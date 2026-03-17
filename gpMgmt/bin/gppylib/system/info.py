@@ -1,4 +1,8 @@
 #! /usr/bin/env python
+from __future__ import print_function
+from __future__ import division
+from past.utils import old_div
+from builtins import object
 import psutil
 import os
 import resource
@@ -7,7 +11,7 @@ PERCENTAGE_OF_AVAIL_MEM_USED_FOR_THREADS = 0.8  # allow 20% of memory to remain 
 
 MB = 1024 * 1024
 
-class SystemInfo():
+class SystemInfo(object):
     def __init__(self, logger=None):
         self.logger = logger
         self.pid = os.getpid()
@@ -15,8 +19,8 @@ class SystemInfo():
 
     def print_mem_usage(self):
         mem = psutil.virtual_memory()
-        print "available: %sMB percent: %s" % (mem.available >> 20, mem.percent)
-        print "process memory usage %s" % (self.process.memory_info().vms >> 20)
+        print("available: %sMB percent: %s" % (mem.available >> 20, mem.percent))
+        print("process memory usage %s" % (self.process.memory_info().vms >> 20))
 
     def debug_log_mem_usage(self):
         mem = psutil.virtual_memory()
@@ -34,5 +38,5 @@ def get_max_available_thread_count():
 
     mem = psutil.virtual_memory()
     available_mem = mem.available
-    num_threads = int(available_mem / thread_size * PERCENTAGE_OF_AVAIL_MEM_USED_FOR_THREADS)
+    num_threads = int(old_div(available_mem, thread_size) * PERCENTAGE_OF_AVAIL_MEM_USED_FOR_THREADS)
     return max(1, num_threads)

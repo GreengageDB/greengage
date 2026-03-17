@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+from builtins import object
 import os
 
 from gppylib.gplog import *
@@ -17,7 +18,7 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
-class GpConfigurationProvider :
+class GpConfigurationProvider(object) :
     """
     An implementation of GpConfigurationProvider will provide functionality
     to fetch and update gpdb system configuration information (as stored in the database)

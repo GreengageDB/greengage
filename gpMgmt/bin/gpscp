@@ -14,8 +14,10 @@ Usage: gpscp [--version] [-?v] [-r] [-p port] [-u user]
 	     -f file      : a file listing all hosts to connect to
              -J character : character to be substitute as hostname [default='=']
 '''
+from __future__ import print_function
 
 # disable deprecationwarnings
+from builtins import object
 import warnings
 
 warnings.simplefilter('ignore', DeprecationWarning)
@@ -23,23 +25,23 @@ warnings.simplefilter('ignore', DeprecationWarning)
 import os
 import sys
 import getopt
-import popen2
+import subprocess
 from gppylib.util import ssh_utils
 from gppylib.gpparseopts import OptParser
 from gppylib.parseutils import canonicalize_address
 
 progname = os.path.split(sys.argv[0])[-1]
 
-if sys.version_info < (2, 5, 0):
+if sys.version_info < (2, 7, 0):
     sys.exit(
-        '''Error: %s is supported on Python versions 2.5 or greater
+        '''Error: %s is supported on Python versions 2.7 or greater
         Please upgrade python installed on this machine.''' % progname)
 
 
 #
 # all the command line options
 #
-class Global:
+class Global(object):
     script_name = os.path.split(__file__)[-1]
     USER = os.environ.get('LOGNAME') or os.environ.get('USER')
     opt = {}
@@ -60,13 +62,13 @@ def usage(exitarg):
     try:
         parser.print_help()
     except:
-        print __doc__
+        print(__doc__)
     sys.exit(exitarg)
 
 
 #############
 def print_version():
-    print '%s version $Revision$' % GV.script_name
+    print('%s version $Revision$' % GV.script_name)
     sys.exit(0)
 
 
@@ -74,7 +76,7 @@ def print_version():
 def parseCommandLine():
     try:
         (options, args) = getopt.getopt(sys.argv[1:], '?vrJ:p:u:h:f:', ['version'])
-    except Exception, e:
+    except Exception as e:
         usage('Error: ' + str(e))
 
     for (switch, val) in options:
@@ -105,11 +107,15 @@ def parseCommandLine():
 
 #############
 def run(cmd, peer):
-    if GV.opt['-v']: print '[INFO]', cmd
-    p = popen2.Popen4(cmd)
+    if GV.opt['-v']: print('[INFO]', cmd)
+    p = subprocess.Popen(cmd,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT,
+                         shell=True)
     p.x_cmd = cmd
     p.x_peer = peer
-    p.tochild.close()
+    p.stdin.close()
     return p
 
 
@@ -124,7 +130,7 @@ try:
 
     try:
         hostlist.checkSSH()
-    except ssh_utils.SSHError, e:
+    except ssh_utils.SSHError as e:
         sys.exit('[ERROR] ' + str(e))
 
     GV.opt['-h'] = hostlist.filterMultiHomedHosts()
@@ -144,15 +150,15 @@ try:
 
     errmsg = None
     for p in proc:
-        for out in p.fromchild:
-            print '[OUT %s] %s' % (p.x_peer, out)
+        for out in p.stdout:
+            print('[OUT %s] %s' % (p.x_peer, out.decode('utf-8')))
         status = p.wait()
         if status:
             errmsg = '[ERROR %s] exit %d, cmd - %s' % (p.x_peer, status, p.x_cmd)
-            print errmsg
+            print(errmsg)
 
     if errmsg: sys.exit(1)
-    if GV.opt['-v']: print '[INFO] completed successfully'
+    if GV.opt['-v']: print('[INFO] completed successfully')
 
 except KeyboardInterrupt:
     sys.exit('\nInterrupted...')

@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import datetime
 import time
 
@@ -11,7 +15,7 @@ import contextlib
 import pygresql.pg
 
 
-class MyDbUrl:
+class MyDbUrl(object):
     pass
 
 
@@ -35,16 +39,11 @@ class SegmentReconfiguerTestCase(GpTestCase):
         db_url.pgpass = self.passwd
 
         self.connect = MagicMock()
-        cm = contextlib.nested(
-                patch('gppylib.db.dbconn.connect', new=self.connect),
-                patch('gppylib.db.dbconn.DbURL', return_value=self.db_url),
-                patch('pygresql.pg.connect'),
-                )
-        cm.__enter__()
-        self.cm = cm
-
-    def tearDown(self):
-        self.cm.__exit__(None, None, None)
+        self.apply_patches([
+            patch('gppylib.db.dbconn.connect', new=self.connect),
+            patch('gppylib.db.dbconn.DbURL', return_value=self.db_url),
+            patch('pygresql.pg.connect'),
+        ])
 
     def test_it_triggers_fts_probe(self):
         reconfigurer = SegmentReconfigurer(logger=self.logger,
@@ -58,14 +57,17 @@ class SegmentReconfiguerTestCase(GpTestCase):
             )
 
     def test_it_retries_the_connection(self):
-        self.connect.configure_mock(side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, self.conn])
+        ctx = MagicMock()
+        ctx.__enter__.return_value = self.conn
+        ctx.__exit__.return_value = False
+
+        self.connect.configure_mock(side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, ctx])
 
         reconfigurer = SegmentReconfigurer(logger=self.logger,
                 worker_pool=self.worker_pool, timeout=self.timeout)
         reconfigurer.reconfigure()
 
         self.connect.assert_has_calls([call(self.db_url), call(self.db_url), call(self.db_url), ])
-        self.conn.close.assert_any_call()
 
     @patch('time.time')
     def test_it_gives_up_after_600_seconds(self, now_mock):
@@ -75,9 +77,9 @@ class SegmentReconfiguerTestCase(GpTestCase):
 
         def fail_for_five_minutes():
             new_time = start_time
-            for i in xrange(2):
+            for i in range(2):
                 # leap forward 300 seconds
-                new_time += self.timeout / 2
+                new_time += old_div(self.timeout, 2)
                 now_mock.configure_mock(return_value=new_time)
                 yield pgdb.DatabaseError
 

@@ -1,4 +1,4 @@
-@gpreload
+@gpreload @keep_connection
 Feature: gpreload behave tests
 
     Scenario: Handle case where a table (public.t1) and view (gpreload_schema.t1) have the same name

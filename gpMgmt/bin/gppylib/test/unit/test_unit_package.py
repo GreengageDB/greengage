@@ -1,12 +1,14 @@
+from __future__ import absolute_import
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.operations.package import IsVersionCompatible, ListPackages, MigratePackages, AlreadyInstalledError, \
     ARCHIVE_PATH, SyncPackages, CleanGppkg
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
+from gppylib.utils import get_dist_info
 
 import os
 import pickle
-import platform
+import base64
 
 
 class IsVersionCompatibleTestCase(GpTestCase):
@@ -84,7 +86,7 @@ class ListPackagesTestCase(GpTestCase):
 
     def test__execute_fail_raise_error_with_no_gppkg_postfix(self):
         self.mock_list_files_by_pattern_run.return_value = ['sample']
-        with self.assertRaisesRegexp(Exception, "unable to parse sample as a gppkg"):
+        with self.assertRaisesRe(Exception, "unable to parse sample as a gppkg"):
             self.subject.execute()
 
 
@@ -100,7 +102,7 @@ class MigratePackagesTestCase(GpTestCase):
             patch('gppylib.operations.package.logger', return_value=Mock(spec=['log', 'info', 'debug', 'error'])),
         ])
 
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if "debian" in get_dist_info()[0]:
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallDebPackageLocally')
         else:
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallPackageLocally')
@@ -119,8 +121,8 @@ class MigratePackagesTestCase(GpTestCase):
         self.args['to_gphome'] = '/wrong/gphome'
         subject = MigratePackages(**self.args)
 
-        expected_raise = "The target GPHOME, %s, must match the current \$GPHOME used to launch gppkg." % self.args['to_gphome']
-        with self.assertRaisesRegexp(ExceptionNoStackTraceNeeded, expected_raise):
+        expected_raise = r"The target GPHOME, %s, must match the current \$GPHOME used to launch gppkg." % self.args['to_gphome']
+        with self.assertRaisesRe(ExceptionNoStackTraceNeeded, expected_raise):
             subject.execute()
 
     def test__execute_identical_source_target_raises(self):
@@ -128,7 +130,7 @@ class MigratePackagesTestCase(GpTestCase):
         subject = MigratePackages(**self.args)
 
         expected_raise = "The source and target GPHOMEs, %s => %s, must differ for packages to be migrated." % (self.args['from_gphome'], self.args['to_gphome'])
-        with self.assertRaisesRegexp(ExceptionNoStackTraceNeeded, expected_raise):
+        with self.assertRaisesRe(ExceptionNoStackTraceNeeded, expected_raise):
             subject.execute()
 
     def test__execute_finds_no_packages(self):
@@ -208,7 +210,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['synced.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['synced.gppkg'])
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['synced.gppkg'])).decode('ascii')
 
         subject = SyncPackages('localhost')
         subject.execute()
@@ -223,7 +225,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['foo.gppkg', 'bar.gppkg', 'zing.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['foo.gppkg'])
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['foo.gppkg'])).decode('ascii')
 
         hostname = 'localhost'
         subject = SyncPackages(hostname)
@@ -240,9 +242,9 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['ba.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['ba.gppkg',
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['ba.gppkg',
                                                                                        'zing.gppkg',
-                                                                                       'ga.gppkg'])
+                                                                                       'ga.gppkg'])).decode('ascii')
         hostname = 'localhost'
         subject = SyncPackages(hostname)
         subject.execute()
@@ -250,7 +252,14 @@ class SyncPackagesTestCase(GpTestCase):
         self.assertEqual(self.make_remote_dir_mock.call_count, 1)
 
         log_messages = [args[1][0] for args in self.mock_logger.method_calls]
-        self.assertIn('The following packages will be uninstalled on localhost: zing.gppkg, ga.gppkg', log_messages)
+        found = False
+        for message in log_messages:
+            if "The following packages will be uninstalled on localhost" in message:
+                self.assertIn('zing.gppkg', message)
+                self.assertIn('ga.gppkg', message)
+                found = True
+                break
+        self.assertTrue(found)
         self.assertNotIn('The packages on %s are consistent.' % hostname, log_messages)
 
 
@@ -268,7 +277,7 @@ class CleanGppkgTestCase(GpTestCase):
         self.sync_packages_mock.return_value.get_ret.side_effect = [Exception('first failure'), Exception('second failure')]
         subject = CleanGppkg("localhost", ["fiction", "fairytale"])
 
-        with self.assertRaisesRegexp(Exception, "SyncPackages failed:\nfirst failure\nsecond failure"):
+        with self.assertRaisesRe(Exception, "SyncPackages failed:\nfirst failure\nsecond failure"):
             subject.execute()
 
 

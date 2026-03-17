@@ -6,6 +6,7 @@
 # THIS IMPORT MUST COME FIRST
 # import mainUtils FIRST to get python version check
 #
+from builtins import object
 from gppylib.mainUtils import *
 
 from gppylib.gplog import *
@@ -17,7 +18,7 @@ from gppylib.operations.buildMirrorSegments import gDatabaseDirectories, gDataba
 
 logger = get_default_logger()
 
-class GpCleanSegmentDirectoryProgram:
+class GpCleanSegmentDirectoryProgram(object):
     """
     Clean up segment directories on a single host
 

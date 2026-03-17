@@ -30,7 +30,7 @@ RUN yum makecache && \
     # The installation goes through a bootstrap script since pip from the
     # repository can no longer update itself.
     curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python && \
-    pip install psi pytest==3.10.1 && \
+    pip install psi pytest==3.10.1 mock==3.0.5 future==0.16 && \
     pip install allure-behave==2.4.0 && \
     yum clean all
 

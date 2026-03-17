@@ -1,11 +1,13 @@
-import imp
+from __future__ import absolute_import
+from builtins import range
+from builtins import object
 import logging
 import os
 import sys
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.gpcatalog import GPCatalogTable
 
 class GpCheckCatTestCase(GpTestCase):
@@ -15,10 +17,10 @@ class GpCheckCatTestCase(GpTestCase):
         #   import gpcheckcat
         #   self.subject = gpcheckcat
         gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckcat")
-        self.subject = imp.load_source('gpcheckcat', gpcheckcat_file)
+        self.subject = load_module('gpcheckcat', gpcheckcat_file)
         self.subject.check_gpexpand = lambda : (True, "")
 
-        self.db_connection = Mock(spec=['close', 'query'])
+        self.db_connection = Mock(spec=['close', 'query', 'set_notice_receiver'])
         self.unique_index_violation_check = Mock(spec=['runCheck'])
         self.foreign_key_check = Mock(spec=['runCheck', 'checkTableForeignKey'])
         self.apply_patches([
@@ -67,7 +69,10 @@ class GpCheckCatTestCase(GpTestCase):
     def test_running_unique_index_violation_check__makes_the_check(self):
         self.subject.runOneCheck('unique_index_violation')
 
-        self.unique_index_violation_check.runCheck.assert_called_with(self.db_connection)
+        self.unique_index_violation_check.runCheck.assert_called()
+        (args, kwargs) = self.unique_index_violation_check.runCheck.call_args
+        wrapper = args[0]
+        self.assertIs(wrapper.db, self.db_connection)
 
     def test_running_unique_index_violation_check__when_no_violations_are_found__passes_the_check(self):
         self.subject.runOneCheck('unique_index_violation')
@@ -111,7 +116,10 @@ class GpCheckCatTestCase(GpTestCase):
 
         self.subject.drop_leaked_schemas(self.leaked_schema_dropper, self.db_connection)
 
-        self.leaked_schema_dropper.drop_leaked_schemas.assert_called_once_with(self.db_connection)
+        self.leaked_schema_dropper.drop_leaked_schemas.assert_called_once()
+        (args, kwargs) = self.leaked_schema_dropper.drop_leaked_schemas.call_args
+        wrapper = args[0]
+        self.assertIs(wrapper.db, self.db_connection)
 
     def test_drop_leaked_schemas__when_leaked_schemas_exist__passes_gpcheckcat(self):
         self.leaked_schema_dropper.drop_leaked_schemas.return_value = ['schema1', 'schema2']
@@ -154,12 +162,12 @@ class GpCheckCatTestCase(GpTestCase):
         # which can then be mocked as necessary.
         with patch.object(sys, 'argv', testargs):
             self.subject.main()
-            self.assertEquals(self.subject.GV.opt['-B'], len(primaries))
+            self.assertEqual(self.subject.GV.opt['-B'], len(primaries))
 
         #mock_log.assert_any_call(50, "Truncated batch size to number of primaries: 50")
         # I am confused that .assert_any_call() did not seem to work as expected --Larry
         last_call = mock_log.call_args_list[0][0][2]
-        self.assertEquals(last_call, "Truncated batch size to number of primaries: 50")
+        self.assertEqual(last_call, "Truncated batch size to number of primaries: 50")
 
     @patch('gpcheckcat_modules.repair.Repair', return_value=Mock())
     @patch('gpcheckcat_modules.repair.Repair.create_repair_for_extra_missing', return_value="/tmp")
@@ -186,12 +194,15 @@ class GpCheckCatTestCase(GpTestCase):
         cat_tables = ["input1", "input2"]
         self.subject.checkForeignKey(cat_tables)
 
-        self.assertEquals(cat_mock.getCatalogTables.call_count, 0)
+        self.assertEqual(cat_mock.getCatalogTables.call_count, 0)
         self.assertFalse(self.subject.GV.checkStatus)
         self.assertTrue(self.subject.GV.foreignKeyStatus)
         self.subject.setError.assert_any_call(self.subject.ERROR_REMOVE)
         self.foreign_key_check.runCheck.assert_called_once_with(cat_tables)
-        fast_seq_mock.assert_called_once_with(self.db_connection)
+        fast_seq_mock.assert_called_once()
+        (args, kwargs) = fast_seq_mock.call_args
+        wrapper = args[0]
+        self.assertIs(wrapper.db, self.db_connection)
 
     @patch('gpcheckcat.processForeignKeyResult')
     def test_checkForeignKey__with_arg(self, process_foreign_key_mock):
@@ -201,7 +212,7 @@ class GpCheckCatTestCase(GpTestCase):
         cat_tables = ["input1", "input2"]
         self.subject.checkForeignKey(cat_tables)
 
-        self.assertEquals(cat_mock.getCatalogTables.call_count, 0)
+        self.assertEqual(cat_mock.getCatalogTables.call_count, 0)
         self.assertFalse(self.subject.GV.checkStatus)
         self.assertTrue(self.subject.GV.foreignKeyStatus)
         self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
@@ -215,7 +226,7 @@ class GpCheckCatTestCase(GpTestCase):
         self.subject.GV.catalog = cat_mock
 
         self.subject.checkForeignKey()
-        self.assertEquals(cat_mock.getCatalogTables.call_count, 1)
+        self.assertEqual(cat_mock.getCatalogTables.call_count, 1)
         self.assertFalse(self.subject.GV.checkStatus)
         self.assertTrue(self.subject.GV.foreignKeyStatus)
         self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
@@ -294,7 +305,7 @@ class GpCheckCatTestCase(GpTestCase):
 
         self.subject.runOneCheck("missing_extraneous")
 
-        self.assertEquals(aTable.getPrimaryKey.call_count, 1)
+        self.assertEqual(aTable.getPrimaryKey.call_count, 1)
         self.subject.setError.assert_called_once_with(self.subject.ERROR_REMOVE)
 
     @patch('gpcheckcat.checkTableMissingEntry', return_value= {("pg_operator", "typename, typenamespace"): "extra"})
@@ -311,7 +322,7 @@ class GpCheckCatTestCase(GpTestCase):
 
         self.subject.runOneCheck("missing_extraneous")
 
-        self.assertEquals(aTable.getPrimaryKey.call_count, 1)
+        self.assertEqual(aTable.getPrimaryKey.call_count, 1)
         self.subject.setError.assert_called_once_with(self.subject.ERROR_REMOVE)
 
     def test_getReportConfiguration_uses_contentid(self):
@@ -343,7 +354,7 @@ class GpCheckCatTestCase(GpTestCase):
         testargs = ['gpcheckcat', '-port 1', '-s test2']
         with patch.object(sys, 'argv', testargs):
             self.subject.main()
-        mock_run.assert_has_calls(call(['test1', 'test3']))
+        mock_run.assert_has_calls([call(['test1', 'test3'])])
 
     @patch('gpcheckcat.GPCatalog', return_value=Mock())
     @patch('sys.exit')
@@ -359,7 +370,7 @@ class GpCheckCatTestCase(GpTestCase):
         testargs = ['gpcheckcat', '-port 1', '-s', "test1, test2"]
         with patch.object(sys, 'argv', testargs):
             self.subject.main()
-        mock_run.assert_has_calls(call(['test3']))
+        mock_run.assert_has_calls([call(['test3'])])
 
     @patch('gpcheckcat.GPCatalog', return_value=Mock())
     @patch('sys.exit')
@@ -375,7 +386,7 @@ class GpCheckCatTestCase(GpTestCase):
         testargs = ['gpcheckcat', '-port 1', '-s', "test_invalid, test2"]
         with patch.object(sys, 'argv', testargs):
             self.subject.main()
-        mock_run.assert_has_calls(call(['test1', 'test3']))
+        mock_run.assert_has_calls([call(['test1', 'test3'])])
         expected_message = "'test_invalid' is not a valid test"
         log_messages = [args[0][1] for args in self.subject.logger.log.call_args_list]
         self.assertIn(expected_message, log_messages)
@@ -573,7 +584,7 @@ where
 
 
 # Define a mock class to represent CatalogTable objects
-class MockCatalogTable:
+class MockCatalogTable(object):
     def __init__(self, table_name):
         self.table_name = table_name
 
@@ -582,7 +593,7 @@ class MockCatalogTable:
 
     def getCatalogTables(self):
         return self
-class Global():
+class Global(object):
     def __init__(self):
         self.opt = {}
 

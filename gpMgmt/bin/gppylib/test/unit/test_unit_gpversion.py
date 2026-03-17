@@ -8,8 +8,9 @@ Unit testing for gpversion module
 import unittest
 
 from gpversion import *
+from .gp_unittest import GpTestCase
 
-class GpVersionTestCase(unittest.TestCase):
+class GpVersionTestCase(GpTestCase):
     def setUp(self):
         pass
         
@@ -110,10 +111,19 @@ class GpVersionTestCase(unittest.TestCase):
 
     def test_lshift_negative(self):
         v = GpVersion('3.2')
-        with self.assertRaisesRegexp(StandardError, 'invalid version shift'):
+        with self.assertRaisesRe(Exception, 'invalid version shift'):
             v << -1
-        with self.assertRaisesRegexp(StandardError, 'invalid version shift'):
+        with self.assertRaisesRe(Exception, 'invalid version shift'):
             v << 1
+
+    # A test that we can use GpVersion not only for ggdb versions.
+    def test_generic(self):
+        v1 = GpVersion("8.9.1")
+        v2 = GpVersion("11.5.0")
+
+        self.assertGreater(v2, v1)
+        self.assertLess(v1, v2)
+        self.assertEqual(tuple(v1.version), (8, 9, 1))
 
 
 #------------------------------- Mainline --------------------------------

@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import tempfile
+import json
 
 from .gp_unittest import GpTestCase
 import gpsegsetuprecovery
@@ -51,7 +52,7 @@ class ValidationForFullRecoveryTestCase(GpTestCase):
     def _assert_failed(self, expected_error):
         self.assertEqual(1, self.validation_recovery_cmd.get_results().rc)
         self.assertEqual('', self.validation_recovery_cmd.get_results().stdout)
-        self.assertItemsEqual(expected_error, self.validation_recovery_cmd.get_results().stderr)
+        self.assertEqualUnordered(json.loads(expected_error), json.loads(self.validation_recovery_cmd.get_results().stderr))
         self.assertEqual(False, self.validation_recovery_cmd.get_results().wasSuccessful())
 
     def test_forceoverwrite_True(self):
@@ -334,7 +335,7 @@ class SegSetupRecoveryTestCase(GpTestCase):
         mock_connect.assert_called_once()
         mock_execsql.assert_called_once()
         #TODO use regex pattern
-        self.assertRegexpMatches(gplog.get_logfile(), '/gpsegsetuprecovery.pyc?_\d+\.log')
+        self.assertReMatch(gplog.get_logfile(), r'/gpsegsetuprecovery.pyc?_\d+\.log')
 
     @patch('gpsegsetuprecovery.ValidationForFullRecovery.validate_failover_data_directory')
     @patch('gpsegsetuprecovery.dbconn.connect')
@@ -350,14 +351,14 @@ class SegSetupRecoveryTestCase(GpTestCase):
                             '-c {}'.format(mix_confinfo)]
                 SegSetupRecovery().main()
 
-        self.assertItemsEqual('[{"error_type": "validation", "error_msg": "connect failed", "dbid": 4, "datadir": "target_data_dir4", '
-                         '"port": 5004, "progress_file": "/tmp/progress_file4"}]', buf.getvalue().strip())
+        self.assertEqual([{"error_type": "validation", "error_msg": "connect failed", "dbid": 4, "datadir": "target_data_dir4",
+                         "port": 5004, "progress_file": "/tmp/progress_file4"}], json.loads(buf.getvalue().strip()))
 
         self.assertEqual(1, ex.exception.code)
         mock_validate_datadir.assert_called_once()
         mock_dburl.assert_called_once()
         mock_connect.assert_called_once()
-        self.assertRegexpMatches(gplog.get_logfile(), '/gpsegsetuprecovery.pyc?_\d+\.log')
+        self.assertReMatch(gplog.get_logfile(), r'/gpsegsetuprecovery.pyc?_\d+\.log')
 
 
     @patch('recovery_base.gplog.setup_tool_logging')

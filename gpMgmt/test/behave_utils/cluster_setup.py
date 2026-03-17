@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from builtins import object
 import os
 import socket
 import inspect
@@ -13,13 +15,13 @@ class GpDeleteSystem(Command):
         Command.__init__(self, 'run gpdeletesystem', cmd_str)
 
     def run(self, validate=True):
-        print "Running delete system: %s" % self
+        print("Running delete system: %s" % self)
         Command.run(self, validateAfter=validate)
         result = self.get_results()
         return result
 
 
-class TestCluster:
+class TestCluster(object):
     def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
@@ -131,18 +133,18 @@ def substitute_strings_in_file(input_file, output_file, sub_dictionary):
     @param output_file: Absolute path of the file to create.
 
     @type sub_dictionary: dictionary @param sub_dictionary: Dictionary that specifies substitution. Key will be replaced with Value.  @rtype bool @returns True if there is at least one substitution made , False otherwise """
-    print "input_file: %s ; output_file: %s ; sub_dictionary: %s" % (input_file, output_file, str(sub_dictionary))
+    print("input_file: %s ; output_file: %s ; sub_dictionary: %s" % (input_file, output_file, str(sub_dictionary)))
     substituted = False
     with open(output_file, 'w') as output_file_object:
         with open(input_file, 'r') as input_file_object:
             for each_line in input_file_object:
                 new_line = each_line
-                for key,value in sub_dictionary.items():
+                for key,value in list(sub_dictionary.items()):
                     new_line = new_line.replace(key, value)
                 if not each_line == new_line:
                     substituted = True
                 output_file_object.write(new_line)
-    print "Substituted: %s" % str(substituted)
+    print("Substituted: %s" % str(substituted))
     return substituted
 
 def local_path(filename):
@@ -161,10 +163,10 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
     results['stderr'] = result.stderr
 
     if verbose:
-        print "command output: %s" % results['stdout']
+        print("command output: %s" % results['stdout'])
     if results['rc'] != 0:
         if verbose:
-            print "command error: %s" % results['stderr']
+            print("command error: %s" % results['stderr'])
     return results
 
 def reset_hosts(hosts, test_base_dir, datadir_prefix):
@@ -173,7 +175,7 @@ def reset_hosts(hosts, test_base_dir, datadir_prefix):
     mirror_dir = os.path.join(test_base_dir, datadir_prefix, 'mirror')
     master_dir = os.path.join(test_base_dir, datadir_prefix, 'master')
 
-    host_args = " ".join(map(lambda x: "-h %s" % x, hosts))
+    host_args = " ".join(["-h %s" % x for x in hosts])
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)
     res = run_shell_command(reset_primary_dirs_cmd, 'reset segment dirs', verbose=True)
     if res['rc'] > 0:

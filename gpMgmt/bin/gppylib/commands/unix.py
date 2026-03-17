@@ -5,6 +5,9 @@
 """
 Set of Classes for executing unix commands.
 """
+from __future__ import print_function
+from builtins import range
+from builtins import object
 import os
 import platform
 import psutil
@@ -14,10 +17,10 @@ import signal
 import uuid
 import pipes
 import re
-from distutils.version import LooseVersion
 
 from gppylib.gplog import get_default_logger
 from gppylib.commands.base import *
+from gppylib.gpversion import GpVersion
 
 logger = get_default_logger()
 
@@ -204,7 +207,7 @@ def get_remote_link_path(path, host):
 """
 
 
-class GenericPlatform():
+class GenericPlatform(object):
     def getName(self):
         "unsupported"
 
@@ -664,7 +667,7 @@ class Hostname(Command):
 
     def get_hostname(self):
         if not self.results:
-            raise Exception, 'Command not yet executed'
+            raise Exception('Command not yet executed')
         return self.results.stdout.strip()
 
 
@@ -677,7 +680,7 @@ class InterfaceAddrs(Command):
         grep = findCmdInPath('grep')
         awk = findCmdInPath('awk')
         cut = findCmdInPath('cut')
-        cmdStr = 'echo "START_CMD_OUTPUT";%s|%s "inet "|%s -v "127.0.0"|%s \'{print \$2}\'|%s -d: -f2' % (ifconfig, grep, grep, awk, cut)
+        cmdStr = 'echo "START_CMD_OUTPUT";%s|%s "inet "|%s -v "127.0.0"|%s \'{print \\$2}\'|%s -d: -f2' % (ifconfig, grep, grep, awk, cut)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -835,7 +838,8 @@ def validate_rsync_version(min_ver):
     pattern = r"version (\d+\.\d+\.\d+)"
     match = re.search(pattern, rsync_version_info)
     current_rsync_version = match.group(1)
-    if LooseVersion(current_rsync_version) < LooseVersion(min_ver):
+    # Use GpVersion as a general class for parsing the version.
+    if GpVersion(current_rsync_version) < GpVersion(min_ver):
         return False
     return True
 

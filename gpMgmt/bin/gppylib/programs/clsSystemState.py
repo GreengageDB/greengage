@@ -4,6 +4,8 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from __future__ import print_function
+from builtins import object
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -27,7 +29,7 @@ from gppylib.utils import TableLogger
 
 logger = gplog.get_default_logger()
 
-class FieldDefinition:
+class FieldDefinition(object):
     """
     Represent a field of our data.  Note that we could infer columnName from name, but we would like
               for columnName to be more stable than "name"
@@ -101,7 +103,7 @@ VALUE__POSTMASTER_PID_FILE = FieldDefinition("File postmaster.pid", "postmaster_
 VALUE__POSTMASTER_PID_VALUE = FieldDefinition("PID from postmaster.pid file", "postmaster_pid", "text", "pid file PID") # int would be better, but we print error messages here sometimes
 VALUE__LOCK_FILES= FieldDefinition("Lock files in /tmp", "lock_files_exist", "text", "local files exist") # boolean would be nice
 
-class GpStateData:
+class GpStateData(object):
     """
     Store key-value pairs of unpacked data for each segment in the cluster
 
@@ -170,7 +172,7 @@ class GpStateData:
                     ]:
             self.__allValues[k] = True
 
-        for values in self.__entriesByCategory.values():
+        for values in list(self.__entriesByCategory.values()):
             for v in values:
                 self.__allValues[v] = True
 
@@ -277,7 +279,7 @@ def replication_state_to_string(state):
 
 
 #-------------------------------------------------------------------------
-class GpSystemStateProgram:
+class GpSystemStateProgram(object):
 
     #
     # Constructor:
@@ -362,9 +364,9 @@ class GpSystemStateProgram:
 
             logger.info("-------------------------------------------------------------" )
             if numMirrorsActingAsPrimaries > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
+                logger.warning( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
             if numUnsynchronized > 0:
-                logger.warn("%s primary segment(s) are not synchronized" % numUnsynchronized)
+                logger.warning("%s primary segment(s) are not synchronized" % numUnsynchronized)
 
         else:
             logger.info("-------------------------------------------------------------" )
@@ -431,16 +433,16 @@ class GpSystemStateProgram:
 
             logger.info("-------------------------------------------------------------" )
             if numMirrorsActingAsPrimaries > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
+                logger.warning( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
             if numFailedMirrors > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) have failed" % numFailedMirrors )
+                logger.warning( "%s segment(s) configured as mirror(s) have failed" % numFailedMirrors )
             if numUnsynchronizedMirrors > 0:
-                logger.warn( "%s mirror segment(s) acting as primaries are not synchronized" % numUnsynchronizedMirrors)
+                logger.warning( "%s mirror segment(s) acting as primaries are not synchronized" % numUnsynchronizedMirrors)
 
         else:
-            logger.warn("-------------------------------------------------------------" )
-            logger.warn( "Mirror not used")
-            logger.warn("-------------------------------------------------------------" )
+            logger.warning("-------------------------------------------------------------" )
+            logger.warning( "Mirror not used")
+            logger.warning("-------------------------------------------------------------" )
 
         return exitCode
 
@@ -580,7 +582,7 @@ class GpSystemStateProgram:
         logger.info("Gathering data from segments...")
         segmentsByHost = GpArray.getSegmentsByHostName(gpArray.getDbList())
         hostNameToCmd = {}
-        for hostName, segments in segmentsByHost.iteritems():
+        for hostName, segments in segmentsByHost.items():
             cmd = gp.GpGetSegmentStatusValues("get segment version status", segments,
                               [gp.SEGMENT_STATUS__GET_VERSION,
                                 gp.SEGMENT_STATUS__GET_PID,
@@ -596,7 +598,7 @@ class GpSystemStateProgram:
         self.__poolWait()
 
         hostNameToResults = {}
-        for hostName, cmd in hostNameToCmd.iteritems():
+        for hostName, cmd in hostNameToCmd.items():
             hostNameToResults[hostName] = cmd.decodeResults()
         return hostNameToResults
 
@@ -712,10 +714,10 @@ class GpSystemStateProgram:
 
     def __addClusterDownWarning(self, gpArray, gpStateData):
         if gpStateData.isClusterProbablyDown(gpArray):
-            logger.warn("*****************************************************" )
-            logger.warn("DATABASE IS PROBABLY UNAVAILABLE" )
-            logger.warn("Review Instance Status in log file or screen output for more information" )
-            logger.warn("*****************************************************" )
+            logger.warning("*****************************************************" )
+            logger.warning("DATABASE IS PROBABLY UNAVAILABLE" )
+            logger.warning("Review Instance Status in log file or screen output for more information" )
+            logger.warning("*****************************************************" )
 
     def __getSegmentStatusColumns(self):
         return [
@@ -788,7 +790,7 @@ class GpSystemStateProgram:
             tabLog = TableLogger().setWarnWithArrows(True)
             logger.info("Number of tables to be redistributed")
             tabLog.info(["  Database", "Count of Tables to redistribute"])
-            for dbname, count in uncompleted.iteritems():
+            for dbname, count in uncompleted.items():
                 tabLog.info(["  %s" % dbname, "%d" % count])
             tabLog.addSeparator()
             tabLog.outputTable()
@@ -854,7 +856,7 @@ class GpSystemStateProgram:
               "(%s)\nEXECUTE '%s' ON MASTER\nFORMAT 'TEXT' (DELIMITER '|' NULL AS '');\n" % \
                (", ".join(columns), scriptName )
 
-        print sql
+        print(sql)
 
         return 0
 
@@ -865,7 +867,7 @@ class GpSystemStateProgram:
             if printToLogger:
                 logger.info(str)
             else:
-                print str
+                print(str)
 
     def __showStatus(self, gpEnv, gpArray):
         """
@@ -960,10 +962,10 @@ class GpSystemStateProgram:
         self.__addClusterDownWarning(gpArray, data)
 
         if hasWarnings:
-            logger.warn("*****************************************************" )
-            logger.warn("Warnings have been generated during status processing" )
-            logger.warn("Check log file or review screen output" )
-            logger.warn("*****************************************************" )
+            logger.warning("*****************************************************" )
+            logger.warning("Warnings have been generated during status processing" )
+            logger.warning("Check log file or review screen output" )
+            logger.warning("*****************************************************" )
 
         return 1 if hasWarnings else 0
 
@@ -1008,7 +1010,7 @@ class GpSystemStateProgram:
         recovery_progress_segs = []
         for seg in gpArray.getSegDbList():
             dbid = seg.getSegmentDbId()
-            if dbid in recovery_progress_by_dbid.keys():
+            if dbid in list(recovery_progress_by_dbid.keys()):
                 data.switchSegment(seg)
                 recovery_progress_segs.append(seg)
                 recovery_type, completed_bytes, total_bytes, percentage, stage = recovery_progress_by_dbid[dbid]
@@ -1209,7 +1211,7 @@ class GpSystemStateProgram:
         replay_left = kwargs.pop('replay_left', None)
 
         if kwargs:
-            raise TypeError('unexpected keyword argument {!r}'.format(kwargs.keys()[0]))
+            raise TypeError('unexpected keyword argument {!r}'.format(list(kwargs.keys())[0]))
 
         if state:
             # Sharp eyes will notice that we may have already set the
@@ -1426,20 +1428,20 @@ class GpSystemStateProgram:
         logger.info("-------------------------------------------------------------" )
 
         dbUrl = dbconn.DbURL(port=gpEnv.getMasterPort(), dbname='template1')
-        conn = dbconn.connect(dbUrl, utility=True)
-        sql = "SELECT state, sync_state, sent_location, flush_location, replay_location FROM pg_stat_replication"
-        cur = dbconn.execSQL(conn, sql)
-        if cur.rowcount == 1:
-            row = cur.fetchall()[0]
-            logger.info("-WAL Sender State: %s" % row[0])
-            logger.info("-Sync state: %s" % row[1])
-            logger.info("-Sent Location: %s" % row[2])
-            logger.info("-Flush Location: %s" % row[3])
-            logger.info("-Replay Location: %s" % row[4])
-        elif cur.rowcount > 1:
-            logger.warning("pg_stat_replication shows more than 1 row.")
-        else:
-            logger.info("No entries found.")
+        with dbconn.connect(dbUrl, utility=True) as conn:
+            sql = "SELECT state, sync_state, sent_location, flush_location, replay_location FROM pg_stat_replication"
+            cur = dbconn.execSQL(conn, sql)
+            if cur.rowcount == 1:
+                row = cur.fetchall()[0]
+                logger.info("-WAL Sender State: %s" % row[0])
+                logger.info("-Sync state: %s" % row[1])
+                logger.info("-Sent Location: %s" % row[2])
+                logger.info("-Flush Location: %s" % row[3])
+                logger.info("-Replay Location: %s" % row[4])
+            elif cur.rowcount > 1:
+                logger.warning("pg_stat_replication shows more than 1 row.")
+            else:
+                logger.info("No entries found.")
 
         logger.info("-------------------------------------------------------------" )
 
@@ -1461,7 +1463,7 @@ class GpSystemStateProgram:
 
         # fetch from hosts
         segmentsByHost = GpArray.getSegmentsByHostName(upSegmentsAndMaster)
-        for hostName, segments in segmentsByHost.iteritems():
+        for hostName, segments in segmentsByHost.items():
             cmd = gp.GpGetSegmentStatusValues("get segment version status", segments,
                                [gp.SEGMENT_STATUS__GET_VERSION],
                                verbose=logging_is_verbose(),
@@ -1483,7 +1485,7 @@ class GpSystemStateProgram:
                         dbIdToVersion[seg.getSegmentDbId()] = version
                         uniqueVersions[version] = True
             else:
-                logger.warn(warning)
+                logger.warning(warning)
 
         # print the list of all segments and warnings about trouble
         tabLog = TableLogger().setWarnWithArrows(True)
@@ -1500,11 +1502,11 @@ class GpSystemStateProgram:
         tabLog.outputTable()
 
         if len(uniqueVersions) > 1:
-            logger.warn("Versions for some segments do not match.  Review table above for details.")
+            logger.warning("Versions for some segments do not match.  Review table above for details.")
 
         hadFailures = len(dbIdToVersion) != len(segmentsAndMaster)
         if hadFailures:
-            logger.warn("Unable to retrieve version data from all segments.  Review table above for details.")
+            logger.warning("Unable to retrieve version data from all segments.  Review table above for details.")
 
         if len(uniqueVersions) == 1 and not hadFailures:
             # if we got data from all segments then we are confident they are all the same version

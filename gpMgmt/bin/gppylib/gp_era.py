@@ -7,6 +7,7 @@
   Copyright (c) EMC/Greenplum Inc 2011. All Rights Reserved. 
 """
 
+from builtins import object
 import sys, os, stat, re
 import hashlib
 
@@ -20,7 +21,7 @@ def DEBUG(msg):
     self = sys._getframe(1).f_locals['self']
     if self.logger: self.logger.debug(msg)
 
-class GpEraFile:
+class GpEraFile(object):
     """
     Manage the gp_era file.
     """
@@ -110,9 +111,9 @@ class GpEraFile:
         Write a new era based on the specified values
         """
         m = hashlib.sha256()
-        m.update(str(host))
-        m.update(str(port))
-        m.update(str(self.datadir))
+        m.update(str(host).encode('utf-8'))
+        m.update(str(port).encode('utf-8'))
+        m.update(str(self.datadir).encode('utf-8'))
         self.era = '%s_%s' % (m.hexdigest()[0:16], time)
         self.write_gp_era()
 

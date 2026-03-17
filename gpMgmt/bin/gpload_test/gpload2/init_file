@@ -21,4 +21,6 @@
 -- s/(").*data_file.tbl(")/data/
 -- m/cmdtime/
 -- s/cmdtime.*$/CONDITION/
+-- m/|/
+-- s/\.\.\.e_\w*_\w*_\w*_\w*_\w*/EXT_GPLOAD_REUSABLE/
 -- end_matchsubs

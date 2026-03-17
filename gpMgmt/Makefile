@@ -21,8 +21,13 @@ install: generate_greengage_path_file
 	if [ -e bin/ext/psutil ]; then \
 	    cp -rp bin/ext/psutil $(DESTDIR)$(prefix)/lib/python ; \
 	fi
+	# Move _pg extension to sys.path root for Python 3 import (from _pg import *)
 	if [ -e bin/ext/pygresql ]; then \
 	    cp -rp bin/ext/pygresql $(DESTDIR)$(prefix)/lib/python ; \
+	    sofile=`find "$(DESTDIR)$(prefix)/lib/python/pygresql" -maxdepth 1 -type f -name "_pg*.so" | head -n 1`; \
+	    if [ -n "$$sofile" ]; then \
+	        mv -f "$$sofile" "$(DESTDIR)$(prefix)/lib/python/"; \
+	    fi; \
 	fi
 	if [ -e bin/ext/yaml ]; then \
 	    cp -rp bin/ext/yaml $(DESTDIR)$(prefix)/lib/python ; \

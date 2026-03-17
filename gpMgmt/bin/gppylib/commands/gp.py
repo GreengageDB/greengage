@@ -6,6 +6,11 @@
 """
 TODO: docs!
 """
+from __future__ import absolute_import
+
+import sys
+from builtins import range
+from builtins import object
 import os, pickle, base64, time
 import os.path
 import pipes
@@ -20,7 +25,7 @@ from gppylib.gplog import *
 from gppylib.db import dbconn
 from gppylib import gparray
 from gppylib.commands.base import *
-from unix import *
+from .unix import *
 from gppylib import pgconf
 from gppylib.utils import writeLinesToFile, createFromSingleHostFile, shellEscape
 
@@ -548,7 +553,7 @@ class GpGetSegmentStatusValues(Command):
         for line in self.get_results().stdout.split('\n'):
             if line.startswith("STATUS_RESULTS:"):
                 toDecode = line[len("STATUS_RESULTS:"):]
-                outputFromCmd = pickle.loads(base64.urlsafe_b64decode(toDecode))
+                outputFromCmd = pickle.loads(base64.urlsafe_b64decode(str(toDecode)))
                 break
         if outputFromCmd is None:
             return ("No status output provided from host %s" % self.remoteHost, None)
@@ -828,7 +833,7 @@ class ModifyConfSetting(Command):
         elif optType == 'string':
             cmdStr = "perl -i -p -e \"s/^%s[ ]*=[ ]*'[^']*'/%s='%s'/\" %s" % (optName, optName, optVal, file)
         else:
-            raise Exception, "Invalid optType for ModifyConfSetting"
+            raise Exception("Invalid optType for ModifyConfSetting")
         self.cmdStr = cmdStr
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
 
@@ -871,7 +876,7 @@ class GpCleanSegmentDirectories(Command):
        files the user has placed there
     """
     def __init__(self, name, segmentsToClean, ctxt, remoteHost):
-        pickledSegmentsStr = base64.urlsafe_b64encode(pickle.dumps(segmentsToClean))
+        pickledSegmentsStr = base64.urlsafe_b64encode(pickle.dumps(segmentsToClean)).decode('ascii')
         cmdStr = "$GPHOME/sbin/gpcleansegmentdir.py -p %s" % pickledSegmentsStr
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
@@ -954,7 +959,7 @@ class ConfigureNewSegment(Command):
             elif primaryMirror == 'mirror' and seg.isSegmentPrimary() == True:
                continue
             hostname = seg.getSegmentHostName()
-            if result.has_key(hostname):
+            if hostname in result:
                 result[hostname] += ','
             else:
                 result[hostname] = ''
@@ -1095,7 +1100,7 @@ class GpConfigHelper(Command):
 
         addParameter = (not getParameter) and (not removeParameter)
         if addParameter:
-            args = '--add-parameter %s --value %s ' % (name, base64.urlsafe_b64encode(pickle.dumps(value)))
+            args = '--add-parameter %s --value %s ' % (name, base64.urlsafe_b64encode(pickle.dumps(value)).decode('ascii'))
         if getParameter:
             args = '--get-parameter %s' % name
         if removeParameter:
@@ -1110,7 +1115,7 @@ class GpConfigHelper(Command):
     # FIXME: figure out how callers of this can handle exceptions here
     def get_value(self):
         raw_value = self.get_results().stdout
-        return pickle.loads(base64.urlsafe_b64decode(raw_value))
+        return pickle.loads(base64.urlsafe_b64decode(str(raw_value)))
 
 
 #-----------------------------------------------
@@ -1404,7 +1409,7 @@ def start_standbymaster(host, datadir, port, era=None,
     # started, this means now postmaster is responsive to signals, which
     # allows shutdown etc.  If we exit earlier, there is a big chance
     # a shutdown message from other process is missed.
-    for i in xrange(60):
+    for i in range(60):
         # Fetch it every time, as postmaster might not have been up yet for
         # the first few cycles, which we have seen when trying wrapper
         # shell script.
@@ -1412,7 +1417,7 @@ def start_standbymaster(host, datadir, port, era=None,
         cmd = Command("get pids",
                       ("python -c "
                        "'from gppylib.commands import unix; "
-                       "print unix.getDescendentProcesses({0})'".format(pid)),
+                       "print(unix.getDescendentProcesses({0}))'".format(pid)),
                       ctxt=REMOTE, remoteHost=host)
         cmd.run()
         logger.debug(str(cmd))
@@ -1662,7 +1667,7 @@ class GpRecoverSeg(Command):
        cmdStr = "$GPHOME/bin/gprecoverseg %s" % (options)
        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
 
-class IfAddrs:
+class IfAddrs(object):
     @staticmethod
     def list_addrs(hostname=None, include_loopback=False):
         cmd = ['echo "START_CMD_OUTPUT";%s/libexec/ifaddrs' % GPHOME]
@@ -1674,7 +1679,7 @@ class IfAddrs:
         else:
             args = cmd
 
-        result = subprocess.check_output(args)
+        result = subprocess.check_output(args).decode('utf-8')
         return result.split('START_CMD_OUTPUT\n')[1].splitlines()
 
 if __name__ == '__main__':

@@ -26,5 +26,9 @@ class ConnectTestCase(unittest.TestCase):
 
         self.assertEqual(result, '"$user",public')
 
+    def test_ipv6(self):
+        with dbconn.connect(dbconn.DbURL(hostname="::1")):
+            pass
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from builtins import range
 import unittest
 import os, socket
 
@@ -126,7 +127,7 @@ class GpExpandTestCase(unittest.TestCase):
         os.environ[self.GP_COMMAND_FAULT_POINT] = 'gpexpand tar segment template'
 
         cmd = Command(name='run gpexpand', cmdStr='gpexpand -i %s' % (self.EXPANSION_INPUT_FILE))
-        with self.assertRaisesRegexp(ExecutionError, 'Fault Injection'):
+        with self.assertRaisesRe(ExecutionError, 'Fault Injection'):
             cmd.run(validateAfter=True)
 
         #Read from the pg_hba.conf file and ensure that
@@ -163,7 +164,7 @@ class GpExpandTestCase(unittest.TestCase):
             os.environ[self.GPMGMT_FAULT_POINT] = 'gpexpand MPP-14620 fault injection'
             original_dist_policies = self._get_dist_policies()
             cmd = Command(name='run gpexpand', cmdStr='gpexpand -i %s' % (self.EXPANSION_INPUT_FILE))
-            with self.assertRaisesRegexp(ExecutionError, 'Fault Injection'):
+            with self.assertRaisesRe(ExecutionError, 'Fault Injection'):
                 cmd.run(validateAfter=True)
 
             rollback = Command(name='rollback expansion', cmdStr='gpexpand -r')

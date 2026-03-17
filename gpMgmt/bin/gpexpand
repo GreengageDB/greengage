@@ -4,6 +4,10 @@
 #
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
+from __future__ import print_function
+from builtins import zip
+from builtins import range
+from builtins import object
 from gppylib.mainUtils import getProgramName
 
 import copy
@@ -45,7 +49,7 @@ try:
     from gppylib.mainUtils import ExceptionNoStackTraceNeeded
     from contextlib import closing
 
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
@@ -192,13 +196,13 @@ def validate_options(options, args, parser):
         parser.exit()
 
     if options.end and options.duration:
-        logger.warn('Both end and duration options were given.')
+        logger.warning('Both end and duration options were given.')
         # Both a duration and an end time were given.
         if options.end > datetime.datetime.now() + options.duration:
-            logger.warn('The duration argument will be used for the expansion end time.')
+            logger.warning('The duration argument will be used for the expansion end time.')
             options.end = datetime.datetime.now() + options.duration
         else:
-            logger.warn('The end argument will be used for the expansion end time.')
+            logger.warning('The end argument will be used for the expansion end time.')
     elif options.duration:
         options.end = datetime.datetime.now() + options.duration
 
@@ -212,7 +216,7 @@ def validate_options(options, args, parser):
     try:
         options.master_data_directory = get_masterdatadir()
         options.gphome = get_gphome()
-    except GpError, msg:
+    except GpError as msg:
         logger.error(msg)
         parser.exit()
 
@@ -374,7 +378,7 @@ class ValidationError(Exception): pass
 
 
 # -------------------------------------------------------------------------
-class GpExpandStatus():
+class GpExpandStatus(object):
     """Class that manages gpexpand status file.
 
     The status file is placed in the master data directory on both the master and
@@ -441,7 +445,7 @@ class GpExpandStatus():
         except IOError:
             raise
 
-        if not self._status_values.has_key(self._status[-1]):
+        if self._status[-1] not in self._status_values:
             raise InvalidStatusError('Invalid status file.  Unknown status %s' % self._status)
 
     def create_status_file(self):
@@ -476,7 +480,7 @@ class GpExpandStatus():
 
         if not self._fp:
             raise InvalidStatusError('The status file is invalid and cannot be written to')
-        if not self._status_values.has_key(status):
+        if status not in self._status_values:
             raise InvalidStatusError('%s is an invalid gpexpand status' % status)
         # Only allow state transitions forward or backward 1
         # If force is True, allow write any status
@@ -502,7 +506,7 @@ class GpExpandStatus():
 
     def get_status_history(self):
         """Gets the full status history"""
-        return zip(self._status, self._status_info)
+        return list(zip(self._status, self._status_info))
 
     def remove_status_file(self):
         """Closes and removes the gpexand status file"""
@@ -588,7 +592,7 @@ class SegmentTemplateError(Exception): pass
 
 
 # -------------------------------------------------------------------------
-class SegmentTemplate:
+class SegmentTemplate(object):
     """Class for creating, distributing and deploying new segments to an
     existing GPDB array"""
 
@@ -625,7 +629,7 @@ class SegmentTemplate:
         for host in hosts:
             tmpHosts[host] = 0
 
-        for host in tmpHosts.keys():
+        for host in list(tmpHosts.keys()):
             hostnameCmd = Hostname('gpexpand associating hostnames with segments', ctxt=REMOTE, remoteHost=host)
             pool.addCommand(hostnameCmd)
 
@@ -685,7 +689,7 @@ class SegmentTemplate:
                                recovery_mode=False,
                                target_gp_dbid=dummyDBID)
             cmd.run(validateAfter=True)
-        except Exception, msg:
+        except Exception as msg:
             raise SegmentTemplateError(msg)
 
         # new segments' tablespace info is loaded from tablespace
@@ -951,7 +955,7 @@ class SegmentTemplate:
 
 # ------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------
-class NewSegmentInput:
+class NewSegmentInput(object):
     def __init__(self, hostname, address, port, datadir, dbid, contentId, role):
         self.hostname = hostname
         self.address = address
@@ -964,7 +968,7 @@ class NewSegmentInput:
 
 # ------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------
-class gpexpand:
+class gpexpand(object):
     def __init__(self, logger, gparray, dburl, options, parallel=1):
         self.pastThePointOfNoReturn = False
         self.logger = logger
@@ -1006,7 +1010,7 @@ class gpexpand:
             logger.info('Querying gpexpand schema for current expansion state')
             try:
                 gpexpand_db_status = gpexpand.get_status_from_db(dburl, options)
-            except Exception, e:
+            except Exception as e:
                 raise Exception('Error while trying to query the gpexpand schema: %s' % e)
             logger.debug('Expansion status returned is %s' % gpexpand_db_status)
 
@@ -1055,7 +1059,7 @@ class gpexpand:
         try:
             conn = dbconn.connect(self.dburl, utility=True, encoding='UTF8')
             max_connections = int(catalog.getSessionGUC(conn, 'max_connections'))
-        except DatabaseError, ex:
+        except DatabaseError as ex:
             if self.options.verbose:
                 logger.exception(ex)
             logger.error('Failed to check max_connections GUC')
@@ -1157,16 +1161,16 @@ class gpexpand:
             oids = "|".join(tblspc_oids)
             headline = "tableSpaceNameOrders={names}".format(names=names)
             secline = "tableSpaceOidOrders={oids}".format(oids=oids)
-            print >>f, headline
-            print >>f, secline
+            print(headline, file=f)
+            print(secline, file=f)
 
             for db in self.gparray.getExpansionSegDbList():
                 if db.isSegmentPrimary():
                     tmpStr = "{dbid}|{locations}"
                     locations = "|".join([tblspc_info[oid]["location"]
                                           for oid in tblspc_oids])
-                    print >>f, tmpStr.format(dbid=db.getSegmentDbId(),
-                                             locations=locations)
+                    print(tmpStr.format(dbid=db.getSegmentDbId(),
+                                             locations=locations), file=f)
 
         return filename
 
@@ -1196,7 +1200,7 @@ class gpexpand:
                                          )
         try:
             self.gparray.validateExpansionSegs()
-        except Exception, e:
+        except Exception as e:
             raise ExpansionError('Invalid input file: %s' % e)
 
     def _getParsedRow(self, lineno, line):
@@ -1235,7 +1239,7 @@ class gpexpand:
                     retValue.append(self._getParsedRow(lineno, line))
                 except ValueError:
                     raise ExpansionError('Missing or invalid value on line %d of file %s.' % (lineno, inputFilename))
-                except Exception, e:
+                except Exception as e:
                     raise ExpansionError('Invalid input file on line %d of file %s: %s' % (lineno, inputFilename, str(e)))
         except IOError:
             raise ExpansionError('Input file %s not found' % inputFilename)
@@ -1336,7 +1340,7 @@ class gpexpand:
         try:
             self.segTemplate.build_segment_template(newTableSpaceInfo)
             self.segTemplate.build_new_segments()
-        except SegmentTemplateError, msg:
+        except SegmentTemplateError as msg:
             raise ExpansionError(msg)
 
     def update_original_segments(self):
@@ -1547,7 +1551,7 @@ class gpexpand:
                     dbconn.execSQL(restore_conn, sqlStr)
 
                 restore_conn.commit()
-            except Exception, e:
+            except Exception as e:
                 raise Exception("Unable to restore master. Exception: " + str(e))
             finally:
                 if restore_conn != None:
@@ -1612,7 +1616,7 @@ class gpexpand:
             if dbname == 'template0':
                 continue
             self.logger.info('Populating gpexpand.status_detail with data from database %s' % (
-                dbname.decode('utf-8')))
+                dbname))
             self._populate_regular_tables(dbname)
             self._populate_partitioned_tables(dbname)
             inject_fault('gpexpand MPP-14620 fault injection')
@@ -1727,7 +1731,7 @@ class gpexpand:
             dbconn.execSQL(table_conn, copySQL)
             table_conn.commit()
             table_conn.close()
-        except Exception, e:
+        except Exception as e:
             raise ExpansionError(e)
 
         try:
@@ -1735,7 +1739,7 @@ class gpexpand:
 
             self.logger.debug(copySQL)
             dbconn.execSQL(self.conn, copySQL)
-        except Exception, e:
+        except Exception as e:
             raise ExpansionError(e)
         finally:
             os.unlink(data_file)
@@ -1815,7 +1819,7 @@ class gpexpand:
             dbconn.execSQL(table_conn, copySQL)
             table_conn.commit()
             table_conn.close()
-        except Exception, e:
+        except Exception as e:
             raise ExpansionError(e)
 
         try:
@@ -1823,7 +1827,7 @@ class gpexpand:
 
             self.logger.debug(copySQL)
             dbconn.execSQL(self.conn, copySQL)
-        except Exception, e:
+        except Exception as e:
             raise ExpansionError(e)
         finally:
             os.unlink(data_file)
@@ -1895,11 +1899,11 @@ class gpexpand:
             self.conn.commit()
             logger.info('You can resume expansion by running gpexpand again')
         elif table_expand_error:
-            logger.warn('**************************************************')
-            logger.warn('One or more tables failed to expand successfully.')
-            logger.warn('Please check the log file, correct the problem and')
-            logger.warn('run gpexpand again to finish the expansion process')
-            logger.warn('**************************************************')
+            logger.warning('**************************************************')
+            logger.warning('One or more tables failed to expand successfully.')
+            logger.warning('Please check the log file, correct the problem and')
+            logger.warning('run gpexpand again to finish the expansion process')
+            logger.warning('**************************************************')
             # We'll try to update the status, but if the errors were caused by
             # going into read only mode, this will fail.  That's ok though as
             # gpexpand will resume next run
@@ -1957,8 +1961,8 @@ class gpexpand:
         # drop schema
         if gpexpand_db_status != 'EXPANSION COMPLETE':
             c = dbconn.connect(self.dburl, encoding='UTF8')
-            self.logger.warn('Expansion has not yet completed.  Removing the expansion')
-            self.logger.warn('schema now will leave the following tables unexpanded:')
+            self.logger.warning('Expansion has not yet completed.  Removing the expansion')
+            self.logger.warning('schema now will leave the following tables unexpanded:')
             unexpanded_tables_sql = "SELECT fq_name FROM gpexpand.status_detail WHERE status = 'NOT STARTED' ORDER BY rank"
 
             cursor = dbconn.execSQL(c, unexpanded_tables_sql)
@@ -1966,9 +1970,9 @@ class gpexpand:
 
             c.close()
 
-            self.logger.warn(unexpanded_tables_text)
-            self.logger.warn('These tables will have to be expanded manually by setting')
-            self.logger.warn('the distribution policy using the ALTER TABLE command.')
+            self.logger.warning(unexpanded_tables_text)
+            self.logger.warning('These tables will have to be expanded manually by setting')
+            self.logger.warning('the distribution policy using the ALTER TABLE command.')
             if not ask_yesno('', "Are you sure you want to drop the expansion schema?", 'N'):
                 logger.info("User Aborted. Exiting...")
                 sys.exit(0)
@@ -2097,7 +2101,7 @@ class gpexpand:
         return
 
 # -----------------------------------------------
-class ExpandTable():
+class ExpandTable(object):
     def __init__(self, options, row=None):
         self.options = options
         if row is not None:
@@ -2116,8 +2120,8 @@ class ExpandTable():
                            self.rank, self.external_writable, self.status,
                            self.expansion_started, self.expansion_finished,
                            self.source_bytes, self.rel_storage)
-        logger.info('Added table %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug(insertSQL.decode('utf-8'))
+        logger.info('Added table %s.%s' % (self.dbname, self.fq_name))
+        logger.debug(insertSQL)
         dbconn.execSQL(conn, insertSQL)
 
     def mark_started(self, status_conn, table_conn, start_time, cancel_flag):
@@ -2127,7 +2131,7 @@ class ExpandTable():
         cursor = dbconn.execSQL(table_conn, sql)
         row = cursor.fetchone()
         src_bytes = int(row[0])
-        logger.debug(" Table: %s has %d bytes" % (self.fq_name.decode('utf-8'), src_bytes))
+        logger.debug(" Table: %s has %d bytes" % (self.fq_name, src_bytes))
 
         sql = """UPDATE gpexpand.status_detail
                   SET status = '%s', expansion_started='%s',
@@ -2137,7 +2141,7 @@ class ExpandTable():
                                                   src_bytes, self.dbname.replace("'", "''"),
                                                   self.table_oid)
 
-        logger.debug("Mark Started: " + sql.decode('utf-8'))
+        logger.debug("Mark Started: " + sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2148,7 +2152,7 @@ class ExpandTable():
                  AND table_oid = %s """ % (undone_status,
                                            self.dbname.replace("'", "''"), self.table_oid)
 
-        logger.debug('Resetting detailed_status: %s' % sql.decode('utf-8'))
+        logger.debug('Resetting detailed_status: %s' % sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2170,8 +2174,8 @@ class ExpandTable():
             external_str = "EXTERNAL" if self.external_writable else ""
             sql = 'ALTER %s TABLE ONLY %s EXPAND TABLE' % (external_str, self.fq_name)
 
-        logger.info('Expanding %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug("Expand SQL: %s" % sql.decode('utf-8'))
+        logger.info('Expanding %s.%s' % (self.dbname, self.fq_name))
+        logger.debug("Expand SQL: %s" % sql)
 
         # check is atomic in python
         if not cancel_flag:
@@ -2179,9 +2183,9 @@ class ExpandTable():
                 try:
                     dbconn.execSQL(table_conn, sql)
                 except DatabaseError as e:
-                    if re.search('DETAIL:\s*table has already been expanded', str(e)):
+                    if re.search(r'DETAIL:\s*table has already been expanded', str(e)):
                         logger.info('Table %s.%s seems to be already expanded, marking as done' % (self.dbname, self.fq_name))
-                    elif re.search('\s*relation not found (OID \d+ )?', str(e)):
+                    elif re.search(r'\s*relation not found (OID \d+ )?', str(e)):
                         logger.warning('Encountered unexpected issue when expanding table %s.%s, skipping' % (self.dbname, self.fq_name))
                         table_conn.rollback()
                         return False
@@ -2190,7 +2194,7 @@ class ExpandTable():
                 table_conn.commit()
             if self.options.analyze:
                 sql = 'ANALYZE %s' % (self.fq_name)
-                logger.info('Analyzing %s' % (self.fq_name.decode('utf-8')))
+                logger.info('Analyzing %s' % (self.fq_name))
                 dbconn.execSQL(table_conn, sql)
                 table_conn.commit()
 
@@ -2205,7 +2209,7 @@ class ExpandTable():
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (done_status, start_time, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2215,7 +2219,7 @@ class ExpandTable():
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (does_not_exist_status, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2257,7 +2261,7 @@ class ExecuteSQLStatementsCommand(SQLCommand):
             for statement in self.sqlCommandList:
                 dbconn.execSQL(self.conn, statement)
             self.conn.commit()
-        except Exception, e:
+        except Exception as e:
             # traceback.print_exc()
             logger.error("Exception in ExecuteSQLStatements. URL = %s" % str(self.url))
             logger.error("  Statement = %s" % str(statement))
@@ -2311,7 +2315,7 @@ class ExpandCommand(SQLCommand):
         try:
             status_conn = dbconn.connect(self.status_url, encoding='UTF8')
             table_conn = dbconn.connect(self.table_url, encoding='UTF8')
-        except DatabaseError, ex:
+        except DatabaseError as ex:
             if self.options.verbose:
                 logger.exception(ex)
             logger.error(ex.__str__().strip())
@@ -2328,8 +2332,8 @@ class ExpandCommand(SQLCommand):
             cursor = dbconn.execSQL(table_conn, sql)
 
             if cursor.rowcount == 0:
-                logger.info('%s no longer exists in database %s' % (self.table.fq_name.decode('utf-8'),
-                                                                       self.table.dbname.decode('utf-8')))
+                logger.info('%s no longer exists in database %s' % (self.table.fq_name,
+                                                                       self.table.dbname))
 
                 self.table.mark_does_not_exist(status_conn, datetime.datetime.now())
                 status_conn.close()
@@ -2344,27 +2348,27 @@ class ExpandCommand(SQLCommand):
 
                 table_exp_success = self.table.expand(table_conn, self.cancel_flag)
 
-        except Exception, ex:
+        except Exception as ex:
             if ex.__str__().find('canceling statement due to user request') == -1 and not self.cancel_flag:
                 self.table_expand_error = True
                 if self.options.verbose:
                     logger.exception(ex)
-                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname.decode('utf-8'),
-                                                                   self.table.fq_name.decode('utf-8'),
+                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname,
+                                                                   self.table.fq_name,
                                                                    ex.__str__().strip()))
             else:
                 logger.info('ALTER TABLE of %s.%s canceled' % (
-                    self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                    self.table.dbname, self.table.fq_name))
 
         if table_exp_success:
             end_time = datetime.datetime.now()
             # update metadata
             logger.info(
-                "Finished expanding %s.%s" % (self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                "Finished expanding %s.%s" % (self.table.dbname, self.table.fq_name))
             self.table.mark_finished(status_conn, start_time, end_time)
         elif not self.options.simple_progress:
             logger.info("Resetting status_detail for %s.%s" % (
-                self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                self.table.dbname, self.table.fq_name))
             self.table.reset_started(status_conn)
 
         # disconnect
@@ -2478,12 +2482,12 @@ before continuing by re-running this utility and providing the input file. """
     try:
         gparray.addExpansionHosts(new_hosts, mirror_type)
         gparray.validateExpansionSegs()
-    except Exception, ex:
+    except Exception as ex:
         num_new_hosts = 0
         if ex.__str__() == 'No new hosts to add':
-            print
-            print '** No hostnames were given that do not already exist in the **'
-            print '** array. Additional segments will be added existing hosts. **'
+            print()
+            print('** No hostnames were given that do not already exist in the **')
+            print('** array. Additional segments will be added existing hosts. **')
         else:
             raise
 
@@ -2528,30 +2532,30 @@ before continuing by re-running this utility and providing the input file. """
                                      )
         try:
             gparray.validateExpansionSegs()
-        except Exception, ex:
+        except Exception as ex:
             if ex.__str__().find('Port') == 0:
                 raise ExpansionError(
                     'Current primary and mirror ports are contiguous.  The input file for gpexpand will need to be created manually.')
     elif num_new_hosts == 0:
         raise ExpansionError('No new hosts or segments were entered.')
 
-    print "\nGenerating configuration file...\n"
+    print("\nGenerating configuration file...\n")
 
     outfile = _gp_expand.generate_inputfile()
 
     outFileStr = """\nInput configuration file was written to '%s'.""" % (outfile)
-    print outFileStr
+    print(outFileStr)
 
     outfile_ts = _gp_expand.generate_tablespace_inputfile(outfile + ".ts")
     if outfile_ts:
         outFileTsStr = """Tablespace Input configuration file was written to '%s'.""" % (outfile_ts)
-        print outFileTsStr
+        print(outFileTsStr)
 
-    print
+    print()
 
-    print """Please review the file and make sure that it is correct then re-run
+    print("""Please review the file and make sure that it is correct then re-run
 with: gpexpand -i %s
-                """ % (outfile)
+                """ % (outfile))
 
 
 def sig_handler(sig, arg):
@@ -2606,7 +2610,7 @@ def main(options, args, parser):
         # Get array configuration
         try:
             gparray = GpArray.initFromCatalog(dburl, utility=True)
-        except DatabaseError, ex:
+        except DatabaseError as ex:
             logger.error('Failed to connect to database.  Make sure the')
             logger.error('Greengage instance you wish to expand is running')
             logger.error('and that your environment is correct, then rerun')
@@ -2637,7 +2641,7 @@ def main(options, args, parser):
                 _gp_expand.rollback(dburl)
                 logger.info('Rollback complete.')
                 sys.exit(0)
-            except ExpansionError, e:
+            except ExpansionError as e:
                 logger.error(e)
                 sys.exit(1)
 
@@ -2686,9 +2690,9 @@ def main(options, args, parser):
             gpexpand cannot rollback if new segments are online and catalog lock has been released in phase1
             So if gpexpand fails after releasing catalog lock in phase1, it must retry the failing work
             """
-            logger.warn('The last gpexpand setup did not complete successfully.')
-            logger.warn('But you can not rollback to the original state, for new segments have been online.')
-            logger.warn('So retry the failing work again in gpexpand setup.')
+            logger.warning('The last gpexpand setup did not complete successfully.')
+            logger.warning('But you can not rollback to the original state, for new segments have been online.')
+            logger.warning('So retry the failing work again in gpexpand setup.')
 
             """Clean the schema first"""
             conn = dbconn.connect(_gp_expand.dburl, encoding='UTF8')
@@ -2725,7 +2729,7 @@ def main(options, args, parser):
         if _gp_expand is not None:
             _gp_expand.shutdown()
         sys.exit()
-    except Exception, e:
+    except Exception as e:
         if options and options.verbose:
             logger.exception("gpexpand failed. exiting...")
         else:

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+from builtins import zip
+from builtins import object
 from gppylib.utils import escapeDoubleQuoteInSQLString
 
-class RepairMissingExtraneous:
+class RepairMissingExtraneous(object):
 
     def __init__(self, catalog_table_obj,  issues, pk_name):
         self.catalog_table_obj = catalog_table_obj
@@ -43,20 +45,20 @@ class RepairMissingExtraneous:
             return
 
         #   issues look like this
-        #   [(49401, "extra", '{1,2}'),
-        #    (49401, "extra", '{1,2}')]
+        #   [(49401, "extra", [1,2]),
+        #    (49401, "extra", [1,2])
         #               OR
-        #   [(49401, 'cmax', "extra", '{1,2}'),
-        #    (49401, 'cmax', "extra", '{1,2}')]
+        #   [(49401, 'cmax', "extra", [1,2]),
+        #    (49401, 'cmax', "extra", [1,2])
 
-        all_seg_ids = set([str(seg_id) for seg_id in all_seg_ids])
+        all_seg_ids = set(all_seg_ids)
         oids_to_segment_mapping = {}
         for issue in self._issues:
 
             oid = issue[0]
 
             issue_type = issue[-2]
-            seg_ids = issue[-1].strip('{}').split(',')
+            seg_ids = issue[-1]
 
             # if an oid is missing from a segment(s) , then it is considered to be extra
             # on all the other segments/master
@@ -66,7 +68,7 @@ class RepairMissingExtraneous:
             for seg_id in seg_ids:
                 seg_id = int(seg_id)
 
-                if not oids_to_segment_mapping.has_key(seg_id):
+                if seg_id not in oids_to_segment_mapping:
                     oids_to_segment_mapping[seg_id] = set()
 
                 oids_to_segment_mapping[seg_id].add(oid)

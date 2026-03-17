@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from builtins import range
 import fileinput
 import os
 import pipes
@@ -8,6 +10,15 @@ import stat
 import time
 import glob
 import shutil
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+else:
+    string_types = basestring
+    binary_type = str
+
 try:
     import subprocess32 as subprocess
 except:
@@ -29,10 +40,14 @@ master_data_dir = None
 
 
 def execute_sql(dbname, sql):
-    result = None
-
     with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
-        result = dbconn.execSQL(conn, sql)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+def query_sql(dbname, sql):
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        cursor = dbconn.execSQL(conn, sql)
+        result = cursor.fetchall()
         conn.commit()
 
     return result
@@ -62,7 +77,7 @@ def run_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -76,7 +91,7 @@ def run_async_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         proc = cmd.runNoWait()
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
     context.async_proc = proc
 
@@ -85,8 +100,8 @@ def run_cmd(command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
-        print 'caught exception %s' % e
+    except ExecutionError as e:
+        print('caught exception %s' % e)
 
     result = cmd.get_results()
     return (result.rc, result.stdout, result.stderr)
@@ -109,7 +124,7 @@ def run_gpcommand(context, command, cmd_prefix=''):
         cmd = Command(name='run %s' % command, cmdStr='%s;$GPHOME/bin/%s' % (cmd_prefix, command))
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -133,7 +148,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, unicode):
+    if isinstance(msg, string_types) and isinstance(actual, binary_type):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):
@@ -153,7 +168,7 @@ def check_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if isinstance(actual, binary_type):
         actual = actual.decode()
     if not pat.search(actual):
         err_str = "Expected error string '%s' and found: '%s'" % (err_msg, actual)
@@ -165,7 +180,7 @@ def check_string_not_present_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if type(actual) == bytes:
         actual = actual.decode()
     if pat.search(actual):
         err_str = "Did not expect error string '%s' but found: '%s'" % (err_msg, actual)
@@ -699,7 +714,7 @@ def are_segments_running():
     result = True
     for seg in segments:
         if seg.status != 'u':
-            print "segment is not up - %s" % seg
+            print("segment is not up - %s" % seg)
             result = False
     return result
 
@@ -716,8 +731,8 @@ def modify_sql_file(file, hostport):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
-                line = re.sub('(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
-            print str(re.sub('\n', '', line))
+                line = re.sub(r'(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
+            print(str(re.sub('\n', '', line)))
 
 
 def remove_dir(host, directory):

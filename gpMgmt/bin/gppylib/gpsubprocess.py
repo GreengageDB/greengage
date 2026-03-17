@@ -97,9 +97,9 @@ class Popen(subprocess.Popen):
     def _postprocess_outputs(self,output,error):
         # All data exchanged.  Translate lists into strings.
         if output is not None:
-            output = ''.join(output)
+            output = b''.join(output)
         if error is not None:
-            error = ''.join(error)
+            error = b''.join(error)
 
         # Translate newlines, if requested.  We cannot let the file
         # object do the translation: It is based on stdio, which is
@@ -138,7 +138,7 @@ class Popen(subprocess.Popen):
             (rset,wset,eset) = self.__select([self.stdout],[],[], timeout)
             while (self.stdout in rset):
                 buffer = os.read(self.stdout.fileno(), 8192)
-                if buffer == '':
+                if not buffer:
                     break
                 else:
                     output.append(buffer)
@@ -151,7 +151,7 @@ class Popen(subprocess.Popen):
             (rset,wset,eset) = self.__select([self.stderr],[],[], timeout)    
             while (self.stderr in rset):
                 buffer = os.read(self.stderr.fileno(), 8192)
-                if buffer == '':
+                if not buffer:
                     break
                 else:
                     error.append(buffer)
@@ -214,7 +214,7 @@ class Popen(subprocess.Popen):
         while True:
             try:
                 return select.select(iwtd, owtd, ewtd, timeout)
-            except select.error, e:
+            except select.error as e:
                 if e[0] == errno.EINTR or e[0] ==  errno.EAGAIN:
                     # if we loop back we have to subtract the amount of time we already waited.
                     if timeout is not None:
@@ -223,7 +223,7 @@ class Popen(subprocess.Popen):
                             return ([],[],[])
                 else: # something bad caused the select.error
                     raise
-            except IOError, e:
+            except IOError as e:
                 if e[0] == errno.EINTR or e[0] ==  errno.EAGAIN:
                     if timeout is not None:
                         timeout = end_time - time.time()

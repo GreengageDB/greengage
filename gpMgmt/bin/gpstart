@@ -6,6 +6,7 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
+from builtins import object
 import sys
 from optparse import OptionGroup, SUPPRESS_HELP
 
@@ -33,14 +34,14 @@ try:
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts, mark_segments_down_for_unreachable_hosts
     from gppylib.utils import TableLogger
     from gppylib.gp_era import GpEraFile
-except ImportError, e:
+except ImportError as e:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 logger = get_default_logger()
 
 
 # ---------------------------------------------------------------
-class GpStart:
+class GpStart(object):
     ######
     def __init__(self, specialMode, restricted, start_standby, master_datadir,
                  wrapper,
@@ -569,7 +570,7 @@ class GpStart:
         # stop them, stopping primaries before mirrors
         #
         for type in ["primary", "mirror"]:
-            for hostName, segments in segmentsByHost.iteritems():
+            for hostName, segments in segmentsByHost.items():
 
                 if type == "primary":
                     segments = [seg for seg in segments if seg.isSegmentPrimary(current_role=True)]
@@ -717,7 +718,7 @@ class GpStart:
             masterconn = dbconn.connect(self.dburl)
             masterconn.close()
 
-        except Exception, e:
+        except Exception as e:
             # MPP-14016.  While certain fts scenarios will trigger initial connection failures
             # we still need watch for PANIC events.
             msg = str(e)
@@ -747,7 +748,7 @@ class GpStart:
                 return gp.start_standbymaster(host, datadir, port, era=self.era,
                                               wrapper=self.wrapper,
                                               wrapper_args=self.wrapper_args)
-            except base.ExecutionError, e:
+            except base.ExecutionError as e:
                 logger.warning("Error occured while starting the standby master: %s" % e)
                 return False
         else:

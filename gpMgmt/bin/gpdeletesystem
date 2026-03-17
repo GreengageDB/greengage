@@ -22,7 +22,7 @@ try:
     from gppylib.operations.deletesystem import validate_pgport
     from gppylib.userinput import *
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
              'have sourced greengage_path.sh.  Detail: ' + str(e))
 
@@ -171,7 +171,7 @@ def display_params(options, dburl, standby, segments, dumpDirsExist):
         logger.info('FINAL WARNING, you are about to delete the Greengage instance')
         logger.info('on master host %s.' % dburl.pghost)
         if dumpDirsExist and options.force:
-            logger.warn('There are database dump files, these will be DELETED if you continue!')
+            logger.warning('There are database dump files, these will be DELETED if you continue!')
             g_warnings_generated = True
         yn = ask_yesno('', 'Continue with Greengage instance deletion?', 'N')
         if not yn:
@@ -207,7 +207,7 @@ def delete_cluster(options):
     dburl = dbconn.DbURL(port=options.pgport)
     try:
         array = gparray.GpArray.initFromCatalog(dburl, True)
-    except Exception, ex:
+    except Exception as ex:
         raise GpDeleteSystemException('Failed to get database configuration: %s' % ex.__str__())
 
     #get tablespace locations of segments from all hosts
@@ -230,7 +230,7 @@ def delete_cluster(options):
         results = cmd.get_results()
         if results.rc > 1:
             raise GpDeleteSystemException('Failed to stop database.')
-        logger.warn('Warnings were generated while stopping the database.')
+        logger.warning('Warnings were generated while stopping the database.')
         g_warnings_generated = True
 
     try:
@@ -315,7 +315,7 @@ if __name__ == '__main__':
             # we can ignore this as cwd must no longer exist
             pass
 
-    except GpDeleteSystemException, ex:
+    except GpDeleteSystemException as ex:
         g_errors_generated = True
         if ex.__str__() == 'User canceled':
             logger.info(ex.__str__())
@@ -323,7 +323,7 @@ if __name__ == '__main__':
             logger.fatal(ex.__str__())
         if options.verbose:
             logger.exception(ex)
-    except Exception, ex:
+    except Exception as ex:
         g_errors_generated = True
         logger.fatal('Error deleting system: %s' % ex.__str__())
         if options.verbose:
@@ -333,7 +333,7 @@ if __name__ == '__main__':
             logger.error('Delete system failed')
             sys.exit(2)
         elif g_warnings_generated:
-            logger.warn('Delete system completed but warnings were generated.')
+            logger.warning('Delete system completed but warnings were generated.')
             sys.exit(1)
         else:
             logger.info('Delete system successful.')

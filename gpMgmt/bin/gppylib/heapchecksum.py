@@ -1,9 +1,9 @@
-
+from builtins import object
 from gppylib.commands.base import REMOTE, WorkerPool
 from gppylib.commands.pg import PgControlData
 
 
-class HeapChecksum:
+class HeapChecksum(object):
     """
     check whether heap checksum is the same between master and all segments
     """
@@ -122,4 +122,4 @@ class HeapChecksum:
         logger: log only if a logger is provided
         """
         if self.logger:
-            self.logger.warn(message)
+            self.logger.warning(message)

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from builtins import object
 from os import path
 try:
     import subprocess32 as subprocess
@@ -14,7 +16,7 @@ from mgmt_utils import *
 
 # This class is intended to store per-Scenario state that is built up over
 # a series of steps.
-class GpConfigContext:
+class GpConfigContext(object):
     def __init__(self):
         self.master_postgres_file = ''
         self.standby_postgres_file = ''

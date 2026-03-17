@@ -1,4 +1,4 @@
-@minirepro
+@minirepro @keep_connection
 Feature: Dump minimum database objects that is related to the query
 
     @minirepro_UI
@@ -13,11 +13,11 @@ Feature: Dump minimum database objects that is related to the query
       When the user runs "minirepro"
       Then minirepro should print "error: No database specified" error message
       When the user runs "minirepro minireprodb -q"
-      Then minirepro should print "error: -q option requires an argument" error message
+      Then minirepro should print "error: -q option requires (1|an) argument" error message
       When the user runs "minirepro minireprodb -q ~/in.sql"
       Then minirepro should print "error: No output file specified" error message
       When the user runs "minirepro minireprodb -q ~/in.sql -f"
-      Then minirepro should print "error: -f option requires an argument" error message
+      Then minirepro should print "error: -f option requires (1|an) argument" error message
 
     @minirepro_UI
     Scenario: Query file does not exist

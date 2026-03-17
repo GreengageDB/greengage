@@ -30,6 +30,14 @@ import logging
 import os
 import sys
 
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+    text_type = str
+else:
+    string_types = basestring
+    binary_type = str
+    text_type = unicode
 
 # ------------------------------- Public Interface --------------------------------
 def get_default_logger():
@@ -312,10 +320,10 @@ class EncodingFileHandler(logging.FileHandler):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
 
     def emit(self, record):
-        if not isinstance(record.msg, str) and not isinstance(record.msg, unicode):
-            record.msg = str(record.msg)
-        if not isinstance(record.msg, unicode):
-            record.msg = unicode(record.msg, 'utf-8')
+        if isinstance(record.msg, binary_type):
+            record.msg = record.msg.decode('utf-8')
+        elif not isinstance(record.msg, text_type):
+            record.msg = text_type(record.msg)
         logging.FileHandler.emit(self, record)
 
 
@@ -328,8 +336,8 @@ class EncodingStreamHandler(logging.StreamHandler):
         logging.StreamHandler.__init__(self, strm)
 
     def emit(self, record):
-        if not isinstance(record.msg, str) and not isinstance(record.msg, unicode):
-            record.msg = str(record.msg)
-        if not isinstance(record.msg, unicode):
-            record.msg = unicode(record.msg, 'utf-8')
+        if isinstance(record.msg, binary_type):
+            record.msg = record.msg.decode('utf-8')
+        elif not isinstance(record.msg, text_type):
+            record.msg = text_type(record.msg)
         logging.StreamHandler.emit(self, record)

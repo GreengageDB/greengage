@@ -1,7 +1,7 @@
+from __future__ import absolute_import
 import os
-import imp
 
-from gp_unittest import *
+from .gp_unittest import *
 from mock import *
 from gparray import Segment, GpArray
 from gppylib.db.dbconn import DbURL
@@ -10,8 +10,14 @@ from gppylib.gplog import *
 from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpMasterEnvironment
 from gppylib.db import dbconn
-import io
 import sys
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 class GpExpand(GpTestCase):
     def setUp(self):
@@ -21,7 +27,7 @@ class GpExpand(GpTestCase):
         #   import gpexpand
         #   self.subject = gpexpand
         gpexpand_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpexpand")
-        self.subject = imp.load_source('gpexpand', gpexpand_file)
+        self.subject = load_module('gpexpand', gpexpand_file)
         self.old_sys_argv = sys.argv
         sys.argv = []  # We need to do this otherwise, the parser will read the command line as the default arguments.
         self.options, self.args, self.parser = self.subject.parseargs()
@@ -36,10 +42,17 @@ class GpExpand(GpTestCase):
         open_mock = mock_open()
         open_mock.return_value.encoding = 'utf-8'
 
+        if sys.version_info[0] == 2:
+            builtin = "__builtin__"
+            input_patch = patch(builtin + '.raw_input')
+        else:
+            builtin = "builtins"
+            input_patch = patch(builtin + '.input')
+
         self.apply_patches([
             patch('gpexpand.GpArray.initFromCatalog', return_value=self.gparray),
-            patch('__builtin__.open', open_mock, create=True),
-            patch('__builtin__.raw_input'),
+            patch(builtin + '.open', open_mock, create=True),
+            input_patch,
             patch('gpexpand.copy.deepcopy', return_value=Mock()),
             patch('gpexpand.dbconn.execSQL', return_value=FakeCursor()),
             patch('gpexpand.GpExpandStatus', return_value=Mock()),
@@ -56,7 +69,7 @@ class GpExpand(GpTestCase):
             patch('gpexpand.get_default_logger', return_value=self.subject.logger),
             patch('gpexpand.HeapChecksum'),
         ])
-        self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
+        # self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
         self.getConfigProviderFunctionMock = self.get_mock_from_apply_patch("getConfigurationProvider")
         self.gpMasterEnvironmentMock = self.get_mock_from_apply_patch("GpMasterEnvironment")
         self.previous_master_data_directory = os.getenv('MASTER_DATA_DIRECTORY', '')
@@ -117,16 +130,16 @@ class GpExpand(GpTestCase):
     #
     # unit tests for interview_setup()
     #
-    def test_user_aborts(self):
-        self.raw_input_mock.return_value = "N"
+    @patch('gppylib.userinput.input', side_effect=['N'])
+    def test_user_aborts(self, mock1):
         with self.assertRaises(SystemExit):
             self.subject.interview_setup(self.gparray, self.options)
         self.subject.logger.info.assert_any_call("User Aborted. Exiting...")
 
-    def test_nonstandard_gpArray_user_aborts(self):
-        self.raw_input_mock.side_effect = ["Y", "N"]
+    @patch('gppylib.userinput.input', side_effect=['Y', 'N'])
+    def test_nonstandard_gpArray_user_aborts(self, mock1):
         self.gparray.isStandardArray = Mock(return_value=(False, ""))
-        with patch('sys.stdout', new=io.BytesIO()) as mock_stdout:
+        with patch('sys.stdout', new=StringIO()) as mock_stdout:
             with self.assertRaises(SystemExit):
                 self.subject.interview_setup(self.gparray, self.options)
             self.assertIn('The current system appears to be non-standard.', mock_stdout.getvalue())

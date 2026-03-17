@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from builtins import range
 import unittest
 import sys
 import os
@@ -148,7 +150,7 @@ def run(cmd):
             valid for the second parameter of open().
     """
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0]
+    out = p.communicate()[0].decode('utf-8')
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
@@ -213,7 +215,7 @@ def read_diff(ifile, outputPath):
         return diff.read()
 
 def write_config_file(database='gptest',user='',host='localhost',port='',table='lineitem',file='lineitem.tbl.small'):
-    if (not user or user == '') and (not os.environ.get('PGUSER') or os.environ.get('PGUSER') == ''):
+    if (not user) and (not os.environ.get('PGUSER')):
         user = os.environ.get('USER')
 
     f = open(configPath + '/config_file','w')
@@ -321,21 +323,21 @@ def modify_sql_file(num):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file,inplace=1):
             if platform.system() in ['Windows', 'Microsoft']:
-                line = line.replace("\!gpload ","\!gpload.py")
+                line = line.replace("\\!gpload ","\\!gpload.py")
                 line = line.replace("gpload ","gpload.py ")
             else:
                 line = line.replace("gpload.py ","gpload ")
             # using absolute path
             line = re.sub('-h WinnBook.local', '-h '+get_hostname(), line)
             line = line.replace("-h localhost",'-h '+get_hostname())
-            line = re.sub('-p \d+', '-p '+get_port(), line)
+            line = re.sub(r'-p \d+', '-p '+get_port(), line)
             line = re.sub('-p$', '-p '+get_port(), line)
-            line = re.sub('-h (\d+)\.(\d+)\.(\d+)\.(\d+)', '-h '+get_hostname(), line)
+            line = re.sub(r'-h (\d+)\.(\d+)\.(\d+)\.(\d+)', '-h '+get_hostname(), line)
             if num == 12 or num == 13 or num == 14 or num == 15 or num == 176:
-                line = re.sub('-U \w+', '-U fake_user', line)
+                line = re.sub(r'-U \w+', '-U fake_user', line)
             else:
-                line = re.sub('-U \w+', '-U '+user, line)
-            print str(re.sub('\n','',line))
+                line = re.sub(r'-U \w+', '-U '+user, line)
+            print(str(re.sub('\n','',line)))
 
 def windows_path(command):
     if platform.system() in ['Windows', 'Microsoft']:
@@ -351,10 +353,10 @@ def get_port():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         f = open(file)
-        for line in f.xreadlines():
-            match = re.search('port=\d+',line)
+        for line in f:
+            match = re.search(r'port=\d+',line)
             if match:
-                match1 = re.search('\d+', match.group())
+                match1 = re.search(r'\d+', match.group())
                 if match1:
                     return match1.group()
         f.close()
@@ -409,7 +411,7 @@ class GPLoad_Env_TestCase(unittest.TestCase):
         "0  gpload setup"
         for num in range(1,6):
            f = open(mkpath('query%d.sql' % num),'w')
-           f.write("\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
+           f.write("\\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
            f.close()
 
     def testQuery01(self):

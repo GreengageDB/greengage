@@ -404,6 +404,8 @@ except that:
 """
 
 import sys
+assert sys.version_info[0] == 2, "subprocess32 should only be used with Python 2"
+
 mswindows = (sys.platform == "win32")
 
 import os
@@ -864,8 +866,8 @@ class Popen(object):
         self.wait()
 
     def _translate_newlines(self, data):
-        data = data.replace("\r\n", "\n")
-        data = data.replace("\r", "\n")
+        data = data.replace(b"\r\n", b"\n")
+        data = data.replace(b"\r", b"\n")
         return data
 
 

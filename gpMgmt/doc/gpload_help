@@ -22,7 +22,7 @@ PREREQUISITES
 
 The client machine where gpload is executed must have the following: 
 
-* Python 2.6.2 or later, pygresql (the Python interface to PostgreSQL), 
+* Python 2.7 or later, pygresql (the Python interface to PostgreSQL), 
   and pyyaml. Note that Python and the required Python libraries are 
   included with the Greengage Database server installation, so if you have 
   Greengage Database installed on the machine where gpload is running, you 
