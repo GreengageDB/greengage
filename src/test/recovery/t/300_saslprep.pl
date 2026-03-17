@@ -1,6 +1,4 @@
-# Test for timeline switch
-# Ensure that a cascading standby is able to follow a newly-promoted standby
-# on a new timeline.
+# Test for sasl authentication in backend-ed libpq
 use strict;
 use warnings;
 use File::Path qw(rmtree);
