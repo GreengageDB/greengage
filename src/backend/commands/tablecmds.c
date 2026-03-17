@@ -7627,36 +7627,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot add column to a partition")));
-
-	/* Protect replicated tables from volatile functions as default value */
-	if (colDef->raw_default->type == T_FuncCall)
-	{
-		FuncCall *funcCall = (FuncCall*) colDef->raw_default;
-		Oid *argtypes = NULL;
-		int nargs = 0;
-
-		if (funcCall->args != NIL)
-		{
-			nargs = list_length(funcCall->args);
-			argtypes = (Oid *) palloc(nargs * sizeof(Oid));
-			
-			ListCell *lc;
-			int i = 0;
-			foreach(lc, funcCall->args)
-			{	
-				argtypes[i] = UNKNOWNOID;
-				i++;
-			}
-			pfree(argtypes);
-		}
-
-		Oid funcOid = LookupFuncName(funcCall->funcname, nargs, argtypes, false);
-		if (func_volatile(funcOid) == PROVOLATILE_VOLATILE && 
-			GpPolicyIsReplicated(rel->rd_cdbpolicy))
-			ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("tried to add volatile function as default")));		
-	}
 				 
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
