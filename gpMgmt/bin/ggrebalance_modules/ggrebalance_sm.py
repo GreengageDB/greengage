@@ -320,10 +320,15 @@ class RebalanceSM:
                 assert isinstance(step, RebalanceStepMoveMirror)
                 move = step.getMove()
                 segment_current_info = move.seg
+                # We need to check if the original segment location exists in gp_segment_configuration.
+                # If not, it means that we've already tried to move this segment but failed after the catalog update,
+                # and now we need to use the dst address as the old address (as it is already in the catalog, and
+                # gpmovemirrors will do validation against it).
                 if self.lookup_seg(gparray, segment_current_info):
                     cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
                 else:
                     cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
+                # If we perform a rollback, we use the original segment location as the target address.
                 if step.isRollback():
                     cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
                 else:
