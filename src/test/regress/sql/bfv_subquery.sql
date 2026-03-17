@@ -295,20 +295,13 @@ DROP TABLE A;
 --
 -- Test if we reattach flow of omitted SubqueryScan to outerplan.
 --
--- start_ignore
-DROP TABLE IF EXISTS T;
-CREATE TABLE T (I INT) DISTRIBUTED BY (I);
--- end_ignore
 
+EXPLAIN (VERBOSE, COSTS OFF)
 WITH A AS (
-    SELECT I FROM T
+    SELECT * FROM UNNEST(ARRAY[0]) I
 ), B AS (
-    SELECT I, UNNEST(ARRAY[0]) FROM A
-), C AS (
-    SELECT I FROM B
-) SELECT I FROM C JOIN T USING (I) WHERE T.I IN (SELECT T.I FROM C);
-
-DROP TABLE T;
+    SELECT *, UNNEST(ARRAY[1]) FROM A
+) SELECT * FROM A WHERE I IN (SELECT A.I FROM B);
 
 --
 -- Test the ctid in Function and Values Scans
