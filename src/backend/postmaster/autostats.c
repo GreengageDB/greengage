@@ -112,7 +112,6 @@ autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples, Oid relation
 	{
 		HeapTuple	tuple;
 		Form_pg_class classForm;
-		float4 reltuples;
 
 		/*
 		 * Must get the relation's tuple from pg_class
@@ -130,8 +129,11 @@ autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples, Oid relation
 		}
 		classForm = (Form_pg_class) GETSTRUCT(tuple);
 
-		if (ntuples / classForm->reltuples < gp_autostats_on_change_ratio_threshold)
+		if (classForm->reltuples &&
+			ntuples / classForm->reltuples < gp_autostats_on_change_ratio_threshold)
+		{
 			result = false;
+		}
 
 		ReleaseSysCache(tuple);
 	}

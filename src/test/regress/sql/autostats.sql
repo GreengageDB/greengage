@@ -153,7 +153,7 @@ reset gp_autostats_allow_nonowner;
 /*
  * Test for gp_autostats_mode=on_change_and_no_stats and gp_autostats_on_change_ratio_threshold > 0
  */
-set gp_autostats_mode=on_change_and_no_stats;
+set gp_autostats_mode = on_change_and_no_stats;
 set gp_autostats_on_change_ratio_threshold = 0.5;
 set gp_autostats_on_change_threshold = 1000;
 
