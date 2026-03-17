@@ -31,9 +31,16 @@
 
 ## For Ubuntu (versions 22.04 or 24.04):
 
-- Install dependencies using README.ubuntu.bash script:
+- Install dependencies using README.ubuntu.bash script.
+
+  For Ubuntu 22.04:
   ```bash
   sudo ./README.ubuntu.bash
+  ```
+
+  Ubuntu 24.04 restricts system pip installs. Allow it explicitly:
+  ```bash
+  sudo -E PIP_BREAK_SYSTEM_PACKAGES=1 ./README.ubuntu.bash
   ```
 
 - For Ubuntu 22.04, create symbolic link to Python 2 in `/usr/bin`:
