@@ -1,6 +1,7 @@
 from builtins import object
 from gppylib.commands.base import REMOTE, WorkerPool
 from gppylib.commands.pg import PgControlData
+import sys
 
 
 class HeapChecksum(object):
@@ -55,9 +56,15 @@ class HeapChecksum(object):
             result = pg_control_data.get_results()
             gparray_gpdb = pg_control_data.gparray_gpdb
             if result.rc == 0:
+                stdout = result.stdout
+                stderr = result.stderr
+                if sys.version_info[0] == 2:
+                    stdout = stdout.encode('utf-8')
+                    stderr = stderr.encode('utf-8')
+
                 self.logger.info("Successfully finished pg_controldata {} for dbid {}:\nstdout: {}\nstderr: {}".format(
-                    gparray_gpdb.getSegmentDataDirectory(), gparray_gpdb.getSegmentDbId(), result.stdout,
-                    result.stderr))
+                    gparray_gpdb.getSegmentDataDirectory(), gparray_gpdb.getSegmentDbId(), stdout,
+                    stderr))
                 try:
                     checksum = pg_control_data.get_value('Data page checksum version')
                     gparray_gpdb.heap_checksum = checksum
