@@ -35,8 +35,8 @@ jobs:
       matrix:
         include:
           - target_os: ubuntu
-          - target_os: ubuntu
-            target_os_version: "24.04"
+          # - target_os: ubuntu
+          #   target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
