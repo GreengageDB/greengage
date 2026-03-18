@@ -1,4 +1,4 @@
-# Main CI pipeline orchestrating build, test, and upload stages
+# .github/workflows/greengage-ci.yml
 name: Greengage CI
 
 on:
