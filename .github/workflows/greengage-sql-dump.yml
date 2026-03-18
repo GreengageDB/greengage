@@ -1,0 +1,126 @@
+# .github/workflows/greengage-sql-dump.yml
+name: Greengage SQL Dump
+
+on:
+  workflow_run:
+    workflows: ["Greengage CI"]
+    types: [completed]
+    branches:
+      - 6.x
+      - 7.x
+
+env:
+  RUN_ID: ${{ github.event.workflow_run.id }}
+  RUN_NAME: ${{ github.event.workflow_run.name }}
+  RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+  RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+  RUN_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+  RUN_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
+  VERSION: ${{ case(
+    github.event.workflow_run.head_branch == '6.x', '6',
+    github.event.workflow_run.head_branch == '7.x', '7',
+    ''
+    ) }}
+
+jobs:
+  create-sql-dump-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    if: |
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      !startsWith(github.event.workflow_run.head_branch, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_os: ubuntu
+          - target_os: ubuntu
+            target_os_version: "24.04"
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for cache and artifact upload
+
+    steps:
+      - name: Determine Greengage Image name
+        run: echo "IMAGE=ghcr.io/${{ github.repository }}/ggdb${VERSION}_${{ matrix.target_os }}${{ matrix.target_os_version }}:${RUN_HEAD_SHA}" >> $GITHUB_ENV
+
+      - name: Display trigger information
+        run: |
+          cat << EOF
+          ================== Workflow Trigger Information ==================
+          Triggered by:   ${RUN_NAME} (#${RUN_ID})
+          Target branch:  ${RUN_HEAD_BRANCH}
+          Source commit:  ${RUN_HEAD_SHA}
+          Commit message: ${RUN_HEAD_COMMIT_MESSAGE}
+
+          Author: ${RUN_HEAD_COMMIT_AUTHOR}
+
+          Image: ${IMAGE}
+          ==================================================================
+          EOF
+
+      - name: Pull Docker image
+        id: image-pull
+        continue-on-error: true
+        run: docker pull "${IMAGE}"
+
+      - name: Maximize disk space
+        if: steps.image-pull.outcome == 'success'
+        uses: greengagedb/greengage-ci/.github/actions/maximize-disk-space@v19
+
+      - name: Create SQL Dump via regression tests
+        if: steps.image-pull.outcome == 'success'
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v25
+        with:
+          image: ${{ env.IMAGE }}
+          optimizer: postgres
+          target_os: ${{ matrix.target_os }}
+          target_os_version: ${{ matrix.target_os_version }}
+          dump_db: "true"
+
+      - name: Upload SQL Dump
+        if: steps.image-pull.outcome == 'success'
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }}
+          path: /mnt/logs/${{ matrix.target_os }}${{ matrix.target_os_version }}_postgres_sqldump.tar
+          if-no-files-found: error
+
+      - name: Report artifact info
+        if: steps.image-pull.outcome == 'success'
+        run: |
+          cat << EOF
+          ==================== SQL Dump Creation Report ====================
+          Artifact name: sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }}
+          Artifact URL:  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload.outputs.artifact-id }}
+          ==================================================================
+          EOF
+
+  verify-dumps-created:
+    runs-on: ubuntu-latest
+    needs: create-sql-dump-regression
+    if: always()
+    steps:
+      - name: Verify at least one SQL dump was created
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          success_count=$(gh api \
+            "/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" \
+            --jq '
+              [.jobs[]
+                | select(.name | startswith("create-sql-dump-regression"))
+                | .steps[]
+                | select(.name == "Upload SQL Dump")
+                | select(.conclusion == "success")
+              ] | length
+            '
+          )
+          echo "::notice::SQL dumps uploaded: ${success_count}"
+          if [ "${success_count}" -eq 0 ]; then
+            echo "::error::No SQL dumps were created - no images found for any matrix configuration"
+            exit 1
+          fi
