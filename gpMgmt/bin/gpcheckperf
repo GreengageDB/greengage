@@ -130,6 +130,8 @@ def gpscp(src, dst):
         print('[Info]', strcmd(c))
     p = subprocess.Popen(c, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout.read(-1)
+    if sys.version_info[0] == 3:
+        out = out.decode('utf-8')
     rc = p.wait()
     if rc:
         sys.exit('[Error] command failed: gpscp {0} =:{1} with output: {2}'.format(src, dst, out))
@@ -166,6 +168,8 @@ def gpsync(src, dst):
 
     for p in proc:
         for line in p.stdout.readlines():
+            if sys.version_info[0] == 3:
+                line = line.decode('utf-8')
             print('[Out {0}] {1}' .format(p.x_peer, line))
         rc = p.wait()
         if rc:
