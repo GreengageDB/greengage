@@ -1,4 +1,4 @@
-# Main CI pipeline orchestrating build, test, and upload stages
+# .github/workflows/greengage-ci.yml
 name: Greengage CI
 
 on:
@@ -42,7 +42,8 @@ jobs:
       matrix:
         include:
           - target_os: ubuntu
-            target_os_version: "22.04"
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
