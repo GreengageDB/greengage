@@ -7,7 +7,7 @@ try:
     from gppylib.commands.unix import *
     from gppylib.commands.gp import *
     from gppylib.gplog import *
-    from gppylib.commands.gp import GpMoveMirrors
+    from gppylib.commands.gp import GpMoveMirrors, SegmentStatus, GpConfigHelper
     from gppylib.system.environment import *
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
@@ -36,6 +36,12 @@ class RebalanceSM:
         'STATE_REBALANCE_DONE'
     ]
 
+    states_rollback_rebalance_flow = [
+        'STATE_REBALANCE_ROLLBACK_STARTED',
+        'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+        'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'
+    ]
+
     transitions = [
         {
             'trigger': 'start',
@@ -59,7 +65,10 @@ class RebalanceSM:
         },
         {
             'trigger': 'move_to_STATE_REBALANCE_EXECUTION_STARTED',
-            'source': ['STATE_REBALANCE_PREPARE_MOVES_DONE', 'STATE_REBALANCE_MOVES_SUCCEEDED', 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'],
+            'source': ['STATE_REBALANCE_PREPARE_MOVES_DONE',
+                       'STATE_REBALANCE_MOVES_SUCCEEDED',
+                       'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE',
+                       'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'],
             'dest': 'STATE_REBALANCE_EXECUTION_STARTED'
         },
         {
@@ -83,6 +92,21 @@ class RebalanceSM:
             'dest': 'STATE_REBALANCE_EXECUTION_DONE'
         },
         {
+            'trigger': 'rollback',
+            'source': 'STATE_REBALANCE_INIT',
+            'dest': 'STATE_REBALANCE_ROLLBACK_STARTED'
+        },
+        {
+            'trigger': 'move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+            'source': 'STATE_REBALANCE_ROLLBACK_STARTED',
+            'dest': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED'
+        },
+        {
+            'trigger': 'move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE',
+            'source': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+            'dest': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'
+        },
+        {
             'trigger': 'move_to_STATE_REBALANCE_DONE',
             'source': 'STATE_REBALANCE_EXECUTION_DONE',
             'dest': 'STATE_REBALANCE_DONE'
@@ -98,18 +122,19 @@ class RebalanceSM:
         PRIMARY_TO_MIRROR = 1
         MIRROR_TO_PRIMARY = 2
 
-    def __init__(self, conn: dbconn.Connection, schema: RebalanceSchema, logger: Any, options: Any, gpArray: gparray.GpArray):
+    def __init__(self, conn: dbconn.Connection, schema: RebalanceSchema, logger: Any, options: Any, dburl: dbconn.DbURL):
         self.logger = logger
         self.options = options
         self.shutdown_requested = False
-        self.gparray = gpArray
+        self.dburl = dburl
         self.conn = conn
         self.rebalance_schema = schema
         self.cmd = None
+        self.is_rollback_flow = False
 
         self.machine = Machine(model = self,
                                queued=True,
-                               states = self.states_main_rebalance_flow + self.states_not_logged,
+                               states = self.states_main_rebalance_flow + self.states_not_logged + self.states_rollback_rebalance_flow,
                                transitions = self.transitions,
                                initial = 'STATE_REBALANCE_INIT',
                                before_state_change = 'on_every_state')
@@ -119,7 +144,7 @@ class RebalanceSM:
             self.logger.info('Rebalance was interrupted')
             raise Exception('Rebalance was interrupted')
 
-        if self.state in self.states_main_rebalance_flow:
+        if self.state in self.states_main_rebalance_flow + self.states_rollback_rebalance_flow:
             self.rebalance_schema.storeRebalanceState(self.state)
 
     def run(self, plan: Plan) -> None:
@@ -139,12 +164,18 @@ class RebalanceSM:
 
         self.trigger('start')
 
-    def process_moves(self, moves: List[LogicalMove]):
-        if len(moves) == 0:
+    def rollback(self) -> None:
+        if self.rebalance_schema.schemaExists():
+            self.trigger('rollback')
+        else:
+            self.logger.info("Rebalance schema doesn't exist. Can't perform rollback.")
+
+    def process_moves(self, steps: List[RebalanceStepMoveMirror]):
+        if len(steps) == 0:
             return
 
-        filename = self.create_config_file(moves)
-        gpmovemirrors_options = f'-a -i {filename}'
+        filename = self.create_config_file(steps)
+        gpmovemirrors_options = f'--skip-resource-estimation -a -i {filename}'
 
         if self.options.parallel is not None:
             batch_size = self.options.parallel
@@ -272,26 +303,36 @@ class RebalanceSM:
             finally:
                 self.cmd = None
 
-    def lookup_seg(self, seg: Segment) -> bool:
+    def lookup_seg(self, gparray: gparray.GpArray, seg: Segment) -> bool:
         """ Look up the segment gpdb by address, port, and dataDirectory """
-        for db in self.gparray.getDbList():
+        for db in gparray.getDbList():
             if (seg.getSegmentHostName() == db.getSegmentHostName() and
                 seg.getSegmentPort() == db.getSegmentPort() and
                 seg.getSegmentDataDirectory() == db.getSegmentDataDirectory()):
                 return True
         return False
 
-    def create_config_file(self, moves: List[LogicalMove]) -> str:
+    def create_config_file(self, steps: List[RebalanceStepMoveMirror]) -> str:
         filename = f'/tmp/ggrebalance_move_config_pid{os.getpid()}'
+        gparray = GpArray.initFromCatalog(self.dburl, utility=True)
         with open(filename, 'w') as fp:
-            for move in moves:
+            for step in steps:
+                assert isinstance(step, RebalanceStepMoveMirror)
+                move = step.getMove()
                 segment_current_info = move.seg
-                is_swap_phase3 = (move.swap_metadata is not None and move.swap_metadata.get('phase') == 3)
-                if not is_swap_phase3 and not self.lookup_seg(segment_current_info):
-                    self.logger.info(f'Skip segment for gpmovemirrors: {str(segment_current_info)}')
-                    continue
-                cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
-                cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
+                # We need to check if the original segment location exists in gp_segment_configuration.
+                # If not, it means that we've already tried to move this segment but failed after the catalog update,
+                # and now we need to use the dst address as the old address (as it is already in the catalog, and
+                # gpmovemirrors will do validation against it).
+                if self.lookup_seg(gparray, segment_current_info):
+                    cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
+                else:
+                    cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
+                # If we perform a rollback, we use the original segment location as the target address.
+                if step.isRollback():
+                    cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
+                else:
+                    cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
                 fp.write(cfg_line)
         return filename
 
@@ -304,9 +345,14 @@ class RebalanceSM:
         return state == self.states_main_rebalance_flow[-1]
 
     def get_state_after_interrupt(self, prev_state) -> str:
-        if (prev_state == 'STATE_REBALANCE_EXECUTION_STARTED' or
-            prev_state == 'STATE_REBALANCE_MOVES_SUCCEEDED' or
-            prev_state == 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'):
+        if prev_state in self.states_rollback_rebalance_flow[:-1]:
+            prev_idx = self.states_rollback_rebalance_flow.index(prev_state)
+            return self.states_rollback_rebalance_flow[prev_idx + 1]
+
+        if (prev_state in ['STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE',
+                           'STATE_REBALANCE_EXECUTION_STARTED',
+                           'STATE_REBALANCE_MOVES_SUCCEEDED',
+                           'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE']):
             return 'STATE_REBALANCE_EXECUTION_STARTED'
 
         prev_idx = self.states_main_rebalance_flow.index(prev_state)
@@ -316,8 +362,205 @@ class RebalanceSM:
     def reset_in_progress_execution_steps(self) -> None:
         in_progress_steps = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.IN_PROGRESS])
         for step in in_progress_steps:
-            step.setStatus(RebalanceStep.Status.PLANNED)
+            step.setStatus(RebalanceStep.Status.ERROR, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
+
+    def process_error_execution_steps(self) -> None:
+        dbconn.execSQL(self.conn, "BEGIN")
+        try:
+            error_steps = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.ERROR])
+            if len(error_steps) == 0:
+                return
+
+            # All steps in an errored batch should be the same type, so we probe only
+            # the first one to detect the type and process accordingly.
+            if isinstance(error_steps[0], RebalanceStepMoveMirror):
+                self.process_error_execution_steps_mirror_moves(error_steps)
+            else:
+                self.process_error_execution_steps_switchovers(error_steps)
+        finally:
+            dbconn.execSQL(self.conn, "COMMIT")
+
+    def process_error_execution_steps_mirror_moves(self, error_steps: List[RebalanceStep]) -> None:
+        self.logger.info('Process failed segment moves...')
+        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+        for step in error_steps:
+            self.logger.info(f'Checking error status for step: {str(step)}')
+            dbid = step.getMove().seg.getSegmentDbId()
+            target_hostname = step.getMove().dstHost.hostname
+            target_datadir = step.getMove().target_datadir
+            target_port = step.getMove().target_port
+
+            catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
+            self.logger.info(f'Segment info from catalog: {str(catalog_segment_info)}')
+
+            gp_segment_configuration_updated = (catalog_segment_info.hostname == target_hostname)
+
+            port_updated = False
+            if gp_segment_configuration_updated:
+                port_updated = (self.get_postgresql_conf_port(target_hostname, target_datadir) == target_port)
+
+            self.logger.info(f'gp_segment_configuration is updated: {gp_segment_configuration_updated}')
+            self.logger.info(f'Port is updated: {port_updated}')
+
+            time_waited = 0
+            SLEEP_PERIOD_SEC = 1.0
+            TIMEOUT_SEC = 120.0
+            if port_updated:
+                self.logger.info(f'Start checking if segment is up with timeout of {TIMEOUT_SEC} sec.')
+                while time_waited < TIMEOUT_SEC:
+                    # Start polling segment status with timeout
+                    segment_process_started = SegmentStatus.remote('Segment status check', target_hostname, target_datadir).was_successful()
+                    if segment_process_started:
+                        catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
+                        if catalog_segment_info.isSegmentUp() and catalog_segment_info.isSegmentModeSynchronized():
+                            self.logger.info('The step is complete, mark it as done')
+                            step.setStatus(RebalanceStep.Status.DONE, step.isRollback())
+                            self.rebalance_schema.updateExecutionStep(step)
+                            break
+
+                    time.sleep(SLEEP_PERIOD_SEC)
+                    time_waited = time_waited + SLEEP_PERIOD_SEC
+                    if time_waited >= TIMEOUT_SEC and self.interactive_check('Timeout waiting for segment start, wait again?', default = False):
+                        time_waited = 0
+
+            # Continue with the next step, if we already marked this one
+            if step.getStatus() == RebalanceStep.Status.DONE:
+                continue
+
+            allow_retry = step.isRetryAllowed()
+            if not allow_retry:
+                self.logger.warning("We've run out of retry attempts")
+
+            if allow_retry and self.interactive_check('Retry step?', default = True):
+                if step.isRollback():
+                    self.logger.info('Plan to retry rollback step')
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
+                else:
+                    self.logger.info('Plan to retry step')
+                    step.setStatus(RebalanceStep.Status.PLANNED)
+                self.rebalance_schema.updateExecutionStep(step)
+                continue
+
+            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
+                self.logger.info('Plan to rollback step')
+                step.setStatus(RebalanceStep.Status.PLANNED, True)
+            else:
+                self.logger.info('Cancel step')
+                step.setStatus(RebalanceStep.Status.CANCELLED)
+            self.rebalance_schema.updateExecutionStep(step)
+
+        # Mark dependent steps accordingly
+        self.mark_dependent_steps_on_error(error_steps, steps_left_todo)
+
+    def process_error_execution_steps_switchovers(self, error_steps: List[RebalanceStep]) -> None:
+        self.logger.info('Process failed switchovers...')
+        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+        for step in error_steps:
+            self.logger.info(f'Processing error status for switchover step: {str(step)}')
+            if self.interactive_check(f'Retry step?', default = True):
+                if step.isRollback():
+                    self.logger.info('Plan to retry rollback step')
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
+                else:
+                    self.logger.info('Plan to retry step')
+                    step.setStatus(RebalanceStep.Status.PLANNED)
+                self.rebalance_schema.updateExecutionStep(step)
+                continue
+
+            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
+                self.logger.info('Plan to rollback step')
+                step.setStatus(RebalanceStep.Status.PLANNED, True)
+
+                # Revert type of switchover
+                rollback_step_for_switchover = None
+                if isinstance(step, RebalanceStepSwitchoverToMirror):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToPrimary(step.getMove())
+                elif isinstance(step, RebalanceStepSwitchoverToPrimary):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToMirror(step.getMove())
+
+                if rollback_step_for_switchover:
+                    rollback_step_for_switchover.setMoveOrder(step.getMoveOrder())
+                    rollback_step_for_switchover.setStatus(step.getStatus(), True)
+                    step = rollback_step_for_switchover
+            else:
+                self.logger.info('Cancel step')
+                step.setStatus(RebalanceStep.Status.CANCELLED)
+            self.rebalance_schema.updateExecutionStep(step)
+
+        # Mark dependent steps accordingly
+        self.mark_dependent_steps_on_error(error_steps, steps_left_todo)
+
+    def mark_dependent_steps_on_error(self, error_steps: List[RebalanceStep], steps_left_todo: List[RebalanceStep]) -> None:
+        # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
+        if not self.is_rollback_flow:
+            for step in error_steps:
+                if step.getStatus() == RebalanceStep.Status.PLANNED and step.isRollback():
+                    content_id = step.getMove().seg.getSegmentContentId()
+                    for step_todo in steps_left_todo:
+                        if step_todo.getMove().seg.getSegmentContentId() == content_id:
+                            self.logger.info(f'Mark as already rolled back the dependent step {step_todo}')
+                            step_todo.setStatus(RebalanceStep.Status.DONE, True)
+                            self.rebalance_schema.updateExecutionStep(step_todo)
+        # 2. If there are any cancelled steps - we need to:
+        #  a. cancel all not yet done steps of the same dbid,
+        #  b. and *ALL* switchovers,
+        #  c. and do cancelation recursively.
+        # But, actually, it means that we need to cancel everything besides steps revived from the ERROR state just above,
+        # as left todo steps didn't get into this ERRORed batch, meaning they must have different step type (meaning switchover).
+        if any(step.getStatus() == RebalanceStep.Status.CANCELLED for step in error_steps):
+            for step_todo in steps_left_todo:
+                self.logger.info(f'Mark as CANCELLED the step {step_todo}')
+                step_todo.setStatus(RebalanceStep.Status.CANCELLED, step_todo.isRollback())
+                self.rebalance_schema.updateExecutionStep(step_todo)
+
+    def get_catalog_gp_segment_configuration_for_dbid(self, dbid: int) -> Segment:
+        row = dbconn.queryRow(self.conn,
+            f"SELECT dbid||'|'||content||'|'||role||'|'||preferred_role||'|'||mode||'|'||status||'|'||hostname||'|'||address||'|'||port||'|'||datadir "
+            f"FROM gp_segment_configuration WHERE dbid = {dbid}")
+        return Segment.initFromString(row[0])
+
+    def get_postgresql_conf_port(self, hostname: str, datadir: str) -> int:
+        cmd = gp.GpConfigHelper(f'get port parameter on host {hostname}',
+                                datadir,
+                                'port',
+                                getParameter=True,
+                                ctxt=gp.REMOTE,
+                                remoteHost=hostname)
+        cmd.run()
+
+        if not cmd.was_successful():
+            self.logger.info(f"Failed to get port from postgresql.conf on {hostname}: {cmd.get_stderr()}")
+            return -1
+
+        output = cmd.get_value()
+        output = output if '#' not in output else output[0:output.find('#')]
+        output = output.strip()
+        if not output or not output.isdigit():
+            return -1
+
+        return int(output)
+
+    # Decorator to overwrite the logic of interactive_check()
+    # during tests execution.
+    def wrap_interactive_check_with_faults(fun):
+        def func_with_faults(self, msg: str, default: bool):
+            try:
+                inject_value = inject_fault_get_value()
+                injected_answers = json.loads(inject_value)
+                if injected_answers.get(msg, '') == 'yes':
+                    return True
+                if injected_answers.get(msg, '') == 'no':
+                    return False
+            except:
+                pass
+            return fun(self, msg, default)
+        return func_with_faults
+
+    @wrap_interactive_check_with_faults
+    def interactive_check(self, msg: str, default: bool) -> bool:
+        # TODO: add logic here when implementing interactive mode
+        return default
 
     @staticmethod
     def convert_moves_to_rebalance_steps(moves: List[LogicalMove]) -> List[RebalanceStep]:
@@ -369,16 +612,21 @@ class RebalanceSM:
 
     # state callbacks start here
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         state_from_prev_run = self.rebalance_schema.getRebalanceStateFromPreviousRun()
+        self.is_rollback_flow = self.rebalance_schema.isRollbackRebalanceFlow(self.states_rollback_rebalance_flow[0])
+
 
         if state_from_prev_run == STATE_NOT_DEFINED:
             self.trigger('move_to_STATE_REBALANCE_STARTED')
         elif self.state_is_final(state_from_prev_run):
             self.logger.info('Cluster is already rebalanced...')
         else:
-            self.logger.info('Continue interrupted rebalance operation...')
+            if self.is_rollback_flow:
+                self.logger.info('Continue interrupted rebalance rollback operation...')
+            else:
+                self.logger.info('Continue interrupted rebalance operation...')
             self.logger.info(f"Previous run stopped after state '{state_from_prev_run}', trying to continue from the next state...")
             try:
                 next_state = self.get_state_after_interrupt(state_from_prev_run)
@@ -389,11 +637,11 @@ class RebalanceSM:
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_STARTED(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_PREPARE_MOVES_STARTED(self) -> None:
         if not self.rebalance_plan.getMoves():
             raise Exception('Rebalance executor was launched with a plan without segment movements')
@@ -414,21 +662,22 @@ class RebalanceSM:
 
         self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_STARTED(self) -> None:
-
         if self.rebalance_schema.allExecutionStepsAreDone():
             self.trigger('move_to_STATE_REBALANCE_EXECUTION_DONE')
             return
 
         # In normal execution we shouldn't have IN_PROGRESS steps at this moment.
         # If they are presented, it means they are left from previous interrupted run.
-        # Bring them back to PLANNED state, so we can try to process them again.
+        # Set them to ERROR state.
         self.reset_in_progress_execution_steps()
+
+        self.process_error_execution_steps()
 
         steps_to_execute = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
 
@@ -447,16 +696,15 @@ class RebalanceSM:
                     (len(current_batch) > 0 and (type(current_batch[0]) is not type(step)))):
                     break
 
-                step.setStatus(RebalanceStep.Status.IN_PROGRESS)
+                step.setStatus(RebalanceStep.Status.IN_PROGRESS, step.isRollback())
                 self.rebalance_schema.updateExecutionStep(step)
                 current_batch.append(step)
 
             if isinstance(current_batch[0], RebalanceStepMoveMirror):
                 self.logger.info('Rebalance - start moving segments:')
-                moves = [step.getMove() for step in current_batch]
-                for move in moves:
-                    self.logger.info(str(move))
-                self.process_moves(moves)
+                for step in current_batch:
+                    self.logger.info(str(step))
+                self.process_moves(current_batch)
                 self.logger.info('Rebalance - end moving segments')
             else:
                 direction = self.RoleSwapDirection.PRIMARY_TO_MIRROR
@@ -469,25 +717,22 @@ class RebalanceSM:
                 self.execute_role_swaps(segments, direction)
                 self.logger.info('Rebalance - end role swap')
 
-            # TODO: check the errored segments here, once we implement rollback for the rebalance.
-            # For now if some error happened, the entire tool will halt its work, so if we reached this point
-            # just mark all steps as done.
             for step in steps_to_execute:
                 if step.getStatus() == RebalanceStep.Status.IN_PROGRESS:
-                    step.setStatus(RebalanceStep.Status.DONE)
+                    step.setStatus(RebalanceStep.Status.DONE, step.isRollback())
                     self.rebalance_schema.updateExecutionStep(step)
 
         self.trigger('move_to_STATE_REBALANCE_MOVES_SUCCEEDED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_MOVES_SUCCEEDED(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED(self) -> None:
 
         # Approve all consequent steps that require approval
@@ -501,20 +746,91 @@ class RebalanceSM:
             # TODO: we'll need to add logic here to get approval from the user in the interactive mode,
             # once we start implementing the interactive mode.
             # In non-interactive mode we assume that the switchover is always approved.
-            step.setStatus(RebalanceStep.Status.PLANNED)
+            step.setStatus(RebalanceStep.Status.PLANNED, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
 
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_DONE(self) -> None:
-        pass
+    @wrap_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_STARTED(self) -> None:
+        self.is_rollback_flow = True
+        self.logger.info('Starting rebalance rollback')
+        self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED(self) -> None:
+
+        self.logger.info('Start preparing steps for rollback...')
+        actual_rollback_steps_cnt = 0
+        rollback_steps = self.rebalance_schema.getExecutionSteps([])
+
+        if len(rollback_steps) > 0:
+            move_order = rollback_steps[-1].getMoveOrder()
+
+            for i, step in enumerate(rollback_steps):
+                # reverse the move order
+                step.setMoveOrder(move_order)
+                move_order -= 1
+                if step.isRollback():
+                    continue
+
+                # convert not yet executed steps as already rolled back
+                if step.getStatus() in [RebalanceStep.Status.APPROVE_REQUIRED, RebalanceStep.Status.PLANNED]:
+                    step.setStatus(RebalanceStep.Status.DONE, True)
+                    actual_rollback_steps_cnt += 1
+                elif step.getStatus() in [RebalanceStep.Status.IN_PROGRESS, RebalanceStep.Status.DONE, RebalanceStep.Status.ERROR]:
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
+                    actual_rollback_steps_cnt += 1
+                elif step.getStatus() == RebalanceStep.Status.CANCELLED:
+                    # We do nothing for CANCELLED steps - for now they can be processed only if run ggrebalance from scratch.
+                    self.logger.warning(f'Step {str(step)} is marked as CANCELLED, and skipped during ROLLBACK processing.')
+                    continue
+
+                rollback_step_for_switchover = None
+
+                # Revert type of switchover
+                if isinstance(step, RebalanceStepSwitchoverToMirror):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToPrimary(step.getMove())
+                elif isinstance(step, RebalanceStepSwitchoverToPrimary):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToMirror(step.getMove())
+
+                if rollback_step_for_switchover:
+                    rollback_step_for_switchover.setMoveOrder(step.getMoveOrder())
+                    rollback_step_for_switchover.setStatus(step.getStatus(), True)
+                    if step.getStatus() == RebalanceStep.Status.PLANNED:
+                        rollback_step_for_switchover.setStatus(RebalanceStep.Status.APPROVE_REQUIRED, True)
+                    rollback_steps[i] = rollback_step_for_switchover
+
+            rollback_steps.sort(key=lambda x: x.getMoveOrder())
+
+        if actual_rollback_steps_cnt > 0:
+            self.logger.info('Saving following rollback rebalance execution steps:')
+            for step in rollback_steps:
+                self.logger.info(str(step))
+            self.rebalance_schema.saveExecutionSteps(rollback_steps)
+            self.logger.info('Saved rollback rebalance execution steps')
+        else:
+            self.logger.info('No steps to rollback found for rebalance')
+
+        self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE')
+
+    @wrap_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE(self) -> None:
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
+
+    @wrap_func_with_faults
+    def on_enter_STATE_REBALANCE_DONE(self) -> None:
+        if self.is_rollback_flow:
+            self.rebalance_schema.dropSchema()
+            self.logger.info('Rebalance rollback is complete')
+        else:
+            self.logger.info('Rebalance is complete')
+
+    @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
         raise Exception('Rebalance execution entered STATE_ERROR')
 

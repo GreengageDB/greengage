@@ -47,6 +47,11 @@ class RebalanceSchema:
                        (plan BYTEA)
                        DISTRIBUTED REPLICATED''')
 
+        dbconn.execSQL(self.conn,
+                       f'''CREATE TABLE {self.schema_name}.{self.segment_move_steps}
+                       (move_order INT NOT NULL UNIQUE, status TEXT, is_rollback BOOL, step BYTEA)
+                       DISTRIBUTED REPLICATED''')
+
         self.savePlan(plan)
 
         dbconn.execSQL(self.conn, 'COMMIT')
@@ -96,6 +101,15 @@ class RebalanceSchema:
     def getMainStateFromPreviousRun(self) -> str:
         return self.getStateFromPreviousRun(self.STATE_CATEGORY_MAIN)
 
+    def isRollbackRebalanceFlow(self, rollback_start_state: str) -> bool:
+        if self.schemaExists():
+            row = dbconn.queryRow(self.conn,
+                                  f"SELECT COUNT(1) FROM {self.schema_name}.{self.rebalance_status} "
+                                  f"WHERE state_category = '{self.STATE_CATEGORY_REBALANCE}' "
+                                  f"AND state = '{rollback_start_state}'")
+            return int(row[0]) != 0
+        return False
+
     def rebalanceSchema(self, target_segment_count: int) -> None:
         # Before rebalancing check if the tables are already rebalanced
         # (in case we re-enter after interruption that happened after COMMIT but before new state)
@@ -112,6 +126,11 @@ class RebalanceSchema:
         if get_table_distr_segment_count(self.conn, self.schema_name, self.saved_plan) > target_segment_count:
             dbconn.execSQL(self.conn,
                            f'''ALTER TABLE "{self.schema_name}"."{self.saved_plan}"
+                           REBALANCE {target_segment_count}''')
+
+        if get_table_distr_segment_count(self.conn, self.schema_name, self.segment_move_steps) > target_segment_count:
+            dbconn.execSQL(self.conn,
+                           f'''ALTER TABLE "{self.schema_name}"."{self.segment_move_steps}"
                            REBALANCE {target_segment_count}''')
 
     def storeState(self, state: str, state_category: str) -> None:
@@ -151,17 +170,12 @@ class RebalanceSchema:
     def saveExecutionSteps(self, steps: List[RebalanceStep]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
 
-        dbconn.execSQL(self.conn, f'DROP TABLE IF EXISTS {self.schema_name}.{self.segment_move_steps}')
-
-        dbconn.execSQL(self.conn,
-                       f'''CREATE TABLE {self.schema_name}.{self.segment_move_steps}
-                       (move_order INT NOT NULL UNIQUE, status TEXT, step BYTEA)
-                       DISTRIBUTED REPLICATED''')
+        dbconn.execSQL(self.conn, f'TRUNCATE TABLE {self.schema_name}.{self.segment_move_steps}')
         
         for step in steps:
             dbconn.execSQL(self.conn,
                        f'''INSERT INTO {self.schema_name}.{self.segment_move_steps}
-                       VALUES ({step.getMoveOrder()}, '{step.getStatus().name}', '\\x{step.serializeStep().hex()}')''')
+                       VALUES ({step.getMoveOrder()}, '{step.getStatus().name}', '{step.isRollback()}', '\\x{step.serializeStep().hex()}')''')
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
@@ -172,7 +186,8 @@ class RebalanceSchema:
 
     def allExecutionStepsAreDone(self) -> bool:
         row = dbconn.queryRow(self.conn,
-                              f"SELECT count(1) FROM {self.schema_name}.{self.segment_move_steps} WHERE status <> '{RebalanceStep.Status.DONE.name}'")
+                              f"SELECT count(1) FROM {self.schema_name}.{self.segment_move_steps} "
+                              f"WHERE status NOT IN ('{RebalanceStep.Status.DONE.name}', '{RebalanceStep.Status.CANCELLED.name}')")
         not_done_count = int(row[0])
         return not_done_count == 0
 

@@ -4587,6 +4587,30 @@ def impl(context):
     if hasattr(context, 'fault_flag_filename') and os.path.exists(context.fault_flag_filename):
         os.remove(context.fault_flag_filename)
 
+@given('on host "{host}" set fault inject "{fault}"')
+@then('on host "{host}" set fault inject "{fault}"')
+@when('on host "{host}" set fault inject "{fault}"')
+def impl(context, fault, host):
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
+    cmd = f"""
+    ssh {host} "
+        echo 'export {fault_injection.GPMGMT_FAULT_POINT}={fault}' >> ~/.bashrc"
+        export {fault_injection.GPMGMT_FAULT_POINT}={fault}
+    """
+    run_command(context, cmd.strip())
+
+@given('on host "{host}" unset fault inject')
+@then('on host "{host}" unset fault inject')
+@when('on host "{host}" unset fault inject')
+def impl(context, host):
+    cmd = f"""
+    ssh {host} "
+        sed -i '/{fault_injection.GPMGMT_FAULT_POINT}=/d' ~/.bashrc
+        unset {fault_injection.GPMGMT_FAULT_POINT}
+    "
+    """
+    run_command(context, cmd.strip())
+
 @given('set fault inject delay {delay} ms')
 @then('set fault inject delay {delay} ms')
 @when('set fault inject delay {delay} ms')
@@ -4608,6 +4632,25 @@ def impl(context):
 @when('unset fault inject delay')
 def impl(context):
     os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = ""
+
+@given('user will answer "{answer}" to the prompt "{prompt}"')
+@then('user will answer "{answer}" to the prompt "{prompt}"')
+@when('user will answer "{answer}" to the prompt "{prompt}"')
+def impl(context, answer, prompt):
+    assert answer == 'yes' or answer == 'no'
+    if not hasattr(context, 'fault_injected_answers'):
+        context.fault_injected_answers = {}
+    context.fault_injected_answers[prompt] = answer
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = fault_injection.GPMGMT_FAULT_TYPE_VALUE
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = json.dumps(context.fault_injected_answers)
+
+@given("clear user's answers")
+@then("clear user's answers")
+@when("clear user's answers")
+def impl(context):
+    context.fault_injected_answers = {}
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = ''
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = ''
 
 @given('stub')
 @then('stub')
