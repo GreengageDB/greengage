@@ -2953,5 +2953,7 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
 		plan->flow = flow;
 	}
 
+	AssertImply(flow && resultplan->lefttree, resultplan->lefttree->flow);
+
     return resultplan;
 }                               /* cdb_insert_result_node */
