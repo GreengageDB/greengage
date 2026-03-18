@@ -2944,7 +2944,7 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
 	 * copied null into it. Otherwise reatach flow to previous node.
 	 */
 	if (resultplan->lefttree && IsA(plan, SubqueryScan) &&
-		nodeTag(resultplan->lefttree) != nodeTag(plan))
+		resultplan->lefttree != plan)
 	{
 		resultplan->lefttree->flow = flow;
 	}
