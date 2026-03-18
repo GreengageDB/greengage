@@ -2153,7 +2153,7 @@ CCostModelGPDB::CostBitmapTableScan(CMemoryPool *mp, CExpressionHandle &exprhdl,
 			CDouble bitmap_union_cost_per_distinct_value(0.000027);
 			CDouble init_cost_advantage_for_bitmap_scan(0.9);
 
-			if (IMDIndex::EmdindBtree == indexType)
+			if (IMDIndex::EmdindBitmap != indexType && IMDIndex::EmdindHash != indexType)
 			{
 				// btree indexes are not sensitive to the NDV, since they don't have any bitmaps
 				c3_dBitmapPageCost = 0.0;

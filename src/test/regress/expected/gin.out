@@ -43,15 +43,17 @@ vacuum gin_test_tbl;
 -- Test for "rare && frequent" searches
 explain (costs off)
 select count(*) from gin_test_tbl where i @> array[1, 999];
-                       QUERY PLAN                        
----------------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on gin_test_tbl
-                     Filter: (i @> '{1,999}'::integer[])
- Optimizer: Postgres query optimizer
-(6 rows)
+               ->  Bitmap Heap Scan on gin_test_tbl
+                     Recheck Cond: (i @> '{1,999}'::integer[])
+                     ->  Bitmap Index Scan on gin_test_idx
+                           Index Cond: (i @> '{1,999}'::integer[])
+ Optimizer: GPORCA
+(8 rows)
 
 select count(*) from gin_test_tbl where i @> array[1, 999];
  count 
@@ -63,15 +65,17 @@ select count(*) from gin_test_tbl where i @> array[1, 999];
 set gin_fuzzy_search_limit = 1000;
 explain (costs off)
 select count(*) > 0 as ok from gin_test_tbl where i @> array[1];
-                     QUERY PLAN                      
------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on gin_test_tbl
-                     Filter: (i @> '{1}'::integer[])
- Optimizer: Postgres query optimizer
-(6 rows)
+               ->  Bitmap Heap Scan on gin_test_tbl
+                     Recheck Cond: (i @> '{1}'::integer[])
+                     ->  Bitmap Index Scan on gin_test_idx
+                           Index Cond: (i @> '{1}'::integer[])
+ Optimizer: GPORCA
+(8 rows)
 
 select count(*) > 0 as ok from gin_test_tbl where i @> array[1];
  ok 
