@@ -293,7 +293,7 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
  * on_change	:	if the number of modified tuples > gp_onchange_threshold, then an automatic analyze is issued.
  * on_no_stats	:	if the operation is a ctas/insert-select and there are no stats on the modified table,
  *					an automatic analyze is issued.
- * on_change_and_no_stats: if one of on_change or on_no_stats is returns true,
+ * on_change_and_no_stats: if either on_change or on_no_stars returns true,
  *					then an automatic analyze is issued.
  */
 void

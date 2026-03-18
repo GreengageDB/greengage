@@ -4386,7 +4386,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_autostats_on_change_threshold", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Threshold for number of tuples added to table by CTAS or Insert-to to trigger autostats in on_change mode. See gp_autostats_mode."),
+			gettext_noop("Threshold for number of tuples added to table by CTAS or DML to trigger autostats in on_change mode. See gp_autostats_mode."),
 			NULL
 		},
 		&gp_autostats_on_change_threshold,
@@ -5005,7 +5005,7 @@ struct config_real ConfigureNamesReal_gp[] =
 
 	{
 		{"gp_autostats_on_change_ratio_threshold", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Threshold for number of tuples added to table by CTAS or Insert-to to trigger autostats in on_change mode. See gp_autostats_mode."),
+			gettext_noop("Threshold for number of tuples added to table by CTAS or DML to trigger autostats in on_change mode. See gp_autostats_mode."),
 			NULL
 		},
 		&gp_autostats_on_change_ratio_threshold,
