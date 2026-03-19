@@ -3,7 +3,7 @@ name: Greengage CI
 
 on:
   push:
-    branches: ['6.x', 'main']  # Trigger on push to 6.x/main (after merged PR)
+    branches: ['6.x']  # Trigger on push to 6.x (after merged PR)
     tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
     branches: ['**'] # Trigger on pull requests for all branches
