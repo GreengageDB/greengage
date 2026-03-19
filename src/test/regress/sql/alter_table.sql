@@ -3235,3 +3235,4 @@ END;
 $$
 EXECUTE ON ANY;
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
+DROP TABLE dist_replicated;

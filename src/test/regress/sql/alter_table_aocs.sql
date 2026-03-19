@@ -694,9 +694,19 @@ execute checkrelfilenodediff('addexp_nonvolatile', 't_addcol_aoco');
 -- results are expected
 select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2 from t_addcol_aoco;
 -- volatile expression, do not expect a table rewrite, only column rewrite
+create or replace function rnd()
+        returns int
+        language plpgsql
+        stable
+as $$
+begin
+	return random();
+end;
+$$
+execute on any;
 execute capturerelfilenodebefore('addexp_volatile', 't_addcol_aoco');
 execute checkattributeencoding('t_addcol_aoco');
-alter table t_addcol_aoco add column defexp3 int default random()*1000::int;
+alter table t_addcol_aoco add column defexp3 int default rnd()*1000::int;
 execute checkrelfilenodediff('addexp_volatile', 't_addcol_aoco');
 execute checkattributeencoding('t_addcol_aoco');
 -- results are expected
