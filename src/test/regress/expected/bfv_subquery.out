@@ -500,6 +500,35 @@ EXPLAIN SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
 
 DROP TABLE A;
 --
+-- Test if we reattach flow of omitted SubqueryScan to outerplan.
+--
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH A AS (
+    SELECT * FROM UNNEST(ARRAY[0]) I
+), B AS (
+    SELECT *, UNNEST(ARRAY[1]) FROM A
+) SELECT * FROM A WHERE I IN (SELECT A.I FROM B);
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Subquery Scan on a
+   Output: a.i
+   Filter: (SubPlan 1)
+   ->  Function Scan on pg_catalog.unnest i
+         Output: i.i
+         Function Call: unnest('{0}'::integer[])
+   SubPlan 1
+     ->  Subquery Scan on b
+           Output: a.i
+           ->  Result
+                 Output: i_1.i, unnest('{1}'::integer[])
+                 ->  Function Scan on pg_catalog.unnest i_1
+                       Output: i_1.i
+                       Function Call: unnest('{0}'::integer[])
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(16 rows)
+
+--
 -- Test the ctid in Function and Values Scans
 --
 create table t1(a int) ;
