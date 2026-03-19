@@ -3203,3 +3203,35 @@ create index float2double_table_idx_c1c2c3 on float2double_table(c1,c2,c3);
 create unique index float2double_table_uniqidx_c1c2c3 on float2double_table(c1,c2,c3);
 ALTER TABLE float2double_table ALTER COLUMN c1 TYPE double precision;
 DROP TABLE float2double_table;
+
+-- Test that adding new column with default value as volatile function
+-- on replicated tables fails.
+-- https://github.com/GreengageDB/greengage/pull/321
+-- start_ignore
+DROP TABLE IF EXISTS dist_replicated;
+DROP FUNCTION IF EXISTS fn_val() CASCADE;
+-- end_ignore
+CREATE TABLE dist_replicated(id int, s text) DISTRIBUTED REPLICATED;
+INSERT INTO dist_replicated(id, s) SELECT v, 'test' FROM generate_series(1,10) v;
+CREATE OR REPLACE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        VOLATILE
+AS $$
+BEGIN
+	RETURN floor(random() * 100 + 1);
+END;
+$$
+EXECUTE ON ANY;
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
+CREATE OR REPLACE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        IMMUTABLE
+AS $$
+BEGIN
+	RETURN 42;
+END;
+$$
+EXECUTE ON ANY;
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
