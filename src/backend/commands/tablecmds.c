@@ -7640,7 +7640,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			funcOid = InvalidOid;
 		free_parsestate(pstate);
 
-		if (func_volatile(funcOid) == PROVOLATILE_VOLATILE && 
+		if (funcOid != InvalidOid &&
+			func_volatile(funcOid) == PROVOLATILE_VOLATILE && 
 			GpPolicyIsReplicated(rel->rd_cdbpolicy))
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),

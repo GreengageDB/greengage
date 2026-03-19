@@ -1379,16 +1379,6 @@ select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarg
 (2 rows)
 
 -- volatile expression, do not expect a table rewrite, only column rewrite
-create or replace function rnd()
-        returns int
-        language plpgsql
-        stable
-as $$
-begin
-	return random();
-end;
-$$
-execute on any;
 execute capturerelfilenodebefore('addexp_volatile', 't_addcol_aoco');
 execute checkattributeencoding('t_addcol_aoco');
  attnum | filenum | lastrownums |                     attoptions                      
@@ -1405,7 +1395,7 @@ execute checkattributeencoding('t_addcol_aoco');
      10 |      10 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
 (10 rows)
 
-alter table t_addcol_aoco add column defexp3 int default rnd()*1000::int;
+alter table t_addcol_aoco add column defexp3 int default random()*1000::int;
 execute checkrelfilenodediff('addexp_volatile', 't_addcol_aoco');
  segid |    casename     |    relname    | rewritten 
 -------+-----------------+---------------+-----------
