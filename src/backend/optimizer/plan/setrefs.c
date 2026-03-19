@@ -2939,7 +2939,8 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
     resultplan = set_plan_refs(root, resultplan, rtoffset);
 
     resultplan->flow = flow;
-	/* In case we ommited SubqueryScan node in set_subqueryscan_references()
+	/*
+	 * In case we ommited SubqueryScan node in set_subqueryscan_references()
 	 * we need to reatach flow to new outerplan node, because previously we
 	 * copied null into it. Otherwise reatach flow to previous node.
 	 */
