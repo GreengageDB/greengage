@@ -1,4 +1,4 @@
-# Main CI pipeline orchestrating build, test, and upload stages
+# .github/workflows/greengage-ci.yml
 name: Greengage CI
 
 on:
@@ -23,7 +23,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v19
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v25
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
