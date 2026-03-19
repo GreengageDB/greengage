@@ -54,6 +54,13 @@ try:
 except ImportError as e:
     sys.exit('Error: unable to import module: ' + str(e))
 
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
+
 GPHOME = os.getenv('GPHOME')
 if GPHOME is None:
     sys.exit('Please set GPHOME environment variable')
@@ -472,7 +479,7 @@ def copyExecOver(fname):
 
 def parseMultiDDResult(out):
     # parse output of "time -p"
-    out = io.StringIO(out)
+    out = StringIO(out)
     result = {}
     bytes = 0
     for line in out:
@@ -548,7 +555,7 @@ def runStreamTest():
     (ok, out) = gpssh(cmd, GV.opt['-V'])
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
-    out = io.StringIO(out)
+    out = StringIO(out)
     result = {}
     for line in out:
         i = line.find(']')
@@ -644,7 +651,7 @@ def reapNetperfTest(proc, x, y):
         print('[Warning] netperf failed on %s -> %s' % (x, y))
         return []
 
-    for line in io.StringIO(out):
+    for line in StringIO(out):
         line = line.split()
         if len(line) != 5:
             continue

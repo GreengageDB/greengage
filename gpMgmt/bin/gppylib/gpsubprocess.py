@@ -113,17 +113,17 @@ class Popen(subprocess.Popen):
         # In Python 3, we always use the text mode. Also, decoding happens here.
         if sys.version_info[0] == 3 or (self.universal_newlines and hasattr(file, 'newlines')):
             if sys.version_info[0] == 3:
-                kargs = {
+                kwargs = {
                     "encoding": "utf-8",
                     "errors": "strict",
                 }
             else:
-                kargs = {}
+                kwargs = {}
 
             if output is not None:
-                output = self._translate_newlines(output, **kargs)
+                output = self._translate_newlines(output, **kwargs)
             if error is not None:
-                error = self._translate_newlines(error, **kargs)    
+                error = self._translate_newlines(error, **kwargs)
         return (output,error)
     
     
