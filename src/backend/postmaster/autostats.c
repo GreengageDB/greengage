@@ -84,9 +84,8 @@ autostats_issue_analyze(Oid relationOid)
 /*
  * Method determines if auto-stats should run as per onchange auto-stats policy. This policy
  * enables auto-analyze if the command was a CTAS, INSERT, DELETE, UPDATE or COPY
- * and the number of tuples is greater than a threshold.
- * gp_autostats_on_change_ratio_threshold is calculated as ntuples divided into
- * tuples at stats.
+ * and the number of tuples is greater than a gp_autostats_on_change_threshold.
+ * gp_autostats_on_change_ratio_threshold is fraction of tuples from stats.
  * If gp_autostats_on_change_ratio_threshold is more than zero, auto-analyze will
  * be enable when both of thresholds is less, than count of tuples.
  */
@@ -129,11 +128,8 @@ autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples, Oid relation
 		}
 		classForm = (Form_pg_class) GETSTRUCT(tuple);
 
-		if (classForm->reltuples &&
-			ntuples / classForm->reltuples < gp_autostats_on_change_ratio_threshold)
-		{
+		if (ntuples < gp_autostats_on_change_ratio_threshold * classForm->reltuples)
 			result = false;
-		}
 
 		ReleaseSysCache(tuple);
 	}
