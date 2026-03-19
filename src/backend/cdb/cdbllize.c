@@ -436,16 +436,15 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 			 */
 			if (!targetPolicy)
 			{
-				int			i;
 				List	   *policykeys = NIL;
 				List	   *policyopclasses = NIL;
+				ListCell   *lc;
 
-				for (i = 0; i < list_length(root->processed_tlist); i++)
+				foreach(lc, root->processed_tlist)
 				{
-					TargetEntry *target =
-					get_tle_by_resno(root->processed_tlist, i + 1);
+					TargetEntry *target = lfirst(lc);
 
-					if (!target || target->resjunk)
+					if (target->resjunk)
 						continue;
 
 					Oid			typeOid = exprType((Node *) target->expr);
@@ -466,7 +465,7 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 
 					if (OidIsValid(opclass))
 					{
-						policykeys = lappend_int(policykeys, i + 1);
+						policykeys = lappend_int(policykeys, target->resno);
 						policyopclasses = lappend_oid(policyopclasses, opclass);
 						break;
 					}
