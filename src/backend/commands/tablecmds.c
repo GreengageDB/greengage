@@ -7627,10 +7627,9 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 errmsg("cannot add column to a partition")));
 
 	/* Protect replicated tables from volatile functions as default value */
-	Node *func = colDef->raw_default;
-	if (func != NULL && func->type == T_FuncCall)
+	if (colDef->raw_default != NULL && colDef->raw_default->type == T_FuncCall)
 	{
-		func = (Node*) colDef->raw_default;
+		Node *func = colDef->raw_default;
 		ParseState *pstate = make_parsestate(NULL);
 		Oid funcOid;
 		
@@ -7647,7 +7646,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("tried to add volatile function as default")));		
 	}
-				 
+
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
 	/*
