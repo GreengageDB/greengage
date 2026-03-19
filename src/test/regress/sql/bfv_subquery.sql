@@ -293,6 +293,17 @@ EXPLAIN SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
 DROP TABLE A;
 
 --
+-- Test if we reattach flow of omitted SubqueryScan to outerplan.
+--
+
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH A AS (
+    SELECT * FROM UNNEST(ARRAY[0]) I
+), B AS (
+    SELECT *, UNNEST(ARRAY[1]) FROM A
+) SELECT * FROM A WHERE I IN (SELECT A.I FROM B);
+
+--
 -- Test the ctid in Function and Values Scans
 --
 

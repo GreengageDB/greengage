@@ -40,7 +40,7 @@
  * Forward declarations.
  */
 static void autostats_issue_analyze(Oid relationOid);
-static bool autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples);
+static bool autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples, Oid relationOid);
 static bool autostats_on_no_stats_check(AutoStatsCmdType cmdType, Oid relationOid);
 
 /*
@@ -84,10 +84,13 @@ autostats_issue_analyze(Oid relationOid)
 /*
  * Method determines if auto-stats should run as per onchange auto-stats policy. This policy
  * enables auto-analyze if the command was a CTAS, INSERT, DELETE, UPDATE or COPY
- * and the number of tuples is greater than a threshold.
+ * and the number of tuples is greater than a gp_autostats_on_change_threshold.
+ * gp_autostats_on_change_ratio_threshold is fraction of tuples from stats.
+ * If gp_autostats_on_change_ratio_threshold is more than zero, auto-analyze will
+ * be enable when both of thresholds is less, than count of tuples.
  */
 static bool
-autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples)
+autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples, Oid relationOid)
 {
 	bool		result = false;
 
@@ -102,6 +105,33 @@ autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples)
 			break;
 		default:
 			break;
+	}
+
+	if (result && gp_autostats_on_change_ratio_threshold > 0)
+	{
+		HeapTuple	tuple;
+		Form_pg_class classForm;
+
+		/*
+		 * Must get the relation's tuple from pg_class
+		 */
+		tuple = SearchSysCache(RELOID,
+							   ObjectIdGetDatum(relationOid),
+							   0, 0, 0);
+		if (!HeapTupleIsValid(tuple))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_TABLE),
+					 errmsg("relation with OID %u does not exist",
+							relationOid)));
+			return false;
+		}
+		classForm = (Form_pg_class) GETSTRUCT(tuple);
+
+		if (ntuples < gp_autostats_on_change_ratio_threshold * classForm->reltuples)
+			result = false;
+
+		ReleaseSysCache(tuple);
 	}
 
 	result = result && (ntuples > gp_autostats_on_change_threshold);
@@ -259,6 +289,8 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
  * on_change	:	if the number of modified tuples > gp_onchange_threshold, then an automatic analyze is issued.
  * on_no_stats	:	if the operation is a ctas/insert-select and there are no stats on the modified table,
  *					an automatic analyze is issued.
+ * on_change_and_no_stats: if either on_change or on_no_stars returns true,
+ *					then an automatic analyze is issued.
  */
 void
 auto_stats(AutoStatsCmdType cmdType, Oid relationOid, uint64 ntuples, bool inFunction)
@@ -296,10 +328,15 @@ auto_stats(AutoStatsCmdType cmdType, Oid relationOid, uint64 ntuples, bool inFun
 	switch (actual_gp_autostats_mode)
 	{
 		case GP_AUTOSTATS_ON_CHANGE:
-			policyCheck = autostats_on_change_check(cmdType, ntuples);
+			policyCheck = autostats_on_change_check(cmdType, ntuples, relationOid);
 			break;
 		case GP_AUTOSTATS_ON_NO_STATS:
 			policyCheck = autostats_on_no_stats_check(cmdType, relationOid);
+			break;
+		case GP_AUTOSTATS_ON_CHANGE_AND_NO_STATS:
+			policyCheck = autostats_on_no_stats_check(cmdType, relationOid);
+			if (!policyCheck)
+				policyCheck = autostats_on_change_check(cmdType, ntuples, relationOid);
 			break;
 		default:
 			Assert(actual_gp_autostats_mode == GP_AUTOSTATS_NONE);

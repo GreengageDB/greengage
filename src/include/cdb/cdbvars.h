@@ -875,11 +875,13 @@ typedef enum
 									 * (insert/delete/update/ctas) */
 	GP_AUTOSTATS_ON_NO_STATS,		/* Autostats is enabled on ctas or copy or
 									 * insert if no stats are present */
+	GP_AUTOSTATS_ON_CHANGE_AND_NO_STATS,
 } GpAutoStatsModeValue;
 
 extern int	gp_autostats_mode;
 extern int	gp_autostats_mode_in_functions;
 extern int	gp_autostats_on_change_threshold;
+extern double	gp_autostats_on_change_ratio_threshold;
 extern bool	gp_autostats_allow_nonowner;
 extern bool	log_autostats;
 
