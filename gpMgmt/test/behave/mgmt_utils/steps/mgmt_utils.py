@@ -24,7 +24,6 @@ try:
     from subprocess32 import PIPE
 except:
     from subprocess import PIPE
-from gppylib import gpsubprocess
 from gppylib.gpsubprocess import Popen, check_output
 from collections import defaultdict
 
