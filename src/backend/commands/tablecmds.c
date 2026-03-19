@@ -51,7 +51,6 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_proc_d.h"
-#include "catalog/pg_proc.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_tablespace.h"
@@ -127,7 +126,6 @@
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 #include "utils/typcache.h"
-#include "parser/parse_func.h"
 
 #include "access/appendonly_compaction.h"
 #include "access/bitmap_private.h"
@@ -7627,6 +7625,28 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot add column to a partition")));
+
+	/* Protect replicated tables from volatile functions as default value */
+	Node *func = colDef->raw_default;
+	if (func != NULL && func->type == T_FuncCall)
+	{
+		func = (Node*) colDef->raw_default;
+		ParseState *pstate = make_parsestate(NULL);
+		Oid funcOid;
+		
+		func = transformExpr(pstate, func, EXPR_KIND_FUNCTION_DEFAULT);
+		if (IsA(func, FuncExpr))
+			funcOid = ((FuncExpr *) func)->funcid;
+		else
+			funcOid = InvalidOid;
+		free_parsestate(pstate);
+
+		if (func_volatile(funcOid) == PROVOLATILE_VOLATILE && 
+			GpPolicyIsReplicated(rel->rd_cdbpolicy))
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("tried to add volatile function as default")));		
+	}
 				 
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
