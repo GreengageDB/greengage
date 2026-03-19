@@ -56,15 +56,9 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  if [ -n "$CI" ]; then
-    local services=$(docker compose -p $project -f "$docker_compose_path" config --services | tr '\n' ' ')
-    for service in $services; do
-      docker compose -p $project -f "$docker_compose_path" exec -T \
-        $service /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
-    done
+  if [[ -z $CI ]]; then
+    docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
   fi
-
-  docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
 
   if [[ $status -gt 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status
