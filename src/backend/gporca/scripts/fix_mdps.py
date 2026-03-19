@@ -14,16 +14,17 @@
 from __future__ import print_function
 import sys
 import subprocess
+from gppylib import gpsubprocess
 import re
 import argparse
 
 dryrun = False
 
 def run_command(command):
-    p = subprocess.Popen(command,
+    p = gpsubprocess.Popen(command,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
-    return iter(p.stdout.readline, b'')
+    return iter(p.stdout.readline, '')
 
 def parseInputFile(inputFile):
     failed_tests = []

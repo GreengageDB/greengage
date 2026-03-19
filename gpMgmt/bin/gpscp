@@ -19,6 +19,7 @@ from __future__ import print_function
 # disable deprecationwarnings
 from builtins import object
 import warnings
+from gppylib import gpsubprocess
 
 warnings.simplefilter('ignore', DeprecationWarning)
 
@@ -108,7 +109,7 @@ def parseCommandLine():
 #############
 def run(cmd, peer):
     if GV.opt['-v']: print('[INFO]', cmd)
-    p = subprocess.Popen(cmd,
+    p = gpsubprocess.Popen(cmd,
                          stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT,
@@ -151,7 +152,7 @@ try:
     errmsg = None
     for p in proc:
         for out in p.stdout:
-            print('[OUT %s] %s' % (p.x_peer, out.decode('utf-8')))
+            print('[OUT %s] %s' % (p.x_peer, out))
         status = p.wait()
         if status:
             errmsg = '[ERROR %s] exit %d, cmd - %s' % (p.x_peer, status, p.x_cmd)

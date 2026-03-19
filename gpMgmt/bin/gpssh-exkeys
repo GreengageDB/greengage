@@ -53,6 +53,7 @@ try:
     from gppylib.commands import unix
     from gppylib.util import ssh_utils
     from gppylib.gpparseopts import OptParser
+    from gppylib import gpsubprocess
 except ImportError as e:
     sys.exit('Error: unable to import module: ' + str(e))
 
@@ -147,10 +148,8 @@ class Host(object):
 
         args = ['ssh', self.m_host, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-n',
                 cmd]
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = gpsubprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p.communicate()
-        stdout = stdout.decode('utf-8')
-        stderr = stderr.decode('utf-8')
         if GV.opt['-v']:
             print('[INFO %s]: exit status=%s' % (self.m_host, p.returncode))
             if stdout:
@@ -174,8 +173,8 @@ class Host(object):
 
             # Grab the tar stream from stdout
             with open(os.path.join(tempDir, '%s.tar' % self.m_host), 'wb') as tarfile:
-                p = subprocess.Popen(args, stdout=tarfile, stderr=subprocess.PIPE)
-                stderr = p.communicate()[1].decode('utf-8')
+                p = gpsubprocess.Popen(args, stdout=tarfile, stderr=subprocess.PIPE)
+                stderr = p.communicate()[1]
 
             if p.returncode:
                 print(('[WARNING %s] cannot fetch existing authentication files: tar rc=%s;'
@@ -530,8 +529,8 @@ try:
     #    Ensure the local host can password-less ssh into each remote host
     for remoteHost in GV.allHosts:
         cmd = ['ssh', remoteHost.host(), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',  'true']
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stderr = p.communicate()[1].decode('utf-8')
+        p = gpsubprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stderr = p.communicate()[1]
         if p.returncode:
             print('[ERROR]: Failed to ssh to %s. %s' % (remoteHost.host(), stderr), file=sys.stderr)
             print('[ERROR]: Expected passwordless ssh to host %s' % remoteHost.host(), file=sys.stderr)
@@ -657,8 +656,8 @@ try:
                 os.mkdir(hostDir)
                 cmd = 'cd %s && tar xf %s' % (hostDir, tarfileName)
                 if GV.opt['-v']: print('[INFO %s]: %s' % (h.host(), cmd))
-                tarproc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                tarerr = tarproc.communicate()[1].decode('utf-8')
+                tarproc = gpsubprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                tarerr = tarproc.communicate()[1]
                 if tarproc.returncode != 0:
                     print('[WARNING %s] cannot extract SSH files;' % h.host(), file=sys.stderr)
                     for line in tarerr.splitlines():
