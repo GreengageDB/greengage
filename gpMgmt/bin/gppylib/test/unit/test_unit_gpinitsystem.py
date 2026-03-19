@@ -4,7 +4,7 @@ from mock import *
 from .gp_unittest import *
 from io import StringIO
 try:
-    from subprocess32 import Popen, PIPE
+    from subprocess32 import PIPE
 except:
     from subprocess import PIPE
 from gppylib.gpsubprocess import Popen

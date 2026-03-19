@@ -1,5 +1,7 @@
 from __future__ import print_function
 from __future__ import division
+
+import sys
 from builtins import next
 from builtins import filter
 from builtins import map
@@ -2119,7 +2121,7 @@ def impl(context, filename, contain, output):
         cmd = Command(name='Running remote command: %s' % cmd_str, cmdStr=cmd_str)
         cmd.run(validateAfter=True)
 
-        actual = cmd.get_stdout()
+        actual = cmd.get_stdout().decode('utf-8')
         if valuesShouldExist and (output not in actual):
                 raise Exception('File %s on host %s does not contain "%s"' % (filepath, host, output))
         if (not valuesShouldExist) and (output in actual):
@@ -4112,7 +4114,11 @@ def impl(context, command, input):
 @when('the user runs {command}, selects {input} and interrupt the process')
 def impl(context, command, input):
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    p.stdin.write(input.encode())
+
+    if sys.version_info[0] == 2:
+        input = input.encode('utf-8')
+
+    p.stdin.write(input)
     p.stdin.flush()
     time.sleep(120)
     # interrupt the process.

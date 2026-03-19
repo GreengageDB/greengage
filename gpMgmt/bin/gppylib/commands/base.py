@@ -532,8 +532,6 @@ class Command(object):
     propagate_env_map = {}  # specific environment variables for this command instance
 
     def __init__(self, name, cmdStr, ctxt=LOCAL, remoteHost=None, stdin=None, gphome=None):
-        assert stdin is None or isinstance(stdin, str)
-
         self.name = name
         self.cmdStr = cmdStr
         self.exec_context = createExecutionContext(ctxt, remoteHost, stdin=stdin,

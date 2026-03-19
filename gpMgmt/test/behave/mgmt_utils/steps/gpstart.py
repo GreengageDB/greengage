@@ -89,9 +89,9 @@ def impl(context, cmd):
         preexec_fn=_handle_sigpipe,
     )
 
-    context.stdout_message, context.stderr_message = p.communicate()
+    returncode, context.stdout_message, context.stderr_message = p.communicate2()
 
-    context.ret_code = p.returncode
+    context.ret_code = returncode
 
 @given('the host for the {seg_type} on content {content} is made unreachable')
 def impl(context, seg_type, content):
