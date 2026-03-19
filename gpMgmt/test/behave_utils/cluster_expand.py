@@ -3,11 +3,12 @@ from builtins import object
 import glob
 from datetime import datetime, timedelta
 try:
-    from subprocess32 import Popen, PIPE
+    from subprocess32 import PIPE
 except:
-    from subprocess import Popen, PIPE
+    from subprocess import PIPE
 from .utils import run_gpcommand
 
+from gppylib.gpsubprocess import Popen
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
@@ -65,7 +66,7 @@ class Gpexpand(object):
             if mirror:
                 p1.stdin.write(("%s\n" % mirror).encode('utf-8'))
 
-        output = p1.communicate()[0].decode('utf-8')
+        output = p1.communicate()[0]
 
         return output, p1.wait()
 

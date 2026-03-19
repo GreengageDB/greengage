@@ -20,7 +20,7 @@ else:
     string_types = basestring
 
 # from gppylib.commands.gp import get_coordinatordatadir
-
+from gppylib import gpsubprocess
 try:
     import subprocess32 as subprocess
 except ImportError:
@@ -86,8 +86,8 @@ def run(cmd):
             function, so you can theoretically pass any value that is
             valid for the second parameter of open().
     """
-    p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0].decode('utf-8')
+    p = gpsubprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    out = p.communicate()[0]
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
@@ -449,9 +449,8 @@ def modify_sql_file(num):
 
 def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
-    p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p = gpsubprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     _, err = p.communicate()
-    err = err.decode('utf-8')
     if err:
         sys.stderr.write(str(err))
         sys.exit(2)

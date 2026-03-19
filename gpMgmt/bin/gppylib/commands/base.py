@@ -460,11 +460,11 @@ class LocalExecutionContext(ExecutionContext):
         cmd.pid = self.proc.pid
         if wait:
             (rc, stdout_value, stderr_value) = self.proc.communicate2(input=self.stdin)
-            assert isinstance(stdout_value, bytes)
-            assert isinstance(stderr_value, bytes)
+            assert isinstance(stdout_value, str)
+            assert isinstance(stderr_value, str)
             self.completed = True
             cmd.set_results(CommandResult(
-                rc, stdout_value.decode('utf-8'), stderr_value.decode('utf-8'), self.completed, self.halt))
+                rc, stdout_value, stderr_value, self.completed, self.halt))
 
     def cancel(self):
         if self.proc:
@@ -532,6 +532,8 @@ class Command(object):
     propagate_env_map = {}  # specific environment variables for this command instance
 
     def __init__(self, name, cmdStr, ctxt=LOCAL, remoteHost=None, stdin=None, gphome=None):
+        assert stdin is None or isinstance(stdin, str)
+
         self.name = name
         self.cmdStr = cmdStr
         self.exec_context = createExecutionContext(ctxt, remoteHost, stdin=stdin,

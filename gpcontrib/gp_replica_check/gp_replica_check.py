@@ -39,6 +39,7 @@ except:
 import threading
 import queue
 import time
+from gppylib import gpsubprocess
 
 if sys.version_info[0] == 3:
     from shlex import quote
@@ -74,7 +75,7 @@ Mirror Data Directory Location: %s' % (self.name, self.host, self.port, self.dat
             print("Primary segment for content %d is down" % self.content)
         else:
             try:
-                res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8')
+                res = gpsubprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                 self.result = True if res.strip().split('\n')[-2].strip() == 't' else False
                 with self.lock:
                     print(self)
@@ -94,7 +95,7 @@ def create_restartpoint_on_ckpt_record_replay(set):
         cmd = "gpconfig -r create_restartpoint_on_ckpt_record_replay --skipvalidation && gpstop -u"
     print(cmd)
     try:
-        res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8')
+        res = gpsubprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         print(res)
     except subprocess.CalledProcessError as e:
         print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
@@ -114,10 +115,10 @@ def install_extension(databases):
 
     database_list = [s.strip() for s in databases.split(',')]
     print("Creating gp_replica_check extension on databases if needed:")
-    datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
+    datnames = gpsubprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     for datname in datnames:
         if len(datname) >= 1 and (datname.strip() in database_list or 'all' in database_list):
-            print(subprocess.check_output('psql %s -t -c "%s"' % (quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True).decode('utf-8'))
+            print(gpsubprocess.check_output('psql %s -t -c "%s"' % (quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True))
 
 # Get the primary and mirror servers, for each content ID.
 def get_segments():
@@ -129,7 +130,7 @@ WHERE gscp.content = gscm.content
       AND gscp.role = 'p'
       AND gscm.role = 'm'
 '''
-    seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
+    seglist = gpsubprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     segmap = {}
     for segrow in seglist:
         segelements = [s.strip() for s in segrow.split('|')]
@@ -150,7 +151,7 @@ SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
 
     database_list = [s.strip() for s in databases.split(',')]
 
-    dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
+    dbrawlist = gpsubprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     dblist = []
     for dbrow in dbrawlist:
         dbname = dbrow

@@ -24,6 +24,7 @@ import time
 from optparse import OptionParser
 from datetime import datetime
 from gppylib.commands import gp
+from gppylib import gpsubprocess
 
 pidfile = 'reswatch.pid'
 ps_file = 'ps.out.gz'
@@ -98,7 +99,7 @@ def runPSProcess(sleepInt=60):
         open_files.append(outfile)
         while True:
             outfile.write(datetime.now().strftime("\n\n>>>%y:%m:%d:%H:%M:%S<<<\n").encode('utf-8'))
-            cmd = subprocess.Popen(ps_cmd, shell=True, stdout=subprocess.PIPE)
+            cmd = gpsubprocess.Popen(ps_cmd, shell=True, stdout=subprocess.PIPE)
             outfile.writelines(cmd.stdout)
             outfile.flush()
             time.sleep(sleepInt)

@@ -9,6 +9,7 @@ from test.behave_utils import utils
 from test.behave_utils.utils import wait_for_unblocked_transactions
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
+from gppylib import gpsubprocess
 
 def _run_sql(sql, opts=None):
     env = None
@@ -81,7 +82,7 @@ def impl(context, cmd):
     Runs `yes | cmd`.
     """
 
-    p = subprocess.Popen(
+    p = gpsubprocess.Popen(
         ["bash", "-c", "yes | %s" % cmd],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -89,8 +90,6 @@ def impl(context, cmd):
     )
 
     context.stdout_message, context.stderr_message = p.communicate()
-    context.stdout_message = context.stdout_message.decode('utf-8')
-    context.stderr_message = context.stderr_message.decode('utf-8')
 
     context.ret_code = p.returncode
 

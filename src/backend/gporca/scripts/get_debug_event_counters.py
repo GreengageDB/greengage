@@ -3,6 +3,7 @@
 from __future__ import print_function
 import sys
 import subprocess
+from gppylib import gpsubprocess
 import re
 import argparse
 import os
@@ -111,7 +112,7 @@ def print_or_insert_header_row(csv):
 # -----------------------------------------------------------------------------
 
 def run_command(command):
-	p = subprocess.Popen(command,
+	p = gpsubprocess.Popen(command,
 						 stdout=subprocess.PIPE,
 						 stderr=subprocess.STDOUT)
 	return iter(p.stdout.readline, b'')

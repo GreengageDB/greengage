@@ -25,6 +25,7 @@ try:
 except:
     import subprocess
 from gppylib import gplog
+import sys
 
 
 logger=gplog.get_default_logger()
@@ -35,7 +36,11 @@ class Popen(subprocess.Popen):
     
     cancelRequested=False
 
-    
+    def __init__(self, *args, **kwargs):
+        if sys.version_info[0] == 3:
+            kwargs['text'] = True
+        super(Popen, self).__init__(*args, **kwargs)
+
     def communicate2(self, timeout=2,input=None):
         """ An extension to communicate() that allows for external cancels
         to abort processing.  
@@ -70,6 +75,10 @@ class Popen(subprocess.Popen):
         self._finish_read_files(timeout,output,error)
                       
         (resout,reserr)=self._postprocess_outputs(output,error)
+        if sys.version_info[0] == 3 and isinstance(resout, bytes):
+            resout = resout.decode('utf-8')
+        if sys.version_info[0] == 3 and isinstance(reserr, bytes):
+            reserr = reserr.decode('utf-8')
 
         return (self.returncode,resout,reserr)
 
@@ -105,11 +114,19 @@ class Popen(subprocess.Popen):
         # object do the translation: It is based on stdio, which is
         # impossible to combine with select (unless forcing no
         # buffering).
-        if self.universal_newlines and hasattr(file, 'newlines'):
+        if self.universal_newlines and (sys.version_info[0] == 3 or hasattr(file, 'newlines')):
+            if sys.version_info[0] == 3:
+                kargs = {
+                    "encoding": "utf-8",
+                    "errors": "strict",
+                }
+            else:
+                kargs = {}
+
             if output:
-                output = self._translate_newlines(output)
+                output = self._translate_newlines(output, **kargs)
             if error:
-                error = self._translate_newlines(error)    
+                error = self._translate_newlines(error, **kargs)    
         return (output,error)
     
     
@@ -231,3 +248,8 @@ class Popen(subprocess.Popen):
                             return ([],[],[])
                 else:
                     raise
+
+def check_output(*popenargs, **kwargs):
+    if sys.version_info[0] == 3:
+        kwargs['text'] = True
+    return subprocess.check_output(*popenargs, **kwargs)

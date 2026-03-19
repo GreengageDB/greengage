@@ -21,10 +21,11 @@ import _thread
 import time
 from contextlib import closing
 try:
-    from subprocess32 import check_output, Popen, PIPE
+    from subprocess32 import PIPE
 except:
-    from subprocess import check_output, Popen, PIPE
-import subprocess
+    from subprocess import PIPE
+from gppylib import gpsubprocess
+from gppylib.gpsubprocess import Popen, check_output
 from collections import defaultdict
 
 import psutil
@@ -4101,7 +4102,7 @@ def impl(context, command, input):
     if input == "no mode but presses enter":
         input = os.linesep
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate(input=input.encode('utf-8'))
+    stdout, stderr = p.communicate(input=input)
 
     p.stdin.close()
 
@@ -4117,7 +4118,7 @@ def impl(context, command, input):
     time.sleep(120)
     # interrupt the process.
     p.terminate()
-    p.communicate(input=input.encode())
+    p.communicate(input=input)
 
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
