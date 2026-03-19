@@ -75,10 +75,6 @@ class Popen(subprocess.Popen):
         self._finish_read_files(timeout,output,error)
                       
         (resout,reserr)=self._postprocess_outputs(output,error)
-        if sys.version_info[0] == 3 and isinstance(resout, bytes):
-            resout = resout.decode('utf-8')
-        if sys.version_info[0] == 3 and isinstance(reserr, bytes):
-            reserr = reserr.decode('utf-8')
 
         return (self.returncode,resout,reserr)
 
@@ -114,7 +110,8 @@ class Popen(subprocess.Popen):
         # object do the translation: It is based on stdio, which is
         # impossible to combine with select (unless forcing no
         # buffering).
-        if self.universal_newlines and (sys.version_info[0] == 3 or hasattr(file, 'newlines')):
+        # In Python 3, we always use the text mode. Also, decoding happens here.
+        if sys.version_info[0] == 3 or (self.universal_newlines and hasattr(file, 'newlines')):
             if sys.version_info[0] == 3:
                 kargs = {
                     "encoding": "utf-8",
@@ -123,9 +120,9 @@ class Popen(subprocess.Popen):
             else:
                 kargs = {}
 
-            if output:
+            if output is not None:
                 output = self._translate_newlines(output, **kargs)
-            if error:
+            if error is not None:
                 error = self._translate_newlines(error, **kargs)    
         return (output,error)
     

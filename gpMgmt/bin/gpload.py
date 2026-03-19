@@ -777,7 +777,7 @@ class CatThread(threading.Thread):
                 while 1:
                     # Windows select does not support select on non-file fd's, so we can use the lock fix. Deadlock is possible here.
                     # We need to look into the Python windows module to see if there is another way to do this in Windows.
-                    line = self.fd.readline().decode('utf-8')
+                    line = self.fd.readline()
                     if not line:
                         break
                     self.gpload.log(self.gpload.DEBUG, 'gpfdist: ' + line.strip('\n'))
@@ -790,7 +790,7 @@ class CatThread(threading.Thread):
                                             )
                     if retList[0] == [self.fd]:
                         self.theLock.acquire()
-                        line = self.fd.readline().decode('utf-8')
+                        line = self.fd.readline()
                         self.theLock.release()
                     else:
                         continue
