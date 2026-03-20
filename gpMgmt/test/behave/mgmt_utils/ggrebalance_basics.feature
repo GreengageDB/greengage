@@ -89,7 +89,7 @@ Feature: ggrebalance behave tests
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -c -y"
+        When the user runs "ggrebalance -c --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Reset numsegments to default is done." to logfile with latest timestamp
          And ggrebalance should print "Cleanup is complete" to logfile with latest timestamp

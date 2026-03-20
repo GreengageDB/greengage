@@ -47,7 +47,7 @@ def parseargs():
                       help='performs rebalance rollback if possible.')
     parser.add_option('-h', '-?', '--help', '--usage', action='help',
                       help='show this help message and exit.')
-    parser.add_option('-y', '--non-interactive-mode', dest="interactive", action='store_false', default=True,
+    parser.add_option('--non-interactive-mode', dest="interactive", action='store_false', default=True,
                          help="non-interactive mode, do not require user input for confirmations, use defaults.")
     parser.add_option('-H', '--target-hosts', dest='target_hosts', metavar='<target_hosts>',
                       help='Set of hostnames where rebalance will distribute segments to')

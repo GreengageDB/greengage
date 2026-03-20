@@ -13,6 +13,8 @@ from gppylib.gparray import Segment, GpArray
 from gppylib.commands.base import REMOTE, WorkerPool
 from gppylib.commands.unix import Hostname, DiskFree, DiskUsage
 from gppylib.operations.validate_disk_space import FileSystem
+from gppylib import userinput
+from gppylib.fault_injection import *
 
 class ValidationError(Exception):
     pass
@@ -740,3 +742,25 @@ class DiskSpaceChecker:
                 raise
         
         return results
+
+# Decorator to overwrite the logic of interactive_check()
+# during tests execution.
+def wrap_interactive_check_with_faults(fun):
+    def func_with_faults(interactive: bool, bg_info: str, msg: str, default: str):
+        try:
+            inject_value = inject_fault_get_value()
+            injected_answers = json.loads(inject_value)
+            if injected_answers.get(msg, '') == 'yes':
+                return True
+            if injected_answers.get(msg, '') == 'no':
+                return False
+        except:
+            pass
+        return fun(interactive, bg_info, msg, default)
+    return func_with_faults
+
+@wrap_interactive_check_with_faults
+def interactive_check_yesno(interactive: bool, bg_info: str, msg: str, default: str) -> bool:
+    if not interactive:
+        return userinput.validate_yesno('', default)
+    return userinput.ask_yesno(bg_info, msg, default)

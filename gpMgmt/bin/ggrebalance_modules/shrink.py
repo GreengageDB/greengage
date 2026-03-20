@@ -9,7 +9,6 @@ try:
     from gppylib.commands.gp import *
     from gppylib.gplog import *
     from gppylib.db import dbconn
-    from gppylib import userinput
     from gppylib.gparray import GpArray, Segment
     from gppylib.fault_injection import *
     from gppylib.userinput import *
@@ -19,6 +18,7 @@ try:
     from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
+    from ggrebalance_modules.rebalance_commons import interactive_check_yesno
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
@@ -290,7 +290,7 @@ class GGShrink:
         if self.state in self.states_main_shrink_flow + self.states_rollback_flow:
             self.rebalance_schema.storeShrinkState(self.state)
 
-    def cleanup(self, prev_run_was_complete: bool) -> None:
+    def cleanup(self, prev_run_was_complete: bool) -> bool:
         if not prev_run_was_complete:
             self.logger.warning("ggrebalance hasn't finished shrink process properly. Previous run was interrupted. "
                                 "Some unbalanced tables can still exist.")
@@ -306,13 +306,12 @@ class GGShrink:
                 self.logger.warning('Current numsegments is not equal to default value.')
                 self.logger.info('Suggestion: explicitly reset the value before cleanup. Note: cluster restart will implicitly reset the value.')
 
-            if (self.options.interactive and
-                not userinput.ask_yesno(None, "\nContinue with cleanup?", 'Y')):
+            if not interactive_check_yesno(self.options.interactive, None, '\nContinue with cleanup?', default = 'Y'):
                 self.logger.info('Cleanup was interrupted...')
-                return
+                return False
 
             if (numsegments_is_set and
-                (not self.options.interactive or userinput.ask_yesno(None, "\nReset numsegments to default?", 'Y'))):
+                interactive_check_yesno(self.options.interactive, None, '\nReset numsegments to default?', default = 'Y')):
                 dbconn.execSQL(self.conn, 'BEGIN')
                 dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
                 dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')
@@ -321,6 +320,8 @@ class GGShrink:
 
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
+
+        return True
 
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]

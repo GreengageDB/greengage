@@ -188,10 +188,14 @@ class GGRebalanceMainSM:
             self.logger.info(f"Rebalance schema doesn't exist. Cleanup is not required.")
         else:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
+            perform_schema_cleanup = True
             if isinstance(self.plan, ShrinkPlan):
-                self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
-            self.rebalance_schema.dropSchema()
-            self.logger.info('Cleanup is complete')
+                perform_schema_cleanup = self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
+            if perform_schema_cleanup:
+                self.rebalance_schema.dropSchema()
+                self.logger.info('Cleanup is complete')
+            else:
+                self.logger.info("Cleanup wasn't successfull due to unfinished shrink")
         self.trigger('move_to_STATE_END')
 
     @wrap_func_with_faults
