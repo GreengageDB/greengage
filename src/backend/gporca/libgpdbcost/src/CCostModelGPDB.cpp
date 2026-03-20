@@ -2156,7 +2156,7 @@ CCostModelGPDB::CostBitmapTableScan(CMemoryPool *mp, CExpressionHandle &exprhdl,
 			if (IMDIndex::EmdindBitmap != indexType &&
 				IMDIndex::EmdindHash != indexType)
 			{
-				// btree indexes are not sensitive to the NDV, since they don't have any bitmaps
+				// only bitmap and hash indexes are sensitive to the NDV, since their work is repeated for each distinct value
 				c3_dBitmapPageCost = 0.0;
 			}
 
