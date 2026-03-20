@@ -38,7 +38,7 @@ jobs:
     needs: build  # Wait for build to complete
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -60,7 +60,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
@@ -78,7 +78,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
@@ -96,7 +96,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
@@ -114,7 +114,7 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
