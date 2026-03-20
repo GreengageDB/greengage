@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     strategy:
-      fail-fast: true  # Stop on any failure in the matrix
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
@@ -106,7 +106,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
