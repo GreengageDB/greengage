@@ -966,3 +966,37 @@ create table part_column_drop_1_10 partition of
 \d part_column_drop
 \d part_column_drop_1_10
 drop table part_column_drop;
+
+-- Test that creating replicated table with default value as 
+-- volatile function in some column fails.
+-- https://github.com/GreengageDB/greengage/pull/321
+-- start_ignore
+DROP TABLE IF EXISTS dist_replicated;
+DROP FUNCTION IF EXISTS fn_val() CASCADE;
+-- end_ignore
+CREATE OR REPLACE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        VOLATILE
+AS $$
+BEGIN
+	RETURN floor(random() * 100 + 1);
+END;
+$$
+EXECUTE ON ANY;
+CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
+CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_val() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
+CREATE OR REPLACE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        IMMUTABLE
+AS $$
+BEGIN
+	RETURN 42;
+END;
+$$
+EXECUTE ON ANY;
+CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
+
+DROP TABLE dist_replicated;
+DROP FUNCTION fn_val;

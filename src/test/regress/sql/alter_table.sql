@@ -3224,6 +3224,7 @@ END;
 $$
 EXECUTE ON ANY;
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT (fn_val() + 1) * (42 + 42);
 CREATE OR REPLACE FUNCTION fn_val()
         RETURNS int
         LANGUAGE plpgsql
@@ -3235,4 +3236,6 @@ END;
 $$
 EXECUTE ON ANY;
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
+
 DROP TABLE dist_replicated;
+DROP FUNCTION fn_val;
