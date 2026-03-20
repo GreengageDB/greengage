@@ -39,6 +39,7 @@ class Popen(subprocess.Popen):
     def __init__(self, *args, **kwargs):
         if sys.version_info[0] == 3:
             kwargs['text'] = True
+            kwargs['encoding'] = 'utf-8'
         super(Popen, self).__init__(*args, **kwargs)
 
     def communicate2(self, timeout=2,input=None):
@@ -249,4 +250,5 @@ class Popen(subprocess.Popen):
 def check_output(*popenargs, **kwargs):
     if sys.version_info[0] == 3:
         kwargs['text'] = True
+        kwargs['encoding'] = 'utf-8'
     return subprocess.check_output(*popenargs, **kwargs)
