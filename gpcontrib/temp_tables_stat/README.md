@@ -38,7 +38,3 @@ Create the extension in your database.
 ```
 CREATE EXTENSION temp_tables_stat;
 ```
-
-## Test
-
-src/test/isolation2/sql/temp_tables_stat.sql
