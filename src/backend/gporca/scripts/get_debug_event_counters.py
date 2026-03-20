@@ -115,7 +115,7 @@ def run_command(command):
 	p = gpsubprocess.Popen(command,
 						 stdout=subprocess.PIPE,
 						 stderr=subprocess.STDOUT)
-	return iter(p.stdout.readline, b'')
+	return iter(p.stdout.readline, '')
 
 
 def processLogFile(logFileLines, allruns):
