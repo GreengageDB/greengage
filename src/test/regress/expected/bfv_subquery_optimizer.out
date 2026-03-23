@@ -497,6 +497,46 @@ EXPLAIN SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
 
 DROP TABLE A;
 --
+-- Test if we reattach flow of omitted SubqueryScan to outerplan.
+--
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH A AS (
+    SELECT * FROM UNNEST(ARRAY[0]) I
+), B AS (
+    SELECT *, UNNEST(ARRAY[1]) FROM A
+) SELECT * FROM A WHERE I IN (SELECT A.I FROM B);
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Sequence
+   Output: share0_ref3.unnest
+   ->  Shared Scan (share slice:id -1:0)
+         Output: share0_ref1.unnest
+         ->  Materialize
+               Output: unnest.unnest
+               ->  Function Scan on pg_catalog.unnest
+                     Output: unnest.unnest
+                     Function Call: unnest('{0}'::integer[])
+   ->  Nested Loop Semi Join
+         Output: share0_ref3.unnest
+         Join Filter: true
+         ->  Result
+               Output: share0_ref3.unnest
+               Filter: (share0_ref3.unnest = share0_ref3.unnest)
+               ->  Shared Scan (share slice:id -1:0)
+                     Output: share0_ref3.unnest
+         ->  Materialize
+               Output: (unnest('{1}'::integer[]))
+               ->  Limit
+                     Output: (unnest('{1}'::integer[]))
+                     ->  Result
+                           Output: unnest('{1}'::integer[])
+                           ->  Shared Scan (share slice:id -1:0)
+                                 Output: share0_ref2.unnest
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: optimizer=on
+(27 rows)
+
+--
 -- Test the ctid in Function and Values Scans
 --
 create table t1(a int) ;
