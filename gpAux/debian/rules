@@ -43,4 +43,4 @@ override_dh_auto_install:
 
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
-	dh_gencontrol -p$(PACKAGE_NAME) -- -VpythonRequires="$(DEPS)" -VpythonConflicts="$(CONFLICTS)"
+	dh_gencontrol -- -VpythonRequires="$(DEPS)" -VpythonConflicts="$(CONFLICTS)"
