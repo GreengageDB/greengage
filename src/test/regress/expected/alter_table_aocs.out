@@ -1379,8 +1379,9 @@ select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarg
 (2 rows)
 
 -- volatile expression, do not expect a table rewrite, only column rewrite
-execute capturerelfilenodebefore('addexp_volatile', 't_addcol_aoco');
-execute checkattributeencoding('t_addcol_aoco');
+create table t_addcol_volatile_aoco with (appendonly=true, orientation=column) as select * from t_addcol_aoco distributed by (a);
+execute capturerelfilenodebefore('addexp_volatile', 't_addcol_volatile_aoco');
+execute checkattributeencoding('t_addcol_volatile_aoco');
  attnum | filenum | lastrownums |                     attoptions                      
 --------+---------+-------------+-----------------------------------------------------
       1 |       1 |             | {compresstype=none,blocksize=32768,compresslevel=0}
@@ -1389,20 +1390,19 @@ execute checkattributeencoding('t_addcol_aoco');
       4 |       4 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       5 |       5 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       6 |       6 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-      7 |       7 | {0,100}     | {compresstype=none,blocksize=32768,compresslevel=0}
-      8 |       8 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-      9 |       9 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-     10 |      10 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-(10 rows)
+      7 |       7 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+      8 |       8 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+      9 |       9 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+(9 rows)
 
-alter table t_addcol_aoco add column defexp3 int default random()*1000::int;
-execute checkrelfilenodediff('addexp_volatile', 't_addcol_aoco');
- segid |    casename     |    relname    | rewritten 
--------+-----------------+---------------+-----------
-     0 | addexp_volatile | t_addcol_aoco | f
+alter table t_addcol_volatile_aoco add column defexp3 int default random()*1000::int;
+execute checkrelfilenodediff('addexp_volatile', 't_addcol_volatile_aoco');
+ segid |    casename     |        relname         | rewritten 
+-------+-----------------+------------------------+-----------
+     0 | addexp_volatile | t_addcol_volatile_aoco | f
 (1 row)
 
-execute checkattributeencoding('t_addcol_aoco');
+execute checkattributeencoding('t_addcol_volatile_aoco');
  attnum | filenum | lastrownums |                     attoptions                      
 --------+---------+-------------+-----------------------------------------------------
       1 |       1 |             | {compresstype=none,blocksize=32768,compresslevel=0}
@@ -1411,21 +1411,21 @@ execute checkattributeencoding('t_addcol_aoco');
       4 |       4 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       5 |       5 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       6 |       6 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-      7 |       7 | {0,100}     | {compresstype=none,blocksize=32768,compresslevel=0}
-      8 |       8 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-      9 |       9 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-     10 |      10 | {0,200}     | {compresstype=none,blocksize=32768,compresslevel=0}
-     11 |      11 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-(11 rows)
+      7 |       7 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+      8 |       8 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+      9 |       9 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+     10 |      10 |             | {compresstype=none,blocksize=32768,compresslevel=0}
+(10 rows)
 
 -- results are expected
-select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_aoco;
+select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_volatile_aoco;
  a | def10 | defnull1 | defnull2 | char_length | char_length | defexp1 | expected_defexp2 | expected_defexp3 
 ---+-------+----------+----------+-------------+-------------+---------+------------------+------------------
  1 |     1 |        1 |        1 |      100001 |     1000002 |  100003 | t                | t
  1 |    10 |          |          |      100000 |     1000002 |  100003 | t                | t
 (2 rows)
 
+drop table t_addcol_volatile_aoco;
 --
 -- truncate
 --
@@ -1470,8 +1470,7 @@ execute checkattributeencoding('t_addcol_aoco');
       8 |       8 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       9 |       9 |             | {compresstype=none,blocksize=32768,compresslevel=0}
      10 |      10 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-     11 |      11 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-(11 rows)
+(10 rows)
 
 -- for unsafe truncate, since we don't clear up gp_fastsequence, we don't need to clear up lastrownums
 execute checkattributeencoding('t_addcol_aoco_truncate');
@@ -1511,8 +1510,7 @@ execute checkattributeencoding('t_addcol_aoco');
       8 |       8 |             | {compresstype=none,blocksize=32768,compresslevel=0}
       9 |       9 |             | {compresstype=none,blocksize=32768,compresslevel=0}
      10 |      10 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-     11 |      11 |             | {compresstype=none,blocksize=32768,compresslevel=0}
-(11 rows)
+(10 rows)
 
 execute checkattributeencoding('t_addcol_aoco_p1');
  attnum | filenum | lastrownums |                     attoptions                      

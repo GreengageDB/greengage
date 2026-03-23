@@ -1288,7 +1288,9 @@ END;
 $$
 EXECUTE ON ANY;
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
+ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
 CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_val() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
+ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
 CREATE OR REPLACE FUNCTION fn_val()
         RETURNS int
         LANGUAGE plpgsql
@@ -1300,6 +1302,5 @@ END;
 $$
 EXECUTE ON ANY;
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
-
 DROP TABLE dist_replicated;
 DROP FUNCTION fn_val;
