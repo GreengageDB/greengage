@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     strategy:
-      fail-fast: true  # Stop on any failure in the matrix
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -37,7 +37,7 @@ jobs:
     needs: build  # Wait for build to complete
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -58,7 +58,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -79,7 +79,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -100,7 +100,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -121,7 +121,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -142,7 +142,7 @@ jobs:
     if: github.event_name == 'push'  # For push to main or tags
     needs: build  # For push (main or tags)
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
