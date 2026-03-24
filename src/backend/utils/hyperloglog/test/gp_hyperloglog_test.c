@@ -42,12 +42,7 @@ float		max_error = 0;
 static void
 hll_statistical_accuracy(size_t cardinality, size_t step)
 {
-	GpHLLCounter hll;
-
-	double		estimate;
-	double		rel_error;
-
-	hll = gp_hyperloglog_init_def();
+	GpHLLCounter hll = gp_hyperloglog_init_def();
 
 	/*
 	 * Insert unique values
@@ -68,10 +63,9 @@ hll_statistical_accuracy(size_t cardinality, size_t step)
 		nitems++;
 	}
 
-	estimate = gp_hyperloglog_estimate(hll);
+	double estimate = gp_hyperloglog_estimate(hll);
 
-
-	rel_error = fabs(estimate - nitems) / nitems;
+	double rel_error = fabs(estimate - nitems) / nitems;
 
 	printf("actual=%d estimate=%f rel_error=%f\n",
 		   nitems,
