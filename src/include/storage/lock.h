@@ -481,6 +481,7 @@ typedef struct LOCALLOCK
 
 #define LOCALLOCK_LOCKMETHOD(llock) ((llock).tag.lock.locktag_lockmethodid)
 #define LOCALLOCK_LOCKTAG(llock) ((LockTagType) (llock).tag.lock.locktag_type)
+#define LOCK_LOCKTAG(lock) ((LockTagType) (lock).tag.locktag_type)
 
 /* Waiter global locallock. (needed by resource queuing). */
 extern LOCALLOCK *awaitedLock;
