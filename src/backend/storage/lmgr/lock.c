@@ -1682,7 +1682,7 @@ LockCheckConflicts(LockMethod lockMethodTable,
 				 * If processes in my session are holding the lock, mask
 				 * it out so that we won't be blocked by them.
 				 */
-				if (otherProc->mppSessionId == mppSessionId &&
+				if (//otherProc->mppSessionId == mppSessionId &&
 					otherProclock->holdMask & LOCKBIT_ON(i))
 					ourHolding++;
 
