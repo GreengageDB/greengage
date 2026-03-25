@@ -44,6 +44,8 @@ extern double expression_returns_set_rows(PlannerInfo *root, Node *clause);
 
 extern bool contain_subplans(Node *clause);
 
+extern bool contain_volatile_functions_raw(Node* raw_expr, ParseExprKind expr_kind);
+
 extern char max_parallel_hazard(Query *parse);
 extern bool is_parallel_safe(PlannerInfo *root, Node *node);
 extern bool contain_nonstrict_functions(Node *clause);

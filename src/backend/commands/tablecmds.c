@@ -50,7 +50,6 @@
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
-#include "catalog/pg_proc.h"
 #include "catalog/pg_proc_d.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_trigger.h"
@@ -86,6 +85,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/clauses.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_collate.h"
@@ -354,7 +354,6 @@ static bool check_for_column_name_collision(Relation rel, const char *colname,
 											bool if_not_exists);
 static void add_column_datatype_dependency(Oid relid, int32 attnum, Oid typid);
 static void add_column_collation_dependency(Oid relid, int32 attnum, Oid collid);
-static bool volatility_walker(Node* expr);
 static void ATPrepDropNotNull(Relation rel, bool recurse, bool recursing);
 static ObjectAddress ATExecDropNotNull(Relation rel, const char *colName, LOCKMODE lockmode);
 static void ATPrepSetNotNull(List **wqueue, Relation rel,
@@ -981,7 +980,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			Assert(colDef->cooked_default == NULL);
 
 			/* Protect replicated tables from volatile expressions as default value */
-			if (GpPolicyIsReplicated(policy) && volatility_walker(colDef->raw_default))
+			if (GpPolicyIsReplicated(policy) &&
+				contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_COLUMN_DEFAULT))
 				ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("volatile expressions are not supported as "
@@ -7636,7 +7636,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 errmsg("cannot add column to a partition")));
 
 	/* Protect replicated tables from volatile expressions as default value */
-    if (GpPolicyIsReplicated(rel->rd_cdbpolicy) && volatility_walker(colDef->raw_default))
+    if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+		contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_COLUMN_DEFAULT))
 		ereport(ERROR,
 			   (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				errmsg("volatile expressions are not supported as "
@@ -8222,39 +8223,6 @@ add_column_collation_dependency(Oid relid, int32 attnum, Oid collid)
 }
 
 /*
- * Check that expression does not contain volatile function calls.
- */
-static bool
-volatility_walker(Node* expr)
-{
-	if (expr == NULL)
-		return false;
-	else if (expr->type == T_FuncCall)
-	{
-		const char *funcname = strVal((Value *) linitial(((FuncCall *) expr)->funcname));
-		CatCList   *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, 
-												  CStringGetDatum(funcname));
-		for (int i = 0; i < catlist->n_members; i++)
-		{
-			HeapTuple	 proctup = &catlist->members[i]->tuple;
-			Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
-			if (procform->provolatile == PROVOLATILE_VOLATILE) {
-				ReleaseSysCacheList(catlist);
-				return true;
-			}
-		}
-		ReleaseSysCacheList(catlist);
-	}
-	else if (expr->type == T_A_Expr)
-	{
-		A_Expr	*a_expr = (A_Expr *) expr;
-		return   volatility_walker(a_expr->lexpr) ||
-				 volatility_walker(a_expr->rexpr);
-	}
-	return false;
-}
-
-/*
  * ALTER TABLE ... ALTER COLUMN a SET ENCODING (...)
  *
  * Update pg_attribute_encoding with the given encoding options.
@@ -8793,6 +8761,14 @@ ATExecColumnDefault(Relation rel, const char *colName,
 	TupleDesc	tupdesc = RelationGetDescr(rel);
 	AttrNumber	attnum;
 	ObjectAddress address;
+
+	/* Protect replicated tables from volatile expressions as default value */
+	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+		contain_volatile_functions_raw(newDefault, EXPR_KIND_COLUMN_DEFAULT))
+		ereport(ERROR,
+			(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				errmsg("volatile expressions are not supported as "
+					"default values ​for columns in replicated tables")));
 
 	/*
 	 * get the number of the attribute

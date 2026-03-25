@@ -45,6 +45,7 @@
 #include "parser/parse_agg.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_func.h"
+#include "parser/parse_expr.h"
 #include "rewrite/rewriteManip.h"
 #include "tcop/tcopprot.h"
 #include "utils/acl.h"
@@ -963,6 +964,27 @@ contain_volatile_functions_not_nextval_walker(Node *node, void *context)
 								  context);
 }
 
+/*
+ * contain_volatile_functions_raw
+ *	  Test whether given raw expression contains volatile functions.
+ *
+ * This is a wrapper for contain_volatile_functions() that is for expressions
+ * that are raw and yet have been analyzed (e.g. ones for DEFAULT COLUMN).
+ */
+bool
+contain_volatile_functions_raw(Node* raw_expr, ParseExprKind expr_kind)
+{
+	ParseState *pstate;
+    Node       *analyzed_expr;
+    bool        result;
+    
+    pstate = make_parsestate(NULL);
+    analyzed_expr = transformExpr(pstate, raw_expr, expr_kind);
+    result = contain_volatile_functions(analyzed_expr);
+    free_parsestate(pstate);
+    
+    return result;
+}
 
 /*****************************************************************************
  *		Check queries for parallel unsafe and/or restricted constructs
