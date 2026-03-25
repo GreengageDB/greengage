@@ -12,6 +12,9 @@
  *-------------------------------------------------------------------------
  */
 
+#ifndef FRONTEND
+#include "postgres.h"
+#endif
 /*
  * This file is compiled with both frontend and backend codes, symlinked by
  * src/backend/Makefile, and use macro FRONTEND to switch.
@@ -111,6 +114,21 @@ pg_fe_scram_init(PGconn *conn,
 		free(state);
 		return NULL;
 	}
+#ifndef FRONTEND
+	if (rc == SASLPREP_SUCCESS)
+	{
+		/* On backend move from palloc-ed to malloc-ed */
+		char	   *prep_password_p = prep_password;
+		prep_password = strdup(prep_password_p);
+		pfree(prep_password_p);
+		if (!prep_password)
+		{
+			free(state->sasl_mechanism);
+			free(state);
+			return NULL;
+		}
+	}
+#endif
 	if (rc != SASLPREP_SUCCESS)
 	{
 		prep_password = strdup(password);
@@ -782,7 +800,17 @@ pg_fe_scram_build_verifier(const char *password)
 	if (rc == SASLPREP_OOM)
 		return NULL;
 	if (rc == SASLPREP_SUCCESS)
+	{
+#ifndef FRONTEND
+		/* On backend move from palloc-ed to malloc-ed */
+		char	   *prep_password_p = prep_password;
+		prep_password = strdup(prep_password_p);
+		pfree(prep_password_p);
+		if (!prep_password)
+			return NULL;
+#endif
 		password = (const char *) prep_password;
+	}
 
 	/* Generate a random salt */
 	if (!pg_strong_random(saltbuf, SCRAM_DEFAULT_SALT_LEN))

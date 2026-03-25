@@ -436,15 +436,18 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 			 */
 			if (!targetPolicy)
 			{
-				int			i;
 				List	   *policykeys = NIL;
 				List	   *policyopclasses = NIL;
 				ListCell   *lc;
 
-				i = 0;
-				foreach(lc, best_path->pathtarget->exprs)
+				foreach(lc, root->processed_tlist)
 				{
-					Oid			typeOid = exprType((Node *) lfirst(lc));
+					TargetEntry *target = lfirst(lc);
+
+					if (target->resjunk)
+						continue;
+
+					Oid			typeOid = exprType((Node *) target->expr);
 					Oid			opclass = InvalidOid;
 
 					/*
@@ -462,11 +465,10 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 
 					if (OidIsValid(opclass))
 					{
-						policykeys = lappend_int(policykeys, i + 1);
+						policykeys = lappend_int(policykeys, target->resno);
 						policyopclasses = lappend_oid(policyopclasses, opclass);
 						break;
 					}
-					i++;
 				}
 				targetPolicy = createHashPartitionedPolicy(policykeys,
 														   policyopclasses,
