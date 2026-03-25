@@ -972,9 +972,10 @@ drop table part_column_drop;
 -- https://github.com/GreengageDB/greengage/pull/321
 -- start_ignore
 DROP TABLE IF EXISTS dist_replicated;
-DROP FUNCTION IF EXISTS fn_val() CASCADE;
+DROP FUNCTION IF EXISTS fn_vol CASCADE;
+DROP FUNCTION IF EXISTS fn_val CASCADE;
 -- end_ignore
-CREATE OR REPLACE FUNCTION fn_val()
+CREATE FUNCTION fn_vol()
         RETURNS int
         LANGUAGE plpgsql
         VOLATILE
@@ -984,9 +985,7 @@ BEGIN
 END;
 $$
 EXECUTE ON ANY;
-CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
-CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_val() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
-CREATE OR REPLACE FUNCTION fn_val()
+CREATE FUNCTION fn_val()
         RETURNS int
         LANGUAGE plpgsql
         IMMUTABLE
@@ -996,7 +995,11 @@ BEGIN
 END;
 $$
 EXECUTE ON ANY;
+
+CREATE TABLE dist_replicated(id int, x int DEFAULT fn_vol()) DISTRIBUTED REPLICATED;
+CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_vol() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
 
 DROP TABLE dist_replicated;
+DROP FUNCTION fn_vol;
 DROP FUNCTION fn_val;
