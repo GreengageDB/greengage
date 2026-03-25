@@ -19,6 +19,8 @@
 
 #include "optimizer/walkers.h"
 
+#include "parser/parse_expr.h"
+
 
 // max size of a folded constant when optimizing queries in Orca
 // Note: this is to prevent OOM issues when trying to serialize very large constants
