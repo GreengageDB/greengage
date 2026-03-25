@@ -980,8 +980,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			Assert(colDef->cooked_default == NULL);
 
 			/* Protect replicated tables from volatile expressions as default value */
-			if (GpPolicyIsReplicated(policy) &&
-				contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_COLUMN_DEFAULT))
+			if (!colDef->generated &&
+				GpPolicyIsReplicated(policy) &&
+				contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_OTHER))
 				ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("volatile expressions are not supported as "
@@ -7637,7 +7638,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 
 	/* Protect replicated tables from volatile expressions as default value */
     if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-		contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_COLUMN_DEFAULT))
+		contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_OTHER))
 		ereport(ERROR,
 			   (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				errmsg("volatile expressions are not supported as "
@@ -8764,7 +8765,7 @@ ATExecColumnDefault(Relation rel, const char *colName,
 
 	/* Protect replicated tables from volatile expressions as default value */
 	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-		contain_volatile_functions_raw(newDefault, EXPR_KIND_COLUMN_DEFAULT))
+		contain_volatile_functions_raw(newDefault, EXPR_KIND_OTHER))
 		ereport(ERROR,
 			(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				errmsg("volatile expressions are not supported as "
