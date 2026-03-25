@@ -1676,7 +1676,7 @@ LockCheckConflicts(LockMethod lockMethodTable,
 			 */
 			while (otherProclock)
 			{
-				PGPROC	   *otherProc = otherProclock->tag.myProc;
+				// PGPROC	   *otherProc = otherProclock->tag.myProc;
 
 				/*
 				 * If processes in my session are holding the lock, mask
