@@ -36,7 +36,14 @@
 */
 /*	#define TEST_ACCURACY_LONG 1 */
 
+/*
+    Uncomment the following to report maximum error.
+*/
+/* #define REPORT_MAX_ERROR 1 */
+
+#if REPORT_MAX_ERROR
 float		max_error = 0;
+#endif
 
 static void
 hll_statistical_accuracy(size_t cardinality, size_t step)
@@ -82,10 +89,12 @@ hll_statistical_accuracy(size_t cardinality, size_t step)
 	 */
 	assert_true(rel_error < expected_error * 2);
 
+#ifdef REPORT_MAX_ERROR    
 	if (rel_error > max_error)
 	{
 		max_error = rel_error;
 	}
+#endif
 }
 
 static void
@@ -257,5 +266,11 @@ main(int argc, char *argv[])
 
 	MemoryContextInit();
 
-	return run_tests(tests);
+    int ret = run_tests(tests);
+
+#ifdef REPORT_MAX_ERROR
+    printf("max error: %g\n", max_error);
+#endif
+
+    return ret;
 }
