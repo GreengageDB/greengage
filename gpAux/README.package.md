@@ -113,12 +113,15 @@ Modify distribution detection in `debian/rules`:
 
 ```makefile
 ifeq ($(LSB_SI),Ubuntu)
-    ifeq ($(LSB_SR),22.04)
-        DEPS=python2.7
-    endif
-    ifeq ($(LSB_SR),20.04)
-        DEPS=python2.7
-    endif
+  ifeq ($(LSB_SR),22.04)
+    DEPS = python2,python2.7
+    CONFLICTS = python-is-python3
+  else
+    DEPS = python3
+  endif
+else
+  DEPS = python2,python2.7
+  CONFLICTS = python-is-python3
 endif
 ```
 
