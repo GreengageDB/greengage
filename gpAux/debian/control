@@ -5,7 +5,7 @@ Build-Depends: debhelper (>= 13),
 	 dh-python,
 	 lsb-release
 
-Package: greengage6
+Package: greengage7
 Architecture: any
 Depends: ${shlibs:Depends},
 	 iproute2,
