@@ -8767,9 +8767,9 @@ ATExecColumnDefault(Relation rel, const char *colName,
 	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
 		contain_volatile_functions_raw(newDefault, EXPR_KIND_OTHER))
 		ereport(ERROR,
-			(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				errmsg("volatile expressions are not supported as "
-					"default values ​for columns in replicated tables")));
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("volatile expressions are not supported as "
+						"default values ​for columns in replicated tables")));
 
 	/*
 	 * get the number of the attribute
