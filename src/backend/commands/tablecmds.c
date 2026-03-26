@@ -984,9 +984,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 				GpPolicyIsReplicated(policy) &&
 				contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_OTHER))
 				ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("volatile expressions are not supported as "
-							"default values ​for columns in replicated tables")));
+						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 	 errmsg("volatile expressions are not supported as "
+								"default values ​for columns in replicated tables")));
 			
 			rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 			rawEnt->attnum = attnum;
