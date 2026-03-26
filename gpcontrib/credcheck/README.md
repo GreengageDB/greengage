@@ -34,9 +34,8 @@ This extension provides all the checks as configurable parameters. The default c
 
 ### [Installation](#installation)
 
-To install the credcheck extension you need a PostgreSQL version upper than 10
-but if you want to use the Password Reuse Policy feature the minimum version
-required is 12.
+To install the credcheck extension and to use the Password Reuse Policy feature
+you need a PostgreSQL version 9.4 or higher.
 
 This extension must be compiled with pgxs, so the `pg_config` tool must be
 available from your PATH environment variable.

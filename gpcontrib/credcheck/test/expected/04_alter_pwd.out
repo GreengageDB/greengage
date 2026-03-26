@@ -1,4 +1,5 @@
 CREATE USER aaa PASSWORD 'DummY';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 LOAD 'credcheck';
 --
 --reset all settings

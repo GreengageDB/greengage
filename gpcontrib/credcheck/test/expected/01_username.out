@@ -56,6 +56,7 @@ NOTICE:  role "a$" does not exist, skipping
 CREATE USER aa WITH PASSWORD 'dummy';
 ERROR:  username does not contain the configured credcheck.username_min_special characters (1)
 CREATE USER a$ WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS a$;
 --
 --min upper >=1
@@ -66,6 +67,7 @@ NOTICE:  role "aA$" does not exist, skipping
 CREATE USER "aa$" WITH PASSWORD 'dummy';
 ERROR:  username does not contain the configured credcheck.username_min_upper characters (1)
 CREATE USER "aA$" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "aA$";
 --
 --min lower >=2
@@ -78,6 +80,7 @@ ERROR:  username does not contain the configured credcheck.username_min_lower ch
 DROP USER IF EXISTS "aaA$";
 NOTICE:  role "aaA$" does not exist, skipping
 CREATE USER "aaA$" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "aaA$";
 --
 --must contain one of the characters 'a','b','c'
@@ -90,6 +93,7 @@ ERROR:  username does not contain the configured credcheck.username_contain char
 DROP USER IF EXISTS "aA$user";
 NOTICE:  role "aA$user" does not exist, skipping
 CREATE USER "aA$user" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "aA$user";
 --
 --must not contain one of the characters 'x','z'
@@ -102,6 +106,7 @@ ERROR:  username contains the configured credcheck.username_not_contain unauthor
 DROP USER IF EXISTS "aaA$user";
 NOTICE:  role "aaA$user" does not exist, skipping
 CREATE USER "aaA$user" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "aaA$user";
 --
 --username contain password
@@ -114,6 +119,7 @@ ERROR:  username should not contain password
 DROP USER IF EXISTS "aaA$usernopass";
 NOTICE:  role "aaA$usernopass" does not exist, skipping
 CREATE USER "aaA$usernopass" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "aaA$usernopass";
 --
 --ignore case while performing checks
@@ -159,8 +165,10 @@ ERROR:  username does not contain the configured credcheck.username_contain char
 DROP USER IF EXISTS "ba$user1";
 NOTICE:  role "ba$user1" does not exist, skipping
 CREATE USER "ba$user1" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "ba$user1";
 DROP USER IF EXISTS "c$user1";
 NOTICE:  role "c$user1" does not exist, skipping
 CREATE USER "c$user1" WITH PASSWORD 'dummy';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER IF EXISTS "c$user1";

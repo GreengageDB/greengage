@@ -16,12 +16,13 @@ SELECT * FROM pg_password_history WHERE rolename = 'credtest';
 SET credcheck.password_reuse_history = 2;
 -- When creating user the password must be stored in the history
 CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | 7488570b80076cf9da26644d5eeb316c4768ff5bee7bf319344e7bb328032098
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest | 5302ee28c0fde94ab3a23a6f660d5983bf8147397def105427d0f37e810c134c
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
 (2 rows)
 
 -- fail, the credential is still in the history
@@ -32,8 +33,8 @@ ALTER USER credtest PASSWORD 'AJ8YuRe=6O0';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
- credtest | 79320cea69ba581d5e17255c02ae08060f412f79a7c14d0e24ffca51fc03ec74
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
+ credtest | c0b37cb82bc2b8a2aae606362754072224fe01651aabc688c4aa240ab450f916
 (2 rows)
 
 -- fail, the credential is still in the history

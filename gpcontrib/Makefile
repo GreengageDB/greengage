@@ -26,7 +26,8 @@ ifeq "$(enable_debug_extensions)" "yes"
                gp_error_handling \
                gp_subtransaction_overflow \
                gp_check_functions \
-               temp_tables_stat
+               temp_tables_stat \
+               credcheck
 else
 	recurse_targets = gp_sparse_vector \
                gp_distribution_policy \
@@ -39,7 +40,8 @@ else
                gp_error_handling \
                gp_subtransaction_overflow \
                gp_check_functions \
-               temp_tables_stat
+               temp_tables_stat \
+               credcheck
 endif
 
 ifeq "$(with_zstd)" "yes"
@@ -105,4 +107,5 @@ installcheck:
 	$(MAKE) -C gp_subtransaction_overflow installcheck
 	$(MAKE) -C gp_check_functions installcheck
 	$(MAKE) -C temp_tables_stat installcheck
+	$(MAKE) -C credcheck installcheck
 

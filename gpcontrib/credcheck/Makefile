@@ -13,15 +13,22 @@ MODULE_big = credcheck
 OBJS = credcheck.o $(WIN32RES)
 PGFILEDESC = "credcheck - postgresql credential checker"
 
-DATA = $(wildcard updates/*--*.sql) sql/$(EXTENSION)--$(EXTVERSION).sql
+DATA = sql/$(EXTENSION)--$(EXTVERSION).sql
 
 REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
-TESTS = 01_username 02_password 03_rename 04_alter_pwd \
+TESTS = setup 01_username 02_password 03_rename 04_alter_pwd \
 	05_reuse_history 06_reuse_interval 07_valid_until \
-	08_first_login
+	08_first_login teardown
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
+ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+else
+subdir = gpcontrib/credcheck
+top_builddir = ../..
+include $(top_builddir)/src/Makefile.global
+include $(top_srcdir)/contrib/contrib-global.mk
+endif

@@ -34,7 +34,7 @@ SELECT pg_password_history_timestamp('credtest', now()::timestamp - '100 days'::
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
 (1 row)
 
 -- fail, the password is in the history for less than 1 year
@@ -43,7 +43,7 @@ ERROR:  Cannot use this credential following the password reuse policy
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
 (1 row)
 
 -- success, but the old password must be kept in the history (interval not reached)
@@ -51,8 +51,8 @@ ALTER USER credtest PASSWORD 'AJ8YuRe=6O1';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
- credtest | a4a99db0eae794af3fdfeb6094da5cbd591b81cb7df6c82cdecc100a3b9ffe55
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
+ credtest | 9b8221d3b2db06d2b736bbf1d45d046adc7b476e2c20a61adc4dd1886cbbb1ed
 (2 rows)
 
 -- fail, the password is still present in the history
@@ -70,7 +70,7 @@ ALTER USER credtest PASSWORD 'J8YuRe=6O';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
  rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
- credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
 (1 row)
 
 -- Rename user, all entries in the history table must follow the change
@@ -78,7 +78,7 @@ ALTER USER credtest RENAME TO credtest2;
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest2' ORDER BY password_date ;
  rolename  |                          password_hash                           
 -----------+------------------------------------------------------------------
- credtest2 | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest2 | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
 (1 row)
 
 -- Dropping the user must empty the record in history table
