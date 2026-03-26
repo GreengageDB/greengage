@@ -7640,9 +7640,9 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
     if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
 		contain_volatile_functions_raw(colDef->raw_default, EXPR_KIND_OTHER))
 		ereport(ERROR,
-			   (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				errmsg("volatile expressions are not supported as "
-					   "default values ​for columns in replicated tables")));
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("volatile expressions are not supported as "
+						"default values ​for columns in replicated tables")));
 
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
