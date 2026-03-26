@@ -563,3 +563,21 @@ INSERT INTO brin_insert_optimization VALUES (1);
 CREATE INDEX ON brin_insert_optimization USING brin (a);
 UPDATE brin_insert_optimization SET a = a;
 DROP TABLE brin_insert_optimization;
+
+-- test that bitmap scan is preferred
+CREATE TABLE brin_bitmap_test (a int);
+CREATE INDEX ON brin_bitmap_test USING brin (a);
+INSERT INTO brin_bitmap_test SELECT generate_series(1, 100000);
+ANALYZE brin_bitmap_test;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a = 1000;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a < 1000;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a >= 2000 AND a < 3000;
+
+DROP TABLE brin_bitmap_test;
+
