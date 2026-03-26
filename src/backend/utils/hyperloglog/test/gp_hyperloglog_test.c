@@ -37,7 +37,7 @@
 /*	#define TEST_ACCURACY_LONG 1 */
 
 /*
-    Uncomment the following to report maximum error.
+	Uncomment the following to report maximum error.
 */
 /* #define REPORT_MAX_ERROR 1 */
 
@@ -63,15 +63,15 @@ hll_statistical_accuracy(size_t cardinality, size_t step)
 		hll = gp_hyperloglog_add_item(
 									  hll,
 									  d,
-									  8,		/* typlen */
+									  sizeof(uint64),	/* typlen */
 									  true,		/* typbyval */
 									  'd');		/* typalign */
 		nitems++;
 	}
 
-	double estimate = gp_hyperloglog_estimate(hll);
+	double		estimate = gp_hyperloglog_estimate(hll);
 
-	double rel_error = fabs(estimate - nitems) / nitems;
+	double		rel_error = fabs(estimate - nitems) / nitems;
 
 	printf("actual=%d estimate=%f rel_error=%f\n",
 		   nitems,
@@ -89,7 +89,7 @@ hll_statistical_accuracy(size_t cardinality, size_t step)
 	 */
 	assert_true(rel_error < expected_error * 2);
 
-#ifdef REPORT_MAX_ERROR    
+#ifdef REPORT_MAX_ERROR
 	if (rel_error > max_error)
 	{
 		max_error = rel_error;
@@ -266,11 +266,11 @@ main(int argc, char *argv[])
 
 	MemoryContextInit();
 
-    int ret = run_tests(tests);
+	int			ret = run_tests(tests);
 
 #ifdef REPORT_MAX_ERROR
-    printf("max error: %g\n", max_error);
+	printf("max error: %g\n", max_error);
 #endif
 
-    return ret;
+	return ret;
 }
