@@ -971,15 +971,12 @@ contain_volatile_functions_not_nextval_walker(Node *node, void *context)
  * that are raw and yet have been analyzed (e.g. ones for DEFAULT COLUMN).
  */
 bool
-contain_volatile_functions_raw(Node* raw_expr, ParseExprKind expr_kind)
+contain_volatile_functions_raw(Node* raw_expr)
 {
-	ParseState *pstate;
-    Node       *analyzed_expr;
-    bool        result;
+	ParseState *pstate = make_parsestate(NULL);
+    Node       *analyzed_expr = transformExpr(pstate, raw_expr, EXPR_KIND_OTHER);
+    bool        result = contain_volatile_functions(analyzed_expr);
     
-    pstate = make_parsestate(NULL);
-    analyzed_expr = transformExpr(pstate, raw_expr, expr_kind);
-    result = contain_volatile_functions(analyzed_expr);
     free_parsestate(pstate);
     
     return result;
