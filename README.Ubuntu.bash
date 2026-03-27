@@ -3,10 +3,14 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
 	bison \
+	build-essential \
 	ccache \
 	clang \
 	cmake \
 	curl \
+	debhelper \
+	devscripts \
+	dh-python \
 	fakeroot \
 	flex \
 	g++ \
