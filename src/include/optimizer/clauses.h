@@ -19,9 +19,6 @@
 
 #include "optimizer/walkers.h"
 
-#include "parser/parse_expr.h"
-
-
 // max size of a folded constant when optimizing queries in Orca
 // Note: this is to prevent OOM issues when trying to serialize very large constants
 // Current limit: 100KB
@@ -45,8 +42,6 @@ extern WindowFuncLists *find_window_functions(Node *clause, Index maxWinRef);
 extern double expression_returns_set_rows(PlannerInfo *root, Node *clause);
 
 extern bool contain_subplans(Node *clause);
-
-extern bool contain_volatile_functions_raw(Node* raw_expr);
 
 extern char max_parallel_hazard(Query *parse);
 extern bool is_parallel_safe(PlannerInfo *root, Node *node);

@@ -972,6 +972,9 @@ drop table part_column_drop;
 -- https://github.com/GreengageDB/greengage/pull/321
 -- start_ignore
 DROP TABLE IF EXISTS dist_replicated;
+DROP TABLE IF EXISTS parent_vol;
+DROP TABLE IF EXISTS parent_val;
+DROP TABLE IF EXISTS child;
 DROP FUNCTION IF EXISTS fn_vol CASCADE;
 DROP FUNCTION IF EXISTS fn_val CASCADE;
 -- end_ignore
@@ -1000,6 +1003,14 @@ CREATE TABLE dist_replicated(id int, x int DEFAULT fn_vol()) DISTRIBUTED REPLICA
 CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_vol() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
 
+CREATE TABLE parent_vol (a int DEFAULT fn_vol()) DISTRIBUTED BY (a);
+CREATE TABLE parent_val (a int DEFAULT fn_val()) DISTRIBUTED BY (a);
+CREATE TABLE child (LIKE parent_vol INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
+CREATE TABLE child (LIKE parent_val INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
+
 DROP TABLE dist_replicated;
+DROP TABLE parent_vol;
+DROP TABLE parent_val;
+DROP TABLE child;
 DROP FUNCTION fn_vol;
 DROP FUNCTION fn_val;

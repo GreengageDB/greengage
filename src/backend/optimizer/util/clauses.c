@@ -963,26 +963,6 @@ contain_volatile_functions_not_nextval_walker(Node *node, void *context)
 								  context);
 }
 
-/*
- * contain_volatile_functions_raw
- *	  Test whether given raw expression contains volatile functions.
- *
- * This is a wrapper for contain_volatile_functions_not_nextval() that 
- * is for expressions that are raw and yet have been analyzed 
- * (e.g. ones for DEFAULT COLUMN).
- */
-bool
-contain_volatile_functions_raw(Node* raw_expr)
-{
-	ParseState *pstate = make_parsestate(NULL);
-    Node       *analyzed_expr = transformExpr(pstate, raw_expr, EXPR_KIND_OTHER);
-    bool        result = contain_volatile_functions_not_nextval(analyzed_expr);
-    
-    free_parsestate(pstate);
-    
-    return result;
-}
-
 /*****************************************************************************
  *		Check queries for parallel unsafe and/or restricted constructs
  *****************************************************************************/

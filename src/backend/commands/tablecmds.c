@@ -978,15 +978,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			RawColumnDefault *rawEnt;
 
 			Assert(colDef->cooked_default == NULL);
-
-			/* Protect replicated tables from volatile expressions as default value */
-			if (!colDef->generated &&
-				GpPolicyIsReplicated(policy) &&
-				contain_volatile_functions_raw(colDef->raw_default))
-				ereport(ERROR,
-						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 	 errmsg("volatile expressions are not supported as "
-								"default values ​for columns in replicated tables")));
 			
 			rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 			rawEnt->attnum = attnum;
@@ -7636,14 +7627,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot add column to a partition")));
 
-	/* Protect replicated tables from volatile expressions as default value */
-    if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-		contain_volatile_functions_raw(colDef->raw_default))
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("volatile expressions are not supported as "
-						"default values ​for columns in replicated tables")));
-
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
 	/*
@@ -8763,14 +8746,6 @@ ATExecColumnDefault(Relation rel, const char *colName,
 	AttrNumber	attnum;
 	ObjectAddress address;
 
-	/* Protect replicated tables from volatile expressions as default value */
-	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-		contain_volatile_functions_raw(newDefault))
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("volatile expressions are not supported as "
-						"default values ​for columns in replicated tables")));
-
 	/*
 	 * get the number of the attribute
 	 */
@@ -8858,6 +8833,25 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	ObjectAddress address;
 
 	/* We assume no checking is required */
+
+	/*
+	*  ... except than in ggdb we need to perform an additional check.
+	*
+	*  The parent table might have a volatile function as the default value
+	*  for a column, for example if it is distributed by a key,
+	*  and the target table might be replicated. Such columns are prohibited
+	*  for replicated tables, so enforce this rule here as well.
+	*/
+	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+		contain_volatile_functions_after_planning((Expr *) newDefault))
+	{
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("volatile expressions are not supported as "
+							"default values for columns in replicated tables"),
+					 errhint("Volatile expression(s) originate from the table(s) "
+							 "specified in the LIKE clause(s)")));
+	}
 
 	/*
 	 * Remove any old default for the column.  We use RESTRICT here for
