@@ -394,6 +394,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -444,6 +445,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -494,6 +496,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -543,6 +546,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -593,6 +597,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -642,6 +647,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -690,6 +696,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -738,6 +745,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -786,6 +794,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -883,6 +892,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "yes" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -935,6 +945,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -987,6 +998,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1035,6 +1047,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "yes" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1047,6 +1060,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And on host "sdw1" unset fault inject
          And user will answer "yes" to the prompt "Rollback step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
         When the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1148,6 +1162,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp

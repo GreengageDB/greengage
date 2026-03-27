@@ -375,6 +375,8 @@ class GGShrink:
                     self.trigger('move_to_STATE_ERROR')
                     return
 
+            if not interactive_check_yesno(self.options.interactive, None, 'Proceed with continue?', default = 'Y'):
+                raise Exception('Continue was not approved, interrupting execution')
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
