@@ -612,3 +612,47 @@ INSERT INTO brin_insert_optimization VALUES (1);
 CREATE INDEX ON brin_insert_optimization USING brin (a);
 UPDATE brin_insert_optimization SET a = a;
 DROP TABLE brin_insert_optimization;
+-- test that bitmap scan is preferred
+CREATE TABLE brin_bitmap_test (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE INDEX ON brin_bitmap_test USING brin (a);
+INSERT INTO brin_bitmap_test SELECT generate_series(1, 100000);
+ANALYZE brin_bitmap_test;
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a = 1000;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Bitmap Heap Scan on brin_bitmap_test
+         Recheck Cond: (a = 1000)
+         ->  Bitmap Index Scan on brin_bitmap_test_a_idx
+               Index Cond: (a = 1000)
+ Optimizer: Postgres-based planner
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a < 1000;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on brin_bitmap_test
+         Recheck Cond: (a < 1000)
+         ->  Bitmap Index Scan on brin_bitmap_test_a_idx
+               Index Cond: (a < 1000)
+ Optimizer: Postgres-based planner
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM brin_bitmap_test WHERE a >= 2000 AND a < 3000;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on brin_bitmap_test
+         Recheck Cond: ((a >= 2000) AND (a < 3000))
+         ->  Bitmap Index Scan on brin_bitmap_test_a_idx
+               Index Cond: ((a >= 2000) AND (a < 3000))
+ Optimizer: Postgres-based planner
+(6 rows)
+
+DROP TABLE brin_bitmap_test;
