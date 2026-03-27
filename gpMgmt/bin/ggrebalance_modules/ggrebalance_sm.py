@@ -721,12 +721,20 @@ class RebalanceSM:
 
         assert len(steps) > 0
 
+        steps_to_approve = []
         for step in steps:
             if step.getStatus() != RebalanceStep.Status.APPROVE_REQUIRED:
                 break
-            # TODO: we'll need to add logic here to get approval from the user in the interactive mode,
-            # once we start implementing the interactive mode.
-            # In non-interactive mode we assume that the switchover is always approved.
+            steps_to_approve.append(step)
+
+        msg = 'Following switchovers require approval:\n'
+        for step in steps_to_approve:
+            msg += str(step)
+            msg += '\n'
+        if not interactive_check_yesno(self.options.interactive, msg, 'Approve switchovers?', default = 'Y'):
+            raise Exception('Switchovers were not approved, interrupting execution')
+
+        for step in steps_to_approve:
             step.setStatus(RebalanceStep.Status.PLANNED, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
 
