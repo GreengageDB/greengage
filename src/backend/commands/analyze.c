@@ -136,11 +136,11 @@
 
 
 /*
- * For Hyperloglog, we define an error margin of 0.3%. If the number of
- * distinct values estimated by hyperloglog is within an error of 0.3%,
+ * For Hyperloglog, we define an error margin as dependency of requested standard 
+ * error. If the number of distinct values estimated by hyperloglog is within an error,
  * we consider everything as distinct.
  */
-#define GP_HLL_ERROR_MARGIN  0.003
+#define GP_HLL_ERROR_MARGIN  (DEFAULT_ERROR * 2)
 
 /* Data structure for Algorithm S from Knuth 3.4.2 */
 typedef struct
