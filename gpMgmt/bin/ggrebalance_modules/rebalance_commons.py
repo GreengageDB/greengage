@@ -744,10 +744,10 @@ class DiskSpaceChecker:
         
         return results
 
-# Decorator to overwrite the logic of interactive_check()
+# Decorator to overwrite the logic of interactive_check_yesno()
 # during tests execution.
 def wrap_interactive_check_with_faults(fun):
-    def func_with_faults(interactive: bool, bg_info: str, msg: str, default: str):
+    def func_with_faults(interactive_mode: bool, bg_info: str, msg: str, default: str):
         try:
             inject_value = inject_fault_get_value()
             injected_answers = json.loads(inject_value)
@@ -757,11 +757,11 @@ def wrap_interactive_check_with_faults(fun):
                 return False
         except:
             pass
-        return fun(interactive, bg_info, msg, default)
+        return fun(interactive_mode, bg_info, msg, default)
     return func_with_faults
 
 @wrap_interactive_check_with_faults
-def interactive_check_yesno(interactive: bool, bg_info: str, msg: str, default: str) -> bool:
-    if not interactive:
+def interactive_check_yesno(interactive_mode: bool, bg_info: str, msg: str, default: str) -> bool:
+    if not interactive_mode:
         return userinput.validate_yesno('', default)
     return userinput.ask_yesno(bg_info, msg, default)
