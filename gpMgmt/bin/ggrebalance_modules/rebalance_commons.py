@@ -7,6 +7,7 @@ import os
 import pickle
 import re
 import socket
+import json
 from typing import Any, Dict, List, Set, Optional, Tuple
 from enum import IntEnum
 from gppylib.gparray import Segment, GpArray

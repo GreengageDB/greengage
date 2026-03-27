@@ -49,7 +49,6 @@ def print_progress(pool: WorkerPool, interval: int = 10) -> None:
 
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT
-    stop_mode = 'fast'
 
     states = [
         'STATE_START',
@@ -226,6 +225,11 @@ class GGShrink:
         self.rebalance_schema = schema
         self.shrink_plan = None
         self.dumped_gparray = gparray.GpArray.initFromFile(self.gparray_dump_file) if os.path.exists(self.gparray_dump_file) else None
+
+        if self.options.interactive:
+            self.stop_mode = 'smart'
+        else:
+            self.stop_mode = 'fast'
 
         self.machine = Machine(model = self,
                                queued=True,
@@ -449,26 +453,43 @@ class GGShrink:
         segments_to_stop = gp_array.get_segment_count() - self.shrink_plan.getTargetSegmentCount()
         self.workers_for_segment_stop = WorkerPool(numWorkers=min(segments_to_stop, self.options.batch_size))
 
+        segments_stop_successful = []
+        segments_stop_failed = []
+        segments_stop_skipped = []
+
         # Stop primaries first, and mirrors after primaries,
         # to avoid hanging replication processes
         seg_roles = [gparray.ROLE_PRIMARY, gparray.ROLE_MIRROR]
         for seg_role in seg_roles:
-            self.logger.info(f"Prepare to stop segments with role '{seg_role}'")
+            self.logger.debug(f"Prepare to stop (mode={self.stop_mode}) segments with role '{seg_role}'")
             for seg in gp_array.getSegDbList():
                 if (seg.getSegmentContentId() >= self.shrink_plan.getTargetSegmentCount() and
                     seg.getSegmentRole() == seg_role and seg.isSegmentUp()):
+                    if (seg_role == gparray.ROLE_MIRROR and
+                        any(seg.getSegmentContentId() == failed_seg.getSegmentContentId() for failed_seg in segments_stop_failed)):
+                        segments_stop_skipped.append(seg)
+                        continue
                     cmd = self.SegmentStopAfterShrink(self, seg)
                     self.workers_for_segment_stop.addCommand(cmd)
             if self.shutdown_requested:
                 break
             print_progress(self.workers_for_segment_stop, interval=1)
+            for task in self.workers_for_segment_stop.getCompletedItems():
+                if task.was_successful():
+                    segments_stop_successful.append(task.segment)
+                else:
+                    segments_stop_failed.append(task.segment)
 
         self.workers_for_segment_stop.haltWork()
         self.workers_for_segment_stop.joinWorkers()
 
-        for task in self.workers_for_segment_stop.getCompletedItems():
-            if not task.was_successful():
-                self.logger.warning('Failed to stop segments')
+        self.logger.info('Summary of shrinked segments:')
+        for seg in segments_stop_successful:
+            self.logger.info(f'segment stopped ok - {str(seg)}')
+        for seg in segments_stop_failed:
+            self.logger.info(f'segment failed to stop - {str(seg)}')
+        for seg in segments_stop_skipped:
+            self.logger.info(f'segment stop skipped - {str(seg)}')
 
         self.workers_for_segment_stop = None
 
@@ -476,7 +497,6 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_SEGMENTS_STOP_DONE(self) -> None:
-        self.logger.info('Shrinked segments were stopped')
         self.trigger('move_to_STATE_SHRINK_DONE')
 
     @wrap_func_with_faults
@@ -578,18 +598,18 @@ class GGShrink:
 
         @wrap_segment_stop_with_faults
         def run(self) -> None:
-            self.shrink.logger.info(f'Stopping shrinked segment {str(self.segment)}')
+            self.shrink.logger.debug(f'Stopping shrinked segment {str(self.segment)}')
             self.checkRunningSegment.run()
             if self.checkRunningSegment.is_shutdown():
-                self.shrink.logger.info(f'Segment {str(self.segment)} is already down')
+                self.shrink.logger.debug(f'Segment {str(self.segment)} is already down')
                 self.set_results(CommandResult(0, b'', b'', True, False))
             else:
                 try:
                     SegmentStop.run(self, validateAfter = True)
                 except ExecutionError:
-                    self.shrink.logger.info(f'Failed to stop shrinked segment {str(self.segment)}')
+                    self.shrink.logger.debug(f'Failed to stop shrinked segment {str(self.segment)}')
                     return
-                self.shrink.logger.info(f'Stopped shrinked segment {str(self.segment)}')
+                self.shrink.logger.debug(f'Stopped shrinked segment {str(self.segment)}')
 
     class TableRebalanceTask(SQLCommand):
         def __init__(self,
