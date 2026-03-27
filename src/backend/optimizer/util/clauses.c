@@ -963,6 +963,7 @@ contain_volatile_functions_not_nextval_walker(Node *node, void *context)
 								  context);
 }
 
+
 /*****************************************************************************
  *		Check queries for parallel unsafe and/or restricted constructs
  *****************************************************************************/
