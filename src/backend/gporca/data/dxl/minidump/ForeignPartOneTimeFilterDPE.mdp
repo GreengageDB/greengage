@@ -419,7 +419,7 @@
               <dxl:Ident ColId="10" ColName="b" TypeMdid="0.23.1.0"/>
             </dxl:Comparison>
           </dxl:HashCondList>
-          <dxl:RandomMotion InputSegments="0" OutputSegments="0,1,2" DuplicateSensitive="true">
+          <dxl:RandomMotion InputSegments="1" OutputSegments="0,1,2" DuplicateSensitive="true">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="431.000566" Rows="10.000000" Width="8"/>
             </dxl:Properties>

@@ -295,6 +295,9 @@ char *GetTypeName(Oid typid);
 // number of GP segments
 int GetGPSegmentCount(void);
 
+// Id of the current session
+int GetGPSessionId(void);
+
 // heap attribute is null
 bool HeapAttIsNull(HeapTuple tup, int attnum);
 
