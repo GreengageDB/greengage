@@ -8,18 +8,41 @@
 
 PG_MODULE_MAGIC;
 
+PG_FUNCTION_INFO_V1(test_create_metadata_queue);
+PG_FUNCTION_INFO_V1(test_delete_metadata_queue);
 PG_FUNCTION_INFO_V1(test_send_empty_metadata);
 PG_FUNCTION_INFO_V1(test_send_metadata);
 PG_FUNCTION_INFO_V1(test_check_metadata);
 PG_FUNCTION_INFO_V1(test_count_metadata);
 PG_FUNCTION_INFO_V1(test_clean_metadata);
 
+Datum
+test_create_metadata_queue(PG_FUNCTION_ARGS)
+{
+	ggMetadataQueueId queue_id = PQMetadataNextQueueId();
+
+	PQCreateMetadataQueue(queue_id);
+
+	PG_RETURN_INT32(queue_id);
+}
+
+Datum
+test_delete_metadata_queue(PG_FUNCTION_ARGS)
+{
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
+
+	PQDeleteMetadataQueue(queue_id);
+
+	PG_RETURN_INT32(0);
+}
 
 Datum
 test_send_empty_metadata(PG_FUNCTION_ARGS)
 {
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
+
 	elog(WARNING, "Sending empty metadata...");
-	pq_metadatasend("", 0);
+	pq_metadatasend("", 0, queue_id);
 	elog(WARNING, "Empty metadata sent!");
 	PG_RETURN_INT32(0);
 }
@@ -27,8 +50,9 @@ test_send_empty_metadata(PG_FUNCTION_ARGS)
 Datum
 test_send_metadata(PG_FUNCTION_ARGS)
 {
-	uint32		len = PG_GETARG_UINT32(0);
-	uint32		id = PG_GETARG_UINT32(1);
+	uint32				len = PG_GETARG_UINT32(0);
+	uint32				id = PG_GETARG_UINT32(1);
+	ggMetadataQueueId 	queue_id = PG_GETARG_INT32(2);
 
 	char	   *metadata = palloc(len);
 
@@ -44,7 +68,7 @@ test_send_metadata(PG_FUNCTION_ARGS)
 
 	/* Send custom metadata */
 	elog(WARNING, "Sending custom metadata...");
-	pq_metadatasend(metadata, len);
+	pq_metadatasend(metadata, len, queue_id);
 	elog(WARNING, "Custom metadata sent!");
 
 	pfree(metadata);
@@ -57,6 +81,7 @@ Datum
 test_check_metadata(PG_FUNCTION_ARGS)
 {
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
 
 	/*
 	 * Metadata records are unordered for the each query, so to make
@@ -69,7 +94,7 @@ test_check_metadata(PG_FUNCTION_ARGS)
 
 	for (int seg_id = -1; seg_id < numsegments; seg_id++)
 	{
-		ggMetadataChunkIterator it = PQMetadataWalk();
+		ggMetadataChunkIterator it = PQMetadataWalk(queue_id);
 
 		for (; it; it = PQgetNextMetadata(it))
 		{
@@ -107,7 +132,8 @@ test_check_metadata(PG_FUNCTION_ARGS)
 Datum
 test_count_metadata(PG_FUNCTION_ARGS)
 {
-	int			count = PQgetMetadataCount();
+	ggMetadataQueueId	queue_id = PG_GETARG_INT32(0);
+	int					count = PQgetMetadataCount(queue_id);
 
 	PG_RETURN_INT32(count);
 }
@@ -115,6 +141,7 @@ test_count_metadata(PG_FUNCTION_ARGS)
 Datum
 test_clean_metadata(PG_FUNCTION_ARGS)
 {
-	PQCleanMetadata();
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
+	PQCleanMetadata(queue_id);
 	PG_RETURN_INT32(0);
 }

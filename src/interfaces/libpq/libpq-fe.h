@@ -626,7 +626,7 @@ typedef struct ggMetadataChunk
 	char   payload[];
 } ggMetadataChunk;
 
-typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *);
+typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *, uint32);
 typedef void (*PQmetadataProcessor) (void *arg, ggMetadataChunk *);
 
 extern PQmetadataReceiver PQsetMetadataReceiver(PGconn *conn,

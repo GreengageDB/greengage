@@ -2381,6 +2381,8 @@ pgGetMetadataMessage(PGconn *conn, int length)
 		return pqSkipnchar(length, conn);
 	}
 
+	int payload_len = length - 4;
+
 	/*
 	 * Since the metadata might be pretty long, we create an own buffer
 	 * rather than using conn->workBuffer.  workBuffer is intended
@@ -2389,21 +2391,29 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	 * we can not use palloc/pqAlloc here as this is a handler.
 	 */
 
-	ggMetadataChunk *chunk = malloc(sizeof(ggMetadataChunk) + length);
+	ggMetadataChunk *chunk = malloc(sizeof(ggMetadataChunk) + payload_len);
 	if (chunk == NULL)
 		return 1;
 
 	chunk->next = NULL;
-	chunk->metadataLen = length;
+	chunk->metadataLen = payload_len;
 
-	if (pqGetnchar(chunk->payload, length, conn))
+	int32 queue_id;
+
+	if (pqGetInt(&queue_id, 4, conn))
+	{
+		free(chunk);
+		return 1;
+	}
+
+	if (pqGetnchar(chunk->payload, payload_len, conn))
 	{
 		free(chunk);
 		return 1;
 	}		
 
 	/* pass ownership of the link too the handler */
-	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk);
+	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk, queue_id);
 
 	return 0;
 }

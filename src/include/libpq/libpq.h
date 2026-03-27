@@ -78,7 +78,7 @@ extern ssize_t secure_write(Port *port, void *ptr, size_t len);
 /*
  * Send custom metadata to frontend
  */
-extern void pq_metadatasend(const void *data, size_t len);
+extern void pq_metadatasend(const void *data, size_t len, int32 queue_id);
 
 typedef void *ggMetadataChunkIterator;
 
@@ -89,11 +89,17 @@ typedef struct ggMetadataDescriptor
 	void *data;
 } ggMetadataDescriptor;
 
-extern ggMetadataChunkIterator PQMetadataWalk(void);
+typedef uint32 ggMetadataQueueId;
+
+extern ggMetadataChunkIterator PQMetadataWalk(ggMetadataQueueId queue_id);
 extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
 extern void PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc);
-extern int PQgetMetadataCount(void);
-extern void PQCleanMetadata(void);
+extern int PQgetMetadataCount(ggMetadataQueueId queue_id);
+extern void PQCleanMetadata(ggMetadataQueueId queue_id);
+
+extern ggMetadataQueueId PQMetadataNextQueueId(void);
+extern void PQCreateMetadataQueue(ggMetadataQueueId queue_id);
+extern void PQDeleteMetadataQueue(ggMetadataQueueId queue_id);
 
 
 #endif   /* LIBPQ_H */
