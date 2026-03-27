@@ -89,7 +89,7 @@ typedef struct ggMetadataDescriptor
 	void *data;
 } ggMetadataDescriptor;
 
-typedef uint32 ggMetadataQueueId;
+typedef unsigned int ggMetadataQueueId;
 
 extern ggMetadataChunkIterator PQMetadataWalk(ggMetadataQueueId queue_id);
 extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
