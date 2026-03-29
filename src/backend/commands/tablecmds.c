@@ -978,6 +978,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			RawColumnDefault *rawEnt;
 
 			Assert(colDef->cooked_default == NULL);
+			
 			rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 			rawEnt->attnum = attnum;
 			rawEnt->raw_default = colDef->raw_default;
