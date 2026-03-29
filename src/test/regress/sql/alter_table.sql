@@ -3213,7 +3213,7 @@ DROP FUNCTION IF EXISTS fn_vol CASCADE;
 DROP FUNCTION IF EXISTS fn_val CASCADE;
 -- end_ignore
 CREATE TABLE dist_replicated(a int) DISTRIBUTED REPLICATED;
-INSERT INTO dist_replicated(a) SELECT v, FROM generate_series(1,10) v;
+INSERT INTO dist_replicated(a) SELECT v FROM generate_series(1,10) v;
 CREATE FUNCTION fn_vol()
         RETURNS int
         LANGUAGE plpgsql
