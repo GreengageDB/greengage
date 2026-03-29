@@ -3212,8 +3212,8 @@ DROP TABLE IF EXISTS dist_replicated;
 DROP FUNCTION IF EXISTS fn_vol CASCADE;
 DROP FUNCTION IF EXISTS fn_val CASCADE;
 -- end_ignore
-CREATE TABLE dist_replicated(id int, s text) DISTRIBUTED REPLICATED;
-INSERT INTO dist_replicated(id, s) SELECT v, 'test' FROM generate_series(1,10) v;
+CREATE TABLE dist_replicated(a int) DISTRIBUTED REPLICATED;
+INSERT INTO dist_replicated(a) SELECT v, FROM generate_series(1,10) v;
 CREATE FUNCTION fn_vol()
         RETURNS int
         LANGUAGE plpgsql
@@ -3243,6 +3243,12 @@ ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_vol();
 ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT (fn_vol() + 1) * (42 + 42);
 ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_val();
 
+CREATE TABLE dist_by_key(x int DEFAULT fn_vol()) DISTRIBUTED BY (x);
+ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
+ALTER TABLE dist_by_key ALTER COLUMN x SET DEFAULT fn_val();
+ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
+
 DROP TABLE dist_replicated;
+DROP TABLE dist_by_key;
 DROP FUNCTION fn_vol;
 DROP FUNCTION fn_val;

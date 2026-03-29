@@ -3241,11 +3241,10 @@ AddRelationNewConstraints(Relation rel,
 						   atp->atttypid, atp->atttypmod,
 						   NameStr(atp->attname),
 						   atp->attgenerated);
-		bool vol = contain_volatile_functions_after_planning((Expr *) expr);
 
 		/* Protect replicated tables from volatile expressions as DEFAULT value */
 		if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-			vol)
+			contain_volatile_functions_not_nextval(expr))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					errmsg("volatile expressions are not supported as "
@@ -3271,7 +3270,7 @@ AddRelationNewConstraints(Relation rel,
 
 		/* If the DEFAULT is volatile we cannot use a missing value */
 		if (colDef->missingMode &&
-			vol)
+			contain_volatile_functions_after_planning((Expr *) expr))
 			colDef->missingMode = false;
 
 		defOid = StoreAttrDefault(rel, colDef->attnum, expr,
