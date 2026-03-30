@@ -2381,7 +2381,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 		return pqSkipnchar(length, conn);
 	}
 
-	int payload_len = length - 4;
+	int payload_len = length - sizeof(ggMetadataQueueId);
 
 	/*
 	 * Since the metadata might be pretty long, we create an own buffer
@@ -2400,7 +2400,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 
 	int32 queue_id;
 
-	if (pqGetInt(&queue_id, 4, conn))
+	if (pqGetInt(&queue_id, sizeof(ggMetadataQueueId), conn))
 	{
 		free(chunk);
 		return 1;
