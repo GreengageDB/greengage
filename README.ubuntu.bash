@@ -48,7 +48,13 @@ apt-get install -y \
   sudo \
   zlib1g-dev
 
-if [ "$(lsb_release -si)" == "Ubuntu" ]; then
+if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; then
+  apt-get install -y \
+    python-pip \
+    python2 \
+    python2-dev
+  python2 -m pip install future==0.16
+else
   apt-get install -y \
     python3-pip \
     python-is-python3;
