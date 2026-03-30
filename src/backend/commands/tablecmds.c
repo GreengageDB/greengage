@@ -8835,13 +8835,13 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	/* We assume no checking is required */
 
 	/*
-	*  ... except than in ggdb we need to perform an additional check.
-	*
-	*  The parent table might have a volatile function as the default value
-	*  for a column, for example if it is distributed by a key,
-	*  and the target table might be replicated. Such columns are prohibited
-	*  for replicated tables, so enforce this rule here as well.
-	*/
+	 *  ... except than in ggdb we need to perform an additional check.
+	 *
+	 *  The parent table might have a volatile function as the default value
+	 *  for a column, for example if it is distributed by a key,
+	 *  and the target table might be replicated. Such columns are prohibited
+	 *  for replicated tables, so enforce this rule here as well.
+	 */
 	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
 		contain_volatile_functions_not_nextval(newDefault))
 	{
