@@ -4,7 +4,8 @@ Upstream-Contact: GreengageDB Team
 Source: https://github.com/GreengageDB/greengage
 
 Files: *
-Copyright: See COPYRIGHT file
+Copyright: 2026 GreengageDB Team <greengage@greengagedb.org>
+           See also: COPYRIGHT file for full attribution details
 License: Apache-2.0
 
 License: Apache-2.0
