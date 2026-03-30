@@ -1301,15 +1301,15 @@ END;
 $$
 EXECUTE ON ANY;
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_vol()) DISTRIBUTED REPLICATED;
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_vol() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
 CREATE TABLE parent_vol (a int DEFAULT fn_vol()) DISTRIBUTED BY (a);
 CREATE TABLE parent_val (a int DEFAULT fn_val()) DISTRIBUTED BY (a);
 CREATE TABLE child (LIKE parent_vol INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
+DETAIL:  Volatile expression(s) originate from the table(s) specified in the LIKE clause(s)
 ERROR:  volatile expressions are not supported as default values for columns in replicated tables
-HINT:  Volatile expression(s) originate from the table(s) specified in the LIKE clause(s)
 CREATE TABLE child (LIKE parent_val INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
 DROP TABLE dist_replicated;
 DROP TABLE parent_vol;

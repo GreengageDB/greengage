@@ -4885,19 +4885,19 @@ END;
 $$
 EXECUTE ON ANY;
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_vol();
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT (fn_vol() + 1) * (42 + 42);
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
 ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_vol();
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT (fn_vol() + 1) * (42 + 42);
-ERROR:  volatile expressions are not supported as default values ​for columns in replicated tables
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
 ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_val();
 CREATE TABLE dist_by_key(x int DEFAULT fn_vol()) DISTRIBUTED BY (x);
 ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
+DETAIL:  Cannot change policy as some of the columns have volatile expressions as defaults.
 ERROR:  volatile expressions are not supported as default values for columns in replicated tables
-HINT:  Cannot change policy as some of the columns have volatile expressions as defaults.
 ALTER TABLE dist_by_key ALTER COLUMN x SET DEFAULT fn_val();
 ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
 DROP TABLE dist_replicated;

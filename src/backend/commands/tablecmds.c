@@ -18324,7 +18324,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			TupleConstr *constr = rel->rd_att->constr;
 			if (constr)
 			{
-				for (uint16 i = constr->num_defval - 1; i >= 0; i--)
+				for (int i = constr->num_defval - 1; i >= 0; i--)
 				{
 					char *adbin = constr->defval[i].adbin;
 					if (adbin && contain_volatile_functions_not_nextval(stringToNode(adbin)))
