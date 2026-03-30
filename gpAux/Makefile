@@ -601,8 +601,8 @@ mgmtcopy :
 libcopy=(cd $(1) && $(TAR) cf - $(2)) | (cd $(3) && $(TAR) xvf -)$(check_pipe_for_errors)
 
 copylibs : thirdparty-dist
-	mkdir -p $(DESTDIR)$(INSTLOC)/etc
-	mkdir -p $(DESTDIR)$(INSTLOC)/include
+	mkdir -p $(INSTLOC)/etc
+	mkdir -p $(INSTLOC)/include
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \
