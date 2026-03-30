@@ -1,4 +1,16 @@
 CREATE OR REPLACE LANGUAGE plpythonu;
+DO $$
+BEGIN	/* in func */
+  IF NOT EXISTS (	/* in func */
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'	/* in func */
+  ) THEN	/* in func */
+    EXECUTE $func$	/* in func */
+      CREATE LANGUAGE plpython3u;	/* in func */
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;	/* in func */
+    $func$;	/* in func */
+  END IF;	/* in func */
+END;	/* in func */
+$$;
 
 -- Helper function, to call either __gp_aoseg, or gp_aocsseg, depending
 -- on whether the table is row- or column-oriented. This allows us to
