@@ -62,7 +62,7 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
-    raise Exception("error=%s" % str(error))
+    raise Exception("error=%s" % str(error.decode('utf-8')))
 $$ LANGUAGE plpythonu;
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_log(dbid int, message text)
     RETURNS void
@@ -75,7 +75,7 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
-    raise Exception("error=%s" % str(error))
+    raise Exception("error=%s" % str(error.decode('utf-8')))
 $$ LANGUAGE plpythonu;
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_stop()
     RETURNS void
@@ -98,8 +98,8 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 output, error = process.communicate()
 if rc != 0:
-    raise Exception("error=%s" % str(error))
-return int(str(output).strip())
+    raise Exception("error=%s" % str(error.decode('utf-8')))
+return int(str(output.decode('utf-8')).strip())
 $$ LANGUAGE plpythonu;
 CREATE OR REPLACE FUNCTION gp_temptablespace_path(tblspcOid Oid)
     RETURNS text

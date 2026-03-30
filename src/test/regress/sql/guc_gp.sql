@@ -221,11 +221,11 @@ $$
          plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
 
          if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
-       plpy.info('iteration:%d unsafe truncate performed' % (i))
-         else:
-       plpy.info('iteration:%d safe truncate performed' % (i))
+           plpy.info('iteration:%d unsafe truncate performed' % (i))
+        else:
+           plpy.info('iteration:%d safe truncate performed' % (i))
 
-   plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
+     plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
      plpy.execute('DROP TABLE unsafe_truncate')
      plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
 $$ language plpythonu;
