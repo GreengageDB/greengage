@@ -8842,23 +8842,14 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	 *  and the target table might be replicated. Such columns are prohibited
 	 *  for replicated tables, so enforce this rule here as well.
 	 */
-	TupleConstr *constr = rel->rd_att->constr;
-	if (constr)
-	{
-		for (uint16 i = constr->num_defval - 1; i >= num_defval; i--)
-		{
-			char *adbin = constr->defval[i].adbin;
-			if (adbin && contain_volatile_functions_not_nextval(stringToNode(adbin)))
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-						 errmsg("volatile expressions are not supported as "
-							   "default values for columns in replicated tables"),
-						 errdetail("Cannot change policy as some of the columns have volatile "
-								  "expressions as defaults.")));
-			}
-		}
-	}
+	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+		contain_volatile_functions_not_nextval(newDefault))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("volatile expressions are not supported as "
+						"default values for columns in replicated tables"),
+				 errdetail("Volatile expression(s) originate from the table(s) "
+						   "specified in the LIKE clause(s)")));
 
 	/*
 	 * Remove any old default for the column.  We use RESTRICT here for
@@ -18331,19 +18322,18 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			 *  which are prohibited for replicated tables.
 			 */
 			TupleConstr *constr = rel->rd_att->constr;
-			uint16 num_defval = constr ? constr->num_defval : 0;
-			Node * expr;
-			for (uint16 i = 0; i < num_defval; i++)
+			if (constr)
 			{
-				expr = stringToNode(constr->defval[i].adbin);
-				if (contain_volatile_functions_not_nextval(expr))
+				for (uint16 i = constr->num_defval - 1; i >= 0; i--)
 				{
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-							 errmsg("volatile expressions are not supported as "
-									"default values for columns in replicated tables"),
-							 errdetail("Cannot change policy as some of the columns have volatile "
-									   "expressions as defaults.")));
+					char *adbin = constr->defval[i].adbin;
+					if (adbin && contain_volatile_functions_not_nextval(stringToNode(adbin)))
+						ereport(ERROR,
+								(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								 errmsg("volatile expressions are not supported as "
+										"default values for columns in replicated tables"),
+								 errdetail("Cannot change policy as some of the columns have volatile "
+										   "expressions as defaults.")));
 				}
 			}
 
