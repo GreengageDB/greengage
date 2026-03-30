@@ -15,6 +15,19 @@ insert into test select i, i % 100 from generate_series(1,1000) as i;
 
 -- start_ignore
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 
 create or replace function sum_owner_consumption(query text, owner text)
@@ -46,7 +59,7 @@ for i in range(len(rv)):
             slice_consumption = 0
             memory_consumption_per_slice[current_slice] = 0
     if search_text.lower() in cur_line.lower():
-        print search_text
+        print(search_text)
         m = comp_regex.match(cur_line)
         if m is not None:
             memory_consumption_per_slice[current_slice] = memory_consumption_per_slice[current_slice] + int(m.group(2))

@@ -191,30 +191,43 @@ set allow_segment_DML to off;
 -- test for guc dev_opt_unsafe_truncate_in_subtransaction
 -- start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 -- end_ignore
 CREATE OR REPLACE FUNCTION run_all_in_one() RETURNS VOID AS
 $$
-     plpy.execute('CREATE TABLE unsafe_truncate(a int, b int) DISTRIBUTED BY (a)')
-     plpy.execute('INSERT INTO unsafe_truncate SELECT * FROM generate_series(1, 10)')
-     for i in range(1,4):
-         plpy.execute('UPDATE unsafe_truncate SET b = b + 1')
-         plpy.execute('CREATE TABLE foobar AS SELECT * FROM unsafe_truncate DISTRIBUTED BY (a)')
+  plpy.execute('CREATE TABLE unsafe_truncate(a int, b int) DISTRIBUTED BY (a)')
+  plpy.execute('INSERT INTO unsafe_truncate SELECT * FROM generate_series(1, 10)')
+  for i in range(1,4):
+    plpy.execute('UPDATE unsafe_truncate SET b = b + 1')
+    plpy.execute('CREATE TABLE foobar AS SELECT * FROM unsafe_truncate DISTRIBUTED BY (a)')
+    
+    before_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
+    plpy.execute('truncate unsafe_truncate')
+    after_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
+    
+    plpy.execute('DROP TABLE unsafe_truncate')
+    plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
 
-         before_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
-         plpy.execute('truncate unsafe_truncate')
-         after_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
-
-         plpy.execute('DROP TABLE unsafe_truncate')
-         plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
-
-         if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
-	     plpy.info('iteration:%d unsafe truncate performed' % (i))
-         else:
-	     plpy.info('iteration:%d safe truncate performed' % (i))
-
-	 plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
-     plpy.execute('DROP TABLE unsafe_truncate')
-     plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
+    if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
+      plpy.info('iteration:%d unsafe truncate performed' % (i))
+    else:
+      plpy.info('iteration:%d safe truncate performed' % (i))
+    
+  plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
+  plpy.execute('DROP TABLE unsafe_truncate')
+  plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
 $$ language plpythonu;
 
 select run_all_in_one();

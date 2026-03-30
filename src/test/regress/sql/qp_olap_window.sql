@@ -5,6 +5,19 @@
 -- start_ignore
 -- count number of certain operators in a given plan
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 create or replace function ow_count_operator(query text, operator text) returns int as
 $$
 rv = plpy.execute('EXPLAIN '+ query)

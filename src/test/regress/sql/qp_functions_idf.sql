@@ -9,6 +9,19 @@ set search_path to qp_idf;
 
 create language plpythonu;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
+
 create table perct as select a, a / 10 as b from generate_series(1, 100)a;
 create table perct2 as select a, a / 10 as b from generate_series(1, 100)a, generate_series(1, 2);
 create table perct3 as select a, b from perct, generate_series(1, 10)i where a % 7 < i;

@@ -1243,6 +1243,19 @@ select * from t1 where a in
 -- start_ignore
 create language plpythonu;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
+
 create or replace function find_operator(query text, operator_name text) returns text as
 $$
 rv = plpy.execute(query)

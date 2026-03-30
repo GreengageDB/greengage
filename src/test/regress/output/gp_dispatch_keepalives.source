@@ -15,7 +15,31 @@ CREATE OR REPLACE FUNCTION gp_keepalives_check(
     OUT keepalives_idle int)
 RETURNS SETOF record AS '@abs_srcdir@/regress.so',
 'gp_keepalives_check' LANGUAGE C VOLATILE EXECUTE ON MASTER;
-CREATE OR REPLACE LANGUAGE plpythonu;
+DO $$
+BEGIN
+  EXECUTE $func$
+    CREATE OR REPLACE LANGUAGE plpythonu;
+  $func$;
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory  '
+    THEN
+      BEGIN
+        IF NOT EXISTS (
+		  SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+		) THEN
+		  EXECUTE $func$
+		    CREATE OR REPLACE LANGUAGE plpython3u;
+		    ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+		  $func$;
+		END IF;
+      EXCEPTION
+      WHEN OTHERS THEN 
+        RAISE NOTICE 'Could not create or rename PL/Python language: %', SQLERRM;
+      END;
+    END IF;
+END;
+$$;
 CREATE OR REPLACE FUNCTION save_keepalives_data(result_table text) RETURNS void AS $$
     results = plpy.execute("select * from gp_keepalives_check()")
     for r in results:

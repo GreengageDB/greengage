@@ -4,6 +4,19 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 
 --start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 --end_ignore
 
 DROP FUNCTION IF EXISTS public.test_bigint_python();

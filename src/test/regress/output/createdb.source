@@ -7,6 +7,19 @@
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.487.gc712d6d8b0 build dev'
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Signalling all postmaster processes to reload
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 --list all database oid relevant directories in all node(master, segments, mirrors, etc.)
 CREATE OR REPLACE FUNCTION db_dirs(dboid oid) RETURNS setof text
