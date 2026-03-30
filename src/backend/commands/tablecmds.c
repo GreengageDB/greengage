@@ -8842,15 +8842,22 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	 *  and the target table might be replicated. Such columns are prohibited
 	 *  for replicated tables, so enforce this rule here as well.
 	 */
-	if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-		contain_volatile_functions_not_nextval(newDefault))
+	TupleConstr *constr = rel->rd_att->constr;
+	if (constr)
 	{
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-					 errmsg("volatile expressions are not supported as "
-							"default values for columns in replicated tables"),
-					 errhint("Volatile expression(s) originate from the table(s) "
-							 "specified in the LIKE clause(s)")));
+		for (uint16 i = constr->num_defval - 1; i >= num_defval; i--)
+		{
+			char *adbin = constr->defval[i].adbin;
+			if (adbin && contain_volatile_functions_not_nextval(stringToNode(adbin)))
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						 errmsg("volatile expressions are not supported as "
+							   "default values for columns in replicated tables"),
+						 errdetail("Cannot change policy as some of the columns have volatile "
+								  "expressions as defaults.")));
+			}
+		}
 	}
 
 	/*
@@ -18335,8 +18342,8 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 							(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 							 errmsg("volatile expressions are not supported as "
 									"default values for columns in replicated tables"),
-							 errhint("Cannot change policy as some of the columns have volatile "
-									 "expressions as defaults.")));
+							 errdetail("Cannot change policy as some of the columns have volatile "
+									   "expressions as defaults.")));
 				}
 			}
 

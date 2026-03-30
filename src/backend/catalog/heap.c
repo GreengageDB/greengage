@@ -3242,14 +3242,6 @@ AddRelationNewConstraints(Relation rel,
 						   NameStr(atp->attname),
 						   atp->attgenerated);
 
-		/* Protect replicated tables from volatile expressions as DEFAULT value */
-		if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
-			contain_volatile_functions_not_nextval(expr))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-					 errmsg("volatile expressions are not supported as "
-							"default values ​for columns in replicated tables")));
-
 		/*
 		 * If the expression is just a NULL constant, we do not bother to make
 		 * an explicit pg_attrdef entry, since the default behavior is
@@ -3267,6 +3259,14 @@ AddRelationNewConstraints(Relation rel,
 			 IsA(expr, Const) &&
 			 castNode(Const, expr)->constisnull))
 			continue;
+
+		/* Protect replicated tables from volatile expressions as DEFAULT value */
+		if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+			contain_volatile_functions_not_nextval(expr))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("volatile expressions are not supported as "
+							"default values for columns in replicated tables")));
 
 		/* If the DEFAULT is volatile we cannot use a missing value */
 		if (colDef->missingMode &&
