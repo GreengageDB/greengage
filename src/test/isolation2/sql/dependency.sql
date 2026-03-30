@@ -113,8 +113,30 @@ $$ language sql;
 -- Case 4. Function dependency on the language.
 -- start_ignore
 drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
 -- end_ignore
-create language plpythonu;
+
+do $$
+begin
+  execute $func$
+    create language plpythonu;
+  $func$;
+exception
+  when others then
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
+    then
+      begin
+        execute $func$
+          create language plpython3u;
+          alter language plpython3u rename to plpythonu;
+        $func$;
+      exception
+      when others then 
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
+      end;
+    end if;
+end;
+$$;
 
 1: begin;
 1: create function test_4_function() returns text as $$
@@ -130,9 +152,30 @@ $$ language plpythonu;
 1: select test_4_function();
 
 drop language plpythonu cascade;
+drop language plpython3u cascade;
 
 -- Check if dependency is dropped before the creation of the dependent object.
-create language plpythonu;
+do $$
+begin
+  execute $func$
+    create language plpythonu;
+  $func$;
+exception
+  when others then
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
+    then
+      begin
+        execute $func$
+          create language plpython3u;
+          alter language plpython3u rename to plpythonu;
+        $func$;
+      exception
+      when others then 
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
+      end;
+    end if;
+end;
+$$;
 
 1: begin;
 2: begin;

@@ -191,6 +191,19 @@ set allow_segment_DML to off;
 -- test for guc dev_opt_unsafe_truncate_in_subtransaction
 -- start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 -- end_ignore
 CREATE OR REPLACE FUNCTION run_all_in_one() RETURNS VOID AS
 $$
@@ -208,11 +221,11 @@ $$
          plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
 
          if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
-	     plpy.info('iteration:%d unsafe truncate performed' % (i))
+       plpy.info('iteration:%d unsafe truncate performed' % (i))
          else:
-	     plpy.info('iteration:%d safe truncate performed' % (i))
+       plpy.info('iteration:%d safe truncate performed' % (i))
 
-	 plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
+   plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
      plpy.execute('DROP TABLE unsafe_truncate')
      plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
 $$ language plpythonu;

@@ -5,6 +5,19 @@ set search_path to qp_query_execution;
 
 -- count number of certain operators in a given plan
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 create or replace function qx_count_operator(query text, planner_operator text, optimizer_operator text) returns int as
 $$
 rv = plpy.execute('EXPLAIN '+ query)

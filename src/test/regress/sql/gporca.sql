@@ -1897,6 +1897,19 @@ drop table can_set_tag_audit;
 
 -- start_ignore
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 
 -- Checking if ORCA uses parser's canSetTag for CREATE TABLE AS SELECT

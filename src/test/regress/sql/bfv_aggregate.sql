@@ -92,6 +92,19 @@ select f3, array_sort(myaggp20a(f1)) from t group by f3 order by f3;
 
 -- start_ignore
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$

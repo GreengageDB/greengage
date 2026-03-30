@@ -6,6 +6,19 @@ set search_path=bfv_partition_plans;
 --
 -- start_ignore
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 
 create or replace function count_operator(query text, operator text) returns int as

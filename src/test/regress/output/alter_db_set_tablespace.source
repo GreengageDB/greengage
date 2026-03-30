@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
+-- m/dboid dir for database alter_db does not exist on dbid = \d+/
+-- s/dbid = \d+/dbid = N/
 -- end_matchsubs
 -- Setup, cleanup and validation helpers
 -- We need to update the restart point on the mirrors so downstream tests do not
@@ -15,6 +17,19 @@ SET search_path TO adst,public;
 CREATE EXTENSION gp_check_functions;
 -- start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 -- end_ignore
 CREATE OR REPLACE FUNCTION setup_tablespace_location_dir_for_test(tablespace_location_dir text) RETURNS VOID AS $$
 import os;
@@ -52,6 +67,19 @@ CREATE OR REPLACE FUNCTION list_db_tablespace(database_name text, tablespace_nam
 $$ LANGUAGE sql;
 -- start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 -- end_ignore
 CREATE OR REPLACE FUNCTION stat_db_objects(datname text, spcname text)
     RETURNS TABLE (dbid int2, relfilenode_dboid_relative_path text, size int)

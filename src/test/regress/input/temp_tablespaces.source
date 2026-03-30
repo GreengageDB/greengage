@@ -40,6 +40,19 @@ set temp_tablespaces=mytempsp0;
 
 --start_ignore
 CREATE EXTENSION IF NOT EXISTS plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE EXTENSION IF NOT EXISTS plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 --end_ignore
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_start(dbid int, name text, location text)
     RETURNS void

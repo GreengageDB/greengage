@@ -104,6 +104,19 @@ DROP ROLE regress_bttest_role;
 
 -- start_ignore
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 -- end_ignore
 CREATE FUNCTION get_index_path(tbl regclass) returns text as $$
   (select 'base/' || db.oid || '/' || c.relfilenode from pg_class c, pg_database db where c.oid = $1 AND db.datname = current_database())

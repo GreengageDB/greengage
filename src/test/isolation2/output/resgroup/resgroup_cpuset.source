@@ -1,6 +1,25 @@
 
-CREATE LANGUAGE plpythonu;
-CREATE
+DO $$
+BEGIN
+  EXECUTE $func$
+    CREATE LANGUAGE plpythonu;
+  $func$;
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
+    THEN
+      BEGIN
+        EXECUTE $func$
+          CREATE LANGUAGE plpython3u;
+          ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+        $func$;
+      EXCEPTION
+      WHEN OTHERS THEN 
+        RAISE NOTICE 'Could not create or rename PL/Python language: %', SQLERRM;
+      END;
+    END IF;
+END;
+$$;
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE
 

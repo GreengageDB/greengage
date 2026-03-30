@@ -3,12 +3,37 @@
 --
 
 -- The helper functions are written in python.
-create or replace language plpythonu;
-
--- While we're at it, test that CREATE OR REPLACE LANGUAGE works when
--- the language exists already (we had a little bug at one point, where
--- the "OR REPLACE" was not dispatched to segments, and this failed)
-create or replace language plpythonu;
+do $$
+begin
+  execute $func$
+    create or replace language plpythonu;
+    -- While we're at it, test that CREATE OR REPLACE LANGUAGE works when
+    -- the language exists already (we had a little bug at one point, where
+    -- the "OR REPLACE" was not dispatched to segments, and this failed)
+    create or replace language plpythonu;
+  $func$;
+exception
+  when others then
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
+    then
+      begin
+        if not exists (
+		  select 1 from pg_language where lanname = 'plpythonu'
+		) then
+		  execute $func$
+		    create or replace language plpython3u;
+            -- See comment above to understand why second command get's executed.
+            create or replace language plpython3u;
+		    alter language plpython3u rename to plpythonu;
+		  $func$;
+		end if;
+      exception
+      when others then 
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
+      end;
+    end if;
+end;
+$$
 
 --start_ignore
 drop schema if exists bfv_legacy cascade;

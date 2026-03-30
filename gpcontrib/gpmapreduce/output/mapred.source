@@ -16,6 +16,18 @@
 -- start_ignore
 create language plperlu;
 create language plpythonu;
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- Take a look at the installed languages, plperl and plpython should be in the list.
 --  + pg_pltemplate contains the list of languages that can be simply installed
 --  + pl_language contains the list of languages that are actually installed

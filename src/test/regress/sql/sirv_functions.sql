@@ -6771,11 +6771,25 @@ select * from sirv_test12_result1;
 --start_ignore
 
 drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
 
 drop table if exists sirv_test13_result1;
 drop table if exists sirv_test13_result2;
 
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 --end_ignore
 
 CREATE or replace FUNCTION sirv_test13_fun1 ()
@@ -6859,10 +6873,24 @@ select * from sirv_test13_result2;
 --start_ignore
 
 drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
 
 drop table if exists sirv_test14_result1;
 
 CREATE LANGUAGE plpythonu;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
+  ) THEN
+    EXECUTE $func$
+      CREATE LANGUAGE plpython3u;
+      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
+    $func$;
+  END IF;
+END;
+$$;
 --end_ignore
 
 CREATE or replace FUNCTION sirv_test14_fun1 ()

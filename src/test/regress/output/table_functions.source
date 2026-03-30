@@ -2345,6 +2345,19 @@ SELECT * FROM multiset_5( TABLE( SELECT 1::integer, 'hello'::text) ) as tf;
 -- start_ignore
 -- These may have been created by previous test
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 CREATE FUNCTION tf_sql(anytable) returns int AS $$ SELECT 1 $$ language sql CONTAINS SQL;
 ERROR:  SQL functions cannot have arguments of type anytable

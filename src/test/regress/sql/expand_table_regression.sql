@@ -1,6 +1,19 @@
 -- start_ignore
 create extension if not exists gp_debug_numsegments;
 create language plpythonu;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_language where lanname = 'plpythonu'
+  ) then
+    execute $func$
+      create language plpython3u;
+      alter language plpython3u rename to plpythonu;
+    $func$;
+  end if;
+end;
+$$;
 -- end_ignore
 
 drop schema if exists test_expand_table_regression cascade;
