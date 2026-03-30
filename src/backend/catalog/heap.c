@@ -3247,7 +3247,7 @@ AddRelationNewConstraints(Relation rel,
 			contain_volatile_functions_not_nextval(expr))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-					errmsg("volatile expressions are not supported as "
+					 errmsg("volatile expressions are not supported as "
 							"default values ​for columns in replicated tables")));
 
 		/*
