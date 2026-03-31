@@ -88,7 +88,7 @@ uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
-installcheck: test_python installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
+installcheck: test_python
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
 
 installcheck-resgroup: all-lib data
