@@ -1,5 +1,6 @@
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 -- Try to verify that a session fatal due to OOM should have no effect on other sessions.
 -- Report on https://github.com/GreengageDB/greengage/issues/12399

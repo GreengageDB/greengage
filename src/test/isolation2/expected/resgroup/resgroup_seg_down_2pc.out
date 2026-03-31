@@ -5,7 +5,10 @@
 -- After recover the segment, there is no error or blocking.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
+--
 
 create extension if not exists gp_inject_fault;
 CREATE

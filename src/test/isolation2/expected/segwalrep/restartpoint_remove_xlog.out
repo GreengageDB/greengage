@@ -2,7 +2,8 @@
 -- has prepared but not-yet-committed/aborted transactions.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 !\retcode gpconfig -c create_restartpoint_on_ckpt_record_replay -v on --skipvalidation;
 (exited with code 0)

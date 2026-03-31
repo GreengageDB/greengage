@@ -3,7 +3,9 @@
 -- transactions.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
 
 -- Allow extra time for mirror promotion to complete recovery to avoid
 -- gprecoverseg BEGIN failures due to gang creation failure as some primaries

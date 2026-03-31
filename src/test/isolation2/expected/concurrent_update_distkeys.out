@@ -10,7 +10,8 @@
 -- distribution keys is updated.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 -- Table to just store the master's data directory path on segment,
 -- this is used to restart master to enable GDD.
 CREATE TABLE ccud_datadir(a int, dir text);

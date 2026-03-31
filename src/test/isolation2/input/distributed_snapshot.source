@@ -1,4 +1,6 @@
 include: helpers/server_helpers.sql;
+--
+--
 
 -- Distributed snapshot tests
 
@@ -11,7 +13,7 @@ language C;
 -- create situation where globalXmin can be lower than distributed oldestXmin
 -- when calling DistributedLog_AdvanceOldestXmin().
 
--- Setup
+-- Setup 
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE TABLE distributed_snapshot_test1 (a int);
 

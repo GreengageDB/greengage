@@ -1,5 +1,6 @@
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 -- setup
 -- Set fsync on since we need to test the fsync code logic.

@@ -1,6 +1,7 @@
 -- helpers:
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 -- expect: create table succeeds
 create unlogged table unlogged_heap_table_managers ( id int, name text ) distributed by (id);

@@ -2,7 +2,9 @@
 -- has orphaned prepared transactions. See below comments for details.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
 
 !\retcode gpconfig -c wal_keep_segments -v 0 --skipvalidation;
 (exited with code 0)

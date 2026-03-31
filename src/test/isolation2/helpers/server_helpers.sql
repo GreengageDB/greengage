@@ -20,6 +20,7 @@ returns text as $$
         cmd = cmd + '-w -t 600 -m %s %s' % (command_mode, command)
     else:
         return 'Invalid command input'
+
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=True)
     stdout, stderr = proc.communicate()
@@ -53,7 +54,7 @@ returns text as $$
     cmd = 'pg_ctl -l postmaster.log -D %s ' % datadir
     opts = '-p %d' % (port)
     cmd = cmd + '-o "%s" start' % opts
-    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').replace('.', '')
 $$ language plpythonu;
 
 
@@ -207,7 +208,7 @@ create or replace function pg_controldata_redo_lsn(datadir text)
     returns pg_lsn as $$
     import subprocess
     cmd = 'pg_controldata %s | grep \"Latest checkpoint\'s REDO location\"' % datadir
-    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).split(':')[1].strip()
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split(':')[1].strip()
 $$ language plpythonu;
 
 --

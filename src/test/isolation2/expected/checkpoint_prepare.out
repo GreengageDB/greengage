@@ -9,7 +9,8 @@
 create extension if not exists gp_inject_fault;
 CREATE
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 create table crash_foo(i int);
 CREATE

@@ -1,5 +1,6 @@
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 -- Setup fault injectors.
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;

@@ -3,7 +3,8 @@
 -- Refer comment in https://github.com/GreengageDB/greengage/issues/9207 for the
 -- context.
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 -- We will reset the value to 250 finally so sanity check the current value here.
 6: show max_prepared_transactions;
