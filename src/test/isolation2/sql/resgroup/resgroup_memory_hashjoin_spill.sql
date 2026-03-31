@@ -5,23 +5,6 @@
 create schema hashjoin_spill;
 set search_path to hashjoin_spill;
 
--- start_ignore
-create language plpythonu;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_language where lanname = 'plpythonu'
-  ) then
-    execute $func$
-      create language plpython3u;
-      alter language plpython3u rename to plpythonu;
-    $func$;
-  end if;
-end;
-$$;
--- end_ignore
-
 -- set workfile is created to true if all segment did it.
 create or replace function hashjoin_spill.is_workfile_created(explain_query text)
 returns setof int as

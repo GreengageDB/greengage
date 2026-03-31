@@ -166,8 +166,28 @@ ERROR:  type ##### was concurrently dropped
 END
 
 -- Case 4. Function dependency on the language.
-create language plpythonu;
-CREATE
+do $$
+begin /* in func */
+  execute $func$ /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
+$$;
+DO
 
 1: begin;
 BEGIN
@@ -194,8 +214,28 @@ drop language plpythonu cascade;
 DROP
 
 -- Check if dependency is dropped before the creation of the dependent object.
-create language plpythonu;
-CREATE
+do $$
+begin /* in func */
+  execute $func$ /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
+$$;
+DO
 
 1: begin;
 BEGIN

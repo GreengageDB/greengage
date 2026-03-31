@@ -13,23 +13,6 @@ DROP VIEW IF EXISTS busy;
 DROP VIEW
 DROP TABLE IF EXISTS bigtable;
 DROP TABLE
-
-CREATE LANGUAGE plpythonu;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
-  ) THEN
-    EXECUTE $func$
-      CREATE LANGUAGE plpython3u;
-      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
-    $func$;
-  END IF;
-END;
-$$;
-
-CREATE
 -- end_ignore
 
 --
@@ -985,6 +968,4 @@ DROP
 2:DROP RESOURCE GROUP rg1_cpu_test;
 DROP
 2:DROP RESOURCE GROUP rg2_cpu_test;
-DROP
-2:DROP LANGUAGE plpythonu CASCADE;
 DROP

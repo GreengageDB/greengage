@@ -1,30 +1,3 @@
-do $$
-begin
-  execute $func$
-    create or replace language plpythonu;
-  $func$;
-exception
-  when others then
-    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
-    then
-      begin
-        if not exists (
-		  select 1 from pg_language where lanname = 'plpythonu'
-		) then
-		  execute $func$
-		    create or replace language plpython3u;
-		    alter language plpython3u rename to plpythonu;
-		  $func$;
-		end if;
-      exception
-      when others then 
-        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
-      end;
-    end if;
-end;
-$$;
-
-
 --
 -- pg_ctl:
 --   datadir: data directory of process to target with `pg_ctl`
@@ -47,7 +20,6 @@ returns text as $$
         cmd = cmd + '-w -t 600 -m %s %s' % (command_mode, command)
     else:
         return 'Invalid command input'
-
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=True)
     stdout, stderr = proc.communicate()
@@ -59,10 +31,10 @@ returns text as $$
     # need to check stdout additionally since if the postgres is starting up
     # pg_ctl still returns 0 after timeout.
 
-    if proc.returncode == 0 and stdout.find("server is still starting up") == -1:
+    if proc.returncode == 0 and stdout.decode('utf-8').find("server is still starting up") == -1:
         return 'OK'
     else:
-        raise PgCtlError(stdout+'|'+stderr)
+        raise PgCtlError(stdout.decode('utf-8')+'|'+stderr.decode('utf-8'))
 $$ language plpythonu;
 
 --

@@ -117,25 +117,25 @@ drop language if exists plpython3u cascade;
 -- end_ignore
 
 do $$
-begin
-  execute $func$
-    create language plpythonu;
-  $func$;
-exception
-  when others then
-    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
-    then
-      begin
-        execute $func$
-          create language plpython3u;
-          alter language plpython3u rename to plpythonu;
-        $func$;
-      exception
-      when others then 
-        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
-      end;
-    end if;
-end;
+begin /* in func */
+  execute $func$ /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
 $$;
 
 1: begin;
@@ -152,29 +152,28 @@ $$ language plpythonu;
 1: select test_4_function();
 
 drop language plpythonu cascade;
-drop language plpython3u cascade;
 
 -- Check if dependency is dropped before the creation of the dependent object.
 do $$
-begin
-  execute $func$
-    create language plpythonu;
-  $func$;
-exception
-  when others then
-    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
-    then
-      begin
-        execute $func$
-          create language plpython3u;
-          alter language plpython3u rename to plpythonu;
-        $func$;
-      exception
-      when others then 
-        raise notice 'Could not create or rename PL/Python language: %', SQLERRM;
-      end;
-    end if;
-end;
+begin /* in func */
+  execute $func$ /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
 $$;
 
 1: begin;

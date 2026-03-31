@@ -26,23 +26,6 @@ $$ LANGUAGE sql;
 -- @param pid: the pid of QD
 -- @param groupname: resource group id
 -- @return bool: true/false indicating whether it the session is in the resource group
--- start_ignore
-CREATE LANGUAGE plpythonu;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
-  ) THEN
-    EXECUTE $func$
-      CREATE LANGUAGE plpython3u;
-      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
-    $func$;
-  END IF;
-END;
-$$;
-
--- end_ignore
 
 CREATE OR REPLACE FUNCTION is_session_in_group(pid integer, groupname text) RETURNS BOOL AS $$
 import subprocess

@@ -2,20 +2,6 @@ DROP ROLE IF EXISTS role_dumpinfo_test;
 DROP ROLE IF EXISTS role_permission;
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
-CREATE LANGUAGE plpythonu;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_language WHERE lanname = 'plpythonu'
-  ) THEN
-    EXECUTE $func$
-      CREATE LANGUAGE plpython3u;
-      ALTER LANGUAGE plpython3u RENAME TO plpythonu;
-    $func$;
-  END IF;
-END;
-$$;
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool
@@ -107,4 +93,3 @@ create temp table t1 as select * from unnest(array(
 DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
-DROP LANGUAGE plpythonu CASCADE;

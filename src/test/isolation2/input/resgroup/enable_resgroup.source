@@ -1,23 +1,23 @@
 DO $$
-BEGIN
-  EXECUTE $func$
-    CREATE LANGUAGE plpythonu;
-  $func$;
-EXCEPTION
-  WHEN OTHERS THEN
-    IF SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory'
-    THEN
-      BEGIN
-        EXECUTE $func$
-          CREATE LANGUAGE plpython3u;
-          ALTER LANGUAGE plpython3u RENAME TO plpythonu;
-        $func$;
-      EXCEPTION
-      WHEN OTHERS THEN 
-        RAISE NOTICE 'Could not create or rename PL/Python language: %', SQLERRM;
-      END;
-    END IF;
-END;
+BEGIN /* in_func */
+  EXECUTE $func$ /* in_func */
+    CREATE LANGUAGE plpythonu;/* in_func */
+  $func$; /* in_func */
+EXCEPTION /* in_func */
+  WHEN OTHERS THEN /* in_func */
+    IF SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in_func */
+    THEN /* in_func */
+      BEGIN /* in_func */
+        EXECUTE $func$ /* in_func */
+          CREATE LANGUAGE plpython3u; /* in_func */
+          ALTER LANGUAGE plpython3u RENAME TO plpythonu; /* in_func */
+        $func$; /* in_func */
+      EXCEPTION /* in_func */
+      WHEN OTHERS THEN /* in_func */
+        RAISE NOTICE 'Could not create or rename PL/Python language: %', SQLERRM; /* in_func */
+      END; /* in_func */
+    END IF; /* in_func */
+END; /* in_func */
 $$;
 
 -- start_ignore
