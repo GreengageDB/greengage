@@ -15,7 +15,7 @@ greengage7: script-not-executable [opt/greengagedb/greengage7/lib/python/*]
 # This was intentional choice - commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
 # "Use 'env perl' instead of absolute path for portable dev environments."
 # Overriding lintian's preference for the absolute path.
-greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl
+greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl [opt/greengagedb/greengage7/lib/postgresql/pgxs/src/test/regress/*.pl]
 
 # ldconfig trigger fires but does nothing: /opt/greengagedb/greengage7/lib
 # is not registered in /etc/ld.so.conf.d/.
