@@ -20,6 +20,7 @@ returns text as $$
         cmd = cmd + '-w -t 600 -m %s %s' % (command_mode, command)
     else:
         return 'Invalid command input'
+
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=True)
     stdout, stderr = proc.communicate()
