@@ -1,4 +1,4 @@
-@ggrebalance_basics @skip
+@ggrebalance_basics
 Feature: ggrebalance behave tests
 
     Scenario Outline: test 1. validate incompatible option combinations
@@ -44,6 +44,9 @@ Feature: ggrebalance behave tests
           | -r --skip-rebalance                                         | Can't use together options '--rollback-required' and '--skip-rebalance'    | stub     |stub|
           | -r --show-plan                                              | Can't use together options '--rollback-required' and '--show-plan'         | stub     |stub|
           | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -c --duration 00:00:01                                      | Can't use together options '--clean-required' and '--duration'                  | stub     |stub|
+          | -c --end '2099-01-01 01:01:01'                              | Can't use together options '--clean-required' and '--end'                       | stub     |stub|
+          | --duration 00:00:01 --end '2099-01-01 01:01:01'             | Can't use together options '--duration' and '--end'                             | stub     |stub|
           | -r --skip-resource-estimation                               | Can't use together options '--rollback-required' and '--skip-resource-estimation' |the database is not running |"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
 
     Scenario: test 2. ggrebalance simple scenarios

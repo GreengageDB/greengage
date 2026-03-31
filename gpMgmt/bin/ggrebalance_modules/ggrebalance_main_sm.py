@@ -157,7 +157,12 @@ class GGRebalanceMainSM:
     def run(self) -> None:
         self.trigger('start')
 
-    def shutdown(self) -> None:
+    def shutdown(self, hard_shutdown: bool) -> None:
+        if hard_shutdown:
+            self.logger.info('hard shutdown')
+        else:
+            self.logger.info('soft shutdown, waiting for critical operations to finish...')
+
         need_exit = True
 
         if self.gg_shrink is not None:
@@ -165,7 +170,7 @@ class GGRebalanceMainSM:
             need_exit = False
 
         if self.gg_rebalance is not None:
-            self.gg_rebalance.shutdown()
+            self.gg_rebalance.shutdown(hard_shutdown)
             need_exit = False
 
         if need_exit:
