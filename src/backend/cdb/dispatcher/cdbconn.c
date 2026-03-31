@@ -970,7 +970,7 @@ PQCleanMetadata(ggMetadataQueueId queue_id)
 {
 	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
 	if (!queue)
-		elog(ERROR, "No metadata queue with id %d", queue_id);
+		elog(ERROR, "No metadata queue with id %u", queue_id);
 
 	PQCleanMetadataInternal(queue);
 }
