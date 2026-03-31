@@ -692,7 +692,7 @@ pq_getmsgend(StringInfo msg)
  * conflict with the official Frontend/Backend protocol.
  */
 void
-pq_metadatasend(const void *data, size_t len)
+pq_metadatasend(const void *data, size_t len, int32 queue_id)
 {
 	StringInfoData buf;
 
@@ -711,6 +711,7 @@ pq_metadatasend(const void *data, size_t len)
 	 */
 	pq_beginmessage(&buf, 'M');
 
+	pq_sendint(&buf, queue_id, 4);
 	/* Append the opaque data */
 	pq_sendbytes(&buf, (const char *) data, (int) len);
 
