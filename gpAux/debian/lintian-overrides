@@ -20,3 +20,9 @@ greengage7: script-not-executable [opt/greengagedb/greengage7/lib/python/*]
 # "Use 'env perl' instead of absolute path for portable dev environments."
 # Overriding lintian's preference for the absolute path.
 greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl
+
+# ldconfig trigger fires but does nothing: /opt/greengagedb/greengage7/lib
+# is not registered in /etc/ld.so.conf.d/.
+# TODO: create debian/greengage7.conf with that path, install to /etc/ld.so.conf.d/,
+# then remove this override.
+greengage7: package-has-unnecessary-activation-of-ldconfig-trigger
