@@ -1,8 +1,6 @@
 -- test invalid connection request (random bytes) to ic proxy:
 -- it should be dropped due to mismatch magic number
 
-CREATE OR REPLACE LANGUAGE plpythonu;
-
 CREATE or REPLACE FUNCTION send_bytes_to_icproxy()
     RETURNS VOID as $$
 import socket, struct

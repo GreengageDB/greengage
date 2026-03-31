@@ -1,8 +1,3 @@
--- start_ignore
-CREATE LANGUAGE plpythonu;
-CREATE
--- end_ignore
-
 DO LANGUAGE plpythonu $$ import os import sys import glob import shutil import subprocess 
 if sys.platform not in ('linux', 'linux2'): # packcore only works on linux return 
 def check_call(cmds): ret = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE) out = ret.communicate() if ret.returncode != 0: raise SystemError('''\ Command {cmds} returned non-zero exit status {retcode} stdout: {stdout} stderr: {stderr} '''.format(cmds=cmds, retcode=ret.returncode, stdout=out[0], stderr=out[1])) 

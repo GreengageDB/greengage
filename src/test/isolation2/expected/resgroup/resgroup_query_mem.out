@@ -13,8 +13,6 @@
 
 create extension if not exists gp_inject_fault;
 CREATE
-create or replace language plpythonu;
-CREATE
 
 create table t_qmem(a int);
 CREATE

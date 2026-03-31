@@ -1,4 +1,28 @@
-CREATE OR REPLACE LANGUAGE plpythonu;
+DO $$
+BEGIN /* in func */
+  EXECUTE $func$ /* in func */
+    CREATE OR REPLACE LANGUAGE plpythonu; /* in func */
+  $func$; /* in func */
+EXCEPTION /* in func */
+  WHEN others THEN /* in func */
+    IF SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    THEN /* in func */
+      BEGIN /* in func */
+        IF NOT EXISTS ( /* in func */
+		  SELECT 1 FROM pg_language WHERE lanname = 'plpythonu' /* in func */
+		) THEN /* in func */
+		  EXECUTE $func$ /* in func */
+		    CREATE OR REPLACE LANGUAGE plpython3u; /* in func */
+		    ALTER LANGUAGE plpython3u RENAME TO plpythonu; /* in func */
+		  $func$; /* in func */
+		END IF; /* in func */
+      EXCEPTION /* in func */
+      WHEN others THEN /* in func */
+        RAISE NOTICE 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      END; /* in func */
+    END IF; /* in func */
+END; /* in func */
+$$;
 
 -- Helper function, to call either __gp_aoseg, or gp_aocsseg, depending
 -- on whether the table is row- or column-oriented. This allows us to

@@ -5,7 +5,6 @@
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 include: helpers/server_helpers.sql;
 
-CREATE OR REPLACE LANGUAGE plpythonu;
 CREATE OR REPLACE FUNCTION connectSeg(n int, port int, hostname text) RETURNS bool AS $$
 import os
 import subprocess
