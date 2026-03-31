@@ -36,7 +36,7 @@ static uint32 cdbconn_get_motion_listener_port(PGconn *conn);
 static void cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc);
 
 static void MPPnoticeReceiver(void *arg, const PGresult *res);
-static void MPPmetadataReceiver(void *arg, ggMetadataChunk *, ggMetadataQueueId);
+static void MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueId queue_id);
 
 static const char *
 transStatusToString(PGTransactionStatusType status)
@@ -873,7 +873,8 @@ forwardQENotices(void)
 		pq_flush();
 }
 
-typedef struct ggMetadataQueue {
+typedef struct ggMetadataQueue
+{
 	ggMetadataQueueId id;
 	int count;
 	ggMetadataChunk *chunks;
