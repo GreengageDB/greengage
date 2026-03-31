@@ -1,5 +1,9 @@
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
+--
+--
 
 -- Test this scenario:
 -- mirror has latency replaying the WAL from the primary, the master is reset

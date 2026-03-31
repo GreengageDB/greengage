@@ -1,5 +1,8 @@
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
+--
 
 -- Distributed snapshot tests
 

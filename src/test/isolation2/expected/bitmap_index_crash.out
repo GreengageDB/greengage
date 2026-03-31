@@ -5,7 +5,8 @@
 -- subsequent flush of the metapage will lead to an inadvertent
 -- overwrite.
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 1:CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE

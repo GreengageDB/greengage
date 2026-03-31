@@ -8,7 +8,9 @@
 -- continous, the inconsistent issue will happen
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
 
 --
 -- generate_recover_config_file:

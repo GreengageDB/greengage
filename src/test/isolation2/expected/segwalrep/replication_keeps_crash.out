@@ -10,7 +10,9 @@
 -- More details please refer to FTSGetReplicationDisconnectTime.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
 
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE

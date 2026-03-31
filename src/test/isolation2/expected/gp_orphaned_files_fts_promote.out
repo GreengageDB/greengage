@@ -1,6 +1,7 @@
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 1: create or replace function getTableSegFiles (t regclass, out gp_contentid smallint, out filepath text) as 'select current_setting(''gp_contentid'')::smallint, pg_relation_filepath(t)' language sql execute on all segments;
 CREATE

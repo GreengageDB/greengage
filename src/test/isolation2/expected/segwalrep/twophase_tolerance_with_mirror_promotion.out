@@ -23,7 +23,8 @@
 -- end_matchsubs
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 CREATE extension IF NOT EXISTS gp_inject_fault;
 CREATE

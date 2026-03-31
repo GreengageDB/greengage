@@ -6,7 +6,8 @@
 -- s/ERROR:.*server closed the connection unexpectedly/ERROR: server closed the connection unexpectedly/gm
 -- end_matchsubs
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 3:CREATE extension if NOT EXISTS gp_inject_fault;
 CREATE

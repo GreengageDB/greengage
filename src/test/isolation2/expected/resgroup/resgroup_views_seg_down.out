@@ -18,7 +18,9 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
 
 -- Case 1: check the scenario with 'pg_cancel_backend'.
 

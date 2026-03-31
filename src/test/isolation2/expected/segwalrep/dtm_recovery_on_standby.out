@@ -1,7 +1,8 @@
 -- Validate that standby performs DTM recovery upon promotion.
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
 
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE

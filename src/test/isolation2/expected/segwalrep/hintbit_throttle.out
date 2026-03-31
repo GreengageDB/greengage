@@ -12,7 +12,10 @@
 -- 3. set gp_disable_tuple_hints=off so buffer will be immediately marked dirty on hint bit change
 
 include: helpers/server_helpers.sql;
-CREATE
+--
+--
+--
+--
 
 -- set wait_for_replication_threshold to 100kB for quicker test.
 -- this cannot be too low otherwise is_query_waiting_for_syncrep() might hit it too.
