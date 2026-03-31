@@ -7,3 +7,9 @@ dir-or-file-in-opt
 
 # Not applicable for plugins
 shared-library-lacks-prerequisites
+
+# lib/python/ contains gppylib library modules that are imported via Python's
+# import system, not executed directly. These files have shebangs as a
+# developer convenience (allows running them standalone during debugging),
+# but they do not require the executable bit in a production package.
+greengage7: script-not-executable [opt/greengagedb/greengage7/lib/python/*]
