@@ -807,7 +807,7 @@ COptTasks::OptimizeTask(void *ptr)
 			{
 				num_segments_for_costing = num_segments;
 			}
-			ULONG session_id = gpdb::GetGPSessionId();
+			ULONG session_id = (ULONG) gpdb::GetGPSessionId();
 
 			CAutoP<CTranslatorQueryToDXL> query_to_dxl_translator;
 			query_to_dxl_translator = CTranslatorQueryToDXL::QueryToDXLInstance(
