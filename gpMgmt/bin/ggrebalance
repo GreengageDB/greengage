@@ -267,11 +267,12 @@ def remove_pid_file(coordinator_data_directory: str):
         pass
 
 gg_main_rebalance_SM = None
-timeout = False
 
 def sig_handler(sig, arg):
     if gg_main_rebalance_SM is not None:
-        gg_main_rebalance_SM.shutdown(hard_shutdown = not timeout)
+        gg_main_rebalance_SM.shutdown()
+        # Set shutdown type back to 'hard' for the case we are here due to timeout
+        gg_main_rebalance_SM.set_hard_shutdown(True)
     else:
         sys.exit(1)
 
@@ -285,11 +286,6 @@ def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
 
     if cnt_primaries_down != 0:
         raise Exception('Detected some primary segments are down, please recover manually')
-
-def timeout_handler():
-    global timeout
-    timeout = True
-    os.kill(os.getpid(), signal.SIGINT)
 
 def main(options, args, parser):
     conn = None
@@ -312,6 +308,12 @@ def main(options, args, parser):
         if options.end:
             logger.info(f'Time limit is set to "{options.end}", current time is "{datetime.now()}"')
             timer_period = math.ceil((options.end - datetime.now()).total_seconds())
+
+            def timeout_handler():
+                if gg_main_rebalance_SM is not None:
+                    gg_main_rebalance_SM.set_hard_shutdown(False)
+                os.kill(os.getpid(), signal.SIGINT)
+
             timeout_checker = Timer(timer_period, timeout_handler)
             timeout_checker.start()
         else:
