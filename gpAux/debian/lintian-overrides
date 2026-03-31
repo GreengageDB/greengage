@@ -13,3 +13,10 @@ shared-library-lacks-prerequisites
 # developer convenience (allows running them standalone during debugging),
 # but they do not require the executable bit in a production package.
 greengage7: script-not-executable [opt/greengagedb/greengage7/lib/python/*]
+
+# These Perl test scripts use '#!/usr/bin/env perl' for portability across
+# environments where Perl is not at /usr/bin/perl (e.g. NixOS, custom builds).
+# This was intentional choice - commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
+# "Use 'env perl' instead of absolute path for portable dev environments."
+# Overriding lintian's preference for the absolute path.
+greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl
