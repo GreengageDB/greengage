@@ -21,8 +21,8 @@ exception
 		) then
 		  execute $func$
 		    create or replace language plpython3u;
-            -- See comment above to understand why second command get's executed.
-            create or replace language plpython3u;
+        -- See comment above to understand why second command get's executed.
+        create or replace language plpython3u;
 		    alter language plpython3u rename to plpythonu;
 		  $func$;
 		end if;

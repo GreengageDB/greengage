@@ -746,7 +746,7 @@ class SQLIsolationExecutor(object):
                     print(file=output_file)
                     if mode == '\\retcode':
                         print('-- start_ignore', file=output_file)
-                    print(stdout, file=output_file)
+                    print(stdout.decode('utf-8'), file=output_file)
                     if mode == '\\retcode':
                         print('-- end_ignore', file=output_file)
                         print('(exited with code {})'.format(cmd_output.returncode), file=output_file)
