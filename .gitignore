@@ -60,8 +60,8 @@ lib*dll.def
 lib*.pc
 **/debian/*
 !**/debian/co*
-!**/debian/*.lintian-overrides
 !**/debian/rules
+!**/debian/*.lintian-overrides
 
 # Local excludes in root directory
 /GNUmakefile
