@@ -17,15 +17,21 @@ Feature: ggrebalance behave tests
           | --target-hosts sdw1,sdw2 --target-hosts-file /tmp/hosts.txt | Can't use together options '--target-hosts' and '--target-hosts-file' |  stub |stub|
           | --target-hosts sdw1,sdw2 --add-hosts sdw3                   | Can't use together options '--target-hosts' and '--add-hosts'         | stub       |stub|
           | --target-hosts sdw1,sdw2 --remove-hosts sdw3                | Can't use together options '--target-hosts' and '--remove-hosts'      | stub       |stub|
+          | --target-hosts-file /tmp/hosts.txt --add-hosts sdw3         | Can't use together options '--target-hosts-file' and '--add-hosts'    |  stub      |stub|
+          | --target-hosts-file /tmp/hosts.txt --remove-hosts sdw3      | Can't use together options '--target-hosts-file' and '--remove-hosts' |  stub      |stub|
+          | --target-hosts-file /tmp/hosts.txt --add-hosts-file /tmp/add.txt    | Can't use together options '--target-hosts-file' and '--add-hosts-file'    |  stub      |stub|
+          | --target-hosts-file /tmp/hosts.txt --remove-hosts-file /tmp/rm.txt  | Can't use together options '--target-hosts-file' and '--remove-hosts-file' |  stub      |stub|
           | --add-hosts sdw3 --add-hosts-file /tmp/add.txt              | Can't use together options '--add-hosts' and '--add-hosts-file'       | stub       |stub|
           | --remove-hosts sdw3 --remove-hosts-file /tmp/rm.txt         | Can't use together options '--remove-hosts' and '--remove-hosts-file' | stub       |stub|
-          | --add-hosts sdw3 --remove-hosts sdw3                        | Can't use together options '--add-hosts' and '--remove-hosts'         | stub       |stub|
           | --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' --target-datadirs-file /tmp/datadirs.txt | Can't use together options '--target-datadirs' and '--target-datadirs-file' | stub |stub|
           | --mirror-mode grouped --skip-rebalance                      | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
           | -m spread --skip-rebalance                                  | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
           | --skip-rebalance --inplace-swap-roles                       | Can't use together options '--skip-rebalance' and '--inplace-swap-roles'     | stub     |stub|
           | -c --target-hosts sdw1,sdw2                                 | Can't use together options '--clean-required' and '--target-hosts'    | stub       |stub|
           | -c --add-hosts sdw3                                         | Can't use together options '--clean-required' and '--add-hosts'       | stub       |stub|
+          | -c --add-hosts-file /tmp/add.txt                            | Can't use together options '--clean-required' and '--add-hosts-file'  | stub       |stub|
+          | -c --remove-hosts sdw3                                      | Can't use together options '--clean-required' and '--remove-hosts'       | stub       |stub|
+          | -c --remove-hosts-file /tmp/rm.txt                          | Can't use together options '--clean-required' and '--remove-hosts-file'  | stub       |stub|
           | -c --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' | Can't use together options '--clean-required' and '--target-datadirs'   | stub    |stub|
           | -c -x 2                                                     | Can't use together options '--clean-required' and '--target-segment-count' | stub    |stub|
           | -c --mirror-mode grouped                                    | Can't use together options '--clean-required' and '--mirror-mode'       | stub     |stub|
@@ -38,6 +44,9 @@ Feature: ggrebalance behave tests
           | -c --skip-resource-estimation                               | Can't use together options '--clean-required' and '--skip-resource-estimation' | stub |stub|
           | -r --target-hosts sdw1,sdw2                                 | Can't use together options '--rollback-required' and '--target-hosts'    | stub       |stub|
           | -r --add-hosts sdw3                                         | Can't use together options '--rollback-required' and '--add-hosts'       | stub       |stub|
+          | -r --add-hosts-file /tmp/add.txt                            | Can't use together options '--rollback-required' and '--add-hosts-file'  | stub       |stub|
+          | -r --remove-hosts sdw3                                      | Can't use together options '--rollback-required' and '--remove-hosts'       | stub       |stub|
+          | -r --remove-hosts-file /tmp/rm.txt                          | Can't use together options '--rollback-required' and '--remove-hosts-file'  | stub       |stub|
           | -r --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' | Can't use together options '--rollback-required' and '--target-datadirs'   | stub    |stub|
           | -r -x 2                                                     | Can't use together options '--rollback-required' and '--target-segment-count' | stub    |stub|
           | -r --mirror-mode grouped                                    | Can't use together options '--rollback-required' and '--mirror-mode'       | stub     |stub|
