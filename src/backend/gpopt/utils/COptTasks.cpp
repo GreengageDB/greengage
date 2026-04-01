@@ -842,8 +842,9 @@ COptTasks::OptimizeTask(void *ptr)
 
 			plan_dxl = COptimizer::PdxlnOptimize(
 				mp, &mda, query_dxl, query_output_dxlnode_array,
-				cte_dxlnode_array, expr_evaluator, num_segments, (ULONG) gp_session_id,
-				MyProc->queryCommandId, search_strategy_arr, optimizer_config);
+				cte_dxlnode_array, expr_evaluator, num_segments,
+				(ULONG) gp_session_id, MyProc->queryCommandId,
+				search_strategy_arr, optimizer_config);
 
 			if (opt_ctxt->m_should_serialize_plan_dxl)
 			{
