@@ -31,6 +31,9 @@ override_dh_auto_install:
 		GPDIR=$(GPDIR) \
 		PARALLEL_MAKE_OPTS=-j$(shell nproc)
 
+override_dh_dwz:
+	@echo "Skipping dwz"
+
 override_dh_fixperms:
 	dh_fixperms
 	# Remove executable bit from Python/Perl/Bash modules without shebang
