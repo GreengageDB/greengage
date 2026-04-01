@@ -807,7 +807,6 @@ COptTasks::OptimizeTask(void *ptr)
 			{
 				num_segments_for_costing = num_segments;
 			}
-			ULONG session_id = (ULONG) gpdb::GetGPSessionId();
 
 			CAutoP<CTranslatorQueryToDXL> query_to_dxl_translator;
 			query_to_dxl_translator = CTranslatorQueryToDXL::QueryToDXLInstance(
@@ -843,7 +842,7 @@ COptTasks::OptimizeTask(void *ptr)
 
 			plan_dxl = COptimizer::PdxlnOptimize(
 				mp, &mda, query_dxl, query_output_dxlnode_array,
-				cte_dxlnode_array, expr_evaluator, num_segments, session_id,
+				cte_dxlnode_array, expr_evaluator, num_segments, (ULONG) gp_session_id,
 				MyProc->queryCommandId, search_strategy_arr, optimizer_config);
 
 			if (opt_ctxt->m_should_serialize_plan_dxl)

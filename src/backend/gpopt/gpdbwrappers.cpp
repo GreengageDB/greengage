@@ -1100,17 +1100,6 @@ gpdb::GetGPSegmentCount(void)
 	return 0;
 }
 
-int
-gpdb::GetGPSessionId(void)
-{
-	GP_WRAP_START;
-	{
-		return gp_session_id;
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
 bool
 gpdb::HeapAttIsNull(HeapTuple tup, int attno)
 {
