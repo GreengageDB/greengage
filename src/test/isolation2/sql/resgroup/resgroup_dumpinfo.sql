@@ -18,7 +18,7 @@ def validate(json_obj, segnum):
    qd_info = [j for j in array if j["segid"] == -1][0]
    #validate keys
    keys = ["segid", "segmentsOnMaster", "loaded", "totalChunks",
-   		   "freeChunks", "chunkSizeInBits", "groups"]
+           "freeChunks", "chunkSizeInBits", "groups"]
    for key in keys:
        if key not in qd_info:
            return False
@@ -30,11 +30,11 @@ def validate(json_obj, segnum):
    group = groups[0]
    #validate group keys
    keys = ["group_id", "nRunning", "locked_for_drop", "memExpected",
-   		   "memQuotaGranted", "memSharedGranted", "memQuotaUsed",
-   		   "memUsage", "memSharedUsage"]
+           "memQuotaGranted", "memSharedGranted", "memQuotaUsed",
+           "memUsage", "memSharedUsage"]
    for key in keys:
       if key not in group:
-	 return False
+         return False
 
    #validate waitqueue
    wait_queue = group["wait_queue"]

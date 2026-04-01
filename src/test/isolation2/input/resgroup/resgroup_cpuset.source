@@ -60,7 +60,7 @@ for token in tokens:
 		expect_cpu.append(token)
 sess_ids = get_all_sess_ids_in_group(grp)
 
-for i in xrange(1000):
+for i in range(1000):
 	time.sleep(0.01)
 	if not check(expect_cpu, sess_ids):
 		return False

@@ -1,7 +1,6 @@
-CREATE LANGUAGE plpython3u;
-CREATE
-
 -- start_ignore
+CREATE LANGUAGE plpython3u;
+
 ! rmdir @cgroup_mnt_point@/cpu/gpdb;
 
 ! rmdir @cgroup_mnt_point@/cpuacct/gpdb;
