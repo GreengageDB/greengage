@@ -64,7 +64,7 @@ CREATE
 --
 -- check gpdb cgroup configuration
 --
-DO LANGUAGE PLPYTHONU $$ import subprocess 
+DO LANGUAGE PLPYTHON3U $$ import subprocess 
 cgroot = '@cgroup_mnt_point@' 
 def get_cgroup_prop(prop): fullpath = cgroot + '/' + prop return int(open(fullpath).readline()) 
 def run_command(cmd): return subprocess.check_output(cmd.split()) 

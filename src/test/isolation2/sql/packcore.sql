@@ -23,7 +23,7 @@ DO LANGUAGE plpython3u $$
 Command {cmds} returned non-zero exit status {retcode}
 stdout: {stdout}
 stderr: {stderr}
-'''.format(cmds=cmds, retcode=ret.returncode, stdout=out[0], stderr=out[1]))
+'''.format(cmds=cmds, retcode=ret.returncode, stdout=out[0].decode('utf-8'), stderr=out[1].decode('utf-8')))
 
     # generate and verify a packcore tarball
     #

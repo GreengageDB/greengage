@@ -27,6 +27,8 @@ returns text as $$
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=True)
     stdout, stderr = proc.communicate()
+    stdout = stdout.decode('utf-8')
+    stderr = stderr.decode('utf-8')
 
     # GPDB_12_MERGE_FIXME: upstream patch f13ea95f9e473a43ee4e1baeb94daaf83535d37c
     # (Change pg_ctl to detect server-ready by watching status in postmaster.pid.)
@@ -57,7 +59,7 @@ returns text as $$
     cmd = 'pg_ctl -l postmaster.log -D %s ' % datadir
     opts = '-p %d' % (port)
     cmd = cmd + '-o "%s" start' % opts
-    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').replace('.', '')
 $$ language plpython3u;
 
 
@@ -211,7 +213,7 @@ create or replace function pg_controldata_redo_lsn(datadir text)
     returns pg_lsn as $$
     import subprocess
     cmd = 'pg_controldata %s | grep \"Latest checkpoint\'s REDO location\"' % datadir
-    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).split(':')[1].strip()
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split(':')[1].strip()
 $$ language plpython3u;
 
 --

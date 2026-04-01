@@ -88,11 +88,11 @@ returns text as $$
     master = rv[1] # role = 'p'
     try:
         cmd = 'rm -rf %s.dtm_recovery && cp -R %s %s.dtm_recovery' % (standby['datadir'], standby['datadir'], standby['datadir'])
-	remove_output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+	remove_output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
         cmd = 'gpinitstandby -ar -P %d' % master['port']
-	remove_output += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+	remove_output += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
         cmd = 'export PGPORT=%d; gpinitstandby -a -s %s -S %s -P %d' % (master['port'], standby['hostname'], standby['datadir'], standby['port'])
-        init_output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        init_output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
     except subprocess.CalledProcessError as e:
         plpy.info(e.output)
 	raise

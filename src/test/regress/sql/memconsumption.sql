@@ -46,7 +46,7 @@ for i in range(len(rv)):
             slice_consumption = 0
             memory_consumption_per_slice[current_slice] = 0
     if search_text.lower() in cur_line.lower():
-        print search_text
+        print(search_text)
         m = comp_regex.match(cur_line)
         if m is not None:
             memory_consumption_per_slice[current_slice] = memory_consumption_per_slice[current_slice] + int(m.group(2))

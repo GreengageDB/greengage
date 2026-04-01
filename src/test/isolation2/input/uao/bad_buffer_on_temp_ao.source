@@ -47,7 +47,7 @@ create or replace function delete_relfile(relfilepath text) returns text as $$
     else:
         try:
             cmd = 'rm -rf %s' % (relfilepath)
-            result += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            result += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as e:
             plpy.info(e.output)
 

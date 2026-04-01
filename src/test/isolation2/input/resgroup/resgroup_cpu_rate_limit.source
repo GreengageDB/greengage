@@ -95,7 +95,7 @@ CREATE RESOURCE GROUP rg2_cpu_test WITH (concurrency=5, cpu_rate_limit=20, memor
 --
 -- check gpdb cgroup configuration
 --
-DO LANGUAGE PLPYTHONU $$
+DO LANGUAGE PLPYTHON3U $$
     import subprocess
 
     cgroot = '@cgroup_mnt_point@'
@@ -105,7 +105,7 @@ DO LANGUAGE PLPYTHONU $$
         return int(open(fullpath).readline())
 
     def run_command(cmd):
-        return subprocess.check_output(cmd.split())
+        return subprocess.check_output(cmd.split()).decode('utf-8')
 
     def show_guc(guc):
         return plpy.execute('SHOW {}'.format(guc))[0][guc]

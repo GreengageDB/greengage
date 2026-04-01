@@ -17,7 +17,7 @@ returns text as $$
     else:
         return 'Invalid command input'
 
-    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').replace('.', '')
 $$ language plpython3u;
 
 create or replace function wait_for_replication_error (expected_error text, segment_id int, retries int) returns bool as

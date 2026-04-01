@@ -25,7 +25,7 @@ conn = pg.connect(dbname="isolation2resgrouptest")
 pt = re.compile(r'con(\d+)')
 
 def check(expect_cpus, sess_ids):
-	procs = subprocess.check_output(['ps', '-eF']).split('\n')
+	procs = subprocess.check_output(['ps', '-eF']).decode('utf-8').split('\n')
 	head, proc_stats = procs[0], procs[1:]
 	PSR = [id for id, attr in enumerate(head.split()) if attr.strip() == 'PSR'][0]
 	cpus = [proc_stat.split()[PSR].strip()
