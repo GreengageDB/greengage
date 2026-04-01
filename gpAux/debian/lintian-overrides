@@ -8,25 +8,25 @@ shared-library-lacks-prerequisites
 # import system, not executed directly. These files have shebangs as a
 # developer convenience (allows running them standalone during debugging),
 # but they do not require the executable bit in a production package.
-greengage7: script-not-executable [opt/greengagedb/greengage7/lib/python/*]
+script-not-executable [opt/greengagedb/greengage7/lib/python/*]
 
 # These Perl test scripts use '#!/usr/bin/env perl' for portability across
 # environments where Perl is not at /usr/bin/perl (e.g. NixOS, custom builds).
 # This was intentional choice - commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
 # "Use 'env perl' instead of absolute path for portable dev environments."
 # Overriding lintian's preference for the absolute path.
-greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl [opt/greengagedb/greengage7/lib/postgresql/pgxs/src/test/regress/*.pl]
+incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl [opt/greengagedb/greengage7/lib/postgresql/pgxs/src/test/regress/*.pl]
 
 # ldconfig trigger fires but does nothing: /opt/greengagedb/greengage7/lib
 # is not registered in /etc/ld.so.conf.d/.
 # TODO: create debian/greengage7.conf with that path, install to /etc/ld.so.conf.d/,
 # then remove this override.
-greengage7: package-has-unnecessary-activation-of-ldconfig-trigger
+package-has-unnecessary-activation-of-ldconfig-trigger
 
 # Timezone data files are hardlinked by upstream PostgreSQL build system
 # to save disk space (identical timezone definitions share inodes).
 # This is standard PostgreSQL behavior, not a packaging error.
-greengage7: package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
+package-contains-hardlink [opt/greengagedb/greengage7/share/postgresql/timezone/*]
 
 # lintian bug, #1000977, #1000449
-greengage7-dbgsym: elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
+elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
