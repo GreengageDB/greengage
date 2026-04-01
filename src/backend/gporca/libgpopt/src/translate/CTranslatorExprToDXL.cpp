@@ -7617,8 +7617,12 @@ CTranslatorExprToDXL::GetOutputSegIdsArray(CExpression *pexprMotion)
 
 			if (CDistributionSpecSingleton::EstSegment == popGather->Est())
 			{
-				// gather to first segment
-				iSegmentId = *((*m_pdrgpiSegments)[0]);
+				// keep this value in sync with GetInputSegIdsArray
+				// (though it is not really necessary as of right now,
+				// as CTranslatorDXLToPlStmt::TranslateDXLMotion is not
+				// using it to determine outputs of the slices)
+				ULONG ulSegmentCount = m_pdrgpiSegments->Size();
+				iSegmentId = (INT)(m_ulSessionId % ulSegmentCount);
 			}
 			pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));
 			break;
