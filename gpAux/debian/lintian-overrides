@@ -27,3 +27,6 @@ greengage7: package-has-unnecessary-activation-of-ldconfig-trigger
 # to save disk space (identical timezone definitions share inodes).
 # This is standard PostgreSQL behavior, not a packaging error.
 greengage7: package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
+
+# lintian bug, #1000977, #1000449
+greengage7-dbgsym: elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
