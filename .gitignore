@@ -60,7 +60,7 @@ lib*dll.def
 lib*.pc
 **/debian/*
 !**/debian/co*
-!**/debian/lint*
+!**/debian/*.lintian-overrides
 !**/debian/rules
 
 # Local excludes in root directory
