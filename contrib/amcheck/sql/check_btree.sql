@@ -103,7 +103,7 @@ DROP ROLE regress_bttest_role;
 
 
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 CREATE FUNCTION get_index_path(tbl regclass) returns text as $$
   (select 'base/' || db.oid || '/' || c.relfilenode from pg_class c, pg_database db where c.oid = $1 AND db.datname = current_database())
@@ -140,7 +140,7 @@ RETURNS integer as $$
       f.close()
 
   return 0
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 -- check index on AO table
 CREATE TABLE bttest_a_ao(id int8) WITH (appendonly=true);

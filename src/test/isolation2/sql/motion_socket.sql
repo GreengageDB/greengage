@@ -69,7 +69,7 @@ for process in psutil.process_iter():
                 motion_socket_count, process.connections()))
 
 
-$$ LANGUAGE plpythonu EXECUTE ON MASTER;
+$$ LANGUAGE plpython3u EXECUTE ON MASTER;
 
 -- check motion sockets in a new session to ensure that the 'unicast' setting
 -- takes effect.

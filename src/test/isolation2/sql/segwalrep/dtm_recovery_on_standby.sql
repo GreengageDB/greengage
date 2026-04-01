@@ -98,7 +98,7 @@ returns text as $$
 	raise
 
     return remove_output + "\n" + init_output
-$$ language plpythonu;
+$$ language plpython3u;
 
 -- start_ignore
 select reinitialize_standby();

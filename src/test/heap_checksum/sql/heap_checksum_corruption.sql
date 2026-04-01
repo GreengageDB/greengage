@@ -21,7 +21,7 @@
 -- end_matchignore
 
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 -- Create our test tables (and functions) in a bespoken schema that we can drop
@@ -91,7 +91,7 @@ RETURNS integer as $$
       f.close()
 
   return 0
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION invalidate_buffers_for_rel(tablename text) RETURNS BOOL AS
 $$

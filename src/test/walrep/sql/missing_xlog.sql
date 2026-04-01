@@ -1,5 +1,5 @@
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 create or replace function pg_ctl(datadir text, command text, port int)
@@ -18,7 +18,7 @@ returns text as $$
         return 'Invalid command input'
 
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
-$$ language plpythonu;
+$$ language plpython3u;
 
 create or replace function wait_for_replication_error (expected_error text, segment_id int, retries int) returns bool as
 $$

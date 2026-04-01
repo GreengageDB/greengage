@@ -190,7 +190,7 @@ set allow_segment_DML to off;
 
 -- test for guc dev_opt_unsafe_truncate_in_subtransaction
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 CREATE OR REPLACE FUNCTION run_all_in_one() RETURNS VOID AS
 $$
@@ -215,7 +215,7 @@ $$
 	 plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
      plpy.execute('DROP TABLE unsafe_truncate')
      plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
-$$ language plpythonu;
+$$ language plpython3u;
 
 select run_all_in_one();
 

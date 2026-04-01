@@ -2,7 +2,7 @@ create schema hashagg_spill;
 set search_path to hashagg_spill;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 -- force multistage to increase likelihood of spilling
@@ -29,7 +29,7 @@ for i in range(len(rv)):
         result.append(cur_row)
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 create table testhagg (i1 int, i2 int, i3 int, i4 int);
 insert into testhagg select i,i,i,i from
@@ -68,7 +68,7 @@ for i in range(len(rv)):
       result.append(overflows)
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 -- Test agg spilling scenarios
 drop table if exists aggspill;

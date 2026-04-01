@@ -1,4 +1,4 @@
-create or replace language plpythonu;
+create or replace language plpython3u;
 
 
 --
@@ -39,7 +39,7 @@ returns text as $$
         return 'OK'
     else:
         raise PgCtlError(stdout+'|'+stderr)
-$$ language plpythonu;
+$$ language plpython3u;
 
 --
 -- pg_ctl_start:
@@ -58,7 +58,7 @@ returns text as $$
     opts = '-p %d' % (port)
     cmd = cmd + '-o "%s" start' % opts
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
-$$ language plpythonu;
+$$ language plpython3u;
 
 
 --
@@ -212,7 +212,7 @@ create or replace function pg_controldata_redo_lsn(datadir text)
     import subprocess
     cmd = 'pg_controldata %s | grep \"Latest checkpoint\'s REDO location\"' % datadir
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).split(':')[1].strip()
-$$ language plpythonu;
+$$ language plpython3u;
 
 --
 -- exec_cmd_on_segments:
@@ -226,4 +226,4 @@ returns text as $$
         return 'OK'
     else:
         return 'Fail'
-$$ language plpythonu execute on all segments;
+$$ language plpython3u execute on all segments;

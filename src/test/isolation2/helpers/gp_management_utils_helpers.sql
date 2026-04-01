@@ -1,4 +1,4 @@
-create or replace language plpythonu;
+create or replace language plpython3u;
 
 --
 -- pg_basebackup:
@@ -38,7 +38,7 @@ create or replace function pg_basebackup(host text, dbid int, port int, slotname
         results = str(e) + "\ncommand output: " + e.output
 
     return results
-$$ language plpythonu;
+$$ language plpython3u;
 
 
 create or replace function count_of_items_in_directory(user_path text) returns text as $$
@@ -46,7 +46,7 @@ create or replace function count_of_items_in_directory(user_path text) returns t
        cmd = 'ls {user_path}'.format(user_path=user_path)
        results = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
        return len([result for result in results.splitlines() if result != ''])
-$$ language plpythonu;
+$$ language plpython3u;
 
 create or replace function count_of_items_in_database_directory(user_path text, database_oid oid) returns int as $$
        import subprocess
@@ -55,9 +55,9 @@ create or replace function count_of_items_in_database_directory(user_path text, 
        cmd = 'ls ' + directory
        results = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
        return len([result for result in results.splitlines() if result != ''])
-$$ language plpythonu;
+$$ language plpython3u;
 
 create or replace function validate_tablespace_symlink(datadir text, tablespacedir text, dbid int, tablespace_oid oid) returns boolean as $$
     import os
     return os.readlink('%s/pg_tblspc/%d' % (datadir, tablespace_oid)) == ('%s/%d' % (tablespacedir, dbid))
-$$ language plpythonu;
+$$ language plpython3u;

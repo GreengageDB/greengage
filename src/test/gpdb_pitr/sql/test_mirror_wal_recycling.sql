@@ -32,7 +32,7 @@ SELECT gp_wait_until_triggered_fault('finished_removing_old_xlog_files', 1, dbid
 -- $datadir/pg_xlog/archive_status/ directory after recycling WAL
 -- segments. It should not.
 -- start_ignore
-CREATE EXTENSION IF NOT EXISTS plpython2u;
+CREATE EXTENSION IF NOT EXISTS plpython3u;
 -- end_ignore
 CREATE OR REPLACE FUNCTION ready_file_exists(datadir text)
 RETURNS bool AS $$
@@ -43,7 +43,7 @@ RETURNS bool AS $$
     rc = os.system(cmd)
 
     return (rc == 0)
-$$ LANGUAGE plpython2u VOLATILE;
+$$ LANGUAGE plpython3u VOLATILE;
 SELECT ready_file_exists(datadir) FROM gp_segment_configuration WHERE content=0 AND role='m';
 
 -- start_ignore

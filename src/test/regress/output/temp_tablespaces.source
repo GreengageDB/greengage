@@ -63,7 +63,7 @@ rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
     raise Exception("error=%s" % str(error))
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_log(dbid int, message text)
     RETURNS void
     EXECUTE ON ALL SEGMENTS
@@ -76,7 +76,7 @@ rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
     raise Exception("error=%s" % str(error))
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_stop()
     RETURNS void
     EXECUTE ON ALL SEGMENTS
@@ -86,7 +86,7 @@ cmd = "pkill file_monitor"
 cmd = ["bash", "-c", cmd]
 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 process.wait()
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_match(dbid int, name text, patstr text)
     RETURNS int
     EXECUTE ON ALL SEGMENTS
@@ -100,7 +100,7 @@ output, error = process.communicate()
 if rc != 0:
     raise Exception("error=%s" % str(error))
 return int(str(output).strip())
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION gp_temptablespace_path(tblspcOid Oid)
     RETURNS text
     EXECUTE ON ALL SEGMENTS

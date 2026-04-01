@@ -1,4 +1,4 @@
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE plpython3u;
 
 -- Helper function, to call either __gp_aoseg, or gp_aocsseg, depending
 -- on whether the table is row- or column-oriented. This allows us to
@@ -120,7 +120,7 @@ CREATE OR REPLACE FUNCTION is_query_waiting_for_syncrep(iterations int, check_qu
         if results:
             return True
     return False
-$$ LANGUAGE plpythonu VOLATILE;
+$$ LANGUAGE plpython3u VOLATILE;
 
 -- Helper function that ensures mirror of the specified contentid is down.
 create or replace function wait_for_mirror_down(contentid smallint, timeout_sec integer) returns bool as

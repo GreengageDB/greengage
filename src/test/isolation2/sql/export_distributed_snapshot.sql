@@ -11,11 +11,11 @@
 -- start_ignore
 DROP FUNCTION IF EXISTS corrupt_snapshot_file(text, text);
 DROP FUNCTION IF EXISTS snapshot_file_ds_fields_exist(text);
-DROP LANGUAGE IF EXISTS plpythonu cascade;
+DROP LANGUAGE IF EXISTS plpython3u cascade;
 DROP TABLE IF EXISTS export_distributed_snapshot_test1;
 -- end_ignore
 
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 
 -- Corrupt field entry for given snapshot file
 CREATE OR REPLACE FUNCTION  corrupt_snapshot_file(token text, field text) RETURNS integer as
@@ -44,7 +44,7 @@ $$
       f.write(content)
       f.close()
   return 0
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 -- Determine if field exists for given snapshot file
 CREATE OR REPLACE FUNCTION  snapshot_file_ds_fields_exist(token text) RETURNS boolean as
@@ -66,7 +66,7 @@ $$
         if "ds" in l:
           return True
   return False
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 -- INSERT test
 CREATE TABLE export_distributed_snapshot_test1 (a int);

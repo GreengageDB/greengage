@@ -112,16 +112,16 @@ $$ language sql;
 
 -- Case 4. Function dependency on the language.
 -- start_ignore
-drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
 -- end_ignore
-create language plpythonu;
+create language plpython3u;
 
 1: begin;
 1: create function test_4_function() returns text as $$
 	return "test"
-$$ language plpythonu;
+$$ language plpython3u;
 
-2&: drop language plpythonu;
+2&: drop language plpython3u;
 
 1: commit;
 
@@ -129,17 +129,17 @@ $$ language plpythonu;
 
 1: select test_4_function();
 
-drop language plpythonu cascade;
+drop language plpython3u cascade;
 
 -- Check if dependency is dropped before the creation of the dependent object.
-create language plpythonu;
+create language plpython3u;
 
 1: begin;
 2: begin;
-2: drop language plpythonu;
+2: drop language plpython3u;
 1&: create function test_4_function() returns text as $$
 	return "test"
-$$ language plpythonu;
+$$ language plpython3u;
 
 2: commit;
 1<:

@@ -27,7 +27,7 @@ $$ LANGUAGE sql;
 -- @param groupname: resource group id
 -- @return bool: true/false indicating whether it the session is in the resource group
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION is_session_in_group(pid integer, groupname text) RETURNS BOOL AS $$
@@ -65,7 +65,7 @@ for host in hosts:
     if not get_result(host):
         return False
 return True
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 DROP ROLE IF EXISTS role_move_query;
 -- start_ignore
