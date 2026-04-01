@@ -44,7 +44,9 @@ jobs:
 
     steps:
       - name: Determine Greengage Image name
-        run: echo "IMAGE=ghcr.io/${{ github.repository }}/ggdb${VERSION}_${{ matrix.target_os }}${{ matrix.target_os_version }}:${RUN_HEAD_SHA}" >> $GITHUB_ENV
+        run: |
+          image="ghcr.io/${{ github.repository }}/ggdb${VERSION}_${{ matrix.target_os }}${{ matrix.target_os_version }}:${RUN_HEAD_SHA}"
+          echo "IMAGE=${image,,}" >> $GITHUB_ENV
 
       - name: Display trigger information
         run: |
