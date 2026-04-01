@@ -3,7 +3,7 @@ ifeq "$(CC)" "icc"
 	USE_ICC = 1
 endif
 
-override CFLAGS+=-std=gnu99
+override CFLAGS += -std=gnu99
 
 # Avoid building LLVM Bitcode for gp_sparse_vector module.
 with_llvm = no
