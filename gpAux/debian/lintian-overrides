@@ -22,3 +22,8 @@ greengage7: incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl [o
 # TODO: create debian/greengage7.conf with that path, install to /etc/ld.so.conf.d/,
 # then remove this override.
 greengage7: package-has-unnecessary-activation-of-ldconfig-trigger
+
+# Timezone data files are hardlinked by upstream PostgreSQL build system
+# to save disk space (identical timezone definitions share inodes).
+# This is standard PostgreSQL behavior, not a packaging error.
+greengage7: package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
