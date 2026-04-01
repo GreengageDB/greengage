@@ -861,7 +861,7 @@
                               <dxl:Ident ColId="8" ColName="a" TypeMdid="0.23.1.0"/>
                             </dxl:ProjElem>
                           </dxl:ProjList>
-                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                             <dxl:Properties>
                               <dxl:Cost StartupCost="0" TotalCost="431.940767" Rows="10.000000" Width="4"/>
                             </dxl:Properties>
