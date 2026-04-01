@@ -102,6 +102,33 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 4, row count = 100
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 4, row count = 100
 
+    Scenario: test 6.1 Check rebalance with both '--add-hosts' and '--remove-hosts' (result should be the same as with the usage of '--target-hosts' in the previous test).
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1", with 4 segments on each
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And database "test_db_2" exists
+         And schema "test_schema_2" exists in "test_db_2"
+         And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
+         And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -x 4 --add-hosts 'sdw2, sdw3' --remove-hosts 'sdw1' -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And the cluster configuration has 0 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 0 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 4, row count = 100
+         And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 4, row count = 100
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 4, row count = 100
+         And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 4, row count = 100
+
     Scenario: test 7. Check rebalance with '--target-hosts-file'.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'

@@ -132,8 +132,7 @@ def validate_options(options, args, parser):
         # (condition_option, incompatible_options)
         ('target_hosts', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file', 'target_hosts_file']),
         ('target_hosts_file', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
-        ('add_hosts', ['add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
-        ('add_hosts_file', ['remove_hosts', 'remove_hosts_file']),
+        ('add_hosts', ['add_hosts_file']),
         ('remove_hosts', ['remove_hosts_file']),
 
         ('target_datadirs', ['target_datadirs_file']),
