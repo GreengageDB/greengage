@@ -8,17 +8,7 @@ export DEB_BUILD_OPTIONS = nocheck
 LSB_SI := $(shell lsb_release -si)
 LSB_SR := $(shell lsb_release -sr)
 
-ifeq ($(LSB_SI),Ubuntu)
-  ifeq ($(LSB_SR),22.04)
-    DEPS = python2,python2.7
-    CONFLICTS = python-is-python3
-  else
-    DEPS = python3
-  endif
-else
-  DEPS = python2,python2.7
-  CONFLICTS = python-is-python3
-endif
+DEPS = python3
 
 %:
 	dh $@
@@ -40,6 +30,18 @@ override_dh_auto_install:
 		GPROOT=$(GPROOT) \
 		GPDIR=$(GPDIR) \
 		PARALLEL_MAKE_OPTS=-j$(shell nproc)
+
+override_dh_dwz:
+	@echo "Skipping dwz"
+
+override_dh_fixperms:
+	dh_fixperms
+	# Remove executable bit from Python/Perl/Bash modules without shebang
+	find $(CURDIR)/debian/$(PACKAGE_NAME) -type f \( -name "*.py" -o -name "*.pm" -o -name "*.sh" \) -executable | while read f; do \
+	    if ! head -1 "$$f" | grep -q '^#!'; then \
+	        chmod -x "$$f"; \
+	    fi; \
+	done
 
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
