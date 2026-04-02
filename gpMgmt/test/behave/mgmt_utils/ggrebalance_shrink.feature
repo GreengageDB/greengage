@@ -127,6 +127,7 @@ Feature: ggrebalance behave tests
         | on_enter_STATE_SHRINK_SEGMENTS_STOP_STARTED_end                             |
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1                  |
         | fault_segment_stop_dbid_3                                                   |
+        | before_set_status_test_db_2.test_schema_2.test_table_1                      |
 
     Scenario Outline: test 1.3. test shrink continue after cluster restart
         Given the database is not running
