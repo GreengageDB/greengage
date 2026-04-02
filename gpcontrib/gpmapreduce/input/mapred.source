@@ -7,17 +7,17 @@
 -- to make this work correctly with gpsourcify, you need to add your
 -- gpwhich token to gptokencheck.
 
+-- start_matchignore
+-- m|STDERR>  }"|
+-- m|STDERR> syntax error at line \d+, near ";|
+-- m|STDERR> Execution of aborted due to compilation errors.|
+-- end_matchignore
+
 -- start_matchsubs
 -- m|mapreduce_\d+_run|
 -- s|mapreduce_\d+_run|mapreduce_PID_run|
--- m|STDERR> Execution of aborted due to compilation errors.|
--- s|STDERR> Execution of aborted due to compilation errors.||
 -- m|STDERR> CONTEXT:  compilation of PL/Perl function "mapreduce_\d+_[a-z_]+"|
 -- s|mapreduce_\d+|mapreduce_X|
--- m|STDERR> syntax error at line \d+, near ";|
--- s|STDERR> syntax error at line \d+, near ";||
--- m|STDERR>  }"|
--- s|STDERR>  }"||
 -- end_matchsubs
 
 --
