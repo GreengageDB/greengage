@@ -3544,6 +3544,14 @@ HandleMoveResourceGroup(void)
 		/* finally we can say we are in a valid resgroup */
 		Assert(selfIsAssigned());
 
+		if (ResGroupIsBypassed())
+		{
+			bypassedSlot.group = NULL;
+			bypassedSlot.groupId = InvalidOid;
+			bypassedGroup = NULL;
+			MySessionState->bypassResGroupId = InvalidOid;
+		}
+
 		/* Add into cgroup */
 		cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 									   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
