@@ -12,12 +12,34 @@
 -- 5. these two ratios should be the same.
 
 create extension if not exists gp_inject_fault;
-create or replace language plpython3u;
+do $$
+begin /* in func */
+  execute $func$ /* in func */
+    drop language if exists plpythonu cascade; /* in func */
+    drop language if exists plpython3u cascade; /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
+$$;
 
 create table t_qmem(a int);
 select gp_inject_fault('rg_qmem_qd_qe', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
 
-create function rg_qmem_test() returns boolean as $$
+1: create function rg_qmem_test() returns boolean as $$
 from pygresql.pg import DB
 from copy import deepcopy
 import re
@@ -62,7 +84,7 @@ ratio2 = int(round(float(qd_opmem) / qe_opmem))
 
 return ratio1 == ratio2
 
-$$ language plpython3u;
+$$ language plpythonu;
 
 select rg_qmem_test();
 select gp_inject_fault('rg_qmem_qd_qe', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;

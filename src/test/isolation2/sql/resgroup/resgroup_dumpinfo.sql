@@ -2,7 +2,29 @@ DROP ROLE IF EXISTS role_dumpinfo_test;
 DROP ROLE IF EXISTS role_permission;
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
-CREATE LANGUAGE plpython3u;
+do $$
+begin /* in func */
+  execute $func$ /* in func */
+    drop language if exists plpythonu cascade; /* in func */
+    drop language if exists plpython3u cascade; /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
+$$;
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool
@@ -58,7 +80,7 @@ json_obj = json.loads(json_text)
 
 return validate(json_obj, n)
 
-$$ LANGUAGE plpython3u;
+$$ LANGUAGE plpythonu;
 
 CREATE RESOURCE GROUP rg_dumpinfo_test WITH (concurrency=2, cpu_rate_limit=20, memory_limit=20);
 CREATE ROLE role_dumpinfo_test RESOURCE GROUP rg_dumpinfo_test;
@@ -94,4 +116,7 @@ create temp table t1 as select * from unnest(array(
 DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
-DROP LANGUAGE plpython3u CASCADE;
+-- start_ignore
+2:DROP LANGUAGE IF EXISTS plpythonu CASCADE;
+2:DROP LANGUAGE IF EXISTS plpython3u CASCADE;
+-- end_ignore
