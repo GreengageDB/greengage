@@ -3716,6 +3716,8 @@ ResGroupGetGroupIdBySessionId(int sessionId)
 			ResGroupSlotData *slot = (ResGroupSlotData *)curSessionState->resGroupSlot;
 			if (slot != NULL)
 				groupId = slot->groupId;
+			else
+				groupId = curSessionState->bypassResGroupId;
 			break;
 		}
 		curSessionState = curSessionState->next;
@@ -3818,6 +3820,7 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 	} while (!groupIncBypassedRef(&groupInfo));
 
 	bypassedGroup = groupInfo.group;
+	MySessionState->bypassResGroupId = groupInfo.groupId;
 	bypassedGroup->totalExecuted++;
 	pgstat_report_resgroup(bypassedGroup->groupId);
 	bypassedSlot.group = groupInfo.group;
