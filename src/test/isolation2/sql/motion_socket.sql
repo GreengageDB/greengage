@@ -9,6 +9,30 @@
 !\retcode gpconfig -c gp_interconnect_address_type -v 'unicast';
 !\retcode gpstop -au;
 
+do $$
+begin /* in func */
+  execute $func$ /* in func */
+    drop language if exists plpythonu cascade; /* in func */
+    drop language if exists plpython3u cascade; /* in func */
+    create language plpythonu; /* in func */
+  $func$; /* in func */
+exception /* in func */
+  when others then /* in func */
+    if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' /* in func */
+    then /* in func */
+      begin /* in func */
+        execute $func$ /* in func */
+          create language plpython3u; /* in func */
+          alter language plpython3u rename to plpythonu; /* in func */
+        $func$; /* in func */
+      exception /* in func */
+      when others then /* in func */
+        raise notice 'Could not create or rename PL/Python language: %', SQLERRM; /* in func */
+      end; /* in func */
+    end if; /* in func */
+end; /* in func */
+$$;
+
 -- start_matchsubs
 -- m/^INFO:  Checking postgres backend postgres:.*/
 -- s/^INFO:  Checking postgres backend postgres:.*/INFO:  Checking postgres backend postgres: XXX/
@@ -69,7 +93,7 @@ for process in psutil.process_iter():
                 motion_socket_count, process.connections()))
 
 
-$$ LANGUAGE plpython3u EXECUTE ON MASTER;
+$$ LANGUAGE plpythonu EXECUTE ON MASTER;
 
 -- check motion sockets in a new session to ensure that the 'unicast' setting
 -- takes effect.
