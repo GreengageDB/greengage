@@ -3034,8 +3034,11 @@ sessionGetSlot(void)
 {
 	if (MySessionState == NULL)
 		return NULL;
-	else
+	if (MySessionState->resGroupSlot != NULL)
 		return (ResGroupSlotData *) MySessionState->resGroupSlot;
+	if (bypassedGroup != NULL)
+		return &bypassedSlot;
+	return NULL;
 }
 
 /*
@@ -3359,7 +3362,7 @@ HandleMoveResourceGroup(void)
 	Assert(IsResGroupRoleAllowed());
 
 	/* transaction has finished */
-	if (!IsTransactionState() || !selfIsAssigned())
+	if (!IsTransactionState() || (!selfIsAssigned() && !ResGroupIsBypassed()))
 	{
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
@@ -3504,12 +3507,18 @@ HandleMoveResourceGroup(void)
 		slot = sessionGetSlot();
 		Assert(slot != NULL);
 
+		if (selfIsAssigned())
+		{
 		selfUnsetSlot();
 		selfUnsetGroup();
+		}
 
 		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 		group = groupHashFind(groupId, true);
+		if (selfIsAssigned())
 		oldGroup = slot->group;
+		else
+		oldGroup = bypassedGroup;
 		Assert(group != NULL);
 		Assert(oldGroup != NULL);
 
