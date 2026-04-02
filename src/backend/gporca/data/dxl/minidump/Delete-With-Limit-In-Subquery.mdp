@@ -841,7 +841,7 @@
                       </dxl:SortingColumnList>
                       <dxl:LimitCount/>
                       <dxl:LimitOffset/>
-                      <dxl:RandomMotion InputSegments="0" OutputSegments="0,1,2">
+                      <dxl:RandomMotion InputSegments="1" OutputSegments="0,1,2">
                         <dxl:Properties>
                           <dxl:Cost StartupCost="0" TotalCost="431.940911" Rows="10.000000" Width="4"/>
                         </dxl:Properties>
@@ -861,7 +861,7 @@
                               <dxl:Ident ColId="8" ColName="a" TypeMdid="0.23.1.0"/>
                             </dxl:ProjElem>
                           </dxl:ProjList>
-                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                             <dxl:Properties>
                               <dxl:Cost StartupCost="0" TotalCost="431.940767" Rows="10.000000" Width="4"/>
                             </dxl:Properties>

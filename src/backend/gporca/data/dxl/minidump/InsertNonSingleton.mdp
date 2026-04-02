@@ -321,7 +321,7 @@ EXPLAIN INSERT INTO snackbox SELECT a FROM (SELECT c FROM hottoast LIMIT 3) hott
           </dxl:ProjList>
           <dxl:Filter/>
           <dxl:OneTimeFilter/>
-          <dxl:BroadcastMotion InputSegments="0" OutputSegments="0,1,2">
+          <dxl:BroadcastMotion InputSegments="1" OutputSegments="0,1,2">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="862.000752" Rows="3.000000" Width="4"/>
             </dxl:Properties>
