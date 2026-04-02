@@ -820,6 +820,21 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char relstorage, boo
 		}
 		else if (colDef->cooked_default != NULL)
 		{
+			/* 
+			 *  The parent table might have a volatile function as the default value
+			 *  for a column, for example if it is distributed by a key,
+			 *  and the target table might be replicated. Such columns are prohibited
+			 *  for replicated tables, so enforce this rule here.
+			 */
+			if (GpPolicyIsReplicated(policy) &&
+				contain_volatile_functions_not_nextval(colDef->cooked_default))
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("volatile expressions are not supported as "
+							"default values for columns in replicated tables"),
+					 errdetail("Volatile expression(s) originate from the table(s) "
+							"specified in the LIKE clause(s)")));
+
 			CookedConstraint *cooked;
 
 			cooked = (CookedConstraint *) palloc(sizeof(CookedConstraint));
@@ -15486,6 +15501,26 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		if (ldistro && ldistro->ptype == POLICYTYPE_REPLICATED)
 		{
 			rep_pol = true;
+
+			/*
+			 *  Check default columns for existence of volatile expressions,
+			 *  which are prohibited for replicated tables.
+			 */
+			TupleConstr *constr = rel->rd_att->constr;
+			if (constr)
+			{
+				for (int i = constr->num_defval - 1; i >= 0; i--)
+				{
+					char *adbin = constr->defval[i].adbin;
+					if (adbin && contain_volatile_functions_not_nextval(stringToNode(adbin)))
+						ereport(ERROR,
+								(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								 errmsg("volatile expressions are not supported as "
+										"default values for columns in replicated tables"),
+								 errdetail("Cannot change policy as some of the columns have volatile "
+										   "expressions as defaults.")));
+				}
+			}
 
 			if (GpPolicyIsReplicated(rel->rd_cdbpolicy))
 				ereport(WARNING,
