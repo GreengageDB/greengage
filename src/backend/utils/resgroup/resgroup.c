@@ -3507,16 +3507,17 @@ HandleMoveResourceGroup(void)
 		slot = sessionGetSlot();
 		Assert(slot != NULL);
 
-		if (selfIsAssigned())
+		if (!ResGroupIsBypassed())
 		{
-		selfUnsetSlot();
-		selfUnsetGroup();
+			selfUnsetSlot();
+			selfUnsetGroup();
 		}
 
 		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 		group = groupHashFind(groupId, true);
-		oldGroup = slot->group;
-		if (!oldGroup)
+		if (!ResGroupIsBypassed())
+			oldGroup = slot->group;
+		else
 			oldGroup = bypassedGroup;
 		Assert(group != NULL);
 		Assert(oldGroup != NULL);
