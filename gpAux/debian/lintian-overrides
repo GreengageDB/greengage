@@ -28,5 +28,6 @@ package-has-unnecessary-activation-of-ldconfig-trigger
 # This is standard PostgreSQL behavior, not a packaging error.
 package-contains-hardlink [opt/greengagedb/greengage7/share/postgresql/timezone/*]
 
-# lintian bug, #1000977, #1000449
-elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
+## This bugs not masking because bug #1004313
+## lintian bugs: #1000977, #1000449
+#elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
