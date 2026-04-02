@@ -3515,10 +3515,9 @@ HandleMoveResourceGroup(void)
 
 		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 		group = groupHashFind(groupId, true);
-		if (selfIsAssigned())
 		oldGroup = slot->group;
-		else
-		oldGroup = bypassedGroup;
+		if (!oldGroup)
+			oldGroup = bypassedGroup;
 		Assert(group != NULL);
 		Assert(oldGroup != NULL);
 
