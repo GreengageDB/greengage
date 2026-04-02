@@ -460,7 +460,7 @@
               </dxl:TableScan>
             </dxl:Result>
           </dxl:Result>
-          <dxl:RandomMotion InputSegments="0" OutputSegments="0,1" DuplicateSensitive="true">
+          <dxl:RandomMotion InputSegments="1" OutputSegments="0,1" DuplicateSensitive="true">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="0.000000" Rows="0.000000" Width="8"/>
             </dxl:Properties>

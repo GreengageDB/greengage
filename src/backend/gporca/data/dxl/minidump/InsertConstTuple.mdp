@@ -230,7 +230,7 @@
           </dxl:ProjList>
           <dxl:Filter/>
           <dxl:OneTimeFilter/>
-          <dxl:RedistributeMotion InputSegments="0" OutputSegments="0,1" DuplicateSensitive="true">
+          <dxl:RedistributeMotion InputSegments="1" OutputSegments="0,1" DuplicateSensitive="true">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="0.000031" Rows="1.000000" Width="8"/>
             </dxl:Properties>

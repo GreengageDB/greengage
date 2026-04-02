@@ -504,7 +504,7 @@ explain SELECT a.f3 FROM tb a JOIN tb b ON a.f1 = b.f1 AND NOT ( a.f2 = 0 OR a.f
                       </dxl:ProjList>
                       <dxl:Filter/>
                       <dxl:OneTimeFilter/>
-                      <dxl:RandomMotion InputSegments="0" OutputSegments="0,1,2" DuplicateSensitive="true">
+                      <dxl:RandomMotion InputSegments="1" OutputSegments="0,1,2" DuplicateSensitive="true">
                         <dxl:Properties>
                           <dxl:Cost StartupCost="0" TotalCost="0.000004" Rows="1.000000" Width="1"/>
                         </dxl:Properties>

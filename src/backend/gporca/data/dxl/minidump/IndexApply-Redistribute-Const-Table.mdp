@@ -404,7 +404,7 @@ Table X (int i, int j) is distributed by i, column i has index
           <dxl:JoinFilter>
             <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
           </dxl:JoinFilter>
-          <dxl:RedistributeMotion InputSegments="0" OutputSegments="0,1" DuplicateSensitive="true">
+          <dxl:RedistributeMotion InputSegments="1" OutputSegments="0,1" DuplicateSensitive="true">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="0.000018" Rows="1.000000" Width="4"/>
             </dxl:Properties>

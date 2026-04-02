@@ -2229,7 +2229,7 @@ EXPLAIN CREATE TABLE test AS
                       </dxl:Sort>
                     </dxl:Aggregate>
                   </dxl:CTEProducer>
-                  <dxl:RandomMotion InputSegments="0" OutputSegments="0,1,2">
+                  <dxl:RandomMotion InputSegments="1" OutputSegments="0,1,2">
                     <dxl:Properties>
                       <dxl:Cost StartupCost="0" TotalCost="2778516239352.373535" Rows="1.000000" Width="72"/>
                     </dxl:Properties>
@@ -2397,7 +2397,7 @@ EXPLAIN CREATE TABLE test AS
                                 <dxl:Ident ColId="55" ColName="ColRef_0055" TypeMdid="0.20.1.0"/>
                               </dxl:ProjElem>
                             </dxl:ProjList>
-                            <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                            <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                               <dxl:Properties>
                                 <dxl:Cost StartupCost="0" TotalCost="1324037.570275" Rows="99.999999" Width="20"/>
                               </dxl:Properties>
@@ -2471,7 +2471,7 @@ EXPLAIN CREATE TABLE test AS
                                     </dxl:ProjList>
                                     <dxl:Filter/>
                                     <dxl:OneTimeFilter/>
-                                    <dxl:BroadcastMotion InputSegments="0" OutputSegments="0,1,2">
+                                    <dxl:BroadcastMotion InputSegments="1" OutputSegments="0,1,2">
                                       <dxl:Properties>
                                         <dxl:Cost StartupCost="0" TotalCost="431.001133" Rows="3.000000" Width="8"/>
                                       </dxl:Properties>
@@ -2500,7 +2500,7 @@ EXPLAIN CREATE TABLE test AS
                                           </dxl:ProjElem>
                                         </dxl:ProjList>
                                         <dxl:Filter/>
-                                        <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                                        <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                                           <dxl:Properties>
                                             <dxl:Cost StartupCost="0" TotalCost="431.000702" Rows="1.000000" Width="8"/>
                                           </dxl:Properties>
@@ -2642,7 +2642,7 @@ EXPLAIN CREATE TABLE test AS
                                   <dxl:Ident ColId="123" ColName="ColRef_0123" TypeMdid="0.20.1.0"/>
                                 </dxl:ProjElem>
                               </dxl:ProjList>
-                              <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                              <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                                 <dxl:Properties>
                                   <dxl:Cost StartupCost="0" TotalCost="1324037.570275" Rows="99.999999" Width="20"/>
                                 </dxl:Properties>
@@ -2716,7 +2716,7 @@ EXPLAIN CREATE TABLE test AS
                                       </dxl:ProjList>
                                       <dxl:Filter/>
                                       <dxl:OneTimeFilter/>
-                                      <dxl:BroadcastMotion InputSegments="0" OutputSegments="0,1,2">
+                                      <dxl:BroadcastMotion InputSegments="1" OutputSegments="0,1,2">
                                         <dxl:Properties>
                                           <dxl:Cost StartupCost="0" TotalCost="431.001133" Rows="3.000000" Width="8"/>
                                         </dxl:Properties>
@@ -2745,7 +2745,7 @@ EXPLAIN CREATE TABLE test AS
                                             </dxl:ProjElem>
                                           </dxl:ProjList>
                                           <dxl:Filter/>
-                                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                                          <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                                             <dxl:Properties>
                                               <dxl:Cost StartupCost="0" TotalCost="431.000702" Rows="1.000000" Width="8"/>
                                             </dxl:Properties>
@@ -2889,7 +2889,7 @@ EXPLAIN CREATE TABLE test AS
                                 <dxl:Ident ColId="89" ColName="ColRef_0089" TypeMdid="0.20.1.0"/>
                               </dxl:ProjElem>
                             </dxl:ProjList>
-                            <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                            <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                               <dxl:Properties>
                                 <dxl:Cost StartupCost="0" TotalCost="1324037.570275" Rows="99.999999" Width="20"/>
                               </dxl:Properties>
@@ -2963,7 +2963,7 @@ EXPLAIN CREATE TABLE test AS
                                     </dxl:ProjList>
                                     <dxl:Filter/>
                                     <dxl:OneTimeFilter/>
-                                    <dxl:BroadcastMotion InputSegments="0" OutputSegments="0,1,2">
+                                    <dxl:BroadcastMotion InputSegments="1" OutputSegments="0,1,2">
                                       <dxl:Properties>
                                         <dxl:Cost StartupCost="0" TotalCost="431.001133" Rows="3.000000" Width="8"/>
                                       </dxl:Properties>
@@ -2992,7 +2992,7 @@ EXPLAIN CREATE TABLE test AS
                                           </dxl:ProjElem>
                                         </dxl:ProjList>
                                         <dxl:Filter/>
-                                        <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+                                        <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                                           <dxl:Properties>
                                             <dxl:Cost StartupCost="0" TotalCost="431.000702" Rows="1.000000" Width="8"/>
                                           </dxl:Properties>
