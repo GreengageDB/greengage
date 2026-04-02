@@ -2863,6 +2863,14 @@ AddRelationNewConstraints(Relation rel,
 			(IsA(expr, Const) &&((Const *) expr)->constisnull))
 			continue;
 
+		/* Protect replicated tables from volatile expressions as DEFAULT value */
+		if (GpPolicyIsReplicated(rel->rd_cdbpolicy) &&
+			contain_volatile_functions_not_nextval(expr))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("volatile expressions are not supported as "
+							"default values for columns in replicated tables")));
+
 		StoreAttrDefault(rel, colDef->attnum, expr, is_internal);
 
 		cooked = (CookedConstraint *) palloc(sizeof(CookedConstraint));
