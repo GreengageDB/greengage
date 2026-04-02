@@ -694,13 +694,18 @@ execute checkrelfilenodediff('addexp_nonvolatile', 't_addcol_aoco');
 -- results are expected
 select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2 from t_addcol_aoco;
 -- volatile expression, do not expect a table rewrite, only column rewrite
-execute capturerelfilenodebefore('addexp_volatile', 't_addcol_aoco');
-execute checkattributeencoding('t_addcol_aoco');
-alter table t_addcol_aoco add column defexp3 int default random()*1000::int;
-execute checkrelfilenodediff('addexp_volatile', 't_addcol_aoco');
-execute checkattributeencoding('t_addcol_aoco');
+create table t_addcol_volatile_aoco with (appendonly=true, orientation=column) as select * from t_addcol_aoco distributed by (a);
+
+execute capturerelfilenodebefore('addexp_volatile', 't_addcol_volatile_aoco');
+execute checkattributeencoding('t_addcol_volatile_aoco');
+alter table t_addcol_volatile_aoco add column defexp3 int default random()*1000::int;
+execute checkrelfilenodediff('addexp_volatile', 't_addcol_volatile_aoco');
+execute checkattributeencoding('t_addcol_volatile_aoco');
+
 -- results are expected
-select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_aoco;
+select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_volatile_aoco;
+
+drop table t_addcol_volatile_aoco;
 
 --
 -- truncate

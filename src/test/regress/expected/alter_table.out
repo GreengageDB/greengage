@@ -4854,3 +4854,53 @@ create index float2double_table_idx_c1c2c3 on float2double_table(c1,c2,c3);
 create unique index float2double_table_uniqidx_c1c2c3 on float2double_table(c1,c2,c3);
 ALTER TABLE float2double_table ALTER COLUMN c1 TYPE double precision;
 DROP TABLE float2double_table;
+-- Test that adding new column with default value as volatile function
+-- on replicated tables fails.
+-- https://github.com/GreengageDB/greengage/pull/321
+-- start_ignore
+DROP TABLE IF EXISTS dist_replicated;
+DROP FUNCTION IF EXISTS fn_vol CASCADE;
+DROP FUNCTION IF EXISTS fn_val CASCADE;
+-- end_ignore
+CREATE TABLE dist_replicated(a int) DISTRIBUTED REPLICATED;
+INSERT INTO dist_replicated(a) SELECT v FROM generate_series(1,10) v;
+CREATE FUNCTION fn_vol()
+        RETURNS int
+        LANGUAGE plpgsql
+        VOLATILE
+AS $$
+BEGIN
+	RETURN floor(random() * 100 + 1);
+END;
+$$
+EXECUTE ON ANY;
+CREATE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        IMMUTABLE
+AS $$
+BEGIN
+	RETURN 42;
+END;
+$$
+EXECUTE ON ANY;
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_vol();
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT (fn_vol() + 1) * (42 + 42);
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
+ALTER TABLE dist_replicated ADD COLUMN x int DEFAULT fn_val();
+ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_vol();
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
+ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT (fn_vol() + 1) * (42 + 42);
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
+ALTER TABLE dist_replicated ALTER COLUMN x SET DEFAULT fn_val();
+CREATE TABLE dist_by_key(x int DEFAULT fn_vol()) DISTRIBUTED BY (x);
+ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
+DETAIL:  Cannot change policy as some of the columns have volatile expressions as defaults.
+ERROR:  volatile expressions are not supported as default values for columns in replicated tables
+ALTER TABLE dist_by_key ALTER COLUMN x SET DEFAULT fn_val();
+ALTER TABLE dist_by_key SET DISTRIBUTED REPLICATED;
+DROP TABLE dist_replicated;
+DROP TABLE dist_by_key;
+DROP FUNCTION fn_vol;
+DROP FUNCTION fn_val;

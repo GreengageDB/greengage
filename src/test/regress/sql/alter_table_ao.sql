@@ -628,11 +628,16 @@ execute checkrelfilenodediff('addexp_nonvolatile', 't_addcol');
 -- results are expected
 select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2 from t_addcol;
 -- volatile expression, expecting a rewrite
-execute capturerelfilenodebefore('addexp_volatile', 't_addcol');
-alter table t_addcol add column defexp3 int default random()*1000::int;
-execute checkrelfilenodediff('addexp_volatile', 't_addcol');
+create table t_addcol_volatile with (appendonly=true) as select * from t_addcol distributed by (a);
+
+execute capturerelfilenodebefore('addexp_volatile', 't_addcol_volatile');
+alter table t_addcol_volatile add column defexp3 int default random()*1000::int;
+execute checkrelfilenodediff('addexp_volatile', 't_addcol_volatile');
+
 -- results are expected
-select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol;
+select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_volatile;
+
+drop table t_addcol_volatile;
 
 --
 -- truncate

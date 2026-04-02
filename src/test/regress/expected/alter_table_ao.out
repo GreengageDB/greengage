@@ -1087,22 +1087,24 @@ select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarg
 (2 rows)
 
 -- volatile expression, expecting a rewrite
-execute capturerelfilenodebefore('addexp_volatile', 't_addcol');
-alter table t_addcol add column defexp3 int default random()*1000::int;
-execute checkrelfilenodediff('addexp_volatile', 't_addcol');
- segid |    casename     | relname  | rewritten 
--------+-----------------+----------+-----------
-     0 | addexp_volatile | t_addcol | t
+create table t_addcol_volatile with (appendonly=true) as select * from t_addcol distributed by (a);
+execute capturerelfilenodebefore('addexp_volatile', 't_addcol_volatile');
+alter table t_addcol_volatile add column defexp3 int default random()*1000::int;
+execute checkrelfilenodediff('addexp_volatile', 't_addcol_volatile');
+ segid |    casename     |      relname      | rewritten 
+-------+-----------------+-------------------+-----------
+     0 | addexp_volatile | t_addcol_volatile | t
 (1 row)
 
 -- results are expected
-select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol;
+select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_volatile;
  a | def10 | defnull1 | defnull2 | char_length | char_length | defexp1 | expected_defexp2 | expected_defexp3 
 ---+-------+----------+----------+-------------+-------------+---------+------------------+------------------
  1 |     1 |        1 |        1 |      100001 |     1000002 |  100003 | t                | t
  1 |    10 |          |          |      100000 |     1000002 |  100003 | t                | t
 (2 rows)
 
+drop table t_addcol_volatile;
 --
 -- truncate
 --
@@ -1137,7 +1139,12 @@ end;
 execute checkattributeencoding('t_addcol');
  attnum | filenum | lastrownums | attoptions 
 --------+---------+-------------+------------
-(0 rows)
+      5 |       1 |             | 
+      6 |       2 |             | 
+      7 |       3 |             | 
+      8 |       4 |             | 
+      9 |       5 |             | 
+(5 rows)
 
 -- for unsafe truncate, since we don't clear up gp_fastsequence, we don't need to clear up lastrownums
 execute checkattributeencoding('t_addcol_truncate');
@@ -1179,7 +1186,12 @@ select sum(a), sum(b), sum(c) from t_addcol_part;
 execute checkattributeencoding('t_addcol');
  attnum | filenum | lastrownums | attoptions 
 --------+---------+-------------+------------
-(0 rows)
+      5 |       1 |             | 
+      6 |       2 |             | 
+      7 |       3 |             | 
+      8 |       4 |             | 
+      9 |       5 |             | 
+(5 rows)
 
 execute checkattributeencoding('t_addcol_p1');
  attnum | filenum | lastrownums | attoptions 
