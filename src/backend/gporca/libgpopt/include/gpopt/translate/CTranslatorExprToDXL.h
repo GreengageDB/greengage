@@ -98,6 +98,9 @@ private:
 	// segment ids on target system
 	IntPtrArray *m_pdrgpiSegments;
 
+	// id of the current session
+	ULONG m_ulSessionId;
+
 	// id of coordinator node
 	INT m_iCoordinatorId;
 
@@ -714,7 +717,7 @@ private:
 public:
 	// ctor
 	CTranslatorExprToDXL(CMemoryPool *mp, CMDAccessor *md_accessor,
-						 IntPtrArray *pdrgpiSegments,
+						 IntPtrArray *pdrgpiSegments, ULONG ulSessionId,
 						 BOOL fInitColumnFactory = true);
 
 	// dtor

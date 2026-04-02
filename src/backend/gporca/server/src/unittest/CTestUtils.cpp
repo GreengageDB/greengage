@@ -2889,7 +2889,8 @@ CTestUtils::EresTranslate(CMemoryPool *mp, const CHAR *szQueryFileName,
 	pexprPlan->OsPrint(oss);
 
 	// translate plan back to DXL
-	CTranslatorExprToDXL ptrexpr2dxl(mp, md_accessor, PdrgpiSegments(mp));
+	CTranslatorExprToDXL ptrexpr2dxl(mp, md_accessor, PdrgpiSegments(mp),
+									 1 /* ulSessionId */);
 	CDXLNode *pdxlnPlan = ptrexpr2dxl.PdxlnTranslate(pexprPlan, pqc->PdrgPcr(),
 													 pqc->Pdrgpmdname());
 	GPOS_UNITTEST_ASSERT(nullptr != pdxlnPlan);

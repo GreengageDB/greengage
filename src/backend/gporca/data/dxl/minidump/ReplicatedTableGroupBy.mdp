@@ -993,7 +993,7 @@
       </dxl:LogicalGroupBy>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="12">
-      <dxl:GatherMotion InputSegments="0" OutputSegments="-1">
+      <dxl:GatherMotion InputSegments="1" OutputSegments="-1">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="431.029802" Rows="99.999999" Width="12"/>
         </dxl:Properties>

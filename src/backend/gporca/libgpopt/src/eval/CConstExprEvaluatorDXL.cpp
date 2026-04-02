@@ -43,6 +43,7 @@ CConstExprEvaluatorDXL::CConstExprEvaluatorDXL(
 	IConstDXLNodeEvaluator *pconstdxleval)
 	: m_pconstdxleval(pconstdxleval),
 	  m_trexpr2dxl(mp, md_accessor, nullptr /*pdrgpiSegments*/,
+				   0, /* ulSessionId*/
 				   false /*fInitColumnFactory*/),
 	  m_trdxl2expr(mp, md_accessor, false /*fInitColumnFactory*/)
 {
