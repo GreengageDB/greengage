@@ -3034,11 +3034,9 @@ sessionGetSlot(void)
 {
 	if (MySessionState == NULL)
 		return NULL;
-	if (MySessionState->resGroupSlot != NULL)
-		return (ResGroupSlotData *) MySessionState->resGroupSlot;
-	if (bypassedGroup != NULL)
+	if (ResGroupIsBypassed())
 		return &bypassedSlot;
-	return NULL;
+	return (ResGroupSlotData *) MySessionState->resGroupSlot;
 }
 
 /*
