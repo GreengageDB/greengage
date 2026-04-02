@@ -484,7 +484,7 @@ class SQLIsolationExecutor(object):
                     width = len(str(f))
                 else:
                     width = len(str(f).encode('utf-8'))
-                widths.append(len(str(f)))
+                widths.append(width)
 
             rset = r.getresult()
             for row in rset:
