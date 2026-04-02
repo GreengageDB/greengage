@@ -17,7 +17,9 @@ The main components are:
 - `Makefile` - Defines packaging targets, version management, and artifact collection
 - `debian/rules` - Debian build rules with custom overrides
 - `debian/control` - Package metadata and dependencies
-- Other standard Debian packaging files
+- `debian/compat` - Debhelper compatibility level
+- `debian/copyright` - Copyright information
+- `debian/lintian-overrides` - Lintian warning overrides
 
 ## Key Components
 
@@ -38,17 +40,18 @@ The main components are:
 
 The `debian/rules` file uses debhelper (dh) with custom overrides:
 
-1. **Distribution-specific Dependencies**:
-   - Detects Ubuntu 22.04 and adds `python2.7` dependency
+1. **Dependencies**:
+   - Default Python dependency: `python3`
+   - Additional dependencies defined in `debian/control`: `iproute2`, `iputils-ping`, `less`, `openssh-client`, `openssh-server`, `openssl`, `rsync`, `zip`, `net-tools`
 
 2. **Build Process Overrides**:
-   - Skips standard configure and build steps
+   - Skips standard configure, build, and clean steps
    - Uses the project's `make dist` target for installation
-   - Unsets standard compiler flags to avoid conflicts
-   - Enables parallel builds using all available CPU cores
+   - Unsets standard compiler flags (`CFLAGS`, `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS`) to avoid conflicts
+   - Enables parallel builds using all available CPU cores (`-j$(shell nproc)`)
 
 3. **Control File Generation**:
-   - Adds Python dependencies for Ubuntu 22.04
+   - Sets Python dependencies via `-VpythonRequires` and `-VpythonConflicts` variables
 
 ## Usage
 
@@ -65,13 +68,14 @@ make -C ./gpAux pkg-deb
 To customize installation paths, set environment variables:
 
 ```bash
-make -C ./gpAux pkg-deb GGROOT=/custom/path GPDIR=custom_dir
+make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
 ```
 
 ### Environment Variables
 
-- `GGROOT`: Installation root directory (default: `/opt/greengagedb`)
-- `GPDIR`: Subdirectory under `GGROOT` (default: `<Package>` from `debian/control`)
+- `GPROOT`: Installation root directory (default: `/opt/greengagedb`)
+- `GPDIR`: Subdirectory under `GPROOT` (default: value from `debian/control`, e.g., `greengage7`)
+- `PACKAGE_NAME`: Package name (default: value from `debian/control`)
 - `ARTIFACTS_DIR`: Directory for build artifacts (default: `$(CURDIR)/../Package`)
 
 ## Build Process Details
@@ -82,7 +86,7 @@ make -C ./gpAux pkg-deb GGROOT=/custom/path GPDIR=custom_dir
    - Sets `IS_RELEASE` and `STABILITY` for changelog generation
 
 2. **Package Building**:
-   - Executes `debuild` with preserved environment variables (`GGROOT`, `GPDIR`, `PACKAGE_NAME`)
+   - Executes `debuild` with preserved environment variables (`GPROOT`, `GPDIR`, `PACKAGE_NAME`)
    - Skips signing with `-us -uc` flags
    - Collects specific build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`) into `ARTIFACTS_DIR`
 
@@ -92,10 +96,18 @@ make -C ./gpAux pkg-deb GGROOT=/custom/path GPDIR=custom_dir
 
 ## Dependencies
 
-The packaging system automatically handles:
+The package depends on (defined in `debian/control`):
 
-- `Ubuntu 22.04` detection and `python2.7` dependency
-- Other distributions may require manual dependency configuration
+- `iproute2`
+- `iputils-ping`
+- `less`
+- `openssh-client`
+- `openssh-server`
+- `openssl`
+- `rsync`
+- `zip`
+- `net-tools`
+- `${pythonRequires}` (default: `python3`)
 
 ## Maintenance
 
@@ -107,24 +119,6 @@ Edit `debian/control` to update:
 - Maintainer information
 - General dependencies
 
-### Adding Distribution Support
-
-Modify distribution detection in `debian/rules`:
-
-```makefile
-ifeq ($(LSB_SI),Ubuntu)
-  ifeq ($(LSB_SR),22.04)
-    DEPS = python2,python2.7
-    CONFLICTS = python-is-python3
-  else
-    DEPS = python3
-  endif
-else
-  DEPS = python2,python2.7
-  CONFLICTS = python-is-python3
-endif
-```
-
 ## Notes
 
 - Skips tests (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
@@ -132,3 +126,5 @@ endif
 - Enables parallel builds using all available CPU cores
 - Builds without signing for development convenience
 - Collects only specific build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`) into `$(CURDIR)/../Package`
+- Skips `dh_dwz` step
+- Custom `dh_fixperms` removes executable bit from Python/Perl/Bash files without shebang

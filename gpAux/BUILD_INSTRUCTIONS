@@ -55,10 +55,10 @@ To build the Greengage Database, run GNU make with the following options:
 ## To build a Debian package:
 ## ----------------------------------------------------------------------
 
-  > make pkg-deb
+  > make -C ./gpAux pkg-deb
 
 This will generate a changelog, build the Debian package using `debuild`,
-and place the resulting `.deb` packages in the parent directory.
+and place the resulting `.deb` packages in `../Package/`.
 
 See [README.package.md](README.package.md)
 
