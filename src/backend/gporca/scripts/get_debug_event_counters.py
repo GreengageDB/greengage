@@ -127,7 +127,9 @@ def processLogFile(logFileLines, allruns):
 	current_output = []
 
 	for line in logFileLines:
-		utf8_line = line.decode('utf-8')
+		utf8_line = line
+		if sys.version_info[0] == 2:
+			utf8_line = utf8_line.decode('utf-8')
 		start_marker_match = re.search(r'CDebugCounterEventLoggingStart', utf8_line)
 		counter_log_match = re.search(r'CDebugCounterEvent\(', utf8_line)
 		eof_match = re.match(r'EOF', utf8_line)

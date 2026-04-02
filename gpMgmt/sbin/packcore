@@ -105,7 +105,7 @@ def _getLibraryListWithLDD(binary):
 
     ldd_output = Popen(args + [binary], stdout=PIPE)
     for line in ldd_output.stdout:
-        match = re.search(r'(\S+) \(0x', line.decode('utf-8'))
+        match = re.search(r'(\S+) \(0x', line)
         if match and match.group(1):
             libraries.append(match.group(1).strip())
     return libraries
