@@ -205,12 +205,14 @@ using namespace gpnaucrates;
 CTranslatorExprToDXL::CTranslatorExprToDXL(CMemoryPool *mp,
 										   CMDAccessor *md_accessor,
 										   IntPtrArray *pdrgpiSegments,
+										   ULONG ulSessionId,
 										   BOOL fInitColumnFactory)
 	: m_mp(mp),
 	  m_pmda(md_accessor),
 	  m_pdpplan(nullptr),
 	  m_pcf(nullptr),
 	  m_pdrgpiSegments(pdrgpiSegments),
+	  m_ulSessionId(ulSessionId),
 	  m_iCoordinatorId(GPOPT_COORDINATOR_SEGMENT_ID)
 {
 	GPOS_ASSERT(nullptr != mp);
@@ -7615,8 +7617,12 @@ CTranslatorExprToDXL::GetOutputSegIdsArray(CExpression *pexprMotion)
 
 			if (CDistributionSpecSingleton::EstSegment == popGather->Est())
 			{
-				// gather to first segment
-				iSegmentId = *((*m_pdrgpiSegments)[0]);
+				// keep this value in sync with GetInputSegIdsArray
+				// (though it is not really necessary as of right now,
+				// as CTranslatorDXLToPlStmt::TranslateDXLMotion is not
+				// using it to determine outputs of the slices)
+				ULONG ulSegmentCount = m_pdrgpiSegments->Size();
+				iSegmentId = (INT)(m_ulSessionId % ulSegmentCount);
 			}
 			pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));
 			break;
@@ -7667,8 +7673,8 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 			CDistributionSpecSingleton::PdssConvert(pds);
 		if (!pdss->FOnCoordinator())
 		{
-			// non-coordinator singleton is currently fixed to the first segment
-			iSegmentId = *((*m_pdrgpiSegments)[0]);
+			ULONG ulSegmentCount = m_pdrgpiSegments->Size();
+			iSegmentId = (INT)(m_ulSessionId % ulSegmentCount);
 		}
 		pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));
 		return pdrgpi;
@@ -7685,7 +7691,10 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 		// input from one segment in order to ensure that data is consistent
 		// after bring read from operator delivering tainted replication.
 		IntPtrArray *pdrgpi = GPOS_NEW(m_mp) IntPtrArray(m_mp);
-		INT iSegmentId = *((*m_pdrgpiSegments)[0]);
+
+		ULONG ulSegmentCount = m_pdrgpiSegments->Size();
+		INT iSegmentId = (INT)(m_ulSessionId % ulSegmentCount);
+
 		pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));
 		return pdrgpi;
 	}
