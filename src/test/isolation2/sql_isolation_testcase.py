@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2004-Present Pivotal Software, Inc.
@@ -480,7 +480,7 @@ class SQLIsolationExecutor(object):
             # Figure out the widths of each column.
             fields = r.listfields()
             for f in fields:
-                widths.append(len(str(f)))
+                widths.append(len(str(f).encode('utf-8')))
 
             rset = r.getresult()
             for row in rset:
@@ -488,7 +488,7 @@ class SQLIsolationExecutor(object):
                 for col in row:
                     if col is None:
                         col = ""
-                    width = len(str(col))
+                    width = len(str(col).encode('utf-8'))
                     if type(col) == bool:
                         width = 1
                     widths[colno] = max(widths[colno], width)
