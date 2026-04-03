@@ -3553,6 +3553,7 @@ HandleMoveResourceGroup(void)
 	if (bypassed)
 	{
 		UnassignResGroup();
+		Assert(group != NULL);
 		pg_atomic_add_fetch_u32((pg_atomic_uint32 *) &group->nRunningBypassed, 1);
 		bypassedGroup = group;
 		MySessionState->bypassResGroupId = groupId;
