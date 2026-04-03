@@ -539,7 +539,7 @@ class SQLIsolationExecutor(object):
                                 col[i] = elem = 't' if elem else 'f'
                         col = "{" + ",".join([str(elem) for elem in col]) + "}"
                     if sys.version_info[0] < 3:
-                        result += " " + (str(col).decode('utf-8')).ljust(widths[colno]) + " "
+                        result += (" " + (str(col).decode('utf-8')).ljust(widths[colno]) + " ").encode('utf-8')
                     else:
                         result += " " + str(col).ljust(widths[colno]) + " "
                     colno = colno + 1
