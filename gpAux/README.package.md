@@ -1,130 +1,116 @@
-# Greengage Database Packaging System
+# Greengage Packaging System
 
 ## Overview
 
-This documentation describes the Debian packaging system for Greengage Database located in the `gpAux/` subdirectory. The system builds Debian packages using a custom Makefile and `debian/rules` file.
+The packaging system produces OS-native packages for Greengage Database.
+It reuses the project's `make dist` installation flow — the same target
+used for development builds — and wraps it with platform-specific packaging
+tools.
 
-## Location and Structure
+The Makefile in `gpAux/` is the single entry point.  For Debian packaging
+it invokes `debuild` (from the `devscripts` package), which in turn calls
+back into this same Makefile recursively via `debian/rules` to perform the
+actual installation into a staging directory.  Standard build targets
+(`configure`, `build`, `clean`) are overridden and skipped; only
+`make dist` is used.
 
-The packaging system is located in:
+### Supported formats
 
-```text
-./gpAux/
+| Format | Status | Tooling |
+|---|---|---|
+| Debian (`.deb`) | Active | debhelper + debuild |
+| RPM (`.rpm`) | TODO | — |
+
+## Build Flow (Debian)
+
+```
+../getversion → ../VERSION → version-vars → debian/changelog
+                                                  ↓
+make pkg-deb → debuild → debian/rules → make dist → .deb / .ddeb
 ```
 
-The main components are:
+`debuild` re-invokes this Makefile through `debian/rules` using the
+standard debhelper targets (`override_dh_auto_install`, etc.).  The
+`override_dh_auto_install` target runs `make dist` with `DESTDIR`
+pointing at the staging area.
 
-- `Makefile` - Defines packaging targets, version management, and artifact collection
-- `debian/rules` - Debian build rules with custom overrides
-- `debian/control` - Package metadata and dependencies
-- `debian/compat` - Debhelper compatibility level
-- `debian/copyright` - Copyright information
-- `debian/lintian-overrides` - Lintian warning overrides
+## Makefile Targets
 
-## Key Components
+### Version
 
-### Makefile Targets
+| Target | Description |
+|---|---|
+| `../VERSION` | Runs `../getversion`, writes result to `../VERSION` |
+| `version-vars` | Reads `../VERSION`, sets `FULL_VERSION`, `PACKAGE_VERSION`, `DISTRO_CODENAME`, `IS_RELEASE`, `STABILITY`, `BUILD_TYPE` |
+| `version-info` | Prints the above variables (debug) |
 
-1. **Version Management**:
-   - `../VERSION`: Generates version file using `../getversion`
-   - `version-vars`: Sets build variables (`FULL_VERSION`, `PACKAGE_VERSION`, `IS_RELEASE`, `STABILITY`, `BUILD_TYPE`) from `../VERSION`
-   - `version-info`: Displays version information for debugging
+### Packaging
 
-2. **Packaging Targets**:
-   - `pkg`: Default target (aliases to `pkg-deb`)
-   - `pkg-deb`: Builds Debian package, preserves environment variables, and collects specific artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`)
-   - `changelog`: Generates `debian/changelog` using version variables
-   - `debian/install`: Creates installation manifest
+| Target | Description |
+|---|---|
+| `pkg` | Alias for `pkg-deb` |
+| `pkg-deb` | Main build: generates changelog + install manifest, runs `debuild`, collects artifacts into `../Package/` |
+| `changelog` | Generates `debian/changelog` from version-vars |
+| `debian/install` | Generates install manifest (`debian/install`) |
 
-### Debian Rules File
+## debian/rules
 
-The `debian/rules` file uses debhelper (dh) with custom overrides:
+Standard debhelper flow with overrides:
 
-1. **Dependencies**:
-   - Default Python dependency: `python3`
-   - Additional dependencies defined in `debian/control`: `iproute2`, `iputils-ping`, `less`, `openssh-client`, `openssh-server`, `openssl`, `rsync`, `zip`, `net-tools`
+| Override | Behaviour |
+|---|---|
+| `dh_auto_clean` | Skipped |
+| `dh_auto_configure` | Skipped |
+| `dh_auto_build` | Skipped |
+| `dh_auto_install` | Runs `make dist` with `DESTDIR=debian/tmp/$(PACKAGE_NAME)`, `GPROOT=/opt/greengagedb`, `GPDIR=$(PACKAGE_NAME)`, parallel `-j$(nproc)`. Unsets `CFLAGS`, `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS` |
+| `dh_dwz` | Skipped |
+| `dh_fixperms` | Strips executable bit from `.py`, `.pm`, `.sh` files without a shebang |
+| `dh_gencontrol` | Sets `-VpythonRequires=python3`, `-VpythonConflicts` |
 
-2. **Build Process Overrides**:
-   - Skips standard configure, build, and clean steps
-   - Uses the project's `make dist` target for installation
-   - Unsets standard compiler flags (`CFLAGS`, `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS`) to avoid conflicts
-   - Enables parallel builds using all available CPU cores (`-j$(shell nproc)`)
+## Environment Variables
 
-3. **Control File Generation**:
-   - Sets Python dependencies via `-VpythonRequires` and `-VpythonConflicts` variables
+| Variable | Default | Purpose |
+|---|---|---|
+| `GPROOT` | `/opt/greengagedb` | Installation root |
+| `GPDIR` | value from `debian/control` (e.g. `greengage7`) | Subdirectory under `GPROOT` |
+| `PACKAGE_NAME` | value from `debian/control` | Package name |
+| `ARTIFACTS_DIR` | `$(CURDIR)/../Package` | Where build artifacts are collected |
 
-## Usage
+## Build Artifacts
 
-### Building the Package
+`pkg-deb` moves these files from the parent directory into `ARTIFACTS_DIR`:
 
-From the project root directory, run:
-
-```bash
-make -C ./gpAux pkg-deb
-```
-
-### Custom Installation Paths
-
-To customize installation paths, set environment variables:
-
-```bash
-make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
-```
-
-### Environment Variables
-
-- `GPROOT`: Installation root directory (default: `/opt/greengagedb`)
-- `GPDIR`: Subdirectory under `GPROOT` (default: value from `debian/control`, e.g., `greengage7`)
-- `PACKAGE_NAME`: Package name (default: value from `debian/control`)
-- `ARTIFACTS_DIR`: Directory for build artifacts (default: `$(CURDIR)/../Package`)
-
-## Build Process Details
-
-1. **Version Generation**:
-   - Runs `../getversion` to create `../VERSION`
-   - Processes version string into `FULL_VERSION` and `PACKAGE_VERSION`
-   - Sets `IS_RELEASE` and `STABILITY` for changelog generation
-
-2. **Package Building**:
-   - Executes `debuild` with preserved environment variables (`GPROOT`, `GPDIR`, `PACKAGE_NAME`)
-   - Skips signing with `-us -uc` flags
-   - Collects specific build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`) into `ARTIFACTS_DIR`
-
-3. **Installation**:
-   - Uses `make dist` for installation into `debian/tmp`
-   - Generates file manifest in `debian/install`
+- `*.deb` — binary package
+- `*.ddeb` — debug symbols
+- `*.build`, `*.buildinfo`, `*.changes` — build metadata
 
 ## Dependencies
 
-The package depends on (defined in `debian/control`):
+Declared in `debian/control`:
 
-- `iproute2`
-- `iputils-ping`
-- `less`
-- `openssh-client`
-- `openssh-server`
-- `openssl`
-- `rsync`
-- `zip`
-- `net-tools`
-- `${pythonRequires}` (default: `python3`)
+```
+iproute2, iputils-ping, less, openssh-client, openssh-server,
+openssl, rsync, zip, net-tools, ${pythonRequires} (→ python3)
+```
 
-## Maintenance
+## Usage
 
-### Updating Package Metadata
+```bash
+# Build package
+make -C ./gpAux pkg-deb
 
-Edit `debian/control` to update:
+# Custom install path
+make -C ./gpAux pkg-deb GPROOT=/opt/custom GPDIR=custom-db
 
-- Package description
-- Maintainer information
-- General dependencies
+# Debug version variables
+make -C ./gpAux version-info
+```
 
-## Notes
+## Key Files
 
-- Skips tests (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
-- Unsets compiler flags to avoid conflicts with the project's build system
-- Enables parallel builds using all available CPU cores
-- Builds without signing for development convenience
-- Collects only specific build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`) into `$(CURDIR)/../Package`
-- Skips `dh_dwz` step
-- Custom `dh_fixperms` removes executable bit from Python/Perl/Bash files without shebang
+| File | Purpose |
+|---|---|
+| `Makefile` | Version management, packaging targets, artifact collection |
+| `debian/rules` | Debhelper overrides, `make dist` integration |
+| `debian/control` | Package metadata, dependencies |
+| `debian/lintian-overrides` | Suppressed lintian warnings |
