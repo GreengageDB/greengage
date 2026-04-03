@@ -18,7 +18,7 @@ try:
     from gppylib.system.environment import *
     from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
-    from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED, get_table_distr_segment_count
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
@@ -628,13 +628,7 @@ class GGShrink:
             return True
 
         def table_is_rebalanced(self, conn: dbconn.Connection) -> bool:
-            if dbconn.querySingleton(conn, f"""
-                SELECT p.numsegments
-                FROM pg_class c
-                JOIN pg_namespace n ON c.relnamespace = n.oid
-                JOIN gp_distribution_policy p ON c.oid = p.localoid
-                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}'
-                """) != self.target_segment_count:
+            if get_table_distr_segment_count(conn, self.schema_name, self.rel_name) != self.target_segment_count:
                 return False
             return True
 
