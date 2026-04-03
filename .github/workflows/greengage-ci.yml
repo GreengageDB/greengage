@@ -26,7 +26,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v26
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -48,7 +48,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v26
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -69,7 +69,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v26
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -90,7 +90,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v25
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -111,7 +111,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@feat/image_save_tar_option
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -132,7 +132,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v25
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -155,7 +155,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@refactor/package-workflow-simplify
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
