@@ -3356,11 +3356,12 @@ HandleMoveResourceGroup(void)
 	ResGroupData *oldGroup;
 	Oid			groupId = InvalidOid;
 	pid_t		callerPid;
+	bool		bypassed = ResGroupIsBypassed();
 
 	Assert(IsResGroupRoleAllowed());
 
 	/* transaction has finished */
-	if (!IsTransactionState() || (!selfIsAssigned() && !ResGroupIsBypassed()))
+	if (!IsTransactionState() || (!selfIsAssigned() && !bypassed))
 	{
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
@@ -3505,7 +3506,7 @@ HandleMoveResourceGroup(void)
 		slot = sessionGetSlot();
 		Assert(slot != NULL);
 
-		if (!ResGroupIsBypassed())
+		if (!bypassed)
 		{
 			selfUnsetSlot();
 			selfUnsetGroup();
@@ -3513,7 +3514,7 @@ HandleMoveResourceGroup(void)
 
 		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 		group = groupHashFind(groupId, true);
-		if (!ResGroupIsBypassed())
+		if (!bypassed)
 			oldGroup = slot->group;
 		else
 			oldGroup = bypassedGroup;
@@ -3544,17 +3545,20 @@ HandleMoveResourceGroup(void)
 		/* finally we can say we are in a valid resgroup */
 		Assert(selfIsAssigned());
 
-		if (ResGroupIsBypassed())
-		{
-			bypassedSlot.group = NULL;
-			bypassedSlot.groupId = InvalidOid;
-			bypassedGroup = NULL;
-			MySessionState->bypassResGroupId = InvalidOid;
-		}
-
 		/* Add into cgroup */
 		cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 									   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
+	}
+
+	if (bypassed)
+	{
+		UnassignResGroup();
+		pg_atomic_add_fetch_u32((pg_atomic_uint32 *) &group->nRunningBypassed, 1);
+		bypassedGroup = group;
+		MySessionState->bypassResGroupId = groupId;
+		bypassedGroup->totalExecuted++;
+		bypassedSlot.group = group;
+		bypassedSlot.groupId = groupId;
 	}
 
 	pgstat_report_resgroup(groupId);
