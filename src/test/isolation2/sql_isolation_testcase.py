@@ -28,7 +28,6 @@ try:
     import subprocess32 as subprocess
 except:
     import subprocess
-from gppylib import gpsubprocess
 import re
 import multiprocessing
 import tempfile
@@ -117,7 +116,7 @@ class GlobalShellExecutor(object):
         self.v_cnt = 0
         # open pseudo-terminal to interact with subprocess
         self.master_fd, self.slave_fd = pty.openpty()
-        self.sh_proc = gpsubprocess.Popen(['/bin/bash', '--noprofile', '--norc', '--noediting', '-i'],
+        self.sh_proc = subprocess.Popen(['/bin/bash', '--noprofile', '--norc', '--noediting', '-i'],
                                         stdin=self.slave_fd,
                                         stdout=self.slave_fd,
                                         stderr=self.slave_fd,
@@ -752,9 +751,10 @@ class SQLIsolationExecutor(object):
                     if mode != '\\retcode':
                         raise Exception('Invalid execution mode: {}'.format(mode))
 
-                cmd_output = gpsubprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
+                cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
                 if not bg_mode:
                     stdout, _ = cmd_output.communicate()
+                    stdout = stdout.decode('utf-8')
                     print(file=output_file)
                     if mode == '\\retcode':
                         print('-- start_ignore', file=output_file)
