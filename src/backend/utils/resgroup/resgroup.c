@@ -3352,7 +3352,7 @@ void
 HandleMoveResourceGroup(void)
 {
 	ResGroupSlotData *slot;
-	ResGroupData *group;
+	ResGroupData *group = NULL;
 	ResGroupData *oldGroup;
 	Oid			groupId = InvalidOid;
 	pid_t		callerPid;
