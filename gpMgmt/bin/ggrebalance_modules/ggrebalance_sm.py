@@ -12,6 +12,7 @@ try:
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
     from ggrebalance_modules.rebalance_step import *
+    from ggrebalance_modules.rebalance_commons import interactive_check_yesno
     from gppylib.fault_injection import *
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
@@ -421,7 +422,8 @@ class RebalanceSM:
 
                     time.sleep(SLEEP_PERIOD_SEC)
                     time_waited = time_waited + SLEEP_PERIOD_SEC
-                    if time_waited >= TIMEOUT_SEC and self.interactive_check('Timeout waiting for segment start, wait again?', default = False):
+                    if time_waited >= TIMEOUT_SEC and interactive_check_yesno(self.options.interactive, None,
+                                                                              'Timeout waiting for segment start, wait again?', default = 'N'):
                         time_waited = 0
 
             # Continue with the next step, if we already marked this one
@@ -432,7 +434,7 @@ class RebalanceSM:
             if not allow_retry:
                 self.logger.warning("We've run out of retry attempts")
 
-            if allow_retry and self.interactive_check('Retry step?', default = True):
+            if allow_retry and interactive_check_yesno(self.options.interactive, None, 'Retry step?', default = 'Y'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
@@ -442,7 +444,7 @@ class RebalanceSM:
                 self.rebalance_schema.updateExecutionStep(step)
                 continue
 
-            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
+            if not step.isRollback() and interactive_check_yesno(self.options.interactive, None, 'Rollback step?', default = 'Y'):
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
             else:
@@ -458,7 +460,7 @@ class RebalanceSM:
         steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         for step in error_steps:
             self.logger.info(f'Processing error status for switchover step: {str(step)}')
-            if self.interactive_check(f'Retry step?', default = True):
+            if interactive_check_yesno(self.options.interactive, None, 'Retry step?', default = 'Y'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
@@ -468,7 +470,7 @@ class RebalanceSM:
                 self.rebalance_schema.updateExecutionStep(step)
                 continue
 
-            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
+            if not step.isRollback() and interactive_check_yesno(self.options.interactive, None, 'Rollback step?', default = 'Y'):
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
 
@@ -540,27 +542,6 @@ class RebalanceSM:
             return -1
 
         return int(output)
-
-    # Decorator to overwrite the logic of interactive_check()
-    # during tests execution.
-    def wrap_interactive_check_with_faults(fun):
-        def func_with_faults(self, msg: str, default: bool):
-            try:
-                inject_value = inject_fault_get_value()
-                injected_answers = json.loads(inject_value)
-                if injected_answers.get(msg, '') == 'yes':
-                    return True
-                if injected_answers.get(msg, '') == 'no':
-                    return False
-            except:
-                pass
-            return fun(self, msg, default)
-        return func_with_faults
-
-    @wrap_interactive_check_with_faults
-    def interactive_check(self, msg: str, default: bool) -> bool:
-        # TODO: add logic here when implementing interactive mode
-        return default
 
     @staticmethod
     def convert_moves_to_rebalance_steps(moves: List[LogicalMove]) -> List[RebalanceStep]:
@@ -634,6 +615,9 @@ class RebalanceSM:
                 self.logger.error("Can't determine next state. Try to execute cleanup.")
                 self.trigger('move_to_STATE_ERROR')
                 return
+
+            if not interactive_check_yesno(self.options.interactive, None, 'Proceed with continue?', default = 'Y'):
+                raise Exception('Continue was not approved, interrupting execution')
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
@@ -740,12 +724,20 @@ class RebalanceSM:
 
         assert len(steps) > 0
 
+        steps_to_approve = []
         for step in steps:
             if step.getStatus() != RebalanceStep.Status.APPROVE_REQUIRED:
                 break
-            # TODO: we'll need to add logic here to get approval from the user in the interactive mode,
-            # once we start implementing the interactive mode.
-            # In non-interactive mode we assume that the switchover is always approved.
+            steps_to_approve.append(step)
+
+        msg = 'Following switchovers require approval:\n'
+        for step in steps_to_approve:
+            msg += str(step)
+            msg += '\n'
+        if not interactive_check_yesno(self.options.interactive, msg, 'Approve switchovers?', default = 'Y'):
+            raise Exception('Switchovers were not approved, interrupting execution')
+
+        for step in steps_to_approve:
             step.setStatus(RebalanceStep.Status.PLANNED, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
 

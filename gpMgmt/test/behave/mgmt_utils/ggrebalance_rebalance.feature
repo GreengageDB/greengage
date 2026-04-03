@@ -14,7 +14,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --parallel <parallel_size> -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --parallel <parallel_size> -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -44,7 +44,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When the user runs "ggrebalance -c"
         Then ggrebalance should return a return code of 0
         And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --parallel <parallel_size> -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --parallel <parallel_size> -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -91,7 +91,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -128,13 +128,13 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When the user runs "ggrebalance"
+        When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -185,12 +185,12 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "fault_rebalance_table_test_db_2.test_schema_2.test_table_1"
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance"
+        When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Continue interrupted shrink operation..." to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
@@ -221,12 +221,12 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "on_enter_STATE_REBALANCE_EXECUTION_STARTED_begin"
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance"
+        When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Continue interrupted rebalance operation..." to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
@@ -305,8 +305,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
 
         Examples: inplace swap and using 3rd host
         | command    | restore_env|
-        |"ggrebalance -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'"|stub|
-        |"ggrebalance -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'  --inplace-swap-roles"|"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
+        |"ggrebalance --non-interactive-mode -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'"|stub|
+        |"ggrebalance --non-interactive-mode -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'  --inplace-swap-roles"|"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
     
     Scenario: 7. rebalance - case with multiple swaps.
         Given the database is not running
@@ -351,7 +351,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 1 segments where "hostname='sdw1' and content = 2 and role = 'm' and status = 'u'"
@@ -386,13 +386,15 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -434,7 +436,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -442,6 +444,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -483,7 +487,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -491,6 +495,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -532,13 +538,15 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -580,7 +588,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -588,6 +596,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -628,7 +638,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -636,6 +646,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -675,7 +687,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -683,6 +695,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
@@ -722,7 +736,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -730,6 +744,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -769,7 +785,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -777,6 +793,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -818,13 +836,13 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When the user runs "ggrebalance -n 1"
+        When the user runs "ggrebalance --non-interactive-mode -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
          And ggrebalance should print "Start checking if segment is up with timeout" to logfile with latest timestamp
@@ -865,7 +883,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And on host "sdw1" set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And on host "sdw1" unset fault inject
@@ -873,6 +891,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "yes" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -915,7 +935,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And on host "sdw1" set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And on host "sdw1" unset fault inject
@@ -924,6 +944,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "no" to the prompt "Retry step?"
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -966,7 +988,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And on host "sdw1" set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And on host "sdw1" unset fault inject
@@ -975,6 +997,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "no" to the prompt "Retry step?"
          And user will answer "no" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1015,13 +1039,15 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And on host "sdw1" set fault inject "<fault_name>"
-        When the user runs "ggrebalance -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
         When user will answer "no" to the prompt "Timeout waiting for segment start, wait again?"
          And user will answer "yes" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1033,6 +1059,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And all files in gpAdminLogs directory are deleted
          And on host "sdw1" unset fault inject
          And user will answer "yes" to the prompt "Rollback step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
         When the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -1075,13 +1103,13 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
@@ -1119,20 +1147,22 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "on_enter_STATE_REBALANCE_DONE_begin"
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
         When user will answer "yes" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Approve switchovers?"
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
@@ -1180,11 +1210,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
@@ -1210,22 +1240,22 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And set fault inject "on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START_end"
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is already in progress, and was interrupted. Execute 'ggrebalance' without '-r' flag." to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance"
+        When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
@@ -1250,11 +1280,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -1284,11 +1314,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -1318,11 +1348,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -r"
+        When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored

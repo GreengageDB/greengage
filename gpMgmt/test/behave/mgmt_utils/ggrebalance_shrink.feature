@@ -86,9 +86,11 @@ Feature: ggrebalance behave tests
         When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Can't start a new operation, because the previous one was interrupted" to logfile with latest timestamp
-        When the user runs "ggrebalance --parallel 1 --batch-size 1"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance --parallel 1 --batch-size 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -156,9 +158,11 @@ Feature: ggrebalance behave tests
         When the user runs "gpstop -arf"
         Then gpstart should return a return code of 0
         When there is a "heap" table "test_schema_2.test_table_3" in "test_db_2" with data
+         And user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -307,9 +311,11 @@ Feature: ggrebalance behave tests
         When the user runs "ggrebalance -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Can't perform rollback as the catalog is already updated" to logfile with latest timestamp
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -424,9 +430,11 @@ Feature: ggrebalance behave tests
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -474,9 +482,11 @@ Feature: ggrebalance behave tests
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And clear user's answers
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 2, row count = 100
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
@@ -603,9 +613,11 @@ Feature: ggrebalance behave tests
         When the user runs "gpstop -arf"
         Then gpstart should return a return code of 0
         When there is a "heap" table "test_schema_2.test_table_4" in "test_db_2" with "300" rows
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And clear user's answers
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 2, row count = 100
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
@@ -673,9 +685,11 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And table "test_schema_2.test_table_1" is dropped in "test_db_2"
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -711,9 +725,11 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And materialized view "test_schema_1.mv_test_table_1" is dropped in "test_db_1"
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
@@ -749,9 +765,11 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And the database "test_db_2" does not exist
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
          And verify no segment running for saved segment information
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100

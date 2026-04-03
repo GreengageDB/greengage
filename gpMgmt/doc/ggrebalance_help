@@ -180,6 +180,9 @@ OPTIONS
 --non-interactive-mode
  If this option is set, the tool does not ask the user for input and applies
  default options when interaction with the user is required.
+ At the cluster shrink operation, in the interactive mode the shrunken segments
+ are stopped via 'smart' mode, and in non-interactive mode they are stopped via
+ 'fast' mode.
 
 --inplace-swap-roles
  If this option is set, it is permitted to temporarily place primary and
