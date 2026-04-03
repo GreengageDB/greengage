@@ -16,6 +16,7 @@ try:
 except:
     import subprocess
 from pygresql import pg
+from gppylib import gpsubprocess
 
 def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
@@ -305,8 +306,8 @@ def run(cmd):
             function, so you can theoretically pass any value that is
             valid for the second parameter of open().
     """
-    p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0].decode('utf-8')
+    p = gpsubprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    out = p.communicate()[0]
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
@@ -382,7 +383,7 @@ def modify_sql_file(num):
 
 def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
-    p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p = gpsubprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     return p.communicate()
 
 hostNameAddrs = get_ip(HOST)

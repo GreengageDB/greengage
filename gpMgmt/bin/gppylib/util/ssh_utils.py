@@ -302,7 +302,10 @@ class Session(cmd.Cmd):
         for s in self.pxssh_list:
             # Split the output into an array of lines so that we can add text to the beginning of
             #    each line
-            output = s.before.decode('utf-8').split('\n')
+            output_raw = s.before
+            if sys.version_info[0] == 3:
+                output_raw = output_raw.decode('utf-8')
+            output = output_raw.split('\n')
             output = output[1:-1]
 
             commandoutput.append(output)
