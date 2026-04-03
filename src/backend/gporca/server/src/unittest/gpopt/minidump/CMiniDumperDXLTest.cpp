@@ -169,7 +169,8 @@ CMiniDumperDXLTest::EresUnittest_Basic()
 			pdrgpiSegments->Append(GPOS_NEW(mp) INT(ul));
 		}
 
-		CTranslatorExprToDXL ptrexprtodxl(mp, &mda, pdrgpiSegments);
+		CTranslatorExprToDXL ptrexprtodxl(mp, &mda, pdrgpiSegments,
+										  1 /* ulSessionId */);
 		CDXLNode *pdxlnPlan = ptrexprtodxl.PdxlnTranslate(
 			pexprPlan, pqc->PdrgPcr(), pqc->Pdrgpmdname());
 		GPOS_UNITTEST_ASSERT(nullptr != pdxlnPlan);

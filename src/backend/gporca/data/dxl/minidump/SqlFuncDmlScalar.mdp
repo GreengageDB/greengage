@@ -300,7 +300,7 @@ LIMIT 999
             <dxl:Column ColId="17" Attno="-7" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
-        <dxl:RedistributeMotion InputSegments="0" OutputSegments="0,1,2">
+        <dxl:RedistributeMotion InputSegments="1" OutputSegments="0,1,2">
           <dxl:Properties>
             <dxl:Cost StartupCost="0" TotalCost="431.000108" Rows="1.000000" Width="8"/>
           </dxl:Properties>
@@ -342,7 +342,7 @@ LIMIT 999
                   <dxl:Ident ColId="8" ColName="yolo" TypeMdid="0.23.1.0"/>
                 </dxl:ProjElem>
               </dxl:ProjList>
-              <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="0">
+              <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="1">
                 <dxl:Properties>
                   <dxl:Cost StartupCost="0" TotalCost="431.000076" Rows="1.000000" Width="4"/>
                 </dxl:Properties>
