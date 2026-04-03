@@ -505,3 +505,27 @@ Feature: ggrebalance behave tests (misc options scenarios)
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And pg_hba file "/data/gpdata/ggrebalance/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
+
+    Scenario: test 19. Check '--duration' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --duration 00:00:20 --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
+         And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp
+
+    Scenario: test 20. Check '--end' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --end '2000-01-01 01:01:00' --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "End time occurs in the past" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --end $(date -d '+20 seconds' '+%Y%m%dT%H%M%S') --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
+         And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp

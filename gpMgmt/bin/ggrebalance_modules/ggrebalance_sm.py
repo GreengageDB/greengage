@@ -337,9 +337,9 @@ class RebalanceSM:
                 fp.write(cfg_line)
         return filename
 
-    def shutdown(self) -> None:
+    def shutdown(self, hard_shutdown: bool) -> None:
         self.shutdown_requested = True
-        if self.cmd != None:
+        if hard_shutdown and self.cmd != None:
             self.cmd.cancel()
 
     def state_is_final(self, state: str) -> bool:

@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-from gppylib.mainUtils import getProgramName
-
-from psycopg2 import DatabaseError
 try:
     from gppylib.commands.unix import *
     from gppylib.commands.gp import *
@@ -19,6 +16,9 @@ try:
     from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+from datetime import datetime, time
+from threading import Timer
+from psycopg2 import DatabaseError
 
 _usage = """
     Use 'ggrebalance --help' to get list of available options.
@@ -82,6 +82,10 @@ def parseargs():
                       help='Use host names when updating the pg_hba.conf file.')
     parser.add_option('--replay-lag', dest="replay_lag", type="float",
                       help='Replay lag(in GBs) allowed on mirror when rebalancing the segments.')
+    parser.add_option('-T', '--duration', type='duration', metavar='[h][:m[:s]]',
+                      help='duration from beginning to end.')
+    parser.add_option('-E', '--end', type='datetime', metavar='datetime',
+                      help="ending date and time in the format 'YYYY-MM-DD hh:mm:ss'.")
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       help='debug output.')
     parser.add_option('--inplace-swap-roles', dest="inplace_swap_roles", action='store_true', default=False,
@@ -134,6 +138,7 @@ def validate_options(options, args, parser):
         ('target_hosts_file', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
         ('add_hosts', ['add_hosts_file']),
         ('remove_hosts', ['remove_hosts_file']),
+        ('duration', ['end']),
 
         ('target_datadirs', ['target_datadirs_file']),
 
@@ -143,14 +148,15 @@ def validate_options(options, args, parser):
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles'
+            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
+            'duration', 'end'
         ]),
 
         ('rollback_required', [
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation', 'duration', 'end', 'inplace_swap_roles'
+            'skip_resource_estimation', 'inplace_swap_roles'
         ]),
     ]
 
@@ -171,7 +177,18 @@ def validate_options(options, args, parser):
                     f"Can't use together options '--{condition_opt.replace('_', '-')}' and '--{incomp_opt.replace('_', '-')}'"
                     logger.error(error_msg)
                     parser.exit(1)
-    
+
+    # OptParse can return date instead of datetime so we might need to convert
+    if options.end and not isinstance(options.end, datetime):
+        options.end = datetime.combine(options.end, time(0))
+
+    if options.end and options.end < datetime.now():
+        logger.error('End time occurs in the past')
+        parser.exit(1)
+
+    if options.duration:
+        options.end = datetime.now() + options.duration
+
     if (option_is_set('target_hosts') or option_is_set('add_hosts')) and not option_is_set('target_datadirs'):
         logger.error("--target-datadirs option is required when using --target-hosts or --add-hosts")
         parser.exit(1)
@@ -249,14 +266,13 @@ def remove_pid_file(coordinator_data_directory: str):
         pass
 
 gg_main_rebalance_SM = None
-cmd_recoverseg = None
 
 def sig_handler(sig, arg):
     if gg_main_rebalance_SM is not None:
         gg_main_rebalance_SM.shutdown()
+        # Set shutdown type back to 'hard' for the case we are here due to timeout
+        gg_main_rebalance_SM.set_hard_shutdown(True)
     else:
-        if cmd_recoverseg != None:
-            cmd_recoverseg.cancel()
         sys.exit(1)
 
 def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
@@ -272,6 +288,7 @@ def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
 
 def main(options, args, parser):
     conn = None
+    timeout_checker = None
     try:
         signal.signal(signal.SIGTERM, sig_handler)
         signal.signal(signal.SIGHUP, sig_handler)
@@ -287,15 +304,22 @@ def main(options, args, parser):
         if options.quiet:
             quiet_stdout_logging()
 
+        if options.end:
+            logger.info(f'Time limit is set to "{options.end}", current time is "{datetime.now()}"')
+            timer_period = math.ceil((options.end - datetime.now()).total_seconds())
+
+            def timeout_handler():
+                if gg_main_rebalance_SM is not None:
+                    gg_main_rebalance_SM.set_hard_shutdown(False)
+                os.kill(os.getpid(), signal.SIGINT)
+
+            timeout_checker = Timer(timer_period, timeout_handler)
+            timeout_checker.start()
+        else:
+            logger.info('No time limit is set')
+
         gpenv = GpCoordinatorEnvironment(
             options.coordinator_data_directory, True)
-
-        # can we remove it?
-        configurationInterface.registerConfigurationProvider(
-            configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
-
-        configurationInterface.getConfigurationProvider(
-        ).initializeProvider(gpenv.getCoordinatorPort())
 
         dburl = dbconn.DbURL(dbname=DBNAME, port=gpenv.getCoordinatorPort())
 
@@ -333,6 +357,8 @@ def main(options, args, parser):
     finally:
         if conn != None:
             conn.close()
+        if timeout_checker != None:
+            timeout_checker.cancel()
         remove_pid_file(get_coordinatordatadir())
 
 if __name__ == '__main__':
