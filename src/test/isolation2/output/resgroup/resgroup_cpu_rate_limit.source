@@ -37,7 +37,7 @@ CREATE
 -- verify_cpu_usage: calculate each QE's average cpu usage using all the data in
 -- the table cpu_usage_sample. And compare the average value to the expected value.
 -- return true if the practical value is close to the expected value.
-CREATE OR REPLACE FUNCTION verify_cpu_usage(groupname TEXT, expect_cpu_usage INT, err_rate INT) RETURNS BOOL AS $$ import json  
+CREATE OR REPLACE FUNCTION verify_cpu_usage(groupname TEXT, expect_cpu_usage INT, err_rate INT) RETURNS BOOL AS $$ import json from functools import reduce 
 def add_vector(vec1, vec2): r = dict() for seg_id1, value1 in vec1.items(): r[seg_id1] = value1 + vec2[seg_id1] return r 
 def verify_cpu_usage(): all_info = plpy.execute(''' SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples '''.format(name=groupname)) usage_sum = reduce(add_vector, [json.loads(row['cpu']) for row in all_info]) usage = [(float(v) / all_info.nrows()) for k, v in usage_sum.items() if k != "-1"] avg = sum(usage) / len(usage) return abs(avg - expect_cpu_usage) <= err_rate 
 return verify_cpu_usage() $$ LANGUAGE plpythonu;
@@ -64,7 +64,7 @@ CREATE
 --
 -- check gpdb cgroup configuration
 --
-DO LANGUAGE PLPYTHONU $$ import subprocess 
+DO LANGUAGE plpythonu $$ import subprocess 
 cgroot = '@cgroup_mnt_point@' 
 def get_cgroup_prop(prop): fullpath = cgroot + '/' + prop return int(open(fullpath).readline()) 
 def run_command(cmd): return subprocess.check_output(cmd.split()).decode('utf-8') 
