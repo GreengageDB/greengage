@@ -35,7 +35,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 --mirror-mode grouped -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --mirror-mode grouped -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And verify that mirror segments are in "group" configuration
@@ -57,7 +57,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 --mirror-mode spread -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --mirror-mode spread -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And verify that mirror segments are in "spread" configuration
@@ -88,7 +88,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 4 --target-hosts 'sdw2, sdw3' -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --target-hosts 'sdw2, sdw3' -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 0 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -153,7 +153,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "No such file or directory: '/tmp/ggrebalance_non_existing_file'" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
         When there is a file "/tmp/ggrebalance_target_hosts" with hosts "sdw2|sdw3"
-         And the user runs "ggrebalance -x 4 --target-hosts-file /tmp/ggrebalance_target_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+         And the user runs "ggrebalance --non-interactive-mode -x 4 --target-hosts-file /tmp/ggrebalance_target_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 0 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -182,7 +182,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And there is a file "/tmp/ggrebalance_add_hosts" with hosts "sdw2|sdw3"
-        When the user runs "ggrebalance -x 3 --add-hosts-file /tmp/ggrebalance_add_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 3 --add-hosts-file /tmp/ggrebalance_add_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -211,7 +211,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And there is a file "/tmp/ggrebalance_remove_hosts" with hosts "sdw3"
-        When the user runs "ggrebalance -x 4 --remove-hosts-file /tmp/ggrebalance_remove_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --remove-hosts-file /tmp/ggrebalance_remove_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -239,7 +239,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 --target-datadirs '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 --target-datadirs '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_new/dbfast/gpseg_'"
@@ -262,7 +262,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 --target-datadirs '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast/new_seg{content}_on_host_{hostname}, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast_mirror/new_seg{content}_on_host_{hostname}'"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 --target-datadirs '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast/new_seg{content}_on_host_{hostname}, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_new/dbfast_mirror/new_seg{content}_on_host_{hostname}'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_new/dbfast/new\_seg_\_on\_host\_sdw_'"
@@ -286,7 +286,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And there is a file "/tmp/ggrebalance_target_datadirs" with hosts "/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_{hostname}/dbfast/new_seg{content}|/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_{hostname}/dbfast_mirror/new_seg{content}"
-        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 --target-datadirs-file /tmp/ggrebalance_target_datadirs"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 --target-datadirs-file /tmp/ggrebalance_target_datadirs"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_sdw_/dbfast/new\_seg_'"
@@ -373,7 +373,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -l "/tmp/ggrebalance_logs" -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -l "/tmp/ggrebalance_logs" -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And gpAdminLogs directory has no "ggrebalance*" files
          And gpAdminLogs directory has no "gpmovemirrors*" files
@@ -384,7 +384,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And all files in "/tmp/ggrebalance_logs" directory are deleted
         When the user runs "ggrebalance -c"
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --log-dir "/tmp/ggrebalance logs" -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --log-dir "/tmp/ggrebalance logs" -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And gpAdminLogs directory has no "ggrebalance*" files
          And gpAdminLogs directory has no "gpmovemirrors*" files
@@ -417,7 +417,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
         Then validate that following rows are in the stored rows
           |  analyzed_tables_cnt  |
           |  0                    |
-        When the user runs "ggrebalance -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
         When execute following sql in db "test_db_1" and store result in the context
@@ -458,7 +458,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
         Then validate that following rows are in the stored rows
           |  analyzed_tables_cnt  |
           |  0                    |
-        When the user runs "ggrebalance --analyze -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --analyze -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
         When execute following sql in db "test_db_1" and store result in the context
@@ -481,7 +481,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --replay-lag 0 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --replay-lag 0 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And gprecoverseg should print "0 bytes of wal is still to be replayed on mirror with dbid.*, let mirror catchup on replay then trigger rebalance" regex to logfile
          And all files in gpAdminLogs directory are deleted
@@ -491,7 +491,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --hba-hostnames -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode --hba-hostnames -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And pg_hba file "/data/gpdata/ggrebalance/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "sdw2"
@@ -501,7 +501,31 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --non-interactive-mode -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And pg_hba file "/data/gpdata/ggrebalance/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
+
+    Scenario: test 19. Check '--duration' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --duration 00:00:20 --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
+         And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp
+
+    Scenario: test 20. Check '--end' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --end '2000-01-01 01:01:00' --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "End time occurs in the past" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --end $(date -d '+20 seconds' '+%Y%m%dT%H%M%S') --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
+         And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp

@@ -9,7 +9,6 @@ try:
     from gppylib.commands.gp import *
     from gppylib.gplog import *
     from gppylib.db import dbconn
-    from gppylib import userinput
     from gppylib.gparray import GpArray, Segment
     from gppylib.fault_injection import *
     from gppylib.userinput import *
@@ -18,6 +17,7 @@ try:
     from gppylib.system.environment import *
     from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
+    from ggrebalance_modules.rebalance_commons import interactive_check_yesno
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED, get_table_distr_segment_count
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
@@ -49,7 +49,6 @@ def print_progress(pool: WorkerPool, interval: int = 10) -> None:
 
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT
-    stop_mode = 'fast'
 
     states = [
         'STATE_START',
@@ -227,6 +226,11 @@ class GGShrink:
         self.shrink_plan = None
         self.dumped_gparray = gparray.GpArray.initFromFile(self.gparray_dump_file) if os.path.exists(self.gparray_dump_file) else None
 
+        if self.options.interactive:
+            self.stop_mode = 'smart'
+        else:
+            self.stop_mode = 'fast'
+
         self.machine = Machine(model = self,
                                queued=True,
                                states = self.states + self.states_main_shrink_flow + self.states_rollback_flow,
@@ -290,7 +294,7 @@ class GGShrink:
         if self.state in self.states_main_shrink_flow + self.states_rollback_flow:
             self.rebalance_schema.storeShrinkState(self.state)
 
-    def cleanup(self, prev_run_was_complete: bool) -> None:
+    def cleanup(self, prev_run_was_complete: bool) -> bool:
         if not prev_run_was_complete:
             self.logger.warning("ggrebalance hasn't finished shrink process properly. Previous run was interrupted. "
                                 "Some unbalanced tables can still exist.")
@@ -306,13 +310,12 @@ class GGShrink:
                 self.logger.warning('Current numsegments is not equal to default value.')
                 self.logger.info('Suggestion: explicitly reset the value before cleanup. Note: cluster restart will implicitly reset the value.')
 
-            if (self.options.interactive and
-                not userinput.ask_yesno(None, "\nContinue with cleanup?", 'Y')):
+            if not interactive_check_yesno(self.options.interactive, None, '\nContinue with cleanup?', default = 'Y'):
                 self.logger.info('Cleanup was interrupted...')
-                return
+                return False
 
             if (numsegments_is_set and
-                (not self.options.interactive or userinput.ask_yesno(None, "\nReset numsegments to default?", 'Y'))):
+                interactive_check_yesno(self.options.interactive, None, '\nReset numsegments to default?', default = 'Y')):
                 dbconn.execSQL(self.conn, 'BEGIN')
                 dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
                 dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')
@@ -321,6 +324,8 @@ class GGShrink:
 
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
+
+        return True
 
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]
@@ -370,6 +375,8 @@ class GGShrink:
                     self.trigger('move_to_STATE_ERROR')
                     return
 
+            if not interactive_check_yesno(self.options.interactive, None, 'Proceed with continue?', default = 'Y'):
+                raise Exception('Continue was not approved, interrupting execution')
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
@@ -448,26 +455,43 @@ class GGShrink:
         segments_to_stop = gp_array.get_segment_count() - self.shrink_plan.getTargetSegmentCount()
         self.workers_for_segment_stop = WorkerPool(numWorkers=min(segments_to_stop, self.options.batch_size))
 
+        segments_stop_successful = []
+        segments_stop_failed = []
+        segments_stop_skipped = []
+
         # Stop primaries first, and mirrors after primaries,
         # to avoid hanging replication processes
         seg_roles = [gparray.ROLE_PRIMARY, gparray.ROLE_MIRROR]
         for seg_role in seg_roles:
-            self.logger.info(f"Prepare to stop segments with role '{seg_role}'")
+            self.logger.debug(f"Prepare to stop (mode={self.stop_mode}) segments with role '{seg_role}'")
             for seg in gp_array.getSegDbList():
                 if (seg.getSegmentContentId() >= self.shrink_plan.getTargetSegmentCount() and
                     seg.getSegmentRole() == seg_role and seg.isSegmentUp()):
+                    if (seg_role == gparray.ROLE_MIRROR and
+                        any(seg.getSegmentContentId() == failed_seg.getSegmentContentId() for failed_seg in segments_stop_failed)):
+                        segments_stop_skipped.append(seg)
+                        continue
                     cmd = self.SegmentStopAfterShrink(self, seg)
                     self.workers_for_segment_stop.addCommand(cmd)
             if self.shutdown_requested:
                 break
             print_progress(self.workers_for_segment_stop, interval=1)
+            for task in self.workers_for_segment_stop.getCompletedItems():
+                if task.was_successful():
+                    segments_stop_successful.append(task.segment)
+                else:
+                    segments_stop_failed.append(task.segment)
 
         self.workers_for_segment_stop.haltWork()
         self.workers_for_segment_stop.joinWorkers()
 
-        for task in self.workers_for_segment_stop.getCompletedItems():
-            if not task.was_successful():
-                self.logger.warning('Failed to stop segments')
+        self.logger.info('Summary of shrinked segments:')
+        for seg in segments_stop_successful:
+            self.logger.info(f'segment stopped ok - {str(seg)}')
+        for seg in segments_stop_failed:
+            self.logger.info(f'segment failed to stop - {str(seg)}')
+        for seg in segments_stop_skipped:
+            self.logger.info(f'segment stop skipped - {str(seg)}')
 
         self.workers_for_segment_stop = None
 
@@ -475,7 +499,6 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_SEGMENTS_STOP_DONE(self) -> None:
-        self.logger.info('Shrinked segments were stopped')
         self.trigger('move_to_STATE_SHRINK_DONE')
 
     @wrap_func_with_faults
@@ -577,18 +600,18 @@ class GGShrink:
 
         @wrap_segment_stop_with_faults
         def run(self) -> None:
-            self.shrink.logger.info(f'Stopping shrinked segment {str(self.segment)}')
+            self.shrink.logger.debug(f'Stopping shrinked segment {str(self.segment)}')
             self.checkRunningSegment.run()
             if self.checkRunningSegment.is_shutdown():
-                self.shrink.logger.info(f'Segment {str(self.segment)} is already down')
+                self.shrink.logger.debug(f'Segment {str(self.segment)} is already down')
                 self.set_results(CommandResult(0, b'', b'', True, False))
             else:
                 try:
                     SegmentStop.run(self, validateAfter = True)
                 except ExecutionError:
-                    self.shrink.logger.info(f'Failed to stop shrinked segment {str(self.segment)}')
+                    self.shrink.logger.debug(f'Failed to stop shrinked segment {str(self.segment)}')
                     return
-                self.shrink.logger.info(f'Stopped shrinked segment {str(self.segment)}')
+                self.shrink.logger.debug(f'Stopped shrinked segment {str(self.segment)}')
 
     class TableRebalanceTask(SQLCommand):
         def __init__(self,

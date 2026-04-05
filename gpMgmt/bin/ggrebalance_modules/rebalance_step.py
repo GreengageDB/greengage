@@ -28,7 +28,7 @@ class RebalanceStep:
         if self.isRollback():
             rollback_label = '[ROLLBACK] '
         return (
-            f"{rollback_label}Rebalance step with move_order: {self.getMoveOrder()}, status: {self.getStatus()}"
+            f"{rollback_label}Rebalance step with move_order: {self.getMoveOrder()}, status: {self.getStatus().name}"
         )
 
     def getMoveOrder(self) -> int:
@@ -66,7 +66,7 @@ class RebalanceStepMoveMirror(RebalanceStep):
 
     def __str__(self):
         return (
-            f"{super().__str__()}, type: RebalanceStepMoveMirror:\n"
+            f"{super().__str__()}, type: mirror move:\n"
             f"{str(self.move)}"
         )
 
@@ -77,7 +77,7 @@ class RebalanceStepSwitchoverToMirror(RebalanceStep):
 
     def __str__(self) -> str:
         return (
-            f"{super().__str__()}, type: RebalanceStepSwitchoverToMirror, DBID {str(self.move.seg.getSegmentDbId())}"
+            f"{super().__str__()}, type: switchover from Primary to Mirror, DBID {str(self.move.seg.getSegmentDbId())}"
         )
 
 class RebalanceStepSwitchoverToPrimary(RebalanceStep):
@@ -87,7 +87,7 @@ class RebalanceStepSwitchoverToPrimary(RebalanceStep):
 
     def __str__(self) -> str:
         return (
-            f"{super().__str__()}, type: RebalanceStepSwitchoverToPrimary, DBID {str(self.move.seg.getSegmentDbId())}"
+            f"{super().__str__()}, type: switchover from Mirror to Primary, DBID {str(self.move.seg.getSegmentDbId())}"
         )
 
 def deserializeStep(input: bytes) -> RebalanceStep:
