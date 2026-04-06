@@ -108,3 +108,8 @@ $$ LANGUAGE plpythonu EXECUTE ON MASTER;
 
 !\retcode gpconfig -r gp_interconnect_address_type;
 !\retcode gpstop -au;
+
+-- start_ignore
+drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
+-- end_ignore
