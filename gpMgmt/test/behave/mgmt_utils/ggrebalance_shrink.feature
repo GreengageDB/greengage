@@ -283,6 +283,7 @@ Feature: ggrebalance behave tests
         | on_enter_STATE_SHRINK_TABLES_DONE_end                                       |
         | on_enter_STATE_SHRINK_CATALOG_STARTED_begin                                 |
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1                  |
+        | before_set_status_test_db_2.test_schema_2.test_table_1                      |
 
     Scenario Outline: test 2.3. shrink - check rollback after interrupted state (interruption is done after the point of no return). Rollback fails. So just continue shrink.
         Given the database is not running
@@ -400,6 +401,7 @@ Feature: ggrebalance behave tests
         | on_enter_STATE_SHRINK_TABLES_DONE_end                                       |
         | on_enter_STATE_SHRINK_CATALOG_STARTED_begin                                 |
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1                  |
+        | before_set_status_test_db_2.test_schema_2.test_table_1                      |
 
     Scenario Outline: test 3.1. shrink - check continue after interrupted rollback state. In this case we fail in rollback too early, and normal shrink will be complete.
         Given the database is not running
@@ -527,6 +529,7 @@ Feature: ggrebalance behave tests
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1 | on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE_end                 |
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1 | on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START_begin                  |
         | on_enter_STATE_SHRINK_TABLES_DONE_begin                    | fault_rebalance_table_test_db_2.test_schema_2.test_table_1              |
+        | on_enter_STATE_SHRINK_TABLES_DONE_begin                    | before_set_status_test_db_2.test_schema_2.test_table_1                  |
 
     Scenario Outline: test 3.3. shrink - check continue after interrupted rollback state (interruption is done after rebalance schema is dropped)
         Given the database is not running

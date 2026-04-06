@@ -262,6 +262,12 @@ class GGShrink:
                     self.trigger('move_to_STATE_END_FROM_ROLLBACK')
                     return
 
+        # In some rare cases there can be tables left, that
+        # have been already redistributed, but the status is still 'none'.
+        # To handle it, we cleanup all tables with status 'none' at the first
+        # enter of rollback operation.
+        self.rebalance_schema.clearTablesToRebalanceWithStatus('none')
+
         self.trigger('start')
 
     def get_state_after_interrupt(self, prev_state) -> str:
