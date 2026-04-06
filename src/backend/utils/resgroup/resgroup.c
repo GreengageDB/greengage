@@ -3852,6 +3852,8 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 
 	cgroupOpsRoutine->attachcgroup(bypassedGroup->groupId, MyProcPid,
 								   bypassedGroup->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
+
+	SIMPLE_FAULT_INJECTOR("check_and_unassign_from_resgroup_entry_bypassed");
 }
 
 /*
