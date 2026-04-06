@@ -60,25 +60,66 @@ class RebalanceSchema:
 
         self.savePlan(plan)
 
+        # TODO: generate rollback states
+        # TODO: add check for rebalance rollback
+        dbconn.execSQL(self.conn, f'''
+CREATE FUNCTION ggrebalance._is_rollback()
+RETURNS boolean AS $$
+    SELECT COALESCE(
+        (SELECT state IN (
+            'STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_START',
+            'STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE',
+            'STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START',
+            'STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE',
+            'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START',
+            'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE',
+            'STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START',
+            'STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE')
+        FROM ggrebalance.rebalance_status WHERE state_category = 'SHRINK' ORDER BY updated DESC LIMIT 1),
+        FALSE)
+$$ LANGUAGE sql''')
+
         if options.simple_progress:
+
             dbconn.execSQL(self.conn, f'''
 CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
-SELECT
-    '1.1. Tables shrinked' AS stat_name,
-    count(1)::text AS stat_value
-FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
-UNION
-SELECT
-    '1.3. Tables left to shrink' AS stat_name,
-    count(1)::text AS stat_value
-FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
-UNION
-SELECT
-    '1.2. Tables shrink in progress' AS stat_name,
-    count(1)::text AS stat_value
-FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL
-ORDER BY stat_name ASC;
-                            ''')
+WITH
+cond AS (SELECT ggrebalance._is_rollback() AS rollback_in_progress),
+rebalance_progress_normal_flow AS
+    (
+    SELECT
+        '1.1. Tables shrinked' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
+    UNION
+    SELECT
+        '1.3. Tables left to shrink' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
+    UNION
+    SELECT
+        '1.2. Tables shrink in progress' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL
+    ORDER BY stat_name ASC
+    ),
+rebalance_progress_rollback_flow AS
+    (
+    SELECT
+        '1.1 Tables rollback in progress' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
+    UNION
+    SELECT
+        '1.2 Tables left to rollback' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
+    ORDER BY stat_name ASC
+    )
+SELECT * FROM rebalance_progress_normal_flow WHERE NOT (SELECT rollback_in_progress FROM cond)
+UNION ALL
+SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progress FROM cond);''')
+
         elif options.detailed_progress:
             pass
 

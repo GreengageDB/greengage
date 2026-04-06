@@ -530,7 +530,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
          And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp
 
-    Scenario: test 21. Check '--simple-progress' option.
+    Scenario: test 21. Check '--simple-progress' option with normal flow.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
@@ -609,6 +609,38 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT * FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value |
+          |  1.1. Tables shrinked            | 10         |
+          |  1.2. Tables shrink in progress  | 0          |
+          |  1.3. Tables left to shrink      | 0          |
+
+    # TODO: test with full rebalance, not only shrink
+    # TODO: merge with the preceding test
+    Scenario: test 22. Check '--simple-progress' option with rollback flow.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_0" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_6" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_7" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_8" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_9" in "test_db_1" with "500" rows
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "on_enter_STATE_SHRINK_TABLES_DONE_end"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 3  --skip-rebalance"
+        Then ggrebalance should return a return code of 1
          And unset fault inject
         When execute following sql in db "postgres" and store result in the context
             """
@@ -619,3 +651,58 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  1.1. Tables shrinked            | 10         |
           |  1.2. Tables shrink in progress  | 0          |
           |  1.3. Tables left to shrink      | 0          |
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE_end"
+        When the user runs "ggrebalance -r -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT * FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value |
+          |  1.1 Tables rollback in progress | 0          |
+          |  1.2 Tables left to rollback     | 10         |
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_0"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT * FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value |
+          |  1.1 Tables rollback in progress | 1          |
+          |  1.2 Tables left to rollback     | 9          |
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_3"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT * FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value |
+          |  1.1 Tables rollback in progress | 1          |
+          |  1.2 Tables left to rollback     | 6          |
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_9"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT * FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value |
+          |  1.1 Tables rollback in progress | 1          |
+          |  1.2 Tables left to rollback     | 0          |
