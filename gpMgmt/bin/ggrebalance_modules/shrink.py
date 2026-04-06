@@ -219,6 +219,7 @@ class GGShrink:
         self.conn = conn
         self.shutdown_requested = False
         self.workers_for_tables_rebalance = None
+        self.tables_rebalance_failed = False
         self.workers_for_segment_stop = None
         self.gparray = gpArray
         self.gparray_dump_file = gpArrayDumpFilename
@@ -475,6 +476,7 @@ class GGShrink:
                     self.workers_for_segment_stop.addCommand(cmd)
             if self.shutdown_requested:
                 break
+            # TODO: remove?
             print_progress(self.workers_for_segment_stop, interval=1)
             for task in self.workers_for_segment_stop.getCompletedItems():
                 if task.was_successful():
@@ -653,6 +655,7 @@ class GGShrink:
         @wrap_table_rebalance_with_faults
         def process_table(self, attempt: int) -> None:
             self.shrink.logger.info(f'Start table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}" to {self.target_segment_count} segments (attempt {attempt})')
+            self.shrink.rebalance_schema.setTableRebalanceStartTime(self.db_name, self.schema_name, self.rel_name)
             if self.db_exists(self.shrink.rebalance_schema.conn, self.db_name):
                 dburl = dbconn.DbURL(dbname=self.db_name, port=self.shrink.gpEnv.getCoordinatorPort())
                 with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
@@ -669,6 +672,9 @@ class GGShrink:
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
+                    # TODO: merge setTableRebalanceEndTime and setStatusForTableToRebalance
+                    inject_fault(f'before_set_status_{self.db_name}.{self.schema_name}.{self.rel_name}')
+                    self.shrink.rebalance_schema.setTableRebalanceEndTime(self.db_name, self.schema_name, self.rel_name)
                     self.shrink.rebalance_schema.setStatusForTableToRebalance(self.db_name, self.schema_name, self.rel_name, self.table_status_after_rebalance)
                     dbconn.execSQL(conn, 'COMMIT')
             else:
@@ -691,7 +697,9 @@ class GGShrink:
                         logger.warning(f"{str(e)}")
                     else:
                         logger.error(f"{str(e)}")
-                        raise Exception(f'Failed to process the db object for {attempt_max_cnt} attempts')
+                        logger.error(f'Failed to process the db object "{self.db_name}"."{self.schema_name}"."{self.rel_name}" for {attempt_max_cnt} attempts')
+                        self.shrink.tables_rebalance_failed = True
+                        self.shrink.workers_for_tables_rebalance.haltWork()
                     continue
                 break
 
@@ -738,7 +746,8 @@ class GGShrink:
         self.logger.info(f'Tables to process {cursor.rowcount}')
 
         if cursor.rowcount > 0:
-            self.workers_for_tables_rebalance = WorkerPool(numWorkers=min(cursor.rowcount, self.options.parallel))
+            num_workers=min(cursor.rowcount, self.options.parallel)
+            self.workers_for_tables_rebalance = WorkerPool(numWorkers=num_workers)
 
             for db_name, schema_name, rel_name in cursor:
                 task = self.TableRebalanceTask(self,
@@ -749,16 +758,13 @@ class GGShrink:
                                                target_status)
                 self.workers_for_tables_rebalance.addCommand(task)
 
-            print_progress(self.workers_for_tables_rebalance, interval=1)
-
+            self.workers_for_tables_rebalance.join()
             self.workers_for_tables_rebalance.haltWork()
             self.workers_for_tables_rebalance.joinWorkers()
-
-            for task in self.workers_for_tables_rebalance.getCompletedItems():
-                if not task.was_successful():
-                    raise Exception(f'Failed to do ALTER REBALANCE: {task.get_results().stderr}')
-
             self.workers_for_tables_rebalance = None
+
+            if self.tables_rebalance_failed:
+                raise Exception('failed to redistribute some tables during shrink')
 
     def state_can_rollback(self, state: str) -> bool:
         if (state in self.states_main_shrink_flow):

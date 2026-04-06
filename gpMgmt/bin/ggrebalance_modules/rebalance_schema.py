@@ -26,11 +26,12 @@ class RebalanceSchema:
         self.schema_name = 'ggrebalance'
         self.rebalance_status = 'rebalance_status'
         self.table_rebalance_status_detail = 'table_rebalance_status_detail'
+        self.rebalance_progress_view = 'rebalance_progress'
         self.saved_plan = 'saved_plan'
         self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
 
-    def createSchema(self, plan: Plan) -> None:
+    def createSchema(self, plan: Plan, options: Any) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, f'CREATE SCHEMA {self.schema_name}')
         dbconn.execSQL(self.conn,
@@ -39,7 +40,12 @@ class RebalanceSchema:
                        DISTRIBUTED REPLICATED''')
         dbconn.execSQL(self.conn,
                        f'''CREATE TABLE {self.schema_name}.{self.table_rebalance_status_detail}
-                       (db_name TEXT, schema_name TEXT, rel_name TEXT, status TEXT,
+                       (db_name TEXT, schema_name TEXT, rel_name TEXT,
+                       status TEXT,
+                       rebalance_type TEXT,
+                       rebalance_started TIMESTAMP WITH TIME ZONE,
+                       rebalance_finished TIMESTAMP WITH TIME ZONE,
+                       source_bytes NUMERIC,
                        CONSTRAINT unique_fqn UNIQUE (db_name, schema_name, rel_name))
                        DISTRIBUTED REPLICATED''')
         dbconn.execSQL(self.conn,
@@ -53,6 +59,28 @@ class RebalanceSchema:
                        DISTRIBUTED REPLICATED''')
 
         self.savePlan(plan)
+
+        if options.simple_progress:
+            dbconn.execSQL(self.conn, f'''
+CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
+SELECT
+    '1.1. Tables shrinked' AS stat_name,
+    count(1)::text AS stat_value
+FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
+UNION
+SELECT
+    '1.3. Tables left to shrink' AS stat_name,
+    count(1)::text AS stat_value
+FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
+UNION
+SELECT
+    '1.2. Tables shrink in progress' AS stat_name,
+    count(1)::text AS stat_value
+FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL
+ORDER BY stat_name ASC;
+                            ''')
+        elif options.detailed_progress:
+            pass
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
@@ -154,9 +182,21 @@ class RebalanceSchema:
                        WHERE (status = '{status}')''')
 
     def addTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
+        # TODO: set source_bytes here?
         dbconn.execSQL(self.conn,
                        f'''INSERT INTO {self.schema_name}.{self.table_rebalance_status_detail}
-                       VALUES ('{escape_string(db)}', '{escape_string(schema_name)}', '{escape_string(rel_name)}', '{status}')''')
+                       VALUES ('{escape_string(db)}', '{escape_string(schema_name)}', '{escape_string(rel_name)}', '{status}',
+                                'SHRINK', NULL, NULL, 0 )''')
+
+    def setTableRebalanceStartTime(self, db: str, schema_name: str, rel_name: str) -> None:
+        dbconn.execSQL(self.conn,
+                       f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET rebalance_started = now(), rebalance_finished = NULL
+                       WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
+
+    def setTableRebalanceEndTime(self, db: str, schema_name: str, rel_name: str) -> None:
+        dbconn.execSQL(self.conn,
+                       f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET rebalance_finished = now()
+                       WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
 
     def setStatusForTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
         dbconn.execSQL(self.conn,
@@ -165,7 +205,7 @@ class RebalanceSchema:
 
     def getTablesToRebalanceWithStatus(self, status: str) -> cursor:
         return dbconn.query(self.conn, f"""SELECT db_name, schema_name, rel_name FROM
-                            {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = '{status}'""")
+                            {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = '{status}' ORDER BY db_name, schema_name, rel_name""")
 
     def saveExecutionSteps(self, steps: List[RebalanceStep]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
