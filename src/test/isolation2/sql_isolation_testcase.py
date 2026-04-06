@@ -159,14 +159,18 @@ class GlobalShellExecutor(object):
             r, _, e = select.select([self.master_fd], [], [self.master_fd], 30)
             if e:
                 # Terminate the shell when we get any output from stderr
-                o = os.read(self.master_fd, 10240).decode('utf-8')
+                o = os.read(self.master_fd, 10240)
+                if sys.version_info[0] == 3:
+                    o = o.decode('utf-8', 'replace')
                 self.bash_log_file.write(o)
                 self.bash_log_file.flush()
                 self.terminate(True)
                 raise GlobalShellExecutor.ExecutionError("Error happened to the bash process, see %s for details." % self.bash_log_file.name)
 
             if r:
-                o = os.read(self.master_fd, 10240).decode('utf-8')
+                o = os.read(self.master_fd, 10240)
+                if sys.version_info[0] == 3:
+                    o = o.decode('utf-8', 'replace')
                 self.bash_log_file.write(o)
                 self.bash_log_file.flush()
                 output += o
