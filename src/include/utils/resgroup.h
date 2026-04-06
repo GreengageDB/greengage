@@ -220,6 +220,7 @@ extern Oid SessionGetResGroupId(SessionState *session);
 extern void HandleMoveResourceGroup(void);
 extern void ResGroupMoveQuery(int sessionId, Oid groupId, const char *groupName);
 extern Oid ResGroupGetGroupIdBySessionId(int sessionId);
+extern bool IsResGroupBypassedBySessionId(int sessionId);
 extern char *getCpuSetByRole(const char *cpuset);
 extern void checkCpuSetByRole(const char *cpuset);
 extern bool checkTablespaceInIOlimit(Oid tblspcid, bool errout);
