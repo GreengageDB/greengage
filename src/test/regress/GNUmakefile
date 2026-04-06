@@ -115,7 +115,6 @@ $(LIBPQ_BE_SRCS): %.c: $(top_srcdir)/src/backend/libpq/%.c
 	rm -f $@ && $(LN_S) $< .
 
 $(LIBPQ_BE_OBJS): override CPPFLAGS := -I$(libpq_srcdir) -I$(top_builddir)/src/port $(CPPFLAGS)
-$(LIBPQ_BE_OBJS): override CPPFLAGS := -UFRONTEND $(CPPFLAGS)
 
 # Build regress_gp.so with backend libpq objects instead of external libpq.so
 regress_gp.so: regress_gp.o $(LIBPQ_BE_OBJS)
