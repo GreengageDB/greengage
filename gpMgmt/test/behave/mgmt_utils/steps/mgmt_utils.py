@@ -26,7 +26,7 @@ try:
     from subprocess32 import PIPE
 except:
     from subprocess import PIPE
-from gppylib.gpsubprocess import Popen, check_output
+from gppylib import gpsubprocess
 from collections import defaultdict
 
 import psutil
@@ -4104,7 +4104,7 @@ def impl(context):
 def impl(context, command, input):
     if input == "no mode but presses enter":
         input = os.linesep
-    p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
+    p = gpsubprocess.Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate(input=input)
 
     p.stdin.close()
@@ -4115,7 +4115,7 @@ def impl(context, command, input):
 
 @when('the user runs {command}, selects {input} and interrupt the process')
 def impl(context, command, input):
-    p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
+    p = gpsubprocess.Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
 
     if sys.version_info[0] == 2:
         input = input.encode('utf-8')
@@ -4131,11 +4131,11 @@ def impl(context, command, input):
 def are_on_different_subnets(primary_hostname, mirror_hostname):
     name = get_dist_info()[0]
     if 'debian' in name:
-        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
-        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        primary_broadcast = gpsubprocess.check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = gpsubprocess.check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
     else:
-        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show | grep 'inet .* brd' | awk '{ print $4 }'"])
-        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show | grep 'inet .* brd' | awk '{ print $4 }'"])
+        primary_broadcast = gpsubprocess.check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = gpsubprocess.check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show | grep 'inet .* brd' | awk '{ print $4 }'"])
     if not primary_broadcast:
         raise Exception("primary hostname %s has no broadcast address" % primary_hostname)
     if not mirror_broadcast:

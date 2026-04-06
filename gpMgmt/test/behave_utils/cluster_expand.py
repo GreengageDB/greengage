@@ -8,7 +8,7 @@ except:
     from subprocess import PIPE
 from .utils import run_gpcommand
 
-from gppylib.gpsubprocess import Popen
+from gppylib import gpsubprocess
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
@@ -39,7 +39,7 @@ class Gpexpand(object):
 
         # If working_directory is None, then Popen will use the directory where
         # the python code is being ran.
-        p1 = Popen(["gpexpand"], stdout=PIPE, stdin=PIPE,
+        p1 = gpsubprocess.Popen(["gpexpand"], stdout=PIPE, stdin=PIPE,
                    cwd=self.working_directory)
 
         # Very raw form of doing the interview part of gpexpand.
