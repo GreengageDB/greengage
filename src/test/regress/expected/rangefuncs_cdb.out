@@ -8,6 +8,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_hashagg                 | on
  enable_hashagg_disk            | on
  enable_hashjoin                | on
+ enable_incrementalsort         | off
  enable_indexonlyscan           | on
  enable_indexscan               | on
  enable_material                | on
@@ -21,7 +22,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(20 rows)
+(21 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;

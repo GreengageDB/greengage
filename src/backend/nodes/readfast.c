@@ -389,6 +389,7 @@ _readSelectStmt(void)
 	READ_NODE_FIELD(scatterClause);
 	READ_NODE_FIELD(limitOffset);
 	READ_NODE_FIELD(limitCount);
+	READ_ENUM_FIELD(limitOption, LimitOption);
 	READ_NODE_FIELD(lockingClause);
 	READ_NODE_FIELD(withClause);
 	READ_ENUM_FIELD(op, SetOperation);

@@ -201,7 +201,7 @@ ShutdownWalRcv(void)
 		case WALRCV_WAITING:
 		case WALRCV_RESTARTING:
 			walrcv->walRcvState = WALRCV_STOPPING;
-			/* fall through */
+			/* FALLTHROUGH */
 		case WALRCV_STOPPING:
 			walrcvpid = walrcv->pid;
 			break;
@@ -304,11 +304,11 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo,
 
 	/*
 	 * If this is the first startup of walreceiver (on this timeline),
-	 * initialize receivedUpto and latestChunkStart to the starting point.
+	 * initialize flushedUpto and latestChunkStart to the starting point.
 	 */
 	if (walrcv->receiveStart == 0 || walrcv->receivedTLI != tli)
 	{
-		walrcv->receivedUpto = recptr;
+		walrcv->flushedUpto = recptr;
 		walrcv->receivedTLI = tli;
 		walrcv->latestChunkStart = recptr;
 	}
@@ -326,7 +326,7 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo,
 }
 
 /*
- * Returns the last+1 byte position that walreceiver has written.
+ * Returns the last+1 byte position that walreceiver has flushed.
  *
  * Optionally, returns the previous chunk start, that is the first byte
  * written in the most recent walreceiver flush cycle.  Callers not
@@ -334,13 +334,13 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo,
  * receiveTLI.
  */
 XLogRecPtr
-GetWalRcvWriteRecPtr(XLogRecPtr *latestChunkStart, TimeLineID *receiveTLI)
+GetWalRcvFlushRecPtr(XLogRecPtr *latestChunkStart, TimeLineID *receiveTLI)
 {
 	WalRcvData *walrcv = WalRcv;
 	XLogRecPtr	recptr;
 
 	SpinLockAcquire(&walrcv->mutex);
-	recptr = walrcv->receivedUpto;
+	recptr = walrcv->flushedUpto;
 	if (latestChunkStart)
 		*latestChunkStart = walrcv->latestChunkStart;
 	if (receiveTLI)
@@ -348,6 +348,18 @@ GetWalRcvWriteRecPtr(XLogRecPtr *latestChunkStart, TimeLineID *receiveTLI)
 	SpinLockRelease(&walrcv->mutex);
 
 	return recptr;
+}
+
+/*
+ * Returns the last+1 byte position that walreceiver has written.
+ * This returns a recently written value without taking a lock.
+ */
+XLogRecPtr
+GetWalRcvWriteRecPtr(void)
+{
+	WalRcvData *walrcv = WalRcv;
+
+	return pg_atomic_read_u64(&walrcv->writtenUpto);
 }
 
 /*
@@ -367,7 +379,7 @@ GetReplicationApplyDelay(void)
 	TimestampTz chunkReplayStartTime;
 
 	SpinLockAcquire(&walrcv->mutex);
-	receivePtr = walrcv->receivedUpto;
+	receivePtr = walrcv->flushedUpto;
 	SpinLockRelease(&walrcv->mutex);
 
 	replayPtr = GetXLogReplayRecPtr(NULL);

@@ -361,9 +361,3 @@
  * Disable tuplesort_set_bound feature; see also optimize_bounded_sort GUC var.
  */
 /* #define DEBUG_BOUNDED_SORT */
-
-/*
- * Other debug #defines (documentation, anyone?)
- */
-/* #define HEAPDEBUGALL */
-/* #define ACLDEBUG */

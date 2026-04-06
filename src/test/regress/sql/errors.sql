@@ -380,10 +380,11 @@ NOT
 NULL);
 
 -- Check that stack depth detection mechanism works and
--- max_stack_depth is not set too high
+-- max_stack_depth is not set too high.  The full error report is not
+-- very stable, so show only SQLSTATE and primary error message.
 create function infinite_recurse() returns int as
 'select infinite_recurse()' language sql CONTAINS SQL;
-\set VERBOSITY terse
+\set VERBOSITY sqlstate
 -- start_matchsubs
 -- # mpp-2756
 -- m/(ERROR|WARNING|CONTEXT|NOTICE):.*stack depth limit exceeded\s+at\s+character/
@@ -394,4 +395,5 @@ create function infinite_recurse() returns int as
 -- start_ignore
 select infinite_recurse();
 -- end_ignore
+\echo :LAST_ERROR_MESSAGE
 select 1; -- test that this works

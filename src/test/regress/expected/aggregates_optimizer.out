@@ -1270,22 +1270,16 @@ drop table p_t1;
 create temp table t1(f1 int, f2 bigint);
 create temp table t2(f1 bigint, f22 bigint);
 select f1 from t1 left join t2 using (f1) group by f1;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
  f1 
 ----
 (0 rows)
 
 select f1 from t1 left join t2 using (f1) group by t1.f1;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
  f1 
 ----
 (0 rows)
 
 select t1.f1 from t1 left join t2 using (f1) group by t1.f1;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
  f1 
 ----
 (0 rows)

@@ -450,7 +450,7 @@ ExecRenameStmt(RenameStmt *stmt)
 }
 
 /*
- * Executes an ALTER OBJECT / DEPENDS ON [EXTENSION] statement.
+ * Executes an ALTER OBJECT / [NO] DEPENDS ON EXTENSION statement.
  *
  * Return value is the address of the altered object.  refAddress is an output
  * argument which, if not null, receives the address of the object that the
@@ -462,7 +462,6 @@ ExecAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, ObjectAddress *refAddre
 	ObjectAddress address;
 	ObjectAddress refAddr;
 	Relation	rel;
-	List   *currexts;
 
 	address =
 		get_object_address_rv(stmt->objectType, stmt->relation, (List *) stmt->object,
@@ -492,11 +491,22 @@ ExecAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, ObjectAddress *refAddre
 	if (refAddress)
 		*refAddress = refAddr;
 
-	/* Avoid duplicates */
-	currexts = getAutoExtensionsOfObject(address.classId,
-										 address.objectId);
-	if (!list_member_oid(currexts, refAddr.objectId))
-		recordDependencyOn(&address, &refAddr, DEPENDENCY_AUTO_EXTENSION);
+	if (stmt->remove)
+	{
+		deleteDependencyRecordsForSpecific(address.classId, address.objectId,
+										   DEPENDENCY_AUTO_EXTENSION,
+										   refAddr.classId, refAddr.objectId);
+	}
+	else
+	{
+		List   *currexts;
+
+		/* Avoid duplicates */
+		currexts = getAutoExtensionsOfObject(address.classId,
+											 address.objectId);
+		if (!list_member_oid(currexts, refAddr.objectId))
+			recordDependencyOn(&address, &refAddr, DEPENDENCY_AUTO_EXTENSION);
+	}
 
 	if (Gp_role == GP_ROLE_DISPATCH && shouldDispatchForObject(stmt->objectType))
 	{

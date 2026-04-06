@@ -409,6 +409,41 @@ smgrcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo)
 }
 
 /*
+ *	smgrdosyncall() -- Immediately sync all forks of all given relations
+ *
+ *		All forks of all given relations are synced out to the store.
+ *
+ *		This is equivalent to FlushRelationBuffers() for each smgr relation,
+ *		then calling smgrimmedsync() for all forks of each relation, but it's
+ *		significantly quicker so should be preferred when possible.
+ */
+void
+smgrdosyncall(SMgrRelation *rels, int nrels)
+{
+	int			i = 0;
+	ForkNumber	forknum;
+
+	if (nrels == 0)
+		return;
+
+	FlushRelationsAllBuffers(rels, nrels);
+
+	/*
+	 * Sync the physical file(s).
+	 */
+	for (i = 0; i < nrels; i++)
+	{
+		int			which = rels[i]->smgr_which;
+
+		for (forknum = 0; forknum <= MAX_FORKNUM; forknum++)
+		{
+			if (smgrsw[which].smgr_exists(rels[i], forknum))
+				smgrsw[which].smgr_immedsync(rels[i], forknum);
+		}
+	}
+}
+
+/*
  *	smgrdounlinkall() -- Immediately unlink all forks of all given relations
  *
  *		All forks of all given relations are removed from the store.  This
@@ -509,11 +544,15 @@ smgrextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 
 /*
  *	smgrprefetch() -- Initiate asynchronous read of the specified block of a relation.
+ *
+ *		In recovery only, this can return false to indicate that a file
+ *		doesn't	exist (presumably it has been dropped by a later WAL
+ *		record).
  */
-void
+bool
 smgrprefetch(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum)
 {
-	(*reln->storageManager).smgr_prefetch(reln, forknum, blocknum);
+	return (*reln->storageManager).smgr_prefetch(reln, forknum, blocknum);
 }
 
 /*

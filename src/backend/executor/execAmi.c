@@ -33,6 +33,7 @@
 // #include "executor/nodeGroup.h" // Group node has been disabled in GPDB
 #include "executor/nodeHash.h"
 #include "executor/nodeHashjoin.h"
+#include "executor/nodeIncrementalSort.h"
 #include "executor/nodeIndexonlyscan.h"
 #include "executor/nodeIndexscan.h"
 #include "executor/nodeLimit.h"
@@ -309,6 +310,16 @@ ExecReScan(PlanState *node)
 		case T_SortState:
 			ExecReScanSort((SortState *) node);
 			break;
+
+		case T_IncrementalSortState:
+			ExecReScanIncrementalSort((IncrementalSortState *) node);
+			break;
+
+#ifdef NOT_USED /* GroupState nodes are not used in GPDB */
+		case T_GroupState:
+			ExecReScanGroup((GroupState *) node);
+			break;
+#endif
 
 		case T_AggState:
 			ExecReScanAgg((AggState *) node);
@@ -659,7 +670,16 @@ ExecSupportsBackwardScan(Plan *node)
 
 		case T_Material:
 		case T_Sort:
+			/* these don't evaluate tlist */
 			return true;
+
+		case T_IncrementalSort:
+
+			/*
+			 * Unlike full sort, incremental sort keeps only a single group of
+			 * tuples in memory, so it can't scan backwards.
+			 */
+			return false;
 
 		case T_LockRows:
 		case T_Limit:

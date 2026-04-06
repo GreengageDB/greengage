@@ -82,8 +82,8 @@ extern void ExecHashInitializeDSM(HashState *node, ParallelContext *pcxt);
 extern void ExecHashInitializeWorker(HashState *node, ParallelWorkerContext *pwcxt);
 extern void ExecHashRetrieveInstrumentation(HashState *node);
 extern void ExecShutdownHash(HashState *node);
-extern void ExecHashGetInstrumentation(HashInstrumentation *instrument,
-									   HashJoinTable hashtable);
+extern void ExecHashAccumInstrumentation(HashInstrumentation *instrument,
+										 HashJoinTable hashtable);
 
 extern void ExecHashTableExplainInit(HashState *hashState, HashJoinState *hjstate,
                                      HashJoinTable  hashtable);

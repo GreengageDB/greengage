@@ -1890,8 +1890,8 @@ pg_SSPI_recvauth(Port *port)
 	secur32 = LoadLibrary("SECUR32.DLL");
 	if (secur32 == NULL)
 		ereport(ERROR,
-				(errmsg_internal("could not load secur32.dll: error code %lu",
-								 GetLastError())));
+				(errmsg("could not load library \"%s\": error code %lu",
+						"SECUR32.DLL", GetLastError())));
 
 	_QuerySecurityContextToken = (QUERY_SECURITY_CONTEXT_TOKEN_FN)
 		GetProcAddress(secur32, "QuerySecurityContextToken");
@@ -2501,7 +2501,7 @@ pam_passwd_conv_proc(int num_msg, const struct pam_message **msg,
 				ereport(LOG,
 						(errmsg("error from underlying PAM layer: %s",
 								msg[i]->msg)));
-				/* FALL THROUGH */
+				/* FALLTHROUGH */
 			case PAM_TEXT_INFO:
 				/* we don't bother to log TEXT_INFO messages */
 				if ((reply[i].resp = strdup("")) == NULL)
@@ -2895,7 +2895,8 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 				 * wldap32, but check anyway
 				 */
 				ereport(LOG,
-						(errmsg("could not load wldap32.dll")));
+						(errmsg("could not load library \"%s\": error code %lu",
+								"WLDAP32.DLL", GetLastError())));
 				ldap_unbind(*ldap);
 				return STATUS_ERROR;
 			}

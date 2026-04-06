@@ -15,6 +15,8 @@ SET enable_partitionwise_aggregate TO true;
 SET enable_partitionwise_join TO true;
 -- Disable parallel plans.
 SET max_parallel_workers_per_gather TO 0;
+-- Disable incremental sort, which can influence selected plans due to fuzz factor.
+SET enable_incrementalsort TO off;
 
 --
 -- Tests for list partitioned tables.
@@ -205,8 +207,8 @@ SELECT a, c, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY (a+b)/2, 2, 1 HAV
 -- Test with multi-level partitioning scheme
 
 CREATE TABLE pagg_tab_ml (a int, b int, c text) PARTITION BY RANGE(a);
-CREATE TABLE pagg_tab_ml_p1 PARTITION OF pagg_tab_ml FOR VALUES FROM (0) TO (10);
-CREATE TABLE pagg_tab_ml_p2 PARTITION OF pagg_tab_ml FOR VALUES FROM (10) TO (20) PARTITION BY LIST (c);
+CREATE TABLE pagg_tab_ml_p1 PARTITION OF pagg_tab_ml FOR VALUES FROM (0) TO (12);
+CREATE TABLE pagg_tab_ml_p2 PARTITION OF pagg_tab_ml FOR VALUES FROM (12) TO (20) PARTITION BY LIST (c);
 CREATE TABLE pagg_tab_ml_p2_s1 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0000', '0001', '0002');
 CREATE TABLE pagg_tab_ml_p2_s2 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0003');
 

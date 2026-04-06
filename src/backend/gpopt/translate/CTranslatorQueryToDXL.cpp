@@ -605,7 +605,7 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 	// translate limit clause
 	CDXLNode *limit_dxlnode = TranslateLimitToDXLGroupBy(
 		m_query->sortClause, m_query->limitCount, m_query->limitOffset,
-		child_dxlnode, sort_group_attno_to_colid_mapping);
+		m_query->limitOption, child_dxlnode, sort_group_attno_to_colid_mapping);
 
 
 	if (nullptr == m_query->targetList)
@@ -1933,12 +1933,19 @@ CTranslatorQueryToDXL::TranslateSortColumsToDXL(
 CDXLNode *
 CTranslatorQueryToDXL::TranslateLimitToDXLGroupBy(
 	List *sort_clause, Node *limit_count, Node *limit_offset_node,
-	CDXLNode *child_dxlnode, IntToUlongMap *grpcols_to_colid_mapping)
+	LimitOption limit_option, CDXLNode *child_dxlnode,
+	IntToUlongMap *grpcols_to_colid_mapping)
 {
 	if (0 == gpdb::ListLength(sort_clause) && nullptr == limit_count &&
 		nullptr == limit_offset_node)
 	{
 		return child_dxlnode;
+	}
+
+	if (LIMIT_OPTION_WITH_TIES == limit_option)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("FETCH FIRST WITH TIES"));
 	}
 
 	// do not remove limit if it is immediately under a DML (JIRA: GPSQL-2669)

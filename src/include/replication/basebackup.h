@@ -14,12 +14,14 @@
 
 #include "nodes/replnodes.h"
 
+struct backup_manifest_info;	/* avoid including backup_manifest.h */
+
+
 /*
  * Minimum and maximum values of MAX_RATE option in BASE_BACKUP command.
  */
 #define MAX_RATE_LOWER	32
 #define MAX_RATE_UPPER	1048576
-
 
 typedef struct
 {
@@ -31,6 +33,7 @@ typedef struct
 
 extern void SendBaseBackup(BaseBackupCmd *cmd);
 
-extern int64 sendTablespace(char *path, bool sizeonly);
+extern int64 sendTablespace(char *path, char *oid, bool sizeonly,
+							struct backup_manifest_info *manifest);
 
 #endif							/* _BASEBACKUP_H */

@@ -458,7 +458,11 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 	test_PrintLog("wal start record", dataStart, sendTime);
 	test_PrintLog("wal end record", walEnd, sendTime);
 
-	xlogreader = XLogReaderAllocate(wal_segment_size, NULL, &read_local_xlog_page, NULL);
+	xlogreader = XLogReaderAllocate(DEFAULT_XLOG_SEG_SIZE, NULL,
+									XL_ROUTINE(.page_read = read_local_xlog_page,
+											   .segment_open = wal_segment_open,
+											   .segment_close = wal_segment_close),
+									NULL);
 
 	/*
 	 * Find the first valid record at or after the given starting point.

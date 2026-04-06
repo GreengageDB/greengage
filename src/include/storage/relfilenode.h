@@ -119,4 +119,10 @@ typedef struct RelFileNodePendingDelete
 	bool isTempRelation;
 } RelFileNodePendingDelete;
 
+typedef struct RelFileNodePendingSync
+{
+	RelFileNode node;
+	int smgr_which; /* which SMGR implementation to use */
+} RelFileNodePendingSync;
+
 #endif							/* RELFILENODE_H */

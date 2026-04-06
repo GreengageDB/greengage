@@ -92,7 +92,10 @@ extern Agg *make_agg(List *tlist, List *qual,
 					 int numGroupCols, AttrNumber *grpColIdx, Oid *grpOperators, Oid *grpCollations,
 					 List *groupingSets, List *chain, double dNumGroups,
 					 Size transitionSpace, Plan *lefttree);
-extern Limit *make_limit(Plan *lefttree, Node *limitOffset, Node *limitCount);
+extern Limit *make_limit(Plan *lefttree, Node *limitOffset, Node *limitCount,
+						 LimitOption limitOption, int uniqNumCols,
+						 AttrNumber *uniqColIdx, Oid *uniqOperators,
+						 Oid *uniqCollations);
 extern TupleSplit *make_tup_split(List *tlist, List *dqa_info_lst, int numGroupCols,
 								  AttrNumber *grpColIdx, Plan *lefttree);
 

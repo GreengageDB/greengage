@@ -2056,6 +2056,14 @@ select * from another;
 (3 rows)
 
 drop table another;
+-- Create an index that skips WAL, then perform a SET DATA TYPE that skips
+-- rewriting the index.
+begin;
+create table skip_wal_skip_rewrite_index (c varchar(10) primary key);
+alter table skip_wal_skip_rewrite_index alter c type varchar(20);
+ERROR:  cannot alter column with primary key or unique constraint
+HINT:  DROP the constraint first, and recreate it after the ALTER
+commit;
 -- table's row type
 create table tab1 (a int, b text);
 create table tab2 (x int, y tab1);
@@ -2244,6 +2252,26 @@ where oid = 'test_storage'::regclass;
 -----------------
  t
 (1 row)
+
+-- test that SET STORAGE propagates to index correctly
+create index test_storage_idx on test_storage (b, a);
+alter table test_storage alter column a set storage external;
+\d+ test_storage
+                                Table "public.test_storage"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | external |              | 
+ b      | integer |           |          | 0       | plain    |              | 
+Indexes:
+    "test_storage_idx" btree (b, a)
+
+\d+ test_storage_idx
+                Index "public.test_storage_idx"
+ Column |  Type   | Key? | Definition | Storage  | Stats target 
+--------+---------+------+------------+----------+--------------
+ b      | integer | yes  | b          | plain    | 
+ a      | text    | yes  | a          | external | 
+btree, for table "public.test_storage"
 
 -- ALTER COLUMN TYPE with a check constraint and a child table (bug #13779)
 CREATE TABLE test_inh_check (a float check (a > 10.2), b float);
@@ -2646,7 +2674,7 @@ from pg_locks l join pg_class c on l.relation = c.oid
 where virtualtransaction = (
         select virtualtransaction
         from pg_locks
-        where transactionid = txid_current()::integer)
+        where transactionid = pg_current_xact_id()::xid)
 and locktype = 'relation'
 and relnamespace != (select oid from pg_namespace where nspname = 'pg_catalog')
 and c.relname != 'my_locks'
@@ -2809,7 +2837,7 @@ from pg_locks l join pg_class c on l.relation = c.oid
 where virtualtransaction = (
         select virtualtransaction
         from pg_locks
-        where transactionid = txid_current()::integer)
+        where transactionid = pg_current_xact_id()::xid)
 and locktype = 'relation'
 and relnamespace != (select oid from pg_namespace where nspname = 'pg_catalog')
 and c.relname = 'my_locks'
@@ -4467,3 +4495,51 @@ create trigger xtrig
 ERROR:  Triggers for statements are not yet supported
 update bar1 set a = a + 1;
 /* End test case for bug #16242 */
+-- Test that ALTER TABLE rewrite preserves a clustered index
+-- for normal indexes and indexes on constraints.
+create table alttype_cluster (a int);
+create index alttype_cluster_ind on alttype_cluster (a);
+alter table alttype_cluster cluster on alttype_cluster_ind;
+-- Normal index remains clustered.
+select indexrelid::regclass, indisclustered from pg_index
+  where indrelid = 'alttype_cluster'::regclass
+  order by indexrelid::regclass::text;
+     indexrelid      | indisclustered 
+---------------------+----------------
+ alttype_cluster_ind | t
+(1 row)
+
+alter table alttype_cluster alter a type bigint;
+select indexrelid::regclass, indisclustered from pg_index
+  where indrelid = 'alttype_cluster'::regclass
+  order by indexrelid::regclass::text;
+     indexrelid      | indisclustered 
+---------------------+----------------
+ alttype_cluster_ind | t
+(1 row)
+
+-- Constraint index remains clustered.
+alter table alttype_cluster add primary key (a);
+alter table alttype_cluster cluster on alttype_cluster_pkey;
+select indexrelid::regclass, indisclustered from pg_index
+  where indrelid = 'alttype_cluster'::regclass
+  order by indexrelid::regclass::text;
+      indexrelid      | indisclustered 
+----------------------+----------------
+ alttype_cluster_ind  | f
+ alttype_cluster_pkey | t
+(2 rows)
+
+alter table alttype_cluster alter a type int;
+ERROR:  cannot alter column with primary key or unique constraint
+HINT:  DROP the constraint first, and recreate it after the ALTER
+select indexrelid::regclass, indisclustered from pg_index
+  where indrelid = 'alttype_cluster'::regclass
+  order by indexrelid::regclass::text;
+      indexrelid      | indisclustered 
+----------------------+----------------
+ alttype_cluster_ind  | f
+ alttype_cluster_pkey | t
+(2 rows)
+
+drop table alttype_cluster;

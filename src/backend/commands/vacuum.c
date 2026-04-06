@@ -139,7 +139,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	bool		rootonly = false;
 	bool		fullscan = false;
 	int			ao_phase = 0;
-	bool		parallel_option = false;
 	ListCell   *lc;
 
 	/* Set default value */
@@ -198,7 +197,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 #if 0
 			/* VACUUM option "parallel" not supported in GPDB */
 
-			parallel_option = true;
 			if (opt->arg == NULL)
 			{
 				ereport(ERROR,
@@ -261,10 +259,10 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		   !(params.options & (VACOPT_FULL | VACOPT_FREEZE)));
 	Assert(!(params.options & VACOPT_SKIPTOAST));
 
-	if ((params.options & VACOPT_FULL) && parallel_option)
+	if ((params.options & VACOPT_FULL) && params.nworkers > 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot specify both FULL and PARALLEL options")));
+				 errmsg("VACUUM FULL cannot be performed in parallel")));
 
 	/*
 	 * Make sure VACOPT_ANALYZE is specified if any column lists are present.
@@ -2669,23 +2667,23 @@ vacuum_delay_point(void)
 /*
  * Computes the vacuum delay for parallel workers.
  *
- * The basic idea of a cost-based vacuum delay for parallel vacuum is to allow
- * each worker to sleep proportional to the work done by it.  We achieve this
+ * The basic idea of a cost-based delay for parallel vacuum is to allow each
+ * worker to sleep in proportion to the share of work it's done.  We achieve this
  * by allowing all parallel vacuum workers including the leader process to
  * have a shared view of cost related parameters (mainly VacuumCostBalance).
  * We allow each worker to update it as and when it has incurred any cost and
  * then based on that decide whether it needs to sleep.  We compute the time
  * to sleep for a worker based on the cost it has incurred
  * (VacuumCostBalanceLocal) and then reduce the VacuumSharedCostBalance by
- * that amount.  This avoids letting the workers sleep who have done less or
- * no I/O as compared to other workers and therefore can ensure that workers
- * who are doing more I/O got throttled more.
+ * that amount.  This avoids putting to sleep those workers which have done less
+ * I/O than other workers and therefore ensure that workers
+ * which are doing more I/O got throttled more.
  *
- * We allow any worker to sleep only if it has performed the I/O above a
- * certain threshold, which is calculated based on the number of active
- * workers (VacuumActiveNWorkers), and the overall cost balance is more than
- * VacuumCostLimit set by the system.  The testing reveals that we achieve
- * the required throttling if we allow a worker that has done more than 50%
+ * We allow a worker to sleep only if it has performed I/O above a certain
+ * threshold, which is calculated based on the number of active workers
+ * (VacuumActiveNWorkers), and the overall cost balance is more than
+ * VacuumCostLimit set by the system.  Testing reveals that we achieve
+ * the required throttling if we force a worker that has done more than 50%
  * of its share of work to sleep.
  */
 static double

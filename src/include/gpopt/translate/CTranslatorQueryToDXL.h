@@ -266,10 +266,11 @@ private:
 		List *sort_clause, IntToUlongMap *col_attno_colid_mapping) const;
 
 	CDXLNode *TranslateLimitToDXLGroupBy(
-		List *plsortcl,			  // list of sort clauses
-		Node *limit_count,		  // query node representing the limit count
-		Node *limit_offset_node,  // query node representing the limit offset
-		CDXLNode *dxlnode,		  // the dxl node representing the subtree
+		List *plsortcl,			   // list of sort clauses
+		Node *limit_count,		   // query node representing the limit count
+		Node *limit_offset_node,   // query node representing the limit offset
+		LimitOption limit_option,  // enum representing the limit option
+		CDXLNode *dxlnode,		   // the dxl node representing the subtree
 		IntToUlongMap *
 			grpcols_to_colid_mapping  // the mapping between the position in the TargetList to the ColId
 	);

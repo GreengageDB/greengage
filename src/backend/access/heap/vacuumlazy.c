@@ -153,6 +153,7 @@
 #define PARALLEL_VACUUM_KEY_DEAD_TUPLES		2
 #define PARALLEL_VACUUM_KEY_QUERY_TEXT		3
 #define PARALLEL_VACUUM_KEY_BUFFER_USAGE	4
+#define PARALLEL_VACUUM_KEY_WAL_USAGE		5
 
 /*
  * Macro to check if we are in a parallel vacuum.  If true, we are in the
@@ -221,7 +222,7 @@ typedef struct LVShared
 	 * live tuples in the index vacuum case or the new live tuples in the
 	 * index cleanup case.
 	 *
-	 * estimated_count is true if the reltuples is an estimated value.
+	 * estimated_count is true if reltuples is an estimated value.
 	 */
 	double		reltuples;
 	bool		estimated_count;
@@ -245,8 +246,8 @@ typedef struct LVShared
 
 	/*
 	 * Number of active parallel workers.  This is used for computing the
-	 * minimum threshold of the vacuum cost balance for a worker to go for the
-	 * delay.
+	 * minimum threshold of the vacuum cost balance before a worker sleeps for
+	 * cost-based delay.
 	 */
 	pg_atomic_uint32 active_nworkers;
 
@@ -288,6 +289,9 @@ typedef struct LVParallelState
 
 	/* Points to buffer usage area in DSM */
 	BufferUsage *buffer_usage;
+
+	/* Points to WAL usage area in DSM */
+	WalUsage   *wal_usage;
 
 	/*
 	 * The number of indexes that support parallel index bulk-deletion and
@@ -419,6 +423,8 @@ lazy_vacuum_rel_heap(Relation onerel, VacuumParams *params,
 	int			nindexes;
 	PGRUsage	ru0;
 	TimestampTz starttime = 0;
+	WalUsage	walusage_start = pgWalUsage;
+	WalUsage	walusage = {0, 0, 0};
 	long		secs;
 	int			usecs;
 	double		read_rate,
@@ -633,6 +639,9 @@ lazy_vacuum_rel_heap(Relation onerel, VacuumParams *params,
 
 			TimestampDifference(starttime, endtime, &secs, &usecs);
 
+			memset(&walusage, 0, sizeof(WalUsage));
+			WalUsageAccumDiff(&walusage, &pgWalUsage, &walusage_start);
+
 			read_rate = 0;
 			write_rate = 0;
 			if ((secs > 0) || (usecs > 0))
@@ -685,7 +694,13 @@ lazy_vacuum_rel_heap(Relation onerel, VacuumParams *params,
 							 (long long) VacuumPageDirty);
 			appendStringInfo(&buf, _("avg read rate: %.3f MB/s, avg write rate: %.3f MB/s\n"),
 							 read_rate, write_rate);
-			appendStringInfo(&buf, _("system usage: %s"), pg_rusage_show(&ru0));
+			appendStringInfo(&buf, _("system usage: %s\n"), pg_rusage_show(&ru0));
+			appendStringInfo(&buf,
+							 _("WAL usage: %ld records, %ld full page images, "
+							   UINT64_FORMAT " bytes"),
+							 walusage.wal_records,
+							 walusage.wal_fpi,
+							 walusage.wal_bytes);
 
 			ereport(LOG,
 					(errmsg_internal("%s", buf.data)));
@@ -740,7 +755,7 @@ vacuum_log_cleanup_info(Relation rel, LVRelStats *vacrelstats)
  *		to reclaim dead line pointers.
  *
  *		If the table has at least two indexes, we execute both index vacuum
- *		and index cleanup with parallel workers unless the parallel vacuum is
+ *		and index cleanup with parallel workers unless parallel vacuum is
  *		disabled.  In a parallel vacuum, we enter parallel mode and then
  *		create both the parallel context and the DSM segment before starting
  *		heap scan so that we can record dead tuples to the DSM segment.  All
@@ -817,8 +832,8 @@ lazy_scan_heap(Relation onerel, VacuumParams *params, LVRelStats *vacrelstats,
 	vacrelstats->latestRemovedXid = InvalidTransactionId;
 
 	/*
-	 * Initialize the state for a parallel vacuum.  As of now, only one worker
-	 * can be used for an index, so we invoke parallelism only if there are at
+	 * Initialize state for a parallel vacuum.  As of now, only one worker can
+	 * be used for an index, so we invoke parallelism only if there are at
 	 * least two indexes on a table.
 	 */
 	if (params->nworkers >= 0 && vacrelstats->useindex && nindexes > 1)
@@ -845,7 +860,7 @@ lazy_scan_heap(Relation onerel, VacuumParams *params, LVRelStats *vacrelstats,
 	}
 
 	/*
-	 * Allocate the space for dead tuples in case the parallel vacuum is not
+	 * Allocate the space for dead tuples in case parallel vacuum is not
 	 * initialized.
 	 */
 	if (!ParallelVacuumIsActive(lps))
@@ -2169,8 +2184,8 @@ lazy_parallel_vacuum_indexes(Relation *Irel, IndexBulkDeleteResult **stats,
 						  vacrelstats->dead_tuples, nindexes, vacrelstats);
 
 	/*
-	 * Next, accumulate buffer usage.  (This must wait for the workers to
-	 * finish, or we might get incomplete data.)
+	 * Next, accumulate buffer and WAL usage.  (This must wait for the workers
+	 * to finish, or we might get incomplete data.)
 	 */
 	if (nworkers > 0)
 	{
@@ -2180,7 +2195,7 @@ lazy_parallel_vacuum_indexes(Relation *Irel, IndexBulkDeleteResult **stats,
 		WaitForParallelWorkersToFinish(lps->pcxt);
 
 		for (i = 0; i < lps->pcxt->nworkers_launched; i++)
-			InstrAccumParallelQuery(&lps->buffer_usage[i]);
+			InstrAccumParallelQuery(&lps->buffer_usage[i], &lps->wal_usage[i]);
 	}
 
 	/*
@@ -2226,7 +2241,7 @@ parallel_vacuum_index(Relation *Irel, IndexBulkDeleteResult **stats,
 		shared_indstats = get_indstats(lvshared, idx);
 
 		/*
-		 * Skip processing indexes that doesn't participate in parallel
+		 * Skip processing indexes that don't participate in parallel
 		 * operation
 		 */
 		if (shared_indstats == NULL ||
@@ -2323,12 +2338,12 @@ vacuum_one_index(Relation indrel, IndexBulkDeleteResult **stats,
 
 	/*
 	 * Copy the index bulk-deletion result returned from ambulkdelete and
-	 * amvacuumcleanup to the DSM segment if it's the first time to get it
-	 * from them, because they allocate it locally and it's possible that an
-	 * index will be vacuumed by the different vacuum process at the next
-	 * time.  The copying of the result normally happens only after the first
-	 * time of index vacuuming.  From the second time, we pass the result on
-	 * the DSM segment so that they then update it directly.
+	 * amvacuumcleanup to the DSM segment if it's the first cycle because they
+	 * allocate locally and it's possible that an index will be vacuumed by a
+	 * different vacuum process the next cycle.  Copying the result normally
+	 * happens only the first time an index is vacuumed.  For any additional
+	 * vacuum pass, we directly point to the result on the DSM segment and
+	 * pass it to vacuum index APIs so that workers can update it directly.
 	 *
 	 * Since all vacuum workers write the bulk-deletion result at different
 	 * slots we can write them without locking.
@@ -2339,8 +2354,8 @@ vacuum_one_index(Relation indrel, IndexBulkDeleteResult **stats,
 		shared_indstats->updated = true;
 
 		/*
-		 * Now that the stats[idx] points to the DSM segment, we don't need
-		 * the locally allocated results.
+		 * Now that stats[idx] points to the DSM segment, we don't need the
+		 * locally allocated results.
 		 */
 		pfree(*stats);
 		*stats = bulkdelete_res;
@@ -2460,7 +2475,7 @@ lazy_vacuum_index(Relation indrel, IndexBulkDeleteResult **stats,
  *	lazy_cleanup_index() -- do post-vacuum cleanup for one index relation.
  *
  *		reltuples is the number of heap tuples and estimated_count is true
- *		if the reltuples is an estimated value.
+ *		if reltuples is an estimated value.
  */
 static void
 lazy_cleanup_index(Relation indrel,
@@ -3062,9 +3077,9 @@ heap_page_is_all_visible(Relation rel, Buffer buf,
 /*
  * Compute the number of parallel worker processes to request.  Both index
  * vacuum and index cleanup can be executed with parallel workers.  The index
- * is eligible for parallel vacuum iff it's size is greater than
+ * is eligible for parallel vacuum iff its size is greater than
  * min_parallel_index_scan_size as invoking workers for very small indexes
- * can hurt the performance.
+ * can hurt performance.
  *
  * nrequested is the number of parallel workers that user requested.  If
  * nrequested is 0, we compute the parallel degree based on nindexes, that is
@@ -3083,7 +3098,7 @@ compute_parallel_vacuum_workers(Relation *Irel, int nindexes, int nrequested,
 	int			i;
 
 	/*
-	 * We don't allow to perform parallel operation in standalone backend or
+	 * We don't allow performing parallel operation in standalone backend or
 	 * when parallelism is disabled.
 	 */
 	if (!IsUnderPostmaster || max_parallel_maintenance_workers == 0)
@@ -3150,13 +3165,13 @@ prepare_index_statistics(LVShared *lvshared, bool *can_parallel_vacuum,
 		if (!can_parallel_vacuum[i])
 			continue;
 
-		/* Set NOT NULL as this index do support parallelism */
+		/* Set NOT NULL as this index does support parallelism */
 		lvshared->bitmap[i >> 3] |= 1 << (i & 0x07);
 	}
 }
 
 /*
- * Update index statistics in pg_class if the statistics is accurate.
+ * Update index statistics in pg_class if the statistics are accurate.
  */
 static void
 update_index_statistics(Relation *Irel, IndexBulkDeleteResult **stats,
@@ -3187,7 +3202,7 @@ update_index_statistics(Relation *Irel, IndexBulkDeleteResult **stats,
 
 /*
  * This function prepares and returns parallel vacuum state if we can launch
- * even one worker.  This function is responsible to enter parallel mode,
+ * even one worker.  This function is responsible for entering parallel mode,
  * create a parallel context, and then initialize the DSM segment.
  */
 static LVParallelState *
@@ -3199,6 +3214,7 @@ begin_parallel_vacuum(Oid relid, Relation *Irel, LVRelStats *vacrelstats,
 	LVShared   *shared;
 	LVDeadTuples *dead_tuples;
 	BufferUsage *buffer_usage;
+	WalUsage   *wal_usage;
 	bool	   *can_parallel_vacuum;
 	long		maxtuples;
 	char	   *sharedquery;
@@ -3283,14 +3299,18 @@ begin_parallel_vacuum(Oid relid, Relation *Irel, LVRelStats *vacrelstats,
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
 	/*
-	 * Estimate space for BufferUsage -- PARALLEL_VACUUM_KEY_BUFFER_USAGE.
+	 * Estimate space for BufferUsage and WalUsage --
+	 * PARALLEL_VACUUM_KEY_BUFFER_USAGE and PARALLEL_VACUUM_KEY_WAL_USAGE.
 	 *
 	 * If there are no extensions loaded that care, we could skip this.  We
-	 * have no way of knowing whether anyone's looking at pgBufferUsage, so do
-	 * it unconditionally.
+	 * have no way of knowing whether anyone's looking at pgBufferUsage or
+	 * pgWalUsage, so do it unconditionally.
 	 */
 	shm_toc_estimate_chunk(&pcxt->estimator,
 						   mul_size(sizeof(BufferUsage), pcxt->nworkers));
+	shm_toc_estimate_keys(&pcxt->estimator, 1);
+	shm_toc_estimate_chunk(&pcxt->estimator,
+						   mul_size(sizeof(WalUsage), pcxt->nworkers));
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
 	/* Finally, estimate PARALLEL_VACUUM_KEY_QUERY_TEXT space */
@@ -3327,11 +3347,18 @@ begin_parallel_vacuum(Oid relid, Relation *Irel, LVRelStats *vacrelstats,
 	shm_toc_insert(pcxt->toc, PARALLEL_VACUUM_KEY_DEAD_TUPLES, dead_tuples);
 	vacrelstats->dead_tuples = dead_tuples;
 
-	/* Allocate space for each worker's BufferUsage; no need to initialize */
+	/*
+	 * Allocate space for each worker's BufferUsage and WalUsage; no need to
+	 * initialize
+	 */
 	buffer_usage = shm_toc_allocate(pcxt->toc,
 									mul_size(sizeof(BufferUsage), pcxt->nworkers));
 	shm_toc_insert(pcxt->toc, PARALLEL_VACUUM_KEY_BUFFER_USAGE, buffer_usage);
 	lps->buffer_usage = buffer_usage;
+	wal_usage = shm_toc_allocate(pcxt->toc,
+								 mul_size(sizeof(WalUsage), pcxt->nworkers));
+	shm_toc_insert(pcxt->toc, PARALLEL_VACUUM_KEY_WAL_USAGE, wal_usage);
+	lps->wal_usage = wal_usage;
 
 	/* Store query string for workers */
 	sharedquery = (char *) shm_toc_allocate(pcxt->toc, querylen + 1);
@@ -3346,8 +3373,8 @@ begin_parallel_vacuum(Oid relid, Relation *Irel, LVRelStats *vacrelstats,
 /*
  * Destroy the parallel context, and end parallel mode.
  *
- * Since writes are not allowed during the parallel mode, so we copy the
- * updated index statistics from DSM in local memory and then later use that
+ * Since writes are not allowed during parallel mode, copy the
+ * updated index statistics from DSM into local memory and then later use that
  * to update the index statistics.  One might think that we can exit from
  * parallel mode, update the index statistics and then destroy parallel
  * context, but that won't be safe (see ExitParallelMode).
@@ -3453,7 +3480,7 @@ skip_parallel_vacuum_index(Relation indrel, LVShared *lvshared)
  * Perform work within a launched parallel process.
  *
  * Since parallel vacuum workers perform only index vacuum or index cleanup,
- * we don't need to report the progress information.
+ * we don't need to report progress information.
  */
 void
 parallel_vacuum_main(dsm_segment *seg, shm_toc *toc)
@@ -3463,6 +3490,7 @@ parallel_vacuum_main(dsm_segment *seg, shm_toc *toc)
 	LVShared   *lvshared;
 	LVDeadTuples *dead_tuples;
 	BufferUsage *buffer_usage;
+	WalUsage   *wal_usage;
 	int			nindexes;
 	char	   *sharedquery;
 	IndexBulkDeleteResult **stats;
@@ -3539,9 +3567,11 @@ parallel_vacuum_main(dsm_segment *seg, shm_toc *toc)
 	parallel_vacuum_index(indrels, stats, lvshared, dead_tuples, nindexes,
 						  &vacrelstats);
 
-	/* Report buffer usage during parallel execution */
+	/* Report buffer/WAL usage during parallel execution */
 	buffer_usage = shm_toc_lookup(toc, PARALLEL_VACUUM_KEY_BUFFER_USAGE, false);
-	InstrEndParallelQuery(&buffer_usage[ParallelWorkerNumber]);
+	wal_usage = shm_toc_lookup(toc, PARALLEL_VACUUM_KEY_WAL_USAGE, false);
+	InstrEndParallelQuery(&buffer_usage[ParallelWorkerNumber],
+						  &wal_usage[ParallelWorkerNumber]);
 
 	/* Pop the error context stack */
 	error_context_stack = errcallback.previous;

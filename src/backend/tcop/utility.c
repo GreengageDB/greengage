@@ -2267,7 +2267,7 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 			if (stmt->concurrent && Gp_role != GP_ROLE_EXECUTE)
 				PreventInTransactionBlock(isTopLevel,
 										  "DROP INDEX CONCURRENTLY");
-			/* fall through */
+			/* FALLTHROUGH */
 
 		case OBJECT_TABLE:
 		case OBJECT_SEQUENCE:

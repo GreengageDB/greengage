@@ -3957,7 +3957,7 @@ AfterTriggerExecute(EState *estate,
 											 trig_tuple_slot2))
 					elog(ERROR, "failed to fetch tuple2 for AFTER trigger");
 			}
-			/* fall through */
+			/* FALLTHROUGH */
 		case AFTER_TRIGGER_FDW_REUSE:
 
 			/*

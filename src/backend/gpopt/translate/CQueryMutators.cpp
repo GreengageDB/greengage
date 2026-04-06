@@ -1651,9 +1651,11 @@ CQueryMutators::ReassignSortClause(Query *top_level_query,
 	top_level_query->sortClause = derived_table_query->sortClause;
 	top_level_query->limitOffset = derived_table_query->limitOffset;
 	top_level_query->limitCount = derived_table_query->limitCount;
+	top_level_query->limitOption = derived_table_query->limitOption;
 	derived_table_query->sortClause = nullptr;
 	derived_table_query->limitOffset = nullptr;
 	derived_table_query->limitCount = nullptr;
+	derived_table_query->limitOption = LIMIT_OPTION_DEFAULT;
 }
 
 // EOF

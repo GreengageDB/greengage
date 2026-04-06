@@ -145,6 +145,10 @@ typedef enum ObjectClass
 
 /* in dependency.c */
 
+extern void AcquireDeletionLock(const ObjectAddress *object, int flags);
+
+extern void ReleaseDeletionLock(const ObjectAddress *object);
+
 extern void performDeletion(const ObjectAddress *object,
 							DropBehavior behavior, int flags);
 
@@ -200,6 +204,10 @@ extern long deleteDependencyRecordsFor(Oid classId, Oid objectId,
 
 extern long deleteDependencyRecordsForClass(Oid classId, Oid objectId,
 											Oid refclassId, char deptype);
+
+extern long deleteDependencyRecordsForSpecific(Oid classId, Oid objectId,
+											   char deptype,
+											   Oid refclassId, Oid refobjectId);
 
 extern long changeDependencyFor(Oid classId, Oid objectId,
 								Oid refClassId, Oid oldRefObjectId,

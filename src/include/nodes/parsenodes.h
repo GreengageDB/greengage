@@ -195,6 +195,7 @@ typedef struct Query
 
 	Node	   *limitOffset;	/* # of result tuples to skip (int8 expr) */
 	Node	   *limitCount;		/* # of result tuples to return (int8 expr) */
+	LimitOption limitOption;	/* limit type */
 
 	List	   *rowMarks;		/* a list of RowMarkClause's */
 
@@ -1739,6 +1740,7 @@ typedef struct SelectStmt
 	List	   *sortClause;		/* sort clause (a list of SortBy's) */
 	Node	   *limitOffset;	/* # of result tuples to skip */
 	Node	   *limitCount;		/* # of result tuples to return */
+	LimitOption limitOption;	/* limit type */
 	List	   *lockingClause;	/* FOR UPDATE (list of LockingClause's) */
 	WithClause *withClause;		/* WITH clause */
 
@@ -3286,6 +3288,9 @@ typedef struct IndexStmt
 	char	   *idxcomment;		/* comment to apply to index, or NULL */
 	Oid			indexOid;		/* OID of an existing index, if any */
 	Oid			oldNode;		/* relfilenode of existing storage, if any */
+	SubTransactionId oldCreateSubid;	/* rd_createSubid of oldNode */
+	SubTransactionId oldFirstRelfilenodeSubid;	/* rd_firstRelfilenodeSubid of
+												 * oldNode */
 	bool		unique;			/* is index unique? */
 	bool		primary;		/* is index a primary key? */
 	bool		isconstraint;	/* is it for a pkey/unique constraint? */
@@ -3436,6 +3441,7 @@ typedef struct AlterObjectDependsStmt
 	RangeVar   *relation;		/* in case a table is involved */
 	Node	   *object;			/* name of the object */
 	Value	   *extname;		/* extension name */
+	bool		remove;			/* set true to remove dep rather than add */
 } AlterObjectDependsStmt;
 
 /* ----------------------
