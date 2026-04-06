@@ -24,7 +24,7 @@ env:
 
 jobs:
   create-sql-dump-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     if: |
       github.event.workflow_run.event == 'push' &&
@@ -102,7 +102,7 @@ jobs:
           EOF
 
   verify-dumps-created:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: create-sql-dump-regression
     if: always()
     steps:
