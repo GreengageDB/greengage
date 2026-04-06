@@ -96,7 +96,10 @@ OBJS = $(WIN32RES) regress.o
 
 OBJS += regress_gp.o
 
-# Compile backend libpq sources with -fPIC for use in regress_gp.so
+# Compile backend libpq sources with -fPIC for use in regress_gp.so.
+#
+# We need the objects only for the missing symbols. Non-hidden symbols will be
+# pulled from the postgres binary, just to save you some hair on your head.
 LIBPQ_BE_SRCS = fe-protocol3.c fe-connect.c fe-exec.c pqexpbuffer.c fe-auth.c \
 	fe-misc.c fe-protocol2.c fe-secure.c fe-auth-scram.c
 LIBPQ_BE_OBJS = $(LIBPQ_BE_SRCS:%.c=%.o)
@@ -107,15 +110,16 @@ include $(top_srcdir)/src/Makefile.shlib
 
 all: all-lib
 
-# Symlink libpq sources and compile without FRONTEND macro
-$(LIBPQ_BE_SRCS): %.c: $(top_srcdir)/src/interfaces/libpq/%.c
+# Symlink libpq sources and compile without FRONTEND macro.
+$(LIBPQ_BE_SRCS): %.c: $(top_srcdir)/src/backend/libpq/%.c
 	rm -f $@ && $(LN_S) $< .
 
 $(LIBPQ_BE_OBJS): override CPPFLAGS := -I$(libpq_srcdir) -I$(top_builddir)/src/port $(CPPFLAGS)
+$(LIBPQ_BE_OBJS): override CPPFLAGS := -UFRONTEND $(CPPFLAGS)
 
 # Build regress_gp.so with backend libpq objects instead of external libpq.so
 regress_gp.so: regress_gp.o $(LIBPQ_BE_OBJS)
-	$(CC) $(CFLAGS) -shared -o $@ $^ $(LDFLAGS) $(LDFLAGS_SL)
+	$(CC) $(CFLAGS) -Bsymbolic -shared -o $@ $^ $(LDFLAGS) $(LDFLAGS_SL)
 
 # Ensure parallel safety if a build is started in this directory
 $(OBJS): | submake-libpgport submake-generated-headers
