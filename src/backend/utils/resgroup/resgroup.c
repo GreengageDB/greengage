@@ -3847,8 +3847,15 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 	pgstat_report_resgroup(bypassedGroup->groupId);
 	bypassedSlot.group = groupInfo.group;
 	bypassedSlot.groupId = groupInfo.groupId;
+	/*
+	 * SessionStateLock is required since IsResGroupBypassedBySessionId will
+	 * traverse the current session array and check corresponding
+	 * bypassResGroupId with shared lock on SessionStateLock.
+	 */
+	LWLockAcquire(SessionStateLock, LW_EXCLUSIVE);
 	/* Share bypassed group id for prohibit moving. */
 	MySessionState->bypassResGroupId = groupInfo.groupId;
+	LWLockRelease(SessionStateLock);
 
 	cgroupOpsRoutine->attachcgroup(bypassedGroup->groupId, MyProcPid,
 								   bypassedGroup->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
