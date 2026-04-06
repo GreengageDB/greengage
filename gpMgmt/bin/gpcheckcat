@@ -570,25 +570,19 @@ def checkReplicatedDistribPolicy():
         n.nspname AS nspname,
         c.relname AS relname,
         a.attname AS attname,
-        v.def_expr AS default_expr
+        pg_get_expr(ad.adbin, ad.adrelid) AS default_expr
     FROM pg_class c
         JOIN pg_namespace n ON c.relnamespace = n.oid
         JOIN pg_attribute a ON c.oid = a.attrelid
         JOIN pg_attrdef ad ON c.oid = ad.adrelid AND a.attnum = ad.adnum
         JOIN gp_distribution_policy d ON c.oid = d.localoid
-    CROSS JOIN LATERAL (
-        SELECT pg_get_expr(ad.adbin, ad.adrelid)
-    ) AS v(def_expr)
+        JOIN pg_proc p ON pg_get_expr(ad.adbin, ad.adrelid) ~ ('\m' || p.proname || '\s*\(')
     WHERE c.relkind = 'r'
         AND d.policytype = 'r'
         AND a.attnum > 0
         AND NOT a.attisdropped
         AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-        AND EXISTS (
-            SELECT 1 FROM pg_proc p
-            WHERE p.provolatile = 'v'
-                AND v.def_expr ~ ('\m' || p.proname || '\s*\(')
-        );
+        AND p.provolatile = 'v';
     '''
 
     try:
@@ -606,7 +600,13 @@ def checkReplicatedDistribPolicy():
                 GV.checkStatus = False
                 setError(ERROR_NOREPAIR)
                 logger.info('[FAIL] replicated tables')
+                myprint(
+                        '[ERROR]: Some columns, containing volatile expressions as defaults, '
+                        'have violated replicated table\'s distribution policy. '
+                        'This must be manually resolved. Check the gpcheckcat log for details.'
+                    )
                 logger.error('replicated tables has %d issue(s)' % len(err))
+                logger.error('The following columns and their tables must be manually fixed and synced:')
                 for e in err:
                     logger.error(formatErr(e[0], e[1], e[2]))
                 if len(err) > 100:
