@@ -27,6 +27,9 @@ Feature: ggrebalance behave tests
           | --mirror-mode grouped --skip-rebalance                      | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
           | -m spread --skip-rebalance                                  | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
           | --skip-rebalance --inplace-swap-roles                       | Can't use together options '--skip-rebalance' and '--inplace-swap-roles'     | stub     |stub|
+          | --detailed-progress --simple-progress                       | Can't use together options '--detailed-progress' and '--simple-progress'     | stub     |stub|
+          | --detailed-progress --no-progress                           | Can't use together options '--detailed-progress' and '--no-progress'         | stub     |stub|
+          | --simple-progress --no-progress                             | Can't use together options '--simple-progress' and '--no-progress'           | stub     |stub|
           | -c --target-hosts sdw1,sdw2                                 | Can't use together options '--clean-required' and '--target-hosts'    | stub       |stub|
           | -c --add-hosts sdw3                                         | Can't use together options '--clean-required' and '--add-hosts'       | stub       |stub|
           | -c --add-hosts-file /tmp/add.txt                            | Can't use together options '--clean-required' and '--add-hosts-file'  | stub       |stub|
@@ -42,6 +45,9 @@ Feature: ggrebalance behave tests
           | -c --hba-hostnames                                          | Can't use together options '--clean-required' and '--hba-hostnames'     | stub     |stub|
           | -c --inplace-swap-roles                                         | Can't use together options '--clean-required' and '--inplace-swap-roles'     | stub     |stub|
           | -c --skip-resource-estimation                               | Can't use together options '--clean-required' and '--skip-resource-estimation' | stub |stub|
+          | -c --detailed-progress                                      | Can't use together options '--clean-required' and '--detailed-progress'        | stub |stub|
+          | -c --simple-progress                                        | Can't use together options '--clean-required' and '--simple-progress'          | stub |stub|
+          | -c --no-progress                                            | Can't use together options '--clean-required' and '--no-progress'              | stub |stub|
           | -r --target-hosts sdw1,sdw2                                 | Can't use together options '--rollback-required' and '--target-hosts'    | stub       |stub|
           | -r --add-hosts sdw3                                         | Can't use together options '--rollback-required' and '--add-hosts'       | stub       |stub|
           | -r --add-hosts-file /tmp/add.txt                            | Can't use together options '--rollback-required' and '--add-hosts-file'  | stub       |stub|
@@ -52,6 +58,9 @@ Feature: ggrebalance behave tests
           | -r --mirror-mode grouped                                    | Can't use together options '--rollback-required' and '--mirror-mode'       | stub     |stub|
           | -r --skip-rebalance                                         | Can't use together options '--rollback-required' and '--skip-rebalance'    | stub     |stub|
           | -r --show-plan                                              | Can't use together options '--rollback-required' and '--show-plan'         | stub     |stub|
+          | -r --detailed-progress                                      | Can't use together options '--rollback-required' and '--detailed-progress' | stub     |stub|
+          | -r --simple-progress                                        | Can't use together options '--rollback-required' and '--simple-progress'   | stub     |stub|
+          | -r --no-progress                                            | Can't use together options '--rollback-required' and '--no-progress'       | stub     |stub|
           | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
           | -r --skip-resource-estimation                               | Can't use together options '--rollback-required' and '--skip-resource-estimation' |the database is not running |"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
 
