@@ -129,6 +129,7 @@ class GGRebalanceMainSM:
         self.options = options
         self.gparray = gpArray
         self.conn = conn
+        self.hard_shutdown = True
 
         self.rebalance_schema = RebalanceSchema(self.conn)
 
@@ -157,7 +158,15 @@ class GGRebalanceMainSM:
     def run(self) -> None:
         self.trigger('start')
 
+    def set_hard_shutdown(self, hard_shutdown: bool) -> None:
+        self.hard_shutdown = hard_shutdown
+
     def shutdown(self) -> None:
+        if self.hard_shutdown:
+            self.logger.info('hard shutdown')
+        else:
+            self.logger.info('soft shutdown, waiting for critical operations to finish...')
+
         need_exit = True
 
         if self.gg_shrink is not None:
@@ -165,7 +174,7 @@ class GGRebalanceMainSM:
             need_exit = False
 
         if self.gg_rebalance is not None:
-            self.gg_rebalance.shutdown()
+            self.gg_rebalance.shutdown(self.hard_shutdown)
             need_exit = False
 
         if need_exit:
@@ -188,10 +197,14 @@ class GGRebalanceMainSM:
             self.logger.info(f"Rebalance schema doesn't exist. Cleanup is not required.")
         else:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
+            perform_schema_cleanup = True
             if isinstance(self.plan, ShrinkPlan):
-                self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
-            self.rebalance_schema.dropSchema()
-            self.logger.info('Cleanup is complete')
+                perform_schema_cleanup = self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
+            if perform_schema_cleanup:
+                self.rebalance_schema.dropSchema()
+                self.logger.info('Cleanup is complete')
+            else:
+                self.logger.info("Cleanup wasn't successfull due to unfinished shrink")
         self.trigger('move_to_STATE_END')
 
     @wrap_func_with_faults

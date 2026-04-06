@@ -1,4 +1,4 @@
-@ggrebalance_basics @skip
+@ggrebalance_basics
 Feature: ggrebalance behave tests
 
     Scenario Outline: test 1. validate incompatible option combinations
@@ -62,6 +62,9 @@ Feature: ggrebalance behave tests
           | -r --simple-progress                                        | Can't use together options '--rollback-required' and '--simple-progress'   | stub     |stub|
           | -r --no-progress                                            | Can't use together options '--rollback-required' and '--no-progress'       | stub     |stub|
           | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -c --duration 00:00:01                                      | Can't use together options '--clean-required' and '--duration'                  | stub     |stub|
+          | -c --end '2099-01-01 01:01:01'                              | Can't use together options '--clean-required' and '--end'                       | stub     |stub|
+          | --duration 00:00:01 --end '2099-01-01 01:01:01'             | Can't use together options '--duration' and '--end'                             | stub     |stub|
           | -r --skip-resource-estimation                               | Can't use together options '--rollback-required' and '--skip-resource-estimation' |the database is not running |"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
 
     Scenario: test 2. ggrebalance simple scenarios
@@ -107,7 +110,7 @@ Feature: ggrebalance behave tests
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -c -y"
+        When the user runs "ggrebalance -c --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Reset numsegments to default is done." to logfile with latest timestamp
          And ggrebalance should print "Cleanup is complete" to logfile with latest timestamp
