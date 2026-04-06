@@ -493,6 +493,11 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
 							(errmsg("cannot find process: %d", pid))));
 
+		if (IsResGroupBypassedBySessionId(sessionId))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							(errmsg("cannot move a process from bypassed group"))));
+
 		currentGroupId = ResGroupGetGroupIdBySessionId(sessionId);
 		if (currentGroupId == InvalidOid)
 			ereport(ERROR,
