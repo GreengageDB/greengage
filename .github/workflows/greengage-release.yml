@@ -13,7 +13,7 @@ jobs:
         include:
         - artifact_name: deb-packages
           extensions:    deb ddeb
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       actions: read
