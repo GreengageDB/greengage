@@ -576,7 +576,9 @@ def checkReplicatedDistribPolicy():
         JOIN pg_attribute a ON c.oid = a.attrelid
         JOIN pg_attrdef ad ON c.oid = ad.adrelid AND a.attnum = ad.adnum
         JOIN gp_distribution_policy d ON c.oid = d.localoid
-        JOIN pg_proc p ON pg_get_expr(ad.adbin, ad.adrelid) ~ ('\m' || p.proname || '\s*\(')
+        JOIN pg_proc p ON 
+            ad.adbin ~ ':funcid \d+' AND
+            regexp_replace(ad.adbin, '.*:funcid (\d+) .*', '\\1', 'g')::int = p.oid
     WHERE c.relkind = 'r'
         AND d.policytype = 'r'
         AND a.attnum > 0
