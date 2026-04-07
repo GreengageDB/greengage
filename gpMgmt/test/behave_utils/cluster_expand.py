@@ -3,11 +3,12 @@ from builtins import object
 import glob
 from datetime import datetime, timedelta
 try:
-    from subprocess32 import Popen, PIPE
+    from subprocess32 import PIPE
 except:
-    from subprocess import Popen, PIPE
+    from subprocess import PIPE
 from .utils import run_gpcommand
 
+from gppylib import gpsubprocess
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
@@ -38,7 +39,7 @@ class Gpexpand(object):
 
         # If working_directory is None, then Popen will use the directory where
         # the python code is being ran.
-        p1 = Popen(["gpexpand"], stdout=PIPE, stdin=PIPE,
+        p1 = gpsubprocess.Popen(["gpexpand"], stdout=PIPE, stdin=PIPE,
                    cwd=self.working_directory)
 
         # Very raw form of doing the interview part of gpexpand.
@@ -46,26 +47,26 @@ class Gpexpand(object):
         # Cannot guarantee that this is not flaky either.
 
         # Would you like to initiate a new System Expansion Yy|Nn (default=N):
-        p1.stdin.write(b"y\n")
+        p1.stdin.write("y\n")
 
         # **Enter a blank line to only add segments to existing hosts**[]:
-        p1.stdin.write(("%s\n" % (",".join(hosts) if hosts else "")).encode('utf-8'))
+        p1.stdin.write("%s\n" % (",".join(hosts) if hosts else ""))
 
         if has_mirrors:
             #What type of mirroring strategy would you like? spread|grouped (default=grouped):
-            p1.stdin.write(b"\n")
+            p1.stdin.write("\n")
 
         #How many new primary segments per host do you want to add? (default=0):
-        p1.stdin.write(("%s\n" % num_of_segments).encode('utf-8'))
+        p1.stdin.write("%s\n" % num_of_segments)
 
         # Enter new primary data directory #<number primary segment>
         for directory in directory_pairs:
             primary, mirror = directory
-            p1.stdin.write(("%s\n" % primary).encode('utf-8'))
+            p1.stdin.write("%s\n" % primary)
             if mirror:
-                p1.stdin.write(("%s\n" % mirror).encode('utf-8'))
+                p1.stdin.write("%s\n" % mirror)
 
-        output = p1.communicate()[0].decode('utf-8')
+        output = p1.communicate()[0]
 
         return output, p1.wait()
 

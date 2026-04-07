@@ -28,6 +28,7 @@ try:
     import subprocess32 as subprocess
 except:
     import subprocess
+from gppylib import gpsubprocess
 import re
 import multiprocessing
 import tempfile
@@ -116,7 +117,7 @@ class GlobalShellExecutor(object):
         self.v_cnt = 0
         # open pseudo-terminal to interact with subprocess
         self.master_fd, self.slave_fd = pty.openpty()
-        self.sh_proc = subprocess.Popen(['/bin/bash', '--noprofile', '--norc', '--noediting', '-i'],
+        self.sh_proc = gpsubprocess.Popen(['/bin/bash', '--noprofile', '--norc', '--noediting', '-i'],
                                         stdin=self.slave_fd,
                                         stdout=self.slave_fd,
                                         stderr=self.slave_fd,
@@ -159,13 +160,17 @@ class GlobalShellExecutor(object):
             if e:
                 # Terminate the shell when we get any output from stderr
                 o = os.read(self.master_fd, 10240)
+                if sys.version_info[0] == 3:
+                    o = o.decode('utf-8', 'replace')
                 self.bash_log_file.write(o)
                 self.bash_log_file.flush()
                 self.terminate(True)
                 raise GlobalShellExecutor.ExecutionError("Error happened to the bash process, see %s for details." % self.bash_log_file.name)
 
             if r:
-                o = os.read(self.master_fd, 10240).decode()
+                o = os.read(self.master_fd, 10240)
+                if sys.version_info[0] == 3:
+                    o = o.decode('utf-8', 'replace')
                 self.bash_log_file.write(o)
                 self.bash_log_file.flush()
                 output += o
@@ -740,7 +745,7 @@ class SQLIsolationExecutor(object):
                     if mode != '\\retcode':
                         raise Exception('Invalid execution mode: {}'.format(mode))
 
-                cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
+                cmd_output = gpsubprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
                 if not bg_mode:
                     stdout, _ = cmd_output.communicate()
                     print(file=output_file)

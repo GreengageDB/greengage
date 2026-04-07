@@ -11,26 +11,26 @@ import shutil
 import stat
 import sys
 from optparse import OptionParser
-from subprocess import Popen, PIPE, STDOUT
-
+from subprocess import PIPE, STDOUT
+from gppylib import gpsubprocess
 
 def _getPlatformInfo():
     if which('lsb_release') is None:
         for file in glob.glob('/etc/*release'):
             shutil.copy(file, '.')
     else:
-        Popen('/usr/bin/lsb_release -a > ./lsb_release.out',
+        gpsubprocess.Popen('/usr/bin/lsb_release -a > ./lsb_release.out',
               shell=True, stderr=PIPE)
 
     if os.path.exists('/etc/gpdb-appliance-version'):
         shutil.copy('/etc/gpdb-appliance-version', '.')
 
-    Popen('uname -r > uname.out', shell=True)
+    gpsubprocess.Popen('uname -r > uname.out', shell=True)
 
 
 def _getFileInfo(coreFile):
-    cmd = Popen(['/usr/bin/file', '--version'], stdout=PIPE, stderr=STDOUT)
-    fileVersion = cmd.communicate()[0].split()[0].strip().decode('utf-8')
+    cmd = gpsubprocess.Popen(['/usr/bin/file', '--version'], stdout=PIPE, stderr=STDOUT)
+    fileVersion = cmd.communicate()[0].split()[0].strip()
     # file allow setting parameters from command line from version 5.21, refer:
     # https://github.com/file/file/commit/6ce24f35cd4a43c4bdd249e8e0c4952c1f8eac67
     # Set ELF program sections processed for core files to suppres "too many
@@ -39,8 +39,8 @@ def _getFileInfo(coreFile):
     if fileVersion >= 'file-5.21':
         opts += ['-P', 'elf_phnum=2048']
     opts += [coreFile]
-    cmd = Popen(opts, stdout=PIPE)
-    return cmd.communicate()[0].decode('utf-8')
+    cmd = gpsubprocess.Popen(opts, stdout=PIPE)
+    return cmd.communicate()[0]
 
 
 def _isCore(fileCmdOutput):
@@ -103,9 +103,9 @@ def _getLibraryListWithLDD(binary):
         # simulate ldd with ld-linux.so
         args = ['/lib64/ld-linux-x86-64.so.2', '--list']
 
-    ldd_output = Popen(args + [binary], stdout=PIPE)
+    ldd_output = gpsubprocess.Popen(args + [binary], stdout=PIPE)
     for line in ldd_output.stdout:
-        match = re.search(r'(\S+) \(0x', line.decode('utf-8'))
+        match = re.search(r'(\S+) \(0x', line)
         if match and match.group(1):
             libraries.append(match.group(1).strip())
     return libraries
@@ -123,7 +123,7 @@ def _getLibraryListWithGDB(coreFile, binary):
         if key in environ:
             del environ[key]
 
-    cmd = Popen([gdb,
+    cmd = gpsubprocess.Popen([gdb,
                  '--batch',     # exit after processing options
                  '--nx',        # do not read any .gdbinit files
                  '--eval-command=info sharedlibrary',
@@ -147,7 +147,6 @@ def _getLibraryListWithGDB(coreFile, binary):
     # path strings in following lines.
     header = False
     for line in result.splitlines():
-        line = line.decode('utf-8')
         if header:
             begin = line.find(os.path.sep)
             if begin >= 0:
@@ -272,14 +271,14 @@ def packCoreFile(coreFile, binary):
 
         _generateGDBScript(os.path.basename(binary), os.path.basename(coreFile))
         os.chdir(oldDir)
-        cmd = Popen(['tar', 'zcf', packTarball, packDir])
+        cmd = gpsubprocess.Popen(['tar', 'zcf', packTarball, packDir])
         cmd.wait()
     except Exception as e:
-        Popen(['rm', '-rf', packTarball])
+        gpsubprocess.Popen(['rm', '-rf', packTarball])
         raise e
     finally:
         os.chdir(oldDir)
-        Popen(['rm', '-rf', packDir])
+        gpsubprocess.Popen(['rm', '-rf', packDir])
 
 
 def parseArgs():
