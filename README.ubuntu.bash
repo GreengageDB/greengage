@@ -34,6 +34,7 @@ apt-get install -y \
   libuv1-dev \
   libxerces-c-dev \
   libxml2-dev \
+  libxml2-utils \
   libxslt-dev \
   libyaml-dev \
   libzstd-dev \

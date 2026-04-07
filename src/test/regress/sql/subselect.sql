@@ -650,12 +650,7 @@ reset optimizer_trace_fallback;
 -- Output DXL plan without unimportant properties.
 -- start_ignore
 \! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
-\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "pretty_xml = dom.toprettyxml(indent='   ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! xmllint --format $MASTER_DATA_DIRECTORY/minidumps/dump.mdp >$MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
@@ -688,12 +683,7 @@ reset optimizer_trace_fallback;
 
 -- start_ignore
 \! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
-\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "pretty_xml = dom.toprettyxml(indent='    ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! xmllint --format $MASTER_DATA_DIRECTORY/minidumps/dump.mdp >$MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
 \! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml

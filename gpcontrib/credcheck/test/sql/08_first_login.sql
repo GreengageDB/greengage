@@ -1,0 +1,7 @@
+LOAD 'credcheck';
+
+SET credcheck.password_change_first_login = true;
+CREATE USER aaa PASSWORD 'DummY';
+-- verify that credcheck_internal.force_change_password is present after user creation
+SELECT 1 FROM pg_catalog.pg_db_role_setting JOIN pg_catalog.pg_roles ON oid = setrole WHERE rolname='aaa' AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
+DROP USER aaa;

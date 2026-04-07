@@ -26,7 +26,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v25
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -38,7 +38,7 @@ jobs:
     needs: build  # Wait for build to complete
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target_os: ubuntu
@@ -48,7 +48,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v25
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -60,14 +60,14 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v19
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -78,14 +78,14 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v19
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -96,14 +96,14 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v23
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -114,14 +114,14 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v21
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -141,7 +141,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v10
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
