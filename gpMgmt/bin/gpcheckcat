@@ -576,9 +576,7 @@ def checkReplicatedDistribPolicy():
         JOIN pg_attribute a ON c.oid = a.attrelid
         JOIN pg_attrdef ad ON c.oid = ad.adrelid AND a.attnum = ad.adnum
         JOIN gp_distribution_policy d ON c.oid = d.localoid
-        JOIN pg_proc p ON 
-            ad.adbin ~ ':funcid \d+' AND
-            regexp_replace(ad.adbin, '.*:funcid (\d+) .*', '\\1', 'g')::int = p.oid
+        JOIN pg_proc p ON ad.adbin ~ (':funcid ' || p.oid || ' ')
     WHERE c.relkind = 'r'
         AND d.policytype = 'r'
         AND a.attnum > 0
@@ -608,6 +606,8 @@ def checkReplicatedDistribPolicy():
                         'This must be manually resolved. Check the gpcheckcat log for details.'
                     )
                 logger.error('replicated tables has %d issue(s)' % len(err))
+                logger.error('Replace the VOLATILE defaults with a STABLE expression via `ALTER TABLE ... SET DEFAULT ...`, '
+                             'also sync the data among segments.')
                 logger.error('The following columns and their tables must be manually fixed and synced:')
                 for e in err:
                     logger.error(formatErr(e[0], e[1], e[2]))

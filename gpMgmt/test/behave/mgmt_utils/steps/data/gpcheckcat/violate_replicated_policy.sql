@@ -38,13 +38,13 @@ CREATE TABLE dist_replicated_non_vol(
     a FLOAT,
     b FLOAT,
     c INT DEFAULT fn_val()
-) DISTRIBUTED REPLICATED
+) DISTRIBUTED REPLICATED;
 
 CREATE TABLE dist_by_key(
     a FLOAT,
     b INT,
     c INT DEFAULT 42
-)
+) DISTRIBUTED BY (a);
 
 CREATE TABLE dist_randomly (
     a FLOAT,
