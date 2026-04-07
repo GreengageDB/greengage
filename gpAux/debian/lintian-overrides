@@ -31,3 +31,7 @@ package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
 ## This bugs not masking because bug #1004313
 ## lintian bugs: #1000977, #1000449
 #elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
+
+# plperl.so is linked against libperl5.34 (pinned in shlibs:Depends).
+# The versioned RUNPATH matches the exact Perl version this package depends on.
+custom-library-search-path [opt/greengagedb/greengage7/lib/postgresql/plperl.so]
