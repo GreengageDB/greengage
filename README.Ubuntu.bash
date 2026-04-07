@@ -10,7 +10,6 @@ apt-get install -y \
 	curl \
 	debhelper \
 	devscripts \
-	dh-python \
 	fakeroot \
 	flex \
 	g++ \
