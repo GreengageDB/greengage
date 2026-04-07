@@ -28,7 +28,10 @@ fi
 processes=3
 
 rm -rf allure-results
+rm -rf coverage
 mkdir allure-results -pm 777
+mkdir coverage
+chmod 777 coverage
 mkdir ssh_keys -p
 if [ ! -e "ssh_keys/id_rsa" ]
 then
@@ -47,7 +50,7 @@ run_feature() {
   bash ci/scripts/init_containers.sh $project
 
   docker compose -p $project -f "$docker_compose_path" exec -T \
-    -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
+    -e COVERAGE_PROCESS_START="/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc" -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \

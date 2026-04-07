@@ -1,10 +1,8 @@
 # .coveragerc to control coverage.py
 [run]
 parallel = True
-data_file = /tmp/coverage-data
+data_file = /tmp/coverage-data/coverage-data
 branch = True
-
-[run]
 omit =
     */site-packages/*
     */bin/behave

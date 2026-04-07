@@ -11,6 +11,11 @@ function gen_env(){
 
 		source /usr/local/greengage-db-devel/greengage_path.sh
 
+		cat > \$GPHOME/lib/python/sitecustomize.py <<INNER_EOF
+		import coverage
+		coverage.process_startup()
+		INNER_EOF
+
 		cd "\${1}/gpdb_src/gpMgmt/"
 		BEHAVE_TAGS="${BEHAVE_TAGS}"
 		BEHAVE_FLAGS="${BEHAVE_FLAGS}"
@@ -19,6 +24,9 @@ function gen_env(){
 		else
 				flags="\${BEHAVE_FLAGS}" make -f Makefile.behave behave
 		fi
+		cd /tmp/coverage-data
+		coverage combine coverage-data.*
+		coverage html -d ./coverage-html
 	EOF
 
 		chmod a+x /opt/run_test.sh
