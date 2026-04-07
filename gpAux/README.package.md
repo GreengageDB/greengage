@@ -65,7 +65,7 @@ Standard debhelper flow with overrides:
 | `dh_auto_install` | Runs `make dist` with `DESTDIR=debian/tmp/$(PACKAGE_NAME)`, `GPROOT=/opt/greengagedb`, `GPDIR=$(PACKAGE_NAME)`, parallel `-j$(nproc)`. Unsets `CFLAGS`, `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS` |
 | `dh_dwz` | Skipped |
 | `dh_fixperms` | Strips executable bit from `.py`, `.pm`, `.sh` files without a shebang |
-| `dh_gencontrol` | Sets `-VpythonRequires=python3`, `-VpythonConflicts` |
+| `dh_gencontrol` | Standard |
 
 ## Environment Variables
 
@@ -90,7 +90,7 @@ Declared in `debian/control`:
 
 ```
 iproute2, iputils-ping, less, openssh-client, openssh-server,
-openssl, rsync, zip, net-tools, ${pythonRequires} (→ python3)
+openssl, python3, python3-pkg-resources, python3-psutil, python3-psycopg2, python3-yaml, rsync, zip, net-tools
 ```
 
 ## Usage
