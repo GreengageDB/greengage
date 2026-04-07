@@ -1281,7 +1281,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	/*
 	 * support multihomed http use cases. see MPP-11874
 	 */
-	if (IS_HTTP_URI(url))
+	if (IS_HTTP_URI(url) || IS_GPFDIST_URI(url) || IS_GPFDISTS_URI(url))
 	{
 		char domain[HOST_NAME_SIZE] = {0};
 
