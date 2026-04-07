@@ -226,14 +226,9 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
                        f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET rebalance_started = now(), rebalance_finished = NULL
                        WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
 
-    def setTableRebalanceEndTime(self, db: str, schema_name: str, rel_name: str) -> None:
-        dbconn.execSQL(self.conn,
-                       f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET rebalance_finished = now()
-                       WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
-
     def setStatusForTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
         dbconn.execSQL(self.conn,
-                       f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET status = '{status}'
+                       f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET status = '{status}', rebalance_finished = now()
                        WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
 
     def getTablesToRebalanceWithStatus(self, status: str) -> cursor:

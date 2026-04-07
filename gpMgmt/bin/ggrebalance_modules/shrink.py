@@ -672,9 +672,7 @@ class GGShrink:
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
-                    # TODO: merge setTableRebalanceEndTime and setStatusForTableToRebalance
                     inject_fault(f'before_set_status_{self.db_name}.{self.schema_name}.{self.rel_name}')
-                    self.shrink.rebalance_schema.setTableRebalanceEndTime(self.db_name, self.schema_name, self.rel_name)
                     self.shrink.rebalance_schema.setStatusForTableToRebalance(self.db_name, self.schema_name, self.rel_name, self.table_status_after_rebalance)
                     dbconn.execSQL(conn, 'COMMIT')
             else:
