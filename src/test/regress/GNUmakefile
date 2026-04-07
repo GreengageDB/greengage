@@ -111,7 +111,7 @@ include $(top_srcdir)/src/Makefile.shlib
 all: all-lib
 
 # Symlink libpq sources and compile without FRONTEND macro.
-$(LIBPQ_BE_SRCS): %.c: $(top_srcdir)/src/backend/libpq/%.c
+$(LIBPQ_BE_SRCS): %.c: $(top_srcdir)/src/interfaces/libpq/%.c
 	rm -f $@ && $(LN_S) $< .
 
 $(LIBPQ_BE_OBJS): override CPPFLAGS := -I$(libpq_srcdir) -I$(top_builddir)/src/port $(CPPFLAGS)
