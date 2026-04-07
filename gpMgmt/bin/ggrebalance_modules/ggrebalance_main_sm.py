@@ -274,7 +274,7 @@ class GGRebalanceMainSM:
     def on_enter_STATE_SETUP_SCHEMA_STARTED(self) -> None:
         # Create schema and status tables.
         # It will also save plan in order to use it for recovering after interruption
-        self.rebalance_schema.createSchema(self.plan, self.options)
+        self.rebalance_schema.createSchema(self.plan, self.options, self.gg_shrink.states_rollback_flow)
         self.trigger('move_to_STATE_SETUP_SCHEMA_DONE')
 
     @wrap_func_with_faults

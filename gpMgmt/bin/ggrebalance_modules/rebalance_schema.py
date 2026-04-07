@@ -31,7 +31,7 @@ class RebalanceSchema:
         self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
 
-    def createSchema(self, plan: Plan, options: Any) -> None:
+    def createSchema(self, plan: Plan, options: Any, shrink_rollback_states: List[str]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, f'CREATE SCHEMA {self.schema_name}')
         dbconn.execSQL(self.conn,
@@ -60,22 +60,14 @@ class RebalanceSchema:
 
         self.savePlan(plan)
 
-        # TODO: generate rollback states
-        # TODO: add check for rebalance rollback
+        states_str = ',\n'.join(f"'{s}'" for s in shrink_rollback_states)
         dbconn.execSQL(self.conn, f'''
 CREATE FUNCTION ggrebalance._is_rollback()
 RETURNS boolean AS $$
     SELECT COALESCE(
         (SELECT state IN (
-            'STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_START',
-            'STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE',
-            'STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START',
-            'STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE',
-            'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START',
-            'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE',
-            'STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START',
-            'STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE')
-        FROM ggrebalance.rebalance_status WHERE state_category = 'SHRINK' ORDER BY updated DESC LIMIT 1),
+{states_str})
+        FROM {self.schema_name}.{self.rebalance_status} WHERE state_category = 'SHRINK' ORDER BY updated DESC LIMIT 1),
         FALSE)
 $$ LANGUAGE sql''')
 
