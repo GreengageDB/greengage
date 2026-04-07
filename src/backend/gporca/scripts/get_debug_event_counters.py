@@ -3,6 +3,7 @@
 from __future__ import print_function
 import sys
 import subprocess
+from gppylib import gpsubprocess
 import re
 import argparse
 import os
@@ -111,10 +112,10 @@ def print_or_insert_header_row(csv):
 # -----------------------------------------------------------------------------
 
 def run_command(command):
-	p = subprocess.Popen(command,
+	p = gpsubprocess.Popen(command,
 						 stdout=subprocess.PIPE,
 						 stderr=subprocess.STDOUT)
-	return iter(p.stdout.readline, b'')
+	return iter(p.stdout.readline, '')
 
 
 def processLogFile(logFileLines, allruns):
@@ -126,7 +127,9 @@ def processLogFile(logFileLines, allruns):
 	current_output = []
 
 	for line in logFileLines:
-		utf8_line = line.decode('utf-8')
+		utf8_line = line
+		if sys.version_info[0] == 2:
+			utf8_line = utf8_line.decode('utf-8')
 		start_marker_match = re.search(r'CDebugCounterEventLoggingStart', utf8_line)
 		counter_log_match = re.search(r'CDebugCounterEvent\(', utf8_line)
 		eof_match = re.match(r'EOF', utf8_line)

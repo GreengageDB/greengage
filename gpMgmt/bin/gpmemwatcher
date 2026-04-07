@@ -24,6 +24,7 @@ import time
 from optparse import OptionParser
 from datetime import datetime
 from gppylib.commands import gp
+from gppylib import gpsubprocess
 
 pidfile = 'reswatch.pid'
 ps_file = 'ps.out.gz'
@@ -94,11 +95,11 @@ def cleanupLogFiles(signum, frame):
 def runPSProcess(sleepInt=60):
     ps_cmd = 'ps -ewwopid,ppid,rss,vsz,pmem,pcpu,time,etime,start_time,wchan,stat,psr,args '
     try:
-        outfile = gzip.open(ps_file, 'w')
+        outfile = gzip.open(ps_file, 'wt')
         open_files.append(outfile)
         while True:
-            outfile.write(datetime.now().strftime("\n\n>>>%y:%m:%d:%H:%M:%S<<<\n").encode('utf-8'))
-            cmd = subprocess.Popen(ps_cmd, shell=True, stdout=subprocess.PIPE)
+            outfile.write(datetime.now().strftime("\n\n>>>%y:%m:%d:%H:%M:%S<<<\n"))
+            cmd = gpsubprocess.Popen(ps_cmd, shell=True, stdout=subprocess.PIPE)
             outfile.writelines(cmd.stdout)
             outfile.flush()
             time.sleep(sleepInt)

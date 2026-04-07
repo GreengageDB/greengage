@@ -13,13 +13,13 @@ class WorkerPoolTestCase(unittest.TestCase):
         Command.propagate_env_map.clear()
 
     def test_RemoteExecutionContext_uses_default_gphome(self):
-        self.subject = RemoteExecutionContext("myhost", b"my_stdin")
+        self.subject = RemoteExecutionContext("myhost", "my_stdin")
         cmd = Command("dummy name", "echo 'foo'")
         self.subject.execute(cmd)
         self.assertIn(". %s/greengage_path.sh;" % GPHOME, cmd.cmdStr)
 
     def test_RemoteExecutionContext_uses_provided_gphome_when_set(self):
-        self.subject = RemoteExecutionContext(targetHost="myhost", stdin=b"my_stdin", gphome="other/gphome")
+        self.subject = RemoteExecutionContext(targetHost="myhost", stdin="my_stdin", gphome="other/gphome")
         cmd = Command("dummy name", "echo 'foo'")
         self.subject.execute(cmd)
         self.assertIn(". other/gphome/greengage_path.sh;", cmd.cmdStr)

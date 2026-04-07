@@ -65,6 +65,7 @@ import uuid
 
 try:
     from gppylib.gpversion import GpVersion
+    from gppylib import gpsubprocess
 except ImportError:
     sys.stderr.write("gpload can't import gpversion, will run in GPDB6 compatibility mode.\n")
     withGpVersion = False
@@ -776,7 +777,7 @@ class CatThread(threading.Thread):
                 while 1:
                     # Windows select does not support select on non-file fd's, so we can use the lock fix. Deadlock is possible here.
                     # We need to look into the Python windows module to see if there is another way to do this in Windows.
-                    line = self.fd.readline().decode('utf-8')
+                    line = self.fd.readline()
                     if not line:
                         break
                     self.gpload.log(self.gpload.DEBUG, 'gpfdist: ' + line.strip('\n'))
@@ -789,7 +790,7 @@ class CatThread(threading.Thread):
                                             )
                     if retList[0] == [self.fd]:
                         self.theLock.acquire()
-                        line = self.fd.readline().decode('utf-8')
+                        line = self.fd.readline()
                         self.theLock.release()
                     else:
                         continue
@@ -1710,7 +1711,7 @@ class gpload(object):
                     cmd += ' '.join(popenList)
                     needshell = True
 
-                a = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                a = gpsubprocess.Popen(cmd, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,
                                      close_fds=cfds, shell=needshell)
                 self.subprocesses.append(a)
@@ -1731,7 +1732,7 @@ class gpload(object):
 
             while 1:
                 readLock.acquire()
-                line = a.stdout.readline().decode('utf-8')
+                line = a.stdout.readline()
                 readLock.release()
                 if not line:
                     self.log(self.ERROR,'failed to start gpfdist: ' +
@@ -3072,7 +3073,7 @@ class gpload(object):
                     if platform.system() in ['Windows', 'Microsoft']:
                         # win32 API is better but hard for us
                         # to install, so we use the crude method
-                        subprocess.Popen("taskkill /F /T /PID %i" % a.pid,
+                        gpsubprocess.Popen("taskkill /F /T /PID %i" % a.pid,
                                          shell=True, stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE)
 
