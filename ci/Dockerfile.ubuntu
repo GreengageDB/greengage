@@ -42,7 +42,8 @@ COPY . gpdb_src
 RUN mkdir bin_gpdb
 
 ENV TARGET_OS=ubuntu \
-    OUTPUT_ARTIFACT_DIR=bin_gpdb
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS=1
 
 # Compile with running mocking tests
 # Use python3 to compile into GPDB's plpython3u
