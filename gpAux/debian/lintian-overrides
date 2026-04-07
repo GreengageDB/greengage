@@ -26,7 +26,7 @@ package-has-unnecessary-activation-of-ldconfig-trigger
 # Timezone data files are hardlinked by upstream PostgreSQL build system
 # to save disk space (identical timezone definitions share inodes).
 # This is standard PostgreSQL behavior, not a packaging error.
-package-contains-hardlink [opt/greengagedb/greengage7/share/postgresql/timezone/*]
+package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
 
 ## This bugs not masking because bug #1004313
 ## lintian bugs: #1000977, #1000449
