@@ -1,9 +1,7 @@
 Source: greengage7
 Maintainer: Greengage <greengage@greengagedb.org>
 Section: database
-Build-Depends: debhelper (>= 13),
-	 dh-python,
-	 lsb-release
+Build-Depends: debhelper (>= 13), lsb-release
 
 Package: greengage7
 Priority: optional
@@ -12,13 +10,17 @@ Depends: ${shlibs:Depends},
 	 iproute2,
 	 iputils-ping,
 	 less,
+	 net-tools,
 	 openssh-client,
 	 openssh-server,
 	 openssl,
+	 python3,
+	 python3-pkg-resources,
+	 python3-psutil,
+	 python3-psycopg2,
+	 python3-yaml,
 	 rsync,
-	 zip,
-	 net-tools,
-	 ${pythonRequires}
+	 zip
 Conflicts: greengage-loaders, ${pythonConflicts}
 Description: Greengage MPP database engine
 	Greengage Database (GPDB) is an advanced, fully featured, open
