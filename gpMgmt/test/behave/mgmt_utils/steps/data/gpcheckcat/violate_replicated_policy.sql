@@ -41,13 +41,4 @@ CREATE TABLE dist_replicated_non_vol(
 ) DISTRIBUTED REPLICATED;
 
 -- Replace already used function to break policy
-CREATE OR REPLACE FUNCTION fn_vol()
-        RETURNS int
-        LANGUAGE plpgsql
-        VOLATILE
-AS $$
-BEGIN
-	RETURN (random() * 1000)::int;
-END;
-$$
-EXECUTE ON ANY;
+ALTER FUNCTION fn_vol VOLATILE;
