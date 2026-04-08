@@ -25,28 +25,6 @@ except ImportError as e:
 
 DBNAME = 'postgres'
 
-def print_progress(pool: WorkerPool, interval: int = 10) -> None:
-    """
-    Waits for a WorkerPool to complete, printing a progress percentage marker
-    once at the beginning of the call, and thereafter at the provided interval
-    (default ten seconds). A final 100% marker is printed upon completion.
-    """
-    def print_completed_percentage() -> bool:
-        # pool.completed can change asynchronously; save its value.
-        completed = pool.completed
-
-        pct = 0
-        if pool.assigned:
-            pct = float(completed) / pool.assigned
-
-        pool.logger.info(f'{pct:.2%} of jobs completed')
-        return completed >= pool.assigned
-
-    # print_completed_percentage() returns True if we're done.
-    while not print_completed_percentage():
-        if pool.join(interval):
-            return
-
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT
 
@@ -476,8 +454,7 @@ class GGShrink:
                     self.workers_for_segment_stop.addCommand(cmd)
             if self.shutdown_requested:
                 break
-            # TODO: remove?
-            print_progress(self.workers_for_segment_stop, interval=1)
+            self.workers_for_segment_stop.join()
             for task in self.workers_for_segment_stop.getCompletedItems():
                 if task.was_successful():
                     segments_stop_successful.append(task.segment)
