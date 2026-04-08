@@ -1,11 +1,39 @@
 -- start_ignore
-DROP LANGUAGE IF EXISTS plpython3u;
 DROP VIEW IF EXISTS busy;
 DROP VIEW IF EXISTS cancel_all;
 DROP TABLE IF EXISTS bigtable;
 -- end_ignore
 
-CREATE LANGUAGE plpython3u;
+do $$ 
+begin /*in func*/
+  execute $func$ /*in func*/
+    drop language if exists plpythonu cascade; /*in func*/
+  $func$; /*in func*/
+  begin /*in func*/
+    execute $func$ /*in func*/
+      create language plpythonu; /*in func*/
+    $func$; /*in func*/
+  exception /*in func*/
+    when others then /*in func*/
+      if SQLERRM = 'could not access file "$libdir/plpython2": No such file or directory' then /*in func*/
+        execute $func$ /*in func*/
+          drop language if exists plpython3u cascade; /*in func*/
+        $func$; /*in func*/
+        begin /*in func*/
+          execute $func$ /*in func*/
+            create language plpython3u; /*in func*/
+            alter language plpython3u rename to plpythonu; /*in func*/
+          $func$; /*in func*/
+        exception /*in func*/
+          when others then /*in func*/
+            raise exception 'Could not create or rename PL/Python language: %', SQLERRM; /*in func*/
+        end; /*in func*/
+      else /*in func*/
+        raise exception 'Failed to create PL/Pythonu: %', SQLERRM; /*in func*/
+      end if; /*in func*/
+  end; /*in func*/
+end; /*in func*/
+$$;
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 
 CREATE RESOURCE GROUP rg1_cpuset_test WITH (memory_limit = 10, cpuset='0');
@@ -66,7 +94,7 @@ for i in range(1000):
 		return False
 
 return True
-$$ LANGUAGE plpython3u;
+$$ LANGUAGE plpythonu;
 
 -- create a resource group that contains all the cpu cores
 CREATE FUNCTION create_allcores_group(grp TEXT) RETURNS BOOL AS $$
@@ -90,7 +118,7 @@ if line != "0":
 	return False
 
 return True
-$$ LANGUAGE plpython3u;
+$$ LANGUAGE plpythonu;
 
 -- check whether the cpuset value in cgroup is valid according to the rule
 CREATE FUNCTION check_rules() RETURNS BOOL AS $$
@@ -157,7 +185,7 @@ if len(default_cpuset & groups_cpuset) > 0 and \
 	return False
 
 return True
-$$ LANGUAGE plpython3u;
+$$ LANGUAGE plpythonu;
 
 CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
@@ -306,7 +334,10 @@ DROP RESOURCE GROUP rg1_cpuset_test;
 DROP FUNCTION check_rules();
 DROP FUNCTION check_cpuset(TEXT, TEXT);
 DROP FUNCTION create_allcores_group(TEXT);
-DROP LANGUAGE IF EXISTS plpython3u CASCADE;
+-- start_ignore
+2:DROP LANGUAGE IF EXISTS plpythonu CASCADE;
+2:DROP LANGUAGE IF EXISTS plpython3u CASCADE;
+-- end_ignore
 DROP VIEW cancel_all;
 DROP VIEW busy;
 DROP TABLE bigtable;
