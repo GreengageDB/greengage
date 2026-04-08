@@ -495,11 +495,11 @@ assign_gp_session_role(const char *newval, void *extra)
 
 
 /*
- * Check and Assign routines for "gp_role" option. Initially,
- * this variable had context PGC_SUSET so that is could only be set by
- * a superuser via the SET command. In greengage, we swapped it
+ * Check and Assign routines for "gp_role" option.
+ * Note: initially, this variable had context PGC_SUSET so that is could only
+ * be set by a superuser via the SET command. In greengage, we swapped it
  * to PGC_BACKEND, as the code responsible for changing Gp_role at runtime
- * is outdated and doesn't work anymore.
+ * is outdated.
  *
  * See src/backend/util/misc/guc.c for option definition.
  */
