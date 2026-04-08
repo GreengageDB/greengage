@@ -87,7 +87,7 @@ RETURNS integer as $$
       else:
         f.seek(corruption_offset, 2)
 
-      f.write(bytes(write_char.encode("utf-8")))
+      f.write(write_char.encode("utf-8"))
       f.close()
 
   return 0

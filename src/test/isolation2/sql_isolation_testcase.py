@@ -485,7 +485,7 @@ class SQLIsolationExecutor(object):
             # Figure out the widths of each column.
             fields = r.listfields()
             for f in fields:
-                if sys.version_info[0] < 3:
+                if sys.version_info[0] == 2:
                     width = len(str(f))
                 else:
                     width = len(str(f).encode('utf-8'))
@@ -498,7 +498,7 @@ class SQLIsolationExecutor(object):
                     if col is None:
                         col = ""
 
-                    if sys.version_info[0] < 3:
+                    if sys.version_info[0] == 2:
                         width = len(str(col))
                     else:
                         width = len(str(col).encode('utf-8'))
@@ -542,7 +542,7 @@ class SQLIsolationExecutor(object):
                             if type(elem) == bool:
                                 col[i] = elem = 't' if elem else 'f'
                         col = "{" + ",".join([str(elem) for elem in col]) + "}"
-                    if sys.version_info[0] < 3:
+                    if sys.version_info[0] == 2:
                         result += (" " + (str(col).decode('utf-8')).ljust(widths[colno]) + " ").encode('utf-8')
                     else:
                         result += " " + str(col).ljust(widths[colno]) + " "
@@ -759,7 +759,6 @@ class SQLIsolationExecutor(object):
                 cmd_output = gpsubprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
                 if not bg_mode:
                     stdout, _ = cmd_output.communicate()
-                    stdout = stdout.decode('utf-8')
                     print(file=output_file)
                     if mode == '\\retcode':
                         print('-- start_ignore', file=output_file)
