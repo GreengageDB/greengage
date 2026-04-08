@@ -17,8 +17,8 @@ try:
     from gppylib.system.environment import *
     from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
-    from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
     from ggrebalance_modules.rebalance_commons import interactive_check_yesno
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED, get_table_distr_segment_count
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
@@ -523,6 +523,12 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE(self) -> None:
+        # In some rare cases there can be tables left, that
+        # have been already redistributed, but the status is still 'none'.
+        # To handle it, we cleanup all tables with status 'none' at the first
+        # enter of rollback operation.
+        self.rebalance_schema.clearTablesToRebalanceWithStatus('none')
+
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START')
 
     @wrap_func_with_faults
@@ -638,43 +644,54 @@ class GGShrink:
                 fun(self, attempt)
             return func_with_faults
 
-        def table_exists(self, conn: dbconn.Connection, schema_name: str, rel_name: str) -> bool:
+        def table_exists(self, conn: dbconn.Connection) -> bool:
             if dbconn.querySingleton(conn, f"""
                 SELECT count(1)
                 FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE c.relname = '{escape_string(rel_name)}' AND n.nspname = '{escape_string(schema_name)}' AND c.relnamespace = n.oid
+                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}'
                 """) == 0:
                 return False
             return True
 
-        def db_exists(self, conn: dbconn.Connection, db_name: str) -> bool:
-            if dbconn.querySingleton(conn, f"""SELECT count(*) FROM pg_database WHERE datname = '{escape_string(db_name)}'""") == 0:
+        def db_exists(self, conn: dbconn.Connection) -> bool:
+            if dbconn.querySingleton(conn, f"""SELECT count(*) FROM pg_database WHERE datname = '{escape_string(self.db_name)}'""") == 0:
                 return False
             return True
+
+        def table_is_rebalanced(self, conn: dbconn.Connection) -> bool:
+            if get_table_distr_segment_count(conn, self.schema_name, self.rel_name) != self.target_segment_count:
+                return False
+            return True
+
+        def rebalance_table(self, conn: dbconn.Connection) -> None:
+            dbconn.execSQL(conn,
+                           f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
+                           REBALANCE {self.target_segment_count}''')
 
         @wrap_table_rebalance_with_faults
         def process_table(self, attempt: int) -> None:
             self.shrink.logger.info(f'Start table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}" to {self.target_segment_count} segments (attempt {attempt})')
             self.shrink.rebalance_schema.setTableRebalanceStartTime(self.db_name, self.schema_name, self.rel_name)
-            if self.db_exists(self.shrink.rebalance_schema.conn, self.db_name):
+            if self.db_exists(self.shrink.rebalance_schema.conn):
                 dburl = dbconn.DbURL(dbname=self.db_name, port=self.shrink.gpEnv.getCoordinatorPort())
                 with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                     dbconn.execSQL(conn, 'BEGIN')
 
-                    table_exists = self.table_exists(conn, self.schema_name, self.rel_name)
-                    if table_exists:
-                        dbconn.execSQL(conn,
-                                    f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
-                                    REBALANCE {self.target_segment_count}''')
+                    if self.table_exists(conn):
+                        if not self.table_is_rebalanced(conn):
+                            self.rebalance_table(conn)
+                        else:
+                            self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" is already rebalanced''')
                         if self.shrink.options.analyze:
                             dbconn.execSQL(conn,
                                            f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
+                    dbconn.execSQL(conn, 'COMMIT')
+
                     inject_fault(f'before_set_status_{self.db_name}.{self.schema_name}.{self.rel_name}')
                     self.shrink.rebalance_schema.setStatusForTableToRebalance(self.db_name, self.schema_name, self.rel_name, self.table_status_after_rebalance)
-                    dbconn.execSQL(conn, 'COMMIT')
             else:
                 self.shrink.logger.info(f'''DB "{self.db_name}" doesn't exist, skipping actual rebalance for "{self.schema_name}"."{self.rel_name}"''')
             self.shrink.logger.info(f'Complete table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}"')
