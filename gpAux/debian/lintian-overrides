@@ -34,4 +34,4 @@ package-contains-hardlink opt/greengagedb/greengage7/share/postgresql/timezone/*
 
 # plperl.so is linked against libperl5.34 (pinned in shlibs:Depends).
 # The versioned RUNPATH matches the exact Perl version this package depends on.
-custom-library-search-path [opt/greengagedb/greengage7/lib/postgresql/plperl.so]
+custom-library-search-path RUNPATH /usr/lib/x86_64-linux-gnu/perl/5.34/CORE [opt/greengagedb/greengage7/lib/postgresql/plperl.so]
