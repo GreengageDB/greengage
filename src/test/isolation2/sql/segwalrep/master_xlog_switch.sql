@@ -1,6 +1,12 @@
 -- Test for verifying if xlog seg created while basebackup
 -- dumps out data does not get cleaned
 
+-- start_ignore
+DROP LANGUAGE IF EXISTS plpython3u CASCADE;
+! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
+! gpstop -u;
+CREATE LANGUAGE plpython3u;
+-- end_ignore
 include: helpers/gp_management_utils_helpers.sql;
 
 -- Inject fault after checkpoint creation in basebackup
@@ -43,3 +49,7 @@ FROM gp_segment_configuration WHERE content=-1 and role='p';
 -- See if recovery.conf exists (Yes - Pass)
 SELECT application_name, state FROM pg_stat_replication;
 !\retcode ls /tmp/master_xlog_switch_test/recovery.conf;
+-- start_ignore
+! gpconfig -r plpython3.python_path --skipvalidation;
+! gpstop -u;
+-- end_ignore

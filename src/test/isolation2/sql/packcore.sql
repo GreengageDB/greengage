@@ -1,4 +1,7 @@
 -- start_ignore
+DROP LANGUAGE IF EXISTS plpython3u CASCADE;
+! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
+! gpstop -u;
 CREATE LANGUAGE plpython3u;
 -- end_ignore
 
@@ -117,3 +120,7 @@ stderr: {stderr}
                    corefile])
 $$;
 -- vi: sw=4 et :
+-- start_ignore
+! gpconfig -r plpython3.python_path --skipvalidation;
+! gpstop -u;
+-- end_ignore
