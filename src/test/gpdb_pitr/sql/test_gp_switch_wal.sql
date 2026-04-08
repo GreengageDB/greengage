@@ -2,12 +2,6 @@
 -- constructed on the individual segments so that their timeline ids are
 -- used instead of each result having the same timeline id.
 
--- start_ignore
-DROP LANGUAGE IF EXISTS plpython3u CASCADE;
-! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
-! gpstop -u;
-CREATE LANGUAGE plpython3u;
--- end_ignore
 include: helpers/server_helpers.sql;
 
 -- Prepare PITR extension
@@ -44,7 +38,3 @@ SELECT gp_segment_id, substring(pg_walfile_name, 1, 8) FROM gp_switch_wal() ORDE
 -- test simple gp_switch_wal() error scenarios
 SELECT gp_switch_wal() FROM gp_dist_random('gp_id');
 CREATE TABLE this_ctas_should_fail AS SELECT gp_segment_id AS contentid, pg_switch_wal, pg_walfile_name FROM gp_switch_wal();
--- start_ignore
-! gpconfig -r plpython3.python_path --skipvalidation;
-! gpstop -u;
--- end_ignore

@@ -759,6 +759,7 @@ class SQLIsolationExecutor(object):
                 cmd_output = gpsubprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
                 if not bg_mode:
                     stdout, _ = cmd_output.communicate()
+                    stdout = stdout.decode('utf-8')
                     print(file=output_file)
                     if mode == '\\retcode':
                         print('-- start_ignore', file=output_file)

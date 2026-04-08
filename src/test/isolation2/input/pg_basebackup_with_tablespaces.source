@@ -1,9 +1,3 @@
--- start_ignore
-DROP LANGUAGE IF EXISTS plpython3u CASCADE;
-! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
-! gpstop -u;
-CREATE LANGUAGE plpython3u;
--- end_ignore
 include: helpers/gp_management_utils_helpers.sql;
 
 -- Given a segment with a database that has a tablespace
@@ -107,8 +101,4 @@ select validate_tablespace_symlink('@testtablespace@/some_basebackup_datadir', '
 drop tablespace some_basebackup_tablespace;
 !\retcode rm -rf @testtablespace@/some_basebackup_datadir/;
 !\retcode rm -rf @testtablespace@/some_basebackup_tablespace_c0/100;
--- start_ignore
-! gpconfig -r plpython3.python_path --skipvalidation;
-! gpstop -u;
--- end_ignore
 

@@ -1,9 +1,3 @@
--- start_ignore
-DROP LANGUAGE IF EXISTS plpython3u CASCADE;
-! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
-! gpstop -u;
-CREATE LANGUAGE plpython3u;
--- end_ignore
 include: helpers/gp_management_utils_helpers.sql;
 
 
@@ -39,8 +33,4 @@ select pg_basebackup(address, dbid, port, null, '@testtablespace@/some_isolation
 
 -- Cleanup things we've created
 !\retcode rm -rf @testtablespace@/some_isolation2_pg_basebackup;
--- start_ignore
-! gpconfig -r plpython3.python_path --skipvalidation;
-! gpstop -u;
--- end_ignore
 
