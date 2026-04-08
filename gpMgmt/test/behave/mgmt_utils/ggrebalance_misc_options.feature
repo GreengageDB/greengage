@@ -743,7 +743,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -757,7 +757,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | 0           |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.1. Estimated shrink rate      | 0 MB/s      |
           |  3.2. Estimated time             | not defined |
          And all files in gpAdminLogs directory are deleted
 
@@ -775,7 +775,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -789,7 +789,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | 0           |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.1. Estimated shrink rate      | 0 MB/s      |
           |  3.2. Estimated time             | not defined |
          And all files in gpAdminLogs directory are deleted
 
@@ -807,7 +807,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -821,7 +821,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
@@ -839,7 +839,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -853,7 +853,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
@@ -869,7 +869,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -883,7 +883,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | 0           |
           |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | 0 s         |
          And all files in gpAdminLogs directory are deleted
 
@@ -900,7 +900,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -913,7 +913,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | 0           |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.1. Estimated shrink rate      | 0 MB/s      |
           |  3.2. Estimated time             | not defined |
          And all files in gpAdminLogs directory are deleted
 
@@ -931,7 +931,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -944,7 +944,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | 0           |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.1. Estimated shrink rate      | 0 MB/s      |
           |  3.2. Estimated time             | not defined |
          And all files in gpAdminLogs directory are deleted
 
@@ -962,7 +962,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -975,7 +975,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
@@ -993,7 +993,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -1006,7 +1006,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | > 0         |
           |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
@@ -1023,7 +1023,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
                     WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
                     WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
-                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.1. Estimated shrink rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
                     WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
                     ELSE stat_value
                 END AS stat_value
@@ -1036,5 +1036,5 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.1. Bytes processed            | > 0         |
           |  2.2. Bytes left to process      | 0           |
           |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.1. Estimated shrink rate      | > 0 MB/s    |
           |  3.2. Estimated time             | 0 s         |

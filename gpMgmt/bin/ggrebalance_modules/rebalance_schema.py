@@ -179,7 +179,7 @@ rebalance_progress_normal_flow AS
     FROM stat_in_processing
     UNION
     SELECT
-        '3.1. Estimated rebalance rate' AS stat_name,
+        '3.1. Estimated shrink rate' AS stat_name,
         (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
     FROM stat_processed
     UNION
@@ -239,7 +239,7 @@ rebalance_progress_rollback_flow AS
     FROM stat_in_processing
     UNION
     SELECT
-        '3.1. Estimated rebalance rate' AS stat_name,
+        '3.1. Estimated shrink rate' AS stat_name,
         (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
     FROM stat_processed
     UNION
