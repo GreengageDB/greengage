@@ -601,9 +601,9 @@ def checkReplicatedDistribPolicy():
                 setError(ERROR_NOREPAIR)
                 logger.info('[FAIL] replicated tables')
                 myprint(
-                        '[ERROR]: Some columns, containing volatile expressions as defaults, '
+                        '[ERROR]: %d columns, containing volatile expressions as defaults, '
                         'have violated replicated table\'s distribution policy. '
-                        'This must be manually resolved. Check the gpcheckcat log for details.'
+                        'This must be manually resolved. Check the gpcheckcat log for details.' % len(err)
                     )
                 logger.error('replicated tables has %d issue(s)' % len(err))
                 logger.error('Replace the VOLATILE defaults with a STABLE expression via `ALTER TABLE ... SET DEFAULT ...`, '

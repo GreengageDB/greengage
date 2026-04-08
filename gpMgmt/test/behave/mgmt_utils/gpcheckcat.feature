@@ -241,7 +241,7 @@ Feature: gpcheckcat tests
         Then psql should return a return code of 0
         When the user runs "gpcheckcat -R replicated_distribution_policy policy_violation_db"
         Then gpcheckcat should return a return code of 3
-        Then gpcheckcat should print "have violated replicated table's distribution policy" to stdout
+        Then gpcheckcat should print "2 columns, containing volatile expressions as defaults, have violated replicated table's distribution policy" to stdout
         And the user runs "dropdb constraint_db"
 
     Scenario: gpcheckcat should report, but not repair, invalid policy issues
