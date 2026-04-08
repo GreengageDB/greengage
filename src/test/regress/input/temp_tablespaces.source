@@ -81,7 +81,6 @@ CREATE OR REPLACE FUNCTION gp_tablespace_watch_stop()
     EXECUTE ON ALL SEGMENTS
 AS $$
 import subprocess
-import sys
 cmd = "pkill file_monitor"
 cmd = ["bash", "-c", cmd]
 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
