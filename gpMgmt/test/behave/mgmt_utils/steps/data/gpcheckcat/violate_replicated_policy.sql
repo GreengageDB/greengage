@@ -40,18 +40,6 @@ CREATE TABLE dist_replicated_non_vol(
     c INT DEFAULT fn_val()
 ) DISTRIBUTED REPLICATED;
 
-CREATE TABLE dist_by_key(
-    a FLOAT,
-    b INT,
-    c INT DEFAULT 42
-) DISTRIBUTED BY (a);
-
-CREATE TABLE dist_randomly (
-    a FLOAT,
-    b INT,
-    c INT DEFAULT 42
-) DISTRIBUTED RANDOMLY;
-
 -- Replace already used function to break policy
 CREATE OR REPLACE FUNCTION fn_vol()
         RETURNS int
