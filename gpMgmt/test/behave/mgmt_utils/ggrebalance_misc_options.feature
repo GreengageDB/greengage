@@ -530,24 +530,42 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
          And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp
 
-    Scenario: test 21. Check '--simple-progress' option.
+    Scenario: test 21. Check '--no-progress', '--simple-progress' and '--detailed-progress' options.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
          And database "test_db_1" exists
          And schema "test_schema_1" exists in "test_db_1"
-         And there is a "heap" table "test_schema_1.test_table_0" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_6" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_7" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_8" in "test_db_1" with "500" rows
-         And there is a "heap" table "test_schema_1.test_table_9" in "test_db_1" with "500" rows
+         And there is a "heap" table "test_schema_1.test_table_0" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_6" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_7" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_8" in "test_db_1" with "50000" rows
+         And there is a "heap" table "test_schema_1.test_table_9" in "test_db_1" with "50000" rows
          And all files in gpAdminLogs directory are deleted
 
+         # Check for '--no-progress'
+         And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE_begin"
+        When the user runs "ggrebalance --no-progress --non-interactive-mode -n 1 -x 3 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT to_regclass('ggrebalance.rebalance_progress') IS NOT NULL AS progress_view_exists;
+            """
+        Then validate that following rows are in the stored rows
+          |  progress_view_exists  |
+          |  f                     |
+        When the user runs "ggrebalance -r -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+
+         # Checks for '--simple-progress'
          # Check progress report before any table is redistributed
          And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE_begin"
         When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 3 --skip-rebalance"
@@ -706,25 +724,12 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  stat_name                       | stat_value |
           |  1.1 Tables rollback in progress | 0          |
           |  1.2 Tables left to rollback     | 0          |
-
-    Scenario: test 21. Check '--detailed-progress' option with normal flow.
-        Given the database is not running
-         And a working directory of the test as '/data/gpdata/ggrebalance'
-         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
-         And database "test_db_1" exists
-         And schema "test_schema_1" exists in "test_db_1"
-         And there is a "heap" table "test_schema_1.test_table_0" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_6" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_7" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_8" in "test_db_1" with "1000000" rows
-         And there is a "heap" table "test_schema_1.test_table_9" in "test_db_1" with "1000000" rows
          And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
 
+         # Checks for '--detailed-progress'
          # Check progress report before any table is redistributed
          And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE_begin"
         When the user runs "ggrebalance --detailed-progress --non-interactive-mode -n 1 -x 3 --skip-rebalance"
