@@ -22,6 +22,12 @@ class RebalanceSchema:
     STATE_CATEGORY_REBALANCE = 'REBALANCE'
     STATE_CATEGORY_MAIN = 'MAIN'
 
+    class ProgressType(Enum):
+        PROGRESS_NOT_DEFINED = 0
+        PROGRESS_NO = 1
+        PROGRESS_SIMPLE = 2
+        PROGRESS_DETAILED = 3
+
     def __init__(self, conn: dbconn.Connection):
         self.schema_name = 'ggrebalance'
         self.rebalance_status = 'rebalance_status'
@@ -30,8 +36,9 @@ class RebalanceSchema:
         self.saved_plan = 'saved_plan'
         self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
+        self.progress_type = self.ProgressType.PROGRESS_NOT_DEFINED
 
-    def createSchema(self, plan: Plan, options: Any, shrink_rollback_states: List[str]) -> None:
+    def createSchema(self, plan: Plan, progress_type: ProgressType, shrink_rollback_states: List[str]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, f'CREATE SCHEMA {self.schema_name}')
         dbconn.execSQL(self.conn,
@@ -71,7 +78,9 @@ RETURNS boolean AS $$
         FALSE)
 $$ LANGUAGE sql''')
 
-        if options.simple_progress:
+        self.progress_type = progress_type
+
+        if self.progress_type == self.ProgressType.PROGRESS_SIMPLE:
 
             dbconn.execSQL(self.conn, f'''
 CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
@@ -112,8 +121,140 @@ SELECT * FROM rebalance_progress_normal_flow WHERE NOT (SELECT rollback_in_progr
 UNION ALL
 SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progress FROM cond);''')
 
-        elif options.detailed_progress:
-            pass
+        elif self.progress_type == self.ProgressType.PROGRESS_DETAILED:
+
+            dbconn.execSQL(self.conn, f'''
+CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
+WITH
+cond AS (SELECT ggrebalance._is_rollback() AS rollback_in_progress),
+rebalance_progress_normal_flow AS
+    (
+    WITH
+    stat_processed AS (
+        SELECT
+            count(1) as tables_processed,
+            coalesce(sum(source_bytes), 0)::float AS bytes_processed,
+            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - max(rebalance_started))), 0)::float AS est_processing_rate
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
+        ),
+    stat_in_processing AS (
+        SELECT
+            count(1) as tables_in_processing,
+            coalesce(sum(source_bytes), 0) bytes_in_processing
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL
+        ),
+    stat_left_to_process AS (
+        SELECT
+            coalesce(sum(source_bytes), 0)::float as bytes_left_to_process
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none'
+        )
+    SELECT
+        '1.1. Tables shrinked' AS stat_name,
+        tables_processed::text AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '1.3. Tables left to shrink' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
+    UNION
+    SELECT
+        '1.2. Tables shrink in progress' AS stat_name,
+        tables_in_processing::text AS stat_value
+    FROM stat_in_processing
+    UNION
+    SELECT
+        '2.1. Bytes processed' AS stat_name,
+        bytes_processed::text AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '2.2. Bytes left to process' AS stat_name,
+        bytes_left_to_process::text AS stat_value
+    FROM stat_left_to_process
+    UNION
+    SELECT
+        '2.3. Bytes in progress' AS stat_name,
+        bytes_in_processing::text AS stat_value
+    FROM stat_in_processing
+    UNION
+    SELECT
+        '3.1. Estimated rebalance rate' AS stat_name,
+        (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '3.2. Estimated time' AS stat_name,
+        CASE
+            WHEN p.est_processing_rate = 0 THEN 'not defined'
+            ELSE (l.bytes_left_to_process / p.est_processing_rate)::text || ' s'
+        END AS stat_value
+    FROM stat_left_to_process l, stat_processed p 
+    ORDER BY stat_name ASC
+    ),
+rebalance_progress_rollback_flow AS
+    (
+    WITH
+    stat_processed AS (
+        SELECT
+            count(1) as tables_processed,
+            coalesce(sum(source_bytes), 0)::float AS bytes_processed,
+            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - max(rebalance_started))), 0)::float AS est_processing_rate
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
+        ),
+    stat_in_processing AS (
+        SELECT
+            count(1) as tables_in_processing,
+            coalesce(sum(source_bytes), 0) bytes_in_processing
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL
+        ),
+    stat_left_to_process AS (
+        SELECT
+            coalesce(sum(source_bytes), 0)::float as bytes_left_to_process
+        FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done'
+        )
+    SELECT
+        '1.1 Tables rollback in progress' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
+    UNION
+    SELECT
+        '1.2 Tables left to rollback' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
+    UNION
+    SELECT
+        '2.1. Bytes processed' AS stat_name,
+        bytes_processed::text AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '2.2. Bytes left to process' AS stat_name,
+        bytes_left_to_process::text AS stat_value
+    FROM stat_left_to_process
+    UNION
+    SELECT
+        '2.3. Bytes in progress' AS stat_name,
+        bytes_in_processing::text AS stat_value
+    FROM stat_in_processing
+    UNION
+    SELECT
+        '3.1. Estimated rebalance rate' AS stat_name,
+        (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '3.2. Estimated time' AS stat_name,
+        CASE
+            WHEN p.est_processing_rate = 0 THEN 'not defined'
+            ELSE (l.bytes_left_to_process / p.est_processing_rate)::text || ' s'
+        END AS stat_value
+    FROM stat_left_to_process l, stat_processed p
+    ORDER BY stat_name ASC
+    )
+SELECT * FROM rebalance_progress_normal_flow WHERE NOT (SELECT rollback_in_progress FROM cond)
+UNION ALL
+SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progress FROM cond)''')
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
@@ -214,12 +355,11 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
                        f'''DELETE FROM {self.schema_name}.{self.table_rebalance_status_detail}
                        WHERE (status = '{status}')''')
 
-    def addTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
-        # TODO: set source_bytes here?
+    def addTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str, rel_size: int) -> None:
         dbconn.execSQL(self.conn,
                        f'''INSERT INTO {self.schema_name}.{self.table_rebalance_status_detail}
                        VALUES ('{escape_string(db)}', '{escape_string(schema_name)}', '{escape_string(rel_name)}', '{status}',
-                                'SHRINK', NULL, NULL, 0 )''')
+                                'SHRINK', NULL, NULL, {rel_size} )''')
 
     def setTableRebalanceStartTime(self, db: str, schema_name: str, rel_name: str) -> None:
         dbconn.execSQL(self.conn,
@@ -274,3 +414,18 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
 
         return result
 
+    def getProgressType(self) -> ProgressType:
+        if self.progress_type != self.ProgressType.PROGRESS_NOT_DEFINED:
+            return self.progress_type
+        # We check the progress type basing on the existence of the progress view
+        # and number of values there.
+        if 0 == int(dbconn.querySingleton(self.conn,
+            f"SELECT CASE WHEN to_regclass('{self.schema_name}.{self.rebalance_progress_view}') IS NULL THEN 0 ELSE 1 END AS view_exists")):
+            self.progress_type = self.ProgressType.PROGRESS_NO
+        else:
+            if 3 >= int(dbconn.querySingleton(self.conn,
+                f"SELECT count(1) FROM {self.schema_name}.{self.rebalance_progress_view}")):
+                self.progress_type = self.ProgressType.PROGRESS_SIMPLE
+            else:
+                self.progress_type = self.ProgressType.PROGRESS_DETAILED
+        return self.progress_type

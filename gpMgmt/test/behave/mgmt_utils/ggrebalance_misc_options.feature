@@ -530,7 +530,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "soft shutdown, waiting for critical operations to finish..." to logfile with latest timestamp
          And ggrebalance should print "Rebalance was interrupted" to logfile with latest timestamp
 
-    Scenario: test 21. Check '--simple-progress' option with normal flow.
+    Scenario: test 21. Check '--simple-progress' option.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
@@ -550,7 +550,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
 
          # Check progress report before any table is redistributed
          And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE_begin"
-        When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 3  --skip-rebalance"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 3 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And unset fault inject
         When execute following sql in db "postgres" and store result in the context
@@ -706,3 +706,330 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  stat_name                       | stat_value |
           |  1.1 Tables rollback in progress | 0          |
           |  1.2 Tables left to rollback     | 0          |
+
+    Scenario: test 21. Check '--detailed-progress' option with normal flow.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_0" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_6" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_7" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_8" in "test_db_1" with "1000000" rows
+         And there is a "heap" table "test_schema_1.test_table_9" in "test_db_1" with "1000000" rows
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report before any table is redistributed
+         And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE_begin"
+        When the user runs "ggrebalance --detailed-progress --non-interactive-mode -n 1 -x 3 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1. Tables shrinked            | 0           |
+          |  1.2. Tables shrink in progress  | 0           |
+          |  1.3. Tables left to shrink      | 10          |
+          |  2.1. Bytes processed            | 0           |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | 0           |
+          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.2. Estimated time             | not defined |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report before finish of first table redistribution
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_0"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1. Tables shrinked            | 0           |
+          |  1.2. Tables shrink in progress  | 1           |
+          |  1.3. Tables left to shrink      | 9           |
+          |  2.1. Bytes processed            | 0           |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.2. Estimated time             | not defined |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report when some tables have been redistributed
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_3"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1. Tables shrinked            | 3           |
+          |  1.2. Tables shrink in progress  | 1           |
+          |  1.3. Tables left to shrink      | 6           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | > 0 s       |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report before finish of last table redistribution
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_9"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1. Tables shrinked            | 9           |
+          |  1.2. Tables shrink in progress  | 1           |
+          |  1.3. Tables left to shrink      | 0           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | > 0 s       |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report when all tables have been redistributed
+         And set fault inject "on_enter_STATE_SHRINK_TABLES_DONE_end"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1. Tables shrinked            | 10          |
+          |  1.2. Tables shrink in progress  | 0           |
+          |  1.3. Tables left to shrink      | 0           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | 0           |
+          |  2.3. Bytes in progress          | 0           |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | 0 s         |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report at rollback before any table is rolled back
+         And set fault inject "on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE_end"
+        When the user runs "ggrebalance -r -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1 Tables rollback in progress | 0           |
+          |  1.2 Tables left to rollback     | 10          |
+          |  2.1. Bytes processed            | 0           |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | 0           |
+          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.2. Estimated time             | not defined |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report at rollback before finish of first table redistribution
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_0"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1 Tables rollback in progress | 1           |
+          |  1.2 Tables left to rollback     | 9           |
+          |  2.1. Bytes processed            | 0           |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | 0 MB/s      |
+          |  3.2. Estimated time             | not defined |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report at rollback when some tables have been redistributed
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_3"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1 Tables rollback in progress | 1           |
+          |  1.2 Tables left to rollback     | 6           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | > 0 s       |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report at rollback before finish of last table redistribution
+         And set fault inject "before_set_status_test_db_1.test_schema_1.test_table_9"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "failed to redistribute some tables during shrink" to logfile with latest timestamp
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1 Tables rollback in progress | 1           |
+          |  1.2 Tables left to rollback     | 0           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | > 0         |
+          |  2.3. Bytes in progress          | > 0         |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | > 0 s       |
+         And all files in gpAdminLogs directory are deleted
+
+         # Check progress report at rollback when all tables have been redistributed
+         And set fault inject "on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE_begin"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 1
+         And unset fault inject
+        When execute following sql in db "postgres" and store result in the context
+            """
+            SELECT
+                stat_name,
+                CASE
+                    WHEN stat_name = '2.1. Bytes processed' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.2. Bytes left to process' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '2.3. Bytes in progress' AND stat_value != '0' THEN '> 0'
+                    WHEN stat_name = '3.1. Estimated rebalance rate' AND stat_value != '0 MB/s' THEN '> 0 MB/s'
+                    WHEN stat_name = '3.2. Estimated time' AND stat_value != 'not defined' AND stat_value != '0 s' THEN '> 0 s'
+                    ELSE stat_value
+                END AS stat_value
+            FROM ggrebalance.rebalance_progress;
+            """
+        Then validate that following rows are in the stored rows
+          |  stat_name                       | stat_value  |
+          |  1.1 Tables rollback in progress | 0           |
+          |  1.2 Tables left to rollback     | 0           |
+          |  2.1. Bytes processed            | > 0         |
+          |  2.2. Bytes left to process      | 0           |
+          |  2.3. Bytes in progress          | 0           |
+          |  3.1. Estimated rebalance rate   | > 0 MB/s    |
+          |  3.2. Estimated time             | 0 s         |

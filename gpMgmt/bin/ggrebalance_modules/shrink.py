@@ -718,11 +718,16 @@ class GGShrink:
             if database_name != 'template0':
                 databases_to_process.append(database_name)
 
+        if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
+            str_rel_size = 'pg_catalog.pg_relation_size(c.oid) as rel_size'
+        else:
+            str_rel_size = '0 as rel_size'
+
         for db in databases_to_process:
             dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                 cursor = dbconn.query(conn,
-                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable
+                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_rel_size}
                                       FROM pg_class c
                                       JOIN pg_namespace n ON c.relnamespace = n.oid
                                       JOIN gp_distribution_policy p ON c.oid = p.localoid
@@ -731,10 +736,10 @@ class GGShrink:
                                       c.relpersistence != 't' AND
                                       p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
                                       n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
-                for schema_name, rel_name, rel_kind, external_writable in cursor:
+                for schema_name, rel_name, rel_kind, external_writable, rel_size in cursor:
                     if rel_kind == 'f' and not external_writable:
                         continue
-                    self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status)
+                    self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, rel_size)
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
