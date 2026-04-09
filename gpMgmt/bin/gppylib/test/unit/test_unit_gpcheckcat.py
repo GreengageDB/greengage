@@ -443,6 +443,45 @@ class GpCheckCatTestCase(GpTestCase):
                 self.num_starts = 0
 
     @patch('gpcheckcat.connect2')
+    def test_checkReplicatedDistribPolicy_with_error_on_execution(self,mock_connect2):
+        # Mocking the database connection to raise an exception during execution
+
+        mock_cursor = Mock()
+        mock_connect2.return_value.cursor.return_value.__enter__.return_value = mock_cursor
+        mock_cursor.execute.side_effect = Exception("Simulated error during execution")
+
+        # Call the function to test
+        self.subject.checkReplicatedDistribPolicy()
+
+        # Assertions
+        self.assertEqual(mock_cursor.execute.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkReplicatedDistribPolicy_exception_on_connect(self, mock_connect2):
+        # Mocking the database connection to raise an exception during connection
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        # Call the function to test
+        self.subject.checkReplicatedDistribPolicy()
+
+        # Assertions
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkReplicatedDistribPolicy_exception_on_cursor_enter(self, mock_connect2):
+        # Mocking the database connection to raise an exception when entering the cursor context
+        mock_connect2.return_value.cursor.return_value.__enter__.side_effect = Exception("Simulated error entering cursor context")
+
+        # Call the function to test
+        self.subject.checkReplicatedDistribPolicy()
+
+        # Assertions
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
     def test_checkMixDistPolicy_with_error_on_execution(self,mock_connect2):
         # Mocking the database connection to raise an exception during execution
 
