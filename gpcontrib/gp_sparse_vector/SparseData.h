@@ -248,11 +248,11 @@ static inline void int8_to_compword(int64 num, char entry[9])
 static inline int64 compword_to_int8(const char *entry)
 {
 	char size = int8compstoragesize(entry);
-	int16_t num_2;
+	int16_t num_2 = 0;
 	char *numptr2 = (char *)(&num_2);
-	int32_t num_4;
+	int32_t num_4 = 0;
 	char *numptr4 = (char *)(&num_4);
-	int64 num;
+	int64 num = 0;
 	char *numptr8 = (char *)(&num);
 
 	switch(size) {

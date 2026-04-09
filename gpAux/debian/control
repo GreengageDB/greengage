@@ -6,6 +6,7 @@ Build-Depends: debhelper (>= 13),
 	 lsb-release
 
 Package: greengage6
+Priority: optional
 Architecture: any
 Depends: ${shlibs:Depends},
 	 iproute2,
