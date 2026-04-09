@@ -67,8 +67,11 @@ class RebalanceSchema:
 
         self.savePlan(plan)
 
-        states_str = ',\n'.join(f"'{s}'" for s in shrink_rollback_states)
-        dbconn.execSQL(self.conn, f'''
+        self.progress_type = progress_type
+
+        if self.progress_type != self.ProgressType.PROGRESS_NO:
+            states_str = ',\n'.join(f"'{s}'" for s in shrink_rollback_states)
+            dbconn.execSQL(self.conn, f'''
 CREATE FUNCTION ggrebalance._is_rollback()
 RETURNS boolean AS $$
     SELECT COALESCE(
@@ -77,8 +80,6 @@ RETURNS boolean AS $$
         FROM {self.schema_name}.{self.rebalance_status} WHERE state_category = 'SHRINK' ORDER BY updated DESC LIMIT 1),
         FALSE)
 $$ LANGUAGE sql''')
-
-        self.progress_type = progress_type
 
         if self.progress_type == self.ProgressType.PROGRESS_SIMPLE:
 
