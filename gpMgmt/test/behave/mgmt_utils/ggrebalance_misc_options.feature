@@ -577,7 +577,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value |
-          |  1.1. Tables shrinked            | 0          |
+          |  1.1. Tables shrunk              | 0          |
           |  1.2. Tables shrink in progress  | 0          |
           |  1.3. Tables left to shrink      | 10         |
          And all files in gpAdminLogs directory are deleted
@@ -594,7 +594,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value |
-          |  1.1. Tables shrinked            | 0          |
+          |  1.1. Tables shrunk              | 0          |
           |  1.2. Tables shrink in progress  | 1          |
           |  1.3. Tables left to shrink      | 9          |
          And all files in gpAdminLogs directory are deleted
@@ -611,7 +611,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value |
-          |  1.1. Tables shrinked            | 3          |
+          |  1.1. Tables shrunk              | 3          |
           |  1.2. Tables shrink in progress  | 1          |
           |  1.3. Tables left to shrink      | 6          |
          And all files in gpAdminLogs directory are deleted
@@ -628,7 +628,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value |
-          |  1.1. Tables shrinked            | 9          |
+          |  1.1. Tables shrunk              | 9          |
           |  1.2. Tables shrink in progress  | 1          |
           |  1.3. Tables left to shrink      | 0          |
          And all files in gpAdminLogs directory are deleted
@@ -643,7 +643,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value |
-          |  1.1. Tables shrinked            | 10         |
+          |  1.1. Tables shrunk              | 10         |
           |  1.2. Tables shrink in progress  | 0          |
           |  1.3. Tables left to shrink      | 0          |
          And all files in gpAdminLogs directory are deleted
@@ -751,7 +751,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value  |
-          |  1.1. Tables shrinked            | 0           |
+          |  1.1. Tables shrunk              | 0           |
           |  1.2. Tables shrink in progress  | 0           |
           |  1.3. Tables left to shrink      | 10          |
           |  2.1. Bytes processed            | 0           |
@@ -783,7 +783,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value  |
-          |  1.1. Tables shrinked            | 0           |
+          |  1.1. Tables shrunk              | 0           |
           |  1.2. Tables shrink in progress  | 1           |
           |  1.3. Tables left to shrink      | 9           |
           |  2.1. Bytes processed            | 0           |
@@ -815,7 +815,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value  |
-          |  1.1. Tables shrinked            | 3           |
+          |  1.1. Tables shrunk              | 3           |
           |  1.2. Tables shrink in progress  | 1           |
           |  1.3. Tables left to shrink      | 6           |
           |  2.1. Bytes processed            | > 0         |
@@ -847,7 +847,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value  |
-          |  1.1. Tables shrinked            | 9           |
+          |  1.1. Tables shrunk              | 9           |
           |  1.2. Tables shrink in progress  | 1           |
           |  1.3. Tables left to shrink      | 0           |
           |  2.1. Bytes processed            | > 0         |
@@ -877,7 +877,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
             """
         Then validate that following rows are in the stored rows
           |  stat_name                       | stat_value  |
-          |  1.1. Tables shrinked            | 10          |
+          |  1.1. Tables shrunk              | 10          |
           |  1.2. Tables shrink in progress  | 0           |
           |  1.3. Tables left to shrink      | 0           |
           |  2.1. Bytes processed            | > 0         |

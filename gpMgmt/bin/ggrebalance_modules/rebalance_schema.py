@@ -89,7 +89,7 @@ cond AS (SELECT ggrebalance._is_rollback() AS rollback_in_progress),
 rebalance_progress_normal_flow AS
     (
     SELECT
-        '1.1. Tables shrinked' AS stat_name,
+        '1.1. Tables shrunk' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
     UNION
@@ -134,7 +134,7 @@ rebalance_progress_normal_flow AS
         SELECT
             count(1) as tables_processed,
             coalesce(sum(source_bytes), 0)::float AS bytes_processed,
-            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - max(rebalance_started))), 0)::float AS est_processing_rate
+            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - min(rebalance_started))), 0)::float AS est_processing_rate
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
         ),
     stat_in_processing AS (
@@ -149,7 +149,7 @@ rebalance_progress_normal_flow AS
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none'
         )
     SELECT
-        '1.1. Tables shrinked' AS stat_name,
+        '1.1. Tables shrunk' AS stat_name,
         tables_processed::text AS stat_value
     FROM stat_processed
     UNION
@@ -199,7 +199,7 @@ rebalance_progress_rollback_flow AS
         SELECT
             count(1) as tables_processed,
             coalesce(sum(source_bytes), 0)::float AS bytes_processed,
-            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - max(rebalance_started))), 0)::float AS est_processing_rate
+            coalesce(sum(source_bytes) / EXTRACT(EPOCH FROM (max(rebalance_finished) - min(rebalance_started))), 0)::float AS est_processing_rate
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
         ),
     stat_in_processing AS (
