@@ -1,77 +1,45 @@
-# Contributor Covenant Code of Conduct
+# Greengage DB Community Code of Conduct
 
-## Our Pledge
+Greengage DB is an open community project. Every Greengage DB user or developer is responsible for making the community a place where people want to come back. We expect all community members to maintain professional ethics and communicate respectfully and politely.
 
-In the interest of fostering an open and welcoming environment, we as
-contributors and maintainers pledge to making participation in Greengage project and
-our community a harassment-free experience for everyone, regardless of age, body
-size, disability, ethnicity, sex characteristics, gender identity and expression,
-level of experience, education, socio-economic status, nationality, personal
-appearance, race, religion, or sexual identity and orientation.
+## Community Development Principles
 
-## Our Standards
+In developing code, documentation, and any other products of intellectual work, we are guided by principles that are important for the development of the community.
 
-Examples of behavior that contributes to creating a positive environment
-include:
+**Collaboration**
 
-* Using welcoming and inclusive language
-* Being respectful of differing viewpoints and experiences
-* Gracefully accepting constructive criticism
-* Focusing on what is best for the community
-* Showing empathy towards other community members
+Anyone can join the Greengage DB community and make a contribution.
 
-Examples of unacceptable behavior by participants include:
+**Equality**
 
-* The use of sexualized language or imagery and unwelcome sexual attention or
-  advances
-* Trolling, insulting/derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or electronic
-  address, without explicit permission
-* Other conduct which could reasonably be considered inappropriate in a
-  professional setting
+The contribution of each community member will be assessed equally, based on its objective significance for the project.
 
-## Our Responsibilities
+**Opportunities**
 
-Project maintainers are responsible for clarifying the standards of acceptable
-behavior and are expected to take appropriate and fair corrective action in
-response to any instances of unacceptable behavior.
+Community members who contribute to Greengage DB can influence the direction of the product's development.
 
-Project maintainers have the right and responsibility to remove, edit, or
-reject comments, commits, code, wiki edits, issues, and other contributions
-that are not aligned to this Code of Conduct, or to ban temporarily or
-permanently any contributor for other behaviors that they deem inappropriate,
-threatening, offensive, or harmful.
+**Availability**
 
-## Scope
+The project code will be distributed under an open license for community members anywhere in the world.
 
-This Code of Conduct applies both within project spaces and in public spaces
-when an individual is representing the project or its community. Examples of
-representing a project or community include using an official project e-mail
-address, posting via an official social media account, or acting as an appointed
-representative at an online or offline event. Representation of a project may be
-further defined and clarified by project maintainers.
+## Code of Conduct in Action
 
-## Enforcement
+This code of conduct applies to all available channels of interaction between community members, including comments on code or documentation, the project's social media, and online and offline events that are partially or fully dedicated to Greengage DB.
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by contacting the project team at oss-coc@vmware.com. All
-complaints will be reviewed and investigated and will result in a response that
-is deemed necessary and appropriate to the circumstances. The project team is
-obligated to maintain confidentiality with regard to the reporter of an incident.
-Further details of specific enforcement policies may be posted separately.
+Every member of the Greengage DB community is expected to adhere to the project’s code of conduct, especially when speaking on behalf of Greengage DB in the public space.
+We encourage everyone to be interested in Greengage DB, regardless of their track record or formal qualifications. This does not negate the important procedures for code and documentation quality, but it does require respectful and polite treatment.
 
-Project maintainers who do not follow or enforce the Code of Conduct in good
-faith may face temporary or permanent repercussions as determined by other
-members of the project's leadership.
+The Greengage DB project exists thanks to the voluntary contributions of its members. Some of them may leave the project over time, and this decision should be respected in the same way as their initial involvement. We expect this code of conduct to be followed in the event of parting with the project, and the departing community member is supposed to treat those who remain with respect.
 
-## Attribution
+## Appropriate Conduct
 
-This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4,
-available at https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+No personal characteristics can serve as grounds for refusing to work for the benefit of the Greengage DB project or belittling your contribution to it. This code of conduct considers any attacks on a person unacceptable. These are the basic principles of communication in the community.
 
-[homepage]: https://www.contributor-covenant.org
+Unacceptable behavior is any threat to use violence, damage social or professional reputation, expressed to an individual or a group of people. Threats to damage the Greengage DB project or its reputation or the implementation of such threats are also a violation of this code of conduct. Harassment of any kind and violation of the basic principles of communication are not tolerated in the Greengage DB community.
 
-For answers to common questions about this code of conduct, see
-https://www.contributor-covenant.org/faq
+In the event of receiving a warning about inappropriate behavior, it is necessary to immediately stop it. Subsequent violations of the Code of Conduct will serve as grounds for taking restrictive measures against the violator, up to and including exclusion from the community.
 
+## Reporting
+
+In many cases, simply sending a link to this code of conduct will be enough to maintain a good community culture. If you see a discussion where the code may potentially be violated, proactively send a link to it.
+In some cases, violations may require issuing warnings and other restrictive measures. In this case, please contact us at **code@greengagedb.org**.

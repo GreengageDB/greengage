@@ -61,7 +61,8 @@ private:
 	static CDXLNode *CreateDXLNode(CMemoryPool *mp, CMDAccessor *md_accessor,
 								   CExpression *pexpr,
 								   CColRefArray *colref_array,
-								   CMDNameArray *pdrgpmdname, ULONG ulHosts);
+								   CMDNameArray *pdrgpmdname, ULONG ulHosts,
+								   ULONG ulSessionId);
 
 	// helper function to print query expression
 	static void PrintQuery(CMemoryPool *mp, CExpression *pexprTranslated,
