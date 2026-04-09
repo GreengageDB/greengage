@@ -658,9 +658,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
             SELECT * FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value |
-          |  1.1 Tables rollback in progress | 0          |
-          |  1.2 Tables left to rollback     | 10         |
+          |  stat_name                        | stat_value |
+          |  1.1. Tables rolled back          | 0          |
+          |  1.2. Tables rollback in progress | 0          |
+          |  1.3. Tables left to rollback     | 10         |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback before finish of first table redistribution
@@ -674,9 +675,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
             SELECT * FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value |
-          |  1.1 Tables rollback in progress | 1          |
-          |  1.2 Tables left to rollback     | 9          |
+          |  stat_name                        | stat_value |
+          |  1.1. Tables rolled back          | 0          |
+          |  1.2. Tables rollback in progress | 1          |
+          |  1.3. Tables left to rollback     | 9          |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback when some tables have been redistributed
@@ -690,9 +692,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
             SELECT * FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value |
-          |  1.1 Tables rollback in progress | 1          |
-          |  1.2 Tables left to rollback     | 6          |
+          |  stat_name                        | stat_value |
+          |  1.1. Tables rolled back          | 3          |
+          |  1.2. Tables rollback in progress | 1          |
+          |  1.3. Tables left to rollback     | 6          |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback before finish of last table redistribution
@@ -706,9 +709,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
             SELECT * FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value |
-          |  1.1 Tables rollback in progress | 1          |
-          |  1.2 Tables left to rollback     | 0          |
+          |  stat_name                        | stat_value |
+          |  1.1. Tables rolled back          | 9          |
+          |  1.2. Tables rollback in progress | 1          |
+          |  1.3. Tables left to rollback     | 0          |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback when all tables have been redistributed
@@ -721,9 +725,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
             SELECT * FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value |
-          |  1.1 Tables rollback in progress | 0          |
-          |  1.2 Tables left to rollback     | 0          |
+          |  stat_name                        | stat_value |
+          |  1.1. Tables rolled back          | 10         |
+          |  1.2. Tables rollback in progress | 0          |
+          |  1.3. Tables left to rollback     | 0          |
          And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
@@ -907,14 +912,15 @@ Feature: ggrebalance behave tests (misc options scenarios)
             FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value  |
-          |  1.1 Tables rollback in progress | 0           |
-          |  1.2 Tables left to rollback     | 10          |
-          |  2.1. Bytes processed            | 0           |
-          |  2.2. Bytes left to process      | > 0         |
-          |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated shrink rate      | 0 MB/s      |
-          |  3.2. Estimated time             | not defined |
+          |  stat_name                        | stat_value  |
+          |  1.1. Tables rolled back          | 0           |
+          |  1.2. Tables rollback in progress | 0           |
+          |  1.3. Tables left to rollback     | 10          |
+          |  2.1. Bytes processed             | 0           |
+          |  2.2. Bytes left to process       | > 0         |
+          |  2.3. Bytes in progress           | 0           |
+          |  3.1. Estimated shrink rate       | 0 MB/s      |
+          |  3.2. Estimated time              | not defined |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback before finish of first table redistribution
@@ -938,14 +944,15 @@ Feature: ggrebalance behave tests (misc options scenarios)
             FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value  |
-          |  1.1 Tables rollback in progress | 1           |
-          |  1.2 Tables left to rollback     | 9           |
-          |  2.1. Bytes processed            | 0           |
-          |  2.2. Bytes left to process      | > 0         |
-          |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated shrink rate      | 0 MB/s      |
-          |  3.2. Estimated time             | not defined |
+          |  stat_name                        | stat_value  |
+          |  1.1. Tables rolled back          | 0           |
+          |  1.2. Tables rollback in progress | 1           |
+          |  1.3. Tables left to rollback     | 9           |
+          |  2.1. Bytes processed             | 0           |
+          |  2.2. Bytes left to process       | > 0         |
+          |  2.3. Bytes in progress           | > 0         |
+          |  3.1. Estimated shrink rate       | 0 MB/s      |
+          |  3.2. Estimated time              | not defined |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback when some tables have been redistributed
@@ -969,14 +976,15 @@ Feature: ggrebalance behave tests (misc options scenarios)
             FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value  |
-          |  1.1 Tables rollback in progress | 1           |
-          |  1.2 Tables left to rollback     | 6           |
-          |  2.1. Bytes processed            | > 0         |
-          |  2.2. Bytes left to process      | > 0         |
-          |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated shrink rate      | > 0 MB/s    |
-          |  3.2. Estimated time             | > 0 s       |
+          |  stat_name                        | stat_value  |
+          |  1.1. Tables rolled back          | 3           |
+          |  1.2. Tables rollback in progress | 1           |
+          |  1.3. Tables left to rollback     | 6           |
+          |  2.1. Bytes processed             | > 0         |
+          |  2.2. Bytes left to process       | > 0         |
+          |  2.3. Bytes in progress           | > 0         |
+          |  3.1. Estimated shrink rate       | > 0 MB/s    |
+          |  3.2. Estimated time              | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback before finish of last table redistribution
@@ -1000,14 +1008,15 @@ Feature: ggrebalance behave tests (misc options scenarios)
             FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value  |
-          |  1.1 Tables rollback in progress | 1           |
-          |  1.2 Tables left to rollback     | 0           |
-          |  2.1. Bytes processed            | > 0         |
-          |  2.2. Bytes left to process      | > 0         |
-          |  2.3. Bytes in progress          | > 0         |
-          |  3.1. Estimated shrink rate      | > 0 MB/s    |
-          |  3.2. Estimated time             | > 0 s       |
+          |  stat_name                        | stat_value  |
+          |  1.1. Tables rolled back          | 9           |
+          |  1.2. Tables rollback in progress | 1           |
+          |  1.3. Tables left to rollback     | 0           |
+          |  2.1. Bytes processed             | > 0         |
+          |  2.2. Bytes left to process       | > 0         |
+          |  2.3. Bytes in progress           | > 0         |
+          |  3.1. Estimated shrink rate       | > 0 MB/s    |
+          |  3.2. Estimated time              | > 0 s       |
          And all files in gpAdminLogs directory are deleted
 
          # Check progress report at rollback when all tables have been redistributed
@@ -1030,11 +1039,12 @@ Feature: ggrebalance behave tests (misc options scenarios)
             FROM ggrebalance.rebalance_progress;
             """
         Then validate that following rows are in the stored rows
-          |  stat_name                       | stat_value  |
-          |  1.1 Tables rollback in progress | 0           |
-          |  1.2 Tables left to rollback     | 0           |
-          |  2.1. Bytes processed            | > 0         |
-          |  2.2. Bytes left to process      | 0           |
-          |  2.3. Bytes in progress          | 0           |
-          |  3.1. Estimated shrink rate      | > 0 MB/s    |
-          |  3.2. Estimated time             | 0 s         |
+          |  stat_name                        | stat_value  |
+          |  1.1. Tables rolled back          | 10          |
+          |  1.2. Tables rollback in progress | 0           |
+          |  1.3. Tables left to rollback     | 0           |
+          |  2.1. Bytes processed             | > 0         |
+          |  2.2. Bytes left to process       | 0           |
+          |  2.3. Bytes in progress           | 0           |
+          |  3.1. Estimated shrink rate       | > 0 MB/s    |
+          |  3.2. Estimated time              | 0 s         |

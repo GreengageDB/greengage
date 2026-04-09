@@ -108,12 +108,17 @@ rebalance_progress_normal_flow AS
 rebalance_progress_rollback_flow AS
     (
     SELECT
-        '1.1 Tables rollback in progress' AS stat_name,
+        '1.1. Tables rolled back' AS stat_name,
+        count(1)::text AS stat_value
+    FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
+    UNION
+    SELECT
+        '1.2. Tables rollback in progress' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.2 Tables left to rollback' AS stat_name,
+        '1.3. Tables left to rollback' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
     ORDER BY stat_name ASC
@@ -215,12 +220,17 @@ rebalance_progress_rollback_flow AS
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done'
         )
     SELECT
-        '1.1 Tables rollback in progress' AS stat_name,
+        '1.1. Tables rolled back' AS stat_name,
+        tables_processed::text AS stat_value
+    FROM stat_processed
+    UNION
+    SELECT
+        '1.2. Tables rollback in progress' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.2 Tables left to rollback' AS stat_name,
+        '1.3. Tables left to rollback' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
     UNION
