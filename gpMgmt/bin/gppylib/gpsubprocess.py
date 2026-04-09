@@ -25,6 +25,7 @@ try:
 except:
     import subprocess
 from gppylib import gplog
+import sys
 
 
 logger=gplog.get_default_logger()
@@ -35,7 +36,12 @@ class Popen(subprocess.Popen):
     
     cancelRequested=False
 
-    
+    def __init__(self, *args, **kwargs):
+        if sys.version_info[0] == 3:
+            kwargs['text'] = True
+            kwargs['encoding'] = 'utf-8'
+        super(Popen, self).__init__(*args, **kwargs)
+
     def communicate2(self, timeout=2,input=None):
         """ An extension to communicate() that allows for external cancels
         to abort processing.  
@@ -105,11 +111,20 @@ class Popen(subprocess.Popen):
         # object do the translation: It is based on stdio, which is
         # impossible to combine with select (unless forcing no
         # buffering).
-        if self.universal_newlines and hasattr(file, 'newlines'):
-            if output:
-                output = self._translate_newlines(output)
-            if error:
-                error = self._translate_newlines(error)    
+        # In Python 3, we always use the text mode. Also, decoding happens here.
+        if sys.version_info[0] == 3 or (self.universal_newlines and hasattr(file, 'newlines')):
+            if sys.version_info[0] == 3:
+                kwargs = {
+                    "encoding": "utf-8",
+                    "errors": "strict",
+                }
+            else:
+                kwargs = {}
+
+            if output is not None:
+                output = self._translate_newlines(output, **kwargs)
+            if error is not None:
+                error = self._translate_newlines(error, **kwargs)
         return (output,error)
     
     
@@ -231,3 +246,9 @@ class Popen(subprocess.Popen):
                             return ([],[],[])
                 else:
                     raise
+
+def check_output(*popenargs, **kwargs):
+    if sys.version_info[0] == 3:
+        kwargs['text'] = True
+        kwargs['encoding'] = 'utf-8'
+    return subprocess.check_output(*popenargs, **kwargs)
