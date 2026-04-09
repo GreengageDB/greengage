@@ -3,8 +3,6 @@ ifeq "$(CC)" "icc"
 	USE_ICC = 1
 endif
 
-override CFLAGS+=-std=gnu99
-
 # Avoid building LLVM Bitcode for gp_sparse_vector module.
 with_llvm = no
 
@@ -24,6 +22,8 @@ else
 	include $(top_builddir)/src/Makefile.global
 	include $(top_srcdir)/contrib/contrib-global.mk
 endif
+
+override CFLAGS += -std=gnu99
 
 ifdef USE_ICC
 	override CFLAGS=-O3 -Werror -std=c99 -vec-report2 -vec-threshold0

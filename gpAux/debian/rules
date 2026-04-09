@@ -1,0 +1,43 @@
+#!/usr/bin/make -f
+# Run command: `make -C ./gpdb_src/gpAux pkg-deb`
+
+DH_VERBOSE = 1
+export DH_OPTIONS = -v
+export DEB_BUILD_OPTIONS = nocheck
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	@echo "Skipping clean"
+
+override_dh_auto_configure:
+	@echo "Skipping configure"
+
+override_dh_auto_build:
+	@echo "Skipping autobuild"
+
+override_dh_auto_install:
+	@echo "=== Building and installing with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
+	env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS \
+	$(MAKE) dist \
+		DESTDIR=$(CURDIR)/debian/tmp/$(PACKAGE_NAME) \
+		GPROOT=$(GPROOT) \
+		GPDIR=$(GPDIR) \
+		PARALLEL_MAKE_OPTS=-j$(shell nproc)
+
+override_dh_dwz:
+	@echo "Skipping dwz"
+
+override_dh_fixperms:
+	dh_fixperms
+	# Remove executable bit from Python/Perl/Bash modules without shebang
+	find $(CURDIR)/debian/$(PACKAGE_NAME) -type f \( -name "*.py" -o -name "*.pm" -o -name "*.sh" \) -executable | while read f; do \
+	    if ! head -1 "$$f" | grep -q '^#!'; then \
+	        chmod -x "$$f"; \
+	    fi; \
+	done
+
+override_dh_gencontrol:
+	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
+	dh_gencontrol
