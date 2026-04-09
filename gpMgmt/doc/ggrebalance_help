@@ -68,7 +68,8 @@ As the first step, ggrebalance will create a rebalance plan. If the plan with
 given parameters is feasible (meaning that the tool can end up with a balanced
 cluster configuration), it will continue execution.
 Next, the tool will create a 'ggrebalance' schema in the cluster to track its
-status. The plan is also saved in the schema.
+status. The plan is also saved in the schema. The schema is created in the
+'postgres' database.
 Then ggrebalance will perform cluster shrink or expand, if the target number
 of segments differs from the current one. During this phase, the tool will
 execute ALTER TABLE ... REBALANCE operations on the existing tables
@@ -81,6 +82,10 @@ a new rebalance operation.
 
 If the tool operation is interrupted and rolled back, the schema is removed as a
 result of the rollback operation.
+
+If options '--detailed-progress' or '--simple-progress' are used, a view called
+'rebalance_progress' is created in the 'ggrebalance' schema. It allows to track
+the status of current operation of the tool.
 
 ******************************************************
 OPTIONS
