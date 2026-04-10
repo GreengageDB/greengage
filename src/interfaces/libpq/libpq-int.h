@@ -729,6 +729,7 @@ extern int	pqWaitTimeout(int forRead, int forWrite, PGconn *conn,
 						  time_t finish_time);
 extern int	pqReadReady(PGconn *conn);
 extern int	pqWriteReady(PGconn *conn);
+extern int	pqIsBackend(void);
 
 /* === in fe-secure.c === */
 

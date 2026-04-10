@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "libpq-fe.h"
+#include "libpq-int.h"
 #include "pgstat.h"
 #include "access/transam.h"
 #include "access/xact.h"
@@ -2233,6 +2234,13 @@ gp_keepalives_check(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funcctx);
+}
+
+PG_FUNCTION_INFO_V1(gp_linked_libpq_is_compiled_for_backend);
+Datum
+gp_linked_libpq_is_compiled_for_backend(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_BOOL(pqIsBackend());
 }
 
 static query_info_collect_hook_type gp_mock_query_info_collect_next_hook = NULL;
