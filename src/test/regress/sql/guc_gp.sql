@@ -441,4 +441,8 @@ FETCH c1;
 FETCH c2;
 END;
 
+-- test that it is impossible to switch gp_role and gp_session_role amidst of a session
+SET gp_role TO EXECUTE;
+SET gp_session_role TO EXECUTE;
+
 DROP TABLE guc_gp_t1;
