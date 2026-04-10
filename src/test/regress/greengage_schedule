@@ -370,4 +370,6 @@ test: cancel_cleanup
 
 test: gp_orphaned_files
 
+test: libpq
+
 # end of tests

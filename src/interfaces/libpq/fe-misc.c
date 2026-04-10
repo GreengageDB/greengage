@@ -1373,6 +1373,20 @@ PQenv2encoding(void)
 	return encoding;
 }
 
+/*
+ * Return 1 if the current library has been compiled for backend usage.
+ * 0 otherwise.
+ */
+int
+pqIsBackend(void)
+{
+#ifdef FRONTEND
+	return 0;
+#else
+	return 1;
+#endif
+}
+
 #ifdef ENABLE_NLS
 
 static void
