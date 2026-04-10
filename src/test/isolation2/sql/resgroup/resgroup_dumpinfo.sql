@@ -94,7 +94,4 @@ create temp table t1 as select * from unnest(array(
 DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
--- start_ignore
-2:DROP LANGUAGE IF EXISTS plpythonu CASCADE;
-2:DROP LANGUAGE IF EXISTS plpython3u CASCADE;
--- end_ignore
+DROP LANGUAGE plpythonu CASCADE;

@@ -13,10 +13,9 @@ DROP VIEW IF EXISTS busy;
 DROP VIEW
 DROP TABLE IF EXISTS bigtable;
 DROP TABLE
--- end_ignore
-
 include: helpers/decide_plpython.sql;
 DO
+-- end_ignore
 
 --
 -- helper functions, tables and views
@@ -971,4 +970,6 @@ DROP
 2:DROP RESOURCE GROUP rg1_cpu_test;
 DROP
 2:DROP RESOURCE GROUP rg2_cpu_test;
+DROP
+2:DROP LANGUAGE plpythonu CASCADE;
 DROP

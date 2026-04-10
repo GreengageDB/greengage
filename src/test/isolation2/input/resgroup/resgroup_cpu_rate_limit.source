@@ -6,9 +6,8 @@ DROP RESOURCE GROUP rg1_cpu_test;
 DROP RESOURCE GROUP rg2_cpu_test;
 DROP VIEW IF EXISTS busy;
 DROP TABLE IF EXISTS bigtable;
--- end_ignore
-
 include: helpers/decide_plpython.sql;
+-- end_ignore
 
 --
 -- helper functions, tables and views
@@ -513,7 +512,4 @@ SELECT * FROM cancel_all;
 2:DROP ROLE role2_cpu_test;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
--- start_ignore
-2:DROP LANGUAGE IF EXISTS plpythonu CASCADE;
-2:DROP LANGUAGE IF EXISTS plpython3u CASCADE;
--- end_ignore
+2:DROP LANGUAGE plpythonu CASCADE;

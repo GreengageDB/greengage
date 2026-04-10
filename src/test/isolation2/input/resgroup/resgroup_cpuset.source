@@ -305,10 +305,7 @@ DROP RESOURCE GROUP rg1_cpuset_test;
 DROP FUNCTION check_rules();
 DROP FUNCTION check_cpuset(TEXT, TEXT);
 DROP FUNCTION create_allcores_group(TEXT);
--- start_ignore
-2:DROP LANGUAGE IF EXISTS plpythonu CASCADE;
-2:DROP LANGUAGE IF EXISTS plpython3u CASCADE;
--- end_ignore
+DROP LANGUAGE plpythonu CASCADE;
 DROP VIEW cancel_all;
 DROP VIEW busy;
 DROP TABLE bigtable;

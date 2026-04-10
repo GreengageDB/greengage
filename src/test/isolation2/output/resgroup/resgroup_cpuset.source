@@ -315,6 +315,8 @@ DROP FUNCTION check_cpuset(TEXT, TEXT);
 DROP
 DROP FUNCTION create_allcores_group(TEXT);
 DROP
+DROP LANGUAGE plpythonu CASCADE;
+DROP
 DROP VIEW cancel_all;
 DROP
 DROP VIEW busy;

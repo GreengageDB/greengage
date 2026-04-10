@@ -5,6 +5,8 @@ DROP
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
 ERROR:  resource group "rg_dumpinfo_test" does not exist
+include: helpers/decide_plpython.sql;
+DO
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool as $$ import json import pygresql.pg as pg 
@@ -80,4 +82,6 @@ DROP
 DROP ROLE role_permission;
 DROP
 DROP RESOURCE GROUP rg_dumpinfo_test;
+DROP
+DROP LANGUAGE plpythonu CASCADE;
 DROP
