@@ -19,18 +19,12 @@ DO LANGUAGE plpython3u $$
                                stderr=subprocess.PIPE)
         out = ret.communicate()
         if ret.returncode != 0:
-            if sys.version_info[0] == 2:
-                raise SystemError('''\
-Command {cmds} returned non-zero exit status {retcode}
-stdout: {stdout}
-stderr: {stderr}
-'''.format(cmds=cmds, retcode=ret.returncode, stdout=out[0], stderr=out[1]))
-            else:
-                raise SystemError('''\
+            raise SystemError('''\
 Command {cmds} returned non-zero exit status {retcode}
 stdout: {stdout}
 stderr: {stderr}
 '''.format(cmds=cmds, retcode=ret.returncode, stdout=out[0].decode('utf-8'), stderr=out[1].decode('utf-8')))
+
     # generate and verify a packcore tarball
     #
     # TODO: packcore can list shared libraries with gdb, ldd, or ld-linux.so,
