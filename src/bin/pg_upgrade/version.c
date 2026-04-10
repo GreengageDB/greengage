@@ -439,7 +439,7 @@ report_extension_updates(ClusterInfo *cluster)
 	if (found)
 	{
 		report_status(PG_REPORT, "notice");
-		gp_fatal_log(
+		pg_log(PG_REPORT,
 				"| Your installation contains extensions that should be updated\n"
 				"| with the ALTER EXTENSION command.  The file\n"
 				"|     %s\n"
