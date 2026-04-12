@@ -1630,10 +1630,14 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
 				}
 				/* check that the valid until date is not under the limit of days */
-				if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+				if (dvalidUntil && dvalidUntil->arg)
 				{
 					int valid_max = check_valid_until(strVal(dvalidUntil->arg));
-					if (valid_max > password_valid_max)
+					if (password_valid_until > 0 && valid_max < password_valid_until)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must have a date beyond %d days"), password_valid_until)));
+					if (password_valid_max > 0 && valid_max > password_valid_max)
 						ereport(ERROR,
 							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
@@ -1751,11 +1755,11 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
 
-				/* check that a maximum number of days for password validity is defined */
-				if (password_valid_max > 0 && valid_max < password_valid_max)
+				/* check that we do not exceed the number of days for password validity */
+				if (password_valid_max > 0 && valid_max > password_valid_max)
 					ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
+							errmsg(gettext_noop("require a VALID UNTIL option with a date NOT beyond %d days"), password_valid_max)));
 
 #if PG_VERSION_NUM >= 120000
 				/* The password can be saved into the history */
