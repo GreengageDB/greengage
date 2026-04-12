@@ -46,7 +46,8 @@ CREATE USER aaa PASSWORD 'DummY2' VALID UNTIL '2050-01-01 00:00:00';
 SET credcheck.password_valid_until to 60;
 SET credcheck.password_reuse_interval to 15;
 SET credcheck.password_reuse_history to 4;
-CREATE role credcheck_test with login password 'password'; 
--- History must be empty
-SELECT count(*), '0' AS "expected" FROM pg_password_history ;
+CREATE role aaa with login password 'password'; 
+select rolname,age(rolvaliduntil) from pg_roles WHERE rolname='aaa';
+-- History must have one entry
+SELECT count(*), '1' AS "expected" FROM pg_password_history ;
 DROP USER aaa;
