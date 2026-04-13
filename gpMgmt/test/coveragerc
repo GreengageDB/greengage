@@ -1,12 +1,15 @@
 # .coveragerc to control coverage.py
 [run]
 parallel = True
+context = behave_tests
+# dynamic_context = test_function
 data_file = /tmp/coverage-data/coverage-data
 branch = True
 omit =
-    */site-packages/*
-    */bin/behave
-    */python/psutil/*
-    */python/pygresql/*
-    */python/yaml/*
-    */python/lockfile/*
+        /usr/local/greengage-db-devel/bin/gpssh
+        /usr/local/greengage-db-devel/bin/gpssh_modules/__init__.py
+        /usr/local/greengage-db-devel/bin/gpssh_modules/gppxssh_wrapper.py
+        /usr/local/greengage-db-devel/bin/lib/pexpect/__init__.py
+        /usr/local/greengage-db-devel/bin/lib/pexpect/pxssh.py
+        */dist-packages/*
+        /usr/local/bin/behave

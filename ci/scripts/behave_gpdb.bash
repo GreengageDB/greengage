@@ -26,7 +26,7 @@ function gen_env(){
 		fi
 		cd /tmp/coverage-data
 		coverage combine coverage-data.*
-		coverage html -d ./coverage-html
+		coverage html --show-context -d ./coverage-html
 	EOF
 
 		chmod a+x /opt/run_test.sh
