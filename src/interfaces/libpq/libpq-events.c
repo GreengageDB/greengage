@@ -59,9 +59,9 @@ PQregisterEventProc(PGconn *conn, PGEventProc proc,
 
 		newSize = conn->eventArraySize ? conn->eventArraySize * 2 : 8;
 		if (conn->events)
-			e = (PGEvent *) realloc(conn->events, newSize * sizeof(PGEvent));
+			e = (PGEvent *) pqRepalloc(conn->events, newSize * sizeof(PGEvent));
 		else
-			e = (PGEvent *) malloc(newSize * sizeof(PGEvent));
+			e = (PGEvent *) pqPalloc(newSize * sizeof(PGEvent));
 
 		if (!e)
 			return FALSE;
@@ -71,7 +71,7 @@ PQregisterEventProc(PGconn *conn, PGEventProc proc,
 	}
 
 	conn->events[conn->nEvents].proc = proc;
-	conn->events[conn->nEvents].name = strdup(name);
+	conn->events[conn->nEvents].name = pqPstrdup(name);
 	if (!conn->events[conn->nEvents].name)
 		return FALSE;
 	conn->events[conn->nEvents].passThrough = passThrough;
@@ -83,7 +83,7 @@ PQregisterEventProc(PGconn *conn, PGEventProc proc,
 	if (!proc(PGEVT_REGISTER, &regevt, passThrough))
 	{
 		conn->nEvents--;
-		free(conn->events[conn->nEvents].name);
+		pqPfree(conn->events[conn->nEvents].name);
 		return FALSE;
 	}
 

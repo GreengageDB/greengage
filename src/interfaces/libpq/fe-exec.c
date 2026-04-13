@@ -145,6 +145,11 @@ static int	check_field_number(const PGresult *res, int field_num);
  *	 returns a newly allocated, initialized PGresult with given status.
  *	 If conn is not NULL and status indicates an error, the conn's
  *	 errorMessage is copied.  Also, any PGEvents are copied from the conn.
+ *
+ * GPDB: most of the libpq's memory allocations happen here--PQresults store
+ *       all retrieved rows. Thus we use a palloc() wrapper instead of bare
+ *       malloc() for vmtracker to see the allocations, in case we're the
+ *       backend.
  */
 PGresult *
 PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status)
@@ -705,7 +710,7 @@ PQclear(PGresult *res)
 			(void) res->events[i].proc(PGEVT_RESULTDESTROY, &evt,
 									   res->events[i].passThrough);
 		}
-		free(res->events[i].name);
+		pqPfree(res->events[i].name);
 	}
 
 	if (res->events)
