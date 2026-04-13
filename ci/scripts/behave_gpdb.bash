@@ -25,7 +25,7 @@ function gen_env(){
 				flags="\${BEHAVE_FLAGS}" make -f Makefile.behave behave
 		fi
 		cd /tmp/coverage-data
-		coverage combine coverage-data.*
+		coverage combine --append coverage-data.*
 		coverage html --show-context -d ./coverage-html
 	EOF
 
