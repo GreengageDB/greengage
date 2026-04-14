@@ -748,22 +748,12 @@ class GGShrink:
                         CREATE OR REPLACE FUNCTION __ggrebalance_temp_schema.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
                         RETURNS NUMERIC
                         AS $$
-                        DECLARE
-                            rec RECORD;
-                            total NUMERIC := 0;
-                        BEGIN
-                            FOR rec IN
-                                SELECT
-                                    pg_catalog.pg_relation_size(c.oid) AS size_bytes
-                                FROM gp_dist_random('pg_class') c
-                                WHERE c.oid = p_rel_oid
-                                AND c.gp_segment_id {'<' if is_rollback else '>='} gp_segment_id_limit
-                            LOOP
-                                total := total + rec.size_bytes;
-                            END LOOP;
-                            RETURN total;
-                        END;
-                        $$ LANGUAGE plpgsql STABLE''')
+                        WITH cte AS MATERIALIZED (
+                            SELECT * FROM gp_dist_random('pg_class') c
+                            WHERE c.oid = p_rel_oid
+                            AND c.gp_segment_id {'<' if is_rollback else '>='} gp_segment_id_limit
+                        ) SELECT sum(pg_catalog.pg_relation_size(cte.oid)) FROM cte;
+                        $$ LANGUAGE sql STABLE''')
                 cursor = dbconn.query(conn,
                                       f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
                                       FROM pg_class c
