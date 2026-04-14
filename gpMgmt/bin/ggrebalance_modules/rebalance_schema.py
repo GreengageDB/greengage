@@ -72,7 +72,7 @@ class RebalanceSchema:
         if self.progress_type != self.ProgressType.PROGRESS_NO:
             states_str = ',\n'.join(f"'{s}'" for s in shrink_rollback_states)
             dbconn.execSQL(self.conn, f'''
-CREATE FUNCTION ggrebalance._is_rollback()
+CREATE FUNCTION {self.schema_name}._is_rollback()
 RETURNS boolean AS $$
     SELECT COALESCE(
         (SELECT state IN (
@@ -86,7 +86,7 @@ $$ LANGUAGE sql''')
             dbconn.execSQL(self.conn, f'''
 CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
 WITH
-cond AS (SELECT ggrebalance._is_rollback() AS rollback_in_progress),
+cond AS (SELECT {self.schema_name}._is_rollback() AS rollback_in_progress),
 rebalance_progress_normal_flow AS
     (
     SELECT
@@ -132,7 +132,7 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
             dbconn.execSQL(self.conn, f'''
 CREATE VIEW {self.schema_name}.{self.rebalance_progress_view} AS
 WITH
-cond AS (SELECT ggrebalance._is_rollback() AS rollback_in_progress),
+cond AS (SELECT {self.schema_name}._is_rollback() AS rollback_in_progress),
 rebalance_progress_normal_flow AS
     (
     WITH
