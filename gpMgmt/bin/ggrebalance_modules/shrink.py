@@ -780,8 +780,7 @@ class GGShrink:
         self.logger.info(f'Tables to process {cursor.rowcount}')
 
         if cursor.rowcount > 0:
-            num_workers=min(cursor.rowcount, self.options.parallel)
-            self.workers_for_tables_rebalance = WorkerPool(numWorkers=num_workers)
+            self.workers_for_tables_rebalance = WorkerPool(numWorkers=min(cursor.rowcount, self.options.parallel))
 
             for db_name, schema_name, rel_name in cursor:
                 task = self.TableRebalanceTask(self,
