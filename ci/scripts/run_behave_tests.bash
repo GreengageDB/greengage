@@ -28,10 +28,10 @@ fi
 processes=3
 
 rm -rf allure-results
-# rm -rf coverage
+rm -rf coverage
 mkdir allure-results -pm 777
-# mkdir coverage
-# chmod 777 coverage
+mkdir coverage
+chmod 777 coverage
 mkdir ssh_keys -p
 if [ ! -e "ssh_keys/id_rsa" ]
 then
