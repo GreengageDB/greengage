@@ -15,7 +15,7 @@ for the files you are modifying.
     the link. I chose one of the hacky solutions and added a `sitecustomize.py`
     to my GPDB installation, because it was simple and it worked:
 
-        $ cat > /usr/local/gpdb/lib/python/sitecustomize.py <<EOF
+        $ cat > $GPHOME/lib/python/sitecustomize.py <<EOF
         import coverage
         coverage.process_startup()
         EOF
@@ -32,7 +32,7 @@ for the files you are modifying.
 
         export COVERAGE_PROCESS_START=/<absolute_path_to_file>/<coverage configuration file>
         
-        (e.g. export COVERAGE_PROCESS_START=~/workspace/gpdb/gpMgmt/test/coveragerc)
+        (e.g. export COVERAGE_PROCESS_START=~gpdb_src/gpMgmt/test/coveragerc)
 
     This will instrument all Python subprocesses that are spawned, and write
     coverage data to the location specified in our config file.
@@ -75,25 +75,4 @@ for the files you are modifying.
 
         $ unset COVERAGE_PROCESS_START
 
-
-# Performance Impact
-Read [how coverage works](https://coverage.readthedocs.io/en/latest/howitworks.html) to learn about the potential
-performance impacts.  In short, each function is instrumented.  We ran `gpMgmt/bin> make unitdevel` and saw no performance
-impact(the run time difference was less than 3 seconds for a 30 second runtime).  As you'd expect, if you construct a Python program
-with a tight loop of a simple function call, you can get much worse performance.
-
-    # Takes 45 seconds without coverage and 180 seconds with coverage(simply unset COVERAGE_PROCESS_START).
-    class _Example:
-        def __init__(self):
-            pass
-
-        def add_numbers(self, x, y):
-            return x + y
-
-    if __name__ == '__main__':
-        for i in range(0,100000000):
-            _Example().add_numbers(1,6)
-            if i%10000000 == 0:
-                print "."
-
-In short, we'd expect the performance hit to be small for most test code, since that tends not to run in a tight loop.
+    Or remove hook from step 2.

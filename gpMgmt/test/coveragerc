@@ -1,7 +1,7 @@
 # .coveragerc to control coverage.py
 [run]
 parallel = True
-context = behave_tests
+# context = behave_tests
 # dynamic_context = test_function
 data_file = /tmp/coverage-data/coverage-data
 branch = True
