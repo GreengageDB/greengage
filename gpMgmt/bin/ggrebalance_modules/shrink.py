@@ -715,7 +715,7 @@ class GGShrink:
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
             if is_rollback:
                 # In case if shrink's rollback, function 'ggrebalance_get_data_move_size()' is used to retrieve
-                # the amount of data we need to move. It invokes 'pg_relation_size()' on the shrunk segments.
+                # the amount of data we need to move. It invokes 'pg_relation_size()' on the segments left after shrink.
                 # As during rollback, CTAS approach is used for table redistribution,
                 # therefore we will move all the data for the relations with partitioned distribution policy.
                 # For the relations with replicated distribution policy, we calculate the size on one segment,
