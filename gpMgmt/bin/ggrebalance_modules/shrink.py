@@ -713,15 +713,59 @@ class GGShrink:
                 databases_to_process.append(database_name)
 
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
-            str_rel_size = 'pg_catalog.pg_relation_size(c.oid) as rel_size'
+            if is_rollback:
+                # In case if shrink's rollback, function 'ggrebalance_get_data_move_size()' is used to retrieve
+                # the amount of data we need to move. It invokes 'pg_relation_size()' on the shrunk segments.
+                # As during rollback, CTAS approach is used for table redistribution,
+                # therefore we will move all the data for the relations with partitioned distribution policy.
+                # For the relations with replicated distribution policy, we calculate the size on one segment,
+                # and multiply by the number of original segments (as here CTAS is used as well - we will re-create data on each segment).
+                str_data_move_size = f'''
+                    CASE
+                        WHEN p.policytype = 'r' THEN (__ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments) / p.numsegments) * {self.gparray.get_segment_count()}
+                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments)
+                    END AS data_move_size'''
+            else:
+                # In case of normal shrink operation, function 'ggrebalance_get_data_move_size()'
+                # behaves a bit different - it calculates data only from the shrunk segments -
+                # as for shrink we use INSERT-like operation, not CTAS.
+                # And we do not need to move data of the replicated tables.
+                str_data_move_size = f'''
+                    CASE
+                        WHEN p.policytype = 'r' THEN 0
+                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, {self.shrink_plan.getTargetSegmentCount()})
+                    END AS data_move_size'''
         else:
-            str_rel_size = '0 as rel_size'
+            str_data_move_size = '0 as data_move_size'
 
         for db in databases_to_process:
             dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+                if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
+                    # 'public' schema may be missing, so create our own temp schema to carry the function
+                    dbconn.execSQL(conn, 'CREATE SCHEMA __ggrebalance_temp_schema');
+                    dbconn.execSQL(conn, f'''
+                        CREATE OR REPLACE FUNCTION __ggrebalance_temp_schema.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
+                        RETURNS NUMERIC
+                        AS $$
+                        DECLARE
+                            rec RECORD;
+                            total NUMERIC := 0;
+                        BEGIN
+                            FOR rec IN
+                                SELECT
+                                    pg_catalog.pg_relation_size(c.oid) AS size_bytes
+                                FROM gp_dist_random('pg_class') c
+                                WHERE c.oid = p_rel_oid
+                                AND c.gp_segment_id {'<' if is_rollback else '>='} gp_segment_id_limit
+                            LOOP
+                                total := total + rec.size_bytes;
+                            END LOOP;
+                            RETURN total;
+                        END;
+                        $$ LANGUAGE plpgsql STABLE''')
                 cursor = dbconn.query(conn,
-                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_rel_size}
+                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
                                       FROM pg_class c
                                       JOIN pg_namespace n ON c.relnamespace = n.oid
                                       JOIN gp_distribution_policy p ON c.oid = p.localoid
@@ -730,10 +774,13 @@ class GGShrink:
                                       c.relpersistence != 't' AND
                                       p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
                                       n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
-                for schema_name, rel_name, rel_kind, external_writable, rel_size in cursor:
+                for schema_name, rel_name, rel_kind, external_writable, data_move_size in cursor:
                     if rel_kind == 'f' and not external_writable:
                         continue
-                    self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, rel_size)
+                    self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, data_move_size)
+
+                if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
+                    dbconn.execSQL(conn, 'DROP SCHEMA __ggrebalance_temp_schema CASCADE')
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
