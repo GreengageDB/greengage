@@ -63,7 +63,7 @@ for the files you are modifying.
     the details of coverage for that file.
 
         $ coverage report
-        $ coverage html -d /tmp/coverage-html
+        $ coverage html --show-contexts -d /tmp/coverage-html
         $ open /tmp/coverage-html/index.html
 
     Your usage model might involve determining code coverage, adding tests, and then checking the resulting change
