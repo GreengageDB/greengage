@@ -86,6 +86,12 @@ def parseargs():
                       help='duration from beginning to end.')
     parser.add_option('-E', '--end', type='datetime', metavar='datetime',
                       help="ending date and time in the format 'YYYY-MM-DD hh:mm:ss'.")
+    parser.add_option('-D', '--detailed-progress', dest='detailed_progress', action='store_true', default=False,
+                      help='Show a detailed progress view.')
+    parser.add_option('-S', '--simple-progress', dest='simple_progress', action='store_true', default=False,
+                      help='Show a simple progress view.')
+    parser.add_option('--no-progress', dest='no_progress', action='store_true', default=False,
+                      help='Suppress progress reports.')
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       help='debug output.')
     parser.add_option('--inplace-swap-roles', dest="inplace_swap_roles", action='store_true', default=False,
@@ -149,15 +155,20 @@ def validate_options(options, args, parser):
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
             'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
-            'duration', 'end'
+            'duration', 'end',
+            'detailed_progress', 'simple_progress', 'no_progress'
         ]),
 
         ('rollback_required', [
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation', 'inplace_swap_roles'
+            'skip_resource_estimation', 'inplace_swap_roles',
+            'detailed_progress', 'simple_progress', 'no_progress'
         ]),
+
+        ('detailed_progress', ['simple_progress', 'no_progress']),
+        ('simple_progress', ['no_progress'])
     ]
 
     def option_is_set(opt_name):
@@ -196,6 +207,11 @@ def validate_options(options, args, parser):
     if option_is_set('mirror_mode') and options.mirror_mode not in ('grouped', 'spread'):
         logger.error('Mirroring strategy %s is not supported' % options.mirror_mode)
         parser.exit(1)
+
+    if not (option_is_set('detailed_progress') or
+            option_is_set('simple_progress') or
+            option_is_set('no_progress')):
+        options.simple_progress = True
 
     return options, args
 
