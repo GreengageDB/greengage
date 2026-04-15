@@ -41,7 +41,7 @@ transfer_ownership() {
     [ -f gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv ] && chown gpadmin:gpadmin gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv
     [ -d /usr/local/gpdb ] && chown -R gpadmin:gpadmin /usr/local/gpdb
     [ -d /usr/local/greengage-db-devel ] && chown -R gpadmin:gpadmin /usr/local/greengage-db-devel
-    chown -R gpadmin:gpadmin /home/gpadmin
+    [ -d /home/gpadmin ] && chown -R gpadmin:gpadmin /home/gpadmin
 }
 
 set_limits() {
@@ -58,7 +58,16 @@ set_limits() {
 }
 
 setup_gpadmin_user() {
-  groupadd supergroup
+  # grep -q "^${supergroup}:" /etc/group
+  if ! getent group supergroup > /dev/null; then
+    groupadd supergroup
+  fi
+
+  if id -u gpadmin > /dev/null; then
+    echo "gpadmin user already exists"
+    return
+  fi
+  
   case "$TEST_OS" in
     centos*)
       /usr/sbin/useradd -G supergroup,tty gpadmin

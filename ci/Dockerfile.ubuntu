@@ -56,9 +56,13 @@ RUN rm -rf gpdb_src/.git/
 
 FROM base AS test
 
-COPY --from=code  /home/gpadmin/gpdb_src gpdb_src
-COPY --from=build /home/gpadmin/bin_gpdb bin_gpdb
-COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
+COPY --from=build /home/gpadmin/gpdb_src/concourse/scripts gpdb_src/concourse/scripts
+
+RUN /home/gpadmin/gpdb_src/concourse/scripts/setup_gpadmin_user.bash ubuntu
+
+COPY --chown=gpadmin:gpadmin --from=code /home/gpadmin/gpdb_src gpdb_src
+COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/bin_gpdb bin_gpdb
+COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.
