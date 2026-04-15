@@ -81,26 +81,4 @@ EOF
 exitcode=$?
 echo "$exitcode" > "$logdir/$logfile"
 
-docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
-  cd /home/gpadmin
-  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
-  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
-  tar -czf /logs/pg_log.tar.gz gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_log/ gpdb_src/gpAux/gpdemo/datadirs/standby/pg_log
-  #regression.diffs may not exist if tests were successful
-  tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/resgroup/results/resgroup/ gpdb_src/src/test/isolation2/resgroup/regression.diffs
-EOF
-
-docker compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
-  cd /home/gpadmin
-  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
-  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
-  tar -czf /logs/pg_log.tar.gz \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/pg_log
-EOF
-
 exit "$exitcode"
