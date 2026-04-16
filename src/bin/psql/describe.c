@@ -3337,14 +3337,22 @@ describeOneTableDetails(const char *schemaname,
 		printfPQExpBuffer(&buf,
 						  "SELECT t.tgname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid%s), "
-						  "t.tgenabled, %s\n"
+						  "t.tgenabled, %s, %s\n"
 						  "FROM pg_catalog.pg_trigger t\n"
 						  "WHERE t.tgrelid = '%s' AND ",
 						  (pset.sversion >= 90000 ? ", true" : ""),
 						  (pset.sversion >= 90000 ? "t.tgisinternal" :
 						   pset.sversion >= 80300 ?
 						   "t.tgconstraint <> 0 AS tgisinternal" :
-						   "false AS tgisinternal"), oid);
+						   "false AS tgisinternal"),
+						  (pset.sversion >= 130000 ?
+						   "(SELECT (NULLIF(a.relid, t.tgrelid))::pg_catalog.regclass"
+						   " FROM pg_catalog.pg_trigger AS u, "
+						   "      pg_catalog.pg_partition_ancestors(t.tgrelid) AS a"
+						   " WHERE u.tgname = t.tgname AND u.tgrelid = a.relid"
+						   "       AND u.tgparentid = 0) AS parent" :
+						   "NULL AS parent"),
+						  oid);
 		if (pset.sversion >= 110000)
 			appendPQExpBufferStr(&buf, "(NOT t.tgisinternal OR (t.tgisinternal AND t.tgenabled = 'D') \n"
 								 "    OR EXISTS (SELECT 1 FROM pg_catalog.pg_depend WHERE objid = t.oid \n"
@@ -3470,6 +3478,12 @@ describeOneTableDetails(const char *schemaname,
 						tgdef = usingpos + 9;
 
 					printfPQExpBuffer(&buf, "    %s", tgdef);
+
+					/* Visually distinguish inherited triggers */
+					if (!PQgetisnull(result, i, 4))
+						appendPQExpBuffer(&buf, ", ON TABLE %s",
+								PQgetvalue(result, i, 4));
+
 					printTableAddFooter(&cont, buf.data);
 				}
 			}
@@ -6737,7 +6751,7 @@ listPublications(const char *pattern)
 	PQExpBufferData buf;
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
-	static const bool translate_columns[] = {false, false, false, false, false, false, false};
+	static const bool translate_columns[] = {false, false, false, false, false, false, false, false};
 
 	if (pset.sversion < 100000)
 	{
@@ -6768,6 +6782,10 @@ listPublications(const char *pattern)
 		appendPQExpBuffer(&buf,
 						  ",\n  pubtruncate AS \"%s\"",
 						  gettext_noop("Truncates"));
+	if (pset.sversion >= 130000)
+		appendPQExpBuffer(&buf,
+						  ",\n  pubviaroot AS \"%s\"",
+						  gettext_noop("Via root"));
 
 	appendPQExpBufferStr(&buf,
 						 "\nFROM pg_catalog.pg_publication\n");
@@ -6809,6 +6827,7 @@ describePublications(const char *pattern)
 	int			i;
 	PGresult   *res;
 	bool		has_pubtruncate;
+	bool		has_pubviaroot;
 
 	if (pset.sversion < 100000)
 	{
@@ -6821,6 +6840,7 @@ describePublications(const char *pattern)
 	}
 
 	has_pubtruncate = (pset.sversion >= 110000);
+	has_pubviaroot = (pset.sversion >= 130000);
 
 	initPQExpBuffer(&buf);
 
@@ -6831,6 +6851,9 @@ describePublications(const char *pattern)
 	if (has_pubtruncate)
 		appendPQExpBufferStr(&buf,
 							 ", pubtruncate");
+	if (has_pubviaroot)
+		appendPQExpBufferStr(&buf,
+							 ", pubviaroot");
 	appendPQExpBufferStr(&buf,
 						 "\nFROM pg_catalog.pg_publication\n");
 
@@ -6880,6 +6903,8 @@ describePublications(const char *pattern)
 
 		if (has_pubtruncate)
 			ncols++;
+		if (has_pubviaroot)
+			ncols++;
 
 		initPQExpBuffer(&title);
 		printfPQExpBuffer(&title, _("Publication %s"), pubname);
@@ -6892,6 +6917,8 @@ describePublications(const char *pattern)
 		printTableAddHeader(&cont, gettext_noop("Deletes"), true, align);
 		if (has_pubtruncate)
 			printTableAddHeader(&cont, gettext_noop("Truncates"), true, align);
+		if (has_pubviaroot)
+			printTableAddHeader(&cont, gettext_noop("Via root"), true, align);
 
 		printTableAddCell(&cont, PQgetvalue(res, i, 2), false, false);
 		printTableAddCell(&cont, PQgetvalue(res, i, 3), false, false);
@@ -6900,6 +6927,8 @@ describePublications(const char *pattern)
 		printTableAddCell(&cont, PQgetvalue(res, i, 6), false, false);
 		if (has_pubtruncate)
 			printTableAddCell(&cont, PQgetvalue(res, i, 7), false, false);
+		if (has_pubviaroot)
+			printTableAddCell(&cont, PQgetvalue(res, i, 8), false, false);
 
 		if (!puballtables)
 		{

@@ -481,7 +481,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	proc->lxid = (LocalTransactionId) xid;
 	pgxact->xid = xid;
 	pgxact->xmin = InvalidTransactionId;
-	pgxact->delayChkpt = false;
+	proc->delayChkpt = false;
 	pgxact->vacuumFlags = 0;
 	proc->pid = 0;
 	proc->backendId = InvalidBackendId;
@@ -1167,7 +1167,7 @@ EndPrepare(GlobalTransaction gxact)
 
 	START_CRIT_SECTION();
 
-	MyPgXact->delayChkpt = true;
+	MyProc->delayChkpt = true;
 
 	XLogBeginInsert();
 	for (record = records.head; record != NULL; record = record->next)
@@ -1212,7 +1212,7 @@ EndPrepare(GlobalTransaction gxact)
 	 * checkpoint starting after this will certainly see the gxact as a
 	 * candidate for fsyncing.
 	 */
-	MyPgXact->delayChkpt = false;
+	MyProc->delayChkpt = false;
 
 	/*
 	 * Remember that we have this GlobalTransaction entry locked for us.  If
@@ -1393,7 +1393,10 @@ XlogReadTwoPhaseData(XLogRecPtr lsn, char **buf, int *len)
 	TimeLineID	save_currtli = ThisTimeLineID;
 
 	xlogreader = XLogReaderAllocate(wal_segment_size, NULL,
-									&read_local_xlog_page, NULL);
+									XL_ROUTINE(.page_read = &read_local_xlog_page,
+											   .segment_open = &wal_segment_open,
+											   .segment_close = &wal_segment_close),
+									NULL);
 	if (!xlogreader)
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
@@ -2369,7 +2372,7 @@ RecordTransactionCommitPrepared(TransactionId xid,
 	START_CRIT_SECTION();
 
 	/* See notes in RecordTransactionCommit */
-	MyPgXact->delayChkpt = true;
+	MyProc->delayChkpt = true;
 
 	/*
 	 * Crack open the gid to get the DTM start time and distributed
@@ -2435,7 +2438,7 @@ RecordTransactionCommitPrepared(TransactionId xid,
 	TransactionIdCommitTree(xid, nchildren, children);
 
 	/* Checkpoint can proceed now */
-	MyPgXact->delayChkpt = false;
+	MyProc->delayChkpt = false;
 
 	END_CRIT_SECTION();
 
@@ -2550,14 +2553,11 @@ PrepareRedoAdd(char *buf, XLogRecPtr start_lsn,
 
 	/* Get a free gxact from the freelist */
 	if (TwoPhaseState->freeGXacts == NULL)
-	{
-		StandbyParamErrorPauseRecovery();
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("maximum number of prepared transactions reached"),
 				 errhint("Increase max_prepared_transactions (currently %d).",
 						 max_prepared_xacts)));
-	}
 	gxact = TwoPhaseState->freeGXacts;
 	TwoPhaseState->freeGXacts = gxact->next;
 

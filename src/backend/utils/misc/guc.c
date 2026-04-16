@@ -41,6 +41,7 @@
 #include "access/xlog_internal.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/storage.h"
 #include "commands/async.h"
 #include "commands/prepare.h"
 #include "commands/trigger.h"
@@ -1031,6 +1032,16 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&enable_sort,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"enable_incrementalsort", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables the planner's use of incremental sort steps."),
+			NULL
+		},
+		&enable_incrementalsort,
+		/* GPDB_13_MERGE_FIXME: enable incremental sort */
+		false,
 		NULL, NULL, NULL
 	},
 	{
@@ -2788,6 +2799,17 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
+		{"wal_skip_threshold", PGC_USERSET, WAL_SETTINGS,
+			gettext_noop("Size of new file to fsync instead of writing WAL."),
+			NULL,
+			GUC_UNIT_KB
+		},
+		&wal_skip_threshold,
+		2048, 0, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"max_wal_senders", PGC_POSTMASTER, REPLICATION_SENDING,
 			gettext_noop("Sets the maximum number of simultaneously running WAL sender processes."),
 			NULL
@@ -2812,6 +2834,19 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&max_replication_slots,
 		10, 0, MAX_BACKENDS /* XXX? */ ,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"max_slot_wal_keep_size", PGC_SIGHUP, REPLICATION_SENDING,
+			gettext_noop("Sets the maximum WAL size that can be reserved by replication slots."),
+			gettext_noop("Replication slots will be marked as failed, and segments released "
+						 "for deletion or recycling, if this much space is occupied by WAL "
+						 "on disk."),
+			GUC_UNIT_MB
+		},
+		&max_slot_wal_keep_size_mb,
+		-1, -1, MAX_KILOBYTES,
 		NULL, NULL, NULL
 	},
 
@@ -8668,7 +8703,7 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 		case VAR_SET_DEFAULT:
 			if (stmt->is_local)
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
-			/* fall through */
+			/* FALLTHROUGH */
 		case VAR_RESET:
 			if (strcmp(stmt->name, "transaction_isolation") == 0 &&
 				Gp_role != GP_ROLE_EXECUTE)

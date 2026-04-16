@@ -55,9 +55,6 @@
 
 #include "miscadmin.h"
 
-/* Define this to detail debug alloc information */
-/* #define HAVE_ALLOCINFO */
-
 #ifdef CDB_PALLOC_CALLER_ID
 #define CDB_MCXT_WHERE(context) (context)->callerFile, (context)->callerLine
 #else
@@ -397,21 +394,6 @@ static const MemoryContextMethods AllocSetMethods = {
 #endif
 };
 
-/* ----------
- * Debug macros
- * ----------
- */
-#ifdef HAVE_ALLOCINFO
-#define AllocFreeInfo(_cxt, _chunk) \
-			fprintf(stderr, "AllocFree: %s: %p, %zu\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size)
-#define AllocAllocInfo(_cxt, _chunk) \
-			fprintf(stderr, "AllocAlloc: %s: %p, %zu\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size)
-#else
-#define AllocFreeInfo(_cxt, _chunk)
-#define AllocAllocInfo(_cxt, _chunk)
-#endif
 
 /* ----------
  * AllocSetFreeIndex -
@@ -945,8 +927,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 			set->blocks = block;
 		}
 
-		AllocAllocInfo(set, chunk);
-
 		/* Ensure any padding bytes are marked NOACCESS. */
 		VALGRIND_MAKE_MEM_NOACCESS((char *) AllocChunkGetPointer(chunk) + size,
 								   chunk_size - size);
@@ -985,8 +965,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 		/* fill the allocated space with junk */
 		randomize_mem((char *) AllocChunkGetPointer(chunk), size);
 #endif
-
-		AllocAllocInfo(set, chunk);
 
 		/* Ensure any padding bytes are marked NOACCESS. */
 		VALGRIND_MAKE_MEM_NOACCESS((char *) AllocChunkGetPointer(chunk) + size,
@@ -1149,8 +1127,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 	randomize_mem((char *) AllocChunkGetPointer(chunk), size);
 #endif
 
-	AllocAllocInfo(set, chunk);
-
 	/* Ensure any padding bytes are marked NOACCESS. */
 	VALGRIND_MAKE_MEM_NOACCESS((char *) AllocChunkGetPointer(chunk) + size,
 							   chunk_size - size);
@@ -1175,8 +1151,6 @@ AllocSetFree(MemoryContext context, void *pointer)
 
 	/* Allow access to private part of chunk header. */
 	VALGRIND_MAKE_MEM_DEFINED(chunk, ALLOCCHUNK_PRIVATE_LEN);
-
-	AllocFreeInfo(set, chunk);
 
 	MEMORY_ACCOUNT_DEC_ALLOCATED(set, chunk->size);
 

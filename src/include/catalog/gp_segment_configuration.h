@@ -39,7 +39,7 @@
  *		typedef struct FormData_gp_segment_configuration
  * ----------------
  */
-CATALOG(gp_segment_configuration,5036,GpSegmentConfigRelationId) BKI_SHARED_RELATION
+CATALOG(gp_segment_configuration,8036,GpSegmentConfigRelationId) BKI_SHARED_RELATION
 {
 	int16		dbid;				/* up to 32767 segment databases */
 	int16		content;			/* up to 32767 contents -- only 16384 usable with mirroring (see dbid) */

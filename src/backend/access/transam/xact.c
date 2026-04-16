@@ -31,6 +31,7 @@
 #include "access/xloginsert.h"
 #include "access/xact_storage_tablespace.h"
 #include "access/xlogutils.h"
+#include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_enum.h"
 #include "catalog/storage.h"
@@ -1620,7 +1621,7 @@ RecordTransactionCommit(void)
 		 * backend has finished updating the state.
 		 */
 		START_CRIT_SECTION();
-		MyPgXact->delayChkpt = true;
+		MyProc->delayChkpt = true;
 
 		SetCurrentTransactionStopTimestamp();
 
@@ -1760,7 +1761,7 @@ RecordTransactionCommit(void)
 	 */
 	if (markXidCommitted || isDtxPrepared)
 	{
-		MyPgXact->delayChkpt = false;
+		MyProc->delayChkpt = false;
 		END_CRIT_SECTION();
 		SIMPLE_FAULT_INJECTOR("after_xlog_xact_distributed_commit");
 	}
@@ -2802,6 +2803,13 @@ CommitTransaction(void)
 	/* This can still fail */
 	AtEOXact_DispatchOids(true);
 
+	/*
+	 * Synchronize files that are created and not WAL-logged during this
+	 * transaction. This must happen before AtEOXact_RelationMap(), so that we
+	 * don't see committed-but-broken files after a crash.
+	 */
+	smgrDoPendingSyncs(true, is_parallel_worker);
+
 	/* close large objects before lower-level cleanup */
 	AtEOXact_LargeObject(true);
 
@@ -3113,6 +3121,12 @@ PrepareTransaction(void)
 	PreCommit_on_commit_actions();
 
 	AtEOXact_DispatchOids(true);
+	/*
+	 * Synchronize files that are created and not WAL-logged during this
+	 * transaction. This must happen before EndPrepare(), so that we don't see
+	 * committed-but-broken files after a crash and COMMIT PREPARED.
+	 */
+	smgrDoPendingSyncs(true, false);
 
 	/* close large objects before lower-level cleanup */
 	AtEOXact_LargeObject(true);
@@ -3473,6 +3487,9 @@ AbortTransaction(void)
 	 */
 	SetUserIdAndSecContext(s->prevUser, s->prevSecContext);
 
+	/* Forget about any active REINDEX. */
+	ResetReindexState(s->nestingLevel);
+
 	/* If in parallel mode, clean up workers and exit parallel mode. */
 	if (IsInParallelMode())
 	{
@@ -3495,6 +3512,7 @@ AbortTransaction(void)
 
 	AtEOXact_DispatchOids(false);
 
+	smgrDoPendingSyncs(false, is_parallel_worker);
 	AtEOXact_LargeObject(false);
 	AtAbort_Notify();
 	AtEOXact_RelationMap(false, is_parallel_worker);
@@ -6127,6 +6145,9 @@ AbortSubTransaction(void)
 	 * AbortTransaction.)
 	 */
 	SetUserIdAndSecContext(s->prevUser, s->prevSecContext);
+
+	/* Forget about any active REINDEX. */
+	ResetReindexState(s->nestingLevel);
 
 	/* Exit from parallel mode, if necessary. */
 	if (IsInParallelMode())

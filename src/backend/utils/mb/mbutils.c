@@ -1392,7 +1392,7 @@ pg_utf8_increment(unsigned char *charptr, int length)
 				charptr[3]++;
 				break;
 			}
-			/* FALL THRU */
+			/* FALLTHROUGH */
 		case 3:
 			a = charptr[2];
 			if (a < 0xBF)
@@ -1400,7 +1400,7 @@ pg_utf8_increment(unsigned char *charptr, int length)
 				charptr[2]++;
 				break;
 			}
-			/* FALL THRU */
+			/* FALLTHROUGH */
 		case 2:
 			a = charptr[1];
 			switch (*charptr)
@@ -1420,7 +1420,7 @@ pg_utf8_increment(unsigned char *charptr, int length)
 				charptr[1]++;
 				break;
 			}
-			/* FALL THRU */
+			/* FALLTHROUGH */
 		case 1:
 			a = *charptr;
 			if (a == 0x7F || a == 0xDF || a == 0xEF || a == 0xF4)

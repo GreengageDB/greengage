@@ -30,6 +30,7 @@
 #include "port.h"
 #include "postmaster/syslogger.h"
 #include "replication/basebackup.h"
+#include "replication/backup_manifest.h"
 #include "replication/walsender.h"
 #include "replication/walsender_private.h"
 #include "storage/bufpage.h"
@@ -41,6 +42,7 @@
 #include "utils/builtins.h"
 #include "utils/ps_status.h"
 #include "utils/relcache.h"
+#include "utils/resowner.h"
 #include "utils/timestamp.h"
 
 #include "access/genam.h"
@@ -69,6 +71,8 @@ typedef struct
 	bool		includewal;
 	uint32		maxrate;
 	bool		sendtblspcmapfile;
+	backup_manifest_option manifest;
+	pg_checksum_type manifest_checksum_type;
 	HTAB	   *exclude;
 } basebackup_options;
 
@@ -76,10 +80,14 @@ typedef struct
 static bool match_exclude_list(char *path, HTAB *exclude);
 
 static int64 sendDir(const char *path, int basepathlen, bool sizeonly,
-					 List *tablespaces, bool sendtblspclinks, HTAB *exclude);
+					 List *tablespaces, bool sendtblspclinks,
+					 backup_manifest_info *manifest, const char *spcoid,
+					 HTAB *exclude);
 static bool sendFile(const char *readfilename, const char *tarfilename,
-					 struct stat *statbuf, bool missing_ok, Oid dboid);
-static void sendFileWithContent(const char *filename, const char *content);
+					 struct stat *statbuf, bool missing_ok, Oid dboid,
+					 backup_manifest_info *manifest, const char *spcoid);
+static void sendFileWithContent(const char *filename, const char *content,
+								backup_manifest_info *manifest);
 static int64 _tarWriteHeader(const char *filename, const char *linktarget,
 							 struct stat *statbuf, bool sizeonly);
 static int64 _tarWriteDir(const char *pathbuf, int basepathlen, struct stat *statbuf,
@@ -242,6 +250,14 @@ static const struct exclude_list_item excludeFiles[] =
 	{BACKUP_LABEL_FILE, false},
 	{TABLESPACE_MAP, false},
 
+	/*
+	 * If there's a backup_manifest, it belongs to a backup that was used to
+	 * start this server. It is *not* correct for this backup. Our
+	 * backup_manifest is injected into the backup separately if users want
+	 * it.
+	 */
+	{"backup_manifest", false},
+
 	{"postmaster.pid", false},
 	{"postmaster.opts", false},
 
@@ -283,6 +299,7 @@ perform_base_backup(basebackup_options *opt)
 	TimeLineID	endtli;
 	StringInfo	labelfile;
 	StringInfo	tblspc_map_file = NULL;
+	backup_manifest_info manifest;
 	int			datadirpathlen;
 	List	   *tablespaces = NIL;
 
@@ -302,12 +319,18 @@ perform_base_backup(basebackup_options *opt)
 									 backup_total);
 	}
 
+	/* we're going to use a BufFile, so we need a ResourceOwner */
+	Assert(CurrentResourceOwner == NULL);
+	CurrentResourceOwner = ResourceOwnerCreate(NULL, "base backup");
+
 	datadirpathlen = strlen(DataDir);
 
 	backup_started_in_recovery = RecoveryInProgress();
 
 	labelfile = makeStringInfo();
 	tblspc_map_file = makeStringInfo();
+	InitializeBackupManifest(&manifest, opt->manifest,
+							 opt->manifest_checksum_type);
 
 	total_checksum_failures = 0;
 
@@ -359,7 +382,10 @@ perform_base_backup(basebackup_options *opt)
 
 		/* Add a node for the base directory at the end */
 		ti = palloc0(sizeof(tablespaceinfo));
-		ti->size = opt->progress ? sendDir(".", 1, true, tablespaces, true, opt->exclude) : -1;
+		if (opt->progress)
+			ti->size = sendDir(".", 1, true, tablespaces, true, NULL, NULL, opt->exclude);
+		else
+			ti->size = -1;
 		tablespaces = lappend(tablespaces, ti);
 
 		/*
@@ -438,7 +464,8 @@ perform_base_backup(basebackup_options *opt)
 				struct stat statbuf;
 
 				/* In the main tar, include the backup_label first... */
-				sendFileWithContent(BACKUP_LABEL_FILE, labelfile->data);
+				sendFileWithContent(BACKUP_LABEL_FILE, labelfile->data,
+									&manifest);
 
 				/*
 				 * Send tablespace_map file if required and then the bulk of
@@ -446,11 +473,14 @@ perform_base_backup(basebackup_options *opt)
 				 */
 				if (tblspc_map_file && opt->sendtblspcmapfile)
 				{
-					sendFileWithContent(TABLESPACE_MAP, tblspc_map_file->data);
-					sendDir(".", 1, false, tablespaces, false, opt->exclude);
+					sendFileWithContent(TABLESPACE_MAP, tblspc_map_file->data,
+										&manifest);
+					sendDir(".", 1, false, tablespaces, false,
+							&manifest, NULL, opt->exclude);
 				}
 				else
-					sendDir(".", 1, false, tablespaces, true, opt->exclude);
+					sendDir(".", 1, false, tablespaces, true,
+							&manifest, NULL, opt->exclude);
 
 				/* ... and pg_control after everything else. */
 				if (lstat(XLOG_CONTROL_FILE, &statbuf) != 0)
@@ -458,10 +488,11 @@ perform_base_backup(basebackup_options *opt)
 							(errcode_for_file_access(),
 							 errmsg("could not stat file \"%s\": %m",
 									XLOG_CONTROL_FILE)));
-				sendFile(XLOG_CONTROL_FILE, XLOG_CONTROL_FILE, &statbuf, false, InvalidOid);
+				sendFile(XLOG_CONTROL_FILE, XLOG_CONTROL_FILE, &statbuf,
+						 false, InvalidOid, &manifest, NULL);
 			}
 			else
-				sendTablespace(ti->path, false);
+				sendTablespace(ti->path, ti->oid, false, &manifest);
 
 			/*
 			 * If we're including WAL, and this is the main data directory we
@@ -693,7 +724,7 @@ perform_base_backup(basebackup_options *opt)
 			 * complete segment.
 			 */
 			StatusFilePath(pathbuf, walFileName, ".done");
-			sendFileWithContent(pathbuf, "");
+			sendFileWithContent(pathbuf, "", &manifest);
 		}
 
 		/*
@@ -716,16 +747,22 @@ perform_base_backup(basebackup_options *opt)
 						(errcode_for_file_access(),
 						 errmsg("could not stat file \"%s\": %m", pathbuf)));
 
-			sendFile(pathbuf, pathbuf, &statbuf, false, InvalidOid);
+			sendFile(pathbuf, pathbuf, &statbuf, false, InvalidOid,
+					 &manifest, NULL);
 
 			/* unconditionally mark file as archived */
 			StatusFilePath(pathbuf, fname, ".done");
-			sendFileWithContent(pathbuf, "");
+			sendFileWithContent(pathbuf, "", &manifest);
 		}
 
 		/* Send CopyDone message for the last tar file */
 		pq_putemptymessage('c');
 	}
+
+	AddWALInfoToBackupManifest(&manifest, startptr, starttli, endptr, endtli);
+
+	SendBackupManifest(&manifest);
+
 	SendXlogRecPtrResult(endptr, endtli);
 
 	if (total_checksum_failures)
@@ -738,6 +775,9 @@ perform_base_backup(basebackup_options *opt)
 				(errcode(ERRCODE_DATA_CORRUPTED),
 				 errmsg("checksum verification failure during base backup")));
 	}
+
+	/* clean up the resource owner we created */
+	WalSndResourceCleanup(true);
 
 	pgstat_progress_end_command();
 }
@@ -799,6 +839,8 @@ parse_basebackup_options(List *options, basebackup_options *opt)
 	bool		o_maxrate = false;
 	bool		o_tablespace_map = false;
 	bool		o_noverify_checksums = false;
+	bool		o_manifest = false;
+	bool		o_manifest_checksums = false;
 
 	MemSet(opt, 0, sizeof(*opt));
 
@@ -808,6 +850,8 @@ parse_basebackup_options(List *options, basebackup_options *opt)
 	 * NULL.
 	 */
 	opt->exclude = NULL;
+	opt->manifest = MANIFEST_OPTION_NO;
+	opt->manifest_checksum_type = CHECKSUM_TYPE_CRC32C;
 
 	foreach(lopt, options)
 	{
@@ -932,6 +976,47 @@ parse_basebackup_options(List *options, basebackup_options *opt)
 			noverify_checksums = true;
 			o_noverify_checksums = true;
 		}
+		else if (strcmp(defel->defname, "manifest") == 0)
+		{
+			char	   *optval = strVal(defel->arg);
+			bool		manifest_bool;
+
+			if (o_manifest)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("duplicate option \"%s\"", defel->defname)));
+			if (parse_bool(optval, &manifest_bool))
+			{
+				if (manifest_bool)
+					opt->manifest = MANIFEST_OPTION_YES;
+				else
+					opt->manifest = MANIFEST_OPTION_NO;
+			}
+			else if (pg_strcasecmp(optval, "force-encode") == 0)
+				opt->manifest = MANIFEST_OPTION_FORCE_ENCODE;
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("unrecognized manifest option: \"%s\"",
+								optval)));
+			o_manifest = true;
+		}
+		else if (strcmp(defel->defname, "manifest_checksums") == 0)
+		{
+			char	   *optval = strVal(defel->arg);
+
+			if (o_manifest_checksums)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("duplicate option \"%s\"", defel->defname)));
+			if (!pg_checksum_parse_type(optval,
+										&opt->manifest_checksum_type))
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("unrecognized checksum algorithm: \"%s\"",
+								optval)));
+			o_manifest_checksums = true;
+		}
 		else
 			elog(ERROR, "option \"%s\" not recognized",
 				 defel->defname);
@@ -954,6 +1039,15 @@ parse_basebackup_options(List *options, basebackup_options *opt)
 			opt->fastcheckpoint ? "true" : "false",
 			opt->nowait ? "true" : "false",
 			opt->includewal ? "true" : "false");
+
+	if (opt->manifest == MANIFEST_OPTION_NO)
+	{
+		if (o_manifest_checksums)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("manifest checksums require a backup manifest")));
+		opt->manifest_checksum_type = CHECKSUM_TYPE_NONE;
+	}
 }
 
 
@@ -1143,11 +1237,15 @@ SendXlogRecPtrResult(XLogRecPtr ptr, TimeLineID tli)
  * Inject a file with given name and content in the output tar stream.
  */
 static void
-sendFileWithContent(const char *filename, const char *content)
+sendFileWithContent(const char *filename, const char *content,
+					backup_manifest_info *manifest)
 {
 	struct stat statbuf;
 	int			pad,
 				len;
+	pg_checksum_context checksum_ctx;
+
+	pg_checksum_init(&checksum_ctx, manifest->checksum_type);
 
 	len = strlen(content);
 
@@ -1186,6 +1284,10 @@ sendFileWithContent(const char *filename, const char *content)
 	elogif(debug_basebackup, LOG,
 			"basebackup send file -- Sent file '%s' with content \n%s.",
 			filename, content);
+
+	pg_checksum_update(&checksum_ctx, (uint8 *) content, len);
+	AddFileToBackupManifest(manifest, NULL, filename, len,
+							(pg_time_t) statbuf.st_mtime, &checksum_ctx);
 }
 
 /*
@@ -1196,7 +1298,8 @@ sendFileWithContent(const char *filename, const char *content)
  * Only used to send auxiliary tablespaces, not PGDATA.
  */
 int64
-sendTablespace(char *path, bool sizeonly)
+sendTablespace(char *path, char *spcoid, bool sizeonly,
+			   backup_manifest_info *manifest)
 {
 	int64		size;
 	char		pathbuf[MAXPGPATH];
@@ -1231,7 +1334,8 @@ sendTablespace(char *path, bool sizeonly)
 						   sizeonly);
 
 	/* Send all the files in the tablespace version directory */
-	size += sendDir(pathbuf, strlen(path), sizeonly, NIL, true, NULL);
+	size += sendDir(pathbuf, strlen(path), sizeonly, NIL, true, manifest,
+					spcoid, NULL);
 
 	return size;
 }
@@ -1268,7 +1372,8 @@ match_exclude_list(char *path, HTAB *exclude)
  */
 static int64
 sendDir(const char *path, int basepathlen, bool sizeonly, List *tablespaces,
-		bool sendtblspclinks, HTAB *exclude)
+		bool sendtblspclinks, backup_manifest_info *manifest,
+		const char *spcoid, HTAB *exclude)
 {
 	DIR		   *dir;
 	struct dirent *de;
@@ -1557,7 +1662,8 @@ sendDir(const char *path, int basepathlen, bool sizeonly, List *tablespaces,
 				skip_this_dir = true;
 
 			if (!skip_this_dir)
-				size += sendDir(pathbuf, basepathlen, sizeonly, tablespaces, sendtblspclinks, exclude);
+				size += sendDir(pathbuf, basepathlen, sizeonly, tablespaces,
+								sendtblspclinks, manifest, spcoid, exclude);
 		}
 		else if (S_ISREG(statbuf.st_mode))
 		{
@@ -1565,7 +1671,8 @@ sendDir(const char *path, int basepathlen, bool sizeonly, List *tablespaces,
 
 			if (!sizeonly)
 				sent = sendFile(pathbuf, pathbuf + basepathlen + 1, &statbuf,
-								true, isDbDir ? atooid(lastDir + 1) : InvalidOid);
+								true, isDbDir ? atooid(lastDir + 1) : InvalidOid,
+								manifest, spcoid);
 
 			if (sent || sizeonly)
 			{
@@ -1639,8 +1746,9 @@ is_checksummed_file(const char *fullpath, const char *filename)
  * and the file did not exist.
  */
 static bool
-sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf,
-		 bool missing_ok, Oid dboid)
+sendFile(const char *readfilename, const char *tarfilename,
+		 struct stat *statbuf, bool missing_ok, Oid dboid,
+		 backup_manifest_info *manifest, const char *spcoid)
 {
 	FILE	   *fp;
 	BlockNumber blkno = 0;
@@ -1657,6 +1765,9 @@ sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf
 	int			segmentno = 0;
 	char	   *segmentpath;
 	bool		verify_checksum = false;
+	pg_checksum_context checksum_ctx;
+
+	pg_checksum_init(&checksum_ctx, manifest->checksum_type);
 
 	fp = AllocateFile(readfilename, "rb");
 	if (fp == NULL)
@@ -1827,6 +1938,9 @@ sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf
 					(errmsg("base backup could not send data, aborting backup")));
 		update_basebackup_progress(cnt);
 
+		/* Also feed it to the checksum machinery. */
+		pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt);
+
 		len += cnt;
 		throttle(cnt);
 
@@ -1851,6 +1965,7 @@ sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf
 		{
 			cnt = Min(sizeof(buf), statbuf->st_size - len);
 			pq_putmessage('d', buf, cnt);
+			pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt);
 			update_basebackup_progress(cnt);
 			len += cnt;
 			throttle(cnt);
@@ -1859,7 +1974,8 @@ sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf
 
 	/*
 	 * Pad to 512 byte boundary, per tar format requirements. (This small
-	 * piece of data is probably not worth throttling.)
+	 * piece of data is probably not worth throttling, and is not checksummed
+	 * because it's not actually part of the file.)
 	 */
 	pad = ((len + 511) & ~511) - len;
 	if (pad > 0)
@@ -1883,6 +1999,9 @@ sendFile(const char *readfilename, const char *tarfilename, struct stat *statbuf
 	}
 
 	total_checksum_failures += checksum_failures;
+
+	AddFileToBackupManifest(manifest, spcoid, tarfilename, statbuf->st_size,
+							(pg_time_t) statbuf->st_mtime, &checksum_ctx);
 
 	return true;
 }

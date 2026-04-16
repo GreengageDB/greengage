@@ -433,7 +433,7 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				else
 					node->hj_JoinState = HJ_NEED_NEW_OUTER;
 
-				/* FALL THRU */
+				/* FALLTHROUGH */
 
 			case HJ_NEED_NEW_OUTER:
 
@@ -517,7 +517,7 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				/* OK, let's scan the bucket for matches */
 				node->hj_JoinState = HJ_SCAN_BUCKET;
 
-				/* FALL THRU */
+				/* FALLTHROUGH */
 
 			case HJ_SCAN_BUCKET:
 
@@ -1411,13 +1411,13 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 					if (BarrierArriveAndWait(batch_barrier,
 											 WAIT_EVENT_HASH_BATCH_ELECTING))
 						ExecParallelHashTableAlloc(hashtable, batchno);
-					/* Fall through. */
+					/* FALLTHROUGH */
 
 				case PHJ_BATCH_ALLOCATING:
 					/* Wait for allocation to complete. */
 					BarrierArriveAndWait(batch_barrier,
 										 WAIT_EVENT_HASH_BATCH_ALLOCATING);
-					/* Fall through. */
+					/* FALLTHROUGH */
 
 				case PHJ_BATCH_LOADING:
 					/* Start (or join in) loading tuples. */
@@ -1437,7 +1437,7 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 					sts_end_parallel_scan(inner_tuples);
 					BarrierArriveAndWait(batch_barrier,
 										 WAIT_EVENT_HASH_BATCH_LOADING);
-					/* Fall through. */
+					/* FALLTHROUGH */
 
 				case PHJ_BATCH_PROBING:
 
@@ -1659,9 +1659,21 @@ ExecReScanHashJoin(HashJoinState *node)
 			/* must destroy and rebuild hash table */
 			if (!node->hj_HashTable->eagerlyReleased)
 			{
-				HashState  *hashState = (HashState *) innerPlanState(node);
+				HashState  *hashNode = castNode(HashState, innerPlanState(node));
 
-				ExecHashTableDestroy(hashState, node->hj_HashTable);
+				Assert(hashNode->hashtable == node->hj_HashTable);
+				/* accumulate stats from old hash table, if wanted */
+				/* (this should match ExecShutdownHash) */
+				if (hashNode->ps.instrument && !hashNode->hinstrument)
+					hashNode->hinstrument = (HashInstrumentation *)
+						palloc0(sizeof(HashInstrumentation));
+				if (hashNode->hinstrument)
+					ExecHashAccumInstrumentation(hashNode->hinstrument,
+												hashNode->hashtable);
+				/* for safety, be sure to clear child plan node's pointer too */
+				hashNode->hashtable = NULL;
+
+				ExecHashTableDestroy(hashNode, node->hj_HashTable);
 			}
 			pfree(node->hj_HashTable);
 			node->hj_HashTable = NULL;

@@ -553,7 +553,6 @@ sub init
 	# only creates an empty file. gpconfigurenewseg is tasked with
 	# populating the master's dbid.
 	open $conf, '>>', "$pgdata/internal.auto.conf";
-	print $conf "\n# Added by PostgresNode.pm\n";
 	print $conf "gp_dbid=$dbid\n";
 	close $conf;
 

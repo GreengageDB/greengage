@@ -9,9 +9,11 @@ CREATE TABLE update_test (
 );
 
 CREATE TABLE upsert_test (
-    a   INT PRIMARY KEY,
-    b   TEXT
-);
+    a   INT,
+    b   TEXT,
+    id  INT DEFAULT 0,
+    PRIMARY KEY (id, a)
+) DISTRIBUTED BY (id);
 
 INSERT INTO update_test VALUES (5, 10, 'foo');
 INSERT INTO update_test(b, a) VALUES (15, 10);
@@ -103,30 +105,29 @@ SELECT a, b, char_length(c) FROM update_test;
 INSERT INTO upsert_test VALUES(1, 'Boo');
 -- uncorrelated  sub-select:
 WITH aaa AS (SELECT 1 AS a, 'Foo' AS b) INSERT INTO upsert_test
-  VALUES (1, 'Bar') ON CONFLICT(a)
-  DO UPDATE SET (b, a) = (SELECT b, a FROM aaa) RETURNING *;
+  VALUES (1, 'Bar') ON CONFLICT(id, a)
+  DO UPDATE SET (b, a) = (SELECT b, a FROM aaa) RETURNING a, b;
 -- correlated sub-select:
-INSERT INTO upsert_test VALUES (1, 'Baz') ON CONFLICT(a)
+INSERT INTO upsert_test VALUES (1, 'Baz') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Correlated', a from upsert_test i WHERE i.a = upsert_test.a)
-  RETURNING *;
+  RETURNING a, b;
 -- correlated sub-select (EXCLUDED.* alias):
-INSERT INTO upsert_test VALUES (1, 'Bat') ON CONFLICT(a)
+INSERT INTO upsert_test VALUES (1, 'Bat') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Excluded', a from upsert_test i WHERE i.a = excluded.a)
-  RETURNING *;
+  RETURNING a, b;
 
 -- ON CONFLICT using system attributes in RETURNING, testing both the
 -- inserting and updating paths. See bug report at:
 -- https://www.postgresql.org/message-id/73436355-6432-49B1-92ED-1FE4F7E7E100%40finefun.com.au
-CREATE FUNCTION xid_current() RETURNS xid LANGUAGE SQL AS $$SELECT (txid_current() % ((1::int8<<32)))::text::xid;$$;
-INSERT INTO upsert_test VALUES (2, 'Beeble') ON CONFLICT(a)
+CREATE FUNCTION xid_current() RETURNS xid LANGUAGE SQL AS $$SELECT pg_current_xact_id()::xid;$$ SECURITY DEFINER;
+INSERT INTO upsert_test VALUES (2, 'Beeble') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Excluded', a from upsert_test i WHERE i.a = excluded.a)
   RETURNING tableoid::regclass, xmin = xid_current() AS xmin_correct, xmax = 0 AS xmax_correct;
 -- currently xmax is set after a conflict - that's probably not good,
 -- but it seems worthwhile to have to be explicit if that changes.
-INSERT INTO upsert_test VALUES (2, 'Brox') ON CONFLICT(a)
+INSERT INTO upsert_test VALUES (2, 'Brox') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Excluded', a from upsert_test i WHERE i.a = excluded.a)
   RETURNING tableoid::regclass, xmin = xid_current() AS xmin_correct, xmax = xid_current() AS xmax_correct;
-
 
 DROP FUNCTION xid_current();
 DROP TABLE update_test;

@@ -219,6 +219,7 @@ max_prepared_transactions = 250		# can be 0 or more
 					# (change requires restart)
 #wal_writer_delay = 200ms		# 1-10000 milliseconds
 #wal_writer_flush_after = 1MB		# measured in pages, 0 disables
+#wal_skip_threshold = 2MB
 
 #commit_delay = 0			# range 0-100000, in microseconds
 #commit_siblings = 5			# range 1-1000
@@ -291,6 +292,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #max_wal_senders = 10		# max number of walsender processes
 				# (change requires restart)
 #wal_keep_segments = 0		# in logfile segments; 0 disables
+#max_slot_wal_keep_size = -1	# measured in bytes; -1 disables
 #wal_sender_timeout = 60s	# in milliseconds; 0 disables
 
 #max_replication_slots = 10	# max number of replication slots
@@ -360,6 +362,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #enable_parallel_append = on
 #enable_seqscan = on
 #enable_sort = on
+#enable_incrementalsort = on
 #enable_tidscan = on
 #enable_partitionwise_join = off
 #enable_partitionwise_aggregate = off

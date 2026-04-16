@@ -857,7 +857,7 @@ cdbexplain_collectStatsFromNode(PlanState *planstate, CdbExplain_SendStatCtx *ct
 		HashState *hashstate = (HashState *) planstate;
 
 		if (hashstate->hashtable)
-			ExecHashGetInstrumentation(&si->hashstats, hashstate->hashtable);
+			ExecHashAccumInstrumentation(&si->hashstats, hashstate->hashtable);
 	}
 }								/* cdbexplain_collectStatsFromNode */
 
@@ -1050,11 +1050,14 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
-		Assert(rsi->sortstats.sortMethod < NUM_SORT_METHOD);
+		int sortMethod = rsi->sortstats.sortMethod;
+		if (sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
+			sortMethod = pg_rightmost_one_pos32(sortMethod) + 1;
+		Assert(sortMethod < NUM_SORT_METHOD);
 		Assert(rsi->sortstats.spaceType < NUM_SORT_SPACE_TYPE);
 		if (rsi->sortstats.sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
 		{
-			cdbexplain_depStatAcc_upd(&sortSpaceUsed[rsi->sortstats.spaceType][rsi->sortstats.sortMethod],
+			cdbexplain_depStatAcc_upd(&sortSpaceUsed[rsi->sortstats.spaceType][sortMethod],
 									  (double) rsi->sortstats.spaceUsed, rsh, rsi, nsi);
 		}
 

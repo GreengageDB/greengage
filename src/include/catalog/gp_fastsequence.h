@@ -22,7 +22,7 @@
 /*
  * gp_fastsequence definition
  */
-CATALOG(gp_fastsequence,5043,FastSequenceRelationId)
+CATALOG(gp_fastsequence,8043,FastSequenceRelationId)
 {
 	Oid				objid;				/* object oid */
 	int8			objmod;				/* object modifier */

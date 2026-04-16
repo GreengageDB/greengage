@@ -220,17 +220,25 @@ extern ProjectSetPath *create_set_projection_path(PlannerInfo *root,
 												  RelOptInfo *rel,
 												  Path *subpath,
 												  PathTarget *target);
+extern SortPath *create_incremental_sort_path(PlannerInfo *root,
+											  RelOptInfo *rel,
+											  Path *subpath,
+											  List *pathkeys,
+											  int presorted_keys,
+											  double limit_tuples);
 extern SortPath *create_sort_path(PlannerInfo *root,
 								  RelOptInfo *rel,
 								  Path *subpath,
 								  List *pathkeys,
 								  double limit_tuples);
+#if 0 /* Group nodes are not used in GPDB */
 extern GroupPath *create_group_path(PlannerInfo *root,
 									RelOptInfo *rel,
 									Path *subpath,
 									List *groupClause,
 									List *qual,
 									double numGroups);
+#endif
 extern UpperUniquePath *create_upper_unique_path(PlannerInfo *root,
                                                  RelOptInfo *rel,
                                                  Path *subpath,
@@ -307,6 +315,7 @@ extern ModifyTablePath *create_modifytable_path(PlannerInfo *root,
 extern Path *create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 									Path *subpath,
 									Node *limitOffset, Node *limitCount,
+									LimitOption limitOption,
 									int64 offset_est, int64 count_est);
 extern void adjust_limit_rows_costs(double *rows,
 									Cost *startup_cost, Cost *total_cost,

@@ -1725,6 +1725,7 @@ _bt_killitems(IndexScanDesc scan)
 	int			i;
 	int			numKilled = so->numKilled;
 	bool		killedsomething = false;
+	bool		droppedpin PG_USED_FOR_ASSERTS_ONLY;
 
 	Assert(BTScanPosIsValid(so->currPos));
 
@@ -1742,6 +1743,7 @@ _bt_killitems(IndexScanDesc scan)
 		 * re-use of any TID on the page, so there is no need to check the
 		 * LSN.
 		 */
+		droppedpin = false;
 		LockBuffer(so->currPos.buf, BT_READ);
 
 		page = BufferGetPage(so->currPos.buf);
@@ -1750,12 +1752,9 @@ _bt_killitems(IndexScanDesc scan)
 	{
 		Buffer		buf;
 
+		droppedpin = true;
 		/* Attempt to re-read the buffer, getting pin and lock. */
 		buf = _bt_getbuf(scan->indexRelation, so->currPos.currPage, BT_READ);
-
-		/* It might not exist anymore; in which case we can't hint it. */
-		if (!BufferIsValid(buf))
-			return;
 
 		page = BufferGetPage(buf);
 		if (BufferGetLSNAtomic(buf) == so->currPos.lsn)
@@ -1795,9 +1794,18 @@ _bt_killitems(IndexScanDesc scan)
 				int			j;
 
 				/*
-				 * Note that we rely on the assumption that heap TIDs in the
-				 * scanpos items array are always in ascending heap TID order
-				 * within a posting list
+				 * We rely on the convention that heap TIDs in the scanpos
+				 * items array are stored in ascending heap TID order for a
+				 * group of TIDs that originally came from a posting list
+				 * tuple.  This convention even applies during backwards
+				 * scans, where returning the TIDs in descending order might
+				 * seem more natural.  This is about effectiveness, not
+				 * correctness.
+				 *
+				 * Note that the page may have been modified in almost any way
+				 * since we first read it (in the !droppedpin case), so it's
+				 * possible that this posting list tuple wasn't a posting list
+				 * tuple when we first encountered its heap TIDs.
 				 */
 				for (j = 0; j < nposting; j++)
 				{
@@ -1806,8 +1814,12 @@ _bt_killitems(IndexScanDesc scan)
 					if (!ItemPointerEquals(item, &kitem->heapTid))
 						break;	/* out of posting list loop */
 
-					/* kitem must have matching offnum when heap TIDs match */
-					Assert(kitem->indexOffset == offnum);
+					/*
+					 * kitem must have matching offnum when heap TIDs match,
+					 * though only in the common case where the page can't
+					 * have been concurrently modified
+					 */
+					Assert(kitem->indexOffset == offnum || !droppedpin);
 
 					/*
 					 * Read-ahead to later kitems here.
@@ -2223,7 +2235,7 @@ _bt_truncate(Relation rel, IndexTuple lastleft, IndexTuple firstright,
 	 */
 	if (keepnatts <= nkeyatts)
 	{
-		BTreeTupleSetNAtts(pivot, keepnatts);
+		BTreeTupleSetNAtts(pivot, keepnatts, false);
 		return pivot;
 	}
 
@@ -2246,11 +2258,13 @@ _bt_truncate(Relation rel, IndexTuple lastleft, IndexTuple firstright,
 	/* Cannot leak memory here */
 	pfree(pivot);
 
-	/* Store heap TID in enlarged pivot tuple */
+	/*
+	 * Store all of firstright's key attribute values plus a tiebreaker heap
+	 * TID value in enlarged pivot tuple
+	 */
 	tidpivot->t_info &= ~INDEX_SIZE_MASK;
 	tidpivot->t_info |= newsize;
-	BTreeTupleSetNAtts(tidpivot, nkeyatts);
-	BTreeTupleSetAltHeapTID(tidpivot);
+	BTreeTupleSetNAtts(tidpivot, nkeyatts, true);
 	pivotheaptid = BTreeTupleGetHeapTID(tidpivot);
 
 	/*
@@ -2328,17 +2342,12 @@ _bt_keep_natts(Relation rel, IndexTuple lastleft, IndexTuple firstright,
 	ScanKey		scankey;
 
 	/*
-	 * Be consistent about the representation of BTREE_VERSION 2/3 tuples
-	 * across Postgres versions; don't allow new pivot tuples to have
-	 * truncated key attributes there.  _bt_compare() treats truncated key
-	 * attributes as having the value minus infinity, which would break
-	 * searches within !heapkeyspace indexes.
+	 * _bt_compare() treats truncated key attributes as having the value minus
+	 * infinity, which would break searches within !heapkeyspace indexes.  We
+	 * must still truncate away non-key attribute values, though.
 	 */
 	if (!itup_key->heapkeyspace)
-	{
-		Assert(nkeyatts != IndexRelationGetNumberOfAttributes(rel));
 		return nkeyatts;
-	}
 
 	scankey = itup_key->scankeys;
 	keepnatts = 1;

@@ -13,6 +13,7 @@ test: int2
 test: int4
 test: int8
 test: oid
+test: xid
 test: float4
 test: float8
 test: bit
@@ -92,6 +93,8 @@ test: select_distinct_on
 #test: select_implicit
 test: select_having
 test: subselect
+# GPDB_13_MERGE_FIXME: enable incremental sort
+# test: incremental_sort
 test: union
 test: case
 test: join

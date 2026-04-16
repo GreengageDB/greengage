@@ -569,6 +569,8 @@ typedef FakeRelCacheEntryData *FakeRelCacheEntry;
  * fields related to physical storage, like rd_rel, are initialized, so the
  * fake entry is only usable in low-level operations like ReadBuffer().
  *
+ * This is also used for syncing WAL-skipped files.
+ *
  * Caller must free the returned entry with FreeFakeRelcacheEntry().
  */
 Relation
@@ -577,18 +579,20 @@ CreateFakeRelcacheEntry(RelFileNode rnode)
 	FakeRelCacheEntry fakeentry;
 	Relation	rel;
 
-	Assert(InRecovery);
-
 	/* Allocate the Relation struct and all related space in one block. */
 	fakeentry = palloc0(sizeof(FakeRelCacheEntryData));
 	rel = (Relation) fakeentry;
 
 	rel->rd_rel = &fakeentry->pgc;
 	rel->rd_node = rnode;
-	/* We will never be working with temp rels during recovery */
+
+	/*
+	 * We will never be working with temp rels during recovery or while
+	 * syncing WAL-skipped files.
+	 */
 	rel->rd_backend = InvalidBackendId;
 
-	/* It must be a permanent table if we're in recovery. */
+	/* It must be a permanent table here */
 	rel->rd_rel->relpersistence = RELPERSISTENCE_PERMANENT;
 
 	/* We don't know the name of the relation; use relfilenode instead */
@@ -597,9 +601,9 @@ CreateFakeRelcacheEntry(RelFileNode rnode)
 	/*
 	 * We set up the lockRelId in case anything tries to lock the dummy
 	 * relation.  Note that this is fairly bogus since relNode may be
-	 * different from the relation's OID.  It shouldn't really matter though,
-	 * since we are presumably running by ourselves and can't have any lock
-	 * conflicts ...
+	 * different from the relation's OID.  It shouldn't really matter though.
+	 * In recovery, we are running by ourselves and can't have any lock
+	 * conflicts.  While syncing, we already hold AccessExclusiveLock.
 	 */
 	rel->rd_lockInfo.lockRelId.dbId = rnode.dbNode;
 	rel->rd_lockInfo.lockRelId.relId = rnode.relNode;
@@ -697,10 +701,10 @@ XLogTruncateRelation(RelFileNode rnode, ForkNumber forkNum,
  * copied to a new timeline.
  *
  * The caller must also make sure it doesn't read past the current replay
- * position (using GetWalRcvWriteRecPtr) if executing in recovery, so it
+ * position (using GetXLogReplayRecPtr) if executing in recovery, so it
  * doesn't fail to notice that the current timeline became historical. The
  * caller must also update ThisTimeLineID with the result of
- * GetWalRcvWriteRecPtr and must check RecoveryInProgress().
+ * GetXLogReplayRecPtr and must check RecoveryInProgress().
  */
 void
 XLogReadDetermineTimeline(XLogReaderState *state, XLogRecPtr wantPage, uint32 wantLength)
@@ -799,10 +803,10 @@ XLogReadDetermineTimeline(XLogReaderState *state, XLogRecPtr wantPage, uint32 wa
 	}
 }
 
-/* openSegment callback for WALRead */
-static int
-wal_segment_open(XLogSegNo nextSegNo, WALSegmentContext * segcxt,
-				 TimeLineID *tli_p)
+/* XLogReaderRoutine->segment_open callback for local pg_wal files */
+int
+wal_segment_open(XLogReaderState *state, XLogSegNo nextSegNo,
+				 WALSegmentContext *segcxt, TimeLineID *tli_p)
 {
 	TimeLineID	tli = *tli_p;
 	char		path[MAXPGPATH];
@@ -827,8 +831,17 @@ wal_segment_open(XLogSegNo nextSegNo, WALSegmentContext * segcxt,
 	return -1;					/* keep compiler quiet */
 }
 
+/* stock XLogReaderRoutine->segment_close callback */
+void
+wal_segment_close(XLogReaderState *state)
+{
+	close(state->seg.ws_file);
+	/* need to check errno? */
+	state->seg.ws_file = -1;
+}
+
 /*
- * read_page callback for reading local xlog files
+ * XLogReaderRoutine->page_read callback for reading local xlog files
  *
  * Public because it would likely be very helpful for someone writing another
  * output method outside walsender, e.g. in a bgworker.
@@ -944,8 +957,9 @@ read_local_xlog_page(XLogReaderState *state, XLogRecPtr targetPagePtr,
 	 * as 'count', read the whole page anyway. It's guaranteed to be
 	 * zero-padded up to the page boundary if it's incomplete.
 	 */
-	if (!WALRead(cur_page, targetPagePtr, XLOG_BLCKSZ, tli, &state->seg,
-				 &state->segcxt, wal_segment_open, &errinfo))
+	if (!WALRead(state, cur_page, targetPagePtr, XLOG_BLCKSZ, tli,
+				 &state->seg, &state->segcxt,
+				 &errinfo))
 		WALReadRaiseError(&errinfo);
 
 	return count;

@@ -61,17 +61,25 @@ typedef struct SortCoordinateData *SortCoordinate;
  * Data structures for reporting sort statistics.  Note that
  * TuplesortInstrumentation can't contain any pointers because we
  * sometimes put it in shared memory.
+ *
+ * The parallel-sort infrastructure relies on having a zero TuplesortMethod
+ * to indicate that a worker never did anything, so we assign zero to
+ * SORT_TYPE_STILL_IN_PROGRESS.  The other values of this enum can be
+ * OR'ed together to represent a situation where different workers used
+ * different methods, so we need a separate bit for each one.  Keep the
+ * NUM_TUPLESORTMETHODS constant in sync with the number of bits!
  */
 typedef enum
 {
 	SORT_TYPE_STILL_IN_PROGRESS = 0,
-	SORT_TYPE_TOP_N_HEAPSORT,
-	SORT_TYPE_QUICKSORT,
-	SORT_TYPE_EXTERNAL_SORT,
-	SORT_TYPE_EXTERNAL_MERGE
-#define NUM_SORT_METHOD (SORT_TYPE_EXTERNAL_MERGE + 1)
-
+	SORT_TYPE_TOP_N_HEAPSORT = 1 << 0,
+	SORT_TYPE_QUICKSORT = 1 << 1,
+	SORT_TYPE_EXTERNAL_SORT = 1 << 2,
+	SORT_TYPE_EXTERNAL_MERGE = 1 << 3
 } TuplesortMethod;
+
+#define NUM_TUPLESORTMETHODS 4
+#define NUM_SORT_METHOD (NUM_TUPLESORTMETHODS + 1)
 
 typedef enum
 {
@@ -222,6 +230,7 @@ extern Tuplesortstate *tuplesort_begin_datum(Oid datumType,
 											 bool randomAccess);
 
 extern void tuplesort_set_bound(Tuplesortstate *state, int64 bound);
+extern bool tuplesort_used_bound(Tuplesortstate *state);
 
 extern void tuplesort_puttupleslot(Tuplesortstate *state,
 								   TupleTableSlot *slot);
@@ -245,6 +254,8 @@ extern bool tuplesort_skiptuples(Tuplesortstate *state, int64 ntuples,
 								 bool forward);
 
 extern void tuplesort_end(Tuplesortstate *state);
+
+extern void tuplesort_reset(Tuplesortstate *state);
 
 extern void tuplesort_get_stats(Tuplesortstate *state,
 								TuplesortInstrumentation *stats);

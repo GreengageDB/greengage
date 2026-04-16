@@ -167,7 +167,7 @@ PgStat_MsgBgWriter BgWriterStats;
  */
 static char *slru_names[] = {"async", "clog", "commit_timestamp",
 							  "multixact_offset", "multixact_member",
-							  "oldserxid", "pg_xact", "subtrans",
+							  "oldserxid", "subtrans",
 							  "other" /* has to be last */};
 
 /* number of elemenents of slru_name array */
@@ -3975,6 +3975,12 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_PROMOTE:
 			event_name = "Promote";
 			break;
+		case WAIT_EVENT_RECOVERY_CONFLICT_SNAPSHOT:
+			event_name = "RecoveryConflictSnapshot";
+			break;
+		case WAIT_EVENT_RECOVERY_CONFLICT_TABLESPACE:
+			event_name = "RecoveryConflictTablespace";
+			break;
 		case WAIT_EVENT_RECOVERY_PAUSE:
 			event_name = "RecoveryPause";
 			break;
@@ -6697,10 +6703,6 @@ pgstat_recv_resetslrucounter(PgStat_MsgResetslrucounter *msg, int len)
 {
 	int			i;
 	TimestampTz	ts = GetCurrentTimestamp();
-
-	memset(&slruStats, 0, sizeof(slruStats));
-
-	elog(LOG, "msg->m_index = %d", msg->m_index);
 
 	for (i = 0; i < SLRU_NUM_ELEMENTS; i++)
 	{

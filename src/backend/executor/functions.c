@@ -26,6 +26,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parse_coerce.h"
+#include "parser/parse_collate.h"
 #include "parser/parse_func.h"
 #include "storage/proc.h"
 #include "tcop/utility.h"
@@ -2133,6 +2134,7 @@ coerce_fn_result_column(TargetEntry *src_tle,
 											-1);
 		if (cast_result == NULL)
 			return false;
+		assign_expr_collations(NULL, cast_result);
 		src_tle->expr = (Expr *) cast_result;
 		/* Make a Var referencing the possibly-modified TLE */
 		new_tle_expr = (Expr *) makeVarFromTargetEntry(1, src_tle);
@@ -2151,6 +2153,7 @@ coerce_fn_result_column(TargetEntry *src_tle,
 											-1);
 		if (cast_result == NULL)
 			return false;
+		assign_expr_collations(NULL, cast_result);
 		/* Did the coercion actually do anything? */
 		if (cast_result != (Node *) var)
 			*upper_tlist_nontrivial = true;

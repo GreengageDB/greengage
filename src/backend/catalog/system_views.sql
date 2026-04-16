@@ -717,16 +717,16 @@ CREATE VIEW pg_statio_all_tables AS
             pg_stat_get_blocks_fetched(T.oid) -
                     pg_stat_get_blocks_hit(T.oid) AS toast_blks_read,
             pg_stat_get_blocks_hit(T.oid) AS toast_blks_hit,
-            sum(pg_stat_get_blocks_fetched(X.indexrelid) -
-                    pg_stat_get_blocks_hit(X.indexrelid))::bigint AS tidx_blks_read,
-            sum(pg_stat_get_blocks_hit(X.indexrelid))::bigint AS tidx_blks_hit
+            pg_stat_get_blocks_fetched(X.indexrelid) -
+                    pg_stat_get_blocks_hit(X.indexrelid) AS tidx_blks_read,
+            pg_stat_get_blocks_hit(X.indexrelid) AS tidx_blks_hit
     FROM pg_class C LEFT JOIN
             pg_index I ON C.oid = I.indrelid LEFT JOIN
             pg_class T ON C.reltoastrelid = T.oid LEFT JOIN
             pg_index X ON T.oid = X.indrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
     WHERE C.relkind IN ('r', 't', 'm')
-    GROUP BY C.oid, N.nspname, C.relname, T.oid, X.indrelid;
+    GROUP BY C.oid, N.nspname, C.relname, T.oid, X.indexrelid;
 
 CREATE VIEW pg_statio_sys_tables AS
     SELECT * FROM pg_statio_all_tables
@@ -1053,7 +1053,9 @@ CREATE VIEW pg_replication_slots AS
             L.xmin,
             L.catalog_xmin,
             L.restart_lsn,
-            L.confirmed_flush_lsn
+            L.confirmed_flush_lsn,
+            L.wal_status,
+            L.min_safe_lsn
     FROM pg_get_replication_slots() AS L
             LEFT JOIN pg_database D ON (L.datoid = D.oid);
 

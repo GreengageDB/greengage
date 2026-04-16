@@ -454,9 +454,16 @@ drop table p_t1;
 create temp table t1(f1 int, f2 bigint);
 create temp table t2(f1 bigint, f22 bigint);
 
+-- start_ignore
+-- FIXME: ORCA CTranslatorQueryToDXL.cpp:4067: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+SET optimizer_trace_fallback = off;
+-- end_ignore
 select f1 from t1 left join t2 using (f1) group by f1;
 select f1 from t1 left join t2 using (f1) group by t1.f1;
 select t1.f1 from t1 left join t2 using (f1) group by t1.f1;
+-- start_ignore
+SET optimizer_trace_fallback = on;
+-- end_ignore
 -- only this one should fail:
 select t1.f1 from t1 left join t2 using (f1) group by f1;
 

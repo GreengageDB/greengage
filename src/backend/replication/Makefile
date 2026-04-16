@@ -16,6 +16,7 @@ override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
 override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
 OBJS = \
+	backup_manifest.o \
 	basebackup.o \
 	repl_gram.o \
 	slot.o \
