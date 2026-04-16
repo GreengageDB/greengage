@@ -185,6 +185,13 @@ class RebalanceSM:
             if batch_size > MAX_COORDINATOR_NUM_WORKERS:
                 batch_size = MAX_COORDINATOR_NUM_WORKERS
             gpmovemirrors_options += f' -B {batch_size}'
+        if self.options.batch_size is not None:
+            segment_batch_size = self.options.batch_size
+            # gpmovemirrors has its own limitation for segment batch size,
+            # need to consider it here.
+            if segment_batch_size > MAX_SEGHOST_NUM_WORKERS:
+                segment_batch_size = MAX_SEGHOST_NUM_WORKERS
+            gpmovemirrors_options += f' -b {segment_batch_size}'
         if self.options.hba_hostnames:
             gpmovemirrors_options = gpmovemirrors_options + ' --hba-hostnames'
         if self.options.logfile_directory is not None:
@@ -290,6 +297,13 @@ class RebalanceSM:
                 if batch_size > MAX_COORDINATOR_NUM_WORKERS:
                     batch_size = MAX_COORDINATOR_NUM_WORKERS
                 recoverseg_options += f' -B {batch_size}'
+            if self.options.batch_size is not None:
+                segment_batch_size = self.options.batch_size
+                # gprecoverseg has its own limitation for segment batch size,
+                # need to consider it here.
+                if segment_batch_size > MAX_SEGHOST_NUM_WORKERS:
+                    segment_batch_size = MAX_SEGHOST_NUM_WORKERS
+                recoverseg_options += f' -b {segment_batch_size}'
             if self.options.replay_lag is not None:
                 recoverseg_options = recoverseg_options + f' --replay-lag {self.options.replay_lag}'
             if self.options.logfile_directory is not None:

@@ -37,9 +37,9 @@ def parseargs():
 
     parser.add_option('-x', '--target-segment-count', type='int', dest='target_segment_count', metavar='<target_segment_count>',
                       help='Target segments number of the whole cluster')
-    parser.add_option('-B', '--batch-size', type='int', default=4, dest='batch_size', metavar='<batch_size>',
+    parser.add_option('-B', '--batch-size', type='int', default=16, dest='batch_size', metavar='<batch_size>',
                       help='Max worker number in WorkerPool instance. Valid values are 1-%d.' % MAX_BATCH_SIZE)
-    parser.add_option('-n', '--parallel', type="int", default=4, dest="parallel", metavar='<parallel>',
+    parser.add_option('-n', '--parallel', type="int", default=16, dest="parallel", metavar='<parallel>',
                       help='Max number of workers at a time. Valid values are 1-%d.' % MAX_PARALLEL_WORKERS)
     parser.add_option('-c', '--clean', action='store_true', dest="clean_required",
                       help='remove the rebalance schema.')
