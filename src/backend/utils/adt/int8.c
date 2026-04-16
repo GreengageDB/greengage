@@ -149,9 +149,16 @@ int8out(PG_FUNCTION_ARGS)
 	int64		val = PG_GETARG_INT64(0);
 	char		buf[MAXINT8LEN + 1];
 	char	   *result;
+	int			len;
 
-	pg_lltoa(val, buf);
-	result = pstrdup(buf);
+	len = pg_lltoa(val, buf) + 1;
+
+	/*
+	 * Since the length is already known, we do a manual palloc() and memcpy()
+	 * to avoid the strlen() call that would otherwise be done in pstrdup().
+	 */
+	result = palloc(len);
+	memcpy(result, buf, len);
 	PG_RETURN_CSTRING(result);
 }
 
@@ -684,8 +691,9 @@ int8mod(PG_FUNCTION_ARGS)
 static int64
 int8gcd_internal(int64 arg1, int64 arg2)
 {
-	int64	swap;
-	int64	a1, a2;
+	int64		swap;
+	int64		a1,
+				a2;
 
 	/*
 	 * Put the greater absolute value in arg1.
@@ -744,9 +752,9 @@ int8gcd_internal(int64 arg1, int64 arg2)
 Datum
 int8gcd(PG_FUNCTION_ARGS)
 {
-	int64	arg1 = PG_GETARG_INT64(0);
-	int64	arg2 = PG_GETARG_INT64(1);
-	int64	result;
+	int64		arg1 = PG_GETARG_INT64(0);
+	int64		arg2 = PG_GETARG_INT64(1);
+	int64		result;
 
 	result = int8gcd_internal(arg1, arg2);
 
@@ -759,10 +767,10 @@ int8gcd(PG_FUNCTION_ARGS)
 Datum
 int8lcm(PG_FUNCTION_ARGS)
 {
-	int64	arg1 = PG_GETARG_INT64(0);
-	int64	arg2 = PG_GETARG_INT64(1);
-	int64	gcd;
-	int64	result;
+	int64		arg1 = PG_GETARG_INT64(0);
+	int64		arg2 = PG_GETARG_INT64(1);
+	int64		gcd;
+	int64		result;
 
 	/*
 	 * Handle lcm(x, 0) = lcm(0, x) = 0 as a special case.  This prevents a

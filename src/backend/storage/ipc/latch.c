@@ -1100,9 +1100,9 @@ WaitEventAdjustKqueue(WaitEventSet *set, WaitEvent *event, int old_events)
 			 !PostmasterIsAlive())
 	{
 		/*
-		 * The extra PostmasterIsAliveInternal() check prevents false alarms on
-		 * systems that give a different value for getppid() while being traced
-		 * by a debugger.
+		 * The extra PostmasterIsAliveInternal() check prevents false alarms
+		 * on systems that give a different value for getppid() while being
+		 * traced by a debugger.
 		 */
 		set->report_postmaster_not_running = true;
 	}
@@ -1355,7 +1355,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			 * because we don't expect the pipe to become readable or to have
 			 * any errors either, treat those cases as postmaster death, too.
 			 *
-			 * Be paranoid about a spurious event signalling the postmaster as
+			 * Be paranoid about a spurious event signaling the postmaster as
 			 * being dead.  There have been reports about that happening with
 			 * older primitives (select(2) to be specific), and a spurious
 			 * WL_POSTMASTER_DEATH event would be painful. Re-checking doesn't
@@ -1614,7 +1614,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			 * we don't expect the pipe to become readable or to have any
 			 * errors either, treat those cases as postmaster death, too.
 			 *
-			 * Be paranoid about a spurious event signalling the postmaster as
+			 * Be paranoid about a spurious event signaling the postmaster as
 			 * being dead.  There have been reports about that happening with
 			 * older primitives (select(2) to be specific), and a spurious
 			 * WL_POSTMASTER_DEATH event would be painful. Re-checking doesn't

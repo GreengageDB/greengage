@@ -1297,8 +1297,8 @@ connectOptions2(PGconn *conn)
 		{
 			conn->status = CONNECTION_BAD;
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid channel_binding value: \"%s\"\n"),
-							  conn->channel_binding);
+							  libpq_gettext("invalid %s value: \"%s\"\n"),
+							  "channel_binding", conn->channel_binding);
 			return false;
 		}
 	}
@@ -1323,8 +1323,8 @@ connectOptions2(PGconn *conn)
 		{
 			conn->status = CONNECTION_BAD;
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid sslmode value: \"%s\"\n"),
-							  conn->sslmode);
+							  libpq_gettext("invalid %s value: \"%s\"\n"),
+							  "sslmode", conn->sslmode);
 			return false;
 		}
 
@@ -1365,7 +1365,8 @@ connectOptions2(PGconn *conn)
 	{
 		conn->status = CONNECTION_BAD;
 		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("invalid ssl_min_protocol_version value: \"%s\"\n"),
+						  libpq_gettext("invalid %s value: \"%s\"\n"),
+						  "ssl_min_protocol_version",
 						  conn->ssl_min_protocol_version);
 		return false;
 	}
@@ -1373,7 +1374,8 @@ connectOptions2(PGconn *conn)
 	{
 		conn->status = CONNECTION_BAD;
 		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("invalid ssl_max_protocol_version value: \"%s\"\n"),
+						  libpq_gettext("invalid %s value: \"%s\"\n"),
+						  "ssl_max_protocol_version",
 						  conn->ssl_max_protocol_version);
 		return false;
 	}
@@ -1405,7 +1407,8 @@ connectOptions2(PGconn *conn)
 		{
 			conn->status = CONNECTION_BAD;
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid gssencmode value: \"%s\"\n"),
+							  libpq_gettext("invalid %s value: \"%s\"\n"),
+							  "gssencmode",
 							  conn->gssencmode);
 			return false;
 		}
@@ -1449,7 +1452,8 @@ connectOptions2(PGconn *conn)
 		{
 			conn->status = CONNECTION_BAD;
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid target_session_attrs value: \"%s\"\n"),
+							  libpq_gettext("invalid %s value: \"%s\"\n"),
+							  "target_settion_attrs",
 							  conn->target_session_attrs);
 			return false;
 		}
@@ -4130,7 +4134,10 @@ freePGconn(PGconn *conn)
 	if (conn->sslkey)
 		free(conn->sslkey);
 	if (conn->sslpassword)
+	{
+		explicit_bzero(conn->sslpassword, strlen(conn->sslpassword));
 		free(conn->sslpassword);
+	}
 	if (conn->sslrootcert)
 		free(conn->sslrootcert);
 	if (conn->sslcrl)

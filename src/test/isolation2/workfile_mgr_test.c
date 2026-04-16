@@ -196,7 +196,6 @@ static bool
 execworkfile_buffile_test(void)
 {
 	int64 result = 0;
-	bool success = false;
 	int64 expected_size = 0;
 	int64 final_size = 0;
 	int64 current_size = 0;
@@ -229,35 +228,35 @@ execworkfile_buffile_test(void)
 
 	elog(LOG, "Running sub-test: Writing small amount data to EWF/Buffile and checking size");
 
-	size_t written = BufFileWrite(ewf, text->data, 20);
+	BufFileWrite(ewf, text->data, 20);
 	expected_size += 20;
 
-	unit_test_result(written == 20 && expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
+	unit_test_result(expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
 
 
 	elog(LOG, "Running sub-test: Writing larger amount data (%d bytes) to EWF/Buffile and checking size", nchars);
-	written = BufFileWrite(ewf, text->data, nchars);
+	BufFileWrite(ewf, text->data, nchars);
 	expected_size += nchars;
 
-	unit_test_result(written == nchars && expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
+	unit_test_result(expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
 
 	elog(LOG, "Running sub-test: Writing to the middle of a EWF/Buffile and checking size");
 	result = BufFileSeek(ewf, 0 /* fileno */, BufFileGetSize(ewf) / 2, SEEK_SET);
 	Assert(result == 0);
 	/* This write should not add to the size */
-	success = BufFileWrite(ewf, text->data, BufFileGetSize(ewf) / 10);
+	BufFileWrite(ewf, text->data, BufFileGetSize(ewf) / 10);
 
-	unit_test_result(success && expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
+	unit_test_result(expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
 
 	elog(LOG, "Running sub-test: Seeking past end and writing data to EWF/Buffile and checking size");
 	int past_end_offset = 100;
 	int past_end_write = 200;
 	result = BufFileSeek(ewf, 0 /* fileno */, BufFileGetSize(ewf) + past_end_offset, SEEK_SET);
 	Assert(result == 0);
-	written = BufFileWrite(ewf, text->data, past_end_write);
+	BufFileWrite(ewf, text->data, past_end_write);
 	expected_size += past_end_offset + past_end_write;
 
-	unit_test_result(written == past_end_write && expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
+	unit_test_result(expected_size == WorkfileSegspace_GetSize() - initial_diskspace);
 
 	elog(LOG, "Running sub-test: Closing EWF/Buffile"); // keep it open
 	final_size = BufFileGetSize(ewf);
@@ -291,7 +290,7 @@ execworkfile_buffile_test(void)
 	elog(LOG, "Running sub-test: Closing and deleting file from disk");
 	BufFileClose(write_ewf);
 
-	unit_test_result(success);
+	unit_test_result(true);
 
 	pfree(text->data);
 	pfree(text);

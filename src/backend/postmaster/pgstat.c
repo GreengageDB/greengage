@@ -157,24 +157,30 @@ char	   *pgstat_stat_tmpname = NULL;
 PgStat_MsgBgWriter BgWriterStats;
 
 /*
- * SLRU statistics counters (unused in other processes) stored directly in
- * stats structure so it can be sent without needing to copy things around.
- * We assume this inits to zeroes. There is no central registry of SLRUs,
- * so we use this fixed list instead.
- *
- * There's a separte entry for each SLRU we have. The "other" entry is used
- * for all SLRUs without an explicit entry (e.g. SLRUs in extensions).
+ * List of SLRU names that we keep stats for.  There is no central registry of
+ * SLRUs, so we use this fixed list instead.  The "other" entry is used for
+ * all SLRUs without an explicit entry (e.g. SLRUs in extensions).
  */
-static char *slru_names[] = {"async", "clog", "commit_timestamp",
-							  "multixact_offset", "multixact_member",
-							  "oldserxid", "subtrans",
-							  "other" /* has to be last */};
+static const char *const slru_names[] = {
+	"CommitTs",
+	"MultiXactMember",
+	"MultiXactOffset",
+	"Notify",
+	"Serial",
+	"Subtrans",
+	"Xact",
+	"other"						/* has to be last */
+};
 
-/* number of elemenents of slru_name array */
-#define SLRU_NUM_ELEMENTS	(sizeof(slru_names) / sizeof(char *))
+#define SLRU_NUM_ELEMENTS	lengthof(slru_names)
 
-/* entries in the same order as slru_names */
-PgStat_MsgSLRU SLRUStats[SLRU_NUM_ELEMENTS];
+/*
+ * SLRU statistics counts waiting to be sent to the collector.  These are
+ * stored directly in stats message format so they can be sent without needing
+ * to copy things around.  We assume this variable inits to zeroes.  Entries
+ * are one-to-one with slru_names[].
+ */
+static PgStat_MsgSLRU SLRUStats[SLRU_NUM_ELEMENTS];
 
 /* ----------
  * Local data
@@ -1836,11 +1842,7 @@ pgstat_initstats(Relation rel)
 	char		relkind = rel->rd_rel->relkind;
 
 	/* We only count stats for things that have storage */
-	if (!(relkind == RELKIND_RELATION ||
-		  relkind == RELKIND_MATVIEW ||
-		  relkind == RELKIND_INDEX ||
-		  relkind == RELKIND_TOASTVALUE ||
-		  relkind == RELKIND_SEQUENCE))
+	if (!RELKIND_HAS_STORAGE(relkind))
 	{
 		rel->pgstat_info = NULL;
 		return;
@@ -3891,56 +3893,53 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_CHECKPOINT_START:
 			event_name = "CheckpointStart";
 			break;
-		case WAIT_EVENT_CLOG_GROUP_UPDATE:
-			event_name = "ClogGroupUpdate";
-			break;
 		case WAIT_EVENT_EXECUTE_GATHER:
 			event_name = "ExecuteGather";
 			break;
-		case WAIT_EVENT_HASH_BATCH_ALLOCATING:
-			event_name = "Hash/Batch/Allocating";
+		case WAIT_EVENT_HASH_BATCH_ALLOCATE:
+			event_name = "HashBatchAllocate";
 			break;
-		case WAIT_EVENT_HASH_BATCH_ELECTING:
-			event_name = "Hash/Batch/Electing";
+		case WAIT_EVENT_HASH_BATCH_ELECT:
+			event_name = "HashBatchElect";
 			break;
-		case WAIT_EVENT_HASH_BATCH_LOADING:
-			event_name = "Hash/Batch/Loading";
+		case WAIT_EVENT_HASH_BATCH_LOAD:
+			event_name = "HashBatchLoad";
 			break;
-		case WAIT_EVENT_HASH_BUILD_ALLOCATING:
-			event_name = "Hash/Build/Allocating";
+		case WAIT_EVENT_HASH_BUILD_ALLOCATE:
+			event_name = "HashBuildAllocate";
 			break;
-		case WAIT_EVENT_HASH_BUILD_ELECTING:
-			event_name = "Hash/Build/Electing";
+		case WAIT_EVENT_HASH_BUILD_ELECT:
+			event_name = "HashBuildElect";
 			break;
-		case WAIT_EVENT_HASH_BUILD_HASHING_INNER:
-			event_name = "Hash/Build/HashingInner";
+		case WAIT_EVENT_HASH_BUILD_HASH_INNER:
+			event_name = "HashBuildHashInner";
 			break;
-		case WAIT_EVENT_HASH_BUILD_HASHING_OUTER:
-			event_name = "Hash/Build/HashingOuter";
+		case WAIT_EVENT_HASH_BUILD_HASH_OUTER:
+			event_name = "HashBuildHashOuter";
 			break;
-		case WAIT_EVENT_HASH_GROW_BATCHES_ALLOCATING:
-			event_name = "Hash/GrowBatches/Allocating";
+		case WAIT_EVENT_HASH_GROW_BATCHES_ALLOCATE:
+			event_name = "HashGrowBatchesAllocate";
 			break;
-		case WAIT_EVENT_HASH_GROW_BATCHES_DECIDING:
-			event_name = "Hash/GrowBatches/Deciding";
+		case WAIT_EVENT_HASH_GROW_BATCHES_DECIDE:
+			event_name = "HashGrowBatchesDecide";
 			break;
-		case WAIT_EVENT_HASH_GROW_BATCHES_ELECTING:
-			event_name = "Hash/GrowBatches/Electing";
+		case WAIT_EVENT_HASH_GROW_BATCHES_ELECT:
+			event_name = "HashGrowBatchesElect";
 			break;
-		case WAIT_EVENT_HASH_GROW_BATCHES_FINISHING:
-			event_name = "Hash/GrowBatches/Finishing";
+		case WAIT_EVENT_HASH_GROW_BATCHES_FINISH:
+			event_name = "HashGrowBatchesFinish";
 			break;
-		case WAIT_EVENT_HASH_GROW_BATCHES_REPARTITIONING:
-			event_name = "Hash/GrowBatches/Repartitioning";
+		case WAIT_EVENT_HASH_GROW_BATCHES_REPARTITION:
+			event_name = "HashGrowBatchesRepartition";
 			break;
-		case WAIT_EVENT_HASH_GROW_BUCKETS_ALLOCATING:
-			event_name = "Hash/GrowBuckets/Allocating";
+		case WAIT_EVENT_HASH_GROW_BUCKETS_ALLOCATE:
+			event_name = "HashGrowBucketsAllocate";
 			break;
-		case WAIT_EVENT_HASH_GROW_BUCKETS_ELECTING:
-			event_name = "Hash/GrowBuckets/Electing";
+		case WAIT_EVENT_HASH_GROW_BUCKETS_ELECT:
+			event_name = "HashGrowBucketsElect";
 			break;
-		case WAIT_EVENT_HASH_GROW_BUCKETS_REINSERTING:
-			event_name = "Hash/GrowBuckets/Reinserting";
+		case WAIT_EVENT_HASH_GROW_BUCKETS_REINSERT:
+			event_name = "HashGrowBucketsReinsert";
 			break;
 		case WAIT_EVENT_LOGICAL_SYNC_DATA:
 			event_name = "LogicalSyncData";
@@ -3972,6 +3971,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_PROCARRAY_GROUP_UPDATE:
 			event_name = "ProcArrayGroupUpdate";
 			break;
+		case WAIT_EVENT_PROC_SIGNAL_BARRIER:
+			event_name = "ProcSignalBarrier";
+			break;
 		case WAIT_EVENT_PROMOTE:
 			event_name = "Promote";
 			break;
@@ -3995,6 +3997,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 			break;
 		case WAIT_EVENT_SYNC_REP:
 			event_name = "SyncRep";
+			break;
+		case WAIT_EVENT_XACT_GROUP_UPDATE:
+			event_name = "XactGroupUpdate";
 			break;
 
 		case WAIT_EVENT_INTERCONNECT:
@@ -4160,9 +4165,6 @@ pgstat_get_wait_io(WaitEventIO w)
 			break;
 		case WAIT_EVENT_LOGICAL_REWRITE_WRITE:
 			event_name = "LogicalRewriteWrite";
-			break;
-		case WAIT_EVENT_PROC_SIGNAL_BARRIER:
-			event_name = "ProcSignalBarrier";
 			break;
 		case WAIT_EVENT_RELATION_MAP_READ:
 			event_name = "RelationMapRead";
@@ -4798,12 +4800,10 @@ pgstat_combine_from_qe(CdbDispatchResults *results, int writerSliceIndex)
 static void
 pgstat_send_slru(void)
 {
-	int		i;
-
 	/* We assume this initializes to zeroes */
 	static const PgStat_MsgSLRU all_zeroes;
 
-	for (i = 0; i < SLRU_NUM_ELEMENTS; i++)
+	for (int i = 0; i < SLRU_NUM_ELEMENTS; i++)
 	{
 		/*
 		 * This function can be called even if nothing at all has happened. In
@@ -6702,7 +6702,7 @@ static void
 pgstat_recv_resetslrucounter(PgStat_MsgResetslrucounter *msg, int len)
 {
 	int			i;
-	TimestampTz	ts = GetCurrentTimestamp();
+	TimestampTz ts = GetCurrentTimestamp();
 
 	for (i = 0; i < SLRU_NUM_ELEMENTS; i++)
 	{
@@ -6718,7 +6718,7 @@ pgstat_recv_resetslrucounter(PgStat_MsgResetslrucounter *msg, int len)
 /* ----------
  * pgstat_recv_autovac() -
  *
- *	Process an autovacuum signalling message.
+ *	Process an autovacuum signaling message.
  * ----------
  */
 static void
@@ -6759,10 +6759,10 @@ pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len)
 	/*
 	 * It is quite possible that a non-aggressive VACUUM ended up skipping
 	 * various pages, however, we'll zero the insert counter here regardless.
-	 * It's currently used only to track when we need to perform an
-	 * "insert" autovacuum, which are mainly intended to freeze newly inserted
-	 * tuples.  Zeroing this may just mean we'll not try to vacuum the table
-	 * again until enough tuples have been inserted to trigger another insert
+	 * It's currently used only to track when we need to perform an "insert"
+	 * autovacuum, which are mainly intended to freeze newly inserted tuples.
+	 * Zeroing this may just mean we'll not try to vacuum the table again
+	 * until enough tuples have been inserted to trigger another insert
 	 * autovacuum.  An anti-wraparound autovacuum will catch any persistent
 	 * stragglers.
 	 */
@@ -7346,7 +7346,7 @@ pgstat_clip_activity(const char *raw_activity)
 int
 pgstat_slru_index(const char *name)
 {
-	int	i;
+	int			i;
 
 	for (i = 0; i < SLRU_NUM_ELEMENTS; i++)
 	{
@@ -7365,15 +7365,13 @@ pgstat_slru_index(const char *name)
  * in which case this returns NULL. This allows writing code that does not
  * know the number of entries in advance.
  */
-char *
-pgstat_slru_name(int idx)
+const char *
+pgstat_slru_name(int slru_idx)
 {
-	Assert(idx >= 0);
-
-	if (idx >= SLRU_NUM_ELEMENTS)
+	if (slru_idx < 0 || slru_idx >= SLRU_NUM_ELEMENTS)
 		return NULL;
 
-	return slru_names[idx];
+	return slru_names[slru_idx];
 }
 
 /*
@@ -7382,54 +7380,62 @@ pgstat_slru_name(int idx)
  * Returns pointer to entry with counters for given SLRU (based on the name
  * stored in SlruCtl as lwlock tranche name).
  */
-static PgStat_MsgSLRU *
-slru_entry(SlruCtl ctl)
+static inline PgStat_MsgSLRU *
+slru_entry(int slru_idx)
 {
-	int		idx = pgstat_slru_index(ctl->shared->lwlock_tranche_name);
+	/*
+	 * The postmaster should never register any SLRU statistics counts; if it
+	 * did, the counts would be duplicated into child processes via fork().
+	 */
+	Assert(IsUnderPostmaster || !IsPostmasterEnvironment);
 
-	Assert((idx >= 0) && (idx < SLRU_NUM_ELEMENTS));
+	Assert((slru_idx >= 0) && (slru_idx < SLRU_NUM_ELEMENTS));
 
-	return &SLRUStats[idx];
+	return &SLRUStats[slru_idx];
+}
+
+/*
+ * SLRU statistics count accumulation functions --- called from slru.c
+ */
+
+void
+pgstat_count_slru_page_zeroed(int slru_idx)
+{
+	slru_entry(slru_idx)->m_blocks_zeroed += 1;
 }
 
 void
-pgstat_count_slru_page_zeroed(SlruCtl ctl)
+pgstat_count_slru_page_hit(int slru_idx)
 {
-	slru_entry(ctl)->m_blocks_zeroed += 1;
+	slru_entry(slru_idx)->m_blocks_hit += 1;
 }
 
 void
-pgstat_count_slru_page_hit(SlruCtl ctl)
+pgstat_count_slru_page_exists(int slru_idx)
 {
-	slru_entry(ctl)->m_blocks_hit += 1;
+	slru_entry(slru_idx)->m_blocks_exists += 1;
 }
 
 void
-pgstat_count_slru_page_exists(SlruCtl ctl)
+pgstat_count_slru_page_read(int slru_idx)
 {
-	slru_entry(ctl)->m_blocks_exists += 1;
+	slru_entry(slru_idx)->m_blocks_read += 1;
 }
 
 void
-pgstat_count_slru_page_read(SlruCtl ctl)
+pgstat_count_slru_page_written(int slru_idx)
 {
-	slru_entry(ctl)->m_blocks_read += 1;
+	slru_entry(slru_idx)->m_blocks_written += 1;
 }
 
 void
-pgstat_count_slru_page_written(SlruCtl ctl)
+pgstat_count_slru_flush(int slru_idx)
 {
-	slru_entry(ctl)->m_blocks_written += 1;
+	slru_entry(slru_idx)->m_flush += 1;
 }
 
 void
-pgstat_count_slru_flush(SlruCtl ctl)
+pgstat_count_slru_truncate(int slru_idx)
 {
-	slru_entry(ctl)->m_flush += 1;
-}
-
-void
-pgstat_count_slru_truncate(SlruCtl ctl)
-{
-	slru_entry(ctl)->m_truncate += 1;
+	slru_entry(slru_idx)->m_truncate += 1;
 }

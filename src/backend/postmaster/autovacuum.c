@@ -718,8 +718,7 @@ AutoVacLauncherMain(int argc, char *argv[])
 		HandleAutoVacLauncherInterrupts();
 
 		/*
-		 * a worker finished, or postmaster signalled failure to start a
-		 * worker
+		 * a worker finished, or postmaster signaled failure to start a worker
 		 */
 		if (got_SIGUSR2)
 		{
@@ -899,7 +898,7 @@ HandleAutoVacLauncherInterrupts(void)
  * Perform a normal exit from the autovac launcher.
  */
 static void
-AutoVacLauncherShutdown()
+AutoVacLauncherShutdown(void)
 {
 	ereport(DEBUG1,
 			(errmsg("autovacuum launcher shutting down")));
@@ -3210,7 +3209,7 @@ relation_needs_vacanalyze(Oid relid,
 
 		/* Determine if this table needs vacuum or analyze. */
 		*dovacuum = force_vacuum || (vactuples > vacthresh) ||
-					(vac_ins_base_thresh >= 0 && instuples > vacinsthresh);
+			(vac_ins_base_thresh >= 0 && instuples > vacinsthresh);
 		*doanalyze = (anltuples > anlthresh);
 	}
 	else

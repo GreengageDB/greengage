@@ -286,8 +286,8 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 	bool		vm;
 	bool		need_fsm_vacuum = false;
 	ForkNumber	forks[MAX_FORKNUM];
-	BlockNumber	blocks[MAX_FORKNUM];
-	int		nforks = 0;
+	BlockNumber blocks[MAX_FORKNUM];
+	int			nforks = 0;
 
 	/* Open it at the smgr level if not already done */
 	RelationOpenSmgr(rel);
@@ -304,7 +304,7 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 	blocks[nforks] = nblocks;
 	nforks++;
 
-	/*  Prepare for truncation of the FSM if it exists */
+	/* Prepare for truncation of the FSM if it exists */
 	fsm = smgrexists(rel->rd_smgr, FSM_FORKNUM);
 	if (fsm)
 	{
@@ -373,9 +373,9 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 	smgrtruncate(rel->rd_smgr, forks, nforks, blocks);
 
 	/*
-	 * Update upper-level FSM pages to account for the truncation.
-	 * This is important because the just-truncated pages were likely
-	 * marked as all-free, and would be preferentially selected.
+	 * Update upper-level FSM pages to account for the truncation. This is
+	 * important because the just-truncated pages were likely marked as
+	 * all-free, and would be preferentially selected.
 	 */
 	if (need_fsm_vacuum)
 		FreeSpaceMapVacuumRange(rel, nblocks, InvalidBlockNumber);
@@ -952,8 +952,8 @@ smgr_redo(XLogReaderState *record)
 		SMgrRelation reln;
 		Relation	rel;
 		ForkNumber	forks[MAX_FORKNUM];
-		BlockNumber	blocks[MAX_FORKNUM];
-		int		nforks = 0;
+		BlockNumber blocks[MAX_FORKNUM];
+		int			nforks = 0;
 		bool		need_fsm_vacuum = false;
 
 		/*
@@ -1029,9 +1029,9 @@ smgr_redo(XLogReaderState *record)
 			smgrtruncate(reln, forks, nforks, blocks);
 
 		/*
-		 * Update upper-level FSM pages to account for the truncation.
-		 * This is important because the just-truncated pages were likely
-		 * marked as all-free, and would be preferentially selected.
+		 * Update upper-level FSM pages to account for the truncation. This is
+		 * important because the just-truncated pages were likely marked as
+		 * all-free, and would be preferentially selected.
 		 */
 		if (need_fsm_vacuum)
 			FreeSpaceMapVacuumRange(rel, xlrec->blkno,

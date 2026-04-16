@@ -1845,69 +1845,74 @@ select v||'a', case when grouping(v||'a') = 1 then 1 else 0 end, count(*)
 --
 -- Compare results between plans using sorting and plans using hash
 -- aggregation. Force spilling in both cases by setting work_mem low
--- and turning on enable_groupingsets_hash_disk.
+-- and altering the statistics.
 --
-SET enable_groupingsets_hash_disk = true;
+create table gs_data_1 as
+select g%1000 as g1000, g%100 as g100, g%10 as g10, g
+   from generate_series(0,1999) g;
+analyze gs_data_1;
+alter table gs_data_1 set (autovacuum_enabled = 'false');
+WARNING:  autovacuum is not supported in Greenplum
+SET allow_system_table_mods = true;
+update pg_class set reltuples = 10 where relname='gs_data_1';
+RESET allow_system_table_mods;
 SET work_mem='64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Produce results with sorting.
 set enable_hashagg = false;
 set jit_above_cost = 0;
 explain (costs off)
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
-                          QUERY PLAN                           
----------------------------------------------------------------
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
+                   QUERY PLAN                   
+------------------------------------------------
  GroupAggregate
-   Group Key: ((g.g % 1000)), ((g.g % 100)), ((g.g % 10))
-   Group Key: ((g.g % 1000)), ((g.g % 100))
-   Group Key: ((g.g % 1000))
+   Group Key: g1000, g100, g10
+   Group Key: g1000, g100
+   Group Key: g1000
    Group Key: ()
-   Sort Key: ((g.g % 100)), ((g.g % 10))
-     Group Key: ((g.g % 100)), ((g.g % 10))
-     Group Key: ((g.g % 100))
-   Sort Key: ((g.g % 10)), ((g.g % 1000))
-     Group Key: ((g.g % 10)), ((g.g % 1000))
-     Group Key: ((g.g % 10))
-   ->  Sort
-         Sort Key: ((g.g % 1000)), ((g.g % 100)), ((g.g % 10))
-         ->  Function Scan on generate_series g
-(14 rows)
+   Sort Key: g100, g10
+     Group Key: g100, g10
+     Group Key: g100
+   Sort Key: g10, g1000
+     Group Key: g10, g1000
+     Group Key: g10
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: g1000, g100, g10
+         ->  Sort
+               Sort Key: g1000, g100, g10
+               ->  Seq Scan on gs_data_1
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 create table gs_group_1 as
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 -- Produce results with hash aggregation.
 set enable_hashagg = true;
 set enable_sort = false;
 explain (costs off)
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
-                    QUERY PLAN                     
----------------------------------------------------
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
+                   QUERY PLAN                   
+------------------------------------------------
  MixedAggregate
-   Hash Key: (g.g % 1000), (g.g % 100), (g.g % 10)
-   Hash Key: (g.g % 1000), (g.g % 100)
-   Hash Key: (g.g % 1000)
-   Hash Key: (g.g % 100), (g.g % 10)
-   Hash Key: (g.g % 100)
-   Hash Key: (g.g % 10), (g.g % 1000)
-   Hash Key: (g.g % 10)
+   Hash Key: g1000, g100, g10
+   Hash Key: g1000, g100
+   Hash Key: g1000
+   Hash Key: g100, g10
+   Hash Key: g100
+   Hash Key: g10, g1000
+   Hash Key: g10
    Group Key: ()
-   ->  Function Scan on generate_series g
-(10 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on gs_data_1
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 create table gs_hash_1 as
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 set enable_sort = true;
 set work_mem to default;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
@@ -1926,7 +1931,6 @@ SET optimizer TO off;
 RESET optimizer;
 drop table gs_group_1;
 drop table gs_hash_1;
-SET enable_groupingsets_hash_disk TO DEFAULT;
 select a, rank(a+3) within group (order by b nulls last)
 from (values (1,1),(1,4),(1,5),(3,1),(3,2)) v(a,b)
 group by rollup (a) order by a;

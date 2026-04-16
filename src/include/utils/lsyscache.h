@@ -104,6 +104,7 @@ extern bool get_op_hash_functions(Oid opno,
 								  RegProcedure *lhs_procno, RegProcedure *rhs_procno);
 extern List *get_op_btree_interpretation(Oid opno);
 extern bool equality_ops_are_compatible(Oid opno1, Oid opno2);
+extern bool comparison_ops_are_compatible(Oid opno1, Oid opno2);
 extern Oid	get_opfamily_proc(Oid opfamily, Oid lefttype, Oid righttype,
 							  int16 procnum);
 extern char *get_attname(Oid relid, AttrNumber attnum, bool missing_ok);
@@ -219,7 +220,7 @@ extern char *get_namespace_name_or_temp(Oid nspid);
 extern Oid	get_range_subtype(Oid rangeOid);
 extern Oid	get_range_collation(Oid rangeOid);
 extern Oid	get_index_column_opclass(Oid index_oid, int attno);
-extern bool	get_index_isreplident(Oid index_oid);
+extern bool get_index_isreplident(Oid index_oid);
 extern bool get_index_isvalid(Oid index_oid);
 extern bool get_index_isclustered(Oid index_oid);
 

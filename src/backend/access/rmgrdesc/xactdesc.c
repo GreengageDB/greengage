@@ -285,7 +285,7 @@ static void
 xact_desc_relations(StringInfo buf, char *label, int nrels,
 					RelFileNodePendingDelete *xnodes)
 {
-	int		i;
+	int			i;
 
 	if (nrels > 0)
 	{
@@ -307,7 +307,7 @@ xact_desc_relations(StringInfo buf, char *label, int nrels,
 static void
 xact_desc_subxacts(StringInfo buf, int nsubxacts, TransactionId *subxacts)
 {
-	int		i;
+	int			i;
 
 	if (nsubxacts > 0)
 	{

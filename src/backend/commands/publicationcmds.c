@@ -340,8 +340,8 @@ AlterPublicationOptions(AlterPublicationStmt *stmt, Relation rel,
 		 * invalidate all partitions contained in the respective partition
 		 * trees, not just those explicitly mentioned in the publication.
 		 */
-		List   *relids = GetPublicationRelations(pubform->oid,
-												 PUBLICATION_PART_ALL);
+		List	   *relids = GetPublicationRelations(pubform->oid,
+													 PUBLICATION_PART_ALL);
 
 		/*
 		 * We don't want to send too many individual messages, at some point
@@ -398,8 +398,8 @@ AlterPublicationTables(AlterPublicationStmt *stmt, Relation rel,
 		PublicationDropTables(pubid, rels, false);
 	else						/* DEFELEM_SET */
 	{
-		List   *oldrelids = GetPublicationRelations(pubid,
-													PUBLICATION_PART_ROOT);
+		List	   *oldrelids = GetPublicationRelations(pubid,
+														PUBLICATION_PART_ROOT);
 		List	   *delrels = NIL;
 		ListCell   *oldlc;
 
@@ -496,29 +496,6 @@ AlterPublication(AlterPublicationStmt *stmt)
 
 	/* Cleanup. */
 	heap_freetuple(tup);
-	table_close(rel, RowExclusiveLock);
-}
-
-/*
- * Drop publication by OID
- */
-void
-RemovePublicationById(Oid pubid)
-{
-	Relation	rel;
-	HeapTuple	tup;
-
-	rel = table_open(PublicationRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(PUBLICATIONOID, ObjectIdGetDatum(pubid));
-
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for publication %u", pubid);
-
-	CatalogTupleDelete(rel, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
 	table_close(rel, RowExclusiveLock);
 }
 

@@ -420,7 +420,7 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 						if (hashtable->nbatch > 1)
 							ExecParallelHashJoinPartitionOuter(node);
 						BarrierArriveAndWait(build_barrier,
-											 WAIT_EVENT_HASH_BUILD_HASHING_OUTER);
+											 WAIT_EVENT_HASH_BUILD_HASH_OUTER);
 					}
 					Assert(BarrierPhase(build_barrier) == PHJ_BUILD_DONE);
 
@@ -433,7 +433,7 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				else
 					node->hj_JoinState = HJ_NEED_NEW_OUTER;
 
-				/* FALLTHROUGH */
+				/* FALL THRU */
 
 			case HJ_NEED_NEW_OUTER:
 
@@ -517,7 +517,7 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				/* OK, let's scan the bucket for matches */
 				node->hj_JoinState = HJ_SCAN_BUCKET;
 
-				/* FALLTHROUGH */
+				/* FALL THRU */
 
 			case HJ_SCAN_BUCKET:
 
@@ -1347,7 +1347,7 @@ ExecHashJoinNewBatch(HashJoinState *hjstate)
 		if (BufFileSeek(hashtable->outerBatchFile[curbatch], 0, 0, SEEK_SET) != 0)
 			ereport(ERROR,
 					(errcode_for_file_access(),
-					 errmsg("could not rewind hash-join temporary file: %m")));
+					 errmsg("could not rewind hash-join temporary file")));
 	}
 
 	return true;
@@ -1409,15 +1409,15 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 
 					/* One backend allocates the hash table. */
 					if (BarrierArriveAndWait(batch_barrier,
-											 WAIT_EVENT_HASH_BATCH_ELECTING))
+											 WAIT_EVENT_HASH_BATCH_ELECT))
 						ExecParallelHashTableAlloc(hashtable, batchno);
-					/* FALLTHROUGH */
+					/* Fall through. */
 
 				case PHJ_BATCH_ALLOCATING:
 					/* Wait for allocation to complete. */
 					BarrierArriveAndWait(batch_barrier,
-										 WAIT_EVENT_HASH_BATCH_ALLOCATING);
-					/* FALLTHROUGH */
+										 WAIT_EVENT_HASH_BATCH_ALLOCATE);
+					/* Fall through. */
 
 				case PHJ_BATCH_LOADING:
 					/* Start (or join in) loading tuples. */
@@ -1436,8 +1436,8 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 					}
 					sts_end_parallel_scan(inner_tuples);
 					BarrierArriveAndWait(batch_barrier,
-										 WAIT_EVENT_HASH_BATCH_LOADING);
-					/* FALLTHROUGH */
+										 WAIT_EVENT_HASH_BATCH_LOAD);
+					/* Fall through. */
 
 				case PHJ_BATCH_PROBING:
 
@@ -1493,8 +1493,7 @@ ExecHashJoinSaveTuple(PlanState *ps, MinimalTuple tuple, uint32 hashvalue,
 					  HashJoinTable hashtable, BufFile **fileptr,
 					  MemoryContext bfCxt)
 {
-	BufFile	   *file = *fileptr;
-	size_t		written;
+	BufFile    *file = *fileptr;
 
 	if (hashtable->work_set == NULL)
 	{
@@ -1532,21 +1531,8 @@ ExecHashJoinSaveTuple(PlanState *ps, MinimalTuple tuple, uint32 hashvalue,
 		MemoryContextSwitchTo(oldcxt);
 	}
 
-	written = BufFileWrite(file, (void *) &hashvalue, sizeof(uint32));
-	if (written != sizeof(uint32))
-	{
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not write to temporary file: %m")));
-	}
-
-	written = BufFileWrite(file, (void *) tuple, tuple->t_len);
-	if (written != tuple->t_len)
-	{
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not write to temporary file: %m")));
-	}
+	BufFileWrite(file, (void *) &hashvalue, sizeof(uint32));
+	BufFileWrite(file, (void *) tuple, tuple->t_len);
 }
 
 /*
@@ -1587,7 +1573,8 @@ ExecHashJoinGetSavedTuple(HashJoinState *hjstate,
 	if (nread != sizeof(header))
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not read from hash-join temporary file: %m")));
+				 errmsg("could not read from hash-join temporary file: read only %zu of %zu bytes",
+						nread, sizeof(header))));
 	*hashvalue = header[0];
 	tuple = (MinimalTuple) palloc(header[1]);
 	tuple->t_len = header[1];
@@ -1597,7 +1584,8 @@ ExecHashJoinGetSavedTuple(HashJoinState *hjstate,
 	if (nread != header[1] - sizeof(uint32))
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not read from hash-join temporary file: %m")));
+				 errmsg("could not read from hash-join temporary file: read only %zu of %zu bytes",
+						nread, header[1] - sizeof(uint32))));
 	ExecForceStoreMinimalTuple(tuple, tupleSlot, true);
 	return tupleSlot;
 }

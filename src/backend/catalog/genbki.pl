@@ -109,7 +109,7 @@ foreach my $header (@ARGV)
 				}
 				else
 				{
-					push @{ $catalog_data{pg_description}}, \%descr;
+					push @{ $catalog_data{pg_description} }, \%descr;
 				}
 			}
 
@@ -690,8 +690,8 @@ close $bki;
 close $schemapg;
 
 # Finally, rename the completed files into place.
-Catalog::RenameTempFile($bkifile,     $tmpext);
-Catalog::RenameTempFile($schemafile,  $tmpext);
+Catalog::RenameTempFile($bkifile,    $tmpext);
+Catalog::RenameTempFile($schemafile, $tmpext);
 
 exit 0;
 

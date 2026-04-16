@@ -549,10 +549,19 @@ select v||'a', case when grouping(v||'a') = 1 then 1 else 0 end, count(*)
 --
 -- Compare results between plans using sorting and plans using hash
 -- aggregation. Force spilling in both cases by setting work_mem low
--- and turning on enable_groupingsets_hash_disk.
+-- and altering the statistics.
 --
 
-SET enable_groupingsets_hash_disk = true;
+create table gs_data_1 as
+select g%1000 as g1000, g%100 as g100, g%10 as g10, g
+   from generate_series(0,1999) g;
+
+analyze gs_data_1;
+alter table gs_data_1 set (autovacuum_enabled = 'false');
+SET allow_system_table_mods = true;
+update pg_class set reltuples = 10 where relname='gs_data_1';
+RESET allow_system_table_mods;
+
 SET work_mem='64kB';
 
 -- Produce results with sorting.
@@ -561,16 +570,12 @@ set enable_hashagg = false;
 set jit_above_cost = 0;
 
 explain (costs off)
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 
 create table gs_group_1 as
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 
 -- Produce results with hash aggregation.
 
@@ -578,17 +583,12 @@ set enable_hashagg = true;
 set enable_sort = false;
 
 explain (costs off)
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 
 create table gs_hash_1 as
-select g100, g10, sum(g::numeric), count(*), max(g::text) from
-  (select g%1000 as g1000, g%100 as g100, g%10 as g10, g
-   from generate_series(0,1999) g) s
-group by cube (g1000, g100,g10);
-
+select g100, g10, sum(g::numeric), count(*), max(g::text)
+from gs_data_1 group by cube (g1000, g100,g10);
 
 set enable_sort = true;
 set work_mem to default;
@@ -608,8 +608,6 @@ RESET optimizer;
 
 drop table gs_group_1;
 drop table gs_hash_1;
-
-SET enable_groupingsets_hash_disk TO DEFAULT;
 
 select a, rank(a+3) within group (order by b nulls last)
 from (values (1,1),(1,4),(1,5),(3,1),(3,2)) v(a,b)

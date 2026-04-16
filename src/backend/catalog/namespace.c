@@ -215,6 +215,7 @@ char	   *namespace_search_path = NULL;
 static void recomputeNamespacePath(void);
 static void AccessTempTableNamespace(bool force);
 static void RemoveTempRelations(Oid tempNamespaceId);
+static void RemoveSchemaById(Oid schemaOid);
 static void RemoveTempRelationsCallback(int code, Datum arg);
 static void NamespaceCallback(Datum arg, int cacheid, uint32 hashvalue);
 static bool MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
@@ -4495,6 +4496,21 @@ RemoveTempRelations(Oid tempNamespaceId)
 					PERFORM_DELETION_QUIETLY |
 					PERFORM_DELETION_SKIP_ORIGINAL |
 					PERFORM_DELETION_SKIP_EXTENSIONS);
+}
+
+/*
+ * Guts of schema deletion.
+ */
+static void
+RemoveSchemaById(Oid schemaOid)
+{
+	ObjectAddress object;
+
+	object.classId = NamespaceRelationId;
+	object.objectId = schemaOid;
+	object.objectSubId = 0;
+
+	DropObjectById(&object);
 }
 
 /*
