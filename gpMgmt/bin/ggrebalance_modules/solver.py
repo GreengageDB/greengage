@@ -1,6 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
-import math
 import random
 from typing import NewType, Optional, Set, Dict, List, Tuple, Union
 from collections import defaultdict
@@ -16,6 +15,13 @@ Cost = NewType('Cost', int)
 Load = NewType('Load', int)
 # {'contendid' - > (primary host, mirror host)}
 Solution = Dict[ContentId, Tuple[HostId, HostId]]
+
+def _pack_solution(p: List[int], m: List[int], n: int) -> Solution:
+    return {ContentId(i): (HostId(p[i]), HostId(m[i])) for i in range(n)}
+
+def _extract_mapping(sol: Solution, n: int) -> Tuple[List[int], List[int]]:
+    return [sol[i][0] for i in range(n)], [sol[i][1] for i in range(n)]
+
 
 @dataclass
 class SolverConfig:
@@ -38,8 +44,7 @@ class SolverConfig:
 
 class GreedySolver:
     """
-    Greedy construction of a balanced primary/mirror assignment
-    with an optional ALNS improvement phase.
+    Greedy construction of a balanced primary/mirror assignment.
 
     Segments:
         0 .. n_segments-1
@@ -61,9 +66,7 @@ class GreedySolver:
     """
     def __init__(self, 
                  config: SolverConfig,
-                 run_improve: bool = True,
-                 printing: bool = False,
-                 seed: int = None):
+                 printing: bool = False):
         
         self.n_segments = config.n_segments
         self.n_hosts_target = config.n_hosts_target
@@ -71,8 +74,8 @@ class GreedySolver:
         self.initial_primary_mapping = config.initial_primary_mapping
         self.initial_mirror_mapping = config.initial_mirror_mapping
         self.strategy = config.strategy
+        self.config = config
 
-        self.run_improve = run_improve
         self.printing = printing
         self.target_primary_load = self.n_segments // self.n_hosts_target
         self.target_load = 2 * self.n_segments // self.n_hosts_target
@@ -93,12 +96,9 @@ class GreedySolver:
         self.best_mirror_mapping: List[HostId] | None = None
         self.best_cost = None
 
-        # seed to use in ALNS
-        self.seed = seed
-
     def solve(self) -> Tuple[Solution, Cost]:
         """
-        Build an initial greedy solution and optionally improve it with ALNS.
+        Build a greedy solution.
 
         Returns:
             (solution, cost) where solution is a mapping from ContentId to
@@ -110,15 +110,6 @@ class GreedySolver:
 
         # Phase 2: Assign mirrors
         mirror_mapping = self._assign_mirror_hosts(primary_mapping)
-
-        # Optional improvement by ALNS.
-        if self.run_improve:
-            # at least 10 iterations per segment
-            config = ALNSConfig(max_iterations=10 * self.n_segments)
-            alns = ALNS(self, config)
-            if self.seed:
-                random.seed(self.seed)
-            primary_mapping, mirror_mapping = alns.optimize(primary_mapping, mirror_mapping)
                    
         solution: Solution = {
             ContentId(i): (HostId(primary_mapping[i]), HostId(mirror_mapping[i]))
@@ -599,132 +590,48 @@ class GreedySolver:
         return True
 
 
-@dataclass
-class ALNSConfig:
-    """
-    ALNS algorithm configuration.
-    """
-    max_iterations: int = 1000
-    timeout: float = 60.0
-    temperature_decay: float = 0.95
-    min_temperature: float = 0.01
-    local_search_frequency: int = 5
-    stagnation_threshold: int = 30
-    restart_threshold: int = 20
-
-
-@dataclass
-class SearchState:
-    """
-    Current search state and statistics.
-    """
-    current_primary_mapping: List[HostId]
-    current_mirror_mapping: List[HostId]
-    current_cost: Cost
-    best_primary_mapping: List[HostId]
-    best_mirror_mapping: List[HostId]
-    best_cost: Cost
-    iteration: int = 0
-    stagnation_count: int = 0
-    last_improvement_iter: int = 0
-
-    def get_temperature(self, config: ALNSConfig) -> float:
-        """
-        Calculate current temperature.
-        """
-        temp = 1.0 * (config.temperature_decay ** self.iteration)
-        return max(config.min_temperature, temp)
-
-    def get_destroy_size(self, config: ALNSConfig) -> float:
-        """
-        Calculate adaptive destroy size based on progress.
-        """
-        if self.iteration - self.last_improvement_iter > config.restart_threshold:
-            return random.uniform(0.20, 0.40)  # Stuck: larger neighborhoods
-        elif self.iteration < config.max_iterations * 0.3:
-            return random.uniform(0.15, 0.30)  # Early phase: explore
-        else:
-            return random.uniform(0.10, 0.20)  # Late phase: intensify
-
-    def update_best(self, primary_mapping: List[HostId], mirror_mapping: List[HostId], cost: Cost) -> bool:
-        """
-        Update best solution found.
-        """
-        if cost < self.best_cost:
-            self.best_primary_mapping = primary_mapping[:]
-            self.best_mirror_mapping = mirror_mapping[:]
-            self.best_cost = cost
-            self.last_improvement_iter = self.iteration
-            return True
-        return False
-
-    def should_restart(self, config: ALNSConfig) -> bool:
-        """
-        Check if search should restart from best.
-        """
-        return self.stagnation_count > config.stagnation_threshold
-
-    def restart_from_best(self):
-        """
-        Restart search from best solution.
-        """
-        self.current_primary_mapping = self.best_primary_mapping[:]
-        self.current_mirror_mapping = self.best_mirror_mapping[:]
-        self.current_cost = self.best_cost
-        self.stagnation_count = 0
-
-
-class ALNSDestroyMethod(Enum):
+class LNSDestroyMethod(Enum):
     GROUP_DESTROY = 'group_destroy'
     BAD_SEGMENTS = 'bad_segments'
     SHAW_REMOVAL = 'shaw_removal'
     RANDOM_SEGMENTS = 'random_segments'
 
 
-class ALNSDestroyOperators:
+class LNSDestroyOperators:
     """
-    Collection of destroy operators for ALNS.
+    Collection of destroy operators for LNS.
     """
     def __init__(self, n_segments: int, strategy: str, 
                  initial_primary: List[HostId],
-                 initial_mirror: List[HostId]):
+                 initial_mirror: List[HostId],
+                 rng: random.Random):
         self.n_segments = n_segments
         self.strategy = strategy
         self.initial_primary = initial_primary
         self.initial_mirror = initial_mirror
+        self.rng = rng
 
-    def select_method(self, stagnation: int) -> ALNSDestroyMethod:
-        """
-        Select destroy method based on search state.
-        """
-        if stagnation > 15:
-            # Stuck: use aggressive methods
-            return random.choice([ALNSDestroyMethod.GROUP_DESTROY, ALNSDestroyMethod.RANDOM_SEGMENTS])
-        
-        if self.strategy == 'grouped':
-            # For grouped, favor group-based destroy
-            return random.choices(
-                [ALNSDestroyMethod.GROUP_DESTROY,
-                 ALNSDestroyMethod.BAD_SEGMENTS,
-                 ALNSDestroyMethod.SHAW_REMOVAL,
-                 ALNSDestroyMethod.RANDOM_SEGMENTS],
-                weights=[0.4, 0.3, 0.2, 0.1]
-            )[0]
-        else:
-            # For spread, favor segment-based methods
-            return random.choices(
-                [ALNSDestroyMethod.BAD_SEGMENTS,
-                 ALNSDestroyMethod.SHAW_REMOVAL,
-                 ALNSDestroyMethod.RANDOM_SEGMENTS],
-                weights=[0.4, 0.4, 0.2]
-            )[0]
-
-    def destroy_random(self, destroy_size: float) -> Set[ContentId]:
-        """
-        Destroy random segments.
-        """
+    def destroy_random(self, primary: List[HostId], destroy_size: float) -> Set[ContentId]:
         n_destroy = max(1, int(self.n_segments * destroy_size))
-        return set(random.sample(range(self.n_segments), n_destroy))
+
+        if self.strategy == 'spread':
+            # Must destroy whole primary groups to avoid partial-group deadlocks
+            groups: Dict[int, List[int]] = defaultdict(list)
+            for seg in range(self.n_segments):
+                # primary_mapping must be passed in - add it as parameter
+                groups[primary[seg]].append(seg)
+
+            primaries = list(groups.keys())
+            self.rng.shuffle(primaries)
+
+            destroyed = set()
+            for p in primaries:
+                if len(destroyed) >= n_destroy:
+                    break
+                destroyed.update(groups[p])
+            return destroyed
+        else:
+            return set(self.rng.sample(range(self.n_segments), n_destroy))
 
     def destroy_primary_groups(self, primary: List[HostId], mirror: List[HostId],
                               destroy_size: float) -> Set[ContentId]:
@@ -761,7 +668,7 @@ class ALNSDestroyOperators:
                 bad_segments.append((badness, seg))
         
         if not bad_segments:
-            return self.destroy_random(destroy_size)
+            return self.destroy_random(primary, destroy_size)
         
         return self._select_bad_segments_with_relatedness(bad_segments, primary, mirror, n_destroy)
 
@@ -772,7 +679,7 @@ class ALNSDestroyOperators:
         """
         n_destroy = max(1, int(self.n_segments * destroy_size))
         
-        seed_seg = random.randint(0, self.n_segments - 1)
+        seed_seg = self.rng.randint(0, self.n_segments - 1)
         destroyed = {seed_seg}
         
         # Calculate relatedness scores
@@ -814,35 +721,30 @@ class ALNSDestroyOperators:
         
         return badness
 
-    def _select_groups_by_badness(self, groups: Dict[HostId, List[ContentId]], 
-                                 badness: Dict[HostId, float], 
-                                 destroy_size: float) -> Set[ContentId]:
-        """
-        Select primary groups weighted by badness.
-        """
+    def _select_groups_by_badness(
+        self,
+        groups: Dict[HostId, List[ContentId]],
+        badness: Dict[HostId, float],
+        destroy_size: float,
+    ) -> Set[ContentId]:
         n_destroy = max(1, int(self.n_segments * destroy_size))
         primaries = list(groups.keys())
-        weights = [badness.get(p, 0.0) + 0.1 for p in primaries]  # Add exploration constant 0.1
-        
-        destroyed = set()
+        weights = [badness.get(p, 0.0) + 0.1 for p in primaries]
+    
+        destroyed: Set[ContentId] = set()
         available_primaries = primaries[:]
         available_weights = weights[:]
-        
         attempts = 0
+    
         while len(destroyed) < n_destroy and attempts < 20 and available_primaries:
-            p_host = random.choices(available_primaries, weights=available_weights)[0]
+            p_host = self.rng.choices(available_primaries, weights=available_weights)[0]
             destroyed.update(groups[p_host])
-            
-            # Remove from further selection
+    
             idx = available_primaries.index(p_host)
             available_primaries.pop(idx)
             available_weights.pop(idx)
             attempts += 1
-        
-        # Trim to size if necessary
-        if len(destroyed) > n_destroy:
-            destroyed = set(random.sample(list(destroyed), n_destroy))
-        
+
         return destroyed
 
     def _select_bad_segments_with_relatedness(self, bad_segments: List[Tuple[int, ContentId]], 
@@ -876,20 +778,21 @@ class ALNSDestroyOperators:
         return destroyed
 
 
-class ALNSRepairMethod(Enum):
+class LNSRepairMethod(Enum):
     GREEDY_REPAIR = 'repair_greedy'
     CONSTRAINT_REPAIR = 'repair_constrained'
     REGRET_REPAIR = "repair_regret"
 
 
-class ALNSRepairOperators:
-    """Repair operators for ALNS."""
+class LNSRepairOperators:
+    """Repair operators for LNS."""
 
     def __init__(self, n_segments: int,
                  n_hosts: int, strategy: str,
                  initial_primary_mapping: List[HostId],
                  initial_mirror_mapping: List[HostId],
-                 target_load: Load):
+                 target_load: Load,
+                 rng: random.Random):
         self.n_segments = n_segments
         self.n_hosts = n_hosts
         self.strategy = strategy
@@ -897,46 +800,7 @@ class ALNSRepairOperators:
         self.initial_mirror_mapping = initial_mirror_mapping
         self.target_load = target_load
         self._host_set = set(range(self.n_hosts))
-
-    def select_method(self, iteration: int, max_iterations: int) -> ALNSRepairMethod:
-        """
-        Select destroy method based on search state.
-        """
-        # Phase 1: Early exploration (first 20% of iterations)
-        if iteration < max_iterations * 0.2:
-            return random.choices(
-                [ALNSRepairMethod.GREEDY_REPAIR,
-                 ALNSRepairMethod.CONSTRAINT_REPAIR],
-                weights=[0.9, 0.1]
-            )[0]
-
-        # Phase 2: Quality optimization (middle 60%)
-        elif iteration < max_iterations * 0.8:
-            if self.strategy == 'spread':
-                # Spread is harder - more Most Constrained
-                return random.choices(
-                    [ALNSRepairMethod.CONSTRAINT_REPAIR,
-                     ALNSRepairMethod.GREEDY_REPAIR,
-                     ALNSRepairMethod.REGRET_REPAIR],
-                    weights=[0.3, 0.5, 0.2]
-                )[0]
-            else:
-                # Grouped is easier - more Greedy/Regret
-                return random.choices(
-                    [ALNSRepairMethod.GREEDY_REPAIR,
-                     ALNSRepairMethod.REGRET_REPAIR,
-                     ALNSRepairMethod.CONSTRAINT_REPAIR],
-                    weights=[0.4, 0.4, 0.2]
-                )[0]
-    
-        # Phase 3: Final intensification (last 20%)
-        else:
-            return random.choices(
-                [ALNSRepairMethod.REGRET_REPAIR,
-                 ALNSRepairMethod.GREEDY_REPAIR,
-                 ALNSRepairMethod.CONSTRAINT_REPAIR],
-                weights=[0.5, 0.3, 0.2]
-            )[0]
+        self.rng = rng
 
     def repair_greedy(self, primary_mapping: List[HostId], mirror_mapping: List[HostId],
                    destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
@@ -975,7 +839,7 @@ class ALNSRepairOperators:
 
         # Shuffle to avoid bias
         destroyed_list = list(destroyed)
-        random.shuffle(destroyed_list)
+        self.rng.shuffle(destroyed_list)
 
         for seg in destroyed_list:
             orig_p = self.initial_primary_mapping[seg]
@@ -1288,11 +1152,28 @@ class ALNSRepairOperators:
 
         return new_primary_mapping, new_mirror_mapping
 
+@dataclass
+class LNSConfig(SolverConfig):
+    max_iterations:      int   = 1_000
+    timeout:             float = 60.0
+    destroy_fraction_lo: float = 0.15   # uniform random destroy size ∈ [lo, hi]
+    destroy_fraction_hi: float = 0.25
 
-class ALNS:
+    @classmethod
+    def from_parent(cls, parent_obj: SolverConfig,
+                    iters: int,
+                    timeout: float):
+        parent_data = {
+            field.name: getattr(parent_obj, field.name) 
+            for field in fields(SolverConfig)
+        }
+        
+        return cls(**parent_data, max_iterations=iters, timeout=timeout)
+
+class LNS:
     """
-    Adaptive Large Neighborhood Search (ALNS) for refining segment
-    rebalancing solutions produced by GreedySolver.
+    Large Neighbourhood Search with uniform operator selection
+    for refining solutions produced by GreedySolver.
 
     Uses:
       - several destroy operators
@@ -1301,226 +1182,120 @@ class ALNS:
       - occasional local search (mirror swaps in grouped)
     """
     def __init__(self,
-                 solver: GreedySolver,
-                 config: ALNSConfig = None):
-        self.solver = solver
-        self.config = config or ALNSConfig()
+                 config: LNSConfig,
+                 printing: bool = False,
+                 seed: int = None):
 
-        self.solver = solver
-        self.n_segments = solver.n_segments
-        self.n_hosts = solver.n_hosts_target
-        self.strategy = solver.strategy
-        self.initial_primary_mapping = solver.initial_primary_mapping
-        self.initial_mirror_mapping = solver.initial_mirror_mapping
-        self.target_primary_load = solver.target_primary_load
-        self.printing = solver.printing
-    
-        self.start_time = None
+        self.config = config
+        self.solver = GreedySolver(config)
+        self.rng = random.Random(seed)
+        self.n_segments = config.n_segments
+        self.n_hosts = config.n_hosts_target
+        self.strategy = config.strategy
+        self.initial_primary_mapping = config.initial_primary_mapping
+        self.initial_mirror_mapping = config.initial_mirror_mapping
+        self.printing = printing
 
-        self.destroy_ops = ALNSDestroyOperators(self.n_segments, self.strategy,
-                                                self.initial_primary_mapping, self.initial_mirror_mapping)
-        
-        self.repair_ops = ALNSRepairOperators(
-            self.n_segments, self.n_hosts, self.strategy,
-            self.initial_primary_mapping, self.initial_mirror_mapping,
-            self.solver.target_primary_load
+        self._destroy = LNSDestroyOperators(
+            self.n_segments, config.strategy,
+            config.initial_primary_mapping,
+            config.initial_mirror_mapping,
+            self.rng
         )
 
-    def optimize(self, 
-                 primary_mapping: List[HostId],
-                 mirror_mapping: List[HostId]) -> Tuple[List[HostId], List[HostId]]:
-        """
-        ALNS.
-        Uses all destroy/repair strategies with SA acceptance.
-        """
-        self.start_time = time.time()
+        self._repair = LNSRepairOperators(
+            self.n_segments, config.n_hosts_target, config.strategy,
+            config.initial_primary_mapping,
+            config.initial_mirror_mapping,
+            self.solver.target_primary_load,
+            self.rng
+        )
 
-        initial_cost = self.solver._calculate_cost(primary_mapping, mirror_mapping)
+        if config.strategy == "grouped":
+            self._d_methods = list(LNSDestroyMethod)
+        else:
+            self._d_methods = [
+                LNSDestroyMethod.BAD_SEGMENTS,
+                LNSDestroyMethod.SHAW_REMOVAL,
+                LNSDestroyMethod.RANDOM_SEGMENTS,
+            ]
+        self._r_methods = list(LNSRepairMethod)
 
-        state = SearchState(current_primary_mapping=primary_mapping[:],
-                            current_mirror_mapping=mirror_mapping[:],
-                            current_cost=initial_cost,
-                            best_primary_mapping=primary_mapping[:],
-                            best_mirror_mapping=mirror_mapping[:],
-                            best_cost=initial_cost)
-        
-        if self.solver.printing:
-            print(f"Initial cost: {state.best_cost}")
-        
-        for state.iteration in range(self.config.max_iterations):
-            if self._timeout_reached():
+    @property
+    def target_load(self):
+        return self.solver.target_load
+    
+    @property
+    def target_primary_load(self):
+        return self.solver.target_primary_load
+
+    def solve(self) -> Tuple[Solution, Cost]:
+        ip  = self.config.initial_primary_mapping
+        im  = self.config.initial_mirror_mapping
+
+        greedy_sol, _ = self.solver.solve()
+        p, m     = _extract_mapping(greedy_sol, self.n_segments)
+        cost     = self.solver._calculate_cost(p, m)
+        best_p, best_m, best_cost = p[:], m[:], cost
+
+        start = time.perf_counter()
+
+        for it in range(self.config.max_iterations):
+            if time.perf_counter() - start > self.config.timeout:
                 if self.printing:
-                    print(f"\n Time limit reached ({self.config.timeout}s) at {state.iteration} iteration")
-                return state.best_primary_mapping, state.best_mirror_mapping
-            
-            new_primary_mapping, new_mirror_mapping, destroy_method, repair_method = self._generate_neighbor(state)
-            
-            # Validate
-            if not self._is_valid(new_primary_mapping, new_mirror_mapping):
-                state.stagnation_count += 1
+                    print(f"\n Time limit reached ({self.config.timeout}s) at {it} iteration")
+                break
+
+            frac     = self.rng.uniform(self.config.destroy_fraction_lo,
+                                        self.config.destroy_fraction_hi)
+            d_method = self.rng.choice(self._d_methods)
+            r_method = self.rng.choice(self._r_methods)
+
+            destroyed = self._apply_destroy(p, m, d_method, frac)
+            new_p_, new_m_  = self._apply_repair(p, m, r_method, destroyed)
+
+            # repair couldn't assign
+            if any(new_p_[i] == -1 or new_m_[i] == -1 for i in range(self.n_segments)):
                 continue
 
-            new_cost = self.solver._calculate_cost(new_primary_mapping, new_mirror_mapping)
-            
-            # SA acceptance
-            if self._accept_move(state.current_cost, new_cost, state.get_temperature(self.config)):
-                # Accept move
-                state.current_primary_mapping = new_primary_mapping
-                state.current_mirror_mapping = new_mirror_mapping
-                state.current_cost = new_cost
-                state.stagnation_count = 0
-
-                if state.update_best(new_primary_mapping, new_mirror_mapping, new_cost):   
+            new_cost = self.solver._calculate_cost(new_p_, new_m_)
+            if new_cost < cost or (new_cost == cost and self.rng.random() < 0.5):
+                p, m, cost = new_p_, new_m_, new_cost
+                if cost < best_cost:
                     if self.printing:
-                        print(f"Iter {state.iteration} ({destroy_method.value}) "
-                              f"({repair_method.value}): NEW BEST = {state.best_cost}")
-            else:
-                state.stagnation_count += 1
-            
-            # Restart from best if stuck
-            if state.should_restart(self.config):
-                if self.printing:
-                    print(f"Iter {state.iteration}: Restarting from best (cost={state.best_cost})")
-                state.restart_from_best()
-        
-        if self.printing:
-            print(f"Final cost: {state.best_cost}")
-        
-        return state.best_primary_mapping, state.best_mirror_mapping
+                        print(f"Iter {it} ({d_method.value}) "
+                              f"({r_method.value}): NEW BEST = {cost}")
+                    best_p, best_m, best_cost = p[:], m[:], cost
 
-    def _generate_neighbor(self, state: SearchState) -> Tuple[List[HostId], List[HostId],
-                                                              ALNSDestroyMethod, ALNSRepairMethod]:
-        """
-        Generate a neighbor solution using destroy/repair.
-        """
-        destroy_size = state.get_destroy_size(self.config)
-        destroy_method = self.destroy_ops.select_method(state.stagnation_count)
-        
-        # Apply destroy
-        destroyed = self._apply_destroy(state.current_primary_mapping, state.current_mirror_mapping, 
-                                      destroy_method, destroy_size)
-        
-        
-        repair_method = self.repair_ops.select_method(state.iteration, self.config.max_iterations)
+        solution = _pack_solution(best_p, best_m, self.n_segments)
+        assert(self.solver._validate_solution(solution))
+        return solution, Cost(best_cost)
 
-        new_primary_mapping, new_mirror_mapping = self._apply_repair(state.current_primary_mapping,
-                                                     state.current_mirror_mapping,
-                                                     repair_method, destroyed)
-        
-        # Apply local search periodically
-        if (self.strategy == 'grouped' and 
-            state.stagnation_count < 10 and
-            state.iteration % self.config.local_search_frequency == 0):
-            new_primary_mapping, new_mirror_mapping = self._local_mirror_swap(new_primary_mapping, new_mirror_mapping)
-        
-        return new_primary_mapping, new_mirror_mapping, destroy_method, repair_method
-
-    def _apply_destroy(self, primary: List[HostId], mirror: List[HostId],
-                      method: ALNSDestroyMethod, destroy_size: float) -> Set[ContentId]:
+    def _apply_destroy(self,
+                       primary: List[HostId],
+                       mirror: List[HostId],
+                       method: LNSDestroyMethod,
+                       destroy_size: float) -> Set[ContentId]:
         """
         Apply the selected destroy method.
         """
-        if method == ALNSDestroyMethod.GROUP_DESTROY and self.strategy == 'grouped':
-            return self.destroy_ops.destroy_primary_groups(primary, mirror, destroy_size)
-        elif method == ALNSDestroyMethod.BAD_SEGMENTS:
-            return self.destroy_ops.destroy_bad_segments(primary, mirror, destroy_size)
-        elif method == ALNSDestroyMethod.SHAW_REMOVAL:
-            return self.destroy_ops.shaw_removal(primary, mirror, destroy_size)
+        if method == LNSDestroyMethod.GROUP_DESTROY:
+            return self._destroy.destroy_primary_groups(primary, mirror, destroy_size)
+        elif method == LNSDestroyMethod.BAD_SEGMENTS:
+            return self._destroy.destroy_bad_segments(primary, mirror, destroy_size)
+        elif method == LNSDestroyMethod.SHAW_REMOVAL:
+            return self._destroy.shaw_removal(primary, mirror, destroy_size)
         else:  # RANDOM_SEGMENTS
-            return self.destroy_ops.destroy_random(destroy_size)
+            return self._destroy.destroy_random(primary, destroy_size)
 
-    # REPAIR
     def _apply_repair(self,
                       primary: List[HostId],
                       mirror: List[HostId],
-                      method: ALNSRepairMethod,
+                      method: LNSRepairMethod,
                       destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
-        if method == ALNSRepairMethod.GREEDY_REPAIR:
-            return self.repair_ops.repair_greedy(primary, mirror, destroyed)
-        elif method == ALNSRepairMethod.CONSTRAINT_REPAIR:
-            return self.repair_ops.repair_most_constrained(primary, mirror, destroyed)
-        elif method == ALNSRepairMethod.REGRET_REPAIR:
-            return self.repair_ops.repair_regret(primary, mirror, destroyed)
-
-    # LOCAL SEARCH
-    def _local_mirror_swap(self, primary_mapping: List[HostId],
-                           mirror_mapping: List[HostId]) -> Tuple[List[HostId], List[HostId]]:
-        """
-        Local search: swap mirror assignments between two primary groups.
-        Only for grouped strategy.
-        """
-        if self.strategy != 'grouped':
-            return primary_mapping, mirror_mapping
-        
-        # Build primary -> mirror mapping
-        groups = defaultdict(list)
-        ph_to_mh = {}
-        
-        for seg in range(self.n_segments):
-            p = primary_mapping[seg]
-            m = mirror_mapping[seg]
-            groups[p].append(seg)
-            ph_to_mh[p] = m
-        
-        current_cost = self.solver._calculate_cost(primary_mapping, mirror_mapping)
-        best_mirror_mapping = mirror_mapping[:]
-        best_cost = current_cost
-        
-        # Try swapping mirrors between random pairs
-        primaries = list(groups.keys())
-        
-        if len(primaries) < 2:
-            return primary_mapping, mirror_mapping
-        
-        attempts = min(20, len(primaries) * (len(primaries) - 1) // 2)
-        
-        for _ in range(attempts):
-            p1, p2 = random.sample(primaries, 2)
-            m1 = ph_to_mh[p1]
-            m2 = ph_to_mh[p2]
-            
-            # Check if swap is valid (doesn't violate primary != mirror)
-            if m1 == p2 or m2 == p1:
-                continue
-            
-            # Create candidate solution with swapped mirrors
-            candidate_mirror_mapping = mirror_mapping[:]
-            for seg in groups[p1]:
-                candidate_mirror_mapping[seg] = m2
-            for seg in groups[p2]:
-                candidate_mirror_mapping[seg] = m1
-            
-            candidate_cost = self.solver._calculate_cost(primary_mapping, candidate_mirror_mapping)
-            
-            if candidate_cost < best_cost:
-                best_mirror_mapping = candidate_mirror_mapping
-                best_cost = candidate_cost
-        
-        return primary_mapping, best_mirror_mapping
-
-    # UTILITIES
-    def _accept_move(self, current_cost: Cost, new_cost: Cost, temperature: float) -> bool:
-        """
-        Simulated Annealing acceptance criterion.
-        """
-        if new_cost < current_cost:
-            return True
-        elif new_cost == current_cost:
-            return random.random() < 0.6
-        else:
-            delta = (new_cost - current_cost) / self.n_segments
-            delta_capped = min(delta, 5.0)
-            return random.random() < math.exp(-delta_capped / temperature)
-
-    def _is_valid(self, primary_mapping: List[HostId], mirror_mapping: List[HostId]) -> bool:
-        """
-        Validation check.
-        """
-        solution = {i: (primary_mapping[i], mirror_mapping[i]) for i in range(self.n_segments)}
-        return self.solver._validate_solution(solution)
-
-    def _timeout_reached(self) -> bool:
-        """Check if time limit exceeded."""
-        if self.start_time is None or self.config.timeout is None:
-            return False
-        return time.time() - self.start_time > self.config.timeout
+        if method == LNSRepairMethod.GREEDY_REPAIR:
+            return self._repair.repair_greedy(primary, mirror, destroyed)
+        elif method == LNSRepairMethod.CONSTRAINT_REPAIR:
+            return self._repair.repair_most_constrained(primary, mirror, destroyed)
+        elif method == LNSRepairMethod.REGRET_REPAIR:
+            return self._repair.repair_regret(primary, mirror, destroyed)

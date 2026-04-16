@@ -13,7 +13,7 @@ import math
 from gppylib.db import dbconn
 import gppylib.gparray as gparray
 from ggrebalance_modules.rebalance_commons import *
-from ggrebalance_modules.solver import GreedySolver, HostId, SolverConfig
+from ggrebalance_modules.solver import LNS, HostId, SolverConfig, LNSConfig
 from gppylib.commands.unix import PortIsAvailable
 
 class PlanningError(Exception):
@@ -23,6 +23,9 @@ GROUPED = 'grouped'
 SPREAD = 'spread'
 
 HostMapping = Dict[Host, HostId]
+
+MAX_SOLVER_ITERS = 1200
+SOLVER_TIMEOUT_SEC = 60.0
 
 @dataclass
 class LogicalMove:
@@ -771,7 +774,8 @@ class Planner:
         self.logger.info("Planning rebalance moves. Can take up to 60s.")
         planning_seed_value = int.from_bytes(os.urandom(16) , 'big')
         self.logger.info(f"Running randomized plan improvement with seed:{planning_seed_value}")
-        solution, _ = GreedySolver(config, seed=planning_seed_value).solve()
+        lns_config = LNSConfig.from_parent(config, MAX_SOLVER_ITERS, SOLVER_TIMEOUT_SEC)
+        solution, _ = LNS(lns_config, seed=planning_seed_value).solve()
 
         self.logger.debug(f"Solution: {solution}")
         self.logger.debug(f"Hosts: {id_to_host}")
