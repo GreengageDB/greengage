@@ -3137,13 +3137,13 @@ freePGconn(PGconn *conn)
 		evt.conn = conn;
 		(void) conn->events[i].proc(PGEVT_CONNDESTROY, &evt,
 									conn->events[i].passThrough);
-		pqPfree(conn->events[i].name);
+		free(conn->events[i].name);
 	}
 
 	if (conn->client_encoding_initial)
 		free(conn->client_encoding_initial);
 	if (conn->events)
-		pqPfree(conn->events);
+		free(conn->events);
 	if (conn->pghost)
 		free(conn->pghost);
 	if (conn->pghostaddr)

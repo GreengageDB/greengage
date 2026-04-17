@@ -402,6 +402,9 @@ PQcopyResult(const PGresult *src, int flags)
  * Copy an array of PGEvents (with no extra space for more).
  * Does not duplicate the event instance data, sets this to NULL.
  * Also, the resultInitialized flags are all cleared.
+ *
+ * GPDB: backends use palloc() for allocations here. Make sure this function
+ *       is only used for PGresult->events!
  */
 static PGEvent *
 dupEvents(PGEvent *events, int count)
