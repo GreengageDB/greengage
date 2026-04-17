@@ -17,6 +17,20 @@ def get_table_distr_segment_count(conn: dbconn.Connection, schema_name: str, tab
                           WHERE n.nspname='{escape_string(schema_name)}' AND c.relname='{escape_string(table_name)}';''')
     return int(row[0])
 
+@dataclass
+class RebalanceSummaryInfo:
+    executed_rebalance_steps: List[RebalanceStep]
+
+    tables_shrunk: str = '0'
+    bytes_processed: str = '0'
+    shrink_rate: str = '0 MB/s'
+    shrink_total_time: str = '0s'
+
+    is_rollback: bool = False
+    tables_rolled_back: str = '0'
+    rollback_rate: str = '0 MB/s'
+    rollback_total_time: str = '0s'
+
 class RebalanceSchema:
     STATE_CATEGORY_SHRINK = 'SHRINK'
     STATE_CATEGORY_REBALANCE = 'REBALANCE'
@@ -33,10 +47,12 @@ class RebalanceSchema:
         self.rebalance_status = 'rebalance_status'
         self.table_rebalance_status_detail = 'table_rebalance_status_detail'
         self.rebalance_progress_view = 'rebalance_progress'
+        self.rebalance_progress_view_history = 'rebalance_progress_history'
         self.saved_plan = 'saved_plan'
         self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
         self.progress_type = self.ProgressType.PROGRESS_NOT_DEFINED
+        self.progress_summary = None
 
     def createSchema(self, plan: Plan, progress_type: ProgressType, shrink_rollback_states: List[str]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
@@ -54,7 +70,7 @@ class RebalanceSchema:
                        rebalance_finished TIMESTAMP WITH TIME ZONE,
                        source_bytes NUMERIC,
                        CONSTRAINT unique_fqn UNIQUE (db_name, schema_name, rel_name))
-                       DISTRIBUTED REPLICATED''')
+                       DISTRIBUTED BY (rel_name)''')
         dbconn.execSQL(self.conn,
                        f'''CREATE TABLE {self.schema_name}.{self.saved_plan}
                        (plan BYTEA)
@@ -270,6 +286,9 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
         dbconn.execSQL(self.conn, 'COMMIT')
 
     def dropSchema(self) -> None:
+        # We call getProgressSummary() here in order to memoize the summary
+        # before we drop the schema, as we might need to show summary when the schema is already absent.
+        self.getProgressSummary()
         dbconn.execSQL(self.conn, f'DROP SCHEMA {self.schema_name} CASCADE')
 
     def getSchemaName(self) -> str:
@@ -425,6 +444,17 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
 
         return result
 
+    def backupShrinkProgress(self, logger) -> None:
+        if self.getProgressType() != self.ProgressType.PROGRESS_NO:
+            shrink_total_time = self.getShrinkTotalTime()
+            dbconn.execSQL(self.conn,
+                           f'DROP TABLE IF EXISTS {self.schema_name}.{self.rebalance_progress_view_history}')
+            dbconn.execSQL(self.conn,
+                           f'CREATE TABLE {self.schema_name}.{self.rebalance_progress_view_history} AS SELECT * FROM {self.schema_name}.{self.rebalance_progress_view}')
+            # also add to progress history table the shrink total time to show it in the final summary
+            dbconn.execSQL(self.conn,
+                           f"INSERT INTO {self.schema_name}.{self.rebalance_progress_view_history} VALUES ('Shrink total time', '{shrink_total_time}')")
+
     def getProgressType(self) -> ProgressType:
         if self.progress_type != self.ProgressType.PROGRESS_NOT_DEFINED:
             return self.progress_type
@@ -440,3 +470,100 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
             else:
                 self.progress_type = self.ProgressType.PROGRESS_DETAILED
         return self.progress_type
+
+    def getShrinkTotalTime(self, is_rollback: bool = False) -> str:
+        target_status = 'done' if not is_rollback else 'none'
+        if not is_rollback:
+            filter_condition = "cte.state != 'STATE_SHRINK_TABLES_STARTED'"
+        else:
+            filter_condition = "cte.state != 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START' AND cte.state LIKE 'STATE_SHRINK_ROLLBACK_%'"
+
+        return dbconn.querySingleton(self.conn, f"""
+WITH
+cte_tables_redistribution AS (
+    WITH events AS (
+        SELECT rebalance_started AS ts, 1 AS delta FROM {self.schema_name}.{self.table_rebalance_status_detail}
+        WHERE status = '{target_status}' and rebalance_finished IS NOT NULL
+        UNION ALL
+        SELECT rebalance_finished AS ts, -1 AS delta FROM {self.schema_name}.{self.table_rebalance_status_detail}
+        WHERE status = '{target_status}' and rebalance_finished IS NOT NULL
+    ),
+    ordered AS (
+        SELECT
+            ts,
+            sum(delta) OVER (ORDER BY ts) AS active,
+            LEAD(ts) OVER (ORDER BY ts) AS next_ts
+        FROM events
+    )
+    SELECT
+        sum(next_ts - ts) AS duration
+    FROM ordered
+    WHERE active > 0 AND next_ts IS NOT NULL
+),
+cte_other_states AS (
+    WITH
+    cte AS (
+        SELECT state, state_category, updated, updated - LAG(updated) OVER (ORDER BY updated) AS duration
+        FROM {self.schema_name}.{self.rebalance_status} ORDER BY updated
+    )
+    SELECT sum(cte.duration) as duration FROM cte WHERE cte.state_category = 'SHRINK' AND
+    {filter_condition}
+),
+cte_total AS (
+    SELECT date_trunc('second', cte_tables_redistribution.duration + cte_other_states.duration) AS duration from cte_tables_redistribution, cte_other_states
+)
+SELECT
+EXTRACT(DAY FROM cte_total.duration)::text || 'd ' ||
+EXTRACT(HOUR FROM cte_total.duration)::text || 'h' ||
+EXTRACT(MINUTE FROM cte_total.duration)::text || 'm' ||
+EXTRACT(SECOND FROM cte_total.duration)::text || 's'
+AS total_duration FROM cte_total""")
+
+    def getProgressSummary(self) -> RebalanceSummaryInfo:
+        if self.progress_summary != None:
+            return self.progress_summary
+
+        result = RebalanceSummaryInfo(self.getExecutionSteps([]))
+
+        if self.getProgressType() != self.ProgressType.PROGRESS_NO:
+            result.is_rollback = bool(dbconn.querySingleton(self.conn,
+                f"SELECT CASE WHEN to_regclass('{self.schema_name}.{self.rebalance_progress_view_history}') IS NULL THEN 0 ELSE 1 END AS view_backup_exists"))
+
+            cursor = dbconn.query(self.conn,
+                                f"SELECT stat_name, stat_value FROM {self.schema_name}.{self.rebalance_progress_view}")
+            if not result.is_rollback:
+                for stat_name, stat_value in cursor:
+                    match stat_name:
+                        case '1.1. Tables shrunk':
+                            result.tables_shrunk = stat_value
+                        case '2.1. Bytes processed':
+                            result.bytes_processed = stat_value
+                        case '3.1. Estimated shrink rate':
+                            result.shrink_rate = stat_value
+
+                result.shrink_total_time = self.getShrinkTotalTime()
+            else:
+                for stat_name, stat_value in cursor:
+                    match stat_name:
+                        case '1.1. Tables rolled back':
+                            result.tables_rolled_back = stat_value
+                        case '2.1. Bytes processed':
+                            result.bytes_processed = stat_value
+                        case '3.1. Estimated shrink rate':
+                            result.rollback_rate = stat_value
+
+                cursor = dbconn.query(self.conn,
+                                f"SELECT stat_name, stat_value FROM {self.schema_name}.{self.rebalance_progress_view_history}")
+                for stat_name, stat_value in cursor:
+                    match stat_name:
+                        case '1.1. Tables shrunk':
+                            result.tables_shrunk = stat_value
+                        case '3.1. Estimated shrink rate':
+                            result.shrink_rate = stat_value
+                        case 'Shrink total time':
+                            result.shrink_total_time = stat_value
+
+                result.rollback_total_time = self.getShrinkTotalTime(is_rollback = True)
+
+        self.progress_summary = result
+        return self.progress_summary

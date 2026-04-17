@@ -563,6 +563,18 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "ggrebalance -r -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And ggrebalance should print "Skip final shrink summary report" to logfile with latest timestamp
+         And ggrebalance should not print "Tables shrunk:" to logfile with latest timestamp
+         And ggrebalance should not print "Bytes processed:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rolled back:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
 
          # Checks for '--simple-progress'
@@ -733,6 +745,18 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And ggrebalance should print "Tables shrunk:\s*10" regex to logfile
+         And ggrebalance should not print "Bytes processed:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should print "Tables rolled back:\s*10" regex to logfile
+         And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
 
          # Checks for '--detailed-progress'
          # Check progress report before any table is redistributed
@@ -1048,3 +1072,18 @@ Feature: ggrebalance behave tests (misc options scenarios)
           |  2.3. Bytes in progress           | 0           |
           |  3.1. Estimated shrink rate       | > 0 MB/s    |
           |  3.2. Estimated time              | 0 s         |
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And ggrebalance should print "Tables shrunk:\s*10" regex to logfile
+         And ggrebalance should print "Bytes processed:\s*\d+" regex to logfile
+         And ggrebalance should print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should print "Tables rolled back:\s*10" regex to logfile
+         And ggrebalance should print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp

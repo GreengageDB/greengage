@@ -337,6 +337,10 @@ def main(options, args, parser):
         gpenv = GpCoordinatorEnvironment(
             options.coordinator_data_directory, True)
 
+        configurationInterface.registerConfigurationProvider(
+            configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
+        configurationInterface.getConfigurationProvider().initializeProvider(gpenv.getCoordinatorPort())
+
         dburl = dbconn.DbURL(dbname=DBNAME, port=gpenv.getCoordinatorPort())
 
         check_down_segments(logger, options, dburl)

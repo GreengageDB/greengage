@@ -91,9 +91,20 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --non-interactive-mode -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should print "Tables shrunk:\s*4" regex to logfile
+         And ggrebalance should not print "Bytes processed:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rolled back:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
+         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 1 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
@@ -128,7 +139,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -137,6 +148,17 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Tables shrunk:" to logfile with latest timestamp
+         And ggrebalance should not print "Bytes processed:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rolled back:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
+         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
@@ -436,7 +458,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -453,6 +475,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Port is updated: False" to logfile with latest timestamp
          And ggrebalance should print "Plan to rollback step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
+         And ggrebalance should print "Rolled back moves:\s*\d+" regex to logfile
+         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should print " WARNINGS " to logfile with latest timestamp
+         And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
+         And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
+         And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -487,7 +517,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -504,6 +534,13 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Port is updated: False" to logfile with latest timestamp
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
+         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled moves:\s*\d+" regex to logfile
+         And ggrebalance should print " WARNINGS " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
+         And ggrebalance should print "These segments should be started manually in order cluster to become fault tolerant:" to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -588,7 +625,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --no-progress --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -603,6 +640,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
          And ggrebalance should print "Plan to rollback step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should print " WARNINGS " to logfile with latest timestamp
+         And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
+         And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
+         And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 4 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -687,7 +732,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --no-progress --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -702,6 +747,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Processing error status for switchover step" to logfile with latest timestamp
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should print " WARNINGS " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
+         And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
+         And ggrebalance should not print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 4 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -736,7 +789,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
          And set fault inject "<fault_name>"
-        When the user runs "ggrebalance --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --no-progress --non-interactive-mode -n 1 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -753,6 +806,15 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Port is updated: False" to logfile with latest timestamp
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should print " WARNINGS " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
+         And ggrebalance should print "These segments should be started manually in order cluster to become fault tolerant:" to logfile with latest timestamp
+         And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
+         And ggrebalance should not print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          # some mirrors are definitely down, so do not check them
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -1200,7 +1262,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
          And all files in gpAdminLogs directory are deleted
-         And set fault inject "on_enter_STATE_SHRINK_TABLES_STARTED_begin"
+         And set fault inject "on_enter_STATE_SHRINK_TABLES_DONE_begin"
          And the gp_segment_configuration have been saved
          And database "test_db_1" exists
          And schema "test_schema_1" exists in "test_db_1"
@@ -1216,7 +1278,6 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And unset fault inject
         When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
-         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -1348,13 +1409,24 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When the user runs "ggrebalance --simple-progress --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance --non-interactive-mode -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Tables shrunk:" to logfile with latest timestamp
+         And ggrebalance should not print "Bytes processed:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Shrink total time:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rolled back:" to logfile with latest timestamp
+         And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
+         And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
+         And ggrebalance should print "Segments moved:\s*0" regex to logfile
+         And ggrebalance should print "Rolled back moves:\s*\d+" regex to logfile
+         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
