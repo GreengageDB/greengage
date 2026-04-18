@@ -1,0 +1,15 @@
+LOAD 'credcheck';
+SET credcheck.password_valid_until TO 4;
+SET credcheck.password_valid_max TO 0;
+DO $$
+BEGIN
+	CREATE ROLE test10 LOGIN PASSWORD '101!!010101010abc!' NOSUPERUSER INHERIT NOCREATEDB NOCREATEROLE NOREPLICATION;
+END
+$$;
+select 1 from pg_shadow where usename = 'test10' and valuntil IS NOT NULL;
+ ?column? 
+----------
+        1
+(1 row)
+
+DROP ROLE test10;
