@@ -1,3 +1,27 @@
+2026-04-18 - Version 4.7.0
+
+This release fixes issues reported by users since last release and adds
+two new features.
+
+  * Allow no password policy checks at all for changes done by a superuser
+    enabling new GUC credcheck.superuser_nocheck. Thanks to Jacute for the
+    feature request.
+  * Add feature "Disallow password change" to disallow users to change
+    their password. This behavior is enabled by setting:
+            credcheck.disallow_password_change=on
+    It returns the following message when a user tries to change its
+    password:
+            ERROR:  you are not allowed to change your password.
+    Thanks to Jacute for the reature request.
+
+Other changes in this release:
+
+  - Fix credcheck.password_valid_until when CREATE/ALTER ROLE is called from
+    a plpgsql block. Thanks to Remi Bos for the report.
+  - Fix password_valid_until / password_valid_max behavior. Thanks to wlkvv
+    Daniel for the report.
+  - Fix markdown formatting before "Warning before password expire" section.
+
 2026-02-19 - Version 4.6.0
 
 This is a maintenance release to fix a security issues introduced in
