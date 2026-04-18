@@ -1467,7 +1467,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	elog(DEBUG1, "Start cc_ProcessUtility()");
 
 	/* If real user connection and top level (not SPI re-enter, etc) */
-	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER &&
+			(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY)
+	   )
 	{
 		Node *parsetree = pstmt->utilityStmt;
 
