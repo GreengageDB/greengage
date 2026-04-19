@@ -317,11 +317,11 @@ class GGRebalanceMainSM:
                     self.logger.info("Rollback is already in progress, and was interrupted. Execute 'ggrebalance' without '-r' flag.")
                     return
                 if not self.prev_shrink_run_was_complete:
+                    self.is_summary_output_required = self.rebalance_schema.schemaExists()
                     self.gg_shrink.rollback(self.plan)
-                    self.is_summary_output_required = True
                     return
+            self.is_summary_output_required = self.rebalance_schema.schemaExists()
             self.gg_rebalance.rollback()
-            self.is_summary_output_required = True
         finally:
             self.trigger('move_to_STATE_END')
 
