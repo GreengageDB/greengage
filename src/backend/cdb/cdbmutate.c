@@ -482,39 +482,38 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 					 */
 					if (!targetPolicy)
 					{
-						int			i;
 						List	   *policykeys = NIL;
 						List	   *policyopclasses = NIL;
+						ListCell   *lc;
 
-						for (i = 0; i < list_length(plan->targetlist); i++)
+						foreach(lc, plan->targetlist)
 						{
-							TargetEntry *target =
-							get_tle_by_resno(plan->targetlist, i + 1);
+							TargetEntry *target = lfirst(lc);
 
-							if (target)
+							if (target->resjunk)
+								continue;
+
+							Oid			typeOid = exprType((Node *) target->expr);
+							Oid			opclass = InvalidOid;
+
+							/*
+							 * Check for a legacy hash operator class if
+							 * gp_use_legacy_hashops GUC is set. If
+							 * InvalidOid is returned or the GUC is not
+							 * set, we'll get the default operator class.
+							 */
+							if (gp_use_legacy_hashops)
+								opclass = get_legacy_cdbhash_opclass_for_base_type(typeOid);
+
+							if (!OidIsValid(opclass))
+								opclass = cdb_default_distribution_opclass_for_type(typeOid);
+
+
+							if (OidIsValid(opclass))
 							{
-								Oid			typeOid = exprType((Node *) target->expr);
-								Oid			opclass = InvalidOid;
-
-								/*
-								 * Check for a legacy hash operator class if
-								 * gp_use_legacy_hashops GUC is set. If
-								 * InvalidOid is returned or the GUC is not
-								 * set, we'll get the default operator class.
-								 */
-								if (gp_use_legacy_hashops)
-									opclass = get_legacy_cdbhash_opclass_for_base_type(typeOid);
-
-								if (!OidIsValid(opclass))
-									opclass = cdb_default_distribution_opclass_for_type(typeOid);
-
-
-								if (OidIsValid(opclass))
-								{
-									policykeys = lappend_int(policykeys, i + 1);
-									policyopclasses = lappend_oid(policyopclasses, opclass);
-									break;
-								}
+								policykeys = lappend_int(policykeys, target->resno);
+								policyopclasses = lappend_oid(policyopclasses, opclass);
+								break;
 							}
 						}
 						targetPolicy = createHashPartitionedPolicy(policykeys,

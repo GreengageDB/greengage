@@ -8,6 +8,7 @@ from behave import given, when, then
 from gppylib.gparray import GpArray
 from gppylib.db import dbconn
 from gppylib.commands.base import Command, REMOTE
+from gppylib import gpsubprocess
 
 # These utilities are intended to help various Behave tests handle disconnecting
 # and reconnecting hosts from the current GPDB cluster.  They are not intended to be
@@ -75,8 +76,8 @@ def add_or_remove_blackhole_route(disconnected_hosts, spare_hosts, disconnect=Fa
 def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
     cmd = "cat /etc/hosts | grep {} | head -1 ".format(disconnect_host)
     cmd += "| awk '{print $1}'"
-    disconnect_addr = subprocess.check_output(["bash", "-c", cmd])
-    disconnect_addr = disconnect_addr.decode('utf-8').strip()
+    disconnect_addr = gpsubprocess.check_output(["bash", "-c", cmd])
+    disconnect_addr = disconnect_addr.strip()
 
     for host in hosts:
         if host == disconnect_host:
@@ -87,7 +88,7 @@ def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
             subcmd = "delete"
 
         cmd = "sudo ip route {} {}".format(subcmd, disconnect_addr)
-        subprocess.check_output(["ssh", host, cmd])
+        gpsubprocess.check_output(["ssh", host, cmd])
 
 @given('all postgres processes are killed on "{disconnected}" hosts')
 @then('all postgres processes are killed on "{disconnected}" hosts')
@@ -103,7 +104,7 @@ def impl(context, disconnected):
             "rm -fr /data/gpdata/mirror/*"]
     for host in disconnected_hosts:
         for cmd in cmds:
-            subprocess.check_output(["ssh", host, cmd])
+            gpsubprocess.check_output(["ssh", host, cmd])
 
 
 @given('An entry to {action} {env} env var is added on all hosts of cluster')
@@ -119,7 +120,7 @@ def impl(context, action, env):
     hosts = GpArray.initFromCatalog(dbconn.DbURL()).getHostList()
     for host in hosts:
         for cmd in cmds:
-            subprocess.check_output(["ssh", host, cmd])
+            gpsubprocess.check_output(["ssh", host, cmd])
 
 
 # This step is very specific to the CCP CI cluster.

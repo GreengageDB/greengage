@@ -1268,373 +1268,357 @@ reset optimizer_trace_fallback;
 -- s/[ ]*\+$/ \+/
 -- end_matchsubs
 -- Output DXL plan without unimportant properties.
--- start_ignore
-\! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
-\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "pretty_xml = dom.toprettyxml(indent='   ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/SortOperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/OperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/Mdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/dxl://' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
--- end_ignore
 select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '        <', '<');
-                                                            replace                                                            
--------------------------------------------------------------------------------------------------------------------------------
- {"<Plan Id=\"0\" SpaceSize=\"0\">                                                                                            +
-  <Result>                                                                                                                    +
-     <ProjList>                                                                                                               +
-        <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                   +
-           <Ident ColId=\"0\" ColName=\"i1\"/>                                                                                +
-        </ProjElem>                                                                                                           +
-     </ProjList>                                                                                                              +
-     <Filter>                                                                                                                 +
-        <SubPlan SubPlanType=\"AnySubPlan\">                                                                                  +
-           <TestExpr>                                                                                                         +
-              <Comparison ComparisonOperator=\"=\">                                                                           +
-                 <If>                                                                                                         +
-                    <Comparison ComparisonOperator=\"&gt;\">                                                                  +
-                       <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                                          +
-                       <ConstValue/>                                                                                          +
-                    </Comparison>                                                                                             +
-                    <If>                                                                                                      +
-                       <Comparison ComparisonOperator=\"=\">                                                                  +
-                          <Ident ColId=\"28\" ColName=\"ColRef_0028\"/>                                                       +
-                          <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                                       +
-                       </Comparison>                                                                                          +
-                       <ConstValue IsNull=\"true\"/>                                                                          +
-                       <ConstValue/>                                                                                          +
-                    </If>                                                                                                     +
-                    <ConstValue/>                                                                                             +
-                 </If>                                                                                                        +
-                 <Ident ColId=\"16\" ColName=\"?column?\"/>                                                                   +
-              </Comparison>                                                                                                   +
-           </TestExpr>                                                                                                        +
-           <ParamList>                                                                                                        +
-              <Param ColId=\"0\" ColName=\"i1\"/>                                                                             +
-           </ParamList>                                                                                                       +
-           <Result>                                                                                                           +
-              <ProjList>                                                                                                      +
-                 <ProjElem Alias=\"ColRef_0026\" ColId=\"26\">                                                                +
-                    <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                                             +
-                 </ProjElem>                                                                                                  +
-                 <ProjElem Alias=\"ColRef_0028\" ColId=\"28\">                                                                +
-                    <Ident ColId=\"28\" ColName=\"ColRef_0028\"/>                                                             +
-                 </ProjElem>                                                                                                  +
-                 <ProjElem Alias=\"?column?\" ColId=\"16\">                                                                   +
-                    <Ident ColId=\"16\" ColName=\"?column?\"/>                                                                +
-                 </ProjElem>                                                                                                  +
-              </ProjList>                                                                                                     +
-              <Filter/>                                                                                                       +
-              <OneTimeFilter/>                                                                                                +
-              <Aggregate AggregationStrategy=\"Sorted\" StreamSafe=\"false\">                                                 +
-                 <GroupingColumns>                                                                                            +
-                    <GroupingColumn ColId=\"8\"/>                                                                             +
-                    <GroupingColumn ColId=\"9\"/>                                                                             +
-                    <GroupingColumn ColId=\"15\"/>                                                                            +
-                    <GroupingColumn ColId=\"16\"/>                                                                            +
-                 </GroupingColumns>                                                                                           +
-                 <ProjList>                                                                                                   +
-                    <ProjElem Alias=\"ColRef_0026\" ColId=\"26\">                                                             +
-                       <AggFunc AggDistinct=\"false\" AggKind=\"n\">                                                          +
-                             <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                                    +
-                       </AggFunc>                                                                                             +
-                    </ProjElem>                                                                                               +
-                    <ProjElem Alias=\"ColRef_0028\" ColId=\"28\">                                                             +
-                       <AggFunc AggDistinct=\"false\" AggKind=\"n\">                                                          +
-                             <Ident ColId=\"27\" ColName=\"ColRef_0027\"/>                                                    +
-                       </AggFunc>                                                                                             +
-                    </ProjElem>                                                                                               +
-                    <ProjElem Alias=\"?column?\" ColId=\"16\">                                                                +
-                       <Ident ColId=\"16\" ColName=\"?column?\"/>                                                             +
-                    </ProjElem>                                                                                               +
-                    <ProjElem Alias=\"i3\" ColId=\"8\">                                                                       +
-                       <Ident ColId=\"8\" ColName=\"i3\"/>                                                                    +
-                    </ProjElem>                                                                                               +
-                    <ProjElem Alias=\"ctid\" ColId=\"9\">                                                                     +
-                       <Ident ColId=\"9\" ColName=\"ctid\"/>                                                                  +
-                    </ProjElem>                                                                                               +
-                    <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                                           +
-                       <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                                        +
-                    </ProjElem>                                                                                               +
-                 </ProjList>                                                                                                  +
-                 <Filter/>                                                                                                    +
-                 <Sort SortDiscardDuplicates=\"false\">                                                                       +
-                    <ProjList>                                                                                                +
-                       <ProjElem Alias=\"?column?\" ColId=\"16\">                                                             +
-                          <Ident ColId=\"16\" ColName=\"?column?\"/>                                                          +
-                       </ProjElem>                                                                                            +
-                       <ProjElem Alias=\"ColRef_0027\" ColId=\"27\">                                                          +
-                          <Ident ColId=\"27\" ColName=\"ColRef_0027\"/>                                                       +
-                       </ProjElem>                                                                                            +
-                       <ProjElem Alias=\"i3\" ColId=\"8\">                                                                    +
-                          <Ident ColId=\"8\" ColName=\"i3\"/>                                                                 +
-                       </ProjElem>                                                                                            +
-                       <ProjElem Alias=\"ctid\" ColId=\"9\">                                                                  +
-                          <Ident ColId=\"9\" ColName=\"ctid\"/>                                                               +
-                       </ProjElem>                                                                                            +
-                       <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                                        +
-                          <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                                     +
-                       </ProjElem>                                                                                            +
-                       <ProjElem Alias=\"ColRef_0025\" ColId=\"25\">                                                          +
-                          <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                                       +
-                       </ProjElem>                                                                                            +
-                    </ProjList>                                                                                               +
-                    <Filter/>                                                                                                 +
-                    <SortingColumnList>                                                                                       +
-                       <SortingColumn ColId=\"8\" SortNullsFirst=\"false\"/>                                                  +
-                       <SortingColumn ColId=\"9\" SortNullsFirst=\"false\"/>                                                  +
-                       <SortingColumn ColId=\"15\" SortNullsFirst=\"false\"/>                                                 +
-                       <SortingColumn ColId=\"16\" SortNullsFirst=\"false\"/>                                                 +
-                    </SortingColumnList>                                                                                      +
-                    <LimitCount/>                                                                                             +
-                    <LimitOffset/>                                                                                            +
-                    <Result>                                                                                                  +
-                       <ProjList>                                                                                             +
-                          <ProjElem Alias=\"?column?\" ColId=\"16\">                                                          +
-                             <Comparison ComparisonOperator=\"=\">                                                            +
-                                <Ident ColId=\"8\" ColName=\"i3\"/>                                                           +
-                                <ConstValue/>                                                                                 +
-                             </Comparison>                                                                                    +
-                          </ProjElem>                                                                                         +
-                          <ProjElem Alias=\"ColRef_0027\" ColId=\"27\">                                                       +
-                             <If>                                                                                             +
-                                <IsNull>                                                                                      +
-                                   <Comparison ComparisonOperator=\"=\">                                                      +
-                                      <Ident ColId=\"0\" ColName=\"i1\"/>                                                     +
-                                      <Ident ColId=\"17\" ColName=\"i2\"/>                                                    +
-                                   </Comparison>                                                                              +
-                                </IsNull>                                                                                     +
-                                <ConstValue/>                                                                                 +
-                                <ConstValue/>                                                                                 +
-                             </If>                                                                                            +
-                          </ProjElem>                                                                                         +
-                          <ProjElem Alias=\"i3\" ColId=\"8\">                                                                 +
-                             <Ident ColId=\"8\" ColName=\"i3\"/>                                                              +
-                          </ProjElem>                                                                                         +
-                          <ProjElem Alias=\"ctid\" ColId=\"9\">                                                               +
-                             <Ident ColId=\"9\" ColName=\"ctid\"/>                                                            +
-                          </ProjElem>                                                                                         +
-                          <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                                     +
-                             <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                                  +
-                          </ProjElem>                                                                                         +
-                          <ProjElem Alias=\"ColRef_0025\" ColId=\"25\">                                                       +
-                             <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                                    +
-                          </ProjElem>                                                                                         +
-                       </ProjList>                                                                                            +
-                       <Filter/>                                                                                              +
-                       <OneTimeFilter/>                                                                                       +
-                       <NestedLoopJoin IndexNestedLoopJoin=\"false\" JoinType=\"Left\" OuterRefAsParam=\"false\">             +
-                          <ProjList>                                                                                          +
-                             <ProjElem Alias=\"i3\" ColId=\"8\">                                                              +
-                                <Ident ColId=\"8\" ColName=\"i3\"/>                                                           +
-                             </ProjElem>                                                                                      +
-                             <ProjElem Alias=\"ctid\" ColId=\"9\">                                                            +
-                                <Ident ColId=\"9\" ColName=\"ctid\"/>                                                         +
-                             </ProjElem>                                                                                      +
-                             <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                                  +
-                                <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                               +
-                             </ProjElem>                                                                                      +
-                             <ProjElem Alias=\"i2\" ColId=\"17\">                                                             +
-                                <Ident ColId=\"17\" ColName=\"i2\"/>                                                          +
-                             </ProjElem>                                                                                      +
-                             <ProjElem Alias=\"ColRef_0025\" ColId=\"25\">                                                    +
-                                <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                                 +
-                             </ProjElem>                                                                                      +
-                          </ProjList>                                                                                         +
-                          <Filter/>                                                                                           +
-                          <JoinFilter>                                                                                        +
-                             <ConstValue/>                                                                                    +
-                          </JoinFilter>                                                                                       +
-                          <Materialize Eager=\"false\">                                                                       +
-                             <ProjList>                                                                                       +
-                                <ProjElem Alias=\"i3\" ColId=\"8\">                                                           +
-                                   <Ident ColId=\"8\" ColName=\"i3\"/>                                                        +
-                                </ProjElem>                                                                                   +
-                                <ProjElem Alias=\"ctid\" ColId=\"9\">                                                         +
-                                   <Ident ColId=\"9\" ColName=\"ctid\"/>                                                      +
-                                </ProjElem>                                                                                   +
-                                <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                               +
-                                   <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                            +
-                                </ProjElem>                                                                                   +
-                             </ProjList>                                                                                      +
-                             <Filter/>                                                                                        +
-                             <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                     +
-                                <ProjList>                                                                                    +
-                                   <ProjElem Alias=\"i3\" ColId=\"8\">                                                        +
-                                      <Ident ColId=\"8\" ColName=\"i3\"/>                                                     +
-                                   </ProjElem>                                                                                +
-                                   <ProjElem Alias=\"ctid\" ColId=\"9\">                                                      +
-                                      <Ident ColId=\"9\" ColName=\"ctid\"/>                                                   +
-                                   </ProjElem>                                                                                +
-                                   <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                            +
-                                      <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                         +
-                                   </ProjElem>                                                                                +
-                                </ProjList>                                                                                   +
-                                <Filter/>                                                                                     +
-                                <SortingColumnList/>                                                                          +
-                                <TableScan>                                                                                   +
-                                   <ProjList>                                                                                 +
-                                      <ProjElem Alias=\"i3\" ColId=\"8\">                                                     +
-                                         <Ident ColId=\"8\" ColName=\"i3\"/>                                                  +
-                                      </ProjElem>                                                                             +
-                                      <ProjElem Alias=\"ctid\" ColId=\"9\">                                                   +
-                                         <Ident ColId=\"9\" ColName=\"ctid\"/>                                                +
-                                      </ProjElem>                                                                             +
-                                      <ProjElem Alias=\"gp_segment_id\" ColId=\"15\">                                         +
-                                         <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                      +
-                                      </ProjElem>                                                                             +
-                                   </ProjList>                                                                                +
-                                   <Filter/>                                                                                  +
-                                   <TableDescriptor>                                                                          +
-                                      <Columns>                                                                               +
-                                         <Column Attno=\"1\" ColId=\"8\" ColName=\"i3\" ColWidth=\"4\"/>                      +
-                                         <Column Attno=\"-1\" ColId=\"9\" ColName=\"ctid\" ColWidth=\"6\"/>                   +
-                                         <Column Attno=\"-3\" ColId=\"10\" ColName=\"xmin\" ColWidth=\"4\"/>                  +
-                                         <Column Attno=\"-4\" ColId=\"11\" ColName=\"cmin\" ColWidth=\"4\"/>                  +
-                                         <Column Attno=\"-5\" ColId=\"12\" ColName=\"xmax\" ColWidth=\"4\"/>                  +
-                                         <Column Attno=\"-6\" ColId=\"13\" ColName=\"cmax\" ColWidth=\"4\"/>                  +
-                                         <Column Attno=\"-7\" ColId=\"14\" ColName=\"tableoid\" ColWidth=\"4\"/>              +
-                                         <Column Attno=\"-8\" ColId=\"15\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>         +
-                                      </Columns>                                                                              +
-                                   </TableDescriptor>                                                                         +
-                                </TableScan>                                                                                  +
-                             </GatherMotion>                                                                                  +
-                          </Materialize>                                                                                      +
-                          <Materialize Eager=\"true\">                                                                        +
-                             <ProjList>                                                                                       +
-                                <ProjElem Alias=\"ColRef_0025\" ColId=\"25\">                                                 +
-                                   <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                              +
-                                </ProjElem>                                                                                   +
-                                <ProjElem Alias=\"i2\" ColId=\"17\">                                                          +
-                                   <Ident ColId=\"17\" ColName=\"i2\"/>                                                       +
-                                </ProjElem>                                                                                   +
-                             </ProjList>                                                                                      +
-                             <Filter/>                                                                                        +
-                             <Result>                                                                                         +
-                                <ProjList>                                                                                    +
-                                   <ProjElem Alias=\"ColRef_0025\" ColId=\"25\">                                              +
-                                      <ConstValue/>                                                                           +
-                                   </ProjElem>                                                                                +
-                                   <ProjElem Alias=\"i2\" ColId=\"17\">                                                       +
-                                      <Ident ColId=\"17\" ColName=\"i2\"/>                                                    +
-                                   </ProjElem>                                                                                +
-                                </ProjList>                                                                                   +
-                                <Filter/>                                                                                     +
-                                <OneTimeFilter/>                                                                              +
-                                <Result>                                                                                      +
-                                   <ProjList>                                                                                 +
-                                      <ProjElem Alias=\"i2\" ColId=\"17\">                                                    +
-                                         <Ident ColId=\"17\" ColName=\"i2\"/>                                                 +
-                                      </ProjElem>                                                                             +
-                                   </ProjList>                                                                                +
-                                   <Filter>                                                                                   +
-                                      <IsNotFalse>                                                                            +
-                                         <Comparison ComparisonOperator=\"=\">                                                +
-                                            <Ident ColId=\"0\" ColName=\"i1\"/>                                               +
-                                            <Ident ColId=\"17\" ColName=\"i2\"/>                                              +
-                                         </Comparison>                                                                        +
-                                      </IsNotFalse>                                                                           +
-                                   </Filter>                                                                                  +
-                                   <OneTimeFilter/>                                                                           +
-                                   <Materialize Eager=\"false\">                                                              +
-                                      <ProjList>                                                                              +
-                                         <ProjElem Alias=\"i2\" ColId=\"17\">                                                 +
-                                            <Ident ColId=\"17\" ColName=\"i2\"/>                                              +
-                                         </ProjElem>                                                                          +
-                                      </ProjList>                                                                             +
-                                      <Filter/>                                                                               +
-                                      <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                            +
-                                         <ProjList>                                                                           +
-                                            <ProjElem Alias=\"i2\" ColId=\"17\">                                              +
-                                               <Ident ColId=\"17\" ColName=\"i2\"/>                                           +
-                                            </ProjElem>                                                                       +
-                                         </ProjList>                                                                          +
-                                         <Filter/>                                                                            +
-                                         <SortingColumnList/>                                                                 +
-                                         <TableScan>                                                                          +
-                                            <ProjList>                                                                        +
-                                               <ProjElem Alias=\"i2\" ColId=\"17\">                                           +
-                                                  <Ident ColId=\"17\" ColName=\"i2\"/>                                        +
-                                               </ProjElem>                                                                    +
-                                            </ProjList>                                                                       +
-                                            <Filter/>                                                                         +
-                                            <TableDescriptor>                                                                 +
-                                               <Columns>                                                                      +
-                                                  <Column Attno=\"1\" ColId=\"17\" ColName=\"i2\" ColWidth=\"4\"/>            +
-                                                  <Column Attno=\"-1\" ColId=\"18\" ColName=\"ctid\" ColWidth=\"6\"/>         +
-                                                  <Column Attno=\"-3\" ColId=\"19\" ColName=\"xmin\" ColWidth=\"4\"/>         +
-                                                  <Column Attno=\"-4\" ColId=\"20\" ColName=\"cmin\" ColWidth=\"4\"/>         +
-                                                  <Column Attno=\"-5\" ColId=\"21\" ColName=\"xmax\" ColWidth=\"4\"/>         +
-                                                  <Column Attno=\"-6\" ColId=\"22\" ColName=\"cmax\" ColWidth=\"4\"/>         +
-                                                  <Column Attno=\"-7\" ColId=\"23\" ColName=\"tableoid\" ColWidth=\"4\"/>     +
-                                                  <Column Attno=\"-8\" ColId=\"24\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>+
-                                               </Columns>                                                                     +
-                                            </TableDescriptor>                                                                +
-                                         </TableScan>                                                                         +
-                                      </GatherMotion>                                                                         +
-                                   </Materialize>                                                                             +
-                                </Result>                                                                                     +
-                             </Result>                                                                                        +
-                          </Materialize>                                                                                      +
-                       </NestedLoopJoin>                                                                                      +
-                    </Result>                                                                                                 +
-                 </Sort>                                                                                                      +
-              </Aggregate>                                                                                                    +
-           </Result>                                                                                                          +
-        </SubPlan>                                                                                                            +
-     </Filter>                                                                                                                +
-     <OneTimeFilter/>                                                                                                         +
-     <Sort SortDiscardDuplicates=\"false\">                                                                                   +
-        <ProjList>                                                                                                            +
-           <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                +
-              <Ident ColId=\"0\" ColName=\"i1\"/>                                                                             +
-           </ProjElem>                                                                                                        +
-        </ProjList>                                                                                                           +
-        <Filter/>                                                                                                             +
-        <SortingColumnList>                                                                                                   +
-           <SortingColumn ColId=\"0\" SortNullsFirst=\"false\"/>                                                              +
-        </SortingColumnList>                                                                                                  +
-        <LimitCount/>                                                                                                         +
-        <LimitOffset/>                                                                                                        +
-        <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                                          +
-           <ProjList>                                                                                                         +
-              <ProjElem Alias=\"i1\" ColId=\"0\">                                                                             +
-                 <Ident ColId=\"0\" ColName=\"i1\"/>                                                                          +
-              </ProjElem>                                                                                                     +
-           </ProjList>                                                                                                        +
-           <Filter/>                                                                                                          +
-           <SortingColumnList/>                                                                                               +
-           <TableScan>                                                                                                        +
-              <ProjList>                                                                                                      +
-                 <ProjElem Alias=\"i1\" ColId=\"0\">                                                                          +
-                    <Ident ColId=\"0\" ColName=\"i1\"/>                                                                       +
-                 </ProjElem>                                                                                                  +
-              </ProjList>                                                                                                     +
-              <Filter/>                                                                                                       +
-              <TableDescriptor>                                                                                               +
-                 <Columns>                                                                                                    +
-                    <Column Attno=\"1\" ColId=\"0\" ColName=\"i1\" ColWidth=\"4\"/>                                           +
-                    <Column Attno=\"-1\" ColId=\"1\" ColName=\"ctid\" ColWidth=\"6\"/>                                        +
-                    <Column Attno=\"-3\" ColId=\"2\" ColName=\"xmin\" ColWidth=\"4\"/>                                        +
-                    <Column Attno=\"-4\" ColId=\"3\" ColName=\"cmin\" ColWidth=\"4\"/>                                        +
-                    <Column Attno=\"-5\" ColId=\"4\" ColName=\"xmax\" ColWidth=\"4\"/>                                        +
-                    <Column Attno=\"-6\" ColId=\"5\" ColName=\"cmax\" ColWidth=\"4\"/>                                        +
-                    <Column Attno=\"-7\" ColId=\"6\" ColName=\"tableoid\" ColWidth=\"4\"/>                                    +
-                    <Column Attno=\"-8\" ColId=\"7\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>                               +
-                 </Columns>                                                                                                   +
-              </TableDescriptor>                                                                                              +
-           </TableScan>                                                                                                       +
-        </GatherMotion>                                                                                                       +
-     </Sort>                                                                                                                  +
-  </Result>                                                                                                                   +
-       </Plan>"}
+                                                replace                                                 
+--------------------------------------------------------------------------------------------------------
+ {"<Plan Id=\"0\" SpaceSize=\"0\">                                                                     +
+       <Result>                                                                                        +
+ <ProjList>                                                                                            +
+   <ProjElem ColId=\"0\" Alias=\"i1\">                                                                 +
+     <Ident ColId=\"0\" ColName=\"i1\"/>                                                               +
+   </ProjElem>                                                                                         +
+ </ProjList>                                                                                           +
+ <Filter>                                                                                              +
+   <SubPlan>                                                                                           +
+     <TestExpr>                                                                                        +
+       <Comparison ComparisonOperator=\"=\">                                                           +
+         <If>                                                                                          +
+           <Comparison ComparisonOperator=\"&gt;\">                                                    +
+             <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                             +
+             <ConstValue/>                                                                             +
+           </Comparison>                                                                               +
+           <If>                                                                                        +
+             <Comparison ComparisonOperator=\"=\">                                                     +
+               <Ident ColId=\"28\" ColName=\"ColRef_0028\"/>                                           +
+               <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                           +
+             </Comparison>                                                                             +
+             <ConstValue/>                                                                             +
+             <ConstValue/>                                                                             +
+           </If>                                                                                       +
+           <ConstValue/>                                                                               +
+         </If>                                                                                         +
+         <Ident ColId=\"16\" ColName=\"?column?\"/>                                                    +
+       </Comparison>                                                                                   +
+     </TestExpr>                                                                                       +
+     <ParamList>                                                                                       +
+       <Param ColId=\"0\" ColName=\"i1\"/>                                                             +
+     </ParamList>                                                                                      +
+     <Result>                                                                                          +
+       <ProjList>                                                                                      +
+         <ProjElem ColId=\"26\" Alias=\"ColRef_0026\">                                                 +
+           <Ident ColId=\"26\" ColName=\"ColRef_0026\"/>                                               +
+         </ProjElem>                                                                                   +
+         <ProjElem ColId=\"28\" Alias=\"ColRef_0028\">                                                 +
+           <Ident ColId=\"28\" ColName=\"ColRef_0028\"/>                                               +
+         </ProjElem>                                                                                   +
+         <ProjElem ColId=\"16\" Alias=\"?column?\">                                                    +
+           <Ident ColId=\"16\" ColName=\"?column?\"/>                                                  +
+         </ProjElem>                                                                                   +
+       </ProjList>                                                                                     +
+       <Filter/>                                                                                       +
+       <OneTimeFilter/>                                                                                +
+       <Aggregate AggregationStrategy=\"Sorted\" StreamSafe=\"false\">                                 +
+         <GroupingColumns>                                                                             +
+           <GroupingColumn ColId=\"8\"/>                                                               +
+           <GroupingColumn ColId=\"9\"/>                                                               +
+           <GroupingColumn ColId=\"15\"/>                                                              +
+           <GroupingColumn ColId=\"16\"/>                                                              +
+         </GroupingColumns>                                                                            +
+         <ProjList>                                                                                    +
+           <ProjElem ColId=\"26\" Alias=\"ColRef_0026\">                                               +
+             <AggFunc>                                                                                 +
+                 <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                         +
+             </AggFunc>                                                                                +
+           </ProjElem>                                                                                 +
+           <ProjElem ColId=\"28\" Alias=\"ColRef_0028\">                                               +
+             <AggFunc>                                                                                 +
+                 <Ident ColId=\"27\" ColName=\"ColRef_0027\"/>                                         +
+             </AggFunc>                                                                                +
+           </ProjElem>                                                                                 +
+           <ProjElem ColId=\"16\" Alias=\"?column?\">                                                  +
+             <Ident ColId=\"16\" ColName=\"?column?\"/>                                                +
+           </ProjElem>                                                                                 +
+           <ProjElem ColId=\"8\" Alias=\"i3\">                                                         +
+             <Ident ColId=\"8\" ColName=\"i3\"/>                                                       +
+           </ProjElem>                                                                                 +
+           <ProjElem ColId=\"9\" Alias=\"ctid\">                                                       +
+             <Ident ColId=\"9\" ColName=\"ctid\"/>                                                     +
+           </ProjElem>                                                                                 +
+           <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                             +
+             <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                           +
+           </ProjElem>                                                                                 +
+         </ProjList>                                                                                   +
+         <Filter/>                                                                                     +
+         <Sort SortDiscardDuplicates=\"false\">                                                        +
+           <ProjList>                                                                                  +
+             <ProjElem ColId=\"16\" Alias=\"?column?\">                                                +
+               <Ident ColId=\"16\" ColName=\"?column?\"/>                                              +
+             </ProjElem>                                                                               +
+             <ProjElem ColId=\"27\" Alias=\"ColRef_0027\">                                             +
+               <Ident ColId=\"27\" ColName=\"ColRef_0027\"/>                                           +
+             </ProjElem>                                                                               +
+             <ProjElem ColId=\"8\" Alias=\"i3\">                                                       +
+               <Ident ColId=\"8\" ColName=\"i3\"/>                                                     +
+             </ProjElem>                                                                               +
+             <ProjElem ColId=\"9\" Alias=\"ctid\">                                                     +
+               <Ident ColId=\"9\" ColName=\"ctid\"/>                                                   +
+             </ProjElem>                                                                               +
+             <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                           +
+               <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                         +
+             </ProjElem>                                                                               +
+             <ProjElem ColId=\"25\" Alias=\"ColRef_0025\">                                             +
+               <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                           +
+             </ProjElem>                                                                               +
+           </ProjList>                                                                                 +
+           <Filter/>                                                                                   +
+           <SortingColumnList>                                                                         +
+             <SortingColumn ColId=\"8\"/>                                                              +
+             <SortingColumn ColId=\"9\"/>                                                              +
+             <SortingColumn ColId=\"15\"/>                                                             +
+             <SortingColumn ColId=\"16\"/>                                                             +
+           </SortingColumnList>                                                                        +
+           <LimitCount/>                                                                               +
+           <LimitOffset/>                                                                              +
+           <Result>                                                                                    +
+             <ProjList>                                                                                +
+               <ProjElem ColId=\"16\" Alias=\"?column?\">                                              +
+                 <Comparison ComparisonOperator=\"=\">                                                 +
+                   <Ident ColId=\"8\" ColName=\"i3\"/>                                                 +
+                   <ConstValue/>                                                                       +
+                 </Comparison>                                                                         +
+               </ProjElem>                                                                             +
+               <ProjElem ColId=\"27\" Alias=\"ColRef_0027\">                                           +
+                 <If>                                                                                  +
+                   <IsNull>                                                                            +
+                     <Comparison ComparisonOperator=\"=\">                                             +
+                       <Ident ColId=\"0\" ColName=\"i1\"/>                                             +
+                       <Ident ColId=\"17\" ColName=\"i2\"/>                                            +
+                     </Comparison>                                                                     +
+                   </IsNull>                                                                           +
+                   <ConstValue/>                                                                       +
+                   <ConstValue/>                                                                       +
+                 </If>                                                                                 +
+               </ProjElem>                                                                             +
+               <ProjElem ColId=\"8\" Alias=\"i3\">                                                     +
+                 <Ident ColId=\"8\" ColName=\"i3\"/>                                                   +
+               </ProjElem>                                                                             +
+               <ProjElem ColId=\"9\" Alias=\"ctid\">                                                   +
+                 <Ident ColId=\"9\" ColName=\"ctid\"/>                                                 +
+               </ProjElem>                                                                             +
+               <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                         +
+                 <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                       +
+               </ProjElem>                                                                             +
+               <ProjElem ColId=\"25\" Alias=\"ColRef_0025\">                                           +
+                 <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                         +
+               </ProjElem>                                                                             +
+             </ProjList>                                                                               +
+             <Filter/>                                                                                 +
+             <OneTimeFilter/>                                                                          +
+             <NestedLoopJoin JoinType=\"Left\" IndexNestedLoopJoin=\"false\" OuterRefAsParam=\"false\">+
+               <ProjList>                                                                              +
+                 <ProjElem ColId=\"8\" Alias=\"i3\">                                                   +
+                   <Ident ColId=\"8\" ColName=\"i3\"/>                                                 +
+                 </ProjElem>                                                                           +
+                 <ProjElem ColId=\"9\" Alias=\"ctid\">                                                 +
+                   <Ident ColId=\"9\" ColName=\"ctid\"/>                                               +
+                 </ProjElem>                                                                           +
+                 <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                       +
+                   <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                     +
+                 </ProjElem>                                                                           +
+                 <ProjElem ColId=\"17\" Alias=\"i2\">                                                  +
+                   <Ident ColId=\"17\" ColName=\"i2\"/>                                                +
+                 </ProjElem>                                                                           +
+                 <ProjElem ColId=\"25\" Alias=\"ColRef_0025\">                                         +
+                   <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                       +
+                 </ProjElem>                                                                           +
+               </ProjList>                                                                             +
+               <Filter/>                                                                               +
+               <JoinFilter>                                                                            +
+                 <ConstValue/>                                                                         +
+               </JoinFilter>                                                                           +
+               <Materialize Eager=\"false\">                                                           +
+                 <ProjList>                                                                            +
+                   <ProjElem ColId=\"8\" Alias=\"i3\">                                                 +
+                     <Ident ColId=\"8\" ColName=\"i3\"/>                                               +
+                   </ProjElem>                                                                         +
+                   <ProjElem ColId=\"9\" Alias=\"ctid\">                                               +
+                     <Ident ColId=\"9\" ColName=\"ctid\"/>                                             +
+                   </ProjElem>                                                                         +
+                   <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                     +
+                     <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                   +
+                   </ProjElem>                                                                         +
+                 </ProjList>                                                                           +
+                 <Filter/>                                                                             +
+                 <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                          +
+                   <ProjList>                                                                          +
+                     <ProjElem ColId=\"8\" Alias=\"i3\">                                               +
+                       <Ident ColId=\"8\" ColName=\"i3\"/>                                             +
+                     </ProjElem>                                                                       +
+                     <ProjElem ColId=\"9\" Alias=\"ctid\">                                             +
+                       <Ident ColId=\"9\" ColName=\"ctid\"/>                                           +
+                     </ProjElem>                                                                       +
+                     <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                   +
+                       <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                                 +
+                     </ProjElem>                                                                       +
+                   </ProjList>                                                                         +
+                   <Filter/>                                                                           +
+                   <SortingColumnList/>                                                                +
+                   <TableScan>                                                                         +
+                     <ProjList>                                                                        +
+                       <ProjElem ColId=\"8\" Alias=\"i3\">                                             +
+                         <Ident ColId=\"8\" ColName=\"i3\"/>                                           +
+                       </ProjElem>                                                                     +
+                       <ProjElem ColId=\"9\" Alias=\"ctid\">                                           +
+                         <Ident ColId=\"9\" ColName=\"ctid\"/>                                         +
+                       </ProjElem>                                                                     +
+                       <ProjElem ColId=\"15\" Alias=\"gp_segment_id\">                                 +
+                         <Ident ColId=\"15\" ColName=\"gp_segment_id\"/>                               +
+                       </ProjElem>                                                                     +
+                     </ProjList>                                                                       +
+                     <Filter/>                                                                         +
+                     <TableDescriptor>                                                                 +
+                       <Columns>                                                                       +
+                         <Column ColId=\"8\" Attno=\"1\" ColName=\"i3\"/>                              +
+                         <Column ColId=\"9\" Attno=\"-1\" ColName=\"ctid\"/>                           +
+                         <Column ColId=\"10\" Attno=\"-3\" ColName=\"xmin\"/>                          +
+                         <Column ColId=\"11\" Attno=\"-4\" ColName=\"cmin\"/>                          +
+                         <Column ColId=\"12\" Attno=\"-5\" ColName=\"xmax\"/>                          +
+                         <Column ColId=\"13\" Attno=\"-6\" ColName=\"cmax\"/>                          +
+                         <Column ColId=\"14\" Attno=\"-7\" ColName=\"tableoid\"/>                      +
+                         <Column ColId=\"15\" Attno=\"-8\" ColName=\"gp_segment_id\"/>                 +
+                       </Columns>                                                                      +
+                     </TableDescriptor>                                                                +
+                   </TableScan>                                                                        +
+                 </GatherMotion>                                                                       +
+               </Materialize>                                                                          +
+               <Materialize Eager=\"true\">                                                            +
+                 <ProjList>                                                                            +
+                   <ProjElem ColId=\"25\" Alias=\"ColRef_0025\">                                       +
+                     <Ident ColId=\"25\" ColName=\"ColRef_0025\"/>                                     +
+                   </ProjElem>                                                                         +
+                   <ProjElem ColId=\"17\" Alias=\"i2\">                                                +
+                     <Ident ColId=\"17\" ColName=\"i2\"/>                                              +
+                   </ProjElem>                                                                         +
+                 </ProjList>                                                                           +
+                 <Filter/>                                                                             +
+                 <Result>                                                                              +
+                   <ProjList>                                                                          +
+                     <ProjElem ColId=\"25\" Alias=\"ColRef_0025\">                                     +
+                       <ConstValue/>                                                                   +
+                     </ProjElem>                                                                       +
+                     <ProjElem ColId=\"17\" Alias=\"i2\">                                              +
+                       <Ident ColId=\"17\" ColName=\"i2\"/>                                            +
+                     </ProjElem>                                                                       +
+                   </ProjList>                                                                         +
+                   <Filter/>                                                                           +
+                   <OneTimeFilter/>                                                                    +
+                   <Result>                                                                            +
+                     <ProjList>                                                                        +
+                       <ProjElem ColId=\"17\" Alias=\"i2\">                                            +
+                         <Ident ColId=\"17\" ColName=\"i2\"/>                                          +
+                       </ProjElem>                                                                     +
+                     </ProjList>                                                                       +
+                     <Filter>                                                                          +
+                       <IsNotFalse>                                                                    +
+                         <Comparison ComparisonOperator=\"=\">                                         +
+                           <Ident ColId=\"0\" ColName=\"i1\"/>                                         +
+                           <Ident ColId=\"17\" ColName=\"i2\"/>                                        +
+                         </Comparison>                                                                 +
+                       </IsNotFalse>                                                                   +
+                     </Filter>                                                                         +
+                     <OneTimeFilter/>                                                                  +
+                     <Materialize Eager=\"false\">                                                     +
+                       <ProjList>                                                                      +
+                         <ProjElem ColId=\"17\" Alias=\"i2\">                                          +
+                           <Ident ColId=\"17\" ColName=\"i2\"/>                                        +
+                         </ProjElem>                                                                   +
+                       </ProjList>                                                                     +
+                       <Filter/>                                                                       +
+                       <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                    +
+                         <ProjList>                                                                    +
+                           <ProjElem ColId=\"17\" Alias=\"i2\">                                        +
+                             <Ident ColId=\"17\" ColName=\"i2\"/>                                      +
+                           </ProjElem>                                                                 +
+                         </ProjList>                                                                   +
+                         <Filter/>                                                                     +
+                         <SortingColumnList/>                                                          +
+                         <TableScan>                                                                   +
+                           <ProjList>                                                                  +
+                             <ProjElem ColId=\"17\" Alias=\"i2\">                                      +
+                               <Ident ColId=\"17\" ColName=\"i2\"/>                                    +
+                             </ProjElem>                                                               +
+                           </ProjList>                                                                 +
+                           <Filter/>                                                                   +
+                           <TableDescriptor>                                                           +
+                             <Columns>                                                                 +
+                               <Column ColId=\"17\" Attno=\"1\" ColName=\"i2\"/>                       +
+                               <Column ColId=\"18\" Attno=\"-1\" ColName=\"ctid\"/>                    +
+                               <Column ColId=\"19\" Attno=\"-3\" ColName=\"xmin\"/>                    +
+                               <Column ColId=\"20\" Attno=\"-4\" ColName=\"cmin\"/>                    +
+                               <Column ColId=\"21\" Attno=\"-5\" ColName=\"xmax\"/>                    +
+                               <Column ColId=\"22\" Attno=\"-6\" ColName=\"cmax\"/>                    +
+                               <Column ColId=\"23\" Attno=\"-7\" ColName=\"tableoid\"/>                +
+                               <Column ColId=\"24\" Attno=\"-8\" ColName=\"gp_segment_id\"/>           +
+                             </Columns>                                                                +
+                           </TableDescriptor>                                                          +
+                         </TableScan>                                                                  +
+                       </GatherMotion>                                                                 +
+                     </Materialize>                                                                    +
+                   </Result>                                                                           +
+                 </Result>                                                                             +
+               </Materialize>                                                                          +
+             </NestedLoopJoin>                                                                         +
+           </Result>                                                                                   +
+         </Sort>                                                                                       +
+       </Aggregate>                                                                                    +
+     </Result>                                                                                         +
+   </SubPlan>                                                                                          +
+ </Filter>                                                                                             +
+ <OneTimeFilter/>                                                                                      +
+ <Sort SortDiscardDuplicates=\"false\">                                                                +
+   <ProjList>                                                                                          +
+     <ProjElem ColId=\"0\" Alias=\"i1\">                                                               +
+       <Ident ColId=\"0\" ColName=\"i1\"/>                                                             +
+     </ProjElem>                                                                                       +
+   </ProjList>                                                                                         +
+   <Filter/>                                                                                           +
+   <SortingColumnList>                                                                                 +
+     <SortingColumn ColId=\"0\"/>                                                                      +
+   </SortingColumnList>                                                                                +
+   <LimitCount/>                                                                                       +
+   <LimitOffset/>                                                                                      +
+   <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                        +
+     <ProjList>                                                                                        +
+       <ProjElem ColId=\"0\" Alias=\"i1\">                                                             +
+         <Ident ColId=\"0\" ColName=\"i1\"/>                                                           +
+       </ProjElem>                                                                                     +
+     </ProjList>                                                                                       +
+     <Filter/>                                                                                         +
+     <SortingColumnList/>                                                                              +
+     <TableScan>                                                                                       +
+       <ProjList>                                                                                      +
+         <ProjElem ColId=\"0\" Alias=\"i1\">                                                           +
+           <Ident ColId=\"0\" ColName=\"i1\"/>                                                         +
+         </ProjElem>                                                                                   +
+       </ProjList>                                                                                     +
+       <Filter/>                                                                                       +
+       <TableDescriptor>                                                                               +
+         <Columns>                                                                                     +
+           <Column ColId=\"0\" Attno=\"1\" ColName=\"i1\"/>                                            +
+           <Column ColId=\"1\" Attno=\"-1\" ColName=\"ctid\"/>                                         +
+           <Column ColId=\"2\" Attno=\"-3\" ColName=\"xmin\"/>                                         +
+           <Column ColId=\"3\" Attno=\"-4\" ColName=\"cmin\"/>                                         +
+           <Column ColId=\"4\" Attno=\"-5\" ColName=\"xmax\"/>                                         +
+           <Column ColId=\"5\" Attno=\"-6\" ColName=\"cmax\"/>                                         +
+           <Column ColId=\"6\" Attno=\"-7\" ColName=\"tableoid\"/>                                     +
+           <Column ColId=\"7\" Attno=\"-8\" ColName=\"gp_segment_id\"/>                                +
+         </Columns>                                                                                    +
+       </TableDescriptor>                                                                              +
+     </TableScan>                                                                                      +
+   </GatherMotion>                                                                                     +
+ </Sort>                                                                                               +
+       </Result>                                                                                       +
+     </Plan>"}
 (1 row)
 
 insert into t1 values (1);
@@ -1659,221 +1643,205 @@ select * from t1 where
 
 reset optimizer_minidump;
 reset optimizer_trace_fallback;
--- start_ignore
-\! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
-\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "pretty_xml = dom.toprettyxml(indent='    ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
-\! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/SortOperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/OperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/Mdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
-\! sed -i 's/dxl://' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
--- end_ignore
 select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '          <', '<');
-                                                                  replace                                                                   
---------------------------------------------------------------------------------------------------------------------------------------------
- {"<Plan Id=\"0\" SpaceSize=\"0\">                                                                                                             +
-   <Result>                                                                                                                                    +
-       <ProjList>                                                                                                                              +
-           <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                                 +
-               <Ident ColId=\"0\" ColName=\"i1\"/>                                                                                             +
-           </ProjElem>                                                                                                                         +
-       </ProjList>                                                                                                                             +
-       <Filter>                                                                                                                                +
-           <SubPlan SubPlanType=\"AnySubPlan\">                                                                                                +
-               <TestExpr>                                                                                                                      +
-                   <ConstValue/>                                                                                                               +
-               </TestExpr>                                                                                                                     +
-               <ParamList>                                                                                                                     +
-                   <Param ColId=\"0\" ColName=\"i1\"/>                                                                                         +
-               </ParamList>                                                                                                                    +
-               <Result>                                                                                                                        +
-                   <ProjList>                                                                                                                  +
-                       <ProjElem Alias=\"?column?\" ColId=\"16\">                                                                              +
-                           <Ident ColId=\"16\" ColName=\"?column?\"/>                                                                          +
-                       </ProjElem>                                                                                                             +
-                   </ProjList>                                                                                                                 +
-                   <Filter>                                                                                                                    +
-                       <Comparison ComparisonOperator=\"=\">                                                                                   +
-                           <Ident ColId=\"29\" ColName=\"ColRef_0029\"/>                                                                       +
-                           <Ident ColId=\"16\" ColName=\"?column?\"/>                                                                          +
-                       </Comparison>                                                                                                           +
-                   </Filter>                                                                                                                   +
-                   <OneTimeFilter/>                                                                                                            +
-                   <Result>                                                                                                                    +
-                       <ProjList>                                                                                                              +
-                           <ProjElem Alias=\"?column?\" ColId=\"16\">                                                                          +
-                               <Comparison ComparisonOperator=\"=\">                                                                           +
-                                   <Ident ColId=\"8\" ColName=\"i3\"/>                                                                         +
-                                   <ConstValue/>                                                                                               +
-                               </Comparison>                                                                                                   +
-                           </ProjElem>                                                                                                         +
-                           <ProjElem Alias=\"ColRef_0029\" ColId=\"29\">                                                                       +
-                               <SubPlan SubPlanType=\"AnySubPlan\">                                                                            +
-                                   <TestExpr>                                                                                                  +
-                                       <Comparison ComparisonOperator=\"=\">                                                                   +
-                                           <Ident ColId=\"0\" ColName=\"i1\"/>                                                                 +
-                                           <Ident ColId=\"17\" ColName=\"i2\"/>                                                                +
-                                       </Comparison>                                                                                           +
-                                   </TestExpr>                                                                                                 +
-                                   <ParamList/>                                                                                                +
-                                   <Result>                                                                                                    +
-                                       <ProjList>                                                                                              +
-                                           <ProjElem Alias=\"i2\" ColId=\"17\">                                                                +
-                                               <Ident ColId=\"17\" ColName=\"i2\"/>                                                            +
-                                           </ProjElem>                                                                                         +
-                                       </ProjList>                                                                                             +
-                                       <Filter/>                                                                                               +
-                                       <OneTimeFilter/>                                                                                        +
-                                       <Result>                                                                                                +
-                                           <ProjList>                                                                                          +
-                                               <ProjElem Alias=\"ColRef_0029\" ColId=\"29\">                                                   +
-                                                   <ConstValue/>                                                                               +
-                                               </ProjElem>                                                                                     +
-                                               <ProjElem Alias=\"i2\" ColId=\"17\">                                                            +
-                                                   <Ident ColId=\"17\" ColName=\"i2\"/>                                                        +
-                                               </ProjElem>                                                                                     +
-                                           </ProjList>                                                                                         +
-                                           <Filter/>                                                                                           +
-                                           <OneTimeFilter/>                                                                                    +
-                                           <Materialize Eager=\"true\">                                                                        +
-                                               <ProjList>                                                                                      +
-                                                   <ProjElem Alias=\"i2\" ColId=\"17\">                                                        +
-                                                       <Ident ColId=\"17\" ColName=\"i2\"/>                                                    +
-                                                   </ProjElem>                                                                                 +
-                                               </ProjList>                                                                                     +
-                                               <Filter/>                                                                                       +
-                                               <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                    +
-                                                   <ProjList>                                                                                  +
-                                                       <ProjElem Alias=\"i2\" ColId=\"17\">                                                    +
-                                                           <Ident ColId=\"17\" ColName=\"i2\"/>                                                +
-                                                       </ProjElem>                                                                             +
-                                                   </ProjList>                                                                                 +
-                                                   <Filter/>                                                                                   +
-                                                   <SortingColumnList/>                                                                        +
-                                                   <TableScan>                                                                                 +
-                                                       <ProjList>                                                                              +
-                                                           <ProjElem Alias=\"i2\" ColId=\"17\">                                                +
-                                                               <Ident ColId=\"17\" ColName=\"i2\"/>                                            +
-                                                           </ProjElem>                                                                         +
-                                                       </ProjList>                                                                             +
-                                                       <Filter/>                                                                               +
-                                                       <TableDescriptor>                                                                       +
-                                                           <Columns>                                                                           +
-                                                               <Column Attno=\"1\" ColId=\"17\" ColName=\"i2\" ColWidth=\"4\"/>                +
-                                                               <Column Attno=\"-1\" ColId=\"18\" ColName=\"ctid\" ColWidth=\"6\"/>             +
-                                                               <Column Attno=\"-3\" ColId=\"19\" ColName=\"xmin\" ColWidth=\"4\"/>             +
-                                                               <Column Attno=\"-4\" ColId=\"20\" ColName=\"cmin\" ColWidth=\"4\"/>             +
-                                                               <Column Attno=\"-5\" ColId=\"21\" ColName=\"xmax\" ColWidth=\"4\"/>             +
-                                                               <Column Attno=\"-6\" ColId=\"22\" ColName=\"cmax\" ColWidth=\"4\"/>             +
-                                                               <Column Attno=\"-7\" ColId=\"23\" ColName=\"tableoid\" ColWidth=\"4\"/>         +
-                                                               <Column Attno=\"-8\" ColId=\"24\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>    +
-                                                           </Columns>                                                                          +
-                                                       </TableDescriptor>                                                                      +
-                                                   </TableScan>                                                                                +
-                                               </GatherMotion>                                                                                 +
-                                           </Materialize>                                                                                      +
-                                       </Result>                                                                                               +
-                                   </Result>                                                                                                   +
-                               </SubPlan>                                                                                                      +
-                           </ProjElem>                                                                                                         +
-                       </ProjList>                                                                                                             +
-                       <Filter/>                                                                                                               +
-                       <OneTimeFilter/>                                                                                                        +
-                       <Materialize Eager=\"true\">                                                                                            +
-                           <ProjList>                                                                                                          +
-                               <ProjElem Alias=\"i3\" ColId=\"8\">                                                                             +
-                                   <Ident ColId=\"8\" ColName=\"i3\"/>                                                                         +
-                               </ProjElem>                                                                                                     +
-                           </ProjList>                                                                                                         +
-                           <Filter/>                                                                                                           +
-                           <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                                        +
-                               <ProjList>                                                                                                      +
-                                   <ProjElem Alias=\"i3\" ColId=\"8\">                                                                         +
-                                       <Ident ColId=\"8\" ColName=\"i3\"/>                                                                     +
-                                   </ProjElem>                                                                                                 +
-                               </ProjList>                                                                                                     +
-                               <Filter/>                                                                                                       +
-                               <SortingColumnList/>                                                                                            +
-                               <TableScan>                                                                                                     +
-                                   <ProjList>                                                                                                  +
-                                       <ProjElem Alias=\"i3\" ColId=\"8\">                                                                     +
-                                           <Ident ColId=\"8\" ColName=\"i3\"/>                                                                 +
-                                       </ProjElem>                                                                                             +
-                                   </ProjList>                                                                                                 +
-                                   <Filter/>                                                                                                   +
-                                   <TableDescriptor>                                                                                           +
-                                       <Columns>                                                                                               +
-                                           <Column Attno=\"1\" ColId=\"8\" ColName=\"i3\" ColWidth=\"4\"/>                                     +
-                                           <Column Attno=\"-1\" ColId=\"9\" ColName=\"ctid\" ColWidth=\"6\"/>                                  +
-                                           <Column Attno=\"-3\" ColId=\"10\" ColName=\"xmin\" ColWidth=\"4\"/>                                 +
-                                           <Column Attno=\"-4\" ColId=\"11\" ColName=\"cmin\" ColWidth=\"4\"/>                                 +
-                                           <Column Attno=\"-5\" ColId=\"12\" ColName=\"xmax\" ColWidth=\"4\"/>                                 +
-                                           <Column Attno=\"-6\" ColId=\"13\" ColName=\"cmax\" ColWidth=\"4\"/>                                 +
-                                           <Column Attno=\"-7\" ColId=\"14\" ColName=\"tableoid\" ColWidth=\"4\"/>                             +
-                                           <Column Attno=\"-8\" ColId=\"15\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>                        +
-                                       </Columns>                                                                                              +
-                                   </TableDescriptor>                                                                                          +
-                               </TableScan>                                                                                                    +
-                           </GatherMotion>                                                                                                     +
-                       </Materialize>                                                                                                          +
-                   </Result>                                                                                                                   +
-               </Result>                                                                                                                       +
-           </SubPlan>                                                                                                                          +
-       </Filter>                                                                                                                               +
-       <OneTimeFilter/>                                                                                                                        +
-       <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                                                                            +
-           <ProjList>                                                                                                                          +
-               <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                             +
-                   <Ident ColId=\"0\" ColName=\"i1\"/>                                                                                         +
-               </ProjElem>                                                                                                                     +
-           </ProjList>                                                                                                                         +
-           <Filter/>                                                                                                                           +
-           <SortingColumnList>                                                                                                                 +
-               <SortingColumn ColId=\"0\" SortNullsFirst=\"false\"/>                                                                           +
-           </SortingColumnList>                                                                                                                +
-           <Sort SortDiscardDuplicates=\"false\">                                                                                              +
-               <ProjList>                                                                                                                      +
-                   <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                         +
-                       <Ident ColId=\"0\" ColName=\"i1\"/>                                                                                     +
-                   </ProjElem>                                                                                                                 +
-               </ProjList>                                                                                                                     +
-               <Filter/>                                                                                                                       +
-               <SortingColumnList>                                                                                                             +
-                   <SortingColumn ColId=\"0\" SortNullsFirst=\"false\"/>                                                                       +
-               </SortingColumnList>                                                                                                            +
-               <LimitCount/>                                                                                                                   +
-               <LimitOffset/>                                                                                                                  +
-               <TableScan>                                                                                                                     +
-                   <ProjList>                                                                                                                  +
-                       <ProjElem Alias=\"i1\" ColId=\"0\">                                                                                     +
-                           <Ident ColId=\"0\" ColName=\"i1\"/>                                                                                 +
-                       </ProjElem>                                                                                                             +
-                   </ProjList>                                                                                                                 +
-                   <Filter/>                                                                                                                   +
-                   <TableDescriptor>                                                                                                           +
-                       <Columns>                                                                                                               +
-                           <Column Attno=\"1\" ColId=\"0\" ColName=\"i1\" ColWidth=\"4\"/>                                                     +
-                           <Column Attno=\"-1\" ColId=\"1\" ColName=\"ctid\" ColWidth=\"6\"/>                                                  +
-                           <Column Attno=\"-3\" ColId=\"2\" ColName=\"xmin\" ColWidth=\"4\"/>                                                  +
-                           <Column Attno=\"-4\" ColId=\"3\" ColName=\"cmin\" ColWidth=\"4\"/>                                                  +
-                           <Column Attno=\"-5\" ColId=\"4\" ColName=\"xmax\" ColWidth=\"4\"/>                                                  +
-                           <Column Attno=\"-6\" ColId=\"5\" ColName=\"cmax\" ColWidth=\"4\"/>                                                  +
-                           <Column Attno=\"-7\" ColId=\"6\" ColName=\"tableoid\" ColWidth=\"4\"/>                                              +
-                           <Column Attno=\"-8\" ColId=\"7\" ColName=\"gp_segment_id\" ColWidth=\"4\"/>                                         +
-                       </Columns>                                                                                                              +
-                   </TableDescriptor>                                                                                                          +
-               </TableScan>                                                                                                                    +
-           </Sort>                                                                                                                             +
-       </GatherMotion>                                                                                                                         +
-   </Result>                                                                                                                                   +
-         </Plan>"}
+                                         replace                                         
+-----------------------------------------------------------------------------------------
+ {"<Plan Id=\"0\" SpaceSize=\"0\">                                                      +
+       <Result>                                                                         +
+         <ProjList>                                                                     +
+ <ProjElem ColId=\"0\" Alias=\"i1\">                                                    +
+   <Ident ColId=\"0\" ColName=\"i1\"/>                                                  +
+ </ProjElem>                                                                            +
+         </ProjList>                                                                    +
+         <Filter>                                                                       +
+ <SubPlan>                                                                              +
+   <TestExpr>                                                                           +
+     <ConstValue/>                                                                      +
+   </TestExpr>                                                                          +
+   <ParamList>                                                                          +
+     <Param ColId=\"0\" ColName=\"i1\"/>                                                +
+   </ParamList>                                                                         +
+   <Result>                                                                             +
+     <ProjList>                                                                         +
+       <ProjElem ColId=\"16\" Alias=\"?column?\">                                       +
+         <Ident ColId=\"16\" ColName=\"?column?\"/>                                     +
+       </ProjElem>                                                                      +
+     </ProjList>                                                                        +
+     <Filter>                                                                           +
+       <Comparison ComparisonOperator=\"=\">                                            +
+         <Ident ColId=\"29\" ColName=\"ColRef_0029\"/>                                  +
+         <Ident ColId=\"16\" ColName=\"?column?\"/>                                     +
+       </Comparison>                                                                    +
+     </Filter>                                                                          +
+     <OneTimeFilter/>                                                                   +
+     <Result>                                                                           +
+       <ProjList>                                                                       +
+         <ProjElem ColId=\"16\" Alias=\"?column?\">                                     +
+           <Comparison ComparisonOperator=\"=\">                                        +
+             <Ident ColId=\"8\" ColName=\"i3\"/>                                        +
+             <ConstValue/>                                                              +
+           </Comparison>                                                                +
+         </ProjElem>                                                                    +
+         <ProjElem ColId=\"29\" Alias=\"ColRef_0029\">                                  +
+           <SubPlan>                                                                    +
+             <TestExpr>                                                                 +
+               <Comparison ComparisonOperator=\"=\">                                    +
+                 <Ident ColId=\"0\" ColName=\"i1\"/>                                    +
+                 <Ident ColId=\"17\" ColName=\"i2\"/>                                   +
+               </Comparison>                                                            +
+             </TestExpr>                                                                +
+             <ParamList/>                                                               +
+             <Result>                                                                   +
+               <ProjList>                                                               +
+                 <ProjElem ColId=\"17\" Alias=\"i2\">                                   +
+                   <Ident ColId=\"17\" ColName=\"i2\"/>                                 +
+                 </ProjElem>                                                            +
+               </ProjList>                                                              +
+               <Filter/>                                                                +
+               <OneTimeFilter/>                                                         +
+               <Result>                                                                 +
+                 <ProjList>                                                             +
+                   <ProjElem ColId=\"29\" Alias=\"ColRef_0029\">                        +
+                     <ConstValue/>                                                      +
+                   </ProjElem>                                                          +
+                   <ProjElem ColId=\"17\" Alias=\"i2\">                                 +
+                     <Ident ColId=\"17\" ColName=\"i2\"/>                               +
+                   </ProjElem>                                                          +
+                 </ProjList>                                                            +
+                 <Filter/>                                                              +
+                 <OneTimeFilter/>                                                       +
+                 <Materialize Eager=\"true\">                                           +
+                   <ProjList>                                                           +
+                     <ProjElem ColId=\"17\" Alias=\"i2\">                               +
+                       <Ident ColId=\"17\" ColName=\"i2\"/>                             +
+                     </ProjElem>                                                        +
+                   </ProjList>                                                          +
+                   <Filter/>                                                            +
+                   <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">         +
+                     <ProjList>                                                         +
+                       <ProjElem ColId=\"17\" Alias=\"i2\">                             +
+                         <Ident ColId=\"17\" ColName=\"i2\"/>                           +
+                       </ProjElem>                                                      +
+                     </ProjList>                                                        +
+                     <Filter/>                                                          +
+                     <SortingColumnList/>                                               +
+                     <TableScan>                                                        +
+                       <ProjList>                                                       +
+                         <ProjElem ColId=\"17\" Alias=\"i2\">                           +
+                           <Ident ColId=\"17\" ColName=\"i2\"/>                         +
+                         </ProjElem>                                                    +
+                       </ProjList>                                                      +
+                       <Filter/>                                                        +
+                       <TableDescriptor>                                                +
+                         <Columns>                                                      +
+                           <Column ColId=\"17\" Attno=\"1\" ColName=\"i2\"/>            +
+                           <Column ColId=\"18\" Attno=\"-1\" ColName=\"ctid\"/>         +
+                           <Column ColId=\"19\" Attno=\"-3\" ColName=\"xmin\"/>         +
+                           <Column ColId=\"20\" Attno=\"-4\" ColName=\"cmin\"/>         +
+                           <Column ColId=\"21\" Attno=\"-5\" ColName=\"xmax\"/>         +
+                           <Column ColId=\"22\" Attno=\"-6\" ColName=\"cmax\"/>         +
+                           <Column ColId=\"23\" Attno=\"-7\" ColName=\"tableoid\"/>     +
+                           <Column ColId=\"24\" Attno=\"-8\" ColName=\"gp_segment_id\"/>+
+                         </Columns>                                                     +
+                       </TableDescriptor>                                               +
+                     </TableScan>                                                       +
+                   </GatherMotion>                                                      +
+                 </Materialize>                                                         +
+               </Result>                                                                +
+             </Result>                                                                  +
+           </SubPlan>                                                                   +
+         </ProjElem>                                                                    +
+       </ProjList>                                                                      +
+       <Filter/>                                                                        +
+       <OneTimeFilter/>                                                                 +
+       <Materialize Eager=\"true\">                                                     +
+         <ProjList>                                                                     +
+           <ProjElem ColId=\"8\" Alias=\"i3\">                                          +
+             <Ident ColId=\"8\" ColName=\"i3\"/>                                        +
+           </ProjElem>                                                                  +
+         </ProjList>                                                                    +
+         <Filter/>                                                                      +
+         <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                   +
+           <ProjList>                                                                   +
+             <ProjElem ColId=\"8\" Alias=\"i3\">                                        +
+               <Ident ColId=\"8\" ColName=\"i3\"/>                                      +
+             </ProjElem>                                                                +
+           </ProjList>                                                                  +
+           <Filter/>                                                                    +
+           <SortingColumnList/>                                                         +
+           <TableScan>                                                                  +
+             <ProjList>                                                                 +
+               <ProjElem ColId=\"8\" Alias=\"i3\">                                      +
+                 <Ident ColId=\"8\" ColName=\"i3\"/>                                    +
+               </ProjElem>                                                              +
+             </ProjList>                                                                +
+             <Filter/>                                                                  +
+             <TableDescriptor>                                                          +
+               <Columns>                                                                +
+                 <Column ColId=\"8\" Attno=\"1\" ColName=\"i3\"/>                       +
+                 <Column ColId=\"9\" Attno=\"-1\" ColName=\"ctid\"/>                    +
+                 <Column ColId=\"10\" Attno=\"-3\" ColName=\"xmin\"/>                   +
+                 <Column ColId=\"11\" Attno=\"-4\" ColName=\"cmin\"/>                   +
+                 <Column ColId=\"12\" Attno=\"-5\" ColName=\"xmax\"/>                   +
+                 <Column ColId=\"13\" Attno=\"-6\" ColName=\"cmax\"/>                   +
+                 <Column ColId=\"14\" Attno=\"-7\" ColName=\"tableoid\"/>               +
+                 <Column ColId=\"15\" Attno=\"-8\" ColName=\"gp_segment_id\"/>          +
+               </Columns>                                                               +
+             </TableDescriptor>                                                         +
+           </TableScan>                                                                 +
+         </GatherMotion>                                                                +
+       </Materialize>                                                                   +
+     </Result>                                                                          +
+   </Result>                                                                            +
+ </SubPlan>                                                                             +
+         </Filter>                                                                      +
+         <OneTimeFilter/>                                                               +
+         <GatherMotion InputSegments=\"0,1,2\" OutputSegments=\"-1\">                   +
+ <ProjList>                                                                             +
+   <ProjElem ColId=\"0\" Alias=\"i1\">                                                  +
+     <Ident ColId=\"0\" ColName=\"i1\"/>                                                +
+   </ProjElem>                                                                          +
+ </ProjList>                                                                            +
+ <Filter/>                                                                              +
+ <SortingColumnList>                                                                    +
+   <SortingColumn ColId=\"0\"/>                                                         +
+ </SortingColumnList>                                                                   +
+ <Sort SortDiscardDuplicates=\"false\">                                                 +
+   <ProjList>                                                                           +
+     <ProjElem ColId=\"0\" Alias=\"i1\">                                                +
+       <Ident ColId=\"0\" ColName=\"i1\"/>                                              +
+     </ProjElem>                                                                        +
+   </ProjList>                                                                          +
+   <Filter/>                                                                            +
+   <SortingColumnList>                                                                  +
+     <SortingColumn ColId=\"0\"/>                                                       +
+   </SortingColumnList>                                                                 +
+   <LimitCount/>                                                                        +
+   <LimitOffset/>                                                                       +
+   <TableScan>                                                                          +
+     <ProjList>                                                                         +
+       <ProjElem ColId=\"0\" Alias=\"i1\">                                              +
+         <Ident ColId=\"0\" ColName=\"i1\"/>                                            +
+       </ProjElem>                                                                      +
+     </ProjList>                                                                        +
+     <Filter/>                                                                          +
+     <TableDescriptor>                                                                  +
+       <Columns>                                                                        +
+         <Column ColId=\"0\" Attno=\"1\" ColName=\"i1\"/>                               +
+         <Column ColId=\"1\" Attno=\"-1\" ColName=\"ctid\"/>                            +
+         <Column ColId=\"2\" Attno=\"-3\" ColName=\"xmin\"/>                            +
+         <Column ColId=\"3\" Attno=\"-4\" ColName=\"cmin\"/>                            +
+         <Column ColId=\"4\" Attno=\"-5\" ColName=\"xmax\"/>                            +
+         <Column ColId=\"5\" Attno=\"-6\" ColName=\"cmax\"/>                            +
+         <Column ColId=\"6\" Attno=\"-7\" ColName=\"tableoid\"/>                        +
+         <Column ColId=\"7\" Attno=\"-8\" ColName=\"gp_segment_id\"/>                   +
+       </Columns>                                                                       +
+     </TableDescriptor>                                                                 +
+   </TableScan>                                                                         +
+ </Sort>                                                                                +
+         </GatherMotion>                                                                +
+       </Result>                                                                        +
+     </Plan>"}
 (1 row)
 
 \! rm -rf $MASTER_DATA_DIRECTORY/minidumps

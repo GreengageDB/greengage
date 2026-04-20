@@ -149,3 +149,43 @@ reset gp_autostats_mode_in_functions;
 reset gp_autostats_on_change_threshold;
 reset log_autostats;
 reset gp_autostats_allow_nonowner;
+
+/*
+ * Test for gp_autostats_mode=on_change_and_no_stats and gp_autostats_on_change_ratio_threshold > 0
+ */
+set gp_autostats_mode = on_change_and_no_stats;
+set gp_autostats_on_change_ratio_threshold = 0.5;
+set gp_autostats_on_change_threshold = 1000;
+
+create table autostats_test_table (a int);
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,100);
+-- Stats should be updated, because there was "0" before insert
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,500);
+-- Stats should not be updated, because count of added rows is less than gp_autostats_on_change_threshold
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,501);
+-- Stats should not be updated, because count of added rows is less than gp_autostats_on_change_threshold
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,1001);
+-- Stats should be updated
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,1001);
+-- Stats should not be updated, because ratio is less than gp_autostats_on_change_ratio_threshold
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+insert into autostats_test_table select generate_series(1,1052);
+-- Stats should be updated
+select reltuples from pg_class where relname = 'autostats_test_table';
+
+drop table autostats_test_table;
+
+reset gp_autostats_mode;
+reset gp_autostats_on_change_ratio_threshold;
+reset gp_autostats_on_change_threshold;

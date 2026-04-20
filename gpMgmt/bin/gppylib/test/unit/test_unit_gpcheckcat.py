@@ -446,6 +446,35 @@ class GpCheckCatTestCase(GpTestCase):
                 self.num_joins = 0
                 self.num_starts = 0
 
+    def test_checkReplicatedDistribPolicy_with_error_on_execution(self):
+        # Mocking the database connection to raise an exception during execution
+
+        self.db_connection.query.side_effect = Exception("Simulated error during execution")
+
+        # Call the function to test
+        self.subject.checkReplicatedDistribPolicy()
+
+        # Assertions
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertEqual(self.db_connection.query.dictresult.call_count, 0)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkReplicatedDistribPolicy_exception_on_connect(self, mock_connect2):
+        # Mocking the database connection to raise an exception during connection
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        # Call the function to test
+        self.subject.checkReplicatedDistribPolicy()
+
+        # Assertions
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.assertEqual(mock_connect2.query.call_count, 0)
+        self.assertEqual(mock_connect2.query.dictresult.call_count, 0)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
     def test_checkMixDistPolicy_with_error_on_execution(self):
         # Mocking the database connection to raise an exception during execution
 

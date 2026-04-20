@@ -9,6 +9,7 @@ from test.behave_utils import utils
 from test.behave_utils.utils import wait_for_unblocked_transactions
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
+from gppylib import gpsubprocess
 
 def _run_sql(sql, opts=None):
     env = None
@@ -81,18 +82,17 @@ def impl(context, cmd):
     Runs `yes | cmd`.
     """
 
-    p = subprocess.Popen(
+    p = gpsubprocess.Popen(
         ["bash", "-c", "yes | %s" % cmd],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=_handle_sigpipe,
     )
 
-    context.stdout_message, context.stderr_message = p.communicate()
-    context.stdout_message = context.stdout_message.decode('utf-8')
-    context.stderr_message = context.stderr_message.decode('utf-8')
+    # Use communicate2 since communicate from subprocess32 causes an error here.
+    returncode, context.stdout_message, context.stderr_message = p.communicate2()
 
-    context.ret_code = p.returncode
+    context.ret_code = returncode
 
 @given('the host for the {seg_type} on content {content} is made unreachable')
 def impl(context, seg_type, content):

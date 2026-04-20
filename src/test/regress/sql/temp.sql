@@ -101,6 +101,10 @@ COMMIT;
 
 SELECT * FROM temptest;
 
+-- Check that the sequence does not exist after auto-dropping the table.
+CREATE TEMP TABLE temptest(col serial) ON COMMIT DROP;
+SELECT relname, relkind, relpersistence FROM pg_class WHERE relname = 'temptest_col_seq';
+
 -- ON COMMIT is only allowed for TEMP
 
 CREATE TABLE temptest(col int) ON COMMIT DELETE ROWS;

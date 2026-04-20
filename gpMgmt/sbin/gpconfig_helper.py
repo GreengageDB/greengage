@@ -135,10 +135,8 @@ def add_parameter(filename, name, value):
 
 # NOTE: though apparently not documented, postgresQL returns the last valid value
 def get_parameter(filename, name):
-    with open(filename, 'rb') as f:
+    with open(filename, 'rt') as f:
         for line in reversed(f.readlines()):
-            if sys.version_info[0] == 3:
-                line = line.decode('utf-8')
             parts = line.split("=", 1)
             if len(parts) > 1 and parts[0].lstrip().startswith(name):
                 return parts[1].strip()

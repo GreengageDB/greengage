@@ -2938,9 +2938,23 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
     /* Fix up the Result node and the Plan tree below it. */
     resultplan = set_plan_refs(root, resultplan, rtoffset);
 
-    /* Reattach the Flow node. */
     resultplan->flow = flow;
-	plan->flow = flow;
+	/*
+	 * In case we ommited SubqueryScan node in set_subqueryscan_references()
+	 * we need to reatach flow to new outerplan node, because previously we
+	 * copied null into it. Otherwise reatach flow to previous node.
+	 */
+	if (resultplan->lefttree && IsA(plan, SubqueryScan) &&
+		resultplan->lefttree != plan)
+	{
+		resultplan->lefttree->flow = flow;
+	}
+	else
+	{
+		plan->flow = flow;
+	}
+
+	AssertImply(flow && resultplan->lefttree, resultplan->lefttree->flow);
 
     return resultplan;
 }                               /* cdb_insert_result_node */

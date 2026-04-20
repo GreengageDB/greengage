@@ -730,4 +730,9 @@ FETCH c2;
 (1 row)
 
 END;
+-- test that it is impossible to switch gp_role and gp_session_role amidst of a session
+SET gp_role TO EXECUTE;
+ERROR:  parameter "gp_role" cannot be set after connection start
+SET gp_session_role TO EXECUTE;
+ERROR:  parameter "gp_session_role" cannot be set after connection start
 DROP TABLE guc_gp_t1;

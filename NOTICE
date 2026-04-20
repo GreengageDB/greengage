@@ -2281,3 +2281,29 @@ The views and conclusions contained in the software and documentation are those 
 Authors and should not be interpreted as representing official policies, either expressed
 or implied, of the Authors.
 ============================================================================================
+
+=================================================================
+--------------------------- credcheck ---------------------------
+=================================================================
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright (c) 2021-2023 MigOps
+Copyright (c) 2023 Gilles Darold
+Copyright (c) 2024-2026 HexaCluster Corp
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose, without fee, and without a written agreement
+is hereby granted, provided that the above copyright notice and this paragraph
+and the following two paragraphs appear in all copies.
+
+IN NO EVENT SHALL HEXACLUSTER BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,
+SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS,
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF
+HEXACLUSTER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS,
+AND HEXACLUSTER HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES,
+ENHANCEMENTS, OR MODIFICATIONS.
