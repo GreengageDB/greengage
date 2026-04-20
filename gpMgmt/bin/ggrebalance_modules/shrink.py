@@ -645,6 +645,10 @@ class GGShrink:
                            f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
                            REBALANCE {self.target_segment_count}''')
 
+        def check_cancel(self):
+            if self.cancel_flag:
+                raise Exception(f'Cancelled table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}"')
+
         @wrap_table_rebalance_with_faults
         def process_table(self, attempt: int) -> None:
             self.shrink.logger.info(f'Start table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}" to {self.target_segment_count} segments (attempt {attempt})')
@@ -652,14 +656,18 @@ class GGShrink:
             if self.db_exists(self.shrink.rebalance_schema.conn):
                 dburl = dbconn.DbURL(dbname=self.db_name, port=self.shrink.gpEnv.getCoordinatorPort())
                 with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+                    self.cancel_conn = conn
+
                     dbconn.execSQL(conn, 'BEGIN')
 
                     if self.table_exists(conn):
                         if not self.table_is_rebalanced(conn):
+                            self.check_cancel()
                             self.rebalance_table(conn)
                         else:
                             self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" is already rebalanced''')
                         if self.shrink.options.analyze:
+                            self.check_cancel()
                             dbconn.execSQL(conn,
                                            f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
                     else:
@@ -669,6 +677,7 @@ class GGShrink:
 
                     inject_fault(f'before_set_status_{self.db_name}.{self.schema_name}.{self.rel_name}')
                     self.shrink.rebalance_schema.setStatusForTableToRebalance(self.db_name, self.schema_name, self.rel_name, self.table_status_after_rebalance)
+                    self.cancel_conn = None
             else:
                 self.shrink.logger.info(f'''DB "{self.db_name}" doesn't exist, skipping actual rebalance for "{self.schema_name}"."{self.rel_name}"''')
             self.shrink.logger.info(f'Complete table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}"')
@@ -690,8 +699,9 @@ class GGShrink:
                     else:
                         logger.error(f"{str(e)}")
                         logger.error(f'Failed to process the db object "{self.db_name}"."{self.schema_name}"."{self.rel_name}" for {attempt_max_cnt} attempts')
-                        self.shrink.tables_rebalance_failed = True
-                        self.shrink.workers_for_tables_rebalance.haltWork()
+                        if not self.cancel_flag:
+                            self.shrink.tables_rebalance_failed = True
+                            self.shrink.workers_for_tables_rebalance.haltWork()
                     continue
                 break
 
