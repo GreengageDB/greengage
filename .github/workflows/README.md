@@ -45,9 +45,7 @@ operating systems:
 
 A separate workflow `Greengage release` handles the uploading of Debian package
 to GitHub releases. It is triggered when a release is published and uses a
-composite action to manage package deployment. Currently supported for version
-6.x only; package build and release upload are not yet available for version
-7.x.
+composite action to manage package deployment.
 
 ### Key Features
 
@@ -160,9 +158,6 @@ The workflow is parameterized to support flexibility:
   strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
   existing artifact naming; Ubuntu 24.04 support is currently available for
   version 6.x only.
-- **Package Build and Release**: Debian package build and upload to GitHub
-  releases are currently supported for version 6.x only. Version 7.x does not
-  yet include package build steps in the CI workflow.
 
 ## Usage
 
