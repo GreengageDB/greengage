@@ -444,7 +444,7 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
 
         return result
 
-    def backupShrinkProgress(self, logger) -> None:
+    def backupShrinkProgress(self) -> None:
         if self.getProgressType() != self.ProgressType.PROGRESS_NO:
             shrink_total_time = self.getShrinkTotalTime()
             dbconn.execSQL(self.conn,
@@ -496,7 +496,7 @@ cte_tables_redistribution AS (
         FROM events
     )
     SELECT
-        sum(next_ts - ts) AS duration
+        COALESCE(sum(next_ts - ts), INTERVAL '0') AS duration
     FROM ordered
     WHERE active > 0 AND next_ts IS NOT NULL
 ),

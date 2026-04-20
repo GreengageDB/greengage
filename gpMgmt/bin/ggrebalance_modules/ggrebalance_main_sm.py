@@ -201,7 +201,7 @@ class GGRebalanceMainSM:
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
             self.logger.info(f'Bytes processed:\t{summary.bytes_processed}')
             self.logger.info(f'Shrink rate:\t\t{summary.shrink_rate}')
-        self.logger.info(f'Shrink total time:\t\t{summary.shrink_total_time}')
+        self.logger.info(f'Shrink total time:\t{summary.shrink_total_time}')
         if summary.is_rollback:
             self.logger.info('\n')
             self.logger.info(f'Tables rolled back:\t\t{summary.tables_rolled_back}')
