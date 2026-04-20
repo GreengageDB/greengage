@@ -20,6 +20,8 @@ for the files you are modifying.
         coverage.process_startup()
         EOF
 
+    or just run `make -C gpMgmt/bin coverage-setup`
+
 3.  Set up a [Coverage configuration file](https://coverage.readthedocs.io/en/latest/config.html)
     with your preferred options. See the `coveragerc` file in this directory.  Note that file
     excludes many non-development files(like testing source code files).  This file may be placed anywhere; 

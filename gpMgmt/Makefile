@@ -38,19 +38,6 @@ install: generate_greengage_path_file
 	    cp -p bin/ext/_posixsubprocess.so $(DESTDIR)$(prefix)/lib/python ; \
 	fi
 
-coverage-setup:
-	@echo "Setting up coverage instrumentation..."
-	echo "import coverage; coverage.process_startup()" > \
-	    $(DESTDIR)$(prefix)/lib/python/sitecustomize.py
-	@if [ -z "$$COVERAGE_PROCESS_START" ]; then \
-		echo "WARNING: COVERAGE_PROCESS_START is not set."; \
-		echo "Coverage will NOT be collected from subprocesses."; \
-		echo "Set it manually, e.g.:"; \
-		echo "export COVERAGE_PROCESS_START=~/gpdb_src/gpMgmt/test/coveragerc"; \
-	else \
-		echo "COVERAGE_PROCESS_START=$$COVERAGE_PROCESS_START"; \
-	fi
-
 clean distclean: 
 	$(MAKE) -C bin $@
 	rm -f $(DESTDIR)$(prefix)/lib/python/sitecustomize.py

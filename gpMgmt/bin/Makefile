@@ -180,23 +180,35 @@ checkcode: pylint
 	@echo -n "pylint_score=" > $(SRC)/../pylint_score.properties
 	@grep "Your code has been rated at" $(SRC)/../pylint.txt | sed -e "s|Your .* \(.*\)/.*|\1|" >> $(SRC)/../pylint_score.properties
 
-check-regress:
+check-regress: coverage-setup
 	@echo "Running regression tests..."
 	@PYTHONPATH=$(SRC):$(SRC)/ext:$(PYTHONPATH) \
 	gppylib/gpunit discover --verbose -s gppylib -p "test_regress*.py" 2> $(SRC)/../gpMgmt_testregress_results.log 1> $(SRC)/../gpMgmt_testregress_output.log
 
-check:
+check: coverage-setup
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 
-unitdevel:
+unitdevel: coverage-setup
 	@echo "Running pure unit tests..."
 	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	    python -m unittest discover --verbose -s $(SRC)/gppylib -p "test_unit*.py"
 
+coverage-setup:
+	@echo "Setting up coverage instrumentation..."
+	echo "import coverage; coverage.process_startup()" > \
+	    $(DESTDIR)$(prefix)/lib/python/sitecustomize.py
+	@if [ -z "$$COVERAGE_PROCESS_START" ]; then \
+		echo "WARNING: COVERAGE_PROCESS_START is not set."; \
+		echo "Coverage will NOT be collected from subprocesses."; \
+		echo "Set it manually, e.g.:"; \
+		echo "export COVERAGE_PROCESS_START=~/gpdb_src/gpMgmt/test/coveragerc"; \
+	else \
+		echo "COVERAGE_PROCESS_START=$$COVERAGE_PROCESS_START"; \
+	fi
 
 .PHONY: installcheck-bash
 installcheck-bash:
