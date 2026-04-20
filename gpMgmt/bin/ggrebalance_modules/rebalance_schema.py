@@ -478,6 +478,14 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
         else:
             filter_condition = "cte.state != 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START' AND cte.state LIKE 'STATE_SHRINK_ROLLBACK_%'"
 
+        # In order to get total shrink (or shrink rollback time), we need to consider several items:
+        # 1. the execution can be interrupted, so we can't just take the 'updated' column of last state and subtract the first state from it.
+        # So we calculate the duration for each shrink state separately by subtracting the time of the preceeding state,
+        # and then summarize them (refer to cte_other_states.duration). But! Here is another consideration:
+        # 2. We can't do it for the state where the tables redistribution is done - as on each re-enter of this state
+        # we process only the remaining amount of tables, and we will capture only the last re-enter duration.
+        # Therefore we process table redistribution time separately - we get it from actual table rebalance_started and rebalance_finished
+        # (taking into account their parallel execution). Refer to cte_tables_redistribution.duration.
         return dbconn.querySingleton(self.conn, f"""
 WITH
 cte_tables_redistribution AS (
