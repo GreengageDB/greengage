@@ -18,7 +18,9 @@ then
   ssh-keygen -P "" -f ssh_keys/id_rsa
 fi
 
-trap cleanup EXIT
+if [[ -z $CI ]]; then
+  trap cleanup EXIT
+fi
 
 #install gpdb and setup gpadmin user
 bash ci/scripts/init_containers.sh $project cdw sdw1
