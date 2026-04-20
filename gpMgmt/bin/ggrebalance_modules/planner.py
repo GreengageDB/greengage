@@ -69,8 +69,8 @@ class LogicalMove:
         return (
             f"Move Segment(content={self.seg.getSegmentContentId()}, dbid={self.seg.getSegmentDbId()}, "
             f"role={self.seg.role}){size_str}\n"
-            f"      From: {src_host}:{src_port} → {src_datadir}\n"
-            f"      To:   {dst_host}:{dst_port} → {dst_datadir}"
+            f"      From: {src_host}:{src_port}:{src_datadir}\n"
+            f"      To:   {dst_host}:{dst_port}:{dst_datadir}"
         )
     
 
@@ -772,7 +772,10 @@ class Planner:
                                                                          self.resolver)
         id_to_host = {v: k for k, v in host_mapping.items()}
         self.logger.info("Planning rebalance moves. Can take up to 60s.")
-        planning_seed_value = int.from_bytes(os.urandom(16) , 'big')
+        if self.options.solver_seed:
+            planning_seed_value = self.options.solver_seed
+        else:
+            planning_seed_value = int.from_bytes(os.urandom(16) , 'big')
         self.logger.info(f"Running randomized plan improvement with seed:{planning_seed_value}")
         lns_config = LNSConfig.from_parent(config, MAX_SOLVER_ITERS, SOLVER_TIMEOUT_SEC)
         solution, _ = LNS(lns_config, seed=planning_seed_value).solve()

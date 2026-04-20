@@ -19,10 +19,6 @@ Solution = Dict[ContentId, Tuple[HostId, HostId]]
 def _pack_solution(p: List[int], m: List[int], n: int) -> Solution:
     return {ContentId(i): (HostId(p[i]), HostId(m[i])) for i in range(n)}
 
-def _extract_mapping(sol: Solution, n: int) -> Tuple[List[int], List[int]]:
-    return [sol[i][0] for i in range(n)], [sol[i][1] for i in range(n)]
-
-
 @dataclass
 class SolverConfig:
     """
@@ -111,10 +107,7 @@ class GreedySolver:
         # Phase 2: Assign mirrors
         mirror_mapping = self._assign_mirror_hosts(primary_mapping)
                    
-        solution: Solution = {
-            ContentId(i): (HostId(primary_mapping[i]), HostId(mirror_mapping[i]))
-            for i in range(self.n_segments)
-        }
+        solution = _pack_solution(primary_mapping, mirror_mapping, self.n_segments)
         
         cost = self._calculate_cost(primary_mapping, mirror_mapping)
 
@@ -1190,10 +1183,7 @@ class LNS:
         self.solver = GreedySolver(config)
         self.rng = random.Random(seed)
         self.n_segments = config.n_segments
-        self.n_hosts = config.n_hosts_target
         self.strategy = config.strategy
-        self.initial_primary_mapping = config.initial_primary_mapping
-        self.initial_mirror_mapping = config.initial_mirror_mapping
         self.printing = printing
 
         self._destroy = LNSDestroyOperators(
@@ -1230,11 +1220,8 @@ class LNS:
         return self.solver.target_primary_load
 
     def solve(self) -> Tuple[Solution, Cost]:
-        ip  = self.config.initial_primary_mapping
-        im  = self.config.initial_mirror_mapping
-
         greedy_sol, _ = self.solver.solve()
-        p, m     = _extract_mapping(greedy_sol, self.n_segments)
+        p, m     = [greedy_sol[i][0] for i in range(self.n_segments)], [greedy_sol[i][1] for i in range(self.n_segments)]
         cost     = self.solver._calculate_cost(p, m)
         best_p, best_m, best_cost = p[:], m[:], cost
 

@@ -98,6 +98,7 @@ def parseargs():
                       help='Allows to place primary and mirror at the same host during rebalance.')
     parser.add_option('-q', '--quiet', action='store_true', default=False,
                       help='Run in quiet mode.')
+    parser.add_option('--seed', dest="solver_seed", type="int", help='seed value for stable plan generation')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -156,7 +157,7 @@ def validate_options(options, args, parser):
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
             'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
             'duration', 'end',
-            'detailed_progress', 'simple_progress', 'no_progress'
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
         ]),
 
         ('rollback_required', [
@@ -164,7 +165,7 @@ def validate_options(options, args, parser):
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
             'skip_resource_estimation', 'inplace_swap_roles',
-            'detailed_progress', 'simple_progress', 'no_progress'
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
         ]),
 
         ('detailed_progress', ['simple_progress', 'no_progress']),
