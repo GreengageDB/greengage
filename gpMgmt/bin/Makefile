@@ -233,3 +233,4 @@ clean distclean:
 		  gppkgc gprecoversegc gpreloadc gpscpc gpsdc gpssh-exkeysc gpsshc \
 		  gpstartc gpstatec gpstopc gpsys1c minireproc
 	rm -f gpconfig_modules/gucs_disallowed_in_file.txt
+	rm -f $(DESTDIR)$(prefix)/lib/python/sitecustomize.py

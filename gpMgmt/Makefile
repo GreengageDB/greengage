@@ -40,4 +40,3 @@ install: generate_greengage_path_file
 
 clean distclean: 
 	$(MAKE) -C bin $@
-	rm -f $(DESTDIR)$(prefix)/lib/python/sitecustomize.py
