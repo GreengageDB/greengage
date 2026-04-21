@@ -8,3 +8,4 @@ fe-secure.c
 getpeereid.c
 pqexpbuffer.c
 fe-auth-scram.c
+libpq-events.c

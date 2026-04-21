@@ -316,4 +316,6 @@ test: gp_query_id
 
 test: gp_orphaned_files
 
+test: gp_libpq_events
+
 # end of tests

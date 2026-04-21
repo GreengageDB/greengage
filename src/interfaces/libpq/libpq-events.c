@@ -12,7 +12,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "postgres_fe.h"
+#include "c.h"
 
 #include "libpq-fe.h"
 #include "libpq-int.h"

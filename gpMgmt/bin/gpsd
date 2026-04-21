@@ -13,6 +13,7 @@ import sys
 from contextlib import closing
 from optparse import OptionParser
 from pygresql import pgdb
+from gppylib import gpsubprocess
 
 if sys.version_info[0] == 3:
     string_types = str
@@ -37,11 +38,11 @@ def ResultIter(cursor, arraysize=1000):
 
 
 def getVersion(envOpts):
-    cmd = subprocess.Popen('psql --pset footer -Atqc "select version()" template1', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=envOpts)
+    cmd = gpsubprocess.Popen('psql --pset footer -Atqc "select version()" template1', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=envOpts)
     if cmd.wait() != 0:
-        sys.stderr.write('\nError while trying to find GPDB version.\n\n' + cmd.communicate()[1].decode('utf-8') + '\n\n')
+        sys.stderr.write('\nError while trying to find GPDB version.\n\n' + cmd.communicate()[1] + '\n\n')
         sys.exit(1)
-    return cmd.communicate()[0].decode('utf-8')
+    return cmd.communicate()[0]
 
 def get_num_segments(cursor):
     query = "select count(*) from gp_segment_configuration where role='p' and content >=0;"
@@ -55,17 +56,17 @@ def get_num_segments(cursor):
 
 def dumpSchema(connectionInfo, envOpts):
     dmp_cmd = 'pg_dump -h %s -p %s -U %s -s -x --gp-syntax -O %s' % connectionInfo
-    p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
+    p = gpsubprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
     if p.wait() != 0:
-        sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1].decode('utf-8') + '\n\n')
+        sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1] + '\n\n')
         sys.exit(1)
 
 
 def dumpGlobals(connectionInfo, envOpts):
     dmp_cmd = 'pg_dumpall -h %s -p %s -U %s -l %s -g --no-gp-syntax' % connectionInfo
-    p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
+    p = gpsubprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
     if p.wait() != 0:
-        sys.stderr.write('\nError while dumping globals.\n\n' + p.communicate()[1].decode('utf-8') + '\n\n')
+        sys.stderr.write('\nError while dumping globals.\n\n' + p.communicate()[1] + '\n\n')
         sys.exit(1)
 
 

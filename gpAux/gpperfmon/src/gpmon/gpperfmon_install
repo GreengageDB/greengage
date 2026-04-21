@@ -22,7 +22,6 @@ from __future__ import print_function
 
 from builtins import object
 import os, sys, time, re
-from subprocess import Popen
 
 try:
     from optparse import Option, OptionParser
@@ -30,6 +29,7 @@ try:
     from gppylib.userinput import ask_input
     from gppylib.gplog import get_default_logger, setup_tool_logging
     from gppylib.commands.unix import getLocalHostname, getUserName
+    from gppylib import gpsubprocess
 except ImportError as e:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
@@ -55,7 +55,7 @@ def run_command(cmd, verbose=False):
         logger.info(regex.sub(':gpperfmon:gpmon:********',cmdstr))
     else:
         logger.info(cmdstr)
-    p = Popen(cmdstr, shell=True, executable="/bin/bash")
+    p = gpsubprocess.Popen(cmdstr, shell=True, executable="/bin/bash")
     sts = os.waitpid(p.pid, 0)[1]
     if sts:
         raise Exception("error on cmd " + cmdstr)
