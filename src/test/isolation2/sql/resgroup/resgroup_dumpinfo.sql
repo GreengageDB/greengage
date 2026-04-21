@@ -2,7 +2,7 @@ DROP ROLE IF EXISTS role_dumpinfo_test;
 DROP ROLE IF EXISTS role_permission;
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
-include: helpers/decide_plpython.sql;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool
@@ -58,7 +58,7 @@ json_obj = json.loads(json_text)
 
 return validate(json_obj, n)
 
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE RESOURCE GROUP rg_dumpinfo_test WITH (concurrency=2, cpu_rate_limit=20, memory_limit=20);
 CREATE ROLE role_dumpinfo_test RESOURCE GROUP rg_dumpinfo_test;
@@ -94,4 +94,4 @@ create temp table t1 as select * from unnest(array(
 DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
-DROP LANGUAGE plpythonu CASCADE;
+DROP LANGUAGE plpython3u CASCADE;
