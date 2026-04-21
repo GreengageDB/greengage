@@ -1,3 +1,4 @@
+DROP LANGUAGE IF EXISTS plpython3u CASCADE;
 CREATE LANGUAGE plpython3u;
 
 -- start_ignore
