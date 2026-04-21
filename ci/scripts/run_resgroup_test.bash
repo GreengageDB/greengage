@@ -34,18 +34,6 @@ sudo -u gpadmin -- bash -c "
   make PGOPTIONS='-c optimizer=$OPTIMIZER -c statement_mem=$STATEMENT_MEM' installcheck-resgroup -C gpdb_src/
 " && exitcode=0
 
-params=(
-  "./ d gpAdminLogs"
-  "gpdb_src/src/test/ d results"
-  "gpdb_src/src/test/ f regression.diffs"
-  "gpdb_src/gpAux/gpdemo/datadirs/ d log"
-)
-for param in "\${params[@]}"; do
-  read -r path type name <<< "\$param"
-  find \$path -name \$name -type \$type -exec bash -c "tar -rf '/logs/\$name.tar' '{}' ; [ '\$name' == 'regression.diffs' ] && cat '{}' || true" \;
-done
-chmod -R a+rwX /logs
-
 echo \$exitcode > /logs/.exitcode
 exit \$exitcode
 EOF
