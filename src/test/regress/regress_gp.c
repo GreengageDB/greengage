@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "libpq-fe.h"
+#include "libpq-events.h"
 #include "pgstat.h"
 #include "access/transam.h"
 #include "access/xact.h"
@@ -115,6 +116,9 @@ extern Datum broken_int4out(PG_FUNCTION_ARGS);
 extern Datum gp_fts_probe_stats(PG_FUNCTION_ARGS);
 
 extern Datum gp_get_int_tuples(PG_FUNCTION_ARGS);
+
+/* libpq events test */
+extern Datum gp_check_libpq_events(PG_FUNCTION_ARGS);
 
 /* Triggers */
 
@@ -2558,4 +2562,58 @@ gp_mock_cdbdispatchcommand(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(func_ctx);
+}
+
+static int
+check_libpq_events_example_proc(PGEventId evtId, void *evtInfo,
+								void *passThrough)
+{
+	return TRUE;
+}
+
+PG_FUNCTION_INFO_V1(gp_check_libpq_events);
+Datum
+gp_check_libpq_events(PG_FUNCTION_ARGS)
+{
+	PGconn *conn;
+	PGresult *res;
+
+	conn = PQconnectdb("");
+	if (!conn)
+	{
+		ereport(ERROR, (errmsg("PQconnectdb returned NULL")));
+	}
+
+	/* PGEVT_REGISTER */
+	if (!PQregisterEventProc(conn, check_libpq_events_example_proc,
+							 "gp_check_libpq_events", NULL))
+	{
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQregisterEventProc failed")));
+	}
+
+	/* calls dupEvents() */
+	res = PQmakeEmptyPGresult(conn, PGRES_COMMAND_OK);
+	if (!res)
+	{
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQmakeEmptyPGresult failed")));
+	}
+
+	/* PGEVT_RESULTCREATE */
+	if (!PQfireResultCreateEvents(conn, res))
+	{
+		/* PGEVT_RESULTDESTROY */
+		PQclear(res);
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQfireResultCreateEvents failed")));
+	}
+
+	/* PGEVT_RESULTDESTROY */
+	PQclear(res);
+
+	/* PGEVT_CONNDESTROY */
+	PQfinish(conn);
+
+	PG_RETURN_BOOL(true);
 }
