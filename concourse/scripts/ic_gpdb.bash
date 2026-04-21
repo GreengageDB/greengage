@@ -2,6 +2,8 @@
 
 set -eox pipefail
 
+export COVERAGE_PROCESS_START="/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc"
+
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${CWDIR}/common.bash"
 
