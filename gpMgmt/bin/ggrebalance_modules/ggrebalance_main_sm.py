@@ -113,7 +113,7 @@ class GGRebalanceMainSM:
         },
         {
             'trigger': 'move_to_STATE_END',
-            'source': ['STATE_EXECUTOR_DONE', 'STATE_CHECK_PREVIOUS_RUN', 'STATE_CLEANUP', 'STATE_ROLLBACK'],
+            'source': ['STATE_EXECUTOR_DONE', 'STATE_CHECK_PREVIOUS_RUN', 'STATE_CLEANUP', 'STATE_ROLLBACK', 'STATE_PLANNING_STARTED'],
             'dest': 'STATE_END'
         },
         {
@@ -226,9 +226,11 @@ class GGRebalanceMainSM:
     def on_enter_STATE_PLANNING_STARTED(self) -> None:
         if self.options.target_segment_count != None:
             self.plan = Planner(self.logger, self.dburl, self.gparray, self.options).plan()
-
-        if self.options.target_segment_count != None and self.options.show_plan:
             self.logger.info(f"Final plan:\n{self.plan}")
+
+            if self.options.show_plan:
+                self.trigger('move_to_STATE_END')
+                return
 
         self.trigger('move_to_STATE_PLANNING_DONE')
 
