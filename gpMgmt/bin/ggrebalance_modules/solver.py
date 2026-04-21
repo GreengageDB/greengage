@@ -1183,7 +1183,6 @@ class LNS:
         self.solver = GreedySolver(config)
         self.rng = random.Random(seed)
         self.n_segments = config.n_segments
-        self.strategy = config.strategy
         self.printing = printing
 
         self._destroy = LNSDestroyOperators(

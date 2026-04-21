@@ -138,6 +138,10 @@ def validate_options(options, args, parser):
         logger.error(
             'Invalid value of --target-segment-count. It must be >= 1 and <= %d' % MAX_SEGMENTS)
         parser.exit(1)
+    
+    if options.solver_seed and options.solver_seed < 0:
+        logger.error('Invalid value of --seed. Must be >= 0')
+        parser.exit(1)
 
     incompatibility_rules = [
         # (condition_option, incompatible_options)
