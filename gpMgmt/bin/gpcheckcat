@@ -588,6 +588,65 @@ def checkDistribPolicy():
 
     checkConstraintsRepair()
 
+def checkReplicatedDistribPolicy():
+    logger.info('-----------------------------------')
+    logger.info('Checking distribution violations on replicated tables')
+
+    # SELECT all replicated tables with volatile functions in default expressions from non-system schemas
+    qry = '''
+    SELECT
+        n.nspname AS nspname,
+        c.relname AS relname,
+        a.attname AS attname,
+        pg_get_expr(ad.adbin, ad.adrelid) AS default_expr
+    FROM pg_class c
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        JOIN pg_attribute a ON c.oid = a.attrelid
+        JOIN pg_attrdef ad ON c.oid = ad.adrelid AND a.attnum = ad.adnum
+        JOIN gp_distribution_policy d ON c.oid = d.localoid
+        JOIN pg_proc p ON ad.adbin ~ (':funcid ' || p.oid || ' ')
+    WHERE c.relkind = 'r'
+        AND d.policytype = 'r'
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+        AND p.provolatile = 'v';
+    '''
+
+    try:
+        db =  connect2(GV.cfg[GV.master_dbid])
+        curs = db.query(qry)
+
+        err = []
+        for row in curs.dictresult():
+            err.append([GV.cfg[GV.master_dbid], ('nspname', 'relname', 'attname', 'default_expr'), row])
+
+        if not err:
+            logger.info('[OK] replicated tables')
+        else:
+            GV.checkStatus = False
+            setError(ERROR_NOREPAIR)
+            logger.info('[FAIL] replicated tables')
+            myprint(
+                    '[ERROR]: %d columns, containing volatile expressions as defaults, '
+                    'have violated replicated table\'s distribution policy. '
+                    'This must be manually resolved. Check the gpcheckcat log for details.' % len(err)
+                )
+            logger.error('replicated tables has %d issue(s)' % len(err))
+            logger.error('Replace the VOLATILE defaults with a STABLE expression via `ALTER TABLE ... SET DEFAULT ...`, '
+                            'also sync the data among segments.')
+            logger.error('The following columns and their tables must be manually fixed and synced:')
+            for e in err:
+                logger.error(formatErr(e[0], e[1], e[2]))
+            if len(err) > 100:
+                logger.error('...')
+                logger.error(qry)
+    except Exception as e:
+        GV.checkStatus = False
+        setError(ERROR_NOREPAIR)
+        myprint('[ERROR] executing test: checkReplicatedDistribPolicy')
+        myprint('  Execution error: ' + str(e))
+
 #############
 def checkPartitionIntegrity():
     #
@@ -3310,6 +3369,14 @@ all_checks = {
             "fn": lambda: checkMixDistPolicy(),
             "version": 'main',
             "order": 17,
+            "online": True
+        },
+    "replicated_distribution_policy":
+        {
+            "description": "Check policy violations of replicated tables",
+            "fn": lambda: checkReplicatedDistribPolicy(),
+            "version": 'main',
+            "order": 18,
             "online": True,
             "defaultSkip": True
         }
