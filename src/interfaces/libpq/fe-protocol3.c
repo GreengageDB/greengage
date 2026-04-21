@@ -499,7 +499,7 @@ pqParseInput3(PGconn *conn)
 							return;
 						if (pqGetInt(&conn->result->extraslen, 4, conn))
 							return;
-						conn->result->extras = malloc(conn->result->extraslen);
+						conn->result->extras = pqPalloc(conn->result->extraslen);
 						if (pqGetnchar((char *)conn->result->extras, conn->result->extraslen, conn))
 							return;
 						if (ready)
@@ -526,7 +526,7 @@ pqParseInput3(PGconn *conn)
 					{
 						if (conn->result->waitGxids == NULL)
 							conn->result->waitGxids =
-								malloc(sizeof(int) * conn->result->nWaits);
+								pqPalloc(sizeof(int) * conn->result->nWaits);
 						for (i = 0; i < conn->result->nWaits; i++)
 						{
 							int gxid;

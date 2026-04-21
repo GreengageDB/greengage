@@ -1,5 +1,5 @@
 --
--- Test that linked libpq library is compiled for backends.
+-- Test that linked libpq library is properly compiled.
 --
 CREATE OR REPLACE FUNCTION is_backend()
   RETURNS BOOL
@@ -12,3 +12,16 @@ SELECT is_backend();
  t
 (1 row)
 
+DROP FUNCTION is_backend();
+CREATE OR REPLACE FUNCTION check_events()
+  RETURNS bool
+  AS '@abs_builddir@/regress@DLSUFFIX@',
+     'gp_check_libpq_events'
+  LANGUAGE C STRICT;
+SELECT check_events();
+ check_events 
+--------------
+ t
+(1 row)
+
+DROP FUNCTION check_events();

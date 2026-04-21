@@ -145,13 +145,18 @@ static int	check_field_number(const PGresult *res, int field_num);
  *	 returns a newly allocated, initialized PGresult with given status.
  *	 If conn is not NULL and status indicates an error, the conn's
  *	 errorMessage is copied.  Also, any PGEvents are copied from the conn.
+ *
+ * GPDB: most of the libpq's memory allocations happen here--PQresults store
+ *       all retrieved rows. Thus we use a palloc() wrapper instead of bare
+ *       malloc() for vmtracker to see the allocations, in case we're the
+ *       backend.
  */
 PGresult *
 PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status)
 {
 	PGresult   *result;
 
-	result = (PGresult *) malloc(sizeof(PGresult));
+	result = (PGresult *) pqPalloc(sizeof(PGresult));
 	if (!result)
 		return NULL;
 
@@ -402,6 +407,9 @@ PQcopyResult(const PGresult *src, int flags)
  * Does not duplicate the event instance data, sets this to NULL.
  * Also, the resultInitialized flags are all cleared.
  * The total space allocated is added to *memSize.
+ *
+ * GPDB: backends use palloc() for allocations here. Make sure this function
+ *       is only used for PGresult->events!
  */
 static PGEvent *
 dupEvents(PGEvent *events, int count, size_t *memSize)
@@ -414,7 +422,7 @@ dupEvents(PGEvent *events, int count, size_t *memSize)
 		return NULL;
 
 	msize = count * sizeof(PGEvent);
-	newEvents = (PGEvent *) malloc(msize);
+	newEvents = (PGEvent *) pqPalloc(msize);
 	if (!newEvents)
 		return NULL;
 
@@ -424,12 +432,12 @@ dupEvents(PGEvent *events, int count, size_t *memSize)
 		newEvents[i].passThrough = events[i].passThrough;
 		newEvents[i].data = NULL;
 		newEvents[i].resultInitialized = false;
-		newEvents[i].name = strdup(events[i].name);
+		newEvents[i].name = pqPstrdup(events[i].name);
 		if (!newEvents[i].name)
 		{
 			while (--i >= 0)
-				free(newEvents[i].name);
-			free(newEvents);
+				pqPfree(newEvents[i].name);
+			pqPfree(newEvents);
 			return NULL;
 		}
 		msize += strlen(events[i].name) + 1;
@@ -596,7 +604,7 @@ pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary)
 	{
 		size_t		alloc_size = nBytes + PGRESULT_BLOCK_OVERHEAD;
 
-		block = (PGresult_data *) malloc(alloc_size);
+		block = (PGresult_data *) pqPalloc(alloc_size);
 		if (!block)
 			return NULL;
 		res->memorySize += alloc_size;
@@ -621,7 +629,7 @@ pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary)
 	}
 
 	/* Otherwise, start a new block. */
-	block = (PGresult_data *) malloc(PGRESULT_DATA_BLOCKSIZE);
+	block = (PGresult_data *) pqPalloc(PGRESULT_DATA_BLOCKSIZE);
 	if (!block)
 		return NULL;
 	res->memorySize += PGRESULT_DATA_BLOCKSIZE;
@@ -730,22 +738,22 @@ PQclear(PGresult *res)
 			(void) res->events[i].proc(PGEVT_RESULTDESTROY, &evt,
 									   res->events[i].passThrough);
 		}
-		free(res->events[i].name);
+		pqPfree(res->events[i].name);
 	}
 
 	if (res->events)
-		free(res->events);
+		pqPfree(res->events);
 
 	/* Free all the subsidiary blocks */
 	while ((block = res->curBlock) != NULL)
 	{
 		res->curBlock = block->next;
-		free(block);
+		pqPfree(block);
 	}
 
 	/* Free the top-level tuple pointer array */
 	if (res->tuples)
-		free(res->tuples);
+		pqPfree(res->tuples);
 
 	/* zero out the pointer fields to catch programming errors */
 	res->attDescs = NULL;
@@ -757,18 +765,18 @@ PQclear(PGresult *res)
 	/* res->curBlock was zeroed out earlier */
 
 	if (res->extras)
-		free(res->extras);
+		pqPfree(res->extras);
 	res->extraslen = 0;
 	res->extras = NULL;
 	res->extraType = PGExtraTypeNone;
 
 	if (res->waitGxids)
-		free(res->waitGxids);
+		pqPfree(res->waitGxids);
 	res->waitGxids = NULL;
 	res->nWaits = 0;
 
 	/* Free the PGresult structure itself */
-	free(res);
+	pqPfree(res);
 }
 
 /*
@@ -1001,10 +1009,10 @@ pqAddTuple(PGresult *res, PGresAttValue *tup, const char **errmsgp)
 
 		if (res->tuples == NULL)
 			newTuples = (PGresAttValue **)
-				malloc(newSize * sizeof(PGresAttValue *));
+				pqPalloc(newSize * sizeof(PGresAttValue *));
 		else
 			newTuples = (PGresAttValue **)
-				realloc(res->tuples, newSize * sizeof(PGresAttValue *));
+				pqRepalloc(res->tuples, newSize * sizeof(PGresAttValue *));
 		if (!newTuples)
 			return false;		/* malloc or realloc failed */
 		res->memorySize +=

@@ -38,6 +38,7 @@ fe-protocol2.c
 fe-secure.c
 fe-auth-scram.c
 pqexpbuffer.c
+libpq-events.c
 
 # Note: regreesion.* are only left behind on a failure; that's why they're not ignored
 #/regression.diffs
