@@ -1319,9 +1319,9 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	Assert(file->curl->x_httpheader == NULL);
 
 	/*
-	 * support multihomed http use cases. see MPP-11874
+	 * support multihomed use case and always fill 'Host' field
 	 */
-	if (IS_HTTP_URI(url))
+	if (IS_HTTP_URI(url) || IS_GPFDIST_URI(url) || IS_GPFDISTS_URI(url))
 	{
 		char domain[HOST_NAME_SIZE] = {0};
 
