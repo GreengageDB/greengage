@@ -246,7 +246,7 @@ def remove_pid_file(coordinator_data_directory):
 def check_pid_file(coordinator_data_directory, pid_filename):
     is_running = False
     try:
-        fp = open(coordinator_data_directory + f'/{pid_filename}', 'r')
+        fp = open(os.path.join(coordinator_data_directory, pid_filename), 'r')
         pid = int(fp.readline().strip())
         fp.close()
         is_running = check_pid(pid)
