@@ -124,7 +124,8 @@ OPTIONS
  Set the type of mirroring to be used after rebalance is complete.
 
 -p, --show-plan
- Show the segment movement plan.
+ Only show the segment movement plan and halt the tool's work without changing
+ the cluster.
 
 -c, --clean
  Delete the ggrebalance schema and all previously created ggrebalance
