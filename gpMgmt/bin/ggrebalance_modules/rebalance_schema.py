@@ -2,10 +2,13 @@
 
 from psycopg2.extensions import cursor
 from gppylib.db import dbconn
+from gppylib.system.environment import GpCoordinatorEnvironment
 from gppylib.utils import escape_string
 from typing import List
 from ggrebalance_modules.planner import Plan, deserializePlan
 from ggrebalance_modules.rebalance_step import *
+
+DBNAME = 'postgres'
 
 STATE_NOT_DEFINED = 'not defined'
 
@@ -22,6 +25,13 @@ class RebalanceSchema:
     STATE_CATEGORY_REBALANCE = 'REBALANCE'
     STATE_CATEGORY_MAIN = 'MAIN'
 
+    schema_name = 'ggrebalance'
+    rebalance_status = 'rebalance_status'
+    table_rebalance_status_detail = 'table_rebalance_status_detail'
+    rebalance_progress_view = 'rebalance_progress'
+    saved_plan = 'saved_plan'
+    segment_move_steps = 'segment_move_steps'
+
     class ProgressType(Enum):
         PROGRESS_NOT_DEFINED = 0
         PROGRESS_NO = 1
@@ -29,12 +39,6 @@ class RebalanceSchema:
         PROGRESS_DETAILED = 3
 
     def __init__(self, conn: dbconn.Connection):
-        self.schema_name = 'ggrebalance'
-        self.rebalance_status = 'rebalance_status'
-        self.table_rebalance_status_detail = 'table_rebalance_status_detail'
-        self.rebalance_progress_view = 'rebalance_progress'
-        self.saved_plan = 'saved_plan'
-        self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
         self.progress_type = self.ProgressType.PROGRESS_NOT_DEFINED
 
@@ -440,3 +444,21 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
             else:
                 self.progress_type = self.ProgressType.PROGRESS_DETAILED
         return self.progress_type
+
+    @classmethod
+    def checkOperationInProgress(cls, gpEnv: GpCoordinatorEnvironment) -> bool:
+        """Checks if there is ggrebalance operation in progress (possibly interrupted)"""
+        dburl = dbconn.DbURL(dbname=DBNAME, port=gpEnv.getCoordinatorPort())
+        with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+            # if there is no schema existing, we are not performing shrink or rebalance
+            if 0 == (dbconn.querySingleton(conn, f"SELECT COUNT(1) FROM pg_namespace WHERE nspname = '{cls.schema_name}'")):
+                return False
+            # if there is schema existing, check the last state - if it is final one - then we've complete all operations
+            latest_main_state = ''
+            cursor = dbconn.query(conn, f"SELECT state FROM {cls.schema_name}.{cls.rebalance_status} WHERE state_category = '{cls.STATE_CATEGORY_MAIN}' ORDER BY updated DESC LIMIT 1")
+            if cursor.rowcount > 0:
+                latest_main_state = str(cursor.fetchone()[0])
+            if latest_main_state == 'STATE_EXECUTOR_DONE':
+                return False
+
+        return True
