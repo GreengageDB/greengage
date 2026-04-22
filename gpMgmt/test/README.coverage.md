@@ -34,7 +34,7 @@ for the files you are modifying.
 
         export COVERAGE_PROCESS_START=/<absolute_path_to_file>/<coverage configuration file>
         
-        (e.g. export COVERAGE_PROCESS_START=~gpdb_src/gpMgmt/test/coveragerc)
+        (e.g. export COVERAGE_PROCESS_START=~gpdb_src/gpMgmt/test/coveragerc_unit)
 
     This will instrument all Python subprocesses that are spawned, and write
     coverage data to the location specified in our config file.

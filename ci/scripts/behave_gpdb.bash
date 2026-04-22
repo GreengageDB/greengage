@@ -27,8 +27,8 @@ function gen_env(){
 
 		if [ ! -z "\${COVERAGE_PROCESS_START}" ]; then
 			cd /tmp/coverage-data
-			coverage combine --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc coverage-data.*
-			coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc --show-contexts -d ./coverage-html
+			coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
+			coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
 		fi
 	EOF
 
