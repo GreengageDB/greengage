@@ -18,6 +18,7 @@ ggrebalance -x <segment_count>
     [{-D | -S | --no-progress}]
     [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
     [--non-interactive-mode] [-l <log_dir>] [-q] [-v]
+    [--seed <planner_seed>]
 
 ggrebalance
     [-n <parallel_processes>] [-B <batch_size>]
@@ -123,7 +124,8 @@ OPTIONS
  Set the type of mirroring to be used after rebalance is complete.
 
 -p, --show-plan
- Show the segment movement plan.
+ Only show the segment movement plan and halt the tool's work without changing
+ the cluster.
 
 -c, --clean
  Delete the ggrebalance schema and all previously created ggrebalance
@@ -218,6 +220,10 @@ OPTIONS
  Skip rebalance entirely even if the cluster is unbalanced. If this option is set,
  then ggrebalance does not try to plan rebalance at all. This option makes sense
  only if shrink or expand is needed and the user wants to skip rebalance.
+
+--seed
+ Passing seed value guarantees stable plan generation through several
+ ggrebalance runs. Valid values are any non-negative integer.
 
 -q, --quiet
  Run in quiet mode. Command output is not displayed on

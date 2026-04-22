@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import base64
+from collections import defaultdict
 from dataclasses import dataclass
 import ipaddress
 import os
@@ -743,6 +744,25 @@ class DiskSpaceChecker:
                 raise
         
         return results
+
+def is_gparray_balanced(gparray: GpArray) -> bool:
+    primaries_by_host = defaultdict(int)
+    mirrors_by_host = defaultdict(int)
+    for pair in gparray.getSegmentList():
+        if not pair.mirrorDB or not pair.balanced():
+            return False
+        primaries_by_host[pair.primaryDB.getSegmentHostName()] += 1
+        mirrors_by_host[pair.mirrorDB.getSegmentHostName()] += 1
+        if pair.mirrorDB.getSegmentHostName() == pair.primaryDB.getSegmentHostName():
+            return False
+    load = next(iter(primaries_by_host.values()))
+    for n in primaries_by_host.values():
+        if n != load:
+            return False
+    for n in mirrors_by_host.values():
+        if n != load:
+            return False
+    return True
 
 # Decorator to overwrite the logic of interactive_check_yesno()
 # during tests execution.
