@@ -20,6 +20,8 @@ except ImportError as e:
 
 class GGRebalanceMainSM:
 
+    summary_separator_str = '================================================================================'
+
     states_not_logged = [
         'STATE_OPTIONS_VALIDATION',
         'STATE_CLEANUP',
@@ -194,9 +196,9 @@ class GGRebalanceMainSM:
             self.logger.info('Skip final shrink summary report (specify "--simple-progress" or "--detailed-progress" to enable it).')
             return
 
-        self.logger.info('================================================================================')
+        self.logger.info(self.summary_separator_str)
         self.logger.info('                                   SHRINK                                   ')
-        self.logger.info('================================================================================')
+        self.logger.info(self.summary_separator_str)
         self.logger.info(f'Tables shrunk:\t\t{summary.tables_shrunk}')
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
             self.logger.info(f'Bytes processed:\t{summary.bytes_processed}')
@@ -232,9 +234,9 @@ class GGRebalanceMainSM:
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_NO:
             self.logger.info('Skip final rebalance summary report (specify "--simple-progress" or "--detailed-progress" to enable it).')
         else:
-            self.logger.info('================================================================================')
+            self.logger.info(self.summary_separator_str)
             self.logger.info('                                   REBALANCE                                   ')
-            self.logger.info('================================================================================')
+            self.logger.info(self.summary_separator_str)
             self.logger.info(f'Segments moved:\t\t{segments_moved}')
             self.logger.info(f'Rolled back moves:\t\t{len(rolled_back_moves)}')
             self.logger.info(f'Cancelled moves:\t\t{len(cancelled_moves)}')
@@ -250,9 +252,9 @@ class GGRebalanceMainSM:
         # we show warnings regardless the progress type set by user
         show_warnings = len(segments_down) > 0 or len(cancelled_moves) > 0 or not balanced
         if show_warnings:
-            self.logger.warning('================================================================================')
+            self.logger.warning(self.summary_separator_str)
             self.logger.warning('                                   WARNINGS                                    ')
-            self.logger.warning('================================================================================')
+            self.logger.warning(self.summary_separator_str)
 
             if len(cancelled_moves) > 0:
                 self.logger.warning('------------------------------- Cancelled moves  -------------------------------')
