@@ -488,6 +488,7 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_START(self) -> None:
+        self.rebalance_schema.backupShrinkProgress()
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
         dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')

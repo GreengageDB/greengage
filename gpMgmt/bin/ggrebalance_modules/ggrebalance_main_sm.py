@@ -7,18 +7,22 @@ try:
     from gppylib.commands.gp import *
     from gppylib.gplog import *
     from gppylib.system.environment import *
+    from gppylib.system import configurationInterface
     from ggrebalance_modules.planner import *
-    from ggrebalance_modules.rebalance_schema import RebalanceSchema
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema, RebalanceSummaryInfo
     from gppylib.fault_injection import *
     from ggrebalance_modules.shrink import GGShrink
     from ggrebalance_modules.ggrebalance_sm import RebalanceSM
+    from ggrebalance_modules.rebalance_step import RebalanceStep
+    from ggrebalance_modules.rebalance_commons import is_gparray_balanced
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
 class GGRebalanceMainSM:
 
+    summary_separator_str = '================================================================================'
+
     states_not_logged = [
-        'STATE_START',
         'STATE_OPTIONS_VALIDATION',
         'STATE_CLEANUP',
         'STATE_ROLLBACK',
@@ -30,6 +34,7 @@ class GGRebalanceMainSM:
     ]
 
     states_logged = [
+        'STATE_START',
         'STATE_SETUP_SCHEMA_STARTED',
         'STATE_SETUP_SCHEMA_DONE',
         'STATE_EXECUTOR_STARTED',
@@ -149,7 +154,7 @@ class GGRebalanceMainSM:
         self.shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
         self.is_shrink_rollback_in_progress = self.gg_shrink.state_is_from_rollback_flow(self.shrink_state_from_prev_run)
         self.prev_shrink_run_was_complete = self.gg_shrink.state_is_final(self.shrink_state_from_prev_run)
-
+        self.is_summary_output_required = False
 
     def on_every_state(self) -> None:
         if self.state in self.states_logged:
@@ -180,6 +185,104 @@ class GGRebalanceMainSM:
         if need_exit:
             sys.exit(1)
 
+    def is_shrink_planned(self) -> bool:
+        return isinstance(self.plan, ShrinkPlan)
+
+    def print_shrink_summary(self, summary: RebalanceSummaryInfo) -> None:
+        if not self.is_shrink_planned():
+            return
+
+        if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_NO:
+            self.logger.info('Skip final shrink summary report (specify "--simple-progress" or "--detailed-progress" to enable it).')
+            return
+
+        self.logger.info(self.summary_separator_str)
+        self.logger.info('                                   SHRINK                                   ')
+        self.logger.info(self.summary_separator_str)
+        self.logger.info(f'Tables shrunk:\t\t{summary.tables_shrunk}')
+        if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
+            self.logger.info(f'Bytes processed:\t{summary.bytes_processed}')
+            self.logger.info(f'Shrink rate:\t\t{summary.shrink_rate}')
+        self.logger.info(f'Shrink total time:\t{summary.shrink_total_time}')
+        if summary.is_rollback:
+            self.logger.info('\n')
+            self.logger.info(f'Tables rolled back:\t\t{summary.tables_rolled_back}')
+            if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
+                self.logger.info(f'Tables rollback rate:\t\t{summary.rollback_rate}')
+            self.logger.info(f'Rollback total time:\t\t{summary.rollback_total_time}')
+
+    def print_rebalance_summary(self, summary: RebalanceSummaryInfo) -> None:
+        if len(summary.executed_rebalance_steps) == 0:
+            return
+
+        segments_moved = 0
+        rolled_back_moves = []
+        cancelled_moves = []
+
+        for step in summary.executed_rebalance_steps:
+            status = step.getStatus()
+            if status == RebalanceStep.Status.CANCELLED:
+                cancelled_moves.append(step.getMove())
+            elif status == RebalanceStep.Status.DONE:
+                if step.isRollback():
+                    rolled_back_moves.append(step.getMove())
+                else:
+                    segments_moved += 1
+            else:
+                raise Exception(f'Unexpected status for executed step: {str(step)}')
+
+        if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_NO:
+            self.logger.info('Skip final rebalance summary report (specify "--simple-progress" or "--detailed-progress" to enable it).')
+        else:
+            self.logger.info(self.summary_separator_str)
+            self.logger.info('                                   REBALANCE                                   ')
+            self.logger.info(self.summary_separator_str)
+            self.logger.info(f'Segments moved:\t\t{segments_moved}')
+            self.logger.info(f'Rolled back moves:\t\t{len(rolled_back_moves)}')
+            self.logger.info(f'Cancelled moves:\t\t{len(cancelled_moves)}')
+
+        segments_down = []
+        gp_array = configurationInterface.getConfigurationProvider().loadSystemConfig(useUtilityMode=False, verbose=False)
+        for segment in gp_array.getSegDbList():
+            if segment.isSegmentDown():
+                segments_down.append(segment)
+
+        balanced = is_gparray_balanced(gp_array)
+
+        # we show warnings regardless the progress type set by user
+        show_warnings = len(segments_down) > 0 or len(cancelled_moves) > 0 or not balanced
+        if show_warnings:
+            self.logger.warning(self.summary_separator_str)
+            self.logger.warning('                                   WARNINGS                                    ')
+            self.logger.warning(self.summary_separator_str)
+
+            if len(cancelled_moves) > 0:
+                self.logger.warning('------------------------------- Cancelled moves  -------------------------------')
+                for move in cancelled_moves:
+                    self.logger.warning(str(move))
+
+            if len(segments_down) > 0:
+                self.logger.warning('Cluster might be not in fault tolerance mode!')
+                self.logger.warning('These segments should be started manually in order cluster to become fault tolerant:')
+                for segment in segments_down:
+                    self.logger.warning(str(segment))
+
+            if not balanced:
+                self.logger.warning('Cluster is left in unbalanced state')
+                if len(rolled_back_moves) > 0:
+                    self.logger.warning('------------------------------ Rolled back moves ---------------------------------')
+                    for move in rolled_back_moves:
+                        self.logger.warning(str(move))
+                    self.logger.warning('You can review why segments were rolled back and retry rebalance later.')
+
+    def print_full_summary(self) -> None:
+        if not self.is_summary_output_required:
+            return
+        summary = self.rebalance_schema.getProgressSummary()
+        self.logger.info('-----------------------------------SUMMARY--------------------------------------')
+        self.print_shrink_summary(summary)
+        self.print_rebalance_summary(summary)
+
     # state callbacks start here
 
     @wrap_func_with_faults
@@ -198,7 +301,7 @@ class GGRebalanceMainSM:
         else:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
             perform_schema_cleanup = True
-            if isinstance(self.plan, ShrinkPlan):
+            if self.is_shrink_planned():
                 perform_schema_cleanup = self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
             if perform_schema_cleanup:
                 self.rebalance_schema.dropSchema()
@@ -211,13 +314,15 @@ class GGRebalanceMainSM:
     def on_enter_STATE_ROLLBACK(self) -> None:
         try:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
-            if isinstance(self.plan, ShrinkPlan):
+            if self.is_shrink_planned():
                 if self.is_shrink_rollback_in_progress:
                     self.logger.info("Rollback is already in progress, and was interrupted. Execute 'ggrebalance' without '-r' flag.")
                     return
                 if not self.prev_shrink_run_was_complete:
+                    self.is_summary_output_required = self.rebalance_schema.schemaExists()
                     self.gg_shrink.rollback(self.plan)
                     return
+            self.is_summary_output_required = self.rebalance_schema.schemaExists()
             self.gg_rebalance.rollback()
         finally:
             self.trigger('move_to_STATE_END')
@@ -290,7 +395,8 @@ class GGRebalanceMainSM:
 
     @wrap_func_with_faults
     def on_enter_STATE_EXECUTOR_STARTED(self) -> None:
-        if isinstance(self.plan, ShrinkPlan):
+        self.is_summary_output_required = True
+        if self.is_shrink_planned():
             if not self.prev_shrink_run_was_complete:
                 self.trigger('move_to_STATE_SHRINK_STARTED')
                 return
@@ -324,7 +430,7 @@ class GGRebalanceMainSM:
 
     @wrap_func_with_faults
     def on_enter_STATE_END(self) -> None:
-        pass
+        self.print_full_summary()
 
     @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
