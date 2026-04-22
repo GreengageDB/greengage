@@ -24,9 +24,12 @@ function gen_env(){
 		else
 				flags="\${BEHAVE_FLAGS}" make -f Makefile.behave behave
 		fi
-		cd /tmp/coverage-data
-		coverage combine --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc coverage-data.*
-		coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc --show-contexts -d ./coverage-html
+
+		if [ ! -z "\${COVERAGE_PROCESS_START}" ]; then
+			cd /tmp/coverage-data
+			coverage combine --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc coverage-data.*
+			coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc --show-contexts -d ./coverage-html
+		fi
 	EOF
 
 		chmod a+x /opt/run_test.sh
