@@ -36,6 +36,20 @@ class RebalanceSchema:
     STATE_CATEGORY_REBALANCE = 'REBALANCE'
     STATE_CATEGORY_MAIN = 'MAIN'
 
+    # possible stat names for rebalance_progress_view
+    STAT_NAME_1_1_TABLES_SHRUNK = '1.1. Tables shrunk'
+    STAT_NAME_1_2_TABLES_SHRINK_IN_PROGRESS = '1.2. Tables shrink in progress'
+    STAT_NAME_1_3_TABLES_LEFT_TO_SHRINK = '1.3. Tables left to shrink'
+    STAT_NAME_1_1_TABLES_ROLLED_BACK = '1.1. Tables rolled back'
+    STAT_NAME_1_2_TABLES_ROLLBACK_IN_PROGRESS = '1.2. Tables rollback in progress'
+    STAT_NAME_1_3_TABLES_LEFT_TO_ROLLBACK = '1.3. Tables left to rollback'
+    STAT_NAME_2_1_BYTES_PROCESSED = '2.1. Bytes processed'
+    STAT_NAME_2_2_BYTES_LEFT_TO_PROCESS = '2.2. Bytes left to process'
+    STAT_NAME_2_3_BYTES_IN_PROGRESS = '2.3. Bytes in progress'
+    STAT_NAME_3_1_ESTIMATED_SHRINK_RATE = '3.1. Estimated shrink rate'
+    STAT_NAME_3_2_ESTIMATED_TIME = '3.2. Estimated time'
+    STAT_NAME_SHRINK_TOTAL_TIME = 'Shrink total time'
+
     class ProgressType(Enum):
         PROGRESS_NOT_DEFINED = 0
         PROGRESS_NO = 1
@@ -106,17 +120,17 @@ cond AS (SELECT {self.schema_name}._is_rollback() AS rollback_in_progress),
 rebalance_progress_normal_flow AS
     (
     SELECT
-        '1.1. Tables shrunk' AS stat_name,
+        '{self.STAT_NAME_1_1_TABLES_SHRUNK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
     UNION
     SELECT
-        '1.3. Tables left to shrink' AS stat_name,
+        '{self.STAT_NAME_1_3_TABLES_LEFT_TO_SHRINK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.2. Tables shrink in progress' AS stat_name,
+        '{self.STAT_NAME_1_2_TABLES_SHRINK_IN_PROGRESS}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL
     ORDER BY stat_name ASC
@@ -124,17 +138,17 @@ rebalance_progress_normal_flow AS
 rebalance_progress_rollback_flow AS
     (
     SELECT
-        '1.1. Tables rolled back' AS stat_name,
+        '{self.STAT_NAME_1_1_TABLES_ROLLED_BACK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NOT NULL AND rebalance_finished IS NOT NULL
     UNION
     SELECT
-        '1.2. Tables rollback in progress' AS stat_name,
+        '{self.STAT_NAME_1_2_TABLES_ROLLBACK_IN_PROGRESS}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.3. Tables left to rollback' AS stat_name,
+        '{self.STAT_NAME_1_3_TABLES_LEFT_TO_ROLLBACK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
     ORDER BY stat_name ASC
@@ -171,42 +185,42 @@ rebalance_progress_normal_flow AS
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none'
         )
     SELECT
-        '1.1. Tables shrunk' AS stat_name,
+        '{self.STAT_NAME_1_1_TABLES_SHRUNK}' AS stat_name,
         tables_processed::text AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '1.3. Tables left to shrink' AS stat_name,
+        '{self.STAT_NAME_1_3_TABLES_LEFT_TO_SHRINK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'none' AND rebalance_started IS NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.2. Tables shrink in progress' AS stat_name,
+        '{self.STAT_NAME_1_2_TABLES_SHRINK_IN_PROGRESS}' AS stat_name,
         tables_in_processing::text AS stat_value
     FROM stat_in_processing
     UNION
     SELECT
-        '2.1. Bytes processed' AS stat_name,
+        '{self.STAT_NAME_2_1_BYTES_PROCESSED}' AS stat_name,
         bytes_processed::text AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '2.2. Bytes left to process' AS stat_name,
+        '{self.STAT_NAME_2_2_BYTES_LEFT_TO_PROCESS}' AS stat_name,
         bytes_left_to_process::text AS stat_value
     FROM stat_left_to_process
     UNION
     SELECT
-        '2.3. Bytes in progress' AS stat_name,
+        '{self.STAT_NAME_2_3_BYTES_IN_PROGRESS}' AS stat_name,
         bytes_in_processing::text AS stat_value
     FROM stat_in_processing
     UNION
     SELECT
-        '3.1. Estimated shrink rate' AS stat_name,
+        '{self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE}' AS stat_name,
         (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '3.2. Estimated time' AS stat_name,
+        '{self.STAT_NAME_3_2_ESTIMATED_TIME}' AS stat_name,
         CASE
             WHEN p.est_processing_rate = 0 THEN 'not defined'
             ELSE (l.bytes_left_to_process / p.est_processing_rate)::text || ' s'
@@ -236,42 +250,42 @@ rebalance_progress_rollback_flow AS
         FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done'
         )
     SELECT
-        '1.1. Tables rolled back' AS stat_name,
+        '{self.STAT_NAME_1_1_TABLES_ROLLED_BACK}' AS stat_name,
         tables_processed::text AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '1.2. Tables rollback in progress' AS stat_name,
+        '{self.STAT_NAME_1_2_TABLES_ROLLBACK_IN_PROGRESS}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NOT NULL AND rebalance_finished IS NULL
     UNION
     SELECT
-        '1.3. Tables left to rollback' AS stat_name,
+        '{self.STAT_NAME_1_3_TABLES_LEFT_TO_ROLLBACK}' AS stat_name,
         count(1)::text AS stat_value
     FROM {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = 'done' AND rebalance_started IS NULL
     UNION
     SELECT
-        '2.1. Bytes processed' AS stat_name,
+        '{self.STAT_NAME_2_1_BYTES_PROCESSED}' AS stat_name,
         bytes_processed::text AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '2.2. Bytes left to process' AS stat_name,
+        '{self.STAT_NAME_2_2_BYTES_LEFT_TO_PROCESS}' AS stat_name,
         bytes_left_to_process::text AS stat_value
     FROM stat_left_to_process
     UNION
     SELECT
-        '2.3. Bytes in progress' AS stat_name,
+        '{self.STAT_NAME_2_3_BYTES_IN_PROGRESS}' AS stat_name,
         bytes_in_processing::text AS stat_value
     FROM stat_in_processing
     UNION
     SELECT
-        '3.1. Estimated shrink rate' AS stat_name,
+        '{self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE}' AS stat_name,
         (est_processing_rate / (1024*1024))::text || ' MB/s' AS stat_value
     FROM stat_processed
     UNION
     SELECT
-        '3.2. Estimated time' AS stat_name,
+        '{self.STAT_NAME_3_2_ESTIMATED_TIME}' AS stat_name,
         CASE
             WHEN p.est_processing_rate = 0 THEN 'not defined'
             ELSE (l.bytes_left_to_process / p.est_processing_rate)::text || ' s'
@@ -453,7 +467,7 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
                            f'CREATE TABLE {self.schema_name}.{self.rebalance_progress_view_history} AS SELECT * FROM {self.schema_name}.{self.rebalance_progress_view}')
             # also add to progress history table the shrink total time to show it in the final summary
             dbconn.execSQL(self.conn,
-                           f"INSERT INTO {self.schema_name}.{self.rebalance_progress_view_history} VALUES ('Shrink total time', '{shrink_total_time}')")
+                           f"INSERT INTO {self.schema_name}.{self.rebalance_progress_view_history} VALUES ('{self.STAT_NAME_SHRINK_TOTAL_TIME}', '{shrink_total_time}')")
 
     def getProgressType(self) -> ProgressType:
         if self.progress_type != self.ProgressType.PROGRESS_NOT_DEFINED:
@@ -478,7 +492,7 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
         else:
             filter_condition = "cte.state != 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START' AND cte.state LIKE 'STATE_SHRINK_ROLLBACK_%'"
 
-        # In order to get total shrink (or shrink rollback time), we need to consider several items:
+        # In order to get total shrink (or shrink rollback) time, we need to consider several items:
         # 1. the execution can be interrupted, so we can't just take the 'updated' column of last state and subtract the first state from it.
         # So we calculate the duration for each shrink state separately by subtracting the time of the preceeding state,
         # and then summarize them (refer to cte_other_states.duration). But! Here is another consideration:
@@ -542,33 +556,33 @@ AS total_duration FROM cte_total""")
             if not result.is_rollback:
                 for stat_name, stat_value in cursor:
                     match stat_name:
-                        case '1.1. Tables shrunk':
+                        case self.STAT_NAME_1_1_TABLES_SHRUNK:
                             result.tables_shrunk = stat_value
-                        case '2.1. Bytes processed':
+                        case self.STAT_NAME_2_1_BYTES_PROCESSED:
                             result.bytes_processed = stat_value
-                        case '3.1. Estimated shrink rate':
+                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
                             result.shrink_rate = stat_value
 
                 result.shrink_total_time = self.getShrinkTotalTime()
             else:
                 for stat_name, stat_value in cursor:
                     match stat_name:
-                        case '1.1. Tables rolled back':
+                        case self.STAT_NAME_1_1_TABLES_ROLLED_BACK:
                             result.tables_rolled_back = stat_value
-                        case '2.1. Bytes processed':
+                        case self.STAT_NAME_2_1_BYTES_PROCESSED:
                             result.bytes_processed = stat_value
-                        case '3.1. Estimated shrink rate':
+                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
                             result.rollback_rate = stat_value
 
                 cursor = dbconn.query(self.conn,
                                 f"SELECT stat_name, stat_value FROM {self.schema_name}.{self.rebalance_progress_view_history}")
                 for stat_name, stat_value in cursor:
                     match stat_name:
-                        case '1.1. Tables shrunk':
+                        case self.STAT_NAME_1_1_TABLES_SHRUNK:
                             result.tables_shrunk = stat_value
-                        case '3.1. Estimated shrink rate':
+                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
                             result.shrink_rate = stat_value
-                        case 'Shrink total time':
+                        case self.STAT_NAME_SHRINK_TOTAL_TIME:
                             result.shrink_total_time = stat_value
 
                 result.rollback_total_time = self.getShrinkTotalTime(is_rollback = True)
