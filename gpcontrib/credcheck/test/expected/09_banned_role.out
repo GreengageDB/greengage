@@ -1,0 +1,47 @@
+-- start_matchsubs
+-- m/ \(credcheck.c:\d+\)/
+-- s/ \(credcheck.c:\d+\)//
+-- end_matchsubs
+CREATE EXTENSION credcheck;
+SELECT pg_banned_role_reset();
+ pg_banned_role_reset 
+----------------------
+                    0
+(1 row)
+
+CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+\! PGPASSWORD='J8YuRe=6O' psql -h localhost -U credtest -d regression -w
+psql: FATAL:  password authentication failed for user "credtest"
+\! PGPASSWORD='J8YuRe=6O' psql -h localhost -U credtest -d regression -w
+psql: FATAL:  password authentication failed for user "credtest"
+\! PGPASSWORD='J8YuRe=6O' psql -h localhost -U credtest -d regression -w
+psql: FATAL:  rejecting connection, user 'credtest' has been banned
+Note that its locks and other resources will not be released until then.
+SELECT rolname, failure_count FROM pg_banned_role;
+ rolname  | failure_count 
+----------+---------------
+ credtest |             3
+(1 row)
+
+SELECT pg_banned_role_reset('credtest');
+ pg_banned_role_reset 
+----------------------
+                    1
+(1 row)
+
+SELECT rolname, failure_count FROM pg_banned_role;
+ rolname | failure_count 
+---------+---------------
+(0 rows)
+
+\! PGPASSWORD='J8YuRe=6O' psql -h localhost -U credtest -d regression -w
+psql: FATAL:  password authentication failed for user "credtest"
+SELECT pg_banned_role_reset();
+ pg_banned_role_reset 
+----------------------
+                    1
+(1 row)
+
+DROP USER credtest;
+DROP EXTENSION credcheck CASCADE;
