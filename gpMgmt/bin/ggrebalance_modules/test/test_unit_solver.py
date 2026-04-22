@@ -2,42 +2,37 @@ import random
 from collections import defaultdict
 
 from gppylib.test.unit.gp_unittest import *
-from ..solver import GreedySolver, Solution, SolverConfig
+from ..solver import GreedySolver, Solution, SolverConfig, LNS, LNSConfig
+from ..planner import MAX_SOLVER_ITERS, SOLVER_TIMEOUT_SEC
 from .config import getEncoding
 
 
 class TestGreedySolver(GpTestCase):
-
-    def setUp(self):
-        random.seed(42)
     
-    def _validate_solution_allassign(self, solution: Solution, 
-                                     solver: GreedySolver) -> bool:
+    def _validate_solution_allassign(self, solution: Solution, solver) -> bool:
         if len(solution) != solver.n_segments:
             return False
 
         return True
   
-    def _validate_solution_host_ids(self, solution: Solution, 
-                                     solver: GreedySolver) -> bool:
+    def _validate_solution_host_ids(self, solution: Solution, solver) -> bool:
         for seg_id, (primary, mirror) in solution.items():
-            if not (0 <= primary < solver.n_hosts_target):
+            if not (0 <= primary < solver.config.n_hosts_target):
                 return False
-            if not (0 <= mirror < solver.n_hosts_target):
+            if not (0 <= mirror < solver.config.n_hosts_target):
                 return False
         
         return True
     
-    def _validate_solution_nocolocation(self, solution: Solution, 
-                                     solver: GreedySolver) -> bool:
+    def _validate_solution_nocolocation(self, solution: Solution, solver) -> bool:
         for seg_id, (primary, mirror) in solution.items():
             if primary == mirror:
                 return False
         return True
     
     def _validate_solution_balance(self, solution: Solution, 
-                                     solver: GreedySolver) -> bool:
-        load = [0] * solver.n_hosts_target
+                                     solver) -> bool:
+        load = [0] * solver.config.n_hosts_target
         for seg_id, (primary, mirror) in solution.items():
             load[primary] += 1
             load[mirror] += 1
@@ -48,8 +43,7 @@ class TestGreedySolver(GpTestCase):
         
         return True
     
-    def _validate_strategy(self, solution: Solution, 
-                                     solver: GreedySolver):
+    def _validate_strategy(self, solution: Solution, solver):
         primary_to_mirrors = defaultdict(list)
         for seg_id, (primary, mirror) in solution.items():
             primary_to_mirrors[primary].append(mirror)
@@ -84,15 +78,20 @@ class TestGreedySolver(GpTestCase):
 
     def perform_run(self, run_improve:bool, cost:int):
         conf = self.encoding[0]
-        solver = GreedySolver(conf, run_improve=run_improve)
+        if run_improve:
+            lnsconf = LNSConfig.from_parent(conf, MAX_SOLVER_ITERS, SOLVER_TIMEOUT_SEC)
+            solver = LNS(lnsconf, seed=42)
+        else:
+            solver = GreedySolver(conf)
         solution, actual_cost = solver.solve()
         self.assertEqual(actual_cost, cost)
         self._validate_solition(solution, solver)
 
+
     @getEncoding('35_7_balanced_grouped', 'grouped', None, None, None)
     def test_validity_small_grouped_balanced(self):
         self.perform_run(False, 0)
-    
+
     @getEncoding('35_7_balanced_spread', 'spread', None, None, None)
     def test_validity_small_spread_balanced(self):
         self.perform_run(False, 0)
@@ -100,7 +99,7 @@ class TestGreedySolver(GpTestCase):
     @getEncoding('40_5_unbalanced_grouped', 'grouped', None, None, None)
     def test_validity_small_grouped_unbalanced(self):
         self.perform_run(False, 19)
-    
+
     @getEncoding('40_5_unbalanced_grouped', 'grouped', None, None, None)
     def test_validity_small_grouped_unbalanced_with_improve(self):
         self.perform_run(True, 18)
@@ -110,20 +109,20 @@ class TestGreedySolver(GpTestCase):
         conf = self.encoding[0]
 
         with self.assertRaises(ValueError, msg='Cannot follow spread mirroring strategy') as cm:
-            solver = GreedySolver(conf, run_improve=False)
-    
+            solver = GreedySolver(conf)
+
     @getEncoding('40_8_unbalanced_spread', 'spread', None, None, None)
     def test_validity_small_spread_unbalanced(self):
         self.perform_run(False, 10)
-    
+
     @getEncoding('40_8_unbalanced_spread', 'spread', None, None, None)
     def test_validity_small_spread_unbalanced_with_improve(self):
         self.perform_run(True, 6)
-    
+
     @getEncoding('120_20_unbalanced_spread', 'spread', None, None, None)
     def test_validity_medium_spread_unbalanced(self):
         self.perform_run(False, 10)
-    
+
     @getEncoding('120_20_unbalanced_spread', 'spread', None, None, None)
     def test_validity_medium_spread_unbalanced_with_improve(self):
         self.perform_run(True, 7)
@@ -131,41 +130,41 @@ class TestGreedySolver(GpTestCase):
     @getEncoding('1000_50_unbalanced_spread', 'spread', None, None, None)
     def test_validity_large_spread_unbalanced(self):
        self.perform_run(False, 124)
-    
+
     @getEncoding('1000_50_unbalanced_spread', 'spread', None, None, None)
     def test_validity_large_spread_unbalanced_with_improve(self):
         # in more or less standart configurations with lightly skewed
         # distribution greedy initial solution is pretty-well generated.
         # it's expected that ALNS may not bring any impovements.
-        self.perform_run(True, 124)
+        self.perform_run(True, 92)
 
     @getEncoding('1000_50_unbalanced_grouped', 'grouped', None, None, None)
     def test_validity_large_grouped_unbalanced(self):
         self.perform_run(False, 140)
-    
+
     @getEncoding('1000_50_unbalanced_grouped', 'grouped', None, None, None)
     def test_validity_large_grouped_unbalanced_with_improve(self):
         # in standart configurations with lightly skewed
         # distribution greedy initial solution is pretty-well generated.
         # it's expected that ALNS may not bring any impovements.
         self.perform_run(True, 140)
-    
+
     @getEncoding('120_20_unbalanced_grouped', 'spread', None, None, None)
     def test_strategy_change_medium_grouped_unbalanced(self):
         self.perform_run(False, 101)
-    
+
     @getEncoding('120_20_unbalanced_grouped', 'spread', None, None, None)
     def test_strategy_change_medium_grouped_unbalanced_with_improve(self):
         self.perform_run(True, 100)
-    
+
     @getEncoding('120_20_unbalanced_spread', 'grouped', None, None, None)
     def test_strategy_change_medium_spread_unbalanced(self):
         self.perform_run(False, 106)
-    
+
     @getEncoding('120_20_unbalanced_spread', 'grouped', None, None, None)
     def test_strategy_change_medium_spread_unbalanced_with_improve(self):
-       self.perform_run(True, 102)
-    
+       self.perform_run(True, 100)
+
     @getEncoding('120_20_unbalanced_grouped', 'grouped', target_hosts=None,
                  add_hosts=None, remove_hosts="sdw13, sdw14, sdw15, sdw16, sdw17, sdw18, sdw19, sdw20")
     def test_decomission_hosts(self):
@@ -175,7 +174,7 @@ class TestGreedySolver(GpTestCase):
                  add_hosts=None, remove_hosts="sdw13, sdw14, sdw15, sdw16, sdw17, sdw18, sdw19, sdw20")
     def test_decomission_hosts_with_improve(self):
         self.perform_run(True, 109)
-    
+
     @getEncoding('1000_50_unbalanced_grouped', 'grouped', target_hosts=None,
                  add_hosts=None, remove_hosts=",".join(["sdw" + str(i) for i in range(20, 30)]))
     def test_decomission_hosts_large(self):
@@ -184,31 +183,31 @@ class TestGreedySolver(GpTestCase):
     @getEncoding('1000_50_unbalanced_grouped', 'grouped', target_hosts=None,
                  add_hosts=None, remove_hosts=",".join(["sdw" + str(i) for i in range(20, 30)]))
     def test_decomission_hosts_large_with_improve(self):
-        self.perform_run(True, 457)
-    
+        self.perform_run(True, 456)
+
     @getEncoding('1000_50_balanced_grouped', 'grouped', target_hosts=None,
     add_hosts=",".join(["sdw" + str(i) for i in range(51, 101)]),
     remove_hosts=None)
     def test_new_hosts_balanced(self):
         self.perform_run(False, 1000)
-    
+
     @getEncoding('1000_50_balanced_grouped', 'grouped', target_hosts=None,
     add_hosts=",".join(["sdw" + str(i) for i in range(51, 101)]),
     remove_hosts=None)
     def test_new_hosts_balanced_with_improve(self):
         self.perform_run(True, 1000)
-    
+
     @getEncoding('120_20_unbalanced_grouped', 'grouped', target_hosts=
                  "sdw1, sdw2, sdw3, sdw4, sdw5, sdw21, sdw22, sdw23, sdw24, sdw25, sdw12, sdw13",
                  add_hosts=None, remove_hosts=None)
     def test_target_hosts(self):
         self.perform_run(False, 175)
-    
+
     @getEncoding('120_20_unbalanced_grouped', 'grouped', target_hosts=
                  "sdw1, sdw2, sdw3, sdw4, sdw5, sdw21, sdw22, sdw23, sdw24, sdw25, sdw12, sdw13",
                  add_hosts=None, remove_hosts=None)
     def test_target_hosts_with_improve(self):
-        self.perform_run(True, 160)
+        self.perform_run(True, 157)
 
 class TestGreedySolverFunc(GpTestCase):
     """
@@ -225,7 +224,7 @@ class TestGreedySolverFunc(GpTestCase):
             strategy='grouped'
         )
         with self.assertRaises(ValueError) as ctx:
-            GreedySolver(config, run_improve=False)
+            GreedySolver(config)
         self.assertIn("Cannot balance to single host", str(ctx.exception))
 
     def test_init_uneven_distribution_error(self):
@@ -238,7 +237,7 @@ class TestGreedySolverFunc(GpTestCase):
             strategy='grouped'
         )
         with self.assertRaises(ValueError) as ctx:
-            GreedySolver(config, run_improve=False)
+            GreedySolver(config)
         self.assertIn("Cannot evenly distribute", str(ctx.exception))
     
     def test_init_spread_impossible_error(self):
@@ -251,7 +250,7 @@ class TestGreedySolverFunc(GpTestCase):
             strategy='spread'
         )
         with self.assertRaises(ValueError) as ctx:
-            GreedySolver(config, run_improve=False)
+            GreedySolver(config)
         self.assertIn("Cannot follow spread mirroring strategy", str(ctx.exception))
     
     def test_balance_primaries_keep_on_original(self):
@@ -263,7 +262,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1, 1, 2, 2, 0, 0],
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary = solver._balance_primaries()
         
         # Should keep original placements
@@ -282,7 +281,7 @@ class TestGreedySolverFunc(GpTestCase):
             strategy='grouped'
         )
 
-        solver = GreedySolver(config_grouped, run_improve=False)
+        solver = GreedySolver(config_grouped)
         primary_mapping = solver._balance_primaries()
         
         # Check all segments assigned
@@ -299,7 +298,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1]*8 + [2]*2 + [0]*2,
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary = solver._balance_primaries()
         
         # Should balance to 4 per host
@@ -319,7 +318,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1]*4 + [2]*4 + [0]*4,
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary = solver._balance_primaries()
         mirror = solver._assign_mirror_hosts(primary)
 
@@ -335,7 +334,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1, 2, 2, 3, 3, 0, 0, 1],
             strategy='spread'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary = solver._balance_primaries()
         mirror = solver._assign_mirror_hosts(primary)
         
@@ -352,7 +351,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1, 1, 1, 2, 2, 1, 1, 2, 2, 0, 0, 0],
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         
         mirror_mapping = [-1] * 12
         mirror_load = [0] * 3
@@ -382,7 +381,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[3]*12,  # All on decommissioned host
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         
         mirror_mapping = [-1] * 12
         mirror_load = [2, 0, 1] # Host 1 is least loaded
@@ -412,7 +411,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1]*4 + [0]*4,# does not matter
             strategy='grouped'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         
         # Simulate deadlock: all mirror hosts are full, except the host 0.
         # Need swap in case of such mapping where primary group at host 0
@@ -442,7 +441,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[1, 2, 2, 3, 3, 0, 0, 1],  # Valid originals
             strategy='spread'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary_mapping = solver._balance_primaries()
         mirror_mapping = solver._assign_mirror_hosts(primary_mapping)
 
@@ -458,7 +457,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[4, 4, 4, 4, 4, 4, 4, 4],  # All on decommissioned
             strategy='spread'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         primary_mapping = solver._balance_primaries()
         mirror_mapping = solver._assign_mirror_hosts(primary_mapping)
         
@@ -475,7 +474,7 @@ class TestGreedySolverFunc(GpTestCase):
             initial_mirror_mapping=[4, 4, 4, 4, 4, 4, 4, 4],# All on decommissioned
             strategy='spread'
         )
-        solver = GreedySolver(config, run_improve=False)
+        solver = GreedySolver(config)
         
         primary_mapping = [0, 0, 1, 1, 2, 2, 3, 3]
         mirror_mapping = [1, 2, 2, 1, 3, 0, 0, -1]
