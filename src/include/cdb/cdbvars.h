@@ -55,17 +55,21 @@
  * time and are local to the backend process resulting from the
  * connection.	The default is dispatch which is the normal setting
  * for a user of Greengage connecting to a node of  the Greengage cluster.
- * Neither parameter appears in the configuration file.
+ * Neither parameter appears in the configuration file, and both do not
+ * change during the lifetime of PostgreSQL session.
+ * The main difference is that:
  *
  * gp_session_role
  *
- * - does not affect the operation of the backend, and
- * - does not change during the lifetime of PostgreSQL session.
+ * - does not affect the operation of the backend
  *
  * gp_role
  *
- * - determines the operating role of the backend, and
- * - may be changed by a superuser via the SET command.
+ * - determines the operating role of the backend
+ *
+ * (Note that there is no point in keeping both of these parameters,
+ * as they remain intact only because changing this legacy logic
+ * will take some effort)
  *
  * The connection time value of gp_session_role used by a
  * libpq-based client application can be specified using the
