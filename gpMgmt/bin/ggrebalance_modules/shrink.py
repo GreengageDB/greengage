@@ -622,6 +622,18 @@ class GGShrink:
                 fun(self, attempt)
             return func_with_faults
 
+        # decorator to help with interruption of potentially long queries
+        def long_object_method(func):
+            def long_func(*args, **kwargs):
+                try:
+                    self = args[0]
+                    self.long_operation_in_progress = True
+                    self.check_cancel()
+                    return func(*args, **kwargs)
+                finally:
+                    self.long_operation_in_progress = False
+            return long_func
+
         def table_exists(self, conn: dbconn.Connection) -> bool:
             if dbconn.querySingleton(conn, f"""
                 SELECT count(1)
@@ -641,10 +653,16 @@ class GGShrink:
                 return False
             return True
 
+        @long_object_method
         def rebalance_table(self, conn: dbconn.Connection) -> None:
             dbconn.execSQL(conn,
                            f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
                            REBALANCE {self.target_segment_count}''')
+
+        @long_object_method
+        def analyze_table(self, conn: dbconn.Connection) -> None:
+            dbconn.execSQL(conn,
+                           f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
 
         def check_cancel(self):
             if self.cancel_flag:
@@ -653,7 +671,7 @@ class GGShrink:
         @wrap_table_rebalance_with_faults
         def process_table(self, attempt: int) -> None:
             self.shrink.logger.info(f'Start table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}" to {self.target_segment_count} segments (attempt {attempt})')
-            # check for cancel_flag at the beginning and before each long operation
+            # check for cancel_flag at the beginning and before each long operation (refer to long_object_method decorator)
             self.check_cancel()
             self.shrink.rebalance_schema.setTableRebalanceStartTime(self.db_name, self.schema_name, self.rel_name)
             if self.db_exists(self.shrink.rebalance_schema.conn):
@@ -665,18 +683,11 @@ class GGShrink:
 
                     if self.table_exists(conn):
                         if not self.table_is_rebalanced(conn):
-                            self.long_operation_in_progress = True
-                            self.check_cancel()
                             self.rebalance_table(conn)
-                            self.long_operation_in_progress = False
                         else:
                             self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" is already rebalanced''')
                         if self.shrink.options.analyze:
-                            self.long_operation_in_progress = True
-                            self.check_cancel()
-                            dbconn.execSQL(conn,
-                                           f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
-                            self.long_operation_in_progress = False
+                            self.analyze_table(conn)
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
@@ -709,8 +720,6 @@ class GGShrink:
                             self.shrink.tables_rebalance_failed = True
                             self.shrink.workers_for_tables_rebalance.haltWork()
                     continue
-                finally:
-                    self.long_operation_in_progress = False
                 break
 
         def cancel(self):
