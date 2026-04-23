@@ -1177,7 +1177,7 @@ typedef struct Sort
 typedef struct IncrementalSort
 {
 	Sort		sort;
-	int			nPresortedCols;	/* number of presorted columns */
+	int			nPresortedCols; /* number of presorted columns */
 } IncrementalSort;
 
 /* ---------------

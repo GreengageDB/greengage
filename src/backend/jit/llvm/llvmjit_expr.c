@@ -2139,11 +2139,11 @@ llvm_compile_expr(ExprState *state)
 
 			case EEOP_AGG_PLAIN_PERGROUP_NULLCHECK:
 				{
-					int				 jumpnull;
-					LLVMValueRef	 v_aggstatep;
-					LLVMValueRef	 v_allpergroupsp;
-					LLVMValueRef	 v_pergroup_allaggs;
-					LLVMValueRef	 v_setoff;
+					int			jumpnull;
+					LLVMValueRef v_aggstatep;
+					LLVMValueRef v_allpergroupsp;
+					LLVMValueRef v_pergroup_allaggs;
+					LLVMValueRef v_setoff;
 
 					jumpnull = op->d.agg_plain_pergroup_nullcheck.jumpnull;
 
@@ -2151,28 +2151,23 @@ llvm_compile_expr(ExprState *state)
 					 * pergroup_allaggs = aggstate->all_pergroups
 					 * [op->d.agg_plain_pergroup_nullcheck.setoff];
 					 */
-					v_aggstatep = LLVMBuildBitCast(
-						b, v_parent, l_ptr(StructAggState), "");
+					v_aggstatep = LLVMBuildBitCast(b, v_parent,
+												   l_ptr(StructAggState), "");
 
-					v_allpergroupsp = l_load_struct_gep(
-						b, v_aggstatep,
-						FIELDNO_AGGSTATE_ALL_PERGROUPS,
-						"aggstate.all_pergroups");
+					v_allpergroupsp = l_load_struct_gep(b, v_aggstatep,
+														FIELDNO_AGGSTATE_ALL_PERGROUPS,
+														"aggstate.all_pergroups");
 
-					v_setoff = l_int32_const(
-						op->d.agg_plain_pergroup_nullcheck.setoff);
+					v_setoff = l_int32_const(op->d.agg_plain_pergroup_nullcheck.setoff);
 
-					v_pergroup_allaggs = l_load_gep1(
-						b, v_allpergroupsp, v_setoff, "");
+					v_pergroup_allaggs = l_load_gep1(b, v_allpergroupsp, v_setoff, "");
 
-					LLVMBuildCondBr(
-						b,
-						LLVMBuildICmp(b, LLVMIntEQ,
-									  LLVMBuildPtrToInt(
-										  b, v_pergroup_allaggs, TypeSizeT, ""),
-									  l_sizet_const(0), ""),
-						opblocks[jumpnull],
-						opblocks[opno + 1]);
+					LLVMBuildCondBr(b,
+									LLVMBuildICmp(b, LLVMIntEQ,
+												  LLVMBuildPtrToInt(b, v_pergroup_allaggs, TypeSizeT, ""),
+												  l_sizet_const(0), ""),
+									opblocks[jumpnull],
+									opblocks[opno + 1]);
 					break;
 				}
 
@@ -2544,8 +2539,8 @@ BuildV1Call(LLVMJitContext *context, LLVMBuilderRef b,
 		*v_fcinfo_isnull = LLVMBuildLoad(b, v_fcinfo_isnullp, "");
 
 	/*
-	 * Add lifetime-end annotation, signalling that writes to memory don't
-	 * have to be retained (important for inlining potential).
+	 * Add lifetime-end annotation, signaling that writes to memory don't have
+	 * to be retained (important for inlining potential).
 	 */
 	{
 		LLVMValueRef v_lifetime = create_LifetimeEnd(mod);

@@ -90,7 +90,6 @@ endif
 # (Mkvcbuild.pm has a copy of this list, too)
 OBJS_FRONTEND = \
 	$(OBJS_COMMON) \
-	fe_archive.o \
 	fe_memutils.o \
 	file_utils.o \
 	logging.o \

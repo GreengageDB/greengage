@@ -289,8 +289,8 @@ MultiExecParallelHash(HashState *node)
 			 * ExecHashTableCreate(), or someone else is doing that.  Either
 			 * way, wait for everyone to arrive here so we can proceed.
 			 */
-			BarrierArriveAndWait(build_barrier, WAIT_EVENT_HASH_BUILD_ALLOCATING);
-			/* FALLTHROUGH */
+			BarrierArriveAndWait(build_barrier, WAIT_EVENT_HASH_BUILD_ALLOCATE);
+			/* Fall through. */
 
 		case PHJ_BUILD_HASHING_INNER:
 
@@ -347,7 +347,7 @@ MultiExecParallelHash(HashState *node)
 			 * counters.
 			 */
 			if (BarrierArriveAndWait(build_barrier,
-									 WAIT_EVENT_HASH_BUILD_HASHING_INNER))
+									 WAIT_EVENT_HASH_BUILD_HASH_INNER))
 			{
 				/*
 				 * Elect one backend to disable any further growth.  Batches
@@ -648,7 +648,7 @@ ExecHashTableCreate(HashState *state, HashJoinState *hjstate,
 		 * backend will be elected to do that now if necessary.
 		 */
 		if (BarrierPhase(build_barrier) == PHJ_BUILD_ELECTING &&
-			BarrierArriveAndWait(build_barrier, WAIT_EVENT_HASH_BUILD_ELECTING))
+			BarrierArriveAndWait(build_barrier, WAIT_EVENT_HASH_BUILD_ELECT))
 		{
 			pstate->nbatch = nbatch;
 			pstate->space_allowed = space_allowed;
@@ -1239,7 +1239,7 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 			 * tuples.
 			 */
 			if (BarrierArriveAndWait(&pstate->grow_batches_barrier,
-									 WAIT_EVENT_HASH_GROW_BATCHES_ELECTING))
+									 WAIT_EVENT_HASH_GROW_BATCHES_ELECT))
 			{
 				dsa_pointer_atomic *buckets;
 				ParallelHashJoinBatch *old_batch0;
@@ -1344,13 +1344,13 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 				/* All other participants just flush their tuples to disk. */
 				ExecParallelHashCloseBatchAccessors(hashtable);
 			}
-			/* FALLTHROUGH */
+			/* Fall through. */
 
 		case PHJ_GROW_BATCHES_ALLOCATING:
 			/* Wait for the above to be finished. */
 			BarrierArriveAndWait(&pstate->grow_batches_barrier,
-								 WAIT_EVENT_HASH_GROW_BATCHES_ALLOCATING);
-			/* FALLTHROUGH */
+								 WAIT_EVENT_HASH_GROW_BATCHES_ALLOCATE);
+			/* Fall through. */
 
 		case PHJ_GROW_BATCHES_REPARTITIONING:
 			/* Make sure that we have the current dimensions and buckets. */
@@ -1362,8 +1362,8 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 			ExecParallelHashMergeCounters(hashtable);
 			/* Wait for the above to be finished. */
 			BarrierArriveAndWait(&pstate->grow_batches_barrier,
-								 WAIT_EVENT_HASH_GROW_BATCHES_REPARTITIONING);
-			/* FALLTHROUGH */
+								 WAIT_EVENT_HASH_GROW_BATCHES_REPARTITION);
+			/* Fall through. */
 
 		case PHJ_GROW_BATCHES_DECIDING:
 
@@ -1373,7 +1373,7 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 			 * not helping.
 			 */
 			if (BarrierArriveAndWait(&pstate->grow_batches_barrier,
-									 WAIT_EVENT_HASH_GROW_BATCHES_DECIDING))
+									 WAIT_EVENT_HASH_GROW_BATCHES_DECIDE))
 			{
 				bool		space_exhausted = false;
 				bool		extreme_skew_detected = false;
@@ -1418,12 +1418,12 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 				dsa_free(hashtable->area, pstate->old_batches);
 				pstate->old_batches = InvalidDsaPointer;
 			}
-			/* FALLTHROUGH */
+			/* Fall through. */
 
 		case PHJ_GROW_BATCHES_FINISHING:
 			/* Wait for the above to complete. */
 			BarrierArriveAndWait(&pstate->grow_batches_barrier,
-								 WAIT_EVENT_HASH_GROW_BATCHES_FINISHING);
+								 WAIT_EVENT_HASH_GROW_BATCHES_FINISH);
 	}
 }
 
@@ -1672,7 +1672,7 @@ ExecParallelHashIncreaseNumBuckets(HashJoinTable hashtable)
 		case PHJ_GROW_BUCKETS_ELECTING:
 			/* Elect one participant to prepare to increase nbuckets. */
 			if (BarrierArriveAndWait(&pstate->grow_buckets_barrier,
-									 WAIT_EVENT_HASH_GROW_BUCKETS_ELECTING))
+									 WAIT_EVENT_HASH_GROW_BUCKETS_ELECT))
 			{
 				size_t		size;
 				dsa_pointer_atomic *buckets;
@@ -1696,13 +1696,13 @@ ExecParallelHashIncreaseNumBuckets(HashJoinTable hashtable)
 				/* Clear the flag. */
 				pstate->growth = PHJ_GROWTH_OK;
 			}
-			/* FALLTHROUGH */
+			/* Fall through. */
 
 		case PHJ_GROW_BUCKETS_ALLOCATING:
 			/* Wait for the above to complete. */
 			BarrierArriveAndWait(&pstate->grow_buckets_barrier,
-								 WAIT_EVENT_HASH_GROW_BUCKETS_ALLOCATING);
-			/* FALLTHROUGH */
+								 WAIT_EVENT_HASH_GROW_BUCKETS_ALLOCATE);
+			/* Fall through. */
 
 		case PHJ_GROW_BUCKETS_REINSERTING:
 			/* Reinsert all tuples into the hash table. */
@@ -1736,7 +1736,7 @@ ExecParallelHashIncreaseNumBuckets(HashJoinTable hashtable)
 				CHECK_FOR_INTERRUPTS();
 			}
 			BarrierArriveAndWait(&pstate->grow_buckets_barrier,
-								 WAIT_EVENT_HASH_GROW_BUCKETS_REINSERTING);
+								 WAIT_EVENT_HASH_GROW_BUCKETS_REINSERT);
 	}
 }
 

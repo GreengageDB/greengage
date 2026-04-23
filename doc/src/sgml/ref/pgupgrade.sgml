@@ -1,4 +1,7 @@
-<!-- doc/src/sgml/ref/pgupgrade.sgml -->
+<!--
+doc/src/sgml/ref/pgupgrade.sgml
+PostgreSQL documentation
+-->
 
 <refentry id="pgupgrade">
  <indexterm zone="pgupgrade">
@@ -723,11 +726,9 @@ psql --username=postgres --file=script.sql postgres
           </para>
          </listitem>
 
-        </itemizedlist>
-       </para>
+        </itemizedlist></para>
       </listitem>
-     </itemizedlist>
-    </para>
+     </itemizedlist></para>
    </step>
   </procedure>
 

@@ -79,6 +79,8 @@ typedef struct
 
 static bool match_exclude_list(char *path, HTAB *exclude);
 
+static int64 sendTablespace(char *path, char *oid, bool sizeonly,
+							struct backup_manifest_info *manifest);
 static int64 sendDir(const char *path, int basepathlen, bool sizeonly,
 					 List *tablespaces, bool sendtblspclinks,
 					 backup_manifest_info *manifest, const char *spcoid,
@@ -204,7 +206,7 @@ static const char *const excludeDirContents[] =
 
 	/*
 	 * Old contents are loaded for possible debugging but are not required for
-	 * normal operation, see OldSerXidInit().
+	 * normal operation, see SerialInit().
 	 */
 	"pg_serial",
 
@@ -338,8 +340,7 @@ perform_base_backup(basebackup_options *opt)
 								 PROGRESS_BASEBACKUP_PHASE_WAIT_CHECKPOINT);
 	startptr = do_pg_start_backup(opt->label, opt->fastcheckpoint, &starttli,
 								  labelfile, &tablespaces,
-								  tblspc_map_file,
-								  opt->progress, opt->sendtblspcmapfile);
+								  tblspc_map_file, opt->sendtblspcmapfile);
 	Assert(!XLogRecPtrIsInvalid(startptr));
 
 	elogif(!debug_basebackup, LOG,
@@ -382,10 +383,7 @@ perform_base_backup(basebackup_options *opt)
 
 		/* Add a node for the base directory at the end */
 		ti = palloc0(sizeof(tablespaceinfo));
-		if (opt->progress)
-			ti->size = sendDir(".", 1, true, tablespaces, true, NULL, NULL, opt->exclude);
-		else
-			ti->size = -1;
+		ti->size = -1;
 		tablespaces = lappend(tablespaces, ti);
 
 		/*
@@ -394,10 +392,19 @@ perform_base_backup(basebackup_options *opt)
 		 */
 		if (opt->progress)
 		{
+			pgstat_progress_update_param(PROGRESS_BASEBACKUP_PHASE,
+										 PROGRESS_BASEBACKUP_PHASE_ESTIMATE_BACKUP_SIZE);
+
 			foreach(lc, tablespaces)
 			{
 				tablespaceinfo *tmp = (tablespaceinfo *) lfirst(lc);
 
+				if (tmp->path == NULL)
+					tmp->size = sendDir(".", 1, true, tablespaces, true, NULL,
+										NULL, opt->exclude);
+				else
+					tmp->size = sendTablespace(tmp->path, tmp->oid, true,
+											   NULL);
 				backup_total += tmp->size;
 			}
 		}
@@ -713,7 +720,11 @@ perform_base_backup(basebackup_options *opt)
 			elogif(debug_basebackup, LOG,
 				   "basebackup perform -- Sent xlog file %s", walFileName);
 
-			/* wal_segment_size is a multiple of 512, so no need for padding */
+			/*
+			 * wal_segment_size is a multiple of TAR_BLOCK_SIZE, so no need
+			 * for padding.
+			 */
+			Assert(wal_segment_size % TAR_BLOCK_SIZE == 0);
 
 			FreeFile(fp);
 
@@ -1270,11 +1281,11 @@ sendFileWithContent(const char *filename, const char *content,
 	pq_putmessage('d', content, len);
 	update_basebackup_progress(len);
 
-	/* Pad to 512 byte boundary, per tar format requirements */
-	pad = ((len + 511) & ~511) - len;
+	/* Pad to a multiple of the tar block size. */
+	pad = tarPaddingBytesRequired(len);
 	if (pad > 0)
 	{
-		char		buf[512];
+		char		buf[TAR_BLOCK_SIZE];
 
 		MemSet(buf, 0, pad);
 		pq_putmessage('d', buf, pad);
@@ -1297,7 +1308,7 @@ sendFileWithContent(const char *filename, const char *content,
  *
  * Only used to send auxiliary tablespaces, not PGDATA.
  */
-int64
+static int64
 sendTablespace(char *path, char *spcoid, bool sizeonly,
 			   backup_manifest_info *manifest)
 {
@@ -1676,9 +1687,14 @@ sendDir(const char *path, int basepathlen, bool sizeonly, List *tablespaces,
 
 			if (sent || sizeonly)
 			{
-				/* Add size, rounded up to 512byte block */
-				size += ((statbuf.st_size + 511) & ~511);
-				size += 512;	/* Size of the header of the file */
+				/* Add size. */
+				size += statbuf.st_size;
+
+				/* Pad to a multiple of the tar block size. */
+				size += tarPaddingBytesRequired(statbuf.st_size);
+
+				/* Size of the header for the file. */
+				size += TAR_BLOCK_SIZE;
 			}
 		}
 		else
@@ -1973,11 +1989,11 @@ sendFile(const char *readfilename, const char *tarfilename,
 	}
 
 	/*
-	 * Pad to 512 byte boundary, per tar format requirements. (This small
+	 * Pad to a block boundary, per tar format requirements. (This small
 	 * piece of data is probably not worth throttling, and is not checksummed
 	 * because it's not actually part of the file.)
 	 */
-	pad = ((len + 511) & ~511) - len;
+	pad = tarPaddingBytesRequired(len);
 	if (pad > 0)
 	{
 		MemSet(buf, 0, pad);
@@ -2011,7 +2027,7 @@ static int64
 _tarWriteHeader(const char *filename, const char *linktarget,
 				struct stat *statbuf, bool sizeonly)
 {
-	char		h[512];
+	char		h[TAR_BLOCK_SIZE];
 	enum tarError rc;
 
 	if (!sizeonly)

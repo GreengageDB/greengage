@@ -141,7 +141,7 @@ CancelRequested()
 
 #define CHECK_FOR_INTERRUPTS() \
 do { \
-	if (InterruptPending) \
+	if (unlikely(InterruptPending)) \
 		ProcessInterrupts(__FILE__, __LINE__); \
 	BackoffBackendTick(); \
 	ReportOOMConsumption(); \
@@ -152,9 +152,9 @@ do { \
 
 #define CHECK_FOR_INTERRUPTS() \
 do { \
-	if (UNBLOCKED_SIGNAL_QUEUE()) \
+	if (unlikely(UNBLOCKED_SIGNAL_QUEUE())) \
 		pgwin32_dispatch_queued_signals(); \
-	if (InterruptPending) \
+	if (unlikely(InterruptPending)) \
 		ProcessInterrupts(__FILE__, __LINE__); \
 } while(0)
 #endif							/* WIN32 */

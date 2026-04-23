@@ -116,9 +116,6 @@ InitBufferPool(void)
 						NBuffers * (Size) sizeof(LWLockMinimallyPadded),
 						&foundIOLocks);
 
-	LWLockRegisterTranche(LWTRANCHE_BUFFER_IO_IN_PROGRESS, "buffer_io");
-	LWLockRegisterTranche(LWTRANCHE_BUFFER_CONTENT, "buffer_content");
-
 	/*
 	 * The array used to sort to-be-checkpointed buffer ids is located in
 	 * shared memory, to avoid having to allocate significant amounts of
@@ -164,7 +161,7 @@ InitBufferPool(void)
 							 LWTRANCHE_BUFFER_CONTENT);
 
 			LWLockInitialize(BufferDescriptorGetIOLock(buf),
-							 LWTRANCHE_BUFFER_IO_IN_PROGRESS);
+							 LWTRANCHE_BUFFER_IO);
 		}
 
 		/* Correct last entry of linked list */

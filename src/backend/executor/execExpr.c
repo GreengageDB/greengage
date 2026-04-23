@@ -3551,7 +3551,7 @@ ExecBuildAggTransCall(ExprState *state, AggState *aggstate,
 					  bool nullcheck)
 {
 	ExprContext *aggcontext;
-	int adjust_jumpnull = -1;
+	int			adjust_jumpnull = -1;
 
 	if (ishash)
 		aggcontext = aggstate->hashcontext;

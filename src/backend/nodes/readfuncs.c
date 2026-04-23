@@ -363,10 +363,12 @@ _readQuery(void)
 	READ_NODE_FIELD(setOperations);
 	READ_NODE_FIELD(constraintDeps);
     READ_NODE_FIELD(withCheckOptions);
-    local_node->intoPolicy = NULL;
-    READ_BOOL_FIELD(parentStmtType);
     READ_LOCATION_FIELD(stmt_location);
-    READ_LOCATION_FIELD(stmt_len);
+	READ_INT_FIELD(stmt_len);
+    READ_BOOL_FIELD(parentStmtType);
+
+	/* Don't deserialize policy */
+    local_node->intoPolicy = NULL;
 
 	READ_DONE();
 }
@@ -2487,7 +2489,7 @@ _readPlannedStmt(void)
 	READ_NODE_FIELD(paramExecTypes);
 	READ_NODE_FIELD(utilityStmt);
 	READ_LOCATION_FIELD(stmt_location);
-	READ_LOCATION_FIELD(stmt_len);
+	READ_INT_FIELD(stmt_len);
 
 	READ_INT_ARRAY(subplan_sliceIds, list_length(local_node->subplans));
 

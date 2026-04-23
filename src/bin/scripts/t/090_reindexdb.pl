@@ -114,7 +114,7 @@ $node->issues_sql_like(
 	qr/statement:\ REINDEX TABLE s1.t1;/,
 	'parallel reindexdb for schemas does a per-table REINDEX');
 $node->command_ok(
-	['reindexdb', '-j', '2', '-S', 's3'],
+	[ 'reindexdb', '-j', '2', '-S', 's3' ],
 	'parallel reindexdb with empty schema');
 # GPDB: REINDEX CONCURRENTLY doesn't work on GPDB, skip.
 SKIP: {

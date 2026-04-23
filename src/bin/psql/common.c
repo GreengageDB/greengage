@@ -240,7 +240,7 @@ NoticeProcessor(void *arg, const char *message)
  * fgets are coded to handle possible interruption.
  *
  * On Windows, currently this does not work, so control-C is less useful
- * there, and the callback is just a no-op.
+ * there.
  */
 volatile bool sigint_interrupt_enabled = false;
 
@@ -707,7 +707,7 @@ PrintNotifications(void)
 static bool
 PrintQueryTuples(const PGresult *results)
 {
-	bool result = true;
+	bool		result = true;
 
 	/* write output to \g argument, if any */
 	if (pset.gfname)

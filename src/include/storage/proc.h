@@ -83,6 +83,13 @@ struct XidCache
  */
 #define INVALID_PGPROCNO		PG_INT32_MAX
 
+typedef enum
+{
+	PROC_WAIT_STATUS_OK,
+	PROC_WAIT_STATUS_WAITING,
+	PROC_WAIT_STATUS_ERROR,
+} ProcWaitStatus;
+
 /*
  * Each backend has a PGPROC struct in shared memory.  There is also a list of
  * currently-unused PGPROC structs that will be reallocated to new backends.
@@ -106,7 +113,7 @@ struct PGPROC
 	PGPROC	  **procgloballist; /* procglobal list that owns this PGPROC */
 
 	PGSemaphore sem;			/* ONE semaphore to sleep on */
-	int			waitStatus;		/* STATUS_WAITING, STATUS_OK or STATUS_ERROR */
+	ProcWaitStatus waitStatus;
 
 	Latch		procLatch;		/* generic latch for process */
 
@@ -241,10 +248,8 @@ struct PGPROC
 	XLogRecPtr	clogGroupMemberLsn; /* WAL location of commit record for clog
 									 * group member */
 
-	/* Per-backend LWLock.  Protects fields below (but not group fields). */
-	LWLock		backendLock;
-
 	/* Lock manager data, recording fast-path locks taken by this backend. */
+	LWLock		fpInfoLock;		/* protects per-backend fast-path state */
 	uint64		fpLockBits;		/* lock modes held for each fast-path slot */
 	uint64		fpHoldTillEndXactBits;	/* HoldTillEndXactBits for each slot */
 	Oid			fpRelId[FP_LOCK_SLOTS_PER_BACKEND]; /* slots for rel oids */
@@ -382,8 +387,8 @@ extern bool HaveNFreeProcs(int n);
 extern void ProcReleaseLocks(bool isCommit);
 
 extern void ProcQueueInit(PROC_QUEUE *queue);
-extern int	ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable);
-extern PGPROC *ProcWakeup(PGPROC *proc, int waitStatus);
+extern ProcWaitStatus ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable);
+extern PGPROC *ProcWakeup(PGPROC *proc, ProcWaitStatus waitStatus);
 extern void ProcLockWakeup(LockMethod lockMethodTable, LOCK *lock);
 extern void CheckDeadLockAlert(void);
 extern bool IsWaitingForLock(void);
@@ -397,7 +402,7 @@ extern PGPROC *AuxiliaryPidGetProc(int pid);
 extern void BecomeLockGroupLeader(void);
 extern bool BecomeLockGroupMember(PGPROC *leader, int pid);
 
-extern int ResProcSleep(LOCKMODE lockmode, LOCALLOCK *locallock, void *incrementSet);
+extern ProcWaitStatus ResProcSleep(LOCKMODE lockmode, LOCALLOCK *locallock, void *incrementSet);
 
 extern void ResLockWaitCancel(void);
 extern bool ProcCanSetMppSessionId(void);

@@ -1176,7 +1176,9 @@ FillPortalStore(Portal portal, bool isTopLevel)
 	SetTuplestoreDestReceiverParams(treceiver,
 									portal->holdStore,
 									portal->holdContext,
-									false);
+									false,
+									NULL,
+									NULL);
 
 	switch (portal->strategy)
 	{

@@ -1251,7 +1251,7 @@ _mdfd_openseg(SMgrRelation reln, ForkNumber forknum, BlockNumber segno,
 			  int oflags)
 {
 	MdfdVec    *v;
-	int			fd;
+	File		fd;
 	char	   *fullpath;
 
 	fullpath = _mdfd_segpath(reln, forknum, segno);

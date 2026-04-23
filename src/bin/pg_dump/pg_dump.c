@@ -139,10 +139,6 @@ static SimpleOidList function_include_oids = {NULL, NULL};
 
 static SimpleOidList preassigned_oids = {NULL, NULL};
 
-/* placeholders for the delimiters for comments */
-char		g_comment_start[10];
-char		g_comment_end[10];
-
 static const CatalogId nilCatalogId = {0, 0};
 
 const char *EXT_PARTITION_NAME_POSTFIX = "_external_partition__";
@@ -489,9 +485,6 @@ main(int argc, char **argv)
 	 * support on Windows.
 	 */
 	init_parallel_dump_utils();
-
-	strcpy(g_comment_start, "-- ");
-	g_comment_end[0] = '\0';
 
 	progname = get_progname(argv[0]);
 
@@ -2657,8 +2650,8 @@ makeTableDataInfo(DumpOptions *dopt, TableInfo *tbinfo)
 	/* Skip FOREIGN TABLEs (no data to dump) unless requested explicitly */
 	if (tbinfo->relkind == RELKIND_FOREIGN_TABLE &&
 		(foreign_servers_include_oids.head == NULL ||
-		!simple_oid_list_member(&foreign_servers_include_oids,
-								tbinfo->foreign_server)))
+		 !simple_oid_list_member(&foreign_servers_include_oids,
+								 tbinfo->foreign_server)))
 		return;
 	/* Skip EXTERNAL TABLEs (like foreign tables in GPDB 6.x and below) */
 	if (tbinfo->relstorage == RELSTORAGE_EXTERNAL)
@@ -4616,12 +4609,12 @@ append_depends_on_extension(Archive *fout,
 {
 	if (dobj->depends_on_ext)
 	{
-		char   *nm;
+		char	   *nm;
 		PGresult   *res;
-		PQExpBuffer	query;
-		int		ntups;
-		int		i_extname;
-		int		i;
+		PQExpBuffer query;
+		int			ntups;
+		int			i_extname;
+		int			i;
 
 		/* dodge fmtId() non-reentrancy */
 		nm = pg_strdup(objname);
@@ -7472,7 +7465,10 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			indxinfo[j].indisclustered = (PQgetvalue(res, j, i_indisclustered)[0] == 't');
 			indxinfo[j].indisreplident = (PQgetvalue(res, j, i_indisreplident)[0] == 't');
 			indxinfo[j].parentidx = atooid(PQgetvalue(res, j, i_parentidx));
-			indxinfo[j].partattaches = (SimplePtrList) { NULL, NULL };
+			indxinfo[j].partattaches = (SimplePtrList)
+			{
+				NULL, NULL
+			};
 			contype = *(PQgetvalue(res, j, i_contype));
 
 			if (contype == 'p' || contype == 'u' || contype == 'x')
@@ -17467,7 +17463,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				tbinfo->attfdwoptions[j][0] != '\0')
 				appendPQExpBuffer(q,
 								  "ALTER FOREIGN TABLE %s ALTER COLUMN %s OPTIONS (\n"
-								  "	  %s\n"
+								  "    %s\n"
 								  ");\n",
 								  qualrelname,
 								  fmtId(tbinfo->attnames[j]),
@@ -17992,7 +17988,7 @@ dumpConstraint(Archive *fout, const ConstraintInfo *coninfo)
 	delq = createPQExpBuffer();
 
 	foreign = tbinfo &&
-		tbinfo->relkind == RELKIND_FOREIGN_TABLE ?  "FOREIGN " : "";
+		tbinfo->relkind == RELKIND_FOREIGN_TABLE ? "FOREIGN " : "";
 
 	if (coninfo->contype == 'p' ||
 		coninfo->contype == 'u' ||

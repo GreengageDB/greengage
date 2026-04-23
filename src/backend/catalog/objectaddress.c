@@ -102,6 +102,7 @@
  */
 typedef struct
 {
+	const char *class_descr;	/* string describing the catalog, for internal error messages */
 	Oid			class_oid;		/* oid of catalog */
 	Oid			oid_index_oid;	/* oid of index on system oid column */
 	int			oid_catcache_id;	/* id of catcache on system oid column	*/
@@ -123,6 +124,7 @@ typedef struct
 static const ObjectPropertyType ObjectProperty[] =
 {
 	{
+		"access method",
 		AccessMethodRelationId,
 		AmOidIndexId,
 		AMOID,
@@ -136,6 +138,35 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"access method operator",
+		AccessMethodOperatorRelationId,
+		AccessMethodOperatorOidIndexId,
+		-1,
+		-1,
+		Anum_pg_amop_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		OBJECT_AMOP,
+		false
+	},
+	{
+		"access method procedure",
+		AccessMethodProcedureRelationId,
+		AccessMethodProcedureOidIndexId,
+		-1,
+		-1,
+		Anum_pg_amproc_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		OBJECT_AMPROC,
+		false
+	},
+	{
+		"cast",
 		CastRelationId,
 		CastOidIndexId,
 		-1,
@@ -149,6 +180,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"collation",
 		CollationRelationId,
 		CollationOidIndexId,
 		COLLOID,
@@ -162,6 +194,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"constraint",
 		ConstraintRelationId,
 		ConstraintOidIndexId,
 		CONSTROID,
@@ -175,6 +208,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"conversion",
 		ConversionRelationId,
 		ConversionOidIndexId,
 		CONVOID,
@@ -188,6 +222,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"database",
 		DatabaseRelationId,
 		DatabaseOidIndexId,
 		DATABASEOID,
@@ -201,6 +236,21 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"default ACL",
+		DefaultAclRelationId,
+		DefaultAclOidIndexId,
+		-1,
+		-1,
+		Anum_pg_default_acl_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		OBJECT_DEFACL,
+		false
+	},
+	{
+		"extension",
 		ExtensionRelationId,
 		ExtensionOidIndexId,
 		-1,
@@ -214,6 +264,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"foreign-data wrapper",
 		ForeignDataWrapperRelationId,
 		ForeignDataWrapperOidIndexId,
 		FOREIGNDATAWRAPPEROID,
@@ -227,6 +278,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"foreign server",
 		ForeignServerRelationId,
 		ForeignServerOidIndexId,
 		FOREIGNSERVEROID,
@@ -240,6 +292,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"function",
 		ProcedureRelationId,
 		ProcedureOidIndexId,
 		PROCOID,
@@ -253,6 +306,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"language",
 		LanguageRelationId,
 		LanguageOidIndexId,
 		LANGOID,
@@ -266,6 +320,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"large object metadata",
 		LargeObjectMetadataRelationId,
 		LargeObjectMetadataOidIndexId,
 		-1,
@@ -279,6 +334,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"operator class",
 		OperatorClassRelationId,
 		OpclassOidIndexId,
 		CLAOID,
@@ -292,6 +348,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"operator",
 		OperatorRelationId,
 		OperatorOidIndexId,
 		OPEROID,
@@ -305,6 +362,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"operator family",
 		OperatorFamilyRelationId,
 		OpfamilyOidIndexId,
 		OPFAMILYOID,
@@ -318,6 +376,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"role",
 		AuthIdRelationId,
 		AuthIdOidIndexId,
 		AUTHOID,
@@ -331,6 +390,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"rule",
 		RewriteRelationId,
 		RewriteOidIndexId,
 		-1,
@@ -344,6 +404,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"schema",
 		NamespaceRelationId,
 		NamespaceOidIndexId,
 		NAMESPACEOID,
@@ -357,6 +418,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"relation",
 		RelationRelationId,
 		ClassOidIndexId,
 		RELOID,
@@ -370,6 +432,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"tablespace",
 		TableSpaceRelationId,
 		TablespaceOidIndexId,
 		TABLESPACEOID,
@@ -383,6 +446,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"transform",
 		TransformRelationId,
 		TransformOidIndexId,
 		TRFOID,
@@ -390,6 +454,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		Anum_pg_transform_oid
 	},
 	{
+		"trigger",
 		TriggerRelationId,
 		TriggerOidIndexId,
 		-1,
@@ -403,6 +468,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"policy",
 		PolicyRelationId,
 		PolicyOidIndexId,
 		-1,
@@ -416,6 +482,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		false
 	},
 	{
+		"event trigger",
 		EventTriggerRelationId,
 		EventTriggerOidIndexId,
 		EVENTTRIGGEROID,
@@ -429,6 +496,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"text search configuration",
 		TSConfigRelationId,
 		TSConfigOidIndexId,
 		TSCONFIGOID,
@@ -442,6 +510,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"text search dictionary",
 		TSDictionaryRelationId,
 		TSDictionaryOidIndexId,
 		TSDICTOID,
@@ -455,6 +524,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"text search parser",
 		TSParserRelationId,
 		TSParserOidIndexId,
 		TSPARSEROID,
@@ -468,6 +538,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"text search template",
 		TSTemplateRelationId,
 		TSTemplateOidIndexId,
 		TSTEMPLATEOID,
@@ -481,6 +552,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true,
 	},
 	{
+		"type",
 		TypeRelationId,
 		TypeOidIndexId,
 		TYPEOID,
@@ -494,6 +566,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"publication",
 		PublicationRelationId,
 		PublicationObjectIndexId,
 		PUBLICATIONOID,
@@ -507,6 +580,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"subscription",
 		SubscriptionRelationId,
 		SubscriptionObjectIndexId,
 		SUBSCRIPTIONOID,
@@ -520,6 +594,7 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"extented statistics",
 		StatisticExtRelationId,
 		StatisticExtOidIndexId,
 		STATEXTOID,
@@ -531,12 +606,25 @@ static const ObjectPropertyType ObjectProperty[] =
 		InvalidAttrNumber,		/* no ACL (same as relation) */
 		OBJECT_STATISTIC_EXT,
 		true
-	}
-
+	},
+	{
+		"user mapping",
+		UserMappingRelationId,
+		UserMappingOidIndexId,
+		USERMAPPINGOID,
+		-1,
+		Anum_pg_user_mapping_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		OBJECT_USER_MAPPING,
+		false
+	},
 
 	/* GPDB additions */
-	,
 	{
+		"ext protocol",
 		ExtprotocolRelationId,
 		ExtprotocolOidIndexId,
 		EXTPROTOCOLOID,
@@ -2599,6 +2687,14 @@ read_objtype_from_string(const char *objtype)
 /*
  * Interfaces to reference fields of ObjectPropertyType
  */
+const char *
+get_object_class_descr(Oid class_id)
+{
+	const ObjectPropertyType *prop = get_object_property_data(class_id);
+
+	return prop->class_descr;
+}
+
 Oid
 get_object_oid_index(Oid class_id)
 {
