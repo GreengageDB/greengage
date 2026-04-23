@@ -18,9 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -29,7 +27,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -39,9 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -50,7 +45,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -60,9 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -71,7 +63,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -81,9 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -92,7 +81,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -102,9 +90,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -113,7 +99,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -123,9 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -134,7 +117,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -144,9 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target_os: ubuntu
-            target_os_version: "22.04"
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -155,7 +135,6 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
