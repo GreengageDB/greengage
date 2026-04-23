@@ -42,6 +42,7 @@ try:
     from gppylib.commands.pg import PgBaseBackup
     from gppylib.mainUtils import ExceptionNoStackTraceNeeded
     from gppylib.operations.update_pg_hba_on_segments import update_pg_hba_on_segments
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema
 
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
@@ -242,11 +243,10 @@ def remove_pid_file(coordinator_data_directory):
         pass
 
 
-def is_gpexpand_running(coordinator_data_directory):
-    """Checks if there is another instance of gpexpand running"""
+def check_pid_file(coordinator_data_directory, pid_filename):
     is_running = False
     try:
-        fp = open(coordinator_data_directory + '/gpexpand.pid', 'r')
+        fp = open(os.path.join(coordinator_data_directory, pid_filename), 'r')
         pid = int(fp.readline().strip())
         fp.close()
         is_running = check_pid(pid)
@@ -256,6 +256,19 @@ def is_gpexpand_running(coordinator_data_directory):
         raise
 
     return is_running
+
+
+def is_gpexpand_running(coordinator_data_directory):
+    """Checks if there is another instance of gpexpand running"""
+    return check_pid_file(coordinator_data_directory, 'gpexpand.pid')
+
+
+def is_ggrebalance_running(gpEnv, coordinator_data_directory):
+    """Checks if there is an instance of ggrebalance running"""
+    if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
+        return True
+    """Checks if ggrebalance was interrupted and didn't finish its work"""
+    return RebalanceSchema.checkOperationInProgress(gpEnv)
 
 
 def gpexpand_status_file_exists(coordinator_data_directory):
@@ -2524,16 +2537,21 @@ def main(options, args, parser):
         if options.verbose:
             enable_verbose_logging()
 
+        gpEnv = GpCoordinatorEnvironment(options.coordinator_data_directory, True)
+
         if is_gpexpand_running(options.coordinator_data_directory):
             logger.error('gpexpand is already running.  Only one instance')
             logger.error('of gpexpand is allowed at a time.')
+            remove_pid = False
+            sys.exit(1)
+        elif is_ggrebalance_running(gpEnv, options.coordinator_data_directory):
+            logger.error("ggrebalance is already running. gpexpand is not allowed to run in parallel.")
             remove_pid = False
             sys.exit(1)
         else:
             create_pid_file(options.coordinator_data_directory)
 
         # prepare provider for updateSystemConfig
-        gpEnv = GpCoordinatorEnvironment(options.coordinator_data_directory, True)
         configurationInterface.registerConfigurationProvider(
             configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
         configurationInterface.getConfigurationProvider().initializeProvider(gpEnv.getCoordinatorPort())

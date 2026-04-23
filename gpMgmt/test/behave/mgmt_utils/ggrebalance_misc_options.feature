@@ -349,6 +349,40 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And the gprecoverseg lock directory is removed
          And all files in gpAdminLogs directory are deleted
 
+    Scenario: test 13.2. Check other tools launch (gpexpand) when ggrebalance operation hasn't finished.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "10000" rows
+         And there is a "heap" table "test_schema_1.test_table_2" in "test_db_1" with "10000" rows
+         And there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "10000" rows
+         And there is a "heap" table "test_schema_1.test_table_4" in "test_db_1" with "10000" rows
+         And there is a "heap" table "test_schema_1.test_table_5" in "test_db_1" with "10000" rows
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "on_enter_STATE_PREPARE_SHRINK_SCHEMA_STARTED_begin"
+         And set fault inject type to suspend
+        When the user asynchronously runs "ggrebalance -n 1 -x 2 --skip-rebalance" and the process is saved
+         And the user waits till ggrebalance prints "Updated target segment count to 2" in the logs (with timeout of "60" sec)
+        When the user runs "gpexpand"
+        Then gpexpand should return a return code of 1
+         And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+         And unset fault inject
+         And the user asynchronously sets up to end ggrebalance process with SIGINT
+        Then the async process finished with a return code of 1
+         And ggrebalance should print "Shrink was interrupted" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "gpexpand"
+        Then gpexpand should return a return code of 1
+         And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+        When the user runs "gpexpand"
+         Then gpexpand should not print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+
     Scenario: test 14.  Check ggrebalance if pg_basebackup is already running
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'

@@ -22,9 +22,6 @@ try:
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
-
-DBNAME = 'postgres'
-
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT
 

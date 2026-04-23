@@ -10,7 +10,7 @@ try:
     from gppylib.userinput import *
     from gppylib.system.environment import GpCoordinatorEnvironment
     from gppylib.system import configurationInterface, configurationImplGpdb
-    from ggrebalance_modules.shrink import GGShrink, DBNAME
+    from ggrebalance_modules.rebalance_schema import DBNAME
     from ggrebalance_modules.ggrebalance_main_sm import GGRebalanceMainSM
     from ggrebalance_modules.planner import *
     from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup
