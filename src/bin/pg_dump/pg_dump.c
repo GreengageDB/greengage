@@ -17539,7 +17539,33 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					appendStringLiteralAH(q, tbinfo->attnames[j], fout);
 
 					/* GPDB partitioning */
-					if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					if (dopt->binary_upgrade
+						&& GPDB6_MAJOR_PGVERSION <= fout->remoteVersion
+						&& fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					{
+						// binary-upgrade edge-case. Target version (i.e. Greengage 7.x)
+						// uses PostgreSQL partitions, and its catalog doesn't have
+						// 'pg_partition' and 'pg_partition_rule',
+						// but because we are dumping from Greengage 6.x,
+						// the rest of the code expects that we will deal
+						// with partitions here (in 7.x each partition
+						// updates its attributes seperately).
+						//
+						// Gladly, there is a builtin function to traverse partition
+						// hierarchy.
+						//
+						// Also, because non-partitioned tables can also get here,
+						// we can't rely on 'pg_partition_tree' to always report
+						// the table. Therefore, it is hardcoded into the query.
+
+						appendPQExpBufferStr(q, "\n  AND attrelid IN (SELECT ");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass ");
+						appendPQExpBufferStr(q, "UNION SELECT relid FROM pg_partition_tree(");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass));\n");
+					}
+					else if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
 					{
 						/*
 						 * Do for all descendants of a partition table.
