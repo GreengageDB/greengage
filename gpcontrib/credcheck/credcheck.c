@@ -2278,7 +2278,7 @@ pgaf_shmem_startup(void)
 #if PG_VERSION_NUM >= 90600
 		pgaf->lock = &(GetNamedLWLockTranche(PGAF_TRANCHE_NAME))->lock;
 #else
-		pgph->lock = LWLockAssign();
+		pgaf->lock = LWLockAssign();
 #endif
 	}
 
