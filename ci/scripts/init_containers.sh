@@ -58,7 +58,7 @@ for service in $services; do
 import coverage
 coverage.process_startup()
 INNER_EOF
-      echo 'export COVERAGE_PROCESS_START=gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh 
+      echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh 
     "
 done &
 wait
