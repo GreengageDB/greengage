@@ -3677,7 +3677,7 @@ def is_ggrebalance_running():
     if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
         return True
     """Checks if ggrebalance was interrupted and didn't finish its work"""
-    gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, True)
+    gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, False, verbose=False)
     return RebalanceSchema.checkOperationInProgress(gpEnv)
 
 def check_test_subset_parameter_count():
