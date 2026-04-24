@@ -1,6 +1,3 @@
-DROP LANGUAGE IF EXISTS plpython3u CASCADE;
-CREATE LANGUAGE plpython3u;
-
 -- start_ignore
 ! rmdir @cgroup_mnt_point@/cpu/gpdb;
 ! rmdir @cgroup_mnt_point@/cpuacct/gpdb;
