@@ -35,7 +35,6 @@ install: generate_greengage_path_file
 	if [ -e bin/ext/subprocess32.py ]; then \
 	    cp -p bin/ext/subprocess32.py $(DESTDIR)$(prefix)/lib/python ; \
 	    cp -p bin/ext/subprocess32-ChangeLog $(DESTDIR)$(prefix)/lib/python ; \
-		cp -p bin/ext/_posixsubprocess.so $(DESTDIR)$(prefix)/lib/python ; \
 	fi
 
 clean distclean: 
