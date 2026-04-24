@@ -610,6 +610,7 @@ class GGShrink:
             self.rel_name = rel_name
             self.target_segment_count = target_segment_count
             self.table_status_after_rebalance = table_status_after_rebalance
+            self.long_operation_in_progress = False
             SQLCommand.__init__(self, f'task rebalance for {self.db_name}.{self.schema_name}.{self.rel_name}')
 
         # decorator to inject a fault before running TableRebalanceTask for a specific {db_name, schema_name, rel_name}
@@ -618,6 +619,18 @@ class GGShrink:
                 inject_fault(f'fault_rebalance_table_{self.db_name}.{self.schema_name}.{self.rel_name}')
                 fun(self, attempt)
             return func_with_faults
+
+        # decorator to help with interruption of potentially long queries
+        def long_object_method(func):
+            def long_func(*args, **kwargs):
+                try:
+                    self = args[0]
+                    self.long_operation_in_progress = True
+                    self.check_cancel()
+                    return func(*args, **kwargs)
+                finally:
+                    self.long_operation_in_progress = False
+            return long_func
 
         def table_exists(self, conn: dbconn.Connection) -> bool:
             if dbconn.querySingleton(conn, f"""
@@ -638,18 +651,32 @@ class GGShrink:
                 return False
             return True
 
+        @long_object_method
         def rebalance_table(self, conn: dbconn.Connection) -> None:
             dbconn.execSQL(conn,
                            f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
                            REBALANCE {self.target_segment_count}''')
 
+        @long_object_method
+        def analyze_table(self, conn: dbconn.Connection) -> None:
+            dbconn.execSQL(conn,
+                           f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
+
+        def check_cancel(self):
+            if self.cancel_flag:
+                raise Exception(f'Cancelled table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}"')
+
         @wrap_table_rebalance_with_faults
         def process_table(self, attempt: int) -> None:
             self.shrink.logger.info(f'Start table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}" to {self.target_segment_count} segments (attempt {attempt})')
+            # check for cancel_flag at the beginning and before each long operation (refer to long_object_method decorator)
+            self.check_cancel()
             self.shrink.rebalance_schema.setTableRebalanceStartTime(self.db_name, self.schema_name, self.rel_name)
             if self.db_exists(self.shrink.rebalance_schema.conn):
                 dburl = dbconn.DbURL(dbname=self.db_name, port=self.shrink.gpEnv.getCoordinatorPort())
                 with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+                    self.cancel_conn = conn
+
                     dbconn.execSQL(conn, 'BEGIN')
 
                     if self.table_exists(conn):
@@ -658,8 +685,7 @@ class GGShrink:
                         else:
                             self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" is already rebalanced''')
                         if self.shrink.options.analyze:
-                            dbconn.execSQL(conn,
-                                           f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
+                            self.analyze_table(conn)
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
@@ -684,14 +710,36 @@ class GGShrink:
                     self.process_table(attempt)
                 except Exception as e:
                     if attempt < attempt_max_cnt:
-                        logger.warning(f"{str(e)}")
+                        self.shrink.logger.warning(f"{str(e)}")
                     else:
-                        logger.error(f"{str(e)}")
-                        logger.error(f'Failed to process the db object "{self.db_name}"."{self.schema_name}"."{self.rel_name}" for {attempt_max_cnt} attempts')
-                        self.shrink.tables_rebalance_failed = True
-                        self.shrink.workers_for_tables_rebalance.haltWork()
+                        self.shrink.logger.error(f"{str(e)}")
+                        self.shrink.logger.error(f'Failed to process the db object "{self.db_name}"."{self.schema_name}"."{self.rel_name}" for {attempt_max_cnt} attempts')
+                        if not self.cancel_flag:
+                            self.shrink.tables_rebalance_failed = True
+                            self.shrink.workers_for_tables_rebalance.haltWork()
                     continue
                 break
+
+        def cancel(self):
+            super().cancel()
+            # there is a very small (but not 0) chance that 'SQLCommand.cancel()' is issued in
+            # a tiny time window when we've already checked the flag, but the query hasn't
+            # started to execute, so connection.cancel() will fire out without any effect.
+            # To handle it, we add the logic below to re-try 'cancel_conn.cancel()' till
+            # the flag 'self.long_operation_in_progress' is reset.
+            try:
+                cnt = 0
+                while (self.cancel_conn and
+                    not self.cancel_conn.closed and
+                    self.long_operation_in_progress):
+                    self.cancel_conn.cancel()
+                    time.sleep(0.01)
+                    cnt += 1
+                    if (cnt > 1000):
+                        self.shrink.logger.info('TableRebalanceTask cancel timed out')
+                        break
+            finally:
+                pass
 
     def prepare_shrink_schema(self, is_rollback: bool) -> None:
         status = 'done' if is_rollback else 'none'

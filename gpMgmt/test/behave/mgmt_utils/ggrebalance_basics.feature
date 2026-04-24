@@ -120,7 +120,6 @@ Feature: ggrebalance behave tests
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
          And all files in gpAdminLogs directory are deleted
-         And set fault inject "on_enter_STATE_REBALANCE_DONE_begin"
          And database "test_db_1" exists
          And schema "test_schema_1" exists in "test_db_1"
          And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
@@ -129,7 +128,18 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+         And the user connects to "test_db_1" with named connection "test_connection"
+         And the user executes "BEGIN; LOCK TABLE test_schema_1.test_table_1 IN ACCESS EXCLUSIVE MODE;" with named connection "test_connection"
+        When the user asynchronously runs "ggrebalance -x 4 -n 1 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'" and the process is saved
+        Then the user asynchronously sets up to end ggrebalance process when "Start table rebalance for \"test_db_1\".\"test_schema_1\".\"test_table_1\" to 4 segments" is printed in the ggrebalance logs
+         And the async process finished with a return code of 1
+         And ggrebalance should print "Failed to process the db object "test_db_1"."test_schema_1"."test_table_1" for 2 attempts" to logfile with latest timestamp
+         And ggrebalance should print "Shrink was interrupted" to logfile with latest timestamp
+         And the user executes "ROLLBACK;" with named connection "test_connection"
+         And the user drops the named connection "test_connection"
+         And set fault inject "on_enter_STATE_REBALANCE_DONE_begin"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --non-interactive-mode"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
