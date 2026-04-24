@@ -40,3 +40,25 @@ do
     $service bash -c "for HOST in $services; do echo \"\$(host \"\$HOST\" | grep 'has address' | head -n 1 | cut -d ' ' -f 4) \$HOST\" >>/etc/hosts; done" &
 done
 wait
+
+# Add host names of all cluster nodes to /tmp/hostfile_all for coverage collect
+for service in $services
+do
+  docker compose -p $project -f ci/docker-compose.yaml exec -T \
+    $service bash -c "for HOST in $services; do echo \"\$HOST\" >>/tmp/hostfile_all; done" &
+done
+wait
+
+# Setup coverage
+#TODO remove hard-coded links
+for service in $services; do
+  docker compose -p "$project" -f ci/docker-compose.yaml exec -T \
+    "$service" bash -c "
+      cat > /usr/local/greengage-db-devel/lib/python/sitecustomize.py <<INNER_EOF
+import coverage
+coverage.process_startup()
+INNER_EOF
+      echo 'export COVERAGE_PROCESS_START=gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh 
+    "
+done &
+wait
