@@ -368,6 +368,12 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "gpexpand"
         Then gpexpand should return a return code of 1
          And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+        When the user runs "gpcheckcat"
+        Then gpcheckcat should return a return code of 1
+         And gpcheckcat should print "ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+        When the user runs "gpconfig -c application_name -v 'gpconfig_test'"
+        Then gpconfig should return a return code of 1
+         And gpconfig should print "ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced" to logfile with latest timestamp
          And unset fault inject
          And the user asynchronously sets up to end ggrebalance process with SIGINT
         Then the async process finished with a return code of 1
@@ -376,12 +382,22 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "gpexpand"
         Then gpexpand should return a return code of 1
          And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+        When the user runs "gpcheckcat"
+        Then gpcheckcat should return a return code of 1
+         And gpcheckcat should print "ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+        When the user runs "gpconfig -c application_name -v 'gpconfig_test'"
+        Then gpconfig should return a return code of 1
+         And gpconfig should print "ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
         When the user runs "gpexpand"
          Then gpexpand should not print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
+        When the user runs "gpcheckcat"
+         Then gpcheckcat should not print "ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+        When the user runs "gpconfig -c application_name -v 'gpconfig_test'"
+         Then gpconfig should not print "ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced" to logfile with latest timestamp
 
     Scenario: test 14.  Check ggrebalance if pg_basebackup is already running
         Given the database is not running

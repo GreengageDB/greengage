@@ -26,12 +26,14 @@ try:
     from gppylib.commands.gp import *
     from gppylib.db import dbconn
     from gppylib.userinput import *
+    from gppylib.system.environment import GpCoordinatorEnvironment
     from gpconfig_modules.segment_guc import SegmentGuc
     from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
     from gpconfig_modules.file_segment_guc import FileSegmentGuc
     from gpconfig_modules.guc_collection import GucCollection
     from gppylib.gpresgroup import GpResGroup
     from gpconfig_modules.parse_guc_metadata import ParseGuc
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema
 except ImportError as err:
     sys.exit('Cannot import modules.  Please check that you have sourced '
              'greengage_path.sh.  Detail: ' + str(err))
@@ -549,6 +551,20 @@ def check_gpexpand():
         LOGGER.error(msg)
         sys.exit(1)
 
+def check_ggrebalance():
+    if is_ggrebalance_running():
+        LOGGER.error("ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced")
+        sys.exit(1)
+
+def is_ggrebalance_running():
+    coordinator_data_directory = get_coordinatordatadir()
+    """Checks if there is an instance of ggrebalance running"""
+    if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
+        return True
+    """Checks if ggrebalance was interrupted and didn't finish its work"""
+    gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, True)
+    return RebalanceSchema.checkOperationInProgress(gpEnv)
+
 def do_main():
     options = parseargs()
     _set_gparray()
@@ -562,6 +578,8 @@ def do_main():
         # gpconfig should check gpexpand running status when
         # it wants to modify configurations
         check_gpexpand()
+
+        check_ggrebalance()
 
         do_change(options)
 

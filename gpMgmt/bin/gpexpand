@@ -243,21 +243,6 @@ def remove_pid_file(coordinator_data_directory):
         pass
 
 
-def check_pid_file(coordinator_data_directory, pid_filename):
-    is_running = False
-    try:
-        fp = open(os.path.join(coordinator_data_directory, pid_filename), 'r')
-        pid = int(fp.readline().strip())
-        fp.close()
-        is_running = check_pid(pid)
-    except IOError:
-        pass
-    except Exception:
-        raise
-
-    return is_running
-
-
 def is_gpexpand_running(coordinator_data_directory):
     """Checks if there is another instance of gpexpand running"""
     return check_pid_file(coordinator_data_directory, 'gpexpand.pid')
