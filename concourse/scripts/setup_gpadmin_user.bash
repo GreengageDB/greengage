@@ -2,7 +2,7 @@
 
 # Based on install_hawq_toolchain.bash in Pivotal-DataFabric/ci-infrastructure repo
 
-set -euxo pipefail
+set -uxo pipefail
 setup_ssh_for_user() {
   local user="${1}"
   local home_dir
@@ -57,17 +57,13 @@ set_limits() {
   su gpadmin -c 'ulimit -a'
 }
 
-setup_gpadmin_user() {
-  # grep -q "^${supergroup}:" /etc/group
+add_gpadmin_user() {
   if ! getent group supergroup > /dev/null; then
     groupadd supergroup
   fi
 
-  if id -u gpadmin > /dev/null; then
-    echo "gpadmin user already exists"
-    return
-  fi
-  
+  TEST_OS=$1
+
   case "$TEST_OS" in
     centos*)
       /usr/sbin/useradd -G supergroup,tty gpadmin
@@ -82,13 +78,17 @@ setup_gpadmin_user() {
     photon*)
       /usr/sbin/useradd -U -G supergroup,tty,root gpadmin
       ;;
-    *) echo "Unknown OS: $TEST_OS"; exit 1 ;;
+    *) echo "Unknown OS: $TEST_OS"; return 1 ;;
   esac
+
+}
+
+setup_gpadmin_user() {
+
   echo -e "password\npassword" | passwd gpadmin
   # Add user to sudoers list required for gpinitsystem test
   echo "gpadmin ALL = NOPASSWD : ALL" >> /etc/sudoers
   setup_ssh_for_user gpadmin
-  transfer_ownership
   set_limits
 }
 
@@ -161,10 +161,12 @@ workaround_before_concourse_stops_stripping_suid_bits() {
 }
 
 _main() {
+  set -e
   TEST_OS=$(determine_os)
   setup_gpadmin_user
   setup_sshd
   workaround_before_concourse_stops_stripping_suid_bits
 }
 
+echo "Starting"
 [ "${BASH_SOURCE[0]}" = "$0" ] && _main "$@"

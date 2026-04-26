@@ -50,17 +50,18 @@ RUN test "$(lsb_release -sr)" == "22.04" && export PYTHON3=python3; \
     gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base AS code
-# Use --exclude, when it will be available in stable syntax.
-COPY . gpdb_src
-RUN rm -rf gpdb_src/.git/
+
+COPY --exclude=.git . gpdb_src
 
 FROM base AS test
 
 COPY --from=build /home/gpadmin/gpdb_src/concourse/scripts gpdb_src/concourse/scripts
 
-RUN /home/gpadmin/gpdb_src/concourse/scripts/setup_gpadmin_user.bash ubuntu
-
-COPY --chown=gpadmin:gpadmin --from=code /home/gpadmin/gpdb_src gpdb_src
+RUN source /home/gpadmin/gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+    add_gpadmin_user ubuntu; \
+    chown -R gpadmin:gpadmin /home/gpadmin
+    
+COPY --chown=gpadmin:gpadmin --from=code --exclude=.git /home/gpadmin/gpdb_src gpdb_src
 COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/bin_gpdb bin_gpdb
 COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 

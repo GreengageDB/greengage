@@ -55,8 +55,9 @@ function build_arch() {
 ## ----------------------------------------------------------------------
 
 function install_gpdb() {
-	[ ! -d /usr/local/greengage-db-devel ] && mkdir -p /usr/local/greengage-db-devel
-	tar -xzf bin_gpdb/bin_gpdb.tar.gz -C /usr/local/greengage-db-devel
+	gpdb_bin_dir=/usr/local/greengage-db-devel
+	[ ! -d ${gpdb_bin_dir} ] && mkdir -p ${gpdb_bin_dir} && chown gpadmin:gpadmin ${gpdb_bin_dir}
+	su gpadmin -c "tar -xzf bin_gpdb/bin_gpdb.tar.gz -C ${gpdb_bin_dir}"
 }
 
 function setup_configure_vars() {
