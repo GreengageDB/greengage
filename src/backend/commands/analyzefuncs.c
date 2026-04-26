@@ -223,7 +223,12 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 			ctx->index = ctx->num_sample_rows;
 			ctx->summary_sent = true;
 		}
-
+		if (Gp_role == GP_ROLE_EXECUTE && GpPolicyIsPartitioned(onerel->rd_cdbpolicy)
+									   && GpIdentity.segindex >= onerel->rd_cdbpolicy->numsegments)
+		{
+			ctx->index = ctx->num_sample_rows;
+			ctx->summary_sent = true;
+		}
 		MemoryContextSwitchTo(oldcontext);
 	}
 
