@@ -9,16 +9,16 @@ function gen_env(){
 		cat > /opt/run_test.sh <<-EOF
 		set -ex
 
+		source /usr/local/greengage-db-devel/greengage_path.sh
+
 		cat > /tmp/sitecustomize.py <<INNER_EOF
 		import coverage
 		coverage.process_startup()
 		INNER_EOF
 
 		# Now copy everything over to the hosts.
-		while read -r host; do
-			scp /tmp/sitecustomize.py "\$host":/usr/local/greengage-db-devel/lib/python
-			ssh "\$host" "echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh" </dev/null
-		done < /tmp/hostfile_all
+		gpscp -f /tmp/hostfile_all -v /tmp/sitecustomize.py =:/usr/local/greengage-db-devel/lib/python
+		gpssh -f /tmp/hostfile_all -v -e "echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh"
 
 		source /usr/local/greengage-db-devel/greengage_path.sh
 
@@ -31,9 +31,7 @@ function gen_env(){
 				flags="\${BEHAVE_FLAGS}" make -f Makefile.behave behave
 		fi
 
-		while read -r host; do
-        	scp -r "\$host:/tmp/pre-coverage-data/*" /tmp/pre-coverage-data/ || true
-		done < /tmp/hostfile_all
+		gpscp -f /tmp/hostfile_all -v =:/tmp/pre-coverage-data/* /tmp/pre-coverage-data/ || true
 
 		if [ ! -z "\${COVERAGE_PROCESS_START}" ] && [ \$(ls /tmp/pre-coverage-data | wc -l) -gt 0 ]; then
 			cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
