@@ -17804,6 +17804,22 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 
 		gp_segment_number_for_table_shrink = 0;
 	}
+	else if (Gp_role == GP_ROLE_EXECUTE && GpPolicyIsPartitioned(policy) &&
+		   GpIdentity.segindex >= policy->numsegments)
+	{
+		/*
+		 * Truncate data on the segments that are not included into the
+		 * table's distribution policy. We need to do it to avoid possible
+		 * issues with table's statistics.
+		 */
+		List *rels = list_make1(rel);
+		List *relids = list_make1_oid(RelationGetRelid(rel));
+		List *relids_logged = NIL;
+		if (RelationIsLogicallyLogged(rel))
+			relids_logged = list_make1_oid(RelationGetRelid(rel));
+		ExecuteTruncateGuts(rels, relids, relids_logged,
+							DROP_RESTRICT, false, NULL);
+	}
 }
 
 /*

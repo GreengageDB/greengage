@@ -489,3 +489,86 @@ select count(1), gp_segment_id from mv_test_table group by gp_segment_id order b
 
 drop materialized view mv_test_table;
 drop table test_table;
+
+-- check ANALYZE after REBALANCE
+create table test_table_heap(a int) distributed by (a);
+insert into test_table_heap select generate_series(1, 50000);
+alter table test_table_heap rebalance 2;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+drop table test_table_heap;
+
+create table test_table_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into test_table_ao_row select generate_series(1, 50000);
+alter table test_table_ao_row rebalance 2;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+drop table test_table_ao_row;
+
+create table test_table_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into test_table_ao_col select generate_series(1, 50000);
+alter table test_table_ao_col rebalance 2;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+drop table test_table_ao_col;
+
+-- Check ANALYZE inside the transaction and after rollback
+create table test_table_heap(a int) distributed by (a);
+insert into test_table_heap select generate_series(1, 50000);
+begin;
+alter table test_table_heap rebalance 2;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+rollback;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+drop table test_table_heap;
+
+create table test_table_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into test_table_ao_row select generate_series(1, 50000);
+begin;
+alter table test_table_ao_row rebalance 2;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+rollback;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+drop table test_table_ao_row;
+
+create table test_table_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into test_table_ao_col select generate_series(1, 50000);
+begin;
+alter table test_table_ao_col rebalance 2;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+rollback;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+drop table test_table_ao_col;
