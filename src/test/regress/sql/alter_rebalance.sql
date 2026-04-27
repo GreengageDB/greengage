@@ -491,6 +491,7 @@ drop materialized view mv_test_table;
 drop table test_table;
 
 -- check ANALYZE after REBALANCE
+drop table if exists test_table_heap;
 create table test_table_heap(a int) distributed by (a);
 insert into test_table_heap select generate_series(1, 50000);
 alter table test_table_heap rebalance 2;
@@ -501,6 +502,7 @@ select reltuples from pg_class where oid = 'test_table_heap'::regclass;
 select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
 drop table test_table_heap;
 
+drop table if exists test_table_ao_row;
 create table test_table_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
 insert into test_table_ao_row select generate_series(1, 50000);
 alter table test_table_ao_row rebalance 2;
@@ -511,6 +513,7 @@ select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
 select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
 drop table test_table_ao_row;
 
+drop table if exists test_table_ao_col;
 create table test_table_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
 insert into test_table_ao_col select generate_series(1, 50000);
 alter table test_table_ao_col rebalance 2;
