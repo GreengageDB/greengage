@@ -45,7 +45,7 @@ The main components are:
 The `debian/rules` file uses debhelper (dh) with custom overrides:
 
 1. **Distribution-specific Dependencies**:
-   - Detects Ubuntu 22.04 and sets `python2,python2.7` as dependencies with
+   - Detects Ubuntu 22.04 and sets `python2`, `python2.7` as dependencies with
      `python-is-python3` conflict
    - Other Ubuntu versions use `python3`
    - Non-Ubuntu distributions same as for Ubuntu 22.04
