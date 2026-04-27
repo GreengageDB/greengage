@@ -348,6 +348,19 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And the background pid is killed on "coordinator" segment
          And the gprecoverseg lock directory is removed
          And all files in gpAdminLogs directory are deleted
+        When the user connects to "postgres" with named connection "test_connection"
+         And the user executes "SET application_name TO 'gpbackup_20260424085425'" with named connection "test_connection"
+         And the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "gpbackup/gprestore utility is already running." to logfile with latest timestamp
+         And the user drops the named connection "test_connection"
+         And all files in gpAdminLogs directory are deleted
+        When the user connects to "postgres" with named connection "test_connection"
+         And the user executes "SET application_name TO 'gprestore_20260424085425'" with named connection "test_connection"
+         And the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "gpbackup/gprestore utility is already running." to logfile with latest timestamp
+         And the user drops the named connection "test_connection"
 
     Scenario: test 13.2. Check other tools launch (gpexpand) when ggrebalance operation hasn't finished.
         Given the database is not running
