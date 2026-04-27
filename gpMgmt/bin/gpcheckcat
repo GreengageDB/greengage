@@ -3668,15 +3668,15 @@ def check_gpexpand():
 
 def check_ggrebalance():
     if is_ggrebalance_running():
-        myprint("ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced")
+        myprint("ERROR: Using gpcheckcat is not supported during cluster rebalancing")
         sys.exit(1)
 
 def is_ggrebalance_running():
     coordinator_data_directory = get_coordinatordatadir()
-    """Checks if there is an instance of ggrebalance running"""
+    # Checks if there is an instance of ggrebalance running
     if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
         return True
-    """Checks if ggrebalance was interrupted and didn't finish its work"""
+    # Checks if ggrebalance was interrupted and didn't finish its work
     gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, False, verbose=False)
     return RebalanceSchema.checkOperationInProgress(gpEnv)
 

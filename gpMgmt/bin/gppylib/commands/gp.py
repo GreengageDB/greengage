@@ -1439,9 +1439,8 @@ def conflict_with_gpexpand(utility, refuse_phase1=True, refuse_phase2=False):
 def check_pid_file(coordinator_data_directory, pid_filename):
     is_running = False
     try:
-        fp = open(os.path.join(coordinator_data_directory, pid_filename), 'r')
-        pid = int(fp.readline().strip())
-        fp.close()
+        with open(os.path.join(coordinator_data_directory, pid_filename), 'r') as fp:
+            pid = int(fp.readline().strip())
         is_running = check_pid(pid)
     except IOError:
         pass

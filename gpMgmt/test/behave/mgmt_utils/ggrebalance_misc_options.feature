@@ -370,10 +370,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
         When the user runs "gpcheckcat"
         Then gpcheckcat should return a return code of 1
-         And gpcheckcat should print "ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+         And gpcheckcat should print "ERROR: Using gpcheckcat is not supported during cluster rebalancing" to logfile with latest timestamp
         When the user runs "gpconfig -c application_name -v 'gpconfig_test'"
         Then gpconfig should return a return code of 1
-         And gpconfig should print "ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+         And gpconfig should print "ERROR: Using gpconfig is not supported during cluster rebalancing" to logfile with latest timestamp
          And unset fault inject
          And the user asynchronously sets up to end ggrebalance process with SIGINT
         Then the async process finished with a return code of 1
@@ -384,10 +384,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And gpexpand should print "ggrebalance is already running. gpexpand is not allowed to run in parallel" to logfile with latest timestamp
         When the user runs "gpcheckcat"
         Then gpcheckcat should return a return code of 1
-         And gpcheckcat should print "ERROR: Usage of gpcheckcat is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+         And gpcheckcat should print "ERROR: Using gpcheckcat is not supported during cluster rebalancing" to logfile with latest timestamp
         When the user runs "gpconfig -c application_name -v 'gpconfig_test'"
         Then gpconfig should return a return code of 1
-         And gpconfig should print "ERROR: Usage of gpconfig is not supported while the cluster is being rebalanced" to logfile with latest timestamp
+         And gpconfig should print "ERROR: Using gpconfig is not supported during cluster rebalancing" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
