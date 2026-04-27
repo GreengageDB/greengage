@@ -349,7 +349,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And the gprecoverseg lock directory is removed
          And all files in gpAdminLogs directory are deleted
 
-    Scenario: test 13.2. Check other tools launch (gpexpand) when ggrebalance operation hasn't finished.
+    Scenario: test 13.2. Check other tools launch when ggrebalance operation hasn't finished.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2"
