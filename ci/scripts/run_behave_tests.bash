@@ -48,6 +48,9 @@ run_feature() {
   fi
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
+
+  docker compose -p $project -f "$docker_compose_path" exec -T \
+    cdw gpdb_src/ci/scripts/init_coverage_behave.bash
  
   docker compose -p $project -f "$docker_compose_path" exec -T \
       -e COVERAGE_PROCESS_START="/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave" \

@@ -21,11 +21,11 @@ function gen_env(){
 		fi
 
 		while read -r host; do
-        	scp -r "\$host:/tmp/coverage-data/*" /tmp/coverage-data/ || true
+        	scp -r "\$host:/tmp/pre-coverage-data/*" /tmp/pre-coverage-data/ || true
 		done < /tmp/hostfile_all
 
-
-		if [ ! -z "\${COVERAGE_PROCESS_START}" ]; then
+		if [ ! -z "\${COVERAGE_PROCESS_START}" ] && [ \$(ls /tmp/pre-coverage-data | wc -l) -gt 0 ]; then
+			cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
 			cd /tmp/coverage-data
 			coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
 			coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html

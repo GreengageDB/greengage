@@ -38,5 +38,5 @@ install: generate_greengage_path_file
 	    cp -p bin/ext/_posixsubprocess.so $(DESTDIR)$(prefix)/lib/python ; \
 	fi
 
-clean distclean: 
+clean distclean:
 	$(MAKE) -C bin $@
