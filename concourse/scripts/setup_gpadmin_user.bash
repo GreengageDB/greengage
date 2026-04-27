@@ -34,16 +34,6 @@ ssh_keyscan_for_user() {
   } >> "${home_dir}/.ssh/known_hosts"
 }
 
-transfer_ownership() {
-    chmod a+w gpdb_src
-    find gpdb_src -type d -exec chmod a+w {} \;
-    # Needed for the gpload test
-    [ -f gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv ] && chown gpadmin:gpadmin gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv
-    [ -d /usr/local/gpdb ] && chown -R gpadmin:gpadmin /usr/local/gpdb
-    [ -d /usr/local/greengage-db-devel ] && chown -R gpadmin:gpadmin /usr/local/greengage-db-devel
-    [ -d /home/gpadmin ] && chown -R gpadmin:gpadmin /home/gpadmin
-}
-
 set_limits() {
   # Currently same as what's recommended in install guide
   if [ -d /etc/security/limits.d ]; then
@@ -62,7 +52,7 @@ add_gpadmin_user() {
     groupadd supergroup
   fi
 
-  TEST_OS=$1
+  TEST_OS=$(determine_os)
 
   case "$TEST_OS" in
     centos*)
@@ -81,15 +71,15 @@ add_gpadmin_user() {
     *) echo "Unknown OS: $TEST_OS"; return 1 ;;
   esac
 
-}
-
-setup_gpadmin_user() {
-
   echo -e "password\npassword" | passwd gpadmin
   # Add user to sudoers list required for gpinitsystem test
   echo "gpadmin ALL = NOPASSWD : ALL" >> /etc/sudoers
-  setup_ssh_for_user gpadmin
   set_limits
+}
+
+setup_gpadmin_user() {
+  # Perform actions when the container starts
+  setup_ssh_for_user gpadmin
 }
 
 setup_sshd() {

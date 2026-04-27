@@ -59,7 +59,7 @@ FROM base AS test
 COPY --from=build /home/gpadmin/gpdb_src/concourse/scripts gpdb_src/concourse/scripts
 
 RUN source /home/gpadmin/gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-    add_gpadmin_user ubuntu; \
+    add_gpadmin_user; \
     chown -R gpadmin:gpadmin /home/gpadmin
     
 COPY --chown=gpadmin:gpadmin --from=code /home/gpadmin/gpdb_src gpdb_src
