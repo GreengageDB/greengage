@@ -53,13 +53,13 @@ explain.pm:
 data:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/data
 
-isolation2_regress.o: submake-libpgport
+isolation2_regress.o: | submake-libpgport
 
 .PHONY: scan_flaky_fault_injectors
 scan_flaky_fault_injectors:
 	$(top_builddir)/src/test/regress/scan_flaky_fault_injectors.sh
 
-pg_isolation2_regress$(X): isolation2_main.o pg_regress.o submake-libpgport submake-libpq
+pg_isolation2_regress$(X): isolation2_main.o pg_regress.o | submake-libpgport submake-libpq
 	$(CC) $(CFLAGS) $(filter %.o,$^) $(libpq_pgport) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@
 
 clean distclean:
