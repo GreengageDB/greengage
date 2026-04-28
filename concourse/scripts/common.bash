@@ -4,6 +4,8 @@
 ## General purpose functions
 ## ----------------------------------------------------------------------
 
+gpdb_bin_dir=/usr/local/greengage-db-devel
+
 function set_env() {
 	export TERM=xterm-256color
 	export TIMEFORMAT=$'\e[4;33mIt took %R seconds to complete this step\e[0m'
@@ -55,8 +57,12 @@ function build_arch() {
 ## ----------------------------------------------------------------------
 
 function install_gpdb() {
-	gpdb_bin_dir=/usr/local/greengage-db-devel
-	[ ! -d ${gpdb_bin_dir} ] && mkdir -p ${gpdb_bin_dir} && chown gpadmin:gpadmin ${gpdb_bin_dir}
+
+	[ ! -d ${gpdb_bin_dir} ] && mkdir -p ${gpdb_bin_dir}
+
+	# gpdb_bin_dir could be created be someone else, make sure it's owned by gpadmin
+	chown -R gpadmin:gpadmin ${gpdb_bin_dir}
+
 	su gpadmin -c "tar -xzf bin_gpdb/bin_gpdb.tar.gz -C ${gpdb_bin_dir}"
 }
 
@@ -73,12 +79,17 @@ function configure() {
 	# The full set of configure options which were used for building the
 	# tree must be used here as well since the toplevel Makefile depends
 	# on these options for deciding what to test. Since we don't ship
-	./configure --prefix=/usr/local/greengage-db-devel --with-perl --with-python --with-libxml --with-uuid=e2fs --enable-mapreduce --enable-orafce --enable-tap-tests --disable-orca --with-openssl ${CONFIGURE_FLAGS}
+	su gpadmin -c "./configure --prefix=/usr/local/greengage-db-devel --with-perl --with-python --with-libxml --with-uuid=e2fs --enable-mapreduce --enable-orafce --enable-tap-tests --disable-orca --with-openssl ${CONFIGURE_FLAGS}"
 
 	popd
 }
 
 function install_and_configure_gpdb() {
+	if [ -f ${gpdb_src}/greengage_path.sh ]; then
+		echo "${gpdb_src}/greengage_path.sh already exists, skipping install"
+		return 0
+	fi
+
 	install_gpdb
 	setup_configure_vars
 	configure

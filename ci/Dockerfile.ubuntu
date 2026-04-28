@@ -66,6 +66,7 @@ COPY --chown=gpadmin:gpadmin --from=code /home/gpadmin/gpdb_src gpdb_src
 COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/bin_gpdb bin_gpdb
 COPY --chown=gpadmin:gpadmin --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 
+RUN source /home/gpadmin/gpdb_src/concourse/scripts/common.bash; install_and_configure_gpdb; \
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.
-RUN make -C gpdb_src/src/tools/entab install clean
+    make -C gpdb_src/src/tools/entab install clean
