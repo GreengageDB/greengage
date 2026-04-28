@@ -58,7 +58,7 @@ create temp table tn_a_tmp(a int) distributed replicated;
 insert into tn_a values (1), (2);
 insert into tn_a_tmp values(1);
 
-create or replace function fun(sql text, a oid) returns bigint AS 'return plpy.execute(sql).nrows() + a' language plpythonu stable;
+create or replace function fun(sql text, a oid) returns bigint AS 'return plpy.execute(sql).nrows() + a' language plpython3u stable;
 
 create table tn_a_new as with c as (select fun('select * from tn_a_tmp', s.id) from tn_a s) select 1 from c;
 

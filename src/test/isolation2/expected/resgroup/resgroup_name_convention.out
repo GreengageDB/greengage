@@ -209,7 +209,7 @@ ALTER
 SELECT * FROM rg_name_view;
  rsgname  | concurrency 
 ----------+-------------
- слон | 2           
+ слон     | 2           
 (1 row)
 DROP   RESOURCE GROUP U&"\0441\043B\043E\043D";
 DROP
@@ -234,7 +234,7 @@ ALTER
 SELECT * FROM rg_name_view;
  rsgname   | concurrency 
 -----------+-------------
- 资源组 | 2           
+ 资源组       | 2           
 (1 row)
 DROP   RESOURCE GROUP 资源组;
 DROP
@@ -245,7 +245,7 @@ ALTER
 SELECT * FROM rg_name_view;
  rsgname                     | concurrency 
 -----------------------------+-------------
- リソース・グループ | 2           
+ リソース・グループ                   | 2           
 (1 row)
 DROP   RESOURCE GROUP リソース・グループ;
 DROP
@@ -256,7 +256,7 @@ ALTER
 SELECT * FROM rg_name_view;
  rsgname      | concurrency 
 --------------+-------------
- 자원그룹 | 2           
+ 자원그룹         | 2           
 (1 row)
 DROP   RESOURCE GROUP 자원그룹;
 DROP

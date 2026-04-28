@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS gp_pitr;
 
 -- Create plpython function that will run pg_xlogdump on given WAL segment
 -- file and check that the given restore point record exists or not.
-CREATE EXTENSION IF NOT EXISTS plpython2u;
+CREATE EXTENSION IF NOT EXISTS plpython3u;
 CREATE OR REPLACE FUNCTION check_restore_point_record_generated(current_xlogfile_path text, restore_point_name text)
 RETURNS bool AS $$
     import os
@@ -23,7 +23,7 @@ RETURNS bool AS $$
     rc = os.system(cmd)
 
     return (rc == 0)
-$$ LANGUAGE plpython2u VOLATILE;
+$$ LANGUAGE plpython3u VOLATILE;
 
 -- Verify that there is currently no restore point record named
 -- test_gp_create_restore_point in the coordinator's and active primary

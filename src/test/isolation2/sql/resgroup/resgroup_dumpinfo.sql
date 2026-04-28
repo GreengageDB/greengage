@@ -2,7 +2,7 @@ DROP ROLE IF EXISTS role_dumpinfo_test;
 DROP ROLE IF EXISTS role_permission;
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool
@@ -18,7 +18,7 @@ def validate(json_obj, segnum):
    qd_info = [j for j in array if j["segid"] == -1][0]
    #validate keys
    keys = ["segid", "segmentsOnMaster", "loaded", "totalChunks",
-   		   "freeChunks", "chunkSizeInBits", "groups"]
+           "freeChunks", "chunkSizeInBits", "groups"]
    for key in keys:
        if key not in qd_info:
            return False
@@ -30,11 +30,11 @@ def validate(json_obj, segnum):
    group = groups[0]
    #validate group keys
    keys = ["group_id", "nRunning", "locked_for_drop", "memExpected",
-   		   "memQuotaGranted", "memSharedGranted", "memQuotaUsed",
-   		   "memUsage", "memSharedUsage"]
+           "memQuotaGranted", "memSharedGranted", "memQuotaUsed",
+           "memUsage", "memSharedUsage"]
    for key in keys:
       if key not in group:
-	 return False
+         return False
 
    #validate waitqueue
    wait_queue = group["wait_queue"]
@@ -58,7 +58,7 @@ json_obj = json.loads(json_text)
 
 return validate(json_obj, n)
 
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE RESOURCE GROUP rg_dumpinfo_test WITH (concurrency=2, cpu_rate_limit=20, memory_limit=20);
 CREATE ROLE role_dumpinfo_test RESOURCE GROUP rg_dumpinfo_test;
@@ -94,4 +94,4 @@ create temp table t1 as select * from unnest(array(
 DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
-DROP LANGUAGE plpythonu CASCADE;
+DROP LANGUAGE plpython3u CASCADE;
