@@ -8,6 +8,7 @@ test: resgroup/resgroup_bypass_catalog
 test: resgroup/resgroup_views
 test: resgroup/resgroup_syntax
 test: resgroup/resgroup_transaction
+test: resgroup/resgroup_alter_in_transaction
 test: resgroup/resgroup_name_convention
 
 # fault injection tests
