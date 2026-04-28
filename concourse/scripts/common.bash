@@ -85,8 +85,8 @@ function configure() {
 }
 
 function install_and_configure_gpdb() {
-	if [ -f ${gpdb_src}/greengage_path.sh ]; then
-		echo "${gpdb_src}/greengage_path.sh already exists, skipping install"
+	if [ -f ${gpdb_bin_dir}/greengage_path.sh ]; then
+		echo "${gpdb_bin_dir}/greengage_path.sh already exists, skipping install"
 		return 0
 	fi
 
