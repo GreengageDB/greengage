@@ -39,6 +39,8 @@
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/faultinjector.h"
+#include "utils/memutils.h"
+#include "nodes/pg_list.h"
 
 #define RESGROUP_DEFAULT_CONCURRENCY (20)
 #define RESGROUP_DEFAULT_MEM_SHARED_QUOTA (80)
@@ -92,8 +94,20 @@ static void checkAuthIdForDrop(Oid groupId);
 static void createResgroupCallback(XactEvent event, void *arg);
 static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
+static void alterResgroupPreCommitCallback(XactEvent event, void *arg);
+static bool resgroupCapFieldMatches(ResGroupLimitType limittype,
+									const ResGroupCaps *recorded,
+									const ResGroupCaps *current);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
+
+/*
+ * Pending alter resource group callback contexts for the current
+ * transaction. Walked at PRE_COMMIT to detect subtransaction rollback that
+ * reverted a catalog row this callback was registered for.
+ */
+static List *pending_alter_callbacks = NIL;
+static bool alter_pre_commit_callback_registered = false;
 
 /*
  * CREATE RESOURCE GROUP
@@ -416,6 +430,22 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 				 errmsg("resource group \"%s\" does not exist",
 						stmt->name)));
 
+	/*
+	 * The session cannot alter its own resource group inside a transaction
+	 * block, the change would not be visible to this session before COMMIT.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		gp_resource_group_enable_alter_in_transaction &&
+		IsTransactionBlock() &&
+		groupid == GetMyResGroupId())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+				 errmsg("cannot ALTER RESOURCE GROUP \"%s\" inside a transaction block",
+						stmt->name),
+				 errdetail("This statement targets the resource group of the current session, the change would not be visible to this session before COMMIT.")));
+	}
+
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
 		value == 0 &&
 		groupid == ADMINRESGROUP_OID)
@@ -531,6 +561,27 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
+		callbackCtx->should_apply = true;
+
+		/*
+		 * Track the context for the PRE_COMMIT validation hook. The list
+		 * lives across the transaction, so allocate the cell in
+		 * TopMemoryContext. It is freed at the terminal event.
+		 */
+		if (gp_resource_group_enable_alter_in_transaction)
+		{
+			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+			pending_alter_callbacks = lappend(pending_alter_callbacks,
+											  callbackCtx);
+			MemoryContextSwitchTo(oldcxt);
+
+			if (!alter_pre_commit_callback_registered)
+			{
+				RegisterXactCallback(alterResgroupPreCommitCallback, NULL);
+				alter_pre_commit_callback_registered = true;
+			}
+		}
+
 		RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
 	}
 }
@@ -1144,10 +1195,74 @@ alterResgroupCallback(XactEvent event, void *arg)
 {
 	ResourceGroupCallbackContext *callbackCtx = arg;
 
-	if (event == XACT_EVENT_COMMIT)
+	if (event == XACT_EVENT_COMMIT && callbackCtx->should_apply)
+	{
 		ResGroupAlterOnCommit(callbackCtx);
+	}
 
 	pfree(callbackCtx);
+}
+
+static bool
+resgroupCapFieldMatches(ResGroupLimitType limittype,
+						const ResGroupCaps *recorded,
+						const ResGroupCaps *current)
+{
+	switch (limittype)
+	{
+		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
+			return recorded->concurrency == current->concurrency;
+		case RESGROUP_LIMIT_TYPE_CPU:
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			return recorded->cpuRateLimit == current->cpuRateLimit &&
+				   strncmp(recorded->cpuset, current->cpuset,
+						   MaxCpuSetLength) == 0;
+		case RESGROUP_LIMIT_TYPE_MEMORY:
+			return recorded->memLimit == current->memLimit;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
+			return recorded->memSharedQuota == current->memSharedQuota;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
+			return recorded->memSpillRatio == current->memSpillRatio;
+		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
+			return recorded->memAuditor == current->memAuditor;
+		default:
+			return true;
+	}
+}
+
+static void
+alterResgroupPreCommitCallback(XactEvent event, void *arg)
+{
+	ListCell   *lc;
+
+	if (event == XACT_EVENT_PRE_COMMIT &&
+		gp_resource_group_enable_alter_in_transaction &&
+		pending_alter_callbacks != NIL)
+	{
+		Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+
+		foreach (lc, pending_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			ResGroupCaps currentCaps;
+
+			GetResGroupCapabilities(rel, ctx->groupid, &currentCaps);
+
+			if (!resgroupCapFieldMatches(ctx->limittype, &ctx->caps,
+										 &currentCaps))
+			{
+				ctx->should_apply = false;
+			}
+		}
+
+		heap_close(rel, AccessShareLock);
+	}
+
+	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
+	{
+		list_free(pending_alter_callbacks);
+		pending_alter_callbacks = NIL;
+	}
 }
 
 /*

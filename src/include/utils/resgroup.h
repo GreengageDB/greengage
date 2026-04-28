@@ -108,6 +108,7 @@ extern int gp_resource_group_queuing_timeout;
 extern bool gp_resource_group_bypass_catalog_query;
 extern int gp_resource_group_move_timeout;
 extern bool gp_resource_group_retrieve;
+extern bool gp_resource_group_enable_alter_in_transaction;
 
 /*
  * Non-GUC global variables.
@@ -150,6 +151,9 @@ typedef struct
 	ResGroupCaps	oldCaps;	/* last config value, alter operation need to
 								 * check last config for recycling */
 	ResGroupCap		memLimitGap;
+	bool		should_apply;	/* validated at PRE_COMMIT, cleared when a
+								 * subtransaction rollback reverted the
+								 * row from catalog recorded by this callback */
 } ResourceGroupCallbackContext;
 
 /* Shared memory and semaphores */

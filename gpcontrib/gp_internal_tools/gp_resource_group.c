@@ -15,10 +15,12 @@
 #include "postgres.h"
 #include "access/tupdesc.h"
 #include "access/htup.h"
+#include "catalog/pg_resgroup.h"
 #include "cdb/cdbvars.h"
 #include "commands/resgroupcmds.h"
 #include "fmgr.h"
 #include "funcapi.h"
+#include "storage/lmgr.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
 #include "utils/resgroup.h"
@@ -83,6 +85,25 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		Oid currentGroupId;
 		pid_t pid = PG_GETARG_INT32(0);
 		groupName = text_to_cstring(PG_GETARG_TEXT_PP(1));
+
+		/*
+		 * Refuse the move if any backend is currently editing a resource
+		 * group. ALTER RESOURCE GROUP holds ExclusiveLock on
+		 * pg_resgroupcapability until end of its transaction, so a
+		 * conditional acquisition fails fast in that case. The check runs
+		 * as a precondition, before any pid or group validity checks, so
+		 * the caller gets a single clear message during a swap window. On
+		 * success the lock is held until end of the move's transaction,
+		 * which is short.
+		 */
+		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
+										ExclusiveLock))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_IN_USE),
+					 errmsg("cannot move query while a resource group is being altered"),
+					 errhint("Retry after the in-flight ALTER RESOURCE GROUP transaction commits or aborts.")));
+		}
 
 		if (pid == MyProcPid)
 			ereport(ERROR,
