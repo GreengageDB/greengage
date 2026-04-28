@@ -19,9 +19,7 @@ do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data &&
       # each host should have its own copy of the (initially identical) files in .ssh
-      cp -rf .ssh.src .ssh &&
-      source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
-      ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
+      cp -rf .ssh.src .ssh &
 done
 wait
 
