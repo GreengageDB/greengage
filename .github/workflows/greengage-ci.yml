@@ -1,0 +1,184 @@
+# .github/workflows/greengage-ci.yml
+name: Greengage CI
+
+on:
+  push:
+    branches: ['next']
+    tags: ['8.*']
+  pull_request:
+    branches: ['**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  VERSION: "8"
+  OS_MATRIX: |
+    [
+      { "target_os": "ubuntu"                               },
+      { "target_os": "ubuntu", "target_os_version": "24.04" }
+    ]
+
+jobs:
+  generate-matrix:
+    name: Generate CI matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      version:   ${{ steps.config.outputs.version }}
+      os_matrix: ${{ steps.config.outputs.os_matrix }}
+    steps:
+      - name: Generate matrix config
+        id: config
+        run: |
+          echo "version=${{ env.VERSION }}" >> $GITHUB_OUTPUT
+
+          cat > /tmp/os_matrix.json << 'EOF'
+          ${{ env.OS_MATRIX }}
+          EOF
+          echo "os_matrix=$(jq -c '{include: .}' /tmp/os_matrix.json)" >> $GITHUB_OUTPUT
+
+  build:
+    needs: generate-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v30
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  behave-tests:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  regression-tests:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  orca-tests:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  resgroup-tests:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v31
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  jit-tests:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-jit.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: [generate-matrix, build]
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token:         ${{ secrets.GITHUB_TOKEN }}
+      DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+  package:
+    needs: [generate-matrix, build]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
+    with:
+      version:           ${{ needs.generate-matrix.outputs.version }}
+      target_os:         ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+      test_docker:       ubuntu:22.04
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
