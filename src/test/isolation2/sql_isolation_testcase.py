@@ -485,7 +485,11 @@ class SQLIsolationExecutor(object):
             # Figure out the widths of each column.
             fields = r.listfields()
             for f in fields:
-                widths.append(len(str(f)))
+                if sys.version_info[0] == 2:
+                    width = len(str(f))
+                else:
+                    width = len(str(f).encode('utf-8'))
+                widths.append(width)
 
             rset = r.getresult()
             for row in rset:
@@ -493,7 +497,12 @@ class SQLIsolationExecutor(object):
                 for col in row:
                     if col is None:
                         col = ""
-                    width = len(str(col))
+
+                    if sys.version_info[0] == 2:
+                        width = len(str(col))
+                    else:
+                        width = len(str(col).encode('utf-8'))
+
                     if type(col) == bool:
                         width = 1
                     widths[colno] = max(widths[colno], width)
@@ -533,8 +542,10 @@ class SQLIsolationExecutor(object):
                             if type(elem) == bool:
                                 col[i] = elem = 't' if elem else 'f'
                         col = "{" + ",".join([str(elem) for elem in col]) + "}"
-
-                    result += " " + str(col).ljust(widths[colno]) + " "
+                    if sys.version_info[0] == 2:
+                        result += (" " + (str(col).decode('utf-8')).ljust(widths[colno]) + " ").encode('utf-8')
+                    else:
+                        result += " " + str(col).ljust(widths[colno]) + " "
                     colno = colno + 1
                 result += "\n"
 

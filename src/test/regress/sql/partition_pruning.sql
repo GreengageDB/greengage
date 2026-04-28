@@ -615,7 +615,7 @@ drop table mytable cascade;
 
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 
@@ -648,7 +648,7 @@ result[0] = selected
 result[1] = out_of
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 drop table if exists partprune_foo;
 create table partprune_foo(a int, b int, c int) partition by range (b) (start (1) end (101) every (10));

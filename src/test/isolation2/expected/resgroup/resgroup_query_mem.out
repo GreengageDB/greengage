@@ -13,7 +13,7 @@
 
 create extension if not exists gp_inject_fault;
 CREATE
-create or replace language plpythonu;
+create or replace language plpython3u;
 CREATE
 
 create table t_qmem(a int);
@@ -34,7 +34,7 @@ db.query("set gp_resource_group_enable_recalculate_query_mem = off;")
 db.close() 
 ratio2 = int(round(float(qd_opmem) / qe_opmem)) 
 return ratio1 == ratio2 
-$$ language plpythonu;
+$$ language plpython3u;
 CREATE
 
 select rg_qmem_test();

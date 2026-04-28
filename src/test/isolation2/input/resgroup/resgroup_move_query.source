@@ -27,7 +27,7 @@ $$ LANGUAGE sql;
 -- @param groupname: resource group id
 -- @return bool: true/false indicating whether it the session is in the resource group
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION is_session_in_group(pid integer, groupname text) RETURNS BOOL AS $$
@@ -52,11 +52,11 @@ result = conn.query(sql).getresult()
 hosts = result[0]
 
 def get_result(host):
-    stdout = subprocess.check_output(["ssh", "{}".format(host), "ps -ef | grep postgres | grep con{} | grep -v grep | awk '{{print $2}}'".format(session_id)])
+    stdout = subprocess.check_output(["ssh", "{}".format(host), "ps -ef | grep postgres | grep con{} | grep -v grep | awk '{{print $2}}'".format(session_id)]).decode('utf-8')
     session_pids = stdout.split('\n')
 
     path = "@cgroup_mnt_point@/cpu/gpdb/{}/cgroup.procs".format(groupid)
-    stdout= subprocess.check_output(["ssh", "{}".format(host), "cat {}".format(path)])
+    stdout= subprocess.check_output(["ssh", "{}".format(host), "cat {}".format(path)]).decode('utf-8')
     cgroups_pids = stdout.split('\n')
 
     return set(session_pids).issubset(set(cgroups_pids))
@@ -65,7 +65,7 @@ for host in hosts:
     if not get_result(host):
         return False
 return True
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 DROP ROLE IF EXISTS role_move_query;
 -- start_ignore
