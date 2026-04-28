@@ -17567,14 +17567,11 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 						 * but because we are dumping from Greengage 6.x,
 						 * the rest of the code expects that we will deal
 						 * with partitions here (in 7.x each partition
-						 * updates its attributes seperately).
+						 * updates its attributes separately).
 						 *
-						 * Gladly, there is a builtin function to traverse partition
-						 * hierarchy.
-						 *
-						 * Also, because non-partitioned tables can also get here,
-						 * we can't rely on 'pg_partition_tree' to always report
-						 * the table. Therefore, it is hardcoded into the query.
+						 * Use pg_partition_tree() to find partition children.
+						 * For non-partitioned tables it returns no rows,
+						 * so include the root relation explicitly.
 						 */
 						appendPQExpBufferStr(q, "\n  AND attrelid IN (SELECT ");
 						appendStringLiteralAH(q, qualrelname, fout);
