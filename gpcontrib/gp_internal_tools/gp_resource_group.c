@@ -87,17 +87,13 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		groupName = text_to_cstring(PG_GETARG_TEXT_PP(1));
 
 		/*
-		 * Refuse the move if any backend is currently editing a resource
-		 * group. ALTER RESOURCE GROUP holds ExclusiveLock on
-		 * pg_resgroupcapability until end of its transaction, so a
-		 * conditional acquisition fails fast in that case. The check runs
-		 * as a precondition, before any pid or group validity checks, so
-		 * the caller gets a single clear message during a swap window. On
-		 * success the lock is held until end of the move's transaction,
-		 * which is short.
+		 * Refuse the move if any backend is currently editing a resource group.
+		 * ALTER RESOURCE GROUP holds ExclusiveLock on pg_resgroupcapability 
+		 * until end of its transaction, so a conditional acquisition of
+		 * RowExclusiveLock fails fast in that case.
 		 */
 		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
-										ExclusiveLock))
+										RowExclusiveLock))
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_IN_USE),
