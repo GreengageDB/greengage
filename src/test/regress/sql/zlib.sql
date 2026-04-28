@@ -24,7 +24,7 @@ INSERT INTO test_zlib_hashjoin SELECT i,i,i,i,i,i,i,i FROM
 	(select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 -- Check if compressed work file count is limited to file_count_limit
@@ -53,7 +53,7 @@ for i in range(len(rv)):
             result.append(int(comp_workfile_created == workfile_created))
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 SET statement_mem=5000;
 

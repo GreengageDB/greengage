@@ -69,7 +69,7 @@ for process in psutil.process_iter():
                 motion_socket_count, process.connections()))
 
 
-$$ LANGUAGE plpythonu EXECUTE ON MASTER;
+$$ LANGUAGE plpython3u EXECUTE ON MASTER;
 
 -- check motion sockets in a new session to ensure that the 'unicast' setting
 -- takes effect.
@@ -77,3 +77,6 @@ $$ LANGUAGE plpythonu EXECUTE ON MASTER;
 
 !\retcode gpconfig -r gp_interconnect_address_type;
 !\retcode gpstop -au;
+-- start_ignore
+drop language if exists plpython3u cascade;
+-- end_ignore

@@ -166,22 +166,22 @@ ERROR:  type ##### was concurrently dropped
 END
 
 -- Case 4. Function dependency on the language.
-create language plpythonu;
+create language plpython3u;
 CREATE
 
 1: begin;
 BEGIN
-1: create function test_4_function() returns text as $$ return "test" $$ language plpythonu;
+1: create function test_4_function() returns text as $$ return "test" $$ language plpython3u;
 CREATE
 
-2&: drop language plpythonu;  <waiting ...>
+2&: drop language plpython3u;  <waiting ...>
 
 1: commit;
 COMMIT
 
 2<:  <... completed>
-ERROR:  cannot drop language plpythonu because other objects depend on it
-DETAIL:  function test_4_function() depends on language plpythonu
+ERROR:  cannot drop language plpython3u because other objects depend on it
+DETAIL:  function test_4_function() depends on language plpython3u
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 
 1: select test_4_function();
@@ -190,20 +190,20 @@ HINT:  Use DROP ... CASCADE to drop the dependent objects too.
  test            
 (1 row)
 
-drop language plpythonu cascade;
+drop language plpython3u cascade;
 DROP
 
 -- Check if dependency is dropped before the creation of the dependent object.
-create language plpythonu;
+create language plpython3u;
 CREATE
 
 1: begin;
 BEGIN
 2: begin;
 BEGIN
-2: drop language plpythonu;
+2: drop language plpython3u;
 DROP
-1&: create function test_4_function() returns text as $$ return "test" $$ language plpythonu;  <waiting ...>
+1&: create function test_4_function() returns text as $$ return "test" $$ language plpython3u;  <waiting ...>
 
 2: commit;
 COMMIT

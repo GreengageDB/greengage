@@ -99,7 +99,7 @@ WHERE ft.wk_id = dt.wk_id
 AND ft.id = dt1.id;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 create or replace function count_index_scans(explain_query text) returns int as
@@ -113,7 +113,7 @@ for i in range(len(rv)):
         result = result+1
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 DROP TABLE bfv_tab1;
 DROP TABLE bfv_tab2_facttable1;

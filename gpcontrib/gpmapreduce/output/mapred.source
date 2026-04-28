@@ -6,16 +6,23 @@
 -- path from your environment (see gpstringsubs for more details).  And
 -- to make this work correctly with gpsourcify, you need to add your
 -- gpwhich token to gptokencheck.
+-- start_matchignore
+-- m|STDERR>  }"|
+-- m|STDERR> syntax error at line \d+, near ";|
+-- m|STDERR> Execution of aborted due to compilation errors.|
+-- end_matchignore
 -- start_matchsubs
 -- m|mapreduce_\d+_run|
 -- s|mapreduce_\d+_run|mapreduce_PID_run|
+-- m|STDERR> CONTEXT:  compilation of PL/Perl function "mapreduce_\d+_[a-z_]+"|
+-- s|mapreduce_\d+|mapreduce_X|
 -- end_matchsubs
 --
 -- This test makes use of plperlu
 --
 -- start_ignore
 create language plperlu;
-create language plpythonu;
+create language plpython3u;
 -- Take a look at the installed languages, plperl and plpython should be in the list.
 --  + pg_pltemplate contains the list of languages that can be simply installed
 --  + pl_language contains the list of languages that are actually installed
@@ -27,7 +34,7 @@ select * from pg_pltemplate;
  pltclu    | f           | pltclu_call_handler   |                   | $libdir/pltcl    | 
  plperl    | t           | plperl_call_handler   | plperl_validator  | $libdir/plperl   | 
  plperlu   | f           | plperl_call_handler   | plperl_validator  | $libdir/plperl   | 
- plpythonu | f           | plpython_call_handler |                   | $libdir/plpython | 
+ plpython3u | f           | plpython_call_handler |                   | $libdir/plpython | 
  plr       | f           | plr_call_handler      |                   | $libdir/plr      | 
 (7 rows)
 
@@ -39,7 +46,7 @@ select lanname, lanispl, lanpltrusted from pg_language;
  sql       | f       | t
  plpgsql   | t       | t
  plperlu   | t       | f
- plpythonu | t       | f
+ plpython3u | t       | f
 (6 rows)
 
 -- Check environment variables that should have been set by greengage_path.sh
@@ -93,7 +100,7 @@ SELECT * FROM env WHERE var in (
 CREATE OR REPLACE FUNCTION python_version() returns text as $$
 import sys
 return sys.version_info
-$$ language plpythonu NO SQL;
+$$ language plpython3u NO SQL;
 SELECT python_version() FROM env GROUP BY python_version;
     python_version     
 -----------------------
@@ -121,7 +128,7 @@ SELECT perl_version() FROM env GROUP BY perl_version;
 CREATE OR REPLACE FUNCTION python_path() returns text as $$
 import sys
 return sys.path[0]
-$$ language plpythonu NO SQL;
+$$ language plpython3u NO SQL;
 SELECT python_path() FROM env GROUP BY python_path;
                  python_path                 
 ---------------------------------------------
@@ -147,8 +154,8 @@ p = subprocess.Popen(cmd, shell=True,
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 r = p.communicate()
 header = "---------------------\n"
-return header + r[0]
-$$ LANGUAGE plpythonu NO SQL;
+return header + r[0].decode('utf-8')
+$$ LANGUAGE plpython3u NO SQL;
 --
 -- Create a harness to run mapreduce jobs on the correct host/port
 --
@@ -166,10 +173,10 @@ cmd = ['@gpwhich_gpmapreduce@',
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 r = p.communicate()
 header = "---------------------"
-err = '\nSTDERR> '.join(('STDERR> ' + r[1]).split('\n')).replace('\t', '   ')
-out = 'STDOUT>\n' + r[0].replace('\t', ', ')
+err = '\nSTDERR> '.join(('STDERR> ' + r[1].decode('utf-8')).split('\n')).replace('\t', '   ')
+out = 'STDOUT>\n' + r[0].decode('utf-8').replace('\t', ', ')
 return [header, err, out]
-$$ LANGUAGE plpythonu READS SQL DATA;
+$$ LANGUAGE plpython3u READS SQL DATA;
 CREATE OR REPLACE FUNCTION mapreduce(file text, keys text) returns setof text as $$
 import subprocess
 
@@ -186,10 +193,10 @@ for key in keys.split(';'):
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 r = p.communicate()
 header = "---------------------"
-err = '\nSTDERR> '.join(('STDERR> ' + r[1]).split('\n')).replace('\t', '   ')
-out = 'STDOUT>\n' + r[0].replace('\t', ', ')
+err = '\nSTDERR> '.join(('STDERR> ' + r[1].decode('utf-8')).split('\n')).replace('\t', '   ')
+out = 'STDOUT>\n' + r[0].decode('utf-8').replace('\t', ', ')
 return [header, err, out]
-$$ LANGUAGE plpythonu READS SQL DATA;
+$$ LANGUAGE plpython3u READS SQL DATA;
 --
 -- CHECK 1) make sure plperlu is really installed:
 --
