@@ -748,7 +748,8 @@ class RebalanceSM:
         for step in steps_to_approve:
             msg += str(step)
             msg += '\n'
-        if not interactive_check_yesno(self.options.interactive, msg, 'Approve switchovers?', default = 'Y'):
+        if not interactive_check_yesno(self.options.interactive and not self.options.approve_swap_roles,
+                                       msg, 'Approve switchovers?', default = 'Y'):
             raise Exception('Switchovers were not approved, interrupting execution')
 
         for step in steps_to_approve:

@@ -49,6 +49,8 @@ def parseargs():
                       help='show this help message and exit.')
     parser.add_option('--non-interactive-mode', dest="interactive", action='store_false', default=True,
                          help="non-interactive mode, do not require user input for confirmations, use defaults.")
+    parser.add_option('-y', '--approve-swap-roles', dest="approve_swap_roles", action='store_true', default=False,
+                      help="In interactive mode don't ask a user for permission to switch role.")
     parser.add_option('-H', '--target-hosts', dest='target_hosts', metavar='<target_hosts>',
                       help='Set of hostnames where rebalance will distribute segments to')
     parser.add_option('-A', '--add-hosts', dest='add_hosts', metavar='<hosts_to_add>', 

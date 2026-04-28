@@ -17,7 +17,7 @@ ggrebalance -x <segment_count>
     [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
     [{-D | -S | --no-progress}]
     [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
-    [--non-interactive-mode] [-l <log_dir>] [-q] [-v]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
     [--seed <planner_seed>]
 
 ggrebalance
@@ -25,14 +25,14 @@ ggrebalance
     [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
     [{-D | -S | --no-progress}]
     [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
-    [--non-interactive-mode] [-l <log_dir>] [-q] [-v]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
 
 ggrebalance -r
     [-n <parallel_processes>] [-B <batch_size>]
     [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
     [{-D | -S | --no-progress}]
     [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
-    [--non-interactive-mode] [-l <log_dir>] [-q] [-v]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
 
 ggrebalance -c
 
@@ -190,6 +190,11 @@ OPTIONS
  At the cluster shrink operation, in the interactive mode the shrunken segments
  are stopped via 'smart' mode, and in non-interactive mode they are stopped via
  'fast' mode.
+
+-y, --approve-swap-roles
+ If this option is set, in the interactive mode, the tool does not ask the user
+ to acknowledge role swap ('primary' to 'mirror' and vice versa) for a segment
+ during cluster rebalance.
 
 --inplace-swap-roles
  If this option is set, it is permitted to temporarily place primary and
