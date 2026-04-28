@@ -34,11 +34,14 @@ function gen_env(){
 		gpscp -f /tmp/hostfile_all -v =:/tmp/pre-coverage-data/* /tmp/pre-coverage-data/ || true
 
 		if [ ! -z "\${COVERAGE_PROCESS_START}" ] && [ \$(ls /tmp/pre-coverage-data | wc -l) -gt 0 ]; then
-			mkdir -p /tmp/coverage-data
-			cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
-			cd /tmp/coverage-data
-			coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
-			coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
+			LOCK_FILE=/tmp/coverage-data/coverage.lock
+			flock "\$LOCK_FILE" -c "
+				mkdir -p /tmp/coverage-data
+				cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
+				cd /tmp/coverage-data
+				coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
+				coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
+			"
 		fi
 	EOF
 

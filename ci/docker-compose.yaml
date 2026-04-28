@@ -19,7 +19,7 @@ services:
       - ${PWD}/sqldump/dump.sql:/home/gpadmin/sqldump/dump.sql
       - ${PWD}/ssh_keys:/home/gpadmin/.ssh.src
       - ${PWD}/logs_cdw:/logs
-      # - ${PWD}/coverage:/tmp/coverage-data
+      - ${PWD}/coverage:/tmp/coverage-data
   sdw1:
     <<: *common-service
     hostname: sdw1

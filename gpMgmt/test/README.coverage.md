@@ -34,7 +34,7 @@ for the files you are modifying.
 
         export COVERAGE_PROCESS_START=/<absolute_path_to_file>/<coverage configuration file>
         
-        (e.g. export COVERAGE_PROCESS_START=~gpdb_src/gpMgmt/test/coveragerc_unit)
+        (e.g. export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit)
 
     This will instrument all Python subprocesses that are spawned, and write
     coverage data to the location specified in our config file.
@@ -45,27 +45,27 @@ for the files you are modifying.
         $ python -m unittest gppylib.test.unit.test_unit_gpstop
 
 6.  After you have run all the tests you want, [combine the data files](https://coverage.readthedocs.io/en/latest/cmd.html#combining-data-files)
-    that were generated into a single `.coverage` file.  Note that you still have to `combine` the files if you only have a
-    single coverage-data file; otherwise the `report` will fail.
+    that were generated into a single `coverage-data` file.  Note that you still have to `combine` the files if you only have a
+    single coverage-data file; otherwise the `report` will fail. You also need to provide rcfile - path ot config file for handling path resolution correctly.
 
         $ cd /tmp
         $ ls -a
         . .. coverage-data.mdw.10392.109492 coverage-data.mdw.10394.945371 coverage-data.mdw.10405.277583
-        $ coverage combine coverage-data.*
+        $ coverage combine --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit coverage-data*
         $ ls -a
-        . .. .coverage
+        . .. coverage-data
 
-     You can combine files from multiple test runs as follows.  You generate the .coverage file for one run,
+     You can combine files from multiple test runs as follows.  You generate the coverage-data file for one run,
      and then run this step to merge the two results after the second run:
 
-        $ coverage combine --append coverage-data.*
+        $ coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit coverage-data*
         
 7.  Generate a report. [You have many options](https://coverage.readthedocs.io/en/latest/cmd.html#reporting);
     you can generate a stdout report and then a browseable html report.  Note you can click on each file to see
-    the details of coverage for that file.
+    the details of coverage for that file. You also need to provide rcfile path for this task.
 
         $ coverage report
-        $ coverage html --show-contexts -d /tmp/coverage-html
+        $ coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave -d ./coverage-html
         $ open /tmp/coverage-html/index.html
 
     Your usage model might involve determining code coverage, adding tests, and then checking the resulting change
