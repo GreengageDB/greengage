@@ -40,7 +40,6 @@ apt-get install -y \
 	lsof \
 	net-tools \
 	ninja-build \
-	openjdk-17-jdk \
 	openssh-client \
 	openssh-server \
 	openssl \
@@ -54,13 +53,6 @@ apt-get install -y \
 	rsync \
 	sudo \
 	zlib1g-dev
-
-if [ "$(lsb_release -si)" == "Ubuntu" ]; then
-	case "$(lsb_release -sr)" in
-		22.04) apt-get install -y python3.11 python3.11-dev ;;
-		24.04) apt-get install -y python3.12 python3.12-dev ;;
-	esac
-fi
 
 tee -a /etc/sysctl.conf << EOF
 kernel.shmmax = 5000000000000
