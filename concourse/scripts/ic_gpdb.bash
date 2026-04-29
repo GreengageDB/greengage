@@ -2,8 +2,6 @@
 
 set -eox pipefail
 
-export COVERAGE_PROCESS_START="/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit"
-
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${CWDIR}/common.bash"
 
@@ -34,6 +32,7 @@ function gen_env(){
 		cd "\${1}/gpdb_src"
 		source gpAux/gpdemo/gpdemo-env.sh
 		export TEST_PGFDW=1
+        export COVERAGE_PROCESS_START="/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit"
 		make -s ${MAKE_TEST_COMMAND}
 	EOF
 
