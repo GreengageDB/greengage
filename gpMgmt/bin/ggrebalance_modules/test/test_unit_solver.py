@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2026 Greengage Community
+#
+
 import random
 from collections import defaultdict
 

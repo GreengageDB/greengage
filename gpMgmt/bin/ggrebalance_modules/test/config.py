@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2026 Greengage Community
+#
+
 import os
 
 from gppylib.gparray import Segment, GpArray

@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2026 Greengage Community
+#
+
 from gppylib.test.unit.gp_unittest import *
 from mock import *
 

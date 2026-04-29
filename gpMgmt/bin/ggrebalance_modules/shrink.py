@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2026 Greengage Community
+#
 
 from transitions import Machine
 from contextlib import closing
