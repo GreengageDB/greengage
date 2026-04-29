@@ -5,7 +5,7 @@
 Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
 for Ubuntu:
 ```bash
-docker build -t gpdb8_u22:latest -f arenadata/Dockerfile.ubuntu .
+docker build -t gpdb8_u22:latest -f ci/Dockerfile.ubuntu .
 ```
 
 CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
@@ -58,7 +58,7 @@ for Ubuntu:
 ## ORCA linter
 
 ```bash
-docker build -t orca-linter:test -f arenadata/Dockerfile.linter .
+docker build -t orca-linter:test -f ci/Dockerfile.linter .
 docker run --rm -it orca-linter:test
 ```
 
@@ -101,7 +101,7 @@ Feature files are located in `gpMgmt/test/behave/mgmt_utils`
 Before run tests you need to build a docker-image
 for Ubuntu:
 ```bash
-docker build -t "hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME}" -f arenadata/Dockerfile.ubuntu .
+docker build -t "hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME}" -f ci/Dockerfile.ubuntu .
 ```
 
 Command to run features:
@@ -109,15 +109,15 @@ Command to run features:
 for Ubuntu:
 ```bash
 # Run all tests
-IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash
+IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash
 
 # Run specific features
-IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
+IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
 Tests use `allure-behave` package and store allure output files in `allure-results` folder
 **NOTE** that `allure-behave` has too old a version because it is compatible with `python2`.
-Also, the allure report for each failed test has gpdb logs attached files. See `gpMgmt/test/behave_utils/arenadata/formatter.py`
+Also, the allure report for each failed test has gpdb logs attached files. See `gpMgmt/test/behave_utils/ci/formatter.py`
 It required to add `gpMgmt/tests` directory to `PYTHONPATH`.
 
 Greenplum cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
