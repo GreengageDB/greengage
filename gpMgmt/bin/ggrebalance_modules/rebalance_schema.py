@@ -598,16 +598,22 @@ AS total_duration FROM cte_total""")
     def checkOperationInProgress(cls, gpEnv: GpCoordinatorEnvironment) -> bool:
         """Checks if there is ggrebalance operation in progress (possibly interrupted)"""
         dburl = dbconn.DbURL(dbname=DBNAME, port=gpEnv.getCoordinatorPort())
-        with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
-            # if there is no schema existing, we are not performing shrink or rebalance
-            if 0 == (dbconn.querySingleton(conn, f"SELECT COUNT(1) FROM pg_namespace WHERE nspname = '{cls.schema_name}'")):
-                return False
-            # if there is schema existing, check the last state - if it is final one - then we've complete all operations
-            latest_main_state = ''
-            cursor = dbconn.query(conn, f"SELECT state FROM {cls.schema_name}.{cls.rebalance_status} WHERE state_category = '{cls.STATE_CATEGORY_MAIN}' ORDER BY updated DESC LIMIT 1")
-            if cursor.rowcount > 0:
-                latest_main_state = str(cursor.fetchone()[0])
-            if latest_main_state == 'STATE_EXECUTOR_DONE':
-                return False
+        try:
+            with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+                # if there is no schema existing, we are not performing shrink or rebalance
+                if 0 == (dbconn.querySingleton(conn, f"SELECT COUNT(1) FROM pg_namespace WHERE nspname = '{cls.schema_name}'")):
+                    return False
+                # if there is schema existing, check the last state - if it is final one - then we've complete all operations
+                latest_main_state = ''
+                cursor = dbconn.query(conn, f"SELECT state FROM {cls.schema_name}.{cls.rebalance_status} WHERE state_category = '{cls.STATE_CATEGORY_MAIN}' ORDER BY updated DESC LIMIT 1")
+                if cursor.rowcount > 0:
+                    latest_main_state = str(cursor.fetchone()[0])
+                if latest_main_state == 'STATE_EXECUTOR_DONE':
+                    return False
+        except:
+            # In case we didn't succeed to probe the schema,
+            # we assume that the cluster is not in a state that allows rebalance
+            # (for ex., the cluster is in single node mode). So return false here.
+            return False
 
         return True
