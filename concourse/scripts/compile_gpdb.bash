@@ -56,15 +56,15 @@ function git_info() {
 	if [[ -d .git ]]; then
 		"${CWDIR}/git_info.bash" | tee ${GREENPLUM_INSTALL_DIR}/etc/git-info.json
 
-		PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+		PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')
 
 		cat >${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt <<-EOF
 			======================================================================
-			Git log since previous release tag (${PREV_TAG})
+			Git log for '${PREV_TAG:+$PREV_TAG..}HEAD'
 			----------------------------------------------------------------------
 		EOF
 
-		git log --abbrev-commit --date=relative "${PREV_TAG}..HEAD" >>${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt
+		git log --abbrev-commit --date=relative "${PREV_TAG:+$PREV_TAG..}HEAD" >>${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt
 	fi
 	popd
 }
