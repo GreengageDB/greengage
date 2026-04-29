@@ -2,7 +2,7 @@
 [run]
 parallel = True
 dynamic_context = test_function
-data_file = /tmp/coverage-data/coverage-data
+data_file = /home/gpadmin/coverage-data/coverage-data
 branch = True
 omit =
         */__init__.py*
