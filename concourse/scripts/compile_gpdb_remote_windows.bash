@@ -28,17 +28,16 @@ function remote_setup() {
     SESSION_ID=$(date +%Y%m%d%H%M%S.%N)
 
     WORK_DIR="C:\\Users\\buildbot\\${SESSION_ID}"
-    
+
     # Get git information from local repo(concourse gpdb_src input)
     pushd gpdb_src
         GIT_URI=$(git config --get remote.origin.url)
         GIT_COMMIT=$(git rev-parse HEAD)
-        GIT_TAG=$(git describe --tags --abbrev=0 | grep -E -o '[0-9]\.[0-9]+\.[0-9]+')
         GPDB_VERSION=$(./getversion --short)
     popd
 }
 
-# Since we're cloning in a different machine, maybe there's 
+# Since we're cloning in a different machine, maybe there's
 # new commit pushed to the same repo. We need to reset to the
 # same commit to current concourse build.
 function remote_clone() {
@@ -60,7 +59,6 @@ function remote_compile() {
     ssh -T -p "${REMOTE_PORT}" "${REMOTE_USER}"@"${REMOTE_HOST}" <<- EOF
     cd "${WORK_DIR}\gpdb_src"
     set WORK_DIR=${WORK_DIR}
-    set GPDB_VERSION=${GIT_TAG}
     concourse\scripts\compile_gpdb_remote_windows.bat
 EOF
 }
