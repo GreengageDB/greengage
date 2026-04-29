@@ -142,7 +142,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	slock_t _res = 1;
+	register slock_t _res = 1;
 
 	/*
 	 * Use a non-locking test before asserting the bus lock.  Note that the
@@ -223,7 +223,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	slock_t _res = 1;
+	register slock_t _res = 1;
 
 	__asm__ __volatile__(
 		"	lock			\n"
@@ -380,7 +380,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	slock_t _res;
+	register slock_t _res;
 
 	/*
 	 *	See comment in src/backend/port/tas/sunstudio_sparc.s for why this
@@ -533,7 +533,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	int rv;
+	register int rv;
 
 	__asm__	__volatile__(
 		"	clrl	%0		\n"
@@ -559,7 +559,7 @@ typedef unsigned int slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	slock_t _res = 1;
+	register slock_t _res = 1;
 
 	__asm__ __volatile__(
 		"	xmem	%0, %2, %%r0	\n"
@@ -586,7 +586,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	int	_res;
+	register int	_res;
 
 	__asm__ __volatile__(
 		"	movl 	$1, %0			\n"
@@ -631,9 +631,9 @@ typedef unsigned int slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	volatile slock_t *_l = lock;
-	int _res;
-	int _tmp;
+	register volatile slock_t *_l = lock;
+	register int _res;
+	register int _tmp;
 
 	__asm__ __volatile__(
 		"       .set push           \n"
@@ -695,7 +695,7 @@ typedef unsigned char slock_t;
 static __inline__ int
 tas(volatile slock_t *lock)
 {
-	int _res;
+	register int _res;
 
 	/*
 	 * This asm is coded as if %0 could be any register, but actually SuperH
@@ -778,7 +778,7 @@ static __inline__ int
 tas(volatile slock_t *lock)
 {
 	volatile int *lockword = TAS_ACTIVE_WORD(lock);
-	int lockval;
+	register int lockval;
 
 	__asm__ __volatile__(
 		"	ldcwx	0(0,%2),%0	\n"
