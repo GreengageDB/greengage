@@ -45,7 +45,6 @@ apt-get install -y \
   pkg-config \
   protobuf-compiler \
   python3-dev \
-  python3-pip \
   rsync \
   sudo \
   zlib1g-dev
@@ -58,6 +57,7 @@ if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; 
   python2 -m pip install future==0.16
 else
   apt-get install -y \
+    python3-pip \
     python-is-python3;
   python -m pip install future==1.0.0
 fi
