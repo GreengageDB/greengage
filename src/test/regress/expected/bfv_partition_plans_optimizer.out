@@ -1198,17 +1198,13 @@ explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=2.131..2.131 rows=0 loops=2)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=0.000..3.889 rows=0 loops=1)
-         Hash Cond: mpp8031.oid = mpp8031_1.oid
+         Hash Cond: a.oid = b.oid
          ->  Sequence  (cost=0.00..431.00 rows=1 width=16) (never executed)
                ->  Partition Selector for mpp8031 (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4) (never executed)
                      Partitions selected: 4 (out of 4)
-               ->  Dynamic Seq Scan on mpp8031 (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=16) (never executed)
-                     Partitions scanned:  0 (out of 4).
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.978 rows=0 loops=1)
-               ->  Sequence  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.976 rows=0 loops=1)
-                     ->  Partition Selector for mpp8031 (dynamic scan id: 2)  (cost=10.00..100.00 rows=34 width=4) (actual time=0.000..0.017 rows=0 loops=1)
+               ->  Dynamic Seq Scan on mpp8031 a (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=16) (never executed)
                            Partitions selected: 4 (out of 4)
-                     ->  Dynamic Seq Scan on mpp8031 mpp8031_1 (dynamic scan id: 2)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.957 rows=0 loops=1)
+                     ->  Dynamic Seq Scan on mpp8031 b (dynamic scan id: 2)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.957 rows=0 loops=1)
                            Partitions scanned:  Avg 4.0 (out of 4) x 3 workers.  Max 4 parts (seg0).
    (slice0)    Executor memory: 386K bytes.
    (slice1)    Executor memory: 4234K bytes avg x 3 workers, 4234K bytes max (seg0).
@@ -1334,13 +1330,13 @@ explain select * from r_part r1, r_part r2 where r1.a=1; -- should eliminate par
          ->  Sequence  (cost=0.00..431.00 rows=1 width=8)
                ->  Partition Selector for r_part (dynamic scan id: 2)  (cost=10.00..100.00 rows=34 width=4)
                      Partitions selected: 9 (out of 9)
-               ->  Dynamic Seq Scan on r_part r_part_1 (dynamic scan id: 2)  (cost=0.00..431.00 rows=1 width=8)
+               ->  Dynamic Seq Scan on r_part r2 (dynamic scan id: 2)  (cost=0.00..431.00 rows=1 width=8)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                      ->  Sequence  (cost=0.00..431.00 rows=1 width=8)
                            ->  Partition Selector for r_part (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4)
                                  Partitions selected: 1 (out of 9)
-                           ->  Dynamic Seq Scan on r_part (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=8)
+                           ->  Dynamic Seq Scan on r_part r1 (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=8)
                                  Filter: a = 1
  Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (15 rows)
