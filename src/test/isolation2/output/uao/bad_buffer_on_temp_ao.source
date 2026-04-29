@@ -28,9 +28,9 @@ CREATE
 
 -- delete above relfile
 create or replace function delete_relfile(relfilepath text) returns text as $$ import os import subprocess 
-result = relfilepath  if not relfilepath: plpy.info('relfilepath should not be empty') elif not os.path.isfile(relfilepath): plpy.info('non-existent file %s' % (relfilepath)) else: try: cmd = 'rm -rf %s' % (relfilepath) result += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT) except subprocess.CalledProcessError as e: plpy.info(e.output) 
+result = relfilepath  if not relfilepath: plpy.info('relfilepath should not be empty') elif not os.path.isfile(relfilepath): plpy.info('non-existent file %s' % (relfilepath)) else: try: cmd = 'rm -rf %s' % (relfilepath) result += subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8') except subprocess.CalledProcessError as e: plpy.info(e.output) 
 return result 
-$$ language plpythonu;
+$$ language plpython3u;
 CREATE
 
 -- easy to trigger buffer flushing

@@ -39,7 +39,7 @@ create tablespace mytempsp4 location '@testtablespace@_mytempsp4';
 set temp_tablespaces=mytempsp0;
 
 --start_ignore
-CREATE EXTENSION IF NOT EXISTS plpythonu;
+CREATE EXTENSION IF NOT EXISTS plpython3u;
 --end_ignore
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_start(dbid int, name text, location text)
     RETURNS void
@@ -53,8 +53,8 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
-    raise Exception("error=%s" % str(error))
-$$ LANGUAGE plpythonu;
+    raise Exception("error=%s" % error.decode('utf-8'))
+$$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_log(dbid int, message text)
     RETURNS void
@@ -67,8 +67,8 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 if rc != 0:
     output, error = process.communicate()
-    raise Exception("error=%s" % str(error))
-$$ LANGUAGE plpythonu;
+    raise Exception("error=%s" % error.decode('utf-8'))
+$$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_stop()
     RETURNS void
@@ -79,7 +79,7 @@ cmd = "pkill file_monitor"
 cmd = ["bash", "-c", cmd]
 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 process.wait()
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION gp_tablespace_watch_match(dbid int, name text, patstr text)
     RETURNS int
@@ -92,9 +92,9 @@ process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 rc = process.wait()
 output, error = process.communicate()
 if rc != 0:
-    raise Exception("error=%s" % str(error))
-return int(str(output).strip())
-$$ LANGUAGE plpythonu;
+    raise Exception("error=%s" % error.decode('utf-8'))
+return int(output.decode('utf-8').strip())
+$$ LANGUAGE plpython3u;
 
 
 CREATE OR REPLACE FUNCTION gp_temptablespace_path(tblspcOid Oid)

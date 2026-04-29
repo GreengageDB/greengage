@@ -1477,7 +1477,7 @@ copy t_12700 from '/tmp/out_12700_<SEGID>' on segment;
 abort;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 create function get_file_lines_12700(segid int) returns int
@@ -1486,7 +1486,7 @@ $$
 with open('/tmp/out_12700_' + str(segid)) as f:
     return sum(1 for line in f)
 $$
-language plpythonu;
+language plpython3u;
 
 with cte(segid, num) as (
   select gp_segment_id, count(a) num from t_12700 group by gp_segment_id

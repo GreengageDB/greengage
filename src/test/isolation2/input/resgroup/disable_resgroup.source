@@ -8,6 +8,8 @@
 ! gpconfig -r gp_resource_group_memory_limit;
 ! gpconfig -r gp_resource_group_bypass_catalog_query;
 ! gpstop -rai;
+drop language if exists plpythonu cascade;
+drop language if exists plpython3u cascade;
 -- end_ignore
 
 SHOW gp_resource_manager;
