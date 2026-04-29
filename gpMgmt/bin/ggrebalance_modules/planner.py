@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2025-Present, Greengage Community
+#
 
 from collections import defaultdict
 import copy

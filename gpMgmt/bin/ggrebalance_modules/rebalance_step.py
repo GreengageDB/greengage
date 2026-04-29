@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2025-Present, Greengage Community
+#
 
 from enum import Enum
 import pickle

@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2025-Present, Greengage Community
+#
+
 from dataclasses import dataclass, fields
 from enum import Enum
 import random
