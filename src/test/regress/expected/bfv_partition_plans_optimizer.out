@@ -1203,6 +1203,10 @@ explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
                ->  Partition Selector for mpp8031 (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4) (never executed)
                      Partitions selected: 4 (out of 4)
                ->  Dynamic Seq Scan on mpp8031 a (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=16) (never executed)
+                     Partitions scanned:  0 (out of 4).
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.978 rows=0 loops=1)
+               ->  Sequence  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.976 rows=0 loops=1)
+                     ->  Partition Selector for mpp8031 (dynamic scan id: 2)  (cost=10.00..100.00 rows=34 width=4) (actual time=0.000..0.017 rows=0 loops=1)
                            Partitions selected: 4 (out of 4)
                      ->  Dynamic Seq Scan on mpp8031 b (dynamic scan id: 2)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.957 rows=0 loops=1)
                            Partitions scanned:  Avg 4.0 (out of 4) x 3 workers.  Max 4 parts (seg0).

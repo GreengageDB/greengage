@@ -146,7 +146,7 @@ explain analyze select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c
    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.00 rows=1 width=14) (actual time=0.282..0.291 rows=64 loops=1)
          ->  Nested Loop  (cost=0.00..1293.00 rows=1 width=14) (actual time=0.949..1.287 rows=32 loops=1)
                Join Filter: true
-               ->  Seq Scan on gpd1 gpd1_1  (cost=0.00..431.00 rows=1 width=12) (actual time=0.005..0.006 rows=4 loops=1)
+               ->  Seq Scan on gpd1 a  (cost=0.00..431.00 rows=1 width=12) (actual time=0.005..0.006 rows=4 loops=1)
                ->  Materialize  (cost=0.00..431.00 rows=2 width=2) (actual time=0.187..0.253 rows=7 loops=5)
                      ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=2) (actual time=0.897..1.264 rows=8 loops=1)
                            ->  Seq Scan on gpd1 b  (cost=0.00..431.00 rows=1 width=2) (actual time=0.012..0.134 rows=4 loops=1)
