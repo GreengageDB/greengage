@@ -20,7 +20,7 @@ try:
     from ggrebalance_modules.rebalance_commons import interactive_check_yesno
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED, get_table_distr_segment_count
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT

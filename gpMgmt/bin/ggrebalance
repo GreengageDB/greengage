@@ -15,7 +15,7 @@ try:
     from ggrebalance_modules.planner import *
     from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 from datetime import datetime, time
 from threading import Timer
 from psycopg2 import DatabaseError
