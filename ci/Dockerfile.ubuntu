@@ -9,15 +9,16 @@ ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_SECURITY_MIRROR=http://security.ubuntu.com/ubuntu
 
+
 COPY README.Ubuntu.bash ./
 
 RUN set -eux; \
-    CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME"); \
+    . /etc/os-release; \
     sed -i \
-      -e "s|http://archive.ubuntu.com/ubuntu/ ${CODENAME} |${UBUNTU_MAIN_MIRROR}/ ${CODENAME} |g" \
-      -e "s|http://archive.ubuntu.com/ubuntu/ ${CODENAME}-updates |${UBUNTU_UPDATES_MIRROR}/ ${CODENAME}-updates |g" \
-      -e "s|http://archive.ubuntu.com/ubuntu/ ${CODENAME}-backports |${UBUNTU_BACKPORTS_MIRROR}/ ${CODENAME}-backports |g" \
-      -e "s|http://security.ubuntu.com/ubuntu/ ${CODENAME}-security |${UBUNTU_SECURITY_MIRROR}/ ${CODENAME}-security |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ ${UBUNTU_CODENAME} |${UBUNTU_MAIN_MIRROR}/ ${UBUNTU_CODENAME} |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ ${UBUNTU_CODENAME}-updates |${UBUNTU_UPDATES_MIRROR}/ ${UBUNTU_CODENAME}-updates |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ ${UBUNTU_CODENAME}-backports |${UBUNTU_BACKPORTS_MIRROR}/ ${UBUNTU_CODENAME}-backports |g" \
+      -e "s|http://security.ubuntu.com/ubuntu/ ${UBUNTU_CODENAME}-security |${UBUNTU_SECURITY_MIRROR}/ ${UBUNTU_CODENAME}-security |g" \
       /etc/apt/sources.list; \
     ./README.Ubuntu.bash; \
     rm README.Ubuntu.bash; \
@@ -28,7 +29,9 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Install allure-behave for behave tests
-    pip3 install --no-cache-dir --prefer-binary --break-system-packages \
+    PYTHON_PIP_FLAGS="--no-cache-dir --prefer-binary"; \
+    [ "$VERSION_ID" = "24.04" ] && PYTHON_PIP_FLAGS="$PYTHON_PIP_FLAGS --break-system-packages --ignore-installed"; \
+    pip3 install $PYTHON_PIP_FLAGS \
       allure-behave==2.4.0 \
       behave~=1.2.6 \
       coverage~=4.5 \
