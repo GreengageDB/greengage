@@ -29,7 +29,7 @@ RUN set -eux; \
     python -m pip install --no-cache-dir -r pytest_requirement.txt && \
     rm pytest_requirement.txt && \
 # ADCC extension dependencies
-    python -m pip install --no-cache-dir protobuf==3.20.0 && \
+    python3 -m pip install --no-cache-dir protobuf==3.20.0 && \
 # Cleanup to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/man/
