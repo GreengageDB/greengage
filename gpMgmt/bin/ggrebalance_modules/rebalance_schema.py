@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2026 Greengage Community
+# Copyright (c) 2025-Present, Greengage Community
 #
 
 from psycopg2.extensions import cursor
