@@ -95,9 +95,7 @@
 #define TEXTDOMAIN PG_TEXTDOMAIN("plpython")
 
 #include <compile.h>
-#if PY_VERSION_HEX < 0x030c0000  /* Python < 3.12 */
 #include <eval.h>
-#endif
 
 /* put back our *printf macros ... this must match src/include/port.h */
 #ifdef vsnprintf
