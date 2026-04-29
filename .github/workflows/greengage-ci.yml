@@ -165,20 +165,20 @@ jobs:
       DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  package:
-    needs: [generate-matrix, build]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
-    permissions:
-      contents: read
-      packages: write
-      actions: write
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
-    with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
-      test_docker:       ubuntu:22.04
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+  # package:
+  #   needs: [generate-matrix, build]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #     actions: write
+  #   uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
+  #   with:
+  #     version:           ${{ needs.generate-matrix.outputs.version }}
+  #     target_os:         ${{ matrix.target_os }}
+  #     target_os_version: ${{ matrix.target_os_version }}
+  #     test_docker:       ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
+  #   secrets:
+  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
