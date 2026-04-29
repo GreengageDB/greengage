@@ -15,7 +15,7 @@ try:
     from ggrebalance_modules.rebalance_commons import interactive_check_yesno
     from gppylib.fault_injection import *
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 class RebalanceSM:
 
