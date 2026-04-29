@@ -61,7 +61,7 @@ for x in range(c):
   value3 = (value1 * value2) / (value1 + value2)**2
   value4 = math.log(value1) + random.random()*3
   yield {'id': id, 'name':  name, 'value1': value1, 'value2': value2, 'value3': value3, 'value4': value4}
-$$ language plpythonu;
+$$ language plpython3u;
 
 -- Add 1K records on each segment
 \echo 'loading data...'
