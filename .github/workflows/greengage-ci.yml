@@ -16,8 +16,7 @@ env:
   VERSION: "8"
   OS_MATRIX: |
     [
-      { "target_os": "ubuntu"                               },
-      { "target_os": "ubuntu", "target_os_version": "24.04" }
+      { "target_os": "ubuntu" }
     ]
 
 jobs:
