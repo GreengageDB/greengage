@@ -6,7 +6,9 @@ data_file = /tmp/coverage-data/coverage-data
 branch = True
 omit =
         */__init__.py*
+        */sitecustomize.py*
         */test/*
+        */gpload_test/*
         /usr/local/greengage-db-devel/lib/python/pygresql/*
         /usr/local/greengage-db-devel/lib/python/yaml/*
         /usr/local/greengage-db-devel/lib/python/sitecustomize.py
@@ -33,3 +35,8 @@ source3 =
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /usr/local/greengage-db-devel/lib/python/gppylib
+
+source4 =
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
+        /usr/local/greengage-db-devel/bin/gp_replica_check.py
