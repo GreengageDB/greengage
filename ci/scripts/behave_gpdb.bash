@@ -31,6 +31,10 @@ function _main() {
 				exit 1
 		fi
 
+		# Run inside a subshell so it does not pollute the environment after
+		# sourcing greenplum_path
+		time (make_cluster)
+
 		time gen_env
 
 		time run_test
