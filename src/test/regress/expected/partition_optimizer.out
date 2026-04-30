@@ -8587,7 +8587,7 @@ set optimizer_enable_materialize = off;
 explain
 select count(distinct a.d) from t1_12533 a, t2_12533 b
 where a.c = b.c and a.b < 50 and b.b < 50;
-                                                              QUERY PLAN                                                             
+                                                              QUERY PLAN                                                              
 --------------------------------------------------------------------------------------------------------------------------------------
  Aggregate  (cost=0.00..782.59 rows=1 width=8)
    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..782.59 rows=1 width=4)
