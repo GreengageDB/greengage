@@ -68,7 +68,7 @@ run_feature() {
 
   docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
-      -f behave_utils.ci.formatter:CustomFormatter \
+      -f behave_utils.arenadata.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results  \
