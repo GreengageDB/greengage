@@ -11,6 +11,8 @@ function gen_env(){
 
 		source /usr/local/greenplum-db-devel/greenplum_path.sh
 
+		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
+
 		cd "\${1}/gpdb_src/gpMgmt/"
 		BEHAVE_TAGS="${BEHAVE_TAGS}"
 		BEHAVE_FLAGS="${BEHAVE_FLAGS}"
