@@ -37,3 +37,21 @@ services:
     volumes:
       - ${PWD}/ssh_keys:/home/gpadmin/.ssh.src
       - ${PWD}/logs_sdw3:/logs
+  sdw4:
+    <<: *common-service
+    hostname: sdw4
+    volumes:
+      - ${PWD}/ssh_keys:/home/gpadmin/.ssh.src
+      - ${PWD}/logs_sdw4:/logs
+  sdw5:
+    <<: *common-service
+    hostname: sdw5
+    volumes:
+      - ${PWD}/ssh_keys:/home/gpadmin/.ssh.src
+      - ${PWD}/logs_sdw5:/logs
+  sdw6:
+    <<: *common-service
+    hostname: sdw6
+    volumes:
+      - ${PWD}/ssh_keys:/home/gpadmin/.ssh.src
+      - ${PWD}/logs_sdw6:/logs
