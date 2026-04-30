@@ -51,22 +51,19 @@ EOF
 
 FROM base AS build
 
-ARG OS_VERSION=22.04
-ARG SKIP_UNITTESTS
-
 COPY . gpdb_src
 
 RUN mkdir bin_gpdb
 
-ENV TARGET_OS=ubuntu \
-    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+ARG SKIP_UNITTESTS
+ENV OUTPUT_ARTIFACT_DIR=bin_gpdb \
     SKIP_UNITTESTS=$SKIP_UNITTESTS \
 # To set default locale for unittests
     LANG=en_US.UTF-8 \
     CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --with-llvm --with-openssl --enable-cassert --enable-debug --enable-depend --with-libxml --with-uuid=ossp --with-perl --enable-mapreduce --enable-orafce"
 
 # Compile with running mocking tests
-RUN TARGET_OS_VERSION="${OS_VERSION%%.*}" gpdb_src/concourse/scripts/compile_gpdb.bash
+RUN gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base AS code
 COPY . gpdb_src
