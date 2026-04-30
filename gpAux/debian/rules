@@ -41,6 +41,19 @@ override_dh_auto_install:
 		GPDIR=$(GPDIR) \
 		PARALLEL_MAKE_OPTS=-j$(shell nproc)
 
+override_dh_dwz:
+	@echo "Skipping dwz"
+
+override_dh_fixperms:
+	dh_fixperms
+	# Remove executable bit from Python/Perl/Bash modules without shebang
+	find $(CURDIR)/debian/$(PACKAGE_NAME) -type f \( -name "*.py" -o -name "*.pm" -o -name "*.sh" \) -executable | while read f; do \
+	    if ! head -1 "$$f" | grep -q '^#!'; then \
+	        chmod -x "$$f"; \
+	    fi; \
+	done
+	find $(CURDIR)/debian/$(PACKAGE_NAME) -name "*.md" -executable | xargs chmod -x
+
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
 	dh_gencontrol -- -VpythonRequires="$(DEPS)" -VpythonConflicts="$(CONFLICTS)"
