@@ -1803,10 +1803,10 @@ explain select (select a from perct where median(t.a) = 5) from perct t;
                ->  Shared Scan (share slice:id 6:0)  (cost=0.00..431.01 rows=34 width=1)
                      ->  Materialize  (cost=0.00..431.01 rows=34 width=1)
                            ->  GroupAggregate  (cost=0.00..431.01 rows=34 width=12)
-                                 Group Key: perct.a
+                                 Group Key: t.a
                                  ->  Sort  (cost=0.00..431.00 rows=34 width=4)
-                                       Sort Key: perct.a
-                                       ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
+                                       Sort Key: t.a
+                                       ->  Seq Scan on perct t  (cost=0.00..431.00 rows=34 width=4)
                ->  Redistribute Motion 1:3  (slice4)  (cost=0.00..1324037.57 rows=1 width=8)
                      ->  Aggregate  (cost=0.00..1324037.57 rows=1 width=8)
                            ->  Limit  (cost=0.00..1324037.57 rows=34 width=20)
@@ -1846,10 +1846,10 @@ explain select (select array_agg(a ORDER BY a) from perct where median(t.a) = 50
                ->  Shared Scan (share slice:id 6:0)  (cost=0.00..431.01 rows=34 width=1)
                      ->  Materialize  (cost=0.00..431.01 rows=34 width=1)
                            ->  GroupAggregate  (cost=0.00..431.01 rows=34 width=12)
-                                 Group Key: perct.a
+                                 Group Key: t.a
                                  ->  Sort  (cost=0.00..431.00 rows=34 width=4)
-                                       Sort Key: perct.a
-                                       ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
+                                       Sort Key: t.a
+                                       ->  Seq Scan on perct t  (cost=0.00..431.00 rows=34 width=4)
                ->  Redistribute Motion 1:3  (slice4)  (cost=0.00..1324037.57 rows=1 width=8)
                      ->  Aggregate  (cost=0.00..1324037.57 rows=1 width=8)
                            ->  Limit  (cost=0.00..1324037.57 rows=34 width=20)
