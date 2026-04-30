@@ -14760,7 +14760,7 @@ update window_agg_test t
 set i = tt.i 
 from (select (min(i) over (order by j)) as i, j from window_agg_test) tt
 where t.j = tt.j;
-                                                            QUERY PLAN                                                             
+                                                    QUERY PLAN                                                             
 ------------------------------------------------------------------------------------------------------------------
  Update  (cost=0.00..862.06 rows=1 width=1)
    ->  Explicit Redistribute Motion 1:3  (slice3; segments: 1)  (cost=0.00..862.00 rows=2 width=22)
