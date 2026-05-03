@@ -231,15 +231,24 @@ main(int argc, char **argv)
 		create_new_objects();
 	}
 
-	/*
-	 * In a segment, the data directory already contains all the objects,
-	 * because the segment is initialized by taking a physical copy of the
-	 * upgraded QD data directory. The auxiliary AO tables - containing
-	 * information about the segment files, are different in each server,
-	 * however. So we still need to restore those separately on each
-	 * server.
-	 */
-	restore_aosegment_tables();
+	if (!is_greengage_dispatcher_mode())
+	{
+		/*
+		 * In a segment, the data directory already contains all the objects,
+		 * because the segment is initialized by taking a physical copy of the
+		 * upgraded QD data directory. The auxiliary AO tables - containing
+		 * information about the segment files, are different in each server,
+		 * however. So we still need to restore those separately on each
+		 * server.
+		 *
+		 * Because we are concerned with 6.x -> 7.x migration here, this
+		 * step should be done only for primary segments, because starting
+		 * from Greengage 7, pg_aoseg tables on the coordinator are expected
+		 * to remain empty. Don't copy pg_aoblkdir and pg_aovisimap tables
+		 * either, they should be empty too.
+		 */
+		restore_aosegment_tables();
+	}
 
 	if (is_greengage_dispatcher_mode())
 	{
