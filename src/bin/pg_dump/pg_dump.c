@@ -17539,7 +17539,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					appendStringLiteralAH(q, tbinfo->attnames[j], fout);
 
 					/* GPDB partitioning */
-					if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					if (fout->remoteVersion < GPDB6_MAJOR_PGVERSION)
 					{
 						/*
 						 * Do for all descendants of a partition table.
@@ -17555,6 +17555,30 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 										  "pr.paroid = p.oid AND p.parrelid = ");
 						appendStringLiteralAH(q, qualrelname, fout);
 						appendPQExpBufferStr(q, "::pg_catalog.regclass);\n");
+					}
+					else if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					{
+						/*
+						 * Case for 6.x -> 7.x migration
+						 *
+						 * Target version (i.e. Greengage 7.x)
+						 * uses PostgreSQL partitions, and its catalog doesn't have
+						 * 'pg_partition' and 'pg_partition_rule',
+						 * but because we are dumping from Greengage 6.x,
+						 * the rest of the code expects that we will deal
+						 * with partitions here (in 7.x each partition
+						 * updates its attributes separately).
+						 *
+						 * Use pg_partition_tree() to find partition children.
+						 * For non-partitioned tables it returns no rows,
+						 * so include the root relation explicitly.
+						 */
+						appendPQExpBufferStr(q, "\n  AND attrelid IN (SELECT ");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass ");
+						appendPQExpBufferStr(q, "UNION SELECT relid FROM pg_partition_tree(");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass));\n");
 					}
 					else
 					{
