@@ -18,7 +18,7 @@ function gen_env(){
 
 		# Now copy everything over to the hosts.
 		gpscp -f /tmp/hostfile_all -v /tmp/sitecustomize.py =:/usr/local/greengage-db-devel/lib/python
-		gpssh -f /tmp/hostfile_all -v -e "echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh"
+		gpssh -f /tmp/hostfile_all -v -e "echo 'export COVERAGE_PROCESS_START=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh"
 
 		source /usr/local/greengage-db-devel/greengage_path.sh
 
@@ -39,8 +39,8 @@ function gen_env(){
 				mkdir -p /tmp/coverage-data
 				cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
 				cd /tmp/coverage-data
-				coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
-				coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
+				coverage combine --append --data-file=coverage-data --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
+				coverage html --data-file=coverage-data --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
 			"
 		fi
 	EOF
