@@ -389,11 +389,8 @@ analyze_rel_internal(Oid relid, RangeVar *relation,
 	}
 
 	/*
-	 * OK, let's do it.  First let other backends know I'm in ANALYZE.
+	 * OK, let's do it.  First, initialize progress reporting.
 	 */
-	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
-	MyPgXact->vacuumFlags |= PROC_IN_ANALYZE;
-	LWLockRelease(ProcArrayLock);
 	pgstat_progress_start_command(PROGRESS_COMMAND_ANALYZE,
 								  RelationGetRelid(onerel));
 
@@ -443,14 +440,6 @@ analyze_rel_internal(Oid relid, RangeVar *relation,
 	relation_close(onerel, NoLock);
 
 	pgstat_progress_end_command();
-
-	/*
-	 * Reset my PGXACT flag.  Note: we need this here, and not in vacuum_rel,
-	 * because the vacuum flag is cleared by the end-of-xact code.
-	 */
-	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
-	MyPgXact->vacuumFlags &= ~PROC_IN_ANALYZE;
-	LWLockRelease(ProcArrayLock);
 }
 
 /*
@@ -1506,7 +1495,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 		totalblocks = RelationGetNumberOfBlocks(onerel);
 
 	/* Need a cutoff xmin for HeapTupleSatisfiesVacuum */
-	OldestXmin = GetOldestXmin(onerel, PROCARRAY_FLAGS_VACUUM);
+	OldestXmin = GetOldestNonRemovableTransactionId(onerel);
 
 	/* Prepare for sampling block numbers */
 	nblocks = BlockSampler_Init(&bs, totalblocks, targrows, random());

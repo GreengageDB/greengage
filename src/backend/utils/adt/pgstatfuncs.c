@@ -769,7 +769,13 @@ pg_stat_get_activity(PG_FUNCTION_ARGS)
 				PGPROC	   *leader;
 
 				leader = proc->lockGroupLeader;
-				if (leader)
+
+				/*
+				 * Show the leader only for active parallel workers.  This
+				 * leaves the field as NULL for the leader of a parallel
+				 * group.
+				 */
+				if (leader && leader->pid != beentry->st_procpid)
 				{
 					values[29] = Int32GetDatum(leader->pid);
 					nulls[29] = false;

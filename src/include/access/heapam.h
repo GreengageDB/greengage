@@ -173,21 +173,18 @@ extern TransactionId heap_compute_xid_horizon_for_tuples(Relation rel,
 														 int nitems);
 
 /* in heap/pruneheap.c */
+struct GlobalVisState;
 extern void heap_page_prune_opt(Relation relation, Buffer buffer);
 extern int	heap_page_prune(Relation relation, Buffer buffer,
-							TransactionId OldestXmin,
+							struct GlobalVisState *vistest,
+							TransactionId limited_oldest_xmin,
+							TimestampTz limited_oldest_ts,
 							bool report_stats, TransactionId *latestRemovedXid);
 extern void heap_page_prune_execute(Buffer buffer,
 									OffsetNumber *redirected, int nredirected,
 									OffsetNumber *nowdead, int ndead,
 									OffsetNumber *nowunused, int nunused);
 extern void heap_get_root_tuples(Page page, OffsetNumber *root_offsets);
-
-/* in heap/syncscan.c */
-extern void ss_report_location(Relation rel, BlockNumber location);
-extern BlockNumber ss_get_location(Relation rel, BlockNumber relnblocks);
-extern void SyncScanShmemInit(void);
-extern Size SyncScanShmemSize(void);
 
 /* in heap/vacuumlazy.c */
 extern void parallel_vacuum_main(dsm_segment *seg, shm_toc *toc);
@@ -199,10 +196,13 @@ extern TM_Result HeapTupleSatisfiesUpdate(Relation relation, HeapTuple stup, Com
 										  Buffer buffer);
 extern HTSV_Result HeapTupleSatisfiesVacuum(Relation relation, HeapTuple stup, TransactionId OldestXmin,
 											Buffer buffer);
+extern HTSV_Result HeapTupleSatisfiesVacuumHorizon(Relation relation, HeapTuple stup, Buffer buffer,
+												   TransactionId *dead_after);
 extern void HeapTupleSetHintBits(HeapTupleHeader tuple, Buffer buffer, Relation rel,
 								 uint16 infomask, TransactionId xid);
 extern bool HeapTupleHeaderIsOnlyLocked(HeapTupleHeader tuple);
-extern bool HeapTupleIsSurelyDead(HeapTuple htup, TransactionId OldestXmin);
+extern bool HeapTupleIsSurelyDead(HeapTuple htup,
+								  struct GlobalVisState *vistest);
 
 /*
  * To avoid leaking too much knowledge about reorderbuffer implementation

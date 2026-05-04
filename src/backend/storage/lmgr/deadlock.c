@@ -549,7 +549,6 @@ FindLockCycleRecurseMember(PGPROC *checkProc,
 {
 	PGPROC	   *proc;
 	LOCK	   *lock = checkProc->waitLock;
-	PGXACT	   *pgxact;
 	PROCLOCK   *proclock;
 	SHM_QUEUE  *procLocks;
 	LockMethod	lockMethodTable;
@@ -587,7 +586,6 @@ FindLockCycleRecurseMember(PGPROC *checkProc,
 		PGPROC	   *leader;
 
 		proc = proclock->tag.myProc;
-		pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
 		leader = proc->lockGroupLeader == NULL ? proc : proc->lockGroupLeader;
 
 		/* A proc never blocks itself or any other lock group member */
@@ -635,7 +633,7 @@ FindLockCycleRecurseMember(PGPROC *checkProc,
 					 * ProcArrayLock.
 					 */
 					if (checkProc == MyProc &&
-						pgxact->vacuumFlags & PROC_IS_AUTOVACUUM)
+						proc->vacuumFlags & PROC_IS_AUTOVACUUM)
 						blocking_autovacuum_proc = proc;
 
 					/* We're done looking at this proclock */

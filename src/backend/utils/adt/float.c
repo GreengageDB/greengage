@@ -273,18 +273,6 @@ float4in(PG_FUNCTION_ARGS)
 					 errmsg("invalid input syntax for type %s: \"%s\"",
 							"real", orig_num)));
 	}
-#ifdef HAVE_BUGGY_SOLARIS_STRTOD
-	else
-	{
-		/*
-		 * Many versions of Solaris have a bug wherein strtod sets endptr to
-		 * point one byte beyond the end of the string when given "inf" or
-		 * "infinity".
-		 */
-		if (endptr != num && endptr[-1] == '\0')
-			endptr--;
-	}
-#endif							/* HAVE_BUGGY_SOLARIS_STRTOD */
 
 	/* skip trailing whitespace */
 	while (*endptr != '\0' && isspace((unsigned char) *endptr))
@@ -502,18 +490,6 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 										 type_name, orig_string))),
 						 have_error);
 	}
-#ifdef HAVE_BUGGY_SOLARIS_STRTOD
-	else
-	{
-		/*
-		 * Many versions of Solaris have a bug wherein strtod sets endptr to
-		 * point one byte beyond the end of the string when given "inf" or
-		 * "infinity".
-		 */
-		if (endptr != num && endptr[-1] == '\0')
-			endptr--;
-	}
-#endif							/* HAVE_BUGGY_SOLARIS_STRTOD */
 
 	/* skip trailing whitespace */
 	while (*endptr != '\0' && isspace((unsigned char) *endptr))
@@ -1116,18 +1092,25 @@ in_range_float8_float8(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * Deal with infinite offset (necessarily +inf, at this point).  We must
-	 * special-case this because if base happens to be -inf, their sum would
-	 * be NaN, which is an overflow-ish condition we should avoid.
+	 * Deal with cases where both base and offset are infinite, and computing
+	 * base +/- offset would produce NaN.  This corresponds to a window frame
+	 * whose boundary infinitely precedes +inf or infinitely follows -inf,
+	 * which is not well-defined.  For consistency with other cases involving
+	 * infinities, such as the fact that +inf infinitely follows +inf, we
+	 * choose to assume that +inf infinitely precedes +inf and -inf infinitely
+	 * follows -inf, and therefore that all finite and infinite values are in
+	 * such a window frame.
+	 *
+	 * offset is known positive, so we need only check the sign of base in
+	 * this test.
 	 */
-	if (isinf(offset))
-	{
-		PG_RETURN_BOOL(sub ? !less : less);
-	}
+	if (isinf(offset) && isinf(base) &&
+		(sub ? base > 0 : base < 0))
+		PG_RETURN_BOOL(true);
 
 	/*
 	 * Otherwise it should be safe to compute base +/- offset.  We trust the
-	 * FPU to cope if base is +/-inf or the true sum would overflow, and
+	 * FPU to cope if an input is +/-inf or the true sum would overflow, and
 	 * produce a suitably signed infinity, which will compare properly against
 	 * val whether or not that's infinity.
 	 */
@@ -1185,18 +1168,25 @@ in_range_float4_float8(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * Deal with infinite offset (necessarily +inf, at this point).  We must
-	 * special-case this because if base happens to be -inf, their sum would
-	 * be NaN, which is an overflow-ish condition we should avoid.
+	 * Deal with cases where both base and offset are infinite, and computing
+	 * base +/- offset would produce NaN.  This corresponds to a window frame
+	 * whose boundary infinitely precedes +inf or infinitely follows -inf,
+	 * which is not well-defined.  For consistency with other cases involving
+	 * infinities, such as the fact that +inf infinitely follows +inf, we
+	 * choose to assume that +inf infinitely precedes +inf and -inf infinitely
+	 * follows -inf, and therefore that all finite and infinite values are in
+	 * such a window frame.
+	 *
+	 * offset is known positive, so we need only check the sign of base in
+	 * this test.
 	 */
-	if (isinf(offset))
-	{
-		PG_RETURN_BOOL(sub ? !less : less);
-	}
+	if (isinf(offset) && isinf(base) &&
+		(sub ? base > 0 : base < 0))
+		PG_RETURN_BOOL(true);
 
 	/*
 	 * Otherwise it should be safe to compute base +/- offset.  We trust the
-	 * FPU to cope if base is +/-inf or the true sum would overflow, and
+	 * FPU to cope if an input is +/-inf or the true sum would overflow, and
 	 * produce a suitably signed infinity, which will compare properly against
 	 * val whether or not that's infinity.
 	 */

@@ -2102,7 +2102,7 @@ inheritance_planner(PlannerInfo *root)
 	else
 	{
 		/*
-		 * Put back the final adjusted rtable into the master copy of the
+		 * Put back the final adjusted rtable into the original copy of the
 		 * Query.  (We mustn't do this if we found no non-excluded children,
 		 * since we never saved an adjusted rtable at all.)
 		 */
@@ -2111,7 +2111,7 @@ inheritance_planner(PlannerInfo *root)
 		root->simple_rel_array = save_rel_array;
 		root->append_rel_array = save_append_rel_array;
 
-		/* Must reconstruct master's simple_rte_array, too */
+		/* Must reconstruct original's simple_rte_array, too */
 		root->simple_rte_array = (RangeTblEntry **)
 			palloc0((list_length(final_rtable) + 1) * sizeof(RangeTblEntry *));
 		rti = 1;
@@ -4838,16 +4838,17 @@ consider_groupingsets_paths(PlannerInfo *root,
 {
 	Query	   *parse = root->parse;
 	double		dNumGroups;
+	int			hash_mem = get_hash_mem();
 
 	/*
 	 * If we're not being offered sorted input, then only consider plans that
 	 * can be done entirely by hashing.
 	 *
-	 * We can hash everything if it looks like it'll fit in work_mem. But if
+	 * We can hash everything if it looks like it'll fit in hash_mem. But if
 	 * the input is actually sorted despite not being advertised as such, we
 	 * prefer to make use of that in order to use less memory.
 	 *
-	 * If none of the grouping sets are sortable, then ignore the work_mem
+	 * If none of the grouping sets are sortable, then ignore the hash_mem
 	 * limit and generate a path anyway, since otherwise we'll just fail.
 	 */
 	if (!is_sorted)
@@ -4890,10 +4891,10 @@ consider_groupingsets_paths(PlannerInfo *root,
 
 		/*
 		 * gd->rollups is empty if we have only unsortable columns to work
-		 * with.  Override work_mem in that case; otherwise, we'll rely on the
+		 * with.  Override hash_mem in that case; otherwise, we'll rely on the
 		 * sorted-input case to generate usable mixed paths.
 		 */
-		if (hashsize > work_mem * 1024L && gd->rollups)
+		if (hashsize > hash_mem * 1024L && gd->rollups)
 			return;				/* nope, won't fit */
 
 		/*
@@ -4960,7 +4961,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 	{
 		List	   *rollups = NIL;
 		List	   *hash_sets = list_copy(gd->unsortable_sets);
-		double		availspace = (work_mem * 1024.0);
+		double		availspace = (hash_mem * 1024.0);
 		ListCell   *lc;
 
 		/*
@@ -4982,7 +4983,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 
 			/*
 			 * We treat this as a knapsack problem: the knapsack capacity
-			 * represents work_mem, the item weights are the estimated memory
+			 * represents hash_mem, the item weights are the estimated memory
 			 * usage of the hashtables needed to implement a single rollup,
 			 * and we really ought to use the cost saving as the item value;
 			 * however, currently the costs assigned to sort nodes don't
@@ -5023,7 +5024,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 																rollup->numGroups);
 
 					/*
-					 * If sz is enormous, but work_mem (and hence scale) is
+					 * If sz is enormous, but hash_mem (and hence scale) is
 					 * small, avoid integer overflow here.
 					 */
 					k_weights[i] = (int) Min(floor(sz / scale),
@@ -5495,12 +5496,7 @@ create_distinct_paths(PlannerInfo *root,
 	else if (parse->hasDistinctOn || !enable_hashagg)
 		allow_hash = false;		/* policy-based decision not to hash */
 	else
-	{
-		Size		hashentrysize = hash_agg_entry_size(0, cheapest_input_path->pathtarget->width, 0);
-
-		allow_hash = !hashagg_avoid_disk_plan ||
-			(hashentrysize * numDistinctRowsTotal <= work_mem * 1024L);
-	}
+		allow_hash = true;		/* default */
 
 	if (allow_hash && grouping_is_hashable(parse->distinctClause))
 	{
@@ -5670,7 +5666,7 @@ create_ordered_paths(PlannerInfo *root,
 			 * presorted the path is. Additionally incremental sort may enable
 			 * a cheaper startup path to win out despite higher total cost.
 			 */
-			if (!enable_incrementalsort)
+			if (!enable_incremental_sort)
 				continue;
 
 			/* Likewise, if the path can't be used for incremental sort. */
@@ -5751,7 +5747,7 @@ create_ordered_paths(PlannerInfo *root,
 		 * sort_pathkeys because then we can't possibly have a presorted
 		 * prefix of the list without having the list be fully sorted.
 		 */
-		if (enable_incrementalsort && list_length(root->sort_pathkeys) > 1)
+		if (enable_incremental_sort && list_length(root->sort_pathkeys) > 1)
 		{
 			ListCell   *lc;
 
@@ -7343,7 +7339,9 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 		foreach(lc, input_rel->pathlist)
 		{
 			Path	   *path = (Path *) lfirst(lc);
+#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			Path	   *path_original = path;
+#endif
 			bool		is_sorted;
 			int			presorted_keys;
 
@@ -7441,7 +7439,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			 * when the path is not already sorted and when incremental sort
 			 * is enabled.
 			 */
-			if (is_sorted || !enable_incrementalsort)
+			if (is_sorted || !enable_incremental_sort)
 				continue;
 
 			/* Restore the input path (we might have added Sort on top). */
@@ -7520,7 +7518,9 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			foreach(lc, partially_grouped_rel->pathlist)
 			{
 				Path	   *path = (Path *) lfirst(lc);
+#if  0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 				Path	   *path_original = path;
+#endif
 				bool		is_sorted;
 				int			presorted_keys;
 				double		dNumGroups;
@@ -7593,7 +7593,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				 * when the path is not already sorted and when incremental
 				 * sort is enabled.
 				 */
-				if (is_sorted || !enable_incrementalsort)
+				if (is_sorted || !enable_incremental_sort)
 					continue;
 
 				/* Restore the input path (we might have added Sort on top). */
@@ -7644,8 +7644,6 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 
 	if (can_hash)
 	{
-		double		hashaggtablesize;
-
 		if (parse->groupingSets)
 		{
 			/*
@@ -7678,42 +7676,26 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			else
 				dNumGroups = dNumGroupsTotal;
 
-			hashaggtablesize = estimate_hashagg_tablesize(cheapest_path,
-														  agg_costs,
-														  dNumGroups);
-
 			/*
-			 * Provided that the estimated size of the hashtable does not
-			 * exceed work_mem, we'll generate a HashAgg Path, although if we
-			 * were unable to sort above, then we'd better generate a Path, so
-			 * that we at least have one.
+			 * Generate a HashAgg Path.  We just need an Agg over the
+			 * cheapest-total input path, since input order won't matter.
 			 */
-			if (!hashagg_avoid_disk_plan ||
-				hashaggtablesize < work_mem * 1024L ||
-				grouped_rel->pathlist == NIL)
-			{
-				/*
-				 * We just need an Agg over the cheapest-total input path,
-				 * since input order won't matter.
-				 */
-				add_path(grouped_rel, (Path *)
-						 create_agg_path(root, grouped_rel,
-										 path,
-										 grouped_rel->reltarget,
-										 AGG_HASHED,
-										 AGGSPLIT_SIMPLE,
-										 false,
-										 parse->groupClause,
-										 havingQual,
-										 agg_costs,
-										 dNumGroups));
-			}
+			add_path(grouped_rel, (Path *)
+					 create_agg_path(root, grouped_rel,
+									 path,
+									 grouped_rel->reltarget,
+									 AGG_HASHED,
+									 AGGSPLIT_SIMPLE,
+									 false,
+									 parse->groupClause,
+									 havingQual,
+									 agg_costs,
+									 dNumGroups));
 		}
 
 		/*
 		 * Generate a Finalize HashAgg Path atop of the cheapest partially
-		 * grouped path, assuming there is one. Once again, we'll only do this
-		 * if it looks as though the hash table won't exceed work_mem.
+		 * grouped path, assuming there is one
 		 */
 		if (partially_grouped_rel && partially_grouped_rel->pathlist)
 		{
@@ -7737,24 +7719,18 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			else
 				dNumGroups = dNumGroupsTotal;
 
-			hashaggtablesize = estimate_hashagg_tablesize(path,
-														  agg_final_costs,
-														  dNumGroups);
-
-			if (!hashagg_avoid_disk_plan ||
-				hashaggtablesize < work_mem * 1024L)
-				add_path(grouped_rel, (Path *)
-						 create_agg_path(root,
-										 grouped_rel,
-										 path,
-										 grouped_rel->reltarget,
-										 AGG_HASHED,
-										 AGGSPLIT_FINAL_DESERIAL,
-										 false,
-										 parse->groupClause,
-										 havingQual,
-										 agg_final_costs,
-										 dNumGroups));
+			add_path(grouped_rel, (Path *)
+					 create_agg_path(root,
+									 grouped_rel,
+									 path,
+									 grouped_rel->reltarget,
+									 AGG_HASHED,
+									 AGGSPLIT_FINAL_DESERIAL,
+									 false,
+									 parse->groupClause,
+									 havingQual,
+									 agg_final_costs,
+									 dNumGroups));
 		}
 	}
 
@@ -8076,7 +8052,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 		 * group_pathkeys because then we can't possibly have a presorted
 		 * prefix of the list without having the list be fully sorted.
 		 */
-		if (enable_incrementalsort && list_length(root->group_pathkeys) > 1)
+		if (enable_incremental_sort && list_length(root->group_pathkeys) > 1)
 		{
 			foreach(lc, input_rel->pathlist)
 			{
@@ -8134,7 +8110,9 @@ create_partial_grouping_paths(PlannerInfo *root,
 		foreach(lc, input_rel->partial_pathlist)
 		{
 			Path	   *path = (Path *) lfirst(lc);
+#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			Path	   *path_original = path;
+#endif
 			bool		is_sorted;
 			int			presorted_keys;
 
@@ -8186,7 +8164,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 			 * when the path is not already sorted and when incremental sort
 			 * is enabled.
 			 */
-			if (is_sorted || !enable_incrementalsort)
+			if (is_sorted || !enable_incremental_sort)
 				continue;
 
 			/* Restore the input path (we might have added Sort on top). */
@@ -8233,67 +8211,45 @@ create_partial_grouping_paths(PlannerInfo *root,
 		}
 	}
 
-    if (can_hash && cheapest_total_path != NULL)
+	/*
+	 * Add a partially-grouped HashAgg Path where possible
+	 */
+	if (can_hash && cheapest_total_path != NULL)
 	{
-		double		hashaggtablesize;
-
 		/* Checked above */
 		Assert(parse->hasAggs || parse->groupClause);
 
-		hashaggtablesize =
-			estimate_hashagg_tablesize(cheapest_total_path,
-									   agg_partial_costs,
-									   dNumPartialGroups);
-
-		/*
-		 * Tentatively produce a partial HashAgg Path, depending on if it
-		 * looks as if the hash table will fit in work_mem.
-		 */
-		if ((!hashagg_avoid_disk_plan || hashaggtablesize < work_mem * 1024L) &&
-			cheapest_total_path != NULL)
-		{
-			add_path(partially_grouped_rel, (Path *)
-					 create_agg_path(root,
-									 partially_grouped_rel,
-									 cheapest_total_path,
-									 partially_grouped_rel->reltarget,
-									 AGG_HASHED,
-									 AGGSPLIT_INITIAL_SERIAL,
-									 false,
-									 parse->groupClause,
-									 NIL,
-									 agg_partial_costs,
-									 dNumPartialGroups));
-		}
+		add_path(partially_grouped_rel, (Path *)
+				 create_agg_path(root,
+								 partially_grouped_rel,
+								 cheapest_total_path,
+								 partially_grouped_rel->reltarget,
+								 AGG_HASHED,
+								 AGGSPLIT_INITIAL_SERIAL,
+								 false,
+								 parse->groupClause,
+								 NIL,
+								 agg_partial_costs,
+								 dNumPartialGroups));
 	}
 
+	/*
+	 * Now add a partially-grouped HashAgg partial Path where possible
+	 */
 	if (can_hash && cheapest_partial_path != NULL)
 	{
-		double		hashaggtablesize;
-
-		hashaggtablesize =
-			estimate_hashagg_tablesize(cheapest_partial_path,
-									   agg_partial_costs,
-									   dNumPartialPartialGroups);
-
-		/* Do the same for partial paths. */
-		if ((!hashagg_avoid_disk_plan ||
-			 hashaggtablesize < work_mem * 1024L) &&
-			cheapest_partial_path != NULL)
-		{
-			add_partial_path(partially_grouped_rel, (Path *)
-							 create_agg_path(root,
-											 partially_grouped_rel,
-											 cheapest_partial_path,
-											 partially_grouped_rel->reltarget,
-											 AGG_HASHED,
-											 AGGSPLIT_INITIAL_SERIAL,
-											 false,
-											 parse->groupClause,
-											 NIL,
-											 agg_partial_costs,
-											 dNumPartialPartialGroups));
-		}
+		add_partial_path(partially_grouped_rel, (Path *)
+						 create_agg_path(root,
+										 partially_grouped_rel,
+										 cheapest_partial_path,
+										 partially_grouped_rel->reltarget,
+										 AGG_HASHED,
+										 AGGSPLIT_INITIAL_SERIAL,
+										 false,
+										 parse->groupClause,
+										 NIL,
+										 agg_partial_costs,
+										 dNumPartialPartialGroups));
 	}
 
 	/*
@@ -8368,7 +8324,7 @@ gather_grouping_paths(PlannerInfo *root, RelOptInfo *rel)
 	 * group_pathkeys because then we can't possibly have a presorted prefix
 	 * of the list without having the list be fully sorted.
 	 */
-	if (!enable_incrementalsort || list_length(root->group_pathkeys) == 1)
+	if (!enable_incremental_sort || list_length(root->group_pathkeys) == 1)
 		return;
 
 	/* also consider incremental sort on partial paths, if enabled */

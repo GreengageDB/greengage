@@ -145,6 +145,7 @@ bthandler(PG_FUNCTION_ARGS)
 	amroutine->amproperty = btproperty;
 	amroutine->ambuildphasename = btbuildphasename;
 	amroutine->amvalidate = btvalidate;
+	amroutine->amadjustmembers = btadjustmembers;
 	amroutine->ambeginscan = btbeginscan;
 	amroutine->amrescan = btrescan;
 	amroutine->amgettuple = btgettuple;
@@ -909,6 +910,12 @@ _bt_vacuum_needs_cleanup(IndexVacuumInfo *info)
 	metapg = BufferGetPage(metabuf);
 	metad = BTPageGetMeta(metapg);
 
+	/*
+	 * XXX: If IndexVacuumInfo contained the heap relation, we could be more
+	 * aggressive about vacuuming non catalog relations by passing the table
+	 * to GlobalVisCheckRemovableXid().
+	 */
+
 	if (metad->btm_version < BTREE_NOVAC_VERSION)
 	{
 		/*
@@ -918,13 +925,12 @@ _bt_vacuum_needs_cleanup(IndexVacuumInfo *info)
 		result = true;
 	}
 	else if (TransactionIdIsValid(metad->btm_oldest_btpo_xact) &&
-			 TransactionIdPrecedes(metad->btm_oldest_btpo_xact,
-								   RecentGlobalXmin))
+			 GlobalVisCheckRemovableXid(NULL, metad->btm_oldest_btpo_xact))
 	{
 		/*
 		 * If any oldest btpo.xact from a previously deleted page in the index
-		 * is older than RecentGlobalXmin, then at least one deleted page can
-		 * be recycled -- don't skip cleanup.
+		 * is visible to everyone, then at least one deleted page can be
+		 * recycled -- don't skip cleanup.
 		 */
 		result = true;
 	}
@@ -1217,7 +1223,7 @@ backtrack:
 	 */
 	buf = ReadBufferExtended(rel, MAIN_FORKNUM, blkno, RBM_NORMAL,
 							 info->strategy);
-	LockBuffer(buf, BT_READ);
+	_bt_lockbuf(rel, buf, BT_READ);
 	page = BufferGetPage(buf);
 	opaque = NULL;
 	if (!PageIsNew(page))
@@ -1324,8 +1330,7 @@ backtrack:
 		 * course of the vacuum scan, whether or not it actually contains any
 		 * deletable tuples --- see nbtree/README.
 		 */
-		LockBuffer(buf, BUFFER_LOCK_UNLOCK);
-		LockBufferForCleanup(buf);
+		_bt_upgradelockbufcleanup(rel, buf);
 
 		/*
 		 * Check whether we need to backtrack to earlier pages.  What we are
@@ -1378,14 +1383,13 @@ backtrack:
 				 * own conflict now.)
 				 *
 				 * Backends with snapshots acquired after a VACUUM starts but
-				 * before it finishes could have a RecentGlobalXmin with a
-				 * later xid than the VACUUM's OldestXmin cutoff.  These
-				 * backends might happen to opportunistically mark some index
-				 * tuples LP_DEAD before we reach them, even though they may
-				 * be after our cutoff.  We don't try to kill these "extra"
-				 * index tuples in _bt_delitems_vacuum().  This keep things
-				 * simple, and allows us to always avoid generating our own
-				 * conflicts.
+				 * before it finishes could have visibility cutoff with a
+				 * later xid than VACUUM's OldestXmin cutoff.  These backends
+				 * might happen to opportunistically mark some index tuples
+				 * LP_DEAD before we reach them, even though they may be after
+				 * our cutoff.  We don't try to kill these "extra" index
+				 * tuples in _bt_delitems_vacuum().  This keep things simple,
+				 * and allows us to always avoid generating our own conflicts.
 				 */
 				Assert(!BTreeTupleIsPivot(itup));
 				if (!BTreeTupleIsPosting(itup))

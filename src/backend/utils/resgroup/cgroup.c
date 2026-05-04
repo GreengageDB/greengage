@@ -403,7 +403,7 @@ readStr(Oid group, BaseDirType base, CGroupComponentType component,
 
 	readData(path, data, data_size);
 
-	StrNCpy(str, data, len);
+	strlcpy(str, data, len);
 }
 
 /*

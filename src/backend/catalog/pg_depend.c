@@ -174,14 +174,14 @@ recordDependencyOnCurrentExtension(const ObjectAddress *object,
 				ereport(ERROR,
 						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						 errmsg("%s is already a member of extension \"%s\"",
-								getObjectDescription(object),
+								getObjectDescription(object, false),
 								get_extension_name(oldext))));
 			}
 			/* It's a free-standing object, so reject */
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 errmsg("%s is not a member of extension \"%s\"",
-							getObjectDescription(object),
+							getObjectDescription(object, false),
 							get_extension_name(CurrentExtensionObject)),
 					 errdetail("An extension is not allowed to replace an object that it does not own.")));
 		}
@@ -232,7 +232,7 @@ checkMembershipInCurrentExtension(const ObjectAddress *object)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("%s is not a member of extension \"%s\"",
-						getObjectDescription(object),
+						getObjectDescription(object, false),
 						get_extension_name(CurrentExtensionObject)),
 				 errdetail("An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.")));
 	}
@@ -600,7 +600,7 @@ changeDependenciesOn(Oid refClassId, Oid oldRefObjectId,
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot remove dependency on %s because it is a system object",
-						getObjectDescription(&objAddr))));
+						getObjectDescription(&objAddr, false))));
 
 	/*
 	 * We can handle adding a dependency on something pinned, though, since

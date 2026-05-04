@@ -929,7 +929,7 @@ transformColumnDefinition(CreateStmtContext *cxt, ColumnDef *column)
 		stmt = makeNode(AlterTableStmt);
 		stmt->relation = cxt->relation;
 		stmt->cmds = NIL;
-		stmt->relkind = OBJECT_FOREIGN_TABLE;
+		stmt->objtype = OBJECT_FOREIGN_TABLE;
 		stmt->cmds = lappend(stmt->cmds, cmd);
 
 		cxt->alist = lappend(cxt->alist, stmt);
@@ -3611,7 +3611,7 @@ transformIndexConstraint(Constraint *constraint, CreateStmtContext *cxt)
 
 		alterstmt->relation = copyObject(cxt->relation);
 		alterstmt->cmds = notnullcmds;
-		alterstmt->relkind = OBJECT_TABLE;
+		alterstmt->objtype = OBJECT_TABLE;
 		alterstmt->missing_ok = false;
 
 		cxt->alist = lappend(cxt->alist, alterstmt);
@@ -3713,7 +3713,7 @@ transformFKConstraints(CreateStmtContext *cxt,
 
 		alterstmt->relation = cxt->relation;
 		alterstmt->cmds = NIL;
-		alterstmt->relkind = OBJECT_TABLE;
+		alterstmt->objtype = OBJECT_TABLE;
 
 		foreach(fkclist, cxt->fkconstraints)
 		{

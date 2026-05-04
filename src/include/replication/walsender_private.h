@@ -99,11 +99,6 @@ typedef struct WalSnd
 	 */
 	TimestampTz replyTime;
 
-	/* Statistics for transactions spilled to disk. */
-	int64		spillTxns;
-	int64		spillCount;
-	int64		spillBytes;
-
 	/*
 	 * Indicates whether the WalSnd represents a connection with a Greenplum
 	 * mirror in streaming mode

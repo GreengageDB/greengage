@@ -516,7 +516,7 @@ get_ps_display(int *displen)
 void
 set_ps_display_username(const char *username)
 {
-	StrNCpy(ps_username, username, sizeof(ps_username));
+	strlcpy(ps_username, username, sizeof(ps_username));
 }
 
 const char *

@@ -268,6 +268,13 @@
 #endif
 
 /*
+ * Generic function pointer.  This can be used in the rare cases where it's
+ * necessary to cast a function pointer to a seemingly incompatible function
+ * pointer type while avoiding gcc's -Wcast-function-type warnings.
+ */
+typedef void (*pg_funcptr_t) (void);
+
+/*
  * We require C99, hence the compiler should understand flexible array
  * members.  However, for documentation purposes we still consider it to be
  * project style to write "field[FLEXIBLE_ARRAY_MEMBER]" not just "field[]".
@@ -947,35 +954,6 @@ extern void ExceptionalCondition(const char *conditionName,
  *		Return the absolute value of the argument.
  */
 #define Abs(x)			((x) >= 0 ? (x) : -(x))
-
-/*
- * StrNCpy
- *	Like standard library function strncpy(), except that result string
- *	is guaranteed to be null-terminated --- that is, at most N-1 bytes
- *	of the source string will be kept.
- *	Also, the macro returns no result (too hard to do that without
- *	evaluating the arguments multiple times, which seems worse).
- *
- *	BTW: when you need to copy a non-null-terminated string (like a text
- *	datum) and add a null, do not do it with StrNCpy(..., len+1).  That
- *	might seem to work, but it fetches one byte more than there is in the
- *	text object.  One fine day you'll have a SIGSEGV because there isn't
- *	another byte before the end of memory.  Don't laugh, we've had real
- *	live bug reports from real live users over exactly this mistake.
- *	Do it honestly with "memcpy(dst,src,len); dst[len] = '\0';", instead.
- */
-#define StrNCpy(dst,src,len) \
-	do \
-	{ \
-		char * _dst = (dst); \
-		Size _len = (len); \
-\
-		if (_len > 0) \
-		{ \
-			strncpy(_dst, (src), _len); \
-			_dst[_len-1] = '\0'; \
-		} \
-	} while (0)
 
 
 /* Get a bit mask of the bits set in non-long aligned addresses */

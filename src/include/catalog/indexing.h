@@ -21,6 +21,7 @@
 #define INDEXING_H
 
 #include "access/htup.h"
+#include "nodes/execnodes.h"
 #include "utils/relcache.h"
 
 /*
@@ -38,6 +39,10 @@ extern void CatalogCloseIndexes(CatalogIndexState indstate);
 extern void CatalogTupleInsert(Relation heapRel, HeapTuple tup);
 extern void CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 									   CatalogIndexState indstate);
+extern void CatalogTuplesMultiInsertWithInfo(Relation heapRel,
+											 TupleTableSlot **slot,
+											 int ntuples,
+											 CatalogIndexState indstate);
 extern void CatalogTupleUpdate(Relation heapRel, ItemPointer otid,
 							   HeapTuple tup);
 extern void CatalogTupleUpdateWithInfo(Relation heapRel,
@@ -334,8 +339,8 @@ DECLARE_UNIQUE_INDEX(pg_extension_oid_index, 3080, on pg_extension using btree(o
 DECLARE_UNIQUE_INDEX(pg_extension_name_index, 3081, on pg_extension using btree(extname name_ops));
 #define ExtensionNameIndexId 3081
 
-DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 6103, on gp_distribution_policy using btree(localoid oid_ops));
-#define GpPolicyLocalOidIndexId  6103
+DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 8103, on gp_distribution_policy using btree(localoid oid_ops));
+#define GpPolicyLocalOidIndexId  8103
 
 DECLARE_UNIQUE_INDEX(pg_appendonly_relid_index, 7141, on pg_appendonly using btree(relid oid_ops));
 #define AppendOnlyRelidIndexId  7141
@@ -444,7 +449,7 @@ DECLARE_UNIQUE_INDEX(pg_subscription_subname_index, 6115, on pg_subscription usi
 DECLARE_UNIQUE_INDEX(pg_subscription_rel_srrelid_srsubid_index, 6117, on pg_subscription_rel using btree(srrelid oid_ops, srsubid oid_ops));
 #define SubscriptionRelSrrelidSrsubidIndexId 6117
 
-DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 5023, on gp_partition_template using btree(relid oid_ops, level int2_ops));
-#define GpPartitionTemplateRelidLevelIndexId  5023
+DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 8023, on gp_partition_template using btree(relid oid_ops, level int2_ops));
+#define GpPartitionTemplateRelidLevelIndexId  8023
 
 #endif							/* INDEXING_H */

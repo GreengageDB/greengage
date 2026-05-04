@@ -29,7 +29,7 @@
  *		typedef struct FormData_gp_partition_template
  * ----------------
  */
-CATALOG(gp_partition_template,5022,PartitionTemplateRelationId)
+CATALOG(gp_partition_template,8022,PartitionTemplateRelationId)
 {
 	Oid			relid;		/* partitioned table oid */
 	int16       level;

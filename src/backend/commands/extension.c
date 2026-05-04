@@ -838,9 +838,12 @@ is_begin_state(const Node *stmt)
 #endif
 
 /*
- * Set up the search path to contain the target schema, then the schemas
- * of any prerequisite extensions, and nothing else.  In particular this
- * makes the target schema be the default creation target namespace.
+ * Set up the search path to have the target schema first, making it be
+ * the default creation target namespace.  Then add the schemas of any
+ * prerequisite extensions, unless they are in pg_catalog which would be
+ * searched anyway.  (Listing pg_catalog explicitly in a non-first
+ * position would be bad for security.)  Finally add pg_temp to ensure
+ * that temp objects can't take precedence over others.
  *
  * Note: it might look tempting to use PushOverrideSearchPath for this,
  * but we cannot do that.  We have to actually set the search_path GUC in
@@ -848,7 +851,7 @@ is_begin_state(const Node *stmt)
  * GUC_ACTION_SAVE method is just as convenient.
  */
 static void
-set_serach_path_for_extension(List *requiredSchemas, const char *schemaName)
+set_search_path_for_extension(List *requiredSchemas, const char *schemaName)
 {
 	StringInfoData pathbuf;
 	ListCell *lc;
@@ -859,9 +862,10 @@ set_serach_path_for_extension(List *requiredSchemas, const char *schemaName)
 		Oid			reqschema = lfirst_oid(lc);
 		char	   *reqname = get_namespace_name(reqschema);
 
-		if (reqname)
+		if (reqname && strcmp(reqname, "pg_catalog") != 0)
 			appendStringInfo(&pathbuf, ", %s", quote_identifier(reqname));
 	}
+	appendStringInfoString(&pathbuf, ", pg_temp");
 
 	(void) set_config_option("search_path", pathbuf.data,
 							 PGC_USERSET, PGC_S_SESSION,
@@ -974,6 +978,15 @@ execute_extension_script(Node *stmt,
 	if (log_min_messages < WARNING)
 		(void) set_config_option("log_min_messages", "warning",
 								 PGC_SUSET, PGC_S_SESSION,
+								 GUC_ACTION_SAVE, true, 0, false);
+
+	/*
+	 * Similarly disable check_function_bodies, to ensure that SQL functions
+	 * won't be parsed during creation.
+	 */
+	if (check_function_bodies)
+		(void) set_config_option("check_function_bodies", "off",
+								 PGC_USERSET, PGC_S_SESSION,
 								 GUC_ACTION_SAVE, true, 0, false);
 
 	/*
@@ -1675,7 +1688,7 @@ CreateExtensionInternal(char *extensionName,
 		stmt = NULL;
 	}
 
-	set_serach_path_for_extension(requiredSchemas, schemaName);
+	set_search_path_for_extension(requiredSchemas, schemaName);
 
 	if (Gp_role != GP_ROLE_EXECUTE)
 	{
@@ -1919,6 +1932,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 	HeapTuple	tuple;
 	ObjectAddress myself;
 	ObjectAddress nsp;
+	ObjectAddresses *refobjs;
 	ListCell   *lc;
 
 	/*
@@ -1962,27 +1976,26 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 	 */
 	recordDependencyOnOwner(ExtensionRelationId, extensionOid, extOwner);
 
-	myself.classId = ExtensionRelationId;
-	myself.objectId = extensionOid;
-	myself.objectSubId = 0;
+	refobjs = new_object_addresses();
 
-	nsp.classId = NamespaceRelationId;
-	nsp.objectId = schemaOid;
-	nsp.objectSubId = 0;
+	ObjectAddressSet(myself, ExtensionRelationId, extensionOid);
 
-	recordDependencyOn(&myself, &nsp, DEPENDENCY_NORMAL);
+	ObjectAddressSet(nsp, NamespaceRelationId, schemaOid);
+	add_exact_object_address(&nsp, refobjs);
 
 	foreach(lc, requiredExtensions)
 	{
 		Oid			reqext = lfirst_oid(lc);
 		ObjectAddress otherext;
 
-		otherext.classId = ExtensionRelationId;
-		otherext.objectId = reqext;
-		otherext.objectSubId = 0;
-
-		recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
+		ObjectAddressSet(otherext, ExtensionRelationId, reqext);
+		add_exact_object_address(&otherext, refobjs);
 	}
+
+	/* Record all of them (this includes duplicate elimination) */
+	record_object_address_dependencies(&myself, refobjs, DEPENDENCY_NORMAL);
+	free_object_addresses(refobjs);
+
 	/* Post creation hook for new extension */
 	InvokeObjectPostCreateHook(ExtensionRelationId, extensionOid, 0);
 
@@ -3056,7 +3069,7 @@ AlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *o
 					 errmsg("extension \"%s\" does not support SET SCHEMA",
 							NameStr(extForm->extname)),
 					 errdetail("%s is not in the extension's schema \"%s\"",
-							   getObjectDescription(&dep),
+							   getObjectDescription(&dep, false),
 							   get_namespace_name(oldNspOid))));
 	}
 
@@ -3401,7 +3414,7 @@ ApplyExtensionUpdates(Oid extensionOid,
 
 		InvokeObjectPostAlterHook(ExtensionRelationId, extensionOid, 0);
 
-		set_serach_path_for_extension(requiredSchemas, schemaName);
+		set_search_path_for_extension(requiredSchemas, schemaName);
 
 		if (Gp_role != GP_ROLE_EXECUTE)
 		{
@@ -3526,7 +3539,7 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 errmsg("%s is already a member of extension \"%s\"",
-							getObjectDescription(&object),
+							getObjectDescription(&object, false),
 							get_extension_name(oldExtension))));
 
 		/*
@@ -3566,7 +3579,7 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 errmsg("%s is not a member of extension \"%s\"",
-							getObjectDescription(&object),
+							getObjectDescription(&object, false),
 							stmt->extname)));
 
 		/*

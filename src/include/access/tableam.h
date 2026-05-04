@@ -19,6 +19,7 @@
 
 #include "access/relscan.h"
 #include "access/sdir.h"
+#include "access/xact.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/snapshot.h"
@@ -983,6 +984,15 @@ static inline bool
 table_scan_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
 	slot->tts_tableOid = RelationGetRelid(sscan->rs_rd);
+
+	/*
+	 * We don't expect direct calls to table_scan_getnextslot with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_scan_getnextslot call during logical decoding");
+
 	return sscan->rs_rd->rd_tableam->scan_getnextslot(sscan, direction, slot);
 }
 
@@ -1069,7 +1079,9 @@ table_index_fetch_end(struct IndexFetchTableData *scan)
 /*
  * Fetches, as part of an index scan, tuple at `tid` into `slot`, after doing
  * a visibility test according to `snapshot`. If a tuple was found and passed
- * the visibility test, returns true, false otherwise.
+ * the visibility test, returns true, false otherwise. Note that *tid may be
+ * modified when we return true (see later remarks on multiple row versions
+ * reachable via a single index entry).
  *
  * *call_again needs to be false on the first call to table_index_fetch_tuple() for
  * a tid. If there potentially is another tuple matching the tid, *call_again
@@ -1081,12 +1093,12 @@ table_index_fetch_end(struct IndexFetchTableData *scan)
  * that tuple. Index AMs can use that to avoid returning that tid in future
  * searches.
  *
- * The difference between this function and table_fetch_row_version is that
- * this function returns the currently visible version of a row if the AM
- * supports storing multiple row versions reachable via a single index entry
- * (like heap's HOT). Whereas table_fetch_row_version only evaluates the
- * tuple exactly at `tid`. Outside of index entry ->table tuple lookups,
- * table_tuple_fetch_row_version is what's usually needed.
+ * The difference between this function and table_tuple_fetch_row_version()
+ * is that this function returns the currently visible version of a row if
+ * the AM supports storing multiple row versions reachable via a single index
+ * entry (like heap's HOT). Whereas table_tuple_fetch_row_version() only
+ * evaluates the tuple exactly at `tid`. Outside of index entry ->table tuple
+ * lookups, table_tuple_fetch_row_version() is what's usually needed.
  */
 static inline bool
 table_index_fetch_tuple(struct IndexFetchTableData *scan,
@@ -1095,6 +1107,13 @@ table_index_fetch_tuple(struct IndexFetchTableData *scan,
 						TupleTableSlot *slot,
 						bool *call_again, bool *all_dead)
 {
+	/*
+	 * We don't expect direct calls to table_index_fetch_tuple with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_index_fetch_tuple call during logical decoding");
 
 	return scan->rel->rd_tableam->index_fetch_tuple(scan, tid, snapshot,
 													slot, call_again,
@@ -1152,14 +1171,23 @@ table_tuple_fetch_row_version(Relation rel,
 							  Snapshot snapshot,
 							  TupleTableSlot *slot)
 {
+	/*
+	 * We don't expect direct calls to table_tuple_fetch_row_version with
+	 * valid CheckXidAlive for catalog or regular tables.  See detailed
+	 * comments in xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_tuple_fetch_row_version call during logical decoding");
+
 	return rel->rd_tableam->tuple_fetch_row_version(rel, tid, snapshot, slot);
 }
 
 /*
  * Verify that `tid` is a potentially valid tuple identifier. That doesn't
  * mean that the pointed to row needs to exist or be visible, but that
- * attempting to fetch the row (e.g. with table_get_latest_tid() or
- * table_fetch_row_version()) should not error out if called with that tid.
+ * attempting to fetch the row (e.g. with table_tuple_get_latest_tid() or
+ * table_tuple_fetch_row_version()) should not error out if called with that
+ * tid.
  *
  * `scan` needs to have been started via table_beginscan().
  */
@@ -1318,8 +1346,8 @@ table_tuple_complete_speculative(Relation rel, TupleTableSlot *slot,
 /*
  * Insert multiple tuples into a table.
  *
- * This is like table_insert(), but inserts multiple tuples in one
- * operation. That's often faster than calling table_insert() in a loop,
+ * This is like table_tuple_insert(), but inserts multiple tuples in one
+ * operation. That's often faster than calling table_tuple_insert() in a loop,
  * because e.g. the AM can reduce WAL logging and page locking overhead.
  *
  * Except for taking `nslots` tuples as input, and an array of TupleTableSlots
@@ -1838,6 +1866,14 @@ static inline bool
 table_scan_bitmap_next_block(TableScanDesc scan,
 							 struct TBMIterateResult *tbmres)
 {
+	/*
+	 * We don't expect direct calls to table_scan_bitmap_next_block with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_scan_bitmap_next_block call during logical decoding");
+
 	return scan->rs_rd->rd_tableam->scan_bitmap_next_block(scan,
 														   tbmres);
 }
@@ -1855,6 +1891,14 @@ table_scan_bitmap_next_tuple(TableScanDesc scan,
 							 struct TBMIterateResult *tbmres,
 							 TupleTableSlot *slot)
 {
+	/*
+	 * We don't expect direct calls to table_scan_bitmap_next_tuple with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_scan_bitmap_next_tuple call during logical decoding");
+
 	return scan->rs_rd->rd_tableam->scan_bitmap_next_tuple(scan,
 														   tbmres,
 														   slot);
@@ -1873,6 +1917,13 @@ static inline bool
 table_scan_sample_next_block(TableScanDesc scan,
 							 struct SampleScanState *scanstate)
 {
+	/*
+	 * We don't expect direct calls to table_scan_sample_next_block with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_scan_sample_next_block call during logical decoding");
 	return scan->rs_rd->rd_tableam->scan_sample_next_block(scan, scanstate);
 }
 
@@ -1889,6 +1940,13 @@ table_scan_sample_next_tuple(TableScanDesc scan,
 							 struct SampleScanState *scanstate,
 							 TupleTableSlot *slot)
 {
+	/*
+	 * We don't expect direct calls to table_scan_sample_next_tuple with valid
+	 * CheckXidAlive for catalog or regular tables.  See detailed comments in
+	 * xact.c where these variables are declared.
+	 */
+	if (unlikely(TransactionIdIsValid(CheckXidAlive) && !bsysscan))
+		elog(ERROR, "unexpected table_scan_sample_next_tuple call during logical decoding");
 	return scan->rs_rd->rd_tableam->scan_sample_next_tuple(scan, scanstate,
 														   slot);
 }
@@ -1918,8 +1976,10 @@ extern Size table_block_parallelscan_initialize(Relation rel,
 extern void table_block_parallelscan_reinitialize(Relation rel,
 												  ParallelTableScanDesc pscan);
 extern BlockNumber table_block_parallelscan_nextpage(Relation rel,
+													 ParallelBlockTableScanWorker pbscanwork,
 													 ParallelBlockTableScanDesc pbscan);
 extern void table_block_parallelscan_startblock_init(Relation rel,
+													 ParallelBlockTableScanWorker pbscanwork,
 													 ParallelBlockTableScanDesc pbscan);
 
 

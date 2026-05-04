@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * dynahash.c
- *	  dynamic hash tables
+ *	  dynamic chained hash tables
  *
  * dynahash.c supports both local-to-a-backend hash tables and hash tables in
  * shared memory.  For shared hash tables, it is the caller's responsibility
@@ -40,6 +40,16 @@
  * hashing, comparison, and/or key-copying functions.  At least a hashing
  * function must be supplied; comparison defaults to memcmp() and key copying
  * to memcpy() when a user-defined hashing function is selected.
+ *
+ * Compared to simplehash, dynahash has the following benefits:
+ *
+ * - It supports partitioning, which is useful for shared memory access using
+ *   locks.
+ * - Shared memory hashes are allocated in a fixed size area at startup and
+ *   are discoverable by name from other processes.
+ * - Because entries don't need to be moved in the case of hash conflicts, has
+ *   better performance for large entries
+ * - Guarantees stable pointers to entries.
  *
  * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
@@ -398,7 +408,16 @@ hash_create(const char *tabname, long nelem, HASHCTL *info, int flags)
 	if (flags & HASH_KEYCOPY)
 		hashp->keycopy = info->keycopy;
 	else if (hashp->hash == string_hash)
-		hashp->keycopy = (HashCopyFunc) strlcpy;
+	{
+		/*
+		 * The signature of keycopy is meant for memcpy(), which returns
+		 * void*, but strlcpy() returns size_t.  Since we never use the return
+		 * value of keycopy, and size_t is pretty much always the same size as
+		 * void *, this should be safe.  The extra cast in the middle is to
+		 * avoid warnings from -Wcast-function-type.
+		 */
+		hashp->keycopy = (HashCopyFunc) (pg_funcptr_t) strlcpy;
+	}
 	else
 		hashp->keycopy = memcpy;
 

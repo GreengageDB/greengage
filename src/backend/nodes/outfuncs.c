@@ -3415,7 +3415,7 @@ _outAlterTableStmt(StringInfo str, const AlterTableStmt *node)
 
 	WRITE_NODE_FIELD(relation);
 	WRITE_NODE_FIELD(cmds);
-	WRITE_ENUM_FIELD(relkind, ObjectType);
+	WRITE_ENUM_FIELD(objtype, ObjectType);
 
 	WRITE_INT_FIELD(lockmode);
 	/*

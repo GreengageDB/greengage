@@ -50,20 +50,22 @@ MultiXactTruncationLock				41
 OldSnapshotTimeMapLock				42
 LogicalRepWorkerLock				43
 XactTruncationLock					44
+# 45 was XactTruncationLock until removal of BackendRandomLock
+WrapLimitsVacuumLock				46
+NotifyQueueTailLock					47
 
 # Additional individual locks in GPDB
-SharedSnapshotLock					45
-DistributedLogControlLock			46
-# 47 is available; was formerly AOSegFileLock
-ResQueueLock						48
-ResGroupLock						49
-ErrorLogLock						50
-SessionStateLock					51
-RelfilenodeGenLock					52
-WorkFileManagerLock					53
-DistributedLogTruncateLock			54
-TwophaseCommitLock				55
-ShareInputScanLock				56
-FTSReplicationStatusLock			57
-GxidBumpLock						58
-ParallelCursorEndpointLock			59
+SharedSnapshotLock					48
+DistributedLogControlLock			49
+ResQueueLock						50
+ResGroupLock						51
+ErrorLogLock						52
+SessionStateLock					53
+RelfilenodeGenLock					54
+WorkFileManagerLock					55
+DistributedLogTruncateLock			56
+TwophaseCommitLock					57
+ShareInputScanLock					58
+FTSReplicationStatusLock			59
+GxidBumpLock						60
+ParallelCursorEndpointLock			61
