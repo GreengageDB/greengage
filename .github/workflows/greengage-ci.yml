@@ -64,7 +64,7 @@ jobs:
       contents: read
       packages: read
       actions: write
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@CI-5599
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v32
     with:
       version:           ${{ needs.generate-matrix.outputs.version }}
       target_os:         ${{ matrix.target_os }}
@@ -118,7 +118,7 @@ jobs:
       contents: read
       packages: read
       actions: write
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@CI-5597
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v32
     with:
       version:           ${{ needs.generate-matrix.outputs.version }}
       target_os:         ${{ matrix.target_os }}
