@@ -39,8 +39,9 @@ function gen_env(){
 				mkdir -p /tmp/coverage-data
 				cp -r /tmp/pre-coverage-data/* /tmp/coverage-data/
 				cd /tmp/coverage-data
-				coverage combine --append --data-file=coverage-data --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
-				coverage html --data-file=coverage-data --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
+				coverage combine --append --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave coverage-data*
+				coverage html --rcfile=\${1}/gpdb_src/gpMgmt/test/coveragerc_behave --show-contexts -d ./coverage-html
+				mv /tmp/pre-coverage-data/coverage-data /tmp/coverage-data/
 			"
 		fi
 	EOF
