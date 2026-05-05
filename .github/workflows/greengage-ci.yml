@@ -3,181 +3,158 @@ name: Greengage CI
 
 on:
   push:
-    branches: ['next']
-    tags: ['8.*']
+    branches: ['next']  # Trigger on push to main (after merged PR)
+    tags: ['8.*']   # Trigger on tags for versioned releases
   pull_request:
-    branches: ['**']
+    branches: ['**'] # Trigger on pull requests for all branches
 
+# Concurrency control to cancel previous runs on new push to same PR/branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-env:
-  VERSION: "8"
-  OS_MATRIX: |
-    [
-      { "target_os": "ubuntu" }
-    ]
+  cancel-in-progress: true  # Automatically cancel any previous runs for the same group
 
 jobs:
-  generate-matrix:
-    name: Generate CI matrix
-    runs-on: ubuntu-24.04
-    outputs:
-      version:   ${{ steps.config.outputs.version }}
-      os_matrix: ${{ steps.config.outputs.os_matrix }}
-    steps:
-      - name: Generate matrix config
-        id: config
-        run: |
-          echo "version=${{ env.VERSION }}" >> $GITHUB_OUTPUT
-
-          cat > /tmp/os_matrix.json << 'EOF'
-          ${{ env.OS_MATRIX }}
-          EOF
-          echo "os_matrix=$(jq -c '{include: .}' /tmp/os_matrix.json)" >> $GITHUB_OUTPUT
-
   build:
-    needs: generate-matrix
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: write
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v30
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   behave-tests:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'pull_request'
+    needs: build  # Wait for build to complete
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: read
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v32
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'pull_request'
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: read
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v28
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   orca-tests:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'pull_request'
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: read
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v28
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   resgroup-tests:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'pull_request'
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: read
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v32
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   jit-tests:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'pull_request'
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: read
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-jit.yml@v28
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   upload:
-    needs: [generate-matrix, build]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push'  # For push to main or tags
+    needs: build  # For push (main or tags)
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
+      matrix:
+        target_os: [ubuntu]
     permissions:
-      contents: read
-      packages: write
-      actions: write
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
     with:
-      version:           ${{ needs.generate-matrix.outputs.version }}
-      target_os:         ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      version: 8
+      target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token:         ${{ secrets.GITHUB_TOKEN }}
-      DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # package:
-  #   needs: [generate-matrix, build]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix: ${{ fromJson(needs.generate-matrix.outputs.os_matrix) }}
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #     actions: write
-  #   uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
-  #   with:
-  #     version:           ${{ needs.generate-matrix.outputs.version }}
-  #     target_os:         ${{ matrix.target_os }}
-  #     target_os_version: ${{ matrix.target_os_version }}
-  #     test_docker:       ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
-  #   secrets:
-  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+  # Rebuild prod-ready version without debug extensions and pack it to deb
+  package:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v28
+    with:
+      version: 8
+      target_os: ${{ matrix.target_os }}
+      test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
