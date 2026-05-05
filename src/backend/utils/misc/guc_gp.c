@@ -3047,7 +3047,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"optimizer_enable_table_alias", PGC_USERSET, DEVELOPER_OPTIONS,
+		{"optimizer_enable_table_alias", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Enable using table aliases to make plan explain more descriptive"),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
