@@ -242,8 +242,8 @@ main(int argc, char **argv)
 		 * server.
 		 *
 		 * Because we are concerned with 6.x -> 7.x migration here, this
-		 * step should be done only for primary segments, because starting
-		 * from Greengage 7, pg_aoseg tables on the coordinator are expected
+		 * step should be done only for segments, because starting from
+		 * Greengage 7, pg_aoseg tables on the coordinator are expected
 		 * to remain empty. Don't copy pg_aoblkdir and pg_aovisimap tables
 		 * either, they should be empty too.
 		 */
