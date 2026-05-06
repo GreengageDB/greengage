@@ -49,6 +49,12 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
+  services=$(docker compose -p $project -f ci/docker-compose.yaml config --services | tr '\n' ' ')
+
+  # Add host names of all cluster nodes to /tmp/hostfile_all for coverage collect
+  docker compose -p $project -f ci/docker-compose.yaml exec -T \
+    cdw bash -c "for HOST in $services; do echo \"\$HOST\" >>/tmp/hostfile_all; done"
+
   docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
