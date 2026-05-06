@@ -50,7 +50,7 @@ run_feature() {
   bash ci/scripts/init_containers.sh $project
 
   docker compose -p $project -f "$docker_compose_path" exec -T \
-      -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
+    -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
