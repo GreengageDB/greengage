@@ -17,6 +17,7 @@ omit =
         */dist-packages/*
         /usr/local/bin/behave
         /usr/local/bin/coverage
+	/tmp/*
 
 [paths]
 source =
@@ -33,3 +34,20 @@ source3 =
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /usr/local/greengage-db-devel/lib/python/gppylib
+
+[report]
+omit =
+        */__init__.py*
+        */test/*
+        /usr/local/greengage-db-devel/lib/python/pygresql/*
+        /usr/local/greengage-db-devel/lib/python/yaml/*
+        /usr/local/greengage-db-devel/lib/python/sitecustomize.py
+        /usr/local/greengage-db-devel/lib/python/subprocess32.py
+        /usr/local/greengage-db-devel/lib/python/subprocess32.pyc
+        /usr/local/greengage-db-devel/bin/lib/pexpect/*
+        /usr/local/greengage-db-devel/lib/python/psutil/*
+        */dist-packages/*
+        /usr/local/bin/behave
+        /usr/local/bin/coverage
+        /tmp/*
+
