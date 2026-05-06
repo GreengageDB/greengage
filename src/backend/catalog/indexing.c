@@ -18,6 +18,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/tempcat.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_subscription.h"
@@ -234,6 +235,12 @@ CatalogTupleInsert(Relation heapRel, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
+	if (IsTempTableScope())
+	{
+		tempcat_insert(heapRel, tup);
+		return;
+	}
+
 	CatalogTupleCheckConstraints(heapRel, tup);
 
 	indstate = CatalogOpenIndexes(heapRel);
@@ -256,6 +263,12 @@ void
 CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
+	if (IsTempTableScope())
+	{
+		tempcat_insert(heapRel, tup);
+		return;
+	}
+
 	CatalogTupleCheckConstraints(heapRel, tup);
 
 	simple_heap_insert(heapRel, tup);
@@ -279,6 +292,12 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
+	if (IsTempTableScope() || IsTempcatItemPointer(otid))
+	{
+		tempcat_update(heapRel, otid, tup);
+		return;
+	}
+
 	CatalogTupleCheckConstraints(heapRel, tup);
 
 	indstate = CatalogOpenIndexes(heapRel);
@@ -301,6 +320,12 @@ void
 CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
+	if (IsTempTableScope() || IsTempcatItemPointer(otid))
+	{
+		tempcat_update(heapRel, otid, tup);
+		return;
+	}
+
 	CatalogTupleCheckConstraints(heapRel, tup);
 
 	simple_heap_update(heapRel, otid, tup);
@@ -326,5 +351,11 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 void
 CatalogTupleDelete(Relation heapRel, ItemPointer tid)
 {
+	if (IsTempTableScope() || IsTempcatItemPointer(tid))
+	{
+		tempcat_delete(heapRel, tid);
+		return;
+	}
+
 	simple_heap_delete(heapRel, tid);
 }
