@@ -29,7 +29,7 @@ typedef enum ResGroupMemAuditorType
 
 extern void CreateResourceGroup(CreateResourceGroupStmt *stmt);
 extern void DropResourceGroup(DropResourceGroupStmt *stmt);
-extern void AlterResourceGroup(AlterResourceGroupStmt *stmt);
+extern void AlterResourceGroup(AlterResourceGroupStmt *stmt, bool isTopLevel);
 
 /* catalog access function */
 extern Oid GetResGroupIdForName(const char *name);

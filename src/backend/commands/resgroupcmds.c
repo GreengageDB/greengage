@@ -95,9 +95,6 @@ static void createResgroupCallback(XactEvent event, void *arg);
 static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupPreCommitCallback(XactEvent event, void *arg);
-static bool resgroupCapFieldMatches(ResGroupLimitType limittype,
-									const ResGroupCaps *recorded,
-									const ResGroupCaps *current);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
 
@@ -378,7 +375,7 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
  * ALTER RESOURCE GROUP
  */
 void
-AlterResourceGroup(AlterResourceGroupStmt *stmt)
+AlterResourceGroup(AlterResourceGroupStmt *stmt, bool isTopLevel)
 {
 	Relation	pg_resgroupcapability_rel;
 	Oid			groupid;
@@ -431,19 +428,17 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 						stmt->name)));
 
 	/*
-	 * The session cannot alter its own resource group inside a transaction
-	 * block, the change would not be visible to this session before COMMIT.
-	 */
+	* The session alters its own resource group inside a transaction block.
+	* The change will not be visible to this session before COMMIT.
+	*/
 	if (Gp_role == GP_ROLE_DISPATCH &&
 		gp_resource_group_enable_alter_in_transaction &&
-		IsTransactionBlock() &&
+		IsInTransactionChain(isTopLevel) &&
 		groupid == GetMyResGroupId())
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-				 errmsg("cannot ALTER RESOURCE GROUP \"%s\" inside a transaction block",
-						stmt->name),
-				 errdetail("This statement targets the resource group of the current session, the change would not be visible to this session before COMMIT.")));
+		ereport(WARNING,
+				(errmsg("resource group \"%s\" settings will be applied after COMMIT",
+						stmt->name)));
 	}
 
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
@@ -564,11 +559,11 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 		callbackCtx->should_apply = true;
 
 		/*
-		 * Track the context for the PRE_COMMIT validation hook. The list
-		 * lives across the transaction, so allocate the cell in
-		 * TopMemoryContext. It is freed at the terminal event.
-		 */
-		if (gp_resource_group_enable_alter_in_transaction)
+		* Track callbacks only for ALTER inside a transaction chain. Top-level
+		* ALTER keeps the old path. The list cell must live until COMMIT/ABORT.
+		*/
+		if (gp_resource_group_enable_alter_in_transaction &&
+			IsInTransactionChain(isTopLevel))
 		{
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			pending_alter_callbacks = lappend(pending_alter_callbacks,
@@ -577,6 +572,10 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 			if (!alter_pre_commit_callback_registered)
 			{
+				/*
+				* Use a regular callback because once callbacks are not fired at
+				* PRE_COMMIT, where we need to validate final catalog state.
+				*/
 				RegisterXactCallback(alterResgroupPreCommitCallback, NULL);
 				alter_pre_commit_callback_registered = true;
 			}
@@ -1203,41 +1202,38 @@ alterResgroupCallback(XactEvent event, void *arg)
 	pfree(callbackCtx);
 }
 
-static bool
-resgroupCapFieldMatches(ResGroupLimitType limittype,
-						const ResGroupCaps *recorded,
-						const ResGroupCaps *current)
-{
-	switch (limittype)
-	{
-		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
-			return recorded->concurrency == current->concurrency;
-		case RESGROUP_LIMIT_TYPE_CPU:
-		case RESGROUP_LIMIT_TYPE_CPUSET:
-			return recorded->cpuRateLimit == current->cpuRateLimit &&
-				   strncmp(recorded->cpuset, current->cpuset,
-						   MaxCpuSetLength) == 0;
-		case RESGROUP_LIMIT_TYPE_MEMORY:
-			return recorded->memLimit == current->memLimit;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
-			return recorded->memSharedQuota == current->memSharedQuota;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
-			return recorded->memSpillRatio == current->memSpillRatio;
-		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
-			return recorded->memAuditor == current->memAuditor;
-		default:
-			return true;
-	}
-}
-
+/*
+ * PRE_COMMIT hook for transactional ALTER RESOURCE GROUP.
+ *
+ * Checks pending callbacks against pg_resgroupcapability.  If the recorded
+ * value does not match the catalog, the ALTER RESOURCE GROUP was rolled back,
+ * so mark that callback as not needed.
+ * 
+ * This callback is registered for the backend lifetime. With no pending work,
+ * it returns immediately.
+ */
 static void
 alterResgroupPreCommitCallback(XactEvent event, void *arg)
 {
 	ListCell   *lc;
 
-	if (event == XACT_EVENT_PRE_COMMIT &&
-		gp_resource_group_enable_alter_in_transaction &&
-		pending_alter_callbacks != NIL)
+	/*
+	 * Fast path for normal transactions after the callback has been
+	 * registered in this backend but there is no ALTER RESOURCE GROUP
+	 * work pending.
+	 */
+	if (pending_alter_callbacks == NIL)
+		return;
+
+	Assert(gp_resource_group_enable_alter_in_transaction);
+
+	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
+	{
+		list_free(pending_alter_callbacks);
+		pending_alter_callbacks = NIL;
+		return;
+	}
+	else if (event == XACT_EVENT_PRE_COMMIT)
 	{
 		Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 
@@ -1248,20 +1244,12 @@ alterResgroupPreCommitCallback(XactEvent event, void *arg)
 
 			GetResGroupCapabilities(rel, ctx->groupid, &currentCaps);
 
-			if (!resgroupCapFieldMatches(ctx->limittype, &ctx->caps,
-										 &currentCaps))
-			{
-				ctx->should_apply = false;
-			}
+			ctx->should_apply = ResGroupCapFieldMatches(ctx->limittype,
+														&ctx->caps,
+														&currentCaps);
 		}
 
 		heap_close(rel, AccessShareLock);
-	}
-
-	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
-	{
-		list_free(pending_alter_callbacks);
-		pending_alter_callbacks = NIL;
 	}
 }
 

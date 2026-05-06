@@ -920,7 +920,7 @@ standard_ProcessUtility(Node *parsetree,
 				PreventTransactionChain(isTopLevel, "ALTER RESOURCE GROUP");
 			}
 
-			AlterResourceGroup((AlterResourceGroupStmt *) parsetree);
+			AlterResourceGroup((AlterResourceGroupStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_DropResourceGroupStmt:

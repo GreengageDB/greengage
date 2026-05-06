@@ -97,8 +97,7 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_IN_USE),
-					 errmsg("cannot move query while a resource group is being altered"),
-					 errhint("Retry after the in-flight ALTER RESOURCE GROUP transaction commits or aborts.")));
+					 errmsg("cannot move query while a resource group is being edited")));
 		}
 
 		if (pid == MyProcPid)
