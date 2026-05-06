@@ -205,7 +205,7 @@ coverage-setup:
 		echo "WARNING: COVERAGE_PROCESS_START is not set."; \
 		echo "Coverage will NOT be collected from subprocesses."; \
 		echo "Set it manually, e.g.:"; \
-		echo "export COVERAGE_PROCESS_START=~/gpdb_src/gpMgmt/test/coveragerc_unit"; \
+		echo "export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit"; \
 	else \
 		echo "COVERAGE_PROCESS_START=$$COVERAGE_PROCESS_START"; \
 	fi
