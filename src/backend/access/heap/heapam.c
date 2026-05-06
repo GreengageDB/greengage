@@ -42,6 +42,7 @@
 #include "access/relscan.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/tuptoaster.h"
 #include "access/valid.h"
@@ -6249,6 +6250,13 @@ heap_inplace_update_and_unlock(Relation relation,
 	uint32		newlen;
 
 	Assert(ItemPointerEquals(&oldtup->t_self, &tuple->t_self));
+
+	if (IsTempTableScope() || IsTempcatItemPointer(&tuple->t_self))
+	{
+		tempcat_update_inplace(relation, tuple);
+		return;
+	}
+
 	oldlen = oldtup->t_len - htup->t_hoff;
 	newlen = tuple->t_len - tuple->t_data->t_hoff;
 	if (oldlen != newlen || htup->t_hoff != tuple->t_data->t_hoff)
@@ -6340,6 +6348,12 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	HeapTupleHeader htup;
 	uint32		oldlen;
 	uint32		newlen;
+
+	if (IsTempTableScope() || IsTempcatItemPointer(&tuple->t_self))
+	{
+		tempcat_update_inplace(relation, tuple);
+		return;
+	}
 
 	/*
 	 * For now, parallel operations are required to be strictly read-only.

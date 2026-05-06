@@ -779,6 +779,16 @@ AtEOXact_SharedSnapshot(void)
 
 		SharedLocalSnapshotSlot->cur_dump_id = 0;
 		MemSet(SharedLocalSnapshotSlot->dump, 0, sizeof(SnapshotDump) * SNAPSHOTDUMPARRAYSZ);
+
+		/* Also release tempcat DSM if present */
+		if (SharedLocalSnapshotSlot->tempcat_dsm != DSM_HANDLE_INVALID)
+		{
+			dsm_segment *seg = dsm_find_mapping(SharedLocalSnapshotSlot->tempcat_dsm);
+			if (seg)
+				dsm_detach(seg);
+			SharedLocalSnapshotSlot->tempcat_dsm = DSM_HANDLE_INVALID;
+		}
+
 		created_dump = false;
 		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 

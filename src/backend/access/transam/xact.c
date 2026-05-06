@@ -24,6 +24,7 @@
 #include "access/multixact.h"
 #include "access/parallel.h"
 #include "access/subtrans.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/xact.h"
@@ -2703,6 +2704,9 @@ StartTransaction(void)
 	initialize_wal_bytes_written();
 	ShowTransactionState("StartTransaction");
 
+	/* Prepare virtual catalog for this transaction */
+	tempcat_begin_transaction();
+
 	ereportif(Debug_print_full_dtm, LOG,
 			  (errmsg("StartTransaction in DTX Context = '%s', "
 					  "isolation level %s, read-only = %d, %s",
@@ -3031,6 +3035,10 @@ CommitTransaction(void)
 	 * default
 	 */
 	s->state = TRANS_DEFAULT;
+
+	/* Commit virtual catalog changes */
+	tempcat_end_transaction();
+	temp_table_scope = false;
 
 	/* we're now in a consistent state to handle an interrupt. */
 	RESUME_INTERRUPTS();
@@ -3610,6 +3618,10 @@ AbortTransaction(void)
 		AtEOXact_WorkFile();
 		pgstat_report_xact_timestamp(0);
 	}
+
+	/* Abort virtual catalog changes */
+	tempcat_abort_transaction();
+	temp_table_scope = false;
 
 	/*
 	 * Exported snapshots must be cleared before transaction ID is reset.  In
@@ -5243,6 +5255,9 @@ DefineSavepoint(const char *name)
 				 BlockStateAsString(s->blockState));
 			break;
 	}
+
+	/* Create a virtual catalog savepoint */
+	tempcat_define_savepoint(name);
 }
 
 /*
@@ -5491,6 +5506,9 @@ RollbackToSavepoint(const char *name)
 	else
 		elog(FATAL, "RollbackToSavepoint: unexpected state %s",
 			 BlockStateAsString(xact->blockState));
+
+	/* Roll back virtual catalog to the named savepoint */
+	tempcat_rollback_to_savepoint(name);
 }
 
 static void

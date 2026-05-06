@@ -52,11 +52,13 @@
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "cdb/cdbendpoint.h"
 #include "miscadmin.h"
 #include "port/atomics.h"
 #include "pgstat.h"
+#include "storage/dsm.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "storage/spin.h"
@@ -1693,6 +1695,50 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 					SharedLocalSnapshotSlot->slotid,
 					debugCaller,
 					DtxContextToString(distributedTransactionContext))));
+
+	/*
+	 * If there's virtual catalog state, serialize it to a DSM segment
+	 * so reader QEs on this segment can pick it up.
+	 */
+	{
+		extern bool enable_temp_memory_catalog;
+		int    tempcat_len;
+		char  *tempcat_data;
+
+		if (enable_temp_memory_catalog)
+		{
+			tempcat_serialize(&tempcat_len, &tempcat_data);
+
+			if (tempcat_len > sizeof(int32) * 2)  /* more than just header */
+			{
+				dsm_segment *seg;
+				char *ptr;
+
+				if (SharedLocalSnapshotSlot->tempcat_dsm != 0)
+				{
+					seg = dsm_find_mapping(SharedLocalSnapshotSlot->tempcat_dsm);
+					if (seg)
+						dsm_detach(seg);
+				}
+
+				seg = dsm_create(tempcat_len, 0);
+				ptr = dsm_segment_address(seg);
+				memcpy(ptr, tempcat_data, tempcat_len);
+
+				SharedLocalSnapshotSlot->tempcat_dsm = dsm_segment_handle(seg);
+
+				/* Pin so segment survives detach, then release local mapping. */
+				dsm_pin_mapping(seg);
+
+				ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+						(errmsg("updateSharedLocalSnapshot: serialized tempcat to DSM, len=%d",
+								tempcat_len)));
+			}
+
+			pfree(tempcat_data);
+		}
+	}
+
 	LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 }
 
@@ -1810,6 +1856,30 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 							QEDtxContextInfo.distributedXid, SharedLocalSnapshotSlot->distributedXid);
 			copyLocalSnapshot(snapshot);
 			SetSharedTransactionId_reader(SharedLocalSnapshotSlot->fullXid, snapshot->curcid, distributedTransactionContext);
+
+			/*
+			 * Deserialize tempcat state if the writer has shared it.
+			 */
+			if (enable_temp_memory_catalog &&
+				SharedLocalSnapshotSlot->tempcat_dsm != DSM_HANDLE_INVALID)
+			{
+				dsm_segment *seg;
+				char	    *ptr;
+
+				seg = dsm_attach(SharedLocalSnapshotSlot->tempcat_dsm);
+				if (seg)
+				{
+					ptr = dsm_segment_address(seg);
+
+					tempcat_deserialize(
+						dsm_segment_map_length(seg), ptr);
+					dsm_detach(seg);
+
+					ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+						(errmsg("readerFillLocalSnapshot: deserialized tempcat from DSM")));
+				}
+			}
+
 			LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 			return;
 		}
