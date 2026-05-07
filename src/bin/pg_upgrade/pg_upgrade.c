@@ -243,9 +243,33 @@ main(int argc, char **argv)
 		 *
 		 * Because we are concerned with 6.x -> 7.x migration here, this
 		 * step should be done only for segments, because starting from
-		 * Greengage 7, pg_aoseg tables on the coordinator are expected
-		 * to remain empty. Don't copy pg_aoblkdir and pg_aovisimap tables
-		 * either, they should be empty too.
+		 * Greengage 7, pg_aoseg table entries are almost never created
+		 * on the coordinator. With a notable exception:
+		 *
+		 * 'ALTER TABLE ... REPACK BY COLUMNS (...)' and 'CLUSTER ...'
+		 * queries do create an oddly specific entry for RESERVED_SEGNO
+		 * segfile of the AO table with zero tuples. It looks like a flaw
+		 * in the logic, moreover, these commands are absent in 6.x.
+		 *
+		 * If any other pg_aoseg entry (that is, not similar to the one
+		 * created by the aforementioned queries) is present in the target
+		 * cluser, it would cause a failure to 'VACUUM' corresponding
+		 * AO table (see vacuum_ao.c , line 378).
+		 *
+		 * 'restore_aosegment_tables' function also deals with other tables,
+		 * so, in total, when upgrading the coordinator:
+		 *
+		 * Don't copy pg_aoseg tables. Coordinator can always recreate
+		 * necessary entries in the above edge-case.
+		 *
+		 * Don't copy pg_aoblkdir and pg_aovisimap tabes, because they should
+		 * be empty too.
+		 *
+		 * Don't copy gp_fastsequence table, it will be filled when recreating
+		 * AO tables.
+		 *
+		 * (the difference between versions comes mainly from
+		 *  the commit 5778f31124d5737e18d76f8d06f07f96c31c8be7)
 		 */
 		restore_aosegment_tables();
 	}
