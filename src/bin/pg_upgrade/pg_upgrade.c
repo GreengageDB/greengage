@@ -260,9 +260,9 @@ main(int argc, char **argv)
 		 * so, in total, when upgrading the coordinator:
 		 *
 		 * Don't copy pg_aoseg tables. Coordinator can always recreate
-		 * necessary entries in the above edge-case.
+		 * necessary entries in the above edge case.
 		 *
-		 * Don't copy pg_aoblkdir and pg_aovisimap tabes, because they should
+		 * Don't copy pg_aoblkdir and pg_aovisimap tables, because they should
 		 * be empty too.
 		 *
 		 * Don't copy gp_fastsequence table, it will be filled when recreating
