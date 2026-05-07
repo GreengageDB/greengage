@@ -2,7 +2,7 @@
 [run]
 parallel = True
 context = ${FEATURE}
-data_file = /tmp/pre-coverage-data/coverage-data
+data_file = /tmp/coverage-data/$PROJECT-coverage-data/coverage-data
 branch = True
 omit =
         */__init__.py*
