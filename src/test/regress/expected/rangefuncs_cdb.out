@@ -8,7 +8,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_hashagg                 | on
  enable_hashagg_disk            | on
  enable_hashjoin                | on
- enable_incrementalsort         | off
+ enable_incrementalsort         | on
  enable_indexonlyscan           | on
  enable_indexscan               | on
  enable_material                | on
