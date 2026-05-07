@@ -337,25 +337,21 @@ FROM gp_dist_random('gp_id');
 DROP TABLE t1;
 
 
--- Check optional table alias support.
+-- Check table alias support.
 
 -- start_ignore
 drop table if exists foo_alias;
 -- end_ignore
 
--- Check that with optimizer_enable_table_alias=off plan doesn't have aliases.
--- When optimizer_enable_table_alias is off, table aliases are not supported.
-set optimizer_enable_table_alias=off;
-
+-- Test that optimizer_enable_table_alias GUC is defunct and by default aliases are being shown
 create table foo_alias (a int, b int);
 insert into foo_alias select generate_series(1,10);
 
 explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
 
--- When optimizer_enable_table_alias is on, table alias is supported and it 
--- can be easily seen with self joins
-set optimizer_enable_table_alias=on;
-explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+-- The GUC should be enabled by default and cannot be disabled
+show optimizer_enable_table_alias;
+set optimizer_enable_table_alias=off;
+show optimizer_enable_table_alias;
 
 drop table foo_alias;
-reset optimizer_enable_table_alias;

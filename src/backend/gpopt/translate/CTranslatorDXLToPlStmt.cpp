@@ -4704,7 +4704,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 
 	// get table alias
 	const CMDName *md_alias = table_descr->MdAlias();
-	if (!optimizer_enable_table_alias || NULL == md_alias)
+	if (NULL == md_alias)
 	{
 		md_alias = table_descr->MdName();
 	}
@@ -4765,7 +4765,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 		Store the alias information only when table alias is used to allow 
 		EXPLAIN find it
 	*/
-	if (optimizer_enable_table_alias && NULL != table_descr->MdAlias())
+	if (NULL != table_descr->MdAlias())
 	{
 		rte->alias = (Alias *) copyObject(alias);
 	}
