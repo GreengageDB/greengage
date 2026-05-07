@@ -59,13 +59,18 @@ for the files you are modifying.
      and then run this step to merge the two results after the second run:
 
         $ coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit coverage-data*
+
+     When combining files with different [contexts](https://coverage.readthedocs.io/en/7.13.5/contexts.html)
+     you should combine them separately according to used context: static or dynamic. In current system behave tests
+     have static context and unit-tests have dynamic context, so you should combine behave tests together apart of
+     unit tests (and vice versa). After that you can combine them all together with `coveragerc_combine_report` configuration file.
         
 7.  Generate a report. [You have many options](https://coverage.readthedocs.io/en/latest/cmd.html#reporting);
     you can generate a stdout report and then a browseable html report.  Note you can click on each file to see
     the details of coverage for that file. You also need to provide rcfile path for this task.
 
         $ coverage report
-        $ coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave -d ./coverage-html
+        $ coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report -d ./coverage-html
         $ open /tmp/coverage-html/index.html
 
     Your usage model might involve determining code coverage, adding tests, and then checking the resulting change
