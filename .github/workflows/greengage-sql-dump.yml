@@ -8,6 +8,7 @@ on:
     branches:
       - 6.x
       - 7.x
+      - next
 
 env:
   RUN_ID: ${{ github.event.workflow_run.id }}
@@ -17,13 +18,15 @@ env:
   RUN_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
   RUN_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
   VERSION: ${{ case(
-    github.event.workflow_run.head_branch == '6.x', '6',
-    github.event.workflow_run.head_branch == '7.x', '7',
+    github.event.workflow_run.head_branch == '6.x',  '6',
+    github.event.workflow_run.head_branch == '7.x',  '7',
+    github.event.workflow_run.head_branch == 'next', '8',
     ''
     ) }}
 
 jobs:
   create-sql-dump-regression:
+    name: Create SQL Dump
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     if: |
@@ -50,17 +53,19 @@ jobs:
 
       - name: Display trigger information
         run: |
-          cat << EOF
-          ================== Workflow Trigger Information ==================
-          Triggered by:   ${RUN_NAME} (#${RUN_ID})
-          Target branch:  ${RUN_HEAD_BRANCH}
-          Source commit:  ${RUN_HEAD_SHA}
-          Commit message: ${RUN_HEAD_COMMIT_MESSAGE}
-
-          Author: ${RUN_HEAD_COMMIT_AUTHOR}
-
-          Image: ${IMAGE}
-          ==================================================================
+          commit_title="${RUN_HEAD_COMMIT_MESSAGE%%$'\n'*}"
+          commit_title="${commit_title//|/\\|}"
+          echo "::notice::Branch: ${RUN_HEAD_BRANCH} | Commit: ${commit_title} https://github.com/${{ github.repository }}/commit/${RUN_HEAD_SHA}"
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Trigger Information
+          | Field          | Value |
+          |----------------|-------|
+          | Triggered by   | ${RUN_NAME} ([#${RUN_ID}](https://github.com/${{ github.repository }}/actions/runs/${RUN_ID})) |
+          | Target branch  | [${RUN_HEAD_BRANCH}](https://github.com/${{ github.repository }}/tree/${RUN_HEAD_BRANCH}) |
+          | Source commit  | [\`${RUN_HEAD_SHA}\`](https://github.com/${{ github.repository }}/commit/${RUN_HEAD_SHA}) |
+          | Commit message | ${commit_title} |
+          | Author         | ${RUN_HEAD_COMMIT_AUTHOR} |
+          | Image          | \`${IMAGE}\` |
           EOF
 
       - name: Pull Docker image
@@ -94,17 +99,19 @@ jobs:
       - name: Report artifact info
         if: steps.image-pull.outcome == 'success'
         run: |
-          cat << EOF
-          ==================== SQL Dump Creation Report ====================
-          Artifact name: sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }}
-          Artifact URL:  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload.outputs.artifact-id }}
-          ==================================================================
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## SQL Dump Creation Report
+          | Field         | Value |
+          |---------------|-------|
+          | Artifact name | sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }} |
+          | Artifact URL  | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload.outputs.artifact-id }} |
           EOF
 
   verify-dumps-created:
+    name: Verify SQL Dump
     runs-on: ubuntu-24.04
     needs: create-sql-dump-regression
-    if: always()
+    if: needs.create-sql-dump-regression.result != 'skipped'
     steps:
       - name: Verify at least one SQL dump was created
         env:
@@ -114,14 +121,14 @@ jobs:
             "/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" \
             --jq '
               [.jobs[]
-                | select(.name | startswith("create-sql-dump-regression"))
+                | select(.name | startswith("Create SQL Dump"))
                 | .steps[]
                 | select(.name == "Upload SQL Dump")
                 | select(.conclusion == "success")
               ] | length
             '
           )
-          echo "::notice::SQL dumps uploaded: ${success_count}"
+          echo "::notice::SQL dump(s) uploaded: ${success_count}"
           if [ "${success_count}" -eq 0 ]; then
             echo "::error::No SQL dumps were created - no images found for any matrix configuration"
             exit 1
