@@ -478,7 +478,7 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 	/* process the xlog records one at a time and check if it is an AO/AOCO record */
 	do
 	{
-		if (XLogReadRecord(xlogreader, &errormsg))
+		if (XLogReadRecord(xlogreader, dataStart, &errormsg))
 		{
 			if (XLogRecGetRmid(xlogreader) == RM_APPEND_ONLY_ID)
 			{
