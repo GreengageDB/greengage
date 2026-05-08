@@ -87,13 +87,12 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		groupName = text_to_cstring(PG_GETARG_TEXT_PP(1));
 
 		/*
-		 * Refuse the move if any backend is currently editing a resource group.
-		 * ALTER RESOURCE GROUP holds ExclusiveLock on pg_resgroupcapability 
-		 * until end of its transaction, so a conditional acquisition of
-		 * RowExclusiveLock fails fast in that case.
-		 */
+		* Fail if ALTER RESOURCE GROUP is in progress.
+		* ALTER holds ExclusiveLock until end of transaction.
+		* RowShareLock allows concurrent moves but conflicts with it.
+		*/
 		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
-										RowExclusiveLock))
+										RowShareLock))
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_IN_USE),
@@ -125,7 +124,18 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		if (currentGroupId == groupId)
 			PG_RETURN_BOOL(true);
 
-		ResGroupMoveQuery(sessionId, groupId, groupName);
+		PG_TRY();
+		{
+			ResGroupMoveQuery(sessionId, groupId, groupName);
+		}
+		PG_CATCH();
+		{
+			UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
 	}
 	else if (Gp_role == GP_ROLE_EXECUTE)
 	{
