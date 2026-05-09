@@ -8,7 +8,7 @@
 	- [Authentication failure ban](#authentication-failure-ban)
 	- [Authentication delay](#authentication-delay)
 	- [Force password change](#force-password-change)
-	- [Disallow password change](#disallow-password-change)
+	- [Prohibit password changes](#disallow-password-change)
 	- [Warning before password expire](#warning-before-password-expire)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
@@ -83,6 +83,7 @@ Please find the below list of general checks, which we can enforce on credential
 | username_not_contain      | username | username should not contain one of these characters | x,y,z         | &check; ade                 | &#10008; axf                 |
 | username_ignore_case      | username | ignore case while performing the above checks       | on            | &check; Ade                 | &#10008; aXf                 |
 | password_min_length       | password | minimum length of a password                        | 4             | &check; abcd                | &#10008; abc                 |
+| password_min_length_su    | password | minimum password length for a superuser             | 8             | &check; abcdefgh            | &#10008; abcdefgh            |
 | password_min_special      | password | minimum number of special characters                | 1             | &check; a@bc                | &#10008; abc                 |
 | password_min_digit        | password | minimum number of digits in a password              | 1             | &check; a1bc                | &#10008; abc                 |
 | password_min_upper        | password | minimum number of uppercase characters              | 1             | &check; Abc                 | &#10008; abc                 |
@@ -93,6 +94,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_not_contain      | password | password should not contain these characters        | x,y,z         | &check; abc                 | &#10008; axf                 |
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
 | password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days or set it automatically to now() + password_valid_until days in the CREATE/ALTER ROLE statements when the password is changed and no VALID UNTIL clause is present | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
+| password_valid_until_su   | password | same as above but applies to superuser only | 30             | &check; CREATE ROLE abcd VALID UNTIL (now()+'2 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 | password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
 | password_valid_warn       | password | emit a warning N days before the password is about to expire | 0 (disabled) |  |  |
 | password_valid_warning | password | throw a warning N days before the password expires | 0 (disabled) |  |  |
@@ -469,9 +471,9 @@ You can also force any user to change his password at any time using:
 ALTER USER user1 SET credcheck_internal.force_change_password = true;
 ```
 
-### [Disallow password change](#disallow-password-change)
+### [Prohibit password changes](#disallow-password-change)
 
-This feature disallow users to change their password. This behavior is enabled by setting `credcheck.disallow_password_change` to `true`. For example:
+This feature disallow users to change their password. This behavior is enabled by setting `credcheck.disallow_change_password` to `true`. For example:
 
 ```
 $ psql -h localhost -d test -U user1
