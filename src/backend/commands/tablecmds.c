@@ -17749,6 +17749,18 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		initStringInfo(&qualified_table_name);
 		appendStringInfo(&qualified_table_name, "%s.%s", nsp, relname);
 
+		StringInfoData excessive_segments_condition;
+		initStringInfo(&excessive_segments_condition);
+		appendStringInfo(&excessive_segments_condition, "gp_segment_id in (");
+		for (int excessive_segment = policy->numsegments;
+				 excessive_segment < getgpsegmentCount();
+				 excessive_segment++)
+			if (excessive_segment == getgpsegmentCount() - 1)
+				appendStringInfo(&excessive_segments_condition, "%d", excessive_segment);
+			else
+				appendStringInfo(&excessive_segments_condition, "%d, ", excessive_segment);
+		appendStringInfo(&excessive_segments_condition, ")");
+
 		/*
 		 * 'gp_dist_random' will cause fallback to Postgres planner,
 		 * so no need to tweak 'optimizer' value.
@@ -17756,12 +17768,13 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		appendStringInfo(&sqlstmtInsert,
 						 "insert into %s select * "
 						 "from gp_dist_random(%s) "
-						 "where gp_segment_id >= %d",
+						 "where %s",
 						 qualified_table_name.data,
 						 quote_literal_cstr(qualified_table_name.data),
-						 policy->numsegments);
+						 excessive_segments_condition.data);
 
 		pfree(qualified_table_name.data);
+		pfree(excessive_segments_condition.data);
 
 		gp_segment_number_for_table_shrink = policy->numsegments;
 

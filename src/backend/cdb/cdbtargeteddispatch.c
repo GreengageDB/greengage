@@ -146,7 +146,8 @@ GetContentIdsFromPlanForSingleRelation(PlannerInfo *root, Plan *plan, int rangeT
 		/* fall through, policy will be NULL so we won't direct dispatch */
 	}
 
-	if (rte->forceDistRandom ||	policy == NULL)
+	if ((rte->forceDistRandom && gp_segment_number_for_table_shrink == 0) ||
+		policy == NULL)
 	{
 		/*  we won't direct dispatch  */
 		if (rte->rtekind == RTE_RELATION)
