@@ -150,8 +150,7 @@ SET
 1: BEGIN;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
-ERROR:  cannot ALTER RESOURCE GROUP "rg_alter_tran" inside a transaction block
-DETAIL:  This statement targets the resource group of the current session, the change would not be visible to this session before COMMIT.
+ALTER
 1: ROLLBACK;
 ROLLBACK
 1q: ... <quitting>
@@ -191,8 +190,7 @@ BEGIN
 3: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 9;
 ALTER
 4: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
-ERROR:  cannot move query while a resource group is being altered
-HINT:  Retry after the in-flight ALTER RESOURCE GROUP transaction commits or aborts.
+ERROR:  cannot move query while a resource group is being edited
 3: ROLLBACK;
 ROLLBACK
 3q: ... <quitting>
