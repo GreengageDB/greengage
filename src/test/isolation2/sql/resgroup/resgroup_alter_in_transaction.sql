@@ -4,10 +4,8 @@
 
 -- start_ignore
 ! gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
-! gpstop -rai;
--- end_ignore
+! gpstop -arf;
 
--- start_ignore
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
 DROP ROLE rg_alter_tran_role;
@@ -106,5 +104,5 @@ DROP RESOURCE GROUP rg_alter_tran_b;
 
 -- start_ignore
 ! gpconfig -r gp_resource_group_enable_alter_in_transaction;
-! gpstop -rai;
+! gpstop -arf;
 -- end_ignore
