@@ -3003,7 +3003,8 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 				if (isfirst)
 				{
 					root->curSlice->gangType = GANGTYPE_PRIMARY_WRITER;
-					root->curSlice->numsegments = policy->numsegments;
+					if (gp_segment_number_for_table_shrink == 0)
+						root->curSlice->numsegments = policy->numsegments;
 				}
 				else
 				{

@@ -17738,6 +17738,7 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 	if (Gp_role == GP_ROLE_DISPATCH && GpPolicyIsPartitioned(policy))
 	{
 		volatile bool connected = false;
+		bool saveOptimizerGucValue;
 		StringInfoData sqlstmtInsert;
 		initStringInfo(&sqlstmtInsert);
 		const char *nsp = quote_identifier(
@@ -17749,21 +17750,37 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		initStringInfo(&qualified_table_name);
 		appendStringInfo(&qualified_table_name, "%s.%s", nsp, relname);
 
-		/*
-		 * 'gp_dist_random' will cause fallback to Postgres planner,
-		 * so no need to tweak 'optimizer' value.
-		 */
+		StringInfoData shrunk_segments_condition;
+		initStringInfo(&shrunk_segments_condition);
+		appendStringInfo(&shrunk_segments_condition, "gp_segment_id in (");
+		for (int shrunk_segment = policy->numsegments;
+			shrunk_segment < getgpsegmentCount();
+			shrunk_segment++)
+			if (shrunk_segment == getgpsegmentCount() - 1)
+				appendStringInfo(&shrunk_segments_condition,
+								 "%d", shrunk_segment);
+			else
+				appendStringInfo(&shrunk_segments_condition,
+								 "%d, ", shrunk_segment);
+		appendStringInfo(&shrunk_segments_condition, ")");
+
 		appendStringInfo(&sqlstmtInsert,
-						 "insert into %s select * "
-						 "from gp_dist_random(%s) "
-						 "where gp_segment_id >= %d",
+						 "insert into %s select * from %s where %s",
 						 qualified_table_name.data,
-						 quote_literal_cstr(qualified_table_name.data),
-						 policy->numsegments);
+						 qualified_table_name.data,
+						 shrunk_segments_condition.data);
 
 		pfree(qualified_table_name.data);
+		pfree(shrunk_segments_condition.data);
 
 		gp_segment_number_for_table_shrink = policy->numsegments;
+
+		/*
+		 * Force the use of Postgres based planner, since Orca will not
+		 * redistribute the tuples.
+		 */
+		saveOptimizerGucValue = optimizer;
+		optimizer = false;
 
 		PG_TRY();
 		{
@@ -17794,6 +17811,7 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 			pfree(sqlstmtInsert.data);
 
 			gp_segment_number_for_table_shrink = 0;
+			optimizer = saveOptimizerGucValue;
 
 			/* Carry on with error handling. */
 			PG_RE_THROW();
@@ -17803,6 +17821,7 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		pfree(sqlstmtInsert.data);
 
 		gp_segment_number_for_table_shrink = 0;
+		optimizer = saveOptimizerGucValue;
 	}
 	else if (Gp_role == GP_ROLE_EXECUTE && GpPolicyIsPartitioned(policy) &&
 		   GpIdentity.segindex >= policy->numsegments)
