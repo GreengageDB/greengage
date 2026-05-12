@@ -915,12 +915,14 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_AlterResourceGroupStmt:
-			if (Gp_role == GP_ROLE_DISPATCH && !gp_resource_group_enable_alter_in_transaction)
+			if (Gp_role == GP_ROLE_DISPATCH &&
+				!gp_resource_group_enable_alter_in_transaction)
 			{
 				PreventTransactionChain(isTopLevel, "ALTER RESOURCE GROUP");
 			}
 
-			AlterResourceGroup((AlterResourceGroupStmt *) parsetree, isTopLevel);
+			AlterResourceGroupExtended((AlterResourceGroupStmt *) parsetree,
+									   isTopLevel);
 			break;
 
 		case T_DropResourceGroupStmt:

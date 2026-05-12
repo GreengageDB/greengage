@@ -371,11 +371,23 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	}
 }
 
+void
+AlterResourceGroup(AlterResourceGroupStmt *stmt)
+{
+	/*
+	* Legacy ABI entry point has no ProcessUtilityContext.
+	* Treat it as top-level so IsInTransactionChain() can still detect
+	* explicit transaction blocks, subtransactions and non-standalone
+	* transaction states, but does not assume function/multi-command context.
+	*/
+	AlterResourceGroupExtended(stmt, true);
+}
+
 /*
  * ALTER RESOURCE GROUP
  */
 void
-AlterResourceGroup(AlterResourceGroupStmt *stmt, bool isTopLevel)
+AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 {
 	Relation	pg_resgroupcapability_rel;
 	Oid			groupid;
