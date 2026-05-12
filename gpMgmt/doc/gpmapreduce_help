@@ -97,7 +97,7 @@ Run MapReduce jobs and produce explain-analyze plans.
 
 -k | --key <name>=<value>
 
-Sets a YAML variable.  A value is required. Defaults to “key” 
+Sets a YAML variable.  A value is required. Defaults to "key"
 if no variable name is specified. 
 
 

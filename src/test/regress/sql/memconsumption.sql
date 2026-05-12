@@ -14,7 +14,7 @@ set execute_pruned_plan=on;
 insert into test select i, i % 100 from generate_series(1,1000) as i;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 -- end_ignore
 
 create or replace function sum_owner_consumption(query text, owner text)
@@ -46,7 +46,7 @@ for i in range(len(rv)):
             slice_consumption = 0
             memory_consumption_per_slice[current_slice] = 0
     if search_text.lower() in cur_line.lower():
-        print search_text
+        print(search_text)
         m = comp_regex.match(cur_line)
         if m is not None:
             memory_consumption_per_slice[current_slice] = memory_consumption_per_slice[current_slice] + int(m.group(2))
@@ -60,7 +60,7 @@ return [
         } for slice, memory_consumption in  memory_consumption_per_slice.items()
        ]
 $$
-language plpythonu;
+language plpython3u;
 
 select sum(mem_consumption) = 0 from sum_owner_consumption('SELECT t1.i, t2.j FROM test as t1 join test as t2 on t1.i = t2.j', 'X_Alien');
 
@@ -102,7 +102,7 @@ for i in range(len(rv)):
         count = count + 1
 return count
 $$
-language plpythonu;
+language plpython3u;
 
 -- Create functions that will generate nested SQL executors
 CREATE OR REPLACE FUNCTION simple_plpgsql_function(int) RETURNS int AS $$

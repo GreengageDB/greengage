@@ -320,10 +320,13 @@ class EncodingFileHandler(logging.FileHandler):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
 
     def emit(self, record):
+        if not isinstance(record.msg, (string_types, binary_type)):
+            try:
+                record.msg = str(record.msg)
+            except UnicodeEncodeError:
+                record.msg = "Can't decode exception message"
         if isinstance(record.msg, binary_type):
-            record.msg = record.msg.decode('utf-8')
-        elif not isinstance(record.msg, text_type):
-            record.msg = text_type(record.msg)
+            record.msg = record.msg.decode('utf-8', errors='replace')
         logging.FileHandler.emit(self, record)
 
 
@@ -336,8 +339,11 @@ class EncodingStreamHandler(logging.StreamHandler):
         logging.StreamHandler.__init__(self, strm)
 
     def emit(self, record):
+        if not isinstance(record.msg, (string_types, binary_type)):
+            try:
+                record.msg = str(record.msg)
+            except UnicodeEncodeError:
+                record.msg = "Can't decode exception message"
         if isinstance(record.msg, binary_type):
-            record.msg = record.msg.decode('utf-8')
-        elif not isinstance(record.msg, text_type):
-            record.msg = text_type(record.msg)
+            record.msg = record.msg.decode('utf-8', errors='replace')
         logging.StreamHandler.emit(self, record)

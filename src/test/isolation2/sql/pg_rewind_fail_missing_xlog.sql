@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 include: helpers/server_helpers.sql;
 
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION connectSeg(n int, port int, hostname text) RETURNS bool AS $$
 import os
 import subprocess
@@ -21,7 +21,7 @@ for i in range(n):
         time.sleep(1)
 raise Exception("wait connection timeout")
 $$
-LANGUAGE plpythonu;
+LANGUAGE plpython3u;
 
 SHOW gp_keep_all_xlog;
 CREATE TABLE tst_missing_tbl (a int);

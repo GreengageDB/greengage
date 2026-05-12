@@ -1,7 +1,7 @@
 -- test invalid connection request (random bytes) to ic proxy:
 -- it should be dropped due to mismatch magic number
 
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE plpython3u;
 
 CREATE or REPLACE FUNCTION send_bytes_to_icproxy()
     RETURNS VOID as $$
@@ -38,7 +38,7 @@ s.send(val)
 s.sendall(message)
 s.close()
 plpy.info("sent request")
-$$ LANGUAGE plpythonu EXECUTE ON MASTER;
+$$ LANGUAGE plpython3u EXECUTE ON MASTER;
 
 1: create table PR_14998(i int);
 1: SELECT send_bytes_to_icproxy();

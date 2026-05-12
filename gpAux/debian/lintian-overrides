@@ -1,9 +1,42 @@
 # 3rd-party Package
 dir-or-file-in-opt
 
-# TODO
-unusual-interpreter python
-script-uses-unversioned-python-in-shebang
-
 # Not applicable for plugins
 shared-library-lacks-prerequisites
+
+# lib/python/ contains gppylib library modules that are imported via Python's
+# import system, not executed directly. These files have shebangs as a
+# developer convenience (allows running them standalone during debugging),
+# but they do not require the executable bit in a production package.
+script-not-executable [opt/greengagedb/greengage6/lib/python/*]
+
+# bin/, sbin/, lib/python/ modules use bare 'python' interpreter.
+# On Ubuntu 22.04 python(1) is a symlink to python2, created at build time.
+script-uses-unversioned-python-in-shebang opt/greengagedb/greengage6/*bin/*
+unusual-interpreter *python [opt/greengagedb/greengage6/*]
+
+# These Perl test scripts use '#!/usr/bin/env perl' for portability across
+# environments where Perl is not at /usr/bin/perl (e.g. NixOS, custom builds).
+# This was intentional choice - commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
+# "Use 'env perl' instead of absolute path for portable dev environments."
+# Overriding lintian's preference for the absolute path.
+incorrect-path-for-interpreter /usr/bin/env perl != /usr/bin/perl [opt/greengagedb/greengage6/lib/postgresql/pgxs/src/test/regress/*.pl]
+
+# ldconfig trigger fires but does nothing: /opt/greengagedb/greengage6/lib
+# is not registered in /etc/ld.so.conf.d/.
+# TODO: create debian/greengage6.conf with that path, install to /etc/ld.so.conf.d/,
+# then remove this override.
+package-has-unnecessary-activation-of-ldconfig-trigger
+
+# Timezone data files are hardlinked by upstream PostgreSQL build system
+# to save disk space (identical timezone definitions share inodes).
+# This is standard PostgreSQL behavior, not a packaging error.
+package-contains-hardlink opt/greengagedb/greengage6/share/postgresql/timezone/*
+
+## This bugs not masking because bug #1004313
+## lintian bugs: #1000977, #1000449
+#elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
+
+# plperl.so is linked against libperl5.34 (pinned in shlibs:Depends).
+# The versioned RUNPATH matches the exact Perl version this package depends on.
+custom-library-search-path RUNPATH /usr/lib/x86_64-linux-gnu/perl/5.34/CORE [opt/greengagedb/greengage6/lib/postgresql/plperl.so]

@@ -1,3 +1,4 @@
+test: setup
 test: resgroup/enable_resgroup_validate
 test: resgroup/enable_resgroup
 

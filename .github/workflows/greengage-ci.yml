@@ -26,7 +26,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v28
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v30
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -62,7 +62,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_os: [ubuntu]
+        include:
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -71,6 +73,7 @@ jobs:
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -98,15 +101,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_os: [ubuntu]
+        include:
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v29
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v31
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 

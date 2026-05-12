@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 --end_ignore
 
 --start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 --end_ignore
 
 DROP FUNCTION IF EXISTS public.test_bigint_python();
@@ -22,7 +22,7 @@ res = plpy.execute("INSERT INTO public.spi64bittestpython (data) SELECT g FROM g
 
 return res.nrows()
 
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 
 -- insert 30k rows without fault injection framework
