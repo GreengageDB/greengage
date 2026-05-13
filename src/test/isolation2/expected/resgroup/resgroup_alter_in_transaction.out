@@ -7,14 +7,19 @@
 
 ! gpstop -arf;
 
+DROP VIEW IF EXISTS rg_alter_tran_status;
+DROP FUNCTION IF EXISTS rg_alter_tran_func();
+DROP FUNCTION IF EXISTS rg_alter_tran_func_sub();
+DROP FUNCTION IF EXISTS rg_alter_tran_func_sub_fail();
+DROP FUNCTION IF EXISTS rg_alter_tran_func_own_group();
+DROP ROLE IF EXISTS rg_alter_tran_role;
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
-DROP ROLE rg_alter_tran_role;
 -- end_ignore
 
-CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10);
+CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE
-CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10);
+CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE
 
 CREATE OR REPLACE VIEW rg_alter_tran_status AS SELECT groupname, concurrency, cpu_rate_limit, memory_limit FROM gp_toolkit.gp_resgroup_config WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b') ORDER BY groupname;
@@ -23,14 +28,17 @@ CREATE
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 20          | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 2           | 10             | 10           
+ rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
--- 1.1 BEGIN; ALTER; COMMIT; settings applied
+-- 1 Applying settings if there is a COMMIT.
+-- Multiple resource groups are changed to verify atomic apply.
 BEGIN;
 BEGIN
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 5;
+ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 5;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 6;
 ALTER
 COMMIT;
 COMMIT
@@ -38,13 +46,16 @@ SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
  rg_alter_tran   | 5           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.2 BEGIN; ALTER; ROLLBACK; settings not applied
+-- 2 Not applying settings if there is a ROLLBACK.
+-- Multiple resource groups are changed to verify atomic rollback.
 BEGIN;
 BEGIN
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 7;
+ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 7;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 8;
 ALTER
 ROLLBACK;
 ROLLBACK
@@ -52,13 +63,16 @@ SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
  rg_alter_tran   | 5           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.3 BEGIN; ALTER; <error>; COMMIT; settings not applied
+-- 3 Not applying settings if transaction is aborted by error.
+-- COMMIT after an aborted transaction should behave as ROLLBACK.
 BEGIN;
 BEGIN
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 8;
+ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 9;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 10;
 ALTER
 SELECT 1/0;
 ERROR:  division by zero
@@ -68,11 +82,11 @@ SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
  rg_alter_tran   | 5           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.4 plpgsql function calling ALTER; settings applied
-CREATE OR REPLACE FUNCTION rg_alter_tran_func() RETURNS VOID AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 6; END; $body$ LANGUAGE plpgsql;
+-- 4 Applying settings with calling function.
+CREATE OR REPLACE FUNCTION rg_alter_tran_func() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11; END; $body$ LANGUAGE plpgsql;
 CREATE
 SELECT rg_alter_tran_func();
  rg_alter_tran_func 
@@ -82,32 +96,34 @@ SELECT rg_alter_tran_func();
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 6           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 11          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.5 DO block, subtransaction wrapping ALTER, no error; settings applied
-DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 9; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+-- 5 Applying settings with using subtransactions in DO block.
+-- No error, subtransaction commits.
+DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
 DO
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 9           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 13          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.6 DO block, subtransaction with ALTER plus error caught; settings not applied
-DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+-- 6 Not applying settings with rollback subtransactions in DO block.
+-- ALTER happens inside a subtransaction that is rolled back.
+DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 15; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
 DO
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 9           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 13          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.7 plpgsql function with subtransaction, no error; settings applied
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub() RETURNS VOID AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 12; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+-- 7 Applying settings with using subtransactions in function.
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub() RETURNS void AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
 CREATE
 SELECT rg_alter_tran_func_sub();
  rg_alter_tran_func_sub 
@@ -117,12 +133,12 @@ SELECT rg_alter_tran_func_sub();
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 12          | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 17          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.8 plpgsql function with subtransaction plus caught error; settings not applied
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub_fail() RETURNS VOID AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 14; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+-- 8 Not applying settings with rollback subtransactions in function.
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub_fail() RETURNS void AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 19; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
 CREATE
 SELECT rg_alter_tran_func_sub_fail();
  rg_alter_tran_func_sub_fail 
@@ -132,67 +148,108 @@ SELECT rg_alter_tran_func_sub_fail();
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 12          | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 17          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 1.9 / 1.10 ALTER on the executing session's own group requires a
--- superuser session bound to that group, ALTER RESOURCE GROUP is
--- superuser-only. Use a dedicated superuser role for the test.
+-- 9 WARNING during ALTER in transaction of the resource group
+-- under which the request is being executed.
+-- ALTER RESOURCE GROUP is superuser-only. Use a dedicated superuser role.
 CREATE ROLE rg_alter_tran_role SUPERUSER RESOURCE GROUP rg_alter_tran;
 CREATE
 
--- 1.9 ALTER on the session's own group inside a transaction errors
-1: SET ROLE rg_alter_tran_role;
+SET ROLE rg_alter_tran_role;
 SET
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 21;
+ALTER
+COMMIT;
+COMMIT
+RESET ROLE;
+RESET
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 21          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
+(2 rows)
+
+-- 10 Success executing without explicit transaction ALTER of the
+-- resource group under which the request is being executed.
+SET ROLE rg_alter_tran_role;
+SET
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 22;
+ALTER
+RESET ROLE;
+RESET
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 22          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
+(2 rows)
+
+-- 11 Error during pg_resgroup_move_query when any resource group
+-- is edited in an uncommitted transaction.
 1: BEGIN;
 BEGIN
-1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 23;
 ALTER
+2: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
+ERROR:  cannot move query while a resource group is being edited
 1: ROLLBACK;
 ROLLBACK
 1q: ... <quitting>
-
--- 1.10 ALTER on the session's own group outside a transaction succeeds
-2: SET ROLE rg_alter_tran_role;
-SET
-2: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 4;
-ALTER
 2q: ... <quitting>
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 4           | 10             | 10           
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran   | 22          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- Multi-ALTER: two ALTERs in one transaction touching different fields
+-- 12 WARNING during ALTER in function of the resource group under
+-- which the request is being executed.
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_own_group() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 24; END; $body$ LANGUAGE plpgsql;
+CREATE
+SET ROLE rg_alter_tran_role;
+SET
+SELECT rg_alter_tran_func_own_group();
+ rg_alter_tran_func_own_group 
+------------------------------
+                              
+(1 row)
+RESET ROLE;
+RESET
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 24          | 10             | 10           
+ rg_alter_tran_b | 6           | 10             | 10           
+(2 rows)
+
+-- 13 Multi-ALTER: several ALTERs in one transaction touching different
+-- fields and different resource groups.
 BEGIN;
 BEGIN
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 3;
+ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 3;
 ALTER
-ALTER RESOURCE GROUP rg_alter_tran SET MEMORY_LIMIT 7;
+ALTER RESOURCE GROUP rg_alter_tran   SET MEMORY_LIMIT 7;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 4;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran_b SET MEMORY_LIMIT 8;
 ALTER
 COMMIT;
 COMMIT
+
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
  rg_alter_tran   | 3           | 10             | 7            
- rg_alter_tran_b | 20          | 10             | 10           
+ rg_alter_tran_b | 4           | 10             | 8            
 (2 rows)
-
--- 1.11 pg_resgroup_move_query while another session has uncommitted ALTER
-3: BEGIN;
-BEGIN
-3: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 9;
-ALTER
-4: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
-ERROR:  cannot move query while a resource group is being edited
-3: ROLLBACK;
-ROLLBACK
-3q: ... <quitting>
-4q: ... <quitting>
 
 -- cleanup
 DROP VIEW rg_alter_tran_status;
@@ -202,6 +259,8 @@ DROP
 DROP FUNCTION rg_alter_tran_func_sub();
 DROP
 DROP FUNCTION rg_alter_tran_func_sub_fail();
+DROP
+DROP FUNCTION rg_alter_tran_func_own_group();
 DROP
 DROP ROLE rg_alter_tran_role;
 DROP
