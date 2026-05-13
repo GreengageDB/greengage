@@ -4,17 +4,18 @@
 
 -- start_ignore
 ! gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
-
 ! gpstop -arf;
 
 DROP VIEW IF EXISTS rg_alter_tran_status;
+DROP VIEW IF EXISTS rg_alter_tran_runtime_status;
+DROP FUNCTION IF EXISTS rg_alter_tran_runtime_cap(group_name text, cap_id int);
 DROP FUNCTION IF EXISTS rg_alter_tran_func();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub_fail();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_own_group();
-DROP ROLE IF EXISTS rg_alter_tran_role;
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
@@ -23,6 +24,29 @@ CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, 
 CREATE
 
 CREATE OR REPLACE VIEW rg_alter_tran_status AS SELECT groupname, concurrency, cpu_rate_limit, memory_limit FROM gp_toolkit.gp_resgroup_config WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b') ORDER BY groupname;
+CREATE
+
+-- Return a resource group runtime cap from QD shared-memory dump.
+--
+-- cap_id values:
+--   1 - concurrency
+--   2 - cpu_rate_limit
+--   3 - memory_limit
+--   4 - memory_shared_quota
+--   5 - memory_spill_ratio
+--   6 - memory_auditor
+CREATE OR REPLACE FUNCTION rg_alter_tran_runtime_cap(group_name text, cap_id int) RETURNS int AS $$ import json 
+res = plpy.execute(""" SELECT oid FROM pg_resgroup WHERE rsgname = %s """ % plpy.quote_literal(group_name)) 
+if len(res) != 1: return None 
+group_id = int(res[0]["oid"]) cap_key = str(cap_id) 
+res = plpy.execute("SELECT value FROM pg_resgroup_get_status_kv('dump')") dump = json.loads(res[0]["value"]) 
+for seg in dump["info"]: if seg["segid"] != -1: continue 
+for group in seg["groups"]: if int(group["group_id"]) != group_id: continue 
+for cap in group["caps"]: if cap_key in cap: return int(cap[cap_key]) 
+return None $$ LANGUAGE plpython3u;
+CREATE
+
+CREATE OR REPLACE VIEW rg_alter_tran_runtime_status AS SELECT groupname, rg_alter_tran_runtime_cap(groupname, 1) AS concurrency, rg_alter_tran_runtime_cap(groupname, 2) AS cpu_rate_limit, rg_alter_tran_runtime_cap(groupname, 3) AS memory_limit FROM (VALUES ('rg_alter_tran'), ('rg_alter_tran_b')) AS v(groupname) ORDER BY groupname;
 CREATE
 
 SELECT * FROM rg_alter_tran_status;
@@ -152,107 +176,276 @@ SELECT * FROM rg_alter_tran_status;
  rg_alter_tran_b | 6           | 10             | 10           
 (2 rows)
 
--- 9 WARNING during ALTER in transaction of the resource group
--- under which the request is being executed.
--- ALTER RESOURCE GROUP is superuser-only. Use a dedicated superuser role.
-CREATE ROLE rg_alter_tran_role SUPERUSER RESOURCE GROUP rg_alter_tran;
-CREATE
-
-SET ROLE rg_alter_tran_role;
-SET
-BEGIN;
-BEGIN
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 21;
-ALTER
-COMMIT;
-COMMIT
-RESET ROLE;
-RESET
-SELECT * FROM rg_alter_tran_status;
- groupname       | concurrency | cpu_rate_limit | memory_limit 
------------------+-------------+----------------+--------------
- rg_alter_tran   | 21          | 10             | 10           
- rg_alter_tran_b | 6           | 10             | 10           
-(2 rows)
-
--- 10 Success executing without explicit transaction ALTER of the
--- resource group under which the request is being executed.
-SET ROLE rg_alter_tran_role;
-SET
-ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 22;
-ALTER
-RESET ROLE;
-RESET
-SELECT * FROM rg_alter_tran_status;
- groupname       | concurrency | cpu_rate_limit | memory_limit 
------------------+-------------+----------------+--------------
- rg_alter_tran   | 22          | 10             | 10           
- rg_alter_tran_b | 6           | 10             | 10           
-(2 rows)
-
--- 11 Error during pg_resgroup_move_query when any resource group
--- is edited in an uncommitted transaction.
-1: BEGIN;
-BEGIN
-1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 23;
-ALTER
-2: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
-ERROR:  cannot move query while a resource group is being edited
-1: ROLLBACK;
-ROLLBACK
-1q: ... <quitting>
-2q: ... <quitting>
-SELECT * FROM rg_alter_tran_status;
- groupname       | concurrency | cpu_rate_limit | memory_limit 
------------------+-------------+----------------+--------------
- rg_alter_tran   | 22          | 10             | 10           
- rg_alter_tran_b | 6           | 10             | 10           
-(2 rows)
-
--- 12 WARNING during ALTER in function of the resource group under
--- which the request is being executed.
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_own_group() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 24; END; $body$ LANGUAGE plpgsql;
-CREATE
-SET ROLE rg_alter_tran_role;
-SET
-SELECT rg_alter_tran_func_own_group();
- rg_alter_tran_func_own_group 
-------------------------------
-                              
-(1 row)
-RESET ROLE;
-RESET
-SELECT * FROM rg_alter_tran_status;
- groupname       | concurrency | cpu_rate_limit | memory_limit 
------------------+-------------+----------------+--------------
- rg_alter_tran   | 24          | 10             | 10           
- rg_alter_tran_b | 6           | 10             | 10           
-(2 rows)
-
--- 13 Multi-ALTER: several ALTERs in one transaction touching different
+-- 9 Multi-ALTER: several ALTERs in one transaction touching different
 -- fields and different resource groups.
 BEGIN;
 BEGIN
-ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 3;
+ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 20;
 ALTER
 ALTER RESOURCE GROUP rg_alter_tran   SET MEMORY_LIMIT 7;
 ALTER
-ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 4;
+ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 21;
 ALTER
 ALTER RESOURCE GROUP rg_alter_tran_b SET MEMORY_LIMIT 8;
 ALTER
 COMMIT;
 COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 20          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 20          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+
+-- Test ALTER current resource group
+
+-- NOTE: Use nested psql because isolation2 does not emit WARNING messages.
+-- Also, change the resource group of the existing test user instead of
+-- creating and connecting as a new role, so the test does not require
+-- pg_hba.conf changes. A new nested psql connection is required because
+-- resource group is assigned at session start.
+
+-- 10 WARNING during ALTER in transaction of the resource group
+-- under which the request is being executed.
+! curuser="$(psql -At -d isolation2resgrouptest -c 'SELECT current_user')" && psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP rg_alter_tran" >/dev/null && psql -d isolation2resgrouptest -c "BEGIN; ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 22; COMMIT;"; psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP admin_group" >/dev/null;
+WARNING:  resource group "rg_alter_tran" settings will be applied after COMMIT
+COMMIT
 
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 3           | 10             | 7            
- rg_alter_tran_b | 4           | 10             | 8            
+ rg_alter_tran   | 22          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
+
+-- 11 WARNING during ALTER in function of the resource group under
+-- which the request is being executed.
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_own_group() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 23; END; $body$ LANGUAGE plpgsql;
+CREATE
+! curuser="$(psql -At -d isolation2resgrouptest -c 'SELECT current_user')" && psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP rg_alter_tran" >/dev/null && psql -d isolation2resgrouptest -c "BEGIN; SELECT rg_alter_tran_func_own_group(); COMMIT;"; psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP admin_group" >/dev/null;
+WARNING:  resource group "rg_alter_tran" settings will be applied after COMMIT
+CONTEXT:  SQL statement "ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 23"
+PL/pgSQL function rg_alter_tran_func_own_group() line 1 at SQL statement
+COMMIT
+
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 23          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 12 Success executing without explicit transaction ALTER of the
+-- resource group under which the request is being executed.
+! curuser="$(psql -At -d isolation2resgrouptest -c 'SELECT current_user')" && psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP rg_alter_tran" >/dev/null && psql -d isolation2resgrouptest -c "ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 24;"; psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP admin_group" >/dev/null;
+ALTER RESOURCE GROUP
+
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 24          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+
+-- Test subtransaction rollbacks
+
+-- 13 Subtransaction rollback with explicit SAVEPOINT.
+-- Rolled back ALTER must not be applied.
+BEGIN;
+BEGIN
+SAVEPOINT s1;
+SAVEPOINT
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 10;
+ALTER
+ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 24          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 24          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 14 Subtransaction rollback followed by the same final value.
+-- The rolled back callback and the real callback have the same target value;
+-- only one apply should matter.
+BEGIN;
+BEGIN
+SAVEPOINT s1;
+SAVEPOINT
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
+ALTER
+ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
+ALTER
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 11          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 11          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 15 Several ALTERs of the same limit type in one transaction.
+-- Only the final catalog value should be applied.
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 12;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
+ALTER
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 13          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 13          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 16 ALTER changes value and then changes it back in the same transaction.
+-- Final runtime state should stay equal to the committed catalog value.
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 14;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
+ALTER
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 13          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 13          | 10             | 7            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 17 Rolled back callback with stale full snapshot must not overwrite
+-- another committed field.
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET MEMORY_LIMIT 9;
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 15;
+ALTER
+SAVEPOINT s1;
+SAVEPOINT
+ALTER RESOURCE GROUP rg_alter_tran SET MEMORY_LIMIT 9;
+ALTER
+ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 15          | 10             | 9            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+SELECT * FROM rg_alter_tran_runtime_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 15          | 10             | 9            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+
+-- Concurrent ALTERs
+
+-- 18 Error during pg_resgroup_move_query when ALTER is uncommitted.
+1: BEGIN;
+BEGIN
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
+ALTER
+2: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
+ERROR:  cannot move query while a resource group is being edited
+1: ROLLBACK;
+ROLLBACK
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 15          | 10             | 9            
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- 19 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+1: BEGIN;
+BEGIN
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 17;
+ALTER
+2&: DROP RESOURCE GROUP rg_alter_tran_b;  <waiting ...>
+1: ROLLBACK;
+ROLLBACK
+2<:  <... completed>
+DROP
+SELECT * FROM rg_alter_tran_status;
+ groupname     | concurrency | cpu_rate_limit | memory_limit 
+---------------+-------------+----------------+--------------
+ rg_alter_tran | 15          | 10             | 9            
+(1 row)
+
+-- 20 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
+1: BEGIN;
+BEGIN
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 18;
+ALTER
+2&: CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);  <waiting ...>
+1: ROLLBACK;
+ROLLBACK
+2<:  <... completed>
+CREATE
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 15          | 10             | 9            
+ rg_alter_tran_b | 2           | 10             | 10           
+(2 rows)
+
+1q: ... <quitting>
+2q: ... <quitting>
 
 -- cleanup
 DROP VIEW rg_alter_tran_status;
+DROP
+DROP VIEW rg_alter_tran_runtime_status;
+DROP
+DROP FUNCTION rg_alter_tran_runtime_cap(group_name text, cap_id int);
 DROP
 DROP FUNCTION rg_alter_tran_func();
 DROP
@@ -262,8 +455,6 @@ DROP FUNCTION rg_alter_tran_func_sub_fail();
 DROP
 DROP FUNCTION rg_alter_tran_func_own_group();
 DROP
-DROP ROLE rg_alter_tran_role;
-DROP
 DROP RESOURCE GROUP rg_alter_tran;
 DROP
 DROP RESOURCE GROUP rg_alter_tran_b;
@@ -271,6 +462,5 @@ DROP
 
 -- start_ignore
 ! gpconfig -r gp_resource_group_enable_alter_in_transaction;
-
 ! gpstop -arf;
 -- end_ignore
