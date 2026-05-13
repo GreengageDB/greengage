@@ -15,7 +15,7 @@ CREATE OR REPLACE FUNCTION gp_keepalives_check(
     OUT keepalives_idle int)
 RETURNS SETOF record AS '@abs_srcdir@/regress.so',
 'gp_keepalives_check' LANGUAGE C VOLATILE EXECUTE ON MASTER;
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION save_keepalives_data(result_table text) RETURNS void AS $$
     results = plpy.execute("select * from gp_keepalives_check()")
     for r in results:
@@ -24,7 +24,7 @@ CREATE OR REPLACE FUNCTION save_keepalives_data(result_table text) RETURNS void 
                                                                    r["keepalives_interval"], r["keepalives_count"], \
                                                                    r["keepalives_idle"])
         plpy.execute(stmt)
-$$ LANGUAGE plpythonu VOLATILE EXECUTE ON MASTER;
+$$ LANGUAGE plpython3u VOLATILE EXECUTE ON MASTER;
 -- Before we change the keepalives parameters, create the result table to start
 -- the cdbgang and to store the function call results afterwards.
 CREATE TABLE keepalives_before (qe_id int2, is_writer bool,

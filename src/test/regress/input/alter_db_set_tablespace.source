@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
+-- m/dboid dir for database alter_db does not exist on dbid = \d+/
+-- s/dbid = \d+/dbid = N/
 -- end_matchsubs
 -- Setup, cleanup and validation helpers
 
@@ -19,7 +21,7 @@ SET search_path TO adst,public;
 CREATE EXTENSION gp_check_functions;
 
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION setup_tablespace_location_dir_for_test(tablespace_location_dir text) RETURNS VOID AS $$
@@ -32,7 +34,7 @@ except OSError:
     plpy.debug(traceback.format_exc())
     plpy.debug('failed to remove tablespace location directory: %s' % (tablespace_location_dir))
 os.mkdir(tablespace_location_dir)
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 \set adst_source_tablespace_location @testtablespace@/adst_source
 \set adst_destination_tablespace_location @testtablespace@/adst_dest
@@ -61,12 +63,12 @@ CREATE OR REPLACE FUNCTION list_db_tablespace(database_name text, tablespace_nam
 $$ LANGUAGE sql;
 
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION stat_db_objects(datname text, spcname text)
     RETURNS TABLE (dbid int2, relfilenode_dboid_relative_path text, size int)
-    VOLATILE LANGUAGE plpythonu
+    VOLATILE LANGUAGE plpython3u
 AS
 $fn$
 import os

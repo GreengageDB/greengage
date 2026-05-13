@@ -13,21 +13,21 @@ DROP FUNCTION IF EXISTS corrupt_snapshot_file(text, text);
 DROP
 DROP FUNCTION IF EXISTS snapshot_file_ds_fields_exist(text);
 DROP
-DROP LANGUAGE IF EXISTS plpythonu cascade;
+DROP LANGUAGE IF EXISTS plpython3u cascade;
 DROP
 DROP TABLE IF EXISTS export_distributed_snapshot_test1;
 DROP
 -- end_ignore
 
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 CREATE
 
 -- Corrupt field entry for given snapshot file
-CREATE OR REPLACE FUNCTION  corrupt_snapshot_file(token text, field text) RETURNS integer as $$ import os content = bytearray() query = "SELECT (SELECT datadir FROM gp_segment_configuration WHERE role='p' and content=-1) || '/pg_snapshots/' as path" rv = plpy.execute(query) abs_path = rv[0]['path'] snapshot_file = abs_path + token if not os.path.isfile(snapshot_file): plpy.info('skipping non-existent file %s' % (snapshot_file)) else: plpy.info('corrupting file %s for field %s' % (snapshot_file, field)) with open(snapshot_file , "rb+") as f: for line in f: l = line.decode() id = l.split(":")[0] if field == id: corrupt = l[:-2] + '*' + l[len(l)-1:] content.extend(corrupt.encode()) else: content.extend(line) f.seek(0) f.truncate f.write(content) f.close() return 0 $$ LANGUAGE plpythonu;
+CREATE OR REPLACE FUNCTION  corrupt_snapshot_file(token text, field text) RETURNS integer as $$ import os content = bytearray() query = "SELECT (SELECT datadir FROM gp_segment_configuration WHERE role='p' and content=-1) || '/pg_snapshots/' as path" rv = plpy.execute(query) abs_path = rv[0]['path'] snapshot_file = abs_path + token if not os.path.isfile(snapshot_file): plpy.info('skipping non-existent file %s' % (snapshot_file)) else: plpy.info('corrupting file %s for field %s' % (snapshot_file, field)) with open(snapshot_file , "rb+") as f: for line in f: l = line.decode() id = l.split(":")[0] if field == id: corrupt = l[:-2] + '*' + l[len(l)-1:] content.extend(corrupt.encode()) else: content.extend(line) f.seek(0) f.truncate f.write(content) f.close() return 0 $$ LANGUAGE plpython3u;
 CREATE
 
 -- Determine if field exists for given snapshot file
-CREATE OR REPLACE FUNCTION  snapshot_file_ds_fields_exist(token text) RETURNS boolean as $$ import os content = bytearray() query = "SELECT (SELECT datadir FROM gp_segment_configuration WHERE role='p' and content=-1) || '/pg_snapshots/' as path" rv = plpy.execute(query) abs_path = rv[0]['path'] snapshot_file = abs_path + token if not os.path.isfile(snapshot_file): plpy.info('snapshot file %s does not exist' % (snapshot_file)) return -1 else: plpy.info('checking file %s for ds fields' % (snapshot_file)) with open(snapshot_file , "rb+") as f: for line in f: l = line.decode() if "ds" in l: return True return False $$ LANGUAGE plpythonu;
+CREATE OR REPLACE FUNCTION  snapshot_file_ds_fields_exist(token text) RETURNS boolean as $$ import os content = bytearray() query = "SELECT (SELECT datadir FROM gp_segment_configuration WHERE role='p' and content=-1) || '/pg_snapshots/' as path" rv = plpy.execute(query) abs_path = rv[0]['path'] snapshot_file = abs_path + token if not os.path.isfile(snapshot_file): plpy.info('snapshot file %s does not exist' % (snapshot_file)) return -1 else: plpy.info('checking file %s for ds fields' % (snapshot_file)) with open(snapshot_file , "rb+") as f: for line in f: l = line.decode() if "ds" in l: return True return False $$ LANGUAGE plpython3u;
 CREATE
 
 -- INSERT test

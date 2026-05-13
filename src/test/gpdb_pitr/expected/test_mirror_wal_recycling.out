@@ -39,7 +39,7 @@ RETURNS bool AS $$
     rc = os.system(cmd)
 
     return (rc == 0)
-$$ LANGUAGE plpython2u VOLATILE;
+$$ LANGUAGE plpython3u VOLATILE;
 SELECT ready_file_exists(datadir) FROM gp_segment_configuration WHERE content=0 AND role='m';
  ready_file_exists 
 -------------------

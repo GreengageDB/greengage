@@ -150,16 +150,16 @@ explain (costs off) select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join fun
                             QUERY PLAN                            
 ------------------------------------------------------------------
  GroupAggregate
-   Group Key: funcdep1.a, funcdep1.b, funcdep1.c
+   Group Key: t1.a, t1.b, t1.c
    ->  Sort
-         Sort Key: funcdep1.a, funcdep1.b, funcdep1.c
+         Sort Key: t1.a, t1.b, t1.c
          ->  Hash Join
-               Hash Cond: (funcdep1.b = funcdep2.b)
+               Hash Cond: (t1.b = t2.b)
                ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on funcdep1
+                     ->  Seq Scan on funcdep1 t1
                ->  Hash
                      ->  Gather Motion 3:1  (slice2; segments: 3)
-                           ->  Seq Scan on funcdep2
+                           ->  Seq Scan on funcdep2 t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (12 rows)
 

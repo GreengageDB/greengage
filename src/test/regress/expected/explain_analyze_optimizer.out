@@ -49,10 +49,10 @@ EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) SELECT t1.a FROM empty_table t1 join em
 -------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Hash Join (actual rows=0 loops=1)
-         Hash Cond: (empty_table.a = empty_table_1.a)
-         ->  Seq Scan on empty_table (never executed)
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on empty_table t1 (never executed)
          ->  Hash (actual rows=0 loops=1)
-               ->  Seq Scan on empty_table empty_table_1 (actual rows=0 loops=1)
+               ->  Seq Scan on empty_table t2 (actual rows=0 loops=1)
  Planning time: 20.770 ms
    (slice0)    Executor memory: 59K bytes.
    (slice1)    Executor memory: 4170K bytes avg x 3 workers, 4170K bytes max (seg0).
