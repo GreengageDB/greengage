@@ -55,9 +55,10 @@ run_feature() {
   do
     docker compose -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
       echo 'import coverage; coverage.process_startup()' > /usr/local/greengage-db-devel/lib/python/sitecustomize.py &&
-      echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh
-      echo 'export PROJECT=$project' >> /usr/local/greengage-db-devel/greengage_path.sh"
+      echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh &&
+      echo 'export PROJECT=$project' >> /usr/local/greengage-db-devel/greengage_path.sh" &
   done
+  wait
 
   docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
@@ -71,7 +72,7 @@ run_feature() {
 
   docker compose -p "$project" -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e PROJECT="$project" \
-    cdw bash -s <<'EOF'
+    cdw bash -eux <<'EOF'
       set -ex
       cd /tmp/coverage-data
 
