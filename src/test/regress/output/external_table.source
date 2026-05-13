@@ -5067,19 +5067,4 @@ SELECT * FROM ext_t1;
  Optimizer: Postgres query optimizer
 (2 rows)
 
-SELECT * FROM ext_t1;
- c1 
-----
-  1
-  2
-  3
-  4
-  5
-  6
-  7
-  8
-  9
- 10
-(10 rows)
-
 DROP EXTERNAL TABLE ext_t1;
