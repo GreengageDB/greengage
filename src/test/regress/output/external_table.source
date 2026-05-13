@@ -5057,3 +5057,29 @@ FROM ext_subplan_t1;
 
 DROP EXTERNAL TABLE ext_subplan_t1;
 DROP EXTERNAL TABLE ext_subplan_t2;
+-- Test non-negative plan costs on non-distributed external web tables
+CREATE EXTERNAL WEB TABLE ext_t1(c1 int) EXECUTE 'seq 1 10' ON MASTER FORMAT 'text';
+EXPLAIN
+SELECT * FROM ext_t1;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ External Scan on ext_t1  (cost=0.00..11000.00 rows=1000000 width=4)
+ Optimizer: Postgres query optimizer
+(2 rows)
+
+SELECT * FROM ext_t1;
+ c1 
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+DROP EXTERNAL TABLE ext_t1;
