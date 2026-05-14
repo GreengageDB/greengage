@@ -3,6 +3,16 @@
 
 ## Building the Image
 
+> **Important: Before building the image, make sure to initialize and update**
+> **Git submodules from the repository root:**
+>
+> ```bash
+> git submodule update --init --recursive
+> ```
+>
+> This ensures that all dependencies are properly fetched before `docker build`
+> Missing submodules will cause build failures.
+
 Set the target environment:
 
 ```bash
