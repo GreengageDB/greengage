@@ -30,17 +30,17 @@
 #include "commands/defrem.h"
 #include "commands/resgroupcmds.h"
 #include "miscadmin.h"
+#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
+#include "utils/memutils.h"
 #include "utils/resgroup.h"
 #include "utils/resgroup-ops.h"
 #include "utils/resource_manager.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/faultinjector.h"
-#include "utils/memutils.h"
-#include "nodes/pg_list.h"
 
 #define RESGROUP_DEFAULT_CONCURRENCY (20)
 #define RESGROUP_DEFAULT_MEM_SHARED_QUOTA (80)
@@ -375,11 +375,11 @@ void
 AlterResourceGroup(AlterResourceGroupStmt *stmt)
 {
 	/*
-	* Legacy ABI entry point has no ProcessUtilityContext.
-	* Treat it as top-level so IsInTransactionChain() can still detect
-	* explicit transaction blocks, subtransactions and non-standalone
-	* transaction states, but does not assume function/multi-command context.
-	*/
+	 * Legacy ABI entry point has no ProcessUtilityContext.
+	 * Treat it as top-level so IsInTransactionChain() can still detect
+	 * explicit transaction blocks, subtransactions and non-standalone
+	 * transaction states, but does not assume function/multi-command context.
+	 */
 	AlterResourceGroupExtended(stmt, true);
 }
 
@@ -440,9 +440,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 						stmt->name)));
 
 	/*
-	* The session alters its own resource group inside a transaction block.
-	* The change will not be visible to this session before COMMIT.
-	*/
+	 * The session alters its own resource group inside a transaction block.
+	 * The change will not be visible to this session before COMMIT.
+	 */
 	if (Gp_role == GP_ROLE_DISPATCH &&
 		gp_resource_group_enable_alter_in_transaction &&
 		IsInTransactionChain(isTopLevel) &&
@@ -571,9 +571,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->should_apply = true;
 
 		/*
-		* Track callbacks only for ALTER inside a transaction chain. Top-level
-		* ALTER keeps the old path. The list cell must live until COMMIT/ABORT.
-		*/
+		 * Track callbacks only for ALTER inside a transaction chain. Top-level
+		 * ALTER keeps the old path. The list cell must live until COMMIT/ABORT.
+		 */
 		if (gp_resource_group_enable_alter_in_transaction &&
 			IsInTransactionChain(isTopLevel))
 		{
@@ -585,9 +585,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 			if (!alter_pre_commit_callback_registered)
 			{
 				/*
-				* Use a regular callback because once callbacks are not fired at
-				* PRE_COMMIT, where we need to validate final catalog state.
-				*/
+				 * Use a regular callback because once callbacks are not fired at
+				 * PRE_COMMIT, where we need to validate final catalog state.
+				 */
 				RegisterXactCallback(alterResgroupPreCommitCallback, NULL);
 				alter_pre_commit_callback_registered = true;
 			}
@@ -1207,9 +1207,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 	ResourceGroupCallbackContext *callbackCtx = arg;
 
 	if (event == XACT_EVENT_COMMIT && callbackCtx->should_apply)
-	{
 		ResGroupAlterOnCommit(callbackCtx);
-	}
 
 	pfree(callbackCtx);
 }
@@ -1245,7 +1243,8 @@ alterResgroupPreCommitCallback(XactEvent event, void *arg)
 		pending_alter_callbacks = NIL;
 		return;
 	}
-	else if (event == XACT_EVENT_PRE_COMMIT)
+
+	if (event == XACT_EVENT_PRE_COMMIT)
 	{
 		Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 

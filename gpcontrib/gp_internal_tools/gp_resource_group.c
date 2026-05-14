@@ -87,10 +87,10 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		groupName = text_to_cstring(PG_GETARG_TEXT_PP(1));
 
 		/*
-		* Fail if ALTER RESOURCE GROUP is in progress.
-		* ALTER holds ExclusiveLock until end of transaction.
-		* RowShareLock allows concurrent moves but conflicts with it.
-		*/
+		 * Fail if ALTER RESOURCE GROUP is in progress.
+		 * ALTER holds ExclusiveLock until end of transaction.
+		 * RowShareLock allows concurrent moves but conflicts with it.
+		 */
 		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
 										RowShareLock))
 		{

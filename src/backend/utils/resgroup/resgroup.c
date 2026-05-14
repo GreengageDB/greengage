@@ -904,8 +904,7 @@ ResGroupCapFieldMatches(ResGroupLimitType limittype,
 		case RESGROUP_LIMIT_TYPE_CPU:
 		case RESGROUP_LIMIT_TYPE_CPUSET:
 			return left->cpuRateLimit == right->cpuRateLimit &&
-				   strncmp(left->cpuset, right->cpuset,
-						   MaxCpuSetLength) == 0;
+				   strcmp(left->cpuset, right->cpuset) == 0;
 		case RESGROUP_LIMIT_TYPE_MEMORY:
 			return left->memLimit == right->memLimit;
 		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
@@ -914,9 +913,14 @@ ResGroupCapFieldMatches(ResGroupLimitType limittype,
 			return left->memSpillRatio == right->memSpillRatio;
 		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
 			return left->memAuditor == right->memAuditor;
-		default:
-			return true;
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
+			break;
 	}
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			(errmsg("invalid resource group limit type: %d", limittype))));
+	return false;
 }
 
 /*
@@ -931,29 +935,31 @@ resgroupCapFieldApply(ResGroupLimitType limittype,
 	{
 		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
 			dst->concurrency = src->concurrency;
-			break;
+			return;
 		case RESGROUP_LIMIT_TYPE_CPU:
 		case RESGROUP_LIMIT_TYPE_CPUSET:
 			dst->cpuRateLimit = src->cpuRateLimit;
-			StrNCpy(dst->cpuset,
-					src->cpuset,
-					sizeof(dst->cpuset));
-			break;
+			StrNCpy(dst->cpuset, src->cpuset, sizeof(dst->cpuset));
+			return;
 		case RESGROUP_LIMIT_TYPE_MEMORY:
 			dst->memLimit = src->memLimit;
-			break;
+			return;
 		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
 			dst->memSharedQuota = src->memSharedQuota;
-			break;
+			return;
 		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
 			dst->memSpillRatio = src->memSpillRatio;
-			break;
+			return;
 		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
 			dst->memAuditor = src->memAuditor;
-			break;
-		default:
+			return;
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
 			break;
 	}
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			(errmsg("invalid resource group limit type: %d", limittype))));
 }
 
 /*
@@ -982,8 +988,8 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 			 * this value is already in shared memory, skip this callback.
 			 */
 			if (ResGroupCapFieldMatches(callbackCtx->limittype,
-										 &callbackCtx->caps,
-										 &group->caps))
+										&callbackCtx->caps,
+										&group->caps))
 			{
 				apply_changes = false;
 			}

@@ -2,10 +2,11 @@
 -- Test: ALTER RESOURCE GROUP inside a transaction block.
 -- ------------------------------------------------------
 
--- start_ignore
-! gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
-! gpstop -arf;
+!\retcode gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
 
+!\retcode gpstop -arf;
+
+-- start_ignore
 DROP VIEW IF EXISTS rg_alter_tran_status;
 DROP VIEW IF EXISTS rg_alter_tran_runtime_status;
 DROP FUNCTION IF EXISTS rg_alter_tran_runtime_cap(group_name text, cap_id int);
@@ -250,7 +251,6 @@ DROP FUNCTION rg_alter_tran_func_own_group();
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
 
--- start_ignore
-! gpconfig -r gp_resource_group_enable_alter_in_transaction;
-! gpstop -arf;
--- end_ignore
+!\retcode gpconfig -r gp_resource_group_enable_alter_in_transaction;
+
+!\retcode gpstop -arf;
