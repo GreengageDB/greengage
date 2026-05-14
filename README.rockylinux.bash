@@ -1,13 +1,15 @@
 #!/bin/bash
 # FILE:    README.rockylinux.bash
 # CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build
-# PURPOSE: Install build dependencies, compile zstd static library
+# PURPOSE: Install build dependencies, compile zstd static library,
+#          Install Python based on OS version
 
 set -eux
 
 dnf -y install epel-release
 dnf config-manager --set-enabled powertools
 
+# Common packages (always install)
 dnf -y install \
     apr-devel \
     apr-util-devel \
@@ -49,9 +51,9 @@ dnf -y install \
     perl-JSON \
     perl-Test-Base \
     procps-ng \
-    python2 \
-    python2-devel \
-    python2-setuptools \
+    python3 \
+    python3-devel \
+    python3-setuptools \
     readline-devel \
     rsync \
     snappy-devel \
@@ -62,6 +64,16 @@ dnf -y install \
     wget \
     xerces-c-devel \
     zlib-devel
+
+# Detect OS version
+OS_VERSION=$(grep -oP '(?<= release )\d+' /etc/redhat-release)
+
+if [ "$OS_VERSION" -eq 8 ] ; then
+    dnf -y install \
+        python2 \
+        python2-devel \
+        python2-setuptools
+fi
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
