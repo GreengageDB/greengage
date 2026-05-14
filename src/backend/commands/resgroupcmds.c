@@ -1244,24 +1244,24 @@ alterResgroupPreCommitCallback(XactEvent event, void *arg)
 		return;
 	}
 
-	if (event == XACT_EVENT_PRE_COMMIT)
+	if (event != XACT_EVENT_PRE_COMMIT)
+		return;
+
+	Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+
+	foreach (lc, pending_alter_callbacks)
 	{
-		Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+		ResourceGroupCallbackContext *ctx = lfirst(lc);
+		ResGroupCaps currentCaps;
 
-		foreach (lc, pending_alter_callbacks)
-		{
-			ResourceGroupCallbackContext *ctx = lfirst(lc);
-			ResGroupCaps currentCaps;
+		GetResGroupCapabilities(rel, ctx->groupid, &currentCaps);
 
-			GetResGroupCapabilities(rel, ctx->groupid, &currentCaps);
-
-			ctx->should_apply = ResGroupCapFieldMatches(ctx->limittype,
-														&ctx->caps,
-														&currentCaps);
-		}
-
-		heap_close(rel, AccessShareLock);
+		ctx->should_apply = ResGroupCapFieldMatches(ctx->limittype,
+													&ctx->caps,
+													&currentCaps);
 	}
+
+	heap_close(rel, AccessShareLock);
 }
 
 /*

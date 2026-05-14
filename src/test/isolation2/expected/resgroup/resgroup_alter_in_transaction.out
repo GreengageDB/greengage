@@ -3,27 +3,11 @@
 -- ------------------------------------------------------
 
 !\retcode gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
--- start_ignore
--- end_ignore
 (exited with code 0)
 
 !\retcode gpstop -arf;
--- start_ignore
--- end_ignore
 (exited with code 0)
 
--- start_ignore
-DROP VIEW IF EXISTS rg_alter_tran_status;
-DROP VIEW IF EXISTS rg_alter_tran_runtime_status;
-DROP FUNCTION IF EXISTS rg_alter_tran_runtime_cap(group_name text, cap_id int);
-DROP FUNCTION IF EXISTS rg_alter_tran_func();
-DROP FUNCTION IF EXISTS rg_alter_tran_func_sub();
-DROP FUNCTION IF EXISTS rg_alter_tran_func_sub_fail();
-DROP FUNCTION IF EXISTS rg_alter_tran_func_own_group();
-DROP RESOURCE GROUP rg_alter_tran;
-DROP RESOURCE GROUP rg_alter_tran_b;
-CREATE LANGUAGE plpython3u;
--- end_ignore
 
 CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE
@@ -468,11 +452,7 @@ DROP RESOURCE GROUP rg_alter_tran_b;
 DROP
 
 !\retcode gpconfig -r gp_resource_group_enable_alter_in_transaction;
--- start_ignore
--- end_ignore
 (exited with code 0)
 
 !\retcode gpstop -arf;
--- start_ignore
--- end_ignore
 (exited with code 0)
