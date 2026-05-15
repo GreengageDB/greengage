@@ -440,7 +440,6 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 	 * The change will not be visible to this session before COMMIT.
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH &&
-		gp_resource_group_enable_alter_in_transaction &&
 		IsInTransactionChain(isTopLevel) &&
 		groupid == GetMyResGroupId())
 	{
@@ -564,12 +563,12 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
-		if (gp_resource_group_enable_alter_in_transaction &&
-			IsInTransactionChain(isTopLevel))
+		if (IsInTransactionChain(isTopLevel))
 		{
 			/*
-			 * Inside transaction, collect ALTER data for later synchronous apply.
+			 * In transaction, collect ALTER data for later synchronous apply.
 			 */
+			Assert(gp_resource_group_enable_alter_in_transaction);
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			resgroup_alter_tran_callbacks = lappend(
 												resgroup_alter_tran_callbacks,
