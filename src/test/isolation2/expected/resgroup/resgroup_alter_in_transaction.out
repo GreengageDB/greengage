@@ -384,7 +384,7 @@ SELECT * FROM rg_alter_tran_runtime_status;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
 ALTER
-2: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
+2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 ERROR:  cannot move query while a resource group is being edited
 1: ROLLBACK;
 ROLLBACK

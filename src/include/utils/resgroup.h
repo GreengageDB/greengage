@@ -151,9 +151,6 @@ typedef struct
 	ResGroupCaps	oldCaps;	/* last config value, alter operation need to
 								 * check last config for recycling */
 	ResGroupCap		memLimitGap;
-	bool		should_apply;	/* validated at PRE_COMMIT, cleared when a
-								 * subtransaction rollback reverted the
-								 * row from catalog recorded by this callback */
 } ResourceGroupCallbackContext;
 
 /* Shared memory and semaphores */

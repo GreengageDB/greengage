@@ -94,7 +94,7 @@ static void checkAuthIdForDrop(Oid groupId);
 static void createResgroupCallback(XactEvent event, void *arg);
 static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
-static void alterResgroupPreCommitCallback(XactEvent event, void *arg);
+static void alterResgroupTranCallback(XactEvent event, void *arg);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
 
@@ -104,7 +104,7 @@ static void checkCpusetSyntax(const char *cpuset);
  * reverted a catalog row this callback was registered for.
  */
 static List *pending_alter_callbacks = NIL;
-static bool alter_pre_commit_callback_registered = false;
+static bool alter_tran_callback_registered = false;
 
 /*
  * CREATE RESOURCE GROUP
@@ -568,32 +568,30 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
-		callbackCtx->should_apply = true;
-
-		/*
-		 * Track callbacks only for ALTER inside a transaction chain. Top-level
-		 * ALTER keeps the old path. The list cell must live until COMMIT/ABORT.
-		 */
 		if (gp_resource_group_enable_alter_in_transaction &&
 			IsInTransactionChain(isTopLevel))
 		{
-			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+			MemoryContext oldcxt;
+
+			oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			pending_alter_callbacks = lappend(pending_alter_callbacks,
-											  callbackCtx);
+											callbackCtx);
 			MemoryContextSwitchTo(oldcxt);
 
-			if (!alter_pre_commit_callback_registered)
+			if (!alter_tran_callback_registered)
 			{
 				/*
-				 * Use a regular callback because once callbacks are not fired at
-				 * PRE_COMMIT, where we need to validate final catalog state.
+				 * Use a regular callback because once callbacks are not fired
+				 * at PRE_COMMIT, where we need to validate final catalog state.
 				 */
-				RegisterXactCallback(alterResgroupPreCommitCallback, NULL);
-				alter_pre_commit_callback_registered = true;
+				RegisterXactCallback(alterResgroupTranCallback, NULL);
+				alter_tran_callback_registered = true;
 			}
 		}
-
-		RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
+		else
+		{
+			RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
+		}
 	}
 }
 
@@ -1206,62 +1204,99 @@ alterResgroupCallback(XactEvent event, void *arg)
 {
 	ResourceGroupCallbackContext *callbackCtx = arg;
 
-	if (event == XACT_EVENT_COMMIT && callbackCtx->should_apply)
+	if (event == XACT_EVENT_COMMIT)
 		ResGroupAlterOnCommit(callbackCtx);
 
 	pfree(callbackCtx);
 }
 
 /*
- * PRE_COMMIT hook for transactional ALTER RESOURCE GROUP.
+ * Regular callback for transactional ALTER RESOURCE GROUP.
  *
- * Checks pending callbacks against pg_resgroupcapability.  If the recorded
- * value does not match the catalog, the ALTER RESOURCE GROUP was rolled back,
- * so mark that callback as not needed.
- * 
- * This callback is registered for the backend lifetime. With no pending work,
- * it returns immediately.
+ * PRE_COMMIT:
+ *   - read final pg_resgroupcapability state;
+ *   - keep callbacks whose changed value is still present there;
+ *   - drop callbacks rolled back by subtransactions or overwritten later.
+ *
+ * COMMIT:
+ *   - apply kept callbacks.
+ *
+ * ABORT:
+ *   - free pending callbacks.
+ *
+ * The callback remains registered for the backend lifetime. The first check
+ * is the fast path for transactions without ALTER RESOURCE GROUP.
  */
 static void
-alterResgroupPreCommitCallback(XactEvent event, void *arg)
+alterResgroupTranCallback(XactEvent event, void *arg)
 {
 	ListCell   *lc;
 
-	/*
-	 * Fast path for normal transactions after the callback has been
-	 * registered in this backend but there is no ALTER RESOURCE GROUP
-	 * work pending.
-	 */
 	if (pending_alter_callbacks == NIL)
 		return;
 
-	Assert(gp_resource_group_enable_alter_in_transaction);
-
-	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
+	if (event == XACT_EVENT_ABORT)
 	{
+		foreach (lc, pending_alter_callbacks)
+			pfree(lfirst(lc));
+
 		list_free(pending_alter_callbacks);
 		pending_alter_callbacks = NIL;
 		return;
 	}
 
-	if (event != XACT_EVENT_PRE_COMMIT)
-		return;
-
-	Relation rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
-
-	foreach (lc, pending_alter_callbacks)
+	if (event == XACT_EVENT_COMMIT)
 	{
-		ResourceGroupCallbackContext *ctx = lfirst(lc);
-		ResGroupCaps currentCaps;
+		foreach (lc, pending_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
 
-		GetResGroupCapabilities(rel, ctx->groupid, &currentCaps);
+			ResGroupAlterOnCommit(ctx);
+			pfree(ctx);
+		}
 
-		ctx->should_apply = ResGroupCapFieldMatches(ctx->limittype,
-													&ctx->caps,
-													&currentCaps);
+		list_free(pending_alter_callbacks);
+		pending_alter_callbacks = NIL;
+		return;
 	}
 
-	heap_close(rel, AccessShareLock);
+	if (event == XACT_EVENT_PRE_COMMIT)
+	{
+		List	   *prepared = NIL;
+		Relation	rel;
+
+		Assert(gp_resource_group_enable_alter_in_transaction);
+
+		/* Keep only final catalog changes. */
+		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+
+		foreach (lc, pending_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			ResGroupCaps finalCaps;
+
+			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+
+			if (ResGroupCapFieldMatches(ctx->limittype,
+										&ctx->caps,
+										&finalCaps))
+				prepared = lappend(prepared, ctx);
+		}
+
+		heap_close(rel, AccessShareLock);
+
+		foreach (lc, pending_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+
+			if (!list_member_ptr(prepared, ctx))
+				pfree(ctx);
+		}
+
+		list_free(pending_alter_callbacks);
+		pending_alter_callbacks = prepared;
+		return;
+	}
 }
 
 /*

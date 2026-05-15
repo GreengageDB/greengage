@@ -217,7 +217,7 @@ SELECT * FROM rg_alter_tran_runtime_status;
 -- 18 Error during pg_resgroup_move_query when ALTER is uncommitted.
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
-2: SELECT gp_toolkit.pg_resgroup_move_query(pg_backend_pid(), 'rg_alter_tran_b');
+2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 

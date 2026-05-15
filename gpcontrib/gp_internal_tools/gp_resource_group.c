@@ -86,8 +86,13 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		pid_t pid = PG_GETARG_INT32(0);
 		groupName = text_to_cstring(PG_GETARG_TEXT_PP(1));
 
+		if (pid == MyProcPid)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					(errmsg("cannot move myself"))));
+
 		/*
-		 * Fail if ALTER RESOURCE GROUP is in progress.
+		 * Fail if any resource group is being edited.
 		 * ALTER holds ExclusiveLock until end of transaction.
 		 * RowShareLock allows concurrent moves but conflicts with it.
 		 */
@@ -99,34 +104,27 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 					 errmsg("cannot move query while a resource group is being edited")));
 		}
 
-		if (pid == MyProcPid)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 (errmsg("cannot move myself"))));
-
-		groupId = GetResGroupIdForName(groupName);
-		if (groupId == InvalidOid)
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 (errmsg("cannot find resource group: %s", groupName))));
-
-		sessionId = GetSessionIdByPid(pid);
-		if (sessionId == -1)
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 (errmsg("cannot find process: %d", pid))));
-
-		currentGroupId = ResGroupGetGroupIdBySessionId(sessionId);
-		if (currentGroupId == InvalidOid)
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 (errmsg("process %d is in IDLE state", pid))));
-		if (currentGroupId == groupId)
-			PG_RETURN_BOOL(true);
-
 		PG_TRY();
 		{
-			ResGroupMoveQuery(sessionId, groupId, groupName);
+			groupId = GetResGroupIdForName(groupName);
+			if (groupId == InvalidOid)
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						(errmsg("cannot find resource group: %s", groupName))));
+
+			sessionId = GetSessionIdByPid(pid);
+			if (sessionId == -1)
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						(errmsg("cannot find process: %d", pid))));
+
+			currentGroupId = ResGroupGetGroupIdBySessionId(sessionId);
+			if (currentGroupId == InvalidOid)
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						(errmsg("process %d is in IDLE state", pid))));
+			if (currentGroupId != groupId)
+				ResGroupMoveQuery(sessionId, groupId, groupName);
 		}
 		PG_CATCH();
 		{

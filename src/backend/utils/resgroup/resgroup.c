@@ -394,6 +394,9 @@ static void groupMemOnNotifyForCgroup(ResGroupData *group);
 static void groupMemOnDumpForCgroup(ResGroupData *group, StringInfo str);
 static void groupApplyCgroupMemInc(ResGroupData *group);
 static void groupApplyCgroupMemDec(ResGroupData *group);
+static void resGroupCapFieldApply(ResGroupLimitType limittype,
+								  ResGroupCaps *dst,
+								  const ResGroupCaps *src);
 
 static void cpusetOperation(char *cpuset1,
 							const char *cpuset2,
@@ -927,7 +930,7 @@ ResGroupCapFieldMatches(ResGroupLimitType limittype,
  * Apply only the field changed by limittype to the target capability snapshot.
  */
 static void
-resgroupCapFieldApply(ResGroupLimitType limittype,
+resGroupCapFieldApply(ResGroupLimitType limittype,
 					  ResGroupCaps *dst,
 					  const ResGroupCaps *src)
 {
@@ -964,14 +967,17 @@ resgroupCapFieldApply(ResGroupLimitType limittype,
 
 /*
  * Apply the new resgroup caps.
+ *
+ * Only callbackCtx->limittype is applied. The previous state is read
+ * from shared memory.
  */
 void
 ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 {
 	ResGroupData	*group;
-	ResGroupCaps	oldRuntimeCaps;
+	ResGroupCaps	oldCaps;
+	ResGroupCaps	newCaps;
 	volatile int	savedInterruptHoldoffCount;
-	bool			apply_changes = true;
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
@@ -980,53 +986,30 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		savedInterruptHoldoffCount = InterruptHoldoffCount;
 		group = groupHashFind(callbackCtx->groupid, true);
 
-		if (gp_resource_group_enable_alter_in_transaction)
-		{
-			/*
-			 * More than one callback may survive for the same final value, for
-			 * example after savepoint rollback and a later matching ALTER. If
-			 * this value is already in shared memory, skip this callback.
-			 */
-			if (ResGroupCapFieldMatches(callbackCtx->limittype,
-										&callbackCtx->caps,
-										&group->caps))
-			{
-				apply_changes = false;
-			}
-			else
-			{
-				oldRuntimeCaps = group->caps;
-				/*
-				 * callbackCtx->caps is a full snapshot.  In a transaction,
-				 * apply only the field changed by this callback.
-				 */
-				resgroupCapFieldApply(callbackCtx->limittype,
-									  &group->caps,
-									  &callbackCtx->caps);
-			}
-		}
-		else
-		{
-			/*
-			 * Outside transactional ALTER mode, only one ALTER callback is
-			 * expected, so the full snapshot can be copied.
-			 */
-			oldRuntimeCaps = callbackCtx->oldCaps;
-			group->caps = callbackCtx->caps;
-		}
+		oldCaps = group->caps;
+		newCaps = oldCaps;
 
-		if (apply_changes)
+		resGroupCapFieldApply(callbackCtx->limittype,
+							  &newCaps,
+							  &callbackCtx->caps);
+
+		/* Skip duplicate no-op operations. */
+		if (!ResGroupCapFieldMatches(callbackCtx->limittype,
+									&oldCaps,
+									&newCaps))
 		{
+			group->caps = newCaps;
+
 			if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
 			{
 				ResGroupOps_SetCpuRateLimit(callbackCtx->groupid,
-											callbackCtx->caps.cpuRateLimit);
+											newCaps.cpuRateLimit);
 			}
 			else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPUSET)
 			{
 				if (gp_resource_group_enable_cgroup_cpuset)
 				{
-					char *cpuset = getCpuSetByRole(callbackCtx->caps.cpuset);
+					char *cpuset = getCpuSetByRole(newCaps.cpuset);
 					ResGroupOps_SetCpuSet(callbackCtx->groupid, cpuset);
 				}
 			}
@@ -1035,7 +1018,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 				Assert(pResGroupControl->totalChunks > 0);
 				ResGroupCap	memLimitGap = 0;
 				if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_MEMORY)
-					memLimitGap = oldRuntimeCaps.memLimit - callbackCtx->caps.memLimit;
+					memLimitGap = oldCaps.memLimit - newCaps.memLimit;
 				group->memGap += pResGroupControl->totalChunks * memLimitGap / 100;
 
 				Assert(group->groupMemOps != NULL);
@@ -1043,24 +1026,24 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 					group->groupMemOps->group_mem_on_alter(callbackCtx->groupid, group);
 			}
 			/* reset default group if cpuset has changed */
-			if (strcmp(oldRuntimeCaps.cpuset, callbackCtx->caps.cpuset) &&
+			if (strcmp(oldCaps.cpuset, newCaps.cpuset) &&
 				gp_resource_group_enable_cgroup_cpuset)
 			{
 				char defaultCpusetGroup[MaxCpuSetLength];
-			/* get current default group value */
+				/* get current default group value */
 				ResGroupOps_GetCpuSet(DEFAULT_CPUSET_GROUP_ID,
-									  defaultCpusetGroup,
-									  MaxCpuSetLength);
-			/* Add old value to default group
-			 * sub new value from default group */
-			char *cpuset= getCpuSetByRole(callbackCtx->caps.cpuset);
-			char *oldcpuset = getCpuSetByRole(oldRuntimeCaps.cpuset);
+									defaultCpusetGroup,
+									MaxCpuSetLength);
+				/* Add old value to default group
+				* sub new value from default group */
+				char *cpuset= getCpuSetByRole(newCaps.cpuset);
+				char *oldcpuset = getCpuSetByRole(oldCaps.cpuset);
 				CpusetUnion(defaultCpusetGroup,
 							oldcpuset,
 							MaxCpuSetLength);
 				CpusetDifference(defaultCpusetGroup,
-								  cpuset,
-								  MaxCpuSetLength);
+							cpuset,
+							MaxCpuSetLength);
 
 				ResGroupOps_SetCpuSet(DEFAULT_CPUSET_GROUP_ID, defaultCpusetGroup);
 			}
