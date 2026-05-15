@@ -1799,7 +1799,6 @@ ALTER TABLE child2 INHERIT parent;
 ERROR:  Replicated table cannot be inherited
 DROP TABLE child, child2, parent;
 -- Test that partitioned table can't inherit a parent table
-DROP TABLE IF EXISTS test_table, test_table_partitioned;
 CREATE TABLE test_table(a int) DISTRIBUTED BY (a);
 CREATE TABLE test_table_partitioned (
 	b int

@@ -633,7 +633,9 @@ ALTER TABLE child2 INHERIT parent;
 DROP TABLE child, child2, parent;
 
 -- Test that partitioned table can't inherit a parent table
+-- start_ignore
 DROP TABLE IF EXISTS test_table, test_table_partitioned;
+-- end_ignore
 
 CREATE TABLE test_table(a int) DISTRIBUTED BY (a);
 CREATE TABLE test_table_partitioned (
