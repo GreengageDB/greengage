@@ -99,7 +99,7 @@ static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
 static bool resGroupCapFieldMatches(ResGroupLimitType limittype, const ResGroupCaps *recorded, const ResGroupCaps *current);
 
-static List *pending_alter_callbacks = NIL;
+static List *resgroup_alter_tran_callbacks = NIL;
 static bool alter_tran_callback_registered = false;
 
 /*
@@ -571,8 +571,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 			 * Inside transaction, collect ALTER data for later synchronous apply.
 			 */
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-			pending_alter_callbacks = lappend(pending_alter_callbacks,
-											  callbackCtx);
+			resgroup_alter_tran_callbacks = lappend(
+												resgroup_alter_tran_callbacks,
+												callbackCtx);
 			MemoryContextSwitchTo(oldcxt);
 
 			if (!alter_tran_callback_registered)
@@ -1260,22 +1261,22 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 {
 	ListCell   *lc;
 
-	if (pending_alter_callbacks == NIL)
+	if (resgroup_alter_tran_callbacks == NIL)
 		return;
 
 	if (event == XACT_EVENT_ABORT)
 	{
-		foreach (lc, pending_alter_callbacks)
+		foreach (lc, resgroup_alter_tran_callbacks)
 			pfree(lfirst(lc));
 
-		list_free(pending_alter_callbacks);
-		pending_alter_callbacks = NIL;
+		list_free(resgroup_alter_tran_callbacks);
+		resgroup_alter_tran_callbacks = NIL;
 		return;
 	}
 
 	if (event == XACT_EVENT_COMMIT)
 	{
-		foreach (lc, pending_alter_callbacks)
+		foreach (lc, resgroup_alter_tran_callbacks)
 		{
 			ResourceGroupCallbackContext *ctx = lfirst(lc);
 
@@ -1283,8 +1284,8 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 			pfree(ctx);
 		}
 
-		list_free(pending_alter_callbacks);
-		pending_alter_callbacks = NIL;
+		list_free(resgroup_alter_tran_callbacks);
+		resgroup_alter_tran_callbacks = NIL;
 		return;
 	}
 
@@ -1298,7 +1299,7 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 		/* Keep only final catalog changes. */
 		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 
-		foreach (lc, pending_alter_callbacks)
+		foreach (lc, resgroup_alter_tran_callbacks)
 		{
 			ResourceGroupCallbackContext *ctx = lfirst(lc);
 			ResGroupCaps finalCaps;
@@ -1313,7 +1314,7 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 
 		heap_close(rel, AccessShareLock);
 
-		foreach (lc, pending_alter_callbacks)
+		foreach (lc, resgroup_alter_tran_callbacks)
 		{
 			ResourceGroupCallbackContext *ctx = lfirst(lc);
 
@@ -1321,8 +1322,8 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 				pfree(ctx);
 		}
 
-		list_free(pending_alter_callbacks);
-		pending_alter_callbacks = prepared;
+		list_free(resgroup_alter_tran_callbacks);
+		resgroup_alter_tran_callbacks = prepared;
 		return;
 	}
 }
