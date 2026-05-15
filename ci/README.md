@@ -27,6 +27,10 @@ export OS_VERSION=24.04
 # Rocky Linux 8
 export TARGET_OS=rockylinux
 export OS_VERSION=8
+
+# Rocky Linux 9
+export TARGET_OS=rockylinux
+export OS_VERSION=9
 ```
 
 Build the image from the repository root:

@@ -11,7 +11,7 @@
   > **Note:** CentOS 7 is EOL — configure `yum` to use a valid repo
   > (e.g., `vault.centos.org`) before installing dependencies.
 
-## For Rocky Linux 8
+## For Rocky Linux (8 or 9)
 
 - Install dependencies using `README.rockylinux.bash`:
 
@@ -19,11 +19,15 @@
   sudo ./README.rockylinux.bash
   ```
 
-- Create a symbolic link to Python 2 in `/usr/bin`:
+- For Rocky Linux 8, create a symbolic link to Python 2 in `/usr/bin`:
 
   ```bash
   sudo ln -sf /usr/bin/python2 /usr/bin/python
   ```
+
+  > **Note:** Supported Python versions: 2.7 (Rocky 8) or 3.9+ (Rocky 9),
+  > selected by the `python` command. For Rocky 9, Python 3 is already
+  > configured. For Rocky 8, Python 2 is recommended.
 
 ## For Ubuntu (22.04 or 24.04)
 
