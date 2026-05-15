@@ -571,11 +571,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		if (gp_resource_group_enable_alter_in_transaction &&
 			IsInTransactionChain(isTopLevel))
 		{
-			MemoryContext oldcxt;
-
-			oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			pending_alter_callbacks = lappend(pending_alter_callbacks,
-											callbackCtx);
+											  callbackCtx);
 			MemoryContextSwitchTo(oldcxt);
 
 			if (!alter_tran_callback_registered)
