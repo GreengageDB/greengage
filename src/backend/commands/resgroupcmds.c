@@ -97,7 +97,11 @@ static void alterResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupTranCallback(XactEvent event, void *arg);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
-static bool resGroupCapFieldMatches(ResGroupLimitType limittype, const ResGroupCaps *recorded, const ResGroupCaps *current);
+static bool resGroupCapFieldMatches(ResGroupLimitType limittype,
+									const ResGroupCaps *recorded,
+									const ResGroupCaps *current);
+static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
+											ResourceGroupCallbackContext *ctx);
 
 static List *resgroup_alter_tran_callbacks = NIL;
 static bool alter_tran_callback_registered = false;
@@ -1246,6 +1250,34 @@ resGroupCapFieldMatches(ResGroupLimitType limittype,
 }
 
 /*
+ * Check whether the same target ALTER callback is already prepared.
+ */
+static bool
+resgroupAlterCallbackAlreadyPrepared(List *prepared,
+									 ResourceGroupCallbackContext *ctx)
+{
+	ListCell   *lc;
+
+	foreach (lc, prepared)
+	{
+		ResourceGroupCallbackContext *prev = lfirst(lc);
+
+		if (prev->groupid != ctx->groupid)
+			continue;
+
+		if (prev->limittype != ctx->limittype)
+			continue;
+
+		if (resGroupCapFieldMatches(ctx->limittype,
+									&prev->caps,
+									&ctx->caps))
+			return true;
+	}
+
+	return false;
+}
+
+/*
  * Regular callback for transactional ALTER RESOURCE GROUP.
  *
  * PRE_COMMIT: keep callbacks matching final pg_resgroupcapability state.
@@ -1305,21 +1337,24 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 
 			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-			if (resGroupCapFieldMatches(ctx->limittype,
-										&ctx->caps,
-										&finalCaps))
-				prepared = lappend(prepared, ctx);
+			/* Skip changes rolled back or overwritten before commit. */
+			if (!resGroupCapFieldMatches(ctx->limittype,
+										 &ctx->caps,
+										 &finalCaps))
+			{
+				pfree(ctx);
+				continue;
+			}
+			/* Drop duplicate target callbacks. */
+			if (resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+			{
+				pfree(ctx);
+				continue;
+			}
+			prepared = lappend(prepared, ctx);
 		}
 
 		heap_close(rel, AccessShareLock);
-
-		foreach (lc, resgroup_alter_tran_callbacks)
-		{
-			ResourceGroupCallbackContext *ctx = lfirst(lc);
-
-			if (!list_member_ptr(prepared, ctx))
-				pfree(ctx);
-		}
 
 		list_free(resgroup_alter_tran_callbacks);
 		resgroup_alter_tran_callbacks = prepared;
