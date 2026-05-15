@@ -20,11 +20,12 @@ RUN set -eux; \
     case "$OS_VERSION" in \
         8) \
             ln -sf /usr/bin/python2 /usr/bin/python; \
-            FUTURE_VERSION=0.16 ; \
+            ALLURE_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3 future==0.16'; \
             ;; \
         9) \
-            ln -sf /usr/bin/python3 /usr/bin/python; \
-            FUTURE_VERSION=1.0.0 ; \
+            ln -sf /usr/bin/python3.11 /usr/bin/python; \
+            python -m ensurepip --upgrade; \
+            ALLURE_PACKAGES='allure-behave==2.4.0 future==1.0.0'; \
             ;; \
         *) \
             echo "Unsupported Rocky Linux version: $OS_VERSION"; \
@@ -41,14 +42,12 @@ RUN set -eux; \
     mkdir -p /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
+# Upgrade pip to support current package versions
+    python -m pip install --no-cache-dir --upgrade pip; \
 # Install allure-behave for behave tests
-    python -m pip install --no-cache-dir \
-        allure-behave==2.4.0 \
-        mock==3.0.5 \
-        psi==0.3b3 \
-        future=="$FUTURE_VERSION"; \
+    python -m pip install --no-cache-dir $ALLURE_PACKAGES; \
 # Install pytest for gpload test
-    python -m pip install --no-cache-dir -r pytest_requirement.txt; \
+    python -m pip install --no-cache-dir --requirement pytest_requirement.txt; \
     rm pytest_requirement.txt; \
 # Cleanup to reduce image size
     dnf clean all; \

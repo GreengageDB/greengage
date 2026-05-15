@@ -8,16 +8,30 @@ set -eux
 
 dnf -y install epel-release
 
-# Detect OS version
-OS_VERSION=$(grep -oP '(?<= release )\d+' /etc/redhat-release)
+# Detect OS version if not already set
+export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
 case "$OS_VERSION" in
-    8) dnf config-manager --set-enabled powertools ;;
-    9) dnf config-manager --set-enabled crb ;;
-    *) echo "Unsupported Rocky Linux version: $OS_VERSION"; exit 1 ;;
+    8)
+        dnf config-manager --set-enabled powertools
+        python_packages="python2 python2-devel python2-setuptools \
+                         python3 python3-devel python3-setuptools"
+        perl_packages="perl-Env perl-ExtUtils-Embed \
+                       perl-IPC-Run perl-JSON perl-Test-Base"
+        ;;
+    9)
+        dnf config-manager --set-enabled crb
+        python_packages="python3.11 python3.11-devel python3.11-setuptools"
+        perl_packages="perl-Env perl-ExtUtils-Embed \
+                       perl-IPC-Run perl-JSON perl-Test-Base \
+                       perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
+        ;;
+    *)
+        echo "Unsupported Rocky Linux version: $OS_VERSION"
+        exit 1
+        ;;
 esac
-
-# Common packages (always install)
+# shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
     apr-devel \
     apr-util-devel \
@@ -53,15 +67,7 @@ dnf -y install \
     openssh-server \
     openssl-devel \
     pam-devel \
-    perl-Env \
-    perl-ExtUtils-Embed \
-    perl-IPC-Run \
-    perl-JSON \
-    perl-Test-Base \
     procps-ng \
-    python3 \
-    python3-devel \
-    python3-setuptools \
     readline-devel \
     rsync \
     snappy-devel \
@@ -71,14 +77,8 @@ dnf -y install \
     vim \
     wget \
     xerces-c-devel \
-    zlib-devel
-
-if [ "$OS_VERSION" -eq 8 ] ; then
-    dnf -y install \
-        python2 \
-        python2-devel \
-        python2-setuptools
-fi
+    zlib-devel \
+    $python_packages $perl_packages
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
