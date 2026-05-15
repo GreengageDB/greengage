@@ -25,12 +25,6 @@
   sudo ln -sf /usr/bin/python2 /usr/bin/python
   ```
 
-- Set up the `en_US.UTF-8` locale required to run GPDB:
-
-  ```bash
-  sudo localedef -i en_US -f UTF-8 en_US.UTF-8
-  ```
-
 ## For Ubuntu (22.04 or 24.04)
 
 - Install dependencies using `README.ubuntu.bash`:
