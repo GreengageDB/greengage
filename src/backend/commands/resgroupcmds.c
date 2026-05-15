@@ -99,11 +99,6 @@ static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
 static bool resGroupCapFieldMatches(ResGroupLimitType limittype, const ResGroupCaps *recorded, const ResGroupCaps *current);
 
-/*
- * Pending alter resource group callback contexts for the current
- * transaction. Walked at PRE_COMMIT to detect subtransaction rollback that
- * reverted a catalog row this callback was registered for.
- */
 static List *pending_alter_callbacks = NIL;
 static bool alter_tran_callback_registered = false;
 
@@ -572,6 +567,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		if (gp_resource_group_enable_alter_in_transaction &&
 			IsInTransactionChain(isTopLevel))
 		{
+			/*
+			 * Inside transaction, collect ALTER data for later synchronous apply.
+			 */
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			pending_alter_callbacks = lappend(pending_alter_callbacks,
 											  callbackCtx);
@@ -589,6 +587,9 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		}
 		else
 		{
+			/*
+			 * Outside transaction, register a one-shot callback for this ALTER.
+			 */
 			RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
 		}
 	}
@@ -1247,16 +1248,9 @@ resGroupCapFieldMatches(ResGroupLimitType limittype,
 /*
  * Regular callback for transactional ALTER RESOURCE GROUP.
  *
- * PRE_COMMIT:
- *   - read final pg_resgroupcapability state;
- *   - keep callbacks whose changed value is still present there;
- *   - drop callbacks rolled back by subtransactions or overwritten later.
- *
- * COMMIT:
- *   - apply kept callbacks.
- *
- * ABORT:
- *   - free pending callbacks.
+ * PRE_COMMIT: keep callbacks matching final pg_resgroupcapability state.
+ * COMMIT: apply kept callbacks, then cleanup.
+ * ABORT: cleanup.
  *
  * The callback remains registered for the backend lifetime. The first check
  * is the fast path for transactions without ALTER RESOURCE GROUP.
