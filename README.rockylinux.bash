@@ -7,7 +7,15 @@
 set -eux
 
 dnf -y install epel-release
-dnf config-manager --set-enabled powertools
+
+# Detect OS version
+OS_VERSION=$(grep -oP '(?<= release )\d+' /etc/redhat-release)
+
+case "$OS_VERSION" in
+    8) dnf config-manager --set-enabled powertools ;;
+    9) dnf config-manager --set-enabled crb ;;
+    *) echo "Unsupported Rocky Linux version: $OS_VERSION"; exit 1 ;;
+esac
 
 # Common packages (always install)
 dnf -y install \
@@ -64,9 +72,6 @@ dnf -y install \
     wget \
     xerces-c-devel \
     zlib-devel
-
-# Detect OS version
-OS_VERSION=$(grep -oP '(?<= release )\d+' /etc/redhat-release)
 
 if [ "$OS_VERSION" -eq 8 ] ; then
     dnf -y install \
