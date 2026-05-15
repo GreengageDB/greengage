@@ -892,41 +892,6 @@ ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 }
 
 /*
- * Check whether the field changed by limittype has the same value in both
- * capability snapshots.
- */
-bool
-ResGroupCapFieldMatches(ResGroupLimitType limittype,
-						const ResGroupCaps *left,
-						const ResGroupCaps *right)
-{
-	switch (limittype)
-	{
-		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
-			return left->concurrency == right->concurrency;
-		case RESGROUP_LIMIT_TYPE_CPU:
-		case RESGROUP_LIMIT_TYPE_CPUSET:
-			return left->cpuRateLimit == right->cpuRateLimit &&
-				   strcmp(left->cpuset, right->cpuset) == 0;
-		case RESGROUP_LIMIT_TYPE_MEMORY:
-			return left->memLimit == right->memLimit;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
-			return left->memSharedQuota == right->memSharedQuota;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
-			return left->memSpillRatio == right->memSpillRatio;
-		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
-			return left->memAuditor == right->memAuditor;
-		case RESGROUP_LIMIT_TYPE_UNKNOWN:
-		case RESGROUP_LIMIT_TYPE_COUNT:
-			break;
-	}
-	ereport(ERROR,
-			(errcode(ERRCODE_UNDEFINED_OBJECT),
-			(errmsg("invalid resource group limit type: %d", limittype))));
-	return false;
-}
-
-/*
  * Apply only the field changed by limittype to the target capability snapshot.
  */
 static void
@@ -993,60 +958,54 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 							  &newCaps,
 							  &callbackCtx->caps);
 
-		/* Skip duplicate no-op operations. */
-		if (!ResGroupCapFieldMatches(callbackCtx->limittype,
-									&oldCaps,
-									&newCaps))
+		group->caps = newCaps;
+
+		if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
 		{
-			group->caps = newCaps;
+			ResGroupOps_SetCpuRateLimit(callbackCtx->groupid,
+										newCaps.cpuRateLimit);
+		}
+		else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPUSET)
+		{
+			if (gp_resource_group_enable_cgroup_cpuset)
+			{
+				char *cpuset = getCpuSetByRole(newCaps.cpuset);
+				ResGroupOps_SetCpuSet(callbackCtx->groupid, cpuset);
+			}
+		}
+		else if (callbackCtx->limittype != RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO)
+		{
+			Assert(pResGroupControl->totalChunks > 0);
+			ResGroupCap	memLimitGap = 0;
+			if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_MEMORY)
+				memLimitGap = oldCaps.memLimit - newCaps.memLimit;
+			group->memGap += pResGroupControl->totalChunks * memLimitGap / 100;
 
-			if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
-			{
-				ResGroupOps_SetCpuRateLimit(callbackCtx->groupid,
-											newCaps.cpuRateLimit);
-			}
-			else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPUSET)
-			{
-				if (gp_resource_group_enable_cgroup_cpuset)
-				{
-					char *cpuset = getCpuSetByRole(newCaps.cpuset);
-					ResGroupOps_SetCpuSet(callbackCtx->groupid, cpuset);
-				}
-			}
-			else if (callbackCtx->limittype != RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO)
-			{
-				Assert(pResGroupControl->totalChunks > 0);
-				ResGroupCap	memLimitGap = 0;
-				if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_MEMORY)
-					memLimitGap = oldCaps.memLimit - newCaps.memLimit;
-				group->memGap += pResGroupControl->totalChunks * memLimitGap / 100;
+			Assert(group->groupMemOps != NULL);
+			if (group->groupMemOps->group_mem_on_alter)
+				group->groupMemOps->group_mem_on_alter(callbackCtx->groupid, group);
+		}
+		/* reset default group if cpuset has changed */
+		if (strcmp(oldCaps.cpuset, newCaps.cpuset) &&
+			gp_resource_group_enable_cgroup_cpuset)
+		{
+			char defaultCpusetGroup[MaxCpuSetLength];
+			/* get current default group value */
+			ResGroupOps_GetCpuSet(DEFAULT_CPUSET_GROUP_ID,
+								defaultCpusetGroup,
+								MaxCpuSetLength);
+			/* Add old value to default group
+			* sub new value from default group */
+			char *cpuset= getCpuSetByRole(newCaps.cpuset);
+			char *oldcpuset = getCpuSetByRole(oldCaps.cpuset);
+			CpusetUnion(defaultCpusetGroup,
+						oldcpuset,
+						MaxCpuSetLength);
+			CpusetDifference(defaultCpusetGroup,
+						cpuset,
+						MaxCpuSetLength);
 
-				Assert(group->groupMemOps != NULL);
-				if (group->groupMemOps->group_mem_on_alter)
-					group->groupMemOps->group_mem_on_alter(callbackCtx->groupid, group);
-			}
-			/* reset default group if cpuset has changed */
-			if (strcmp(oldCaps.cpuset, newCaps.cpuset) &&
-				gp_resource_group_enable_cgroup_cpuset)
-			{
-				char defaultCpusetGroup[MaxCpuSetLength];
-				/* get current default group value */
-				ResGroupOps_GetCpuSet(DEFAULT_CPUSET_GROUP_ID,
-									defaultCpusetGroup,
-									MaxCpuSetLength);
-				/* Add old value to default group
-				* sub new value from default group */
-				char *cpuset= getCpuSetByRole(newCaps.cpuset);
-				char *oldcpuset = getCpuSetByRole(oldCaps.cpuset);
-				CpusetUnion(defaultCpusetGroup,
-							oldcpuset,
-							MaxCpuSetLength);
-				CpusetDifference(defaultCpusetGroup,
-							cpuset,
-							MaxCpuSetLength);
-
-				ResGroupOps_SetCpuSet(DEFAULT_CPUSET_GROUP_ID, defaultCpusetGroup);
-			}
+			ResGroupOps_SetCpuSet(DEFAULT_CPUSET_GROUP_ID, defaultCpusetGroup);
 		}
 	}
 	PG_CATCH();

@@ -193,7 +193,6 @@ extern void ResGroupReleaseMemory(int32 memoryChunks);
 extern void ResGroupDropFinish(const ResourceGroupCallbackContext *callbackCtx,
 							   bool isCommit);
 extern void ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx);
-extern bool ResGroupCapFieldMatches(ResGroupLimitType limittype, const ResGroupCaps *recorded, const ResGroupCaps *current);
 extern void ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx);
 extern void ResGroupCheckForDrop(Oid groupId, char *name);
 

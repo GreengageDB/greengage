@@ -97,6 +97,7 @@ static void alterResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupTranCallback(XactEvent event, void *arg);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
+static bool resGroupCapFieldMatches(ResGroupLimitType limittype, const ResGroupCaps *recorded, const ResGroupCaps *current);
 
 /*
  * Pending alter resource group callback contexts for the current
@@ -1209,6 +1210,41 @@ alterResgroupCallback(XactEvent event, void *arg)
 }
 
 /*
+ * Check whether the field changed by limittype has the same value in both
+ * capability snapshots.
+ */
+static bool
+resGroupCapFieldMatches(ResGroupLimitType limittype,
+						const ResGroupCaps *left,
+						const ResGroupCaps *right)
+{
+	switch (limittype)
+	{
+		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
+			return left->concurrency == right->concurrency;
+		case RESGROUP_LIMIT_TYPE_CPU:
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			return left->cpuRateLimit == right->cpuRateLimit &&
+				   strcmp(left->cpuset, right->cpuset) == 0;
+		case RESGROUP_LIMIT_TYPE_MEMORY:
+			return left->memLimit == right->memLimit;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
+			return left->memSharedQuota == right->memSharedQuota;
+		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
+			return left->memSpillRatio == right->memSpillRatio;
+		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
+			return left->memAuditor == right->memAuditor;
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
+			break;
+	}
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			(errmsg("invalid resource group limit type: %d", limittype))));
+	return false;
+}
+
+/*
  * Regular callback for transactional ALTER RESOURCE GROUP.
  *
  * PRE_COMMIT:
@@ -1275,7 +1311,7 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 
 			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-			if (ResGroupCapFieldMatches(ctx->limittype,
+			if (resGroupCapFieldMatches(ctx->limittype,
 										&ctx->caps,
 										&finalCaps))
 				prepared = lappend(prepared, ctx);
