@@ -992,8 +992,8 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 			char defaultCpusetGroup[MaxCpuSetLength];
 			/* get current default group value */
 			ResGroupOps_GetCpuSet(DEFAULT_CPUSET_GROUP_ID,
-								defaultCpusetGroup,
-								MaxCpuSetLength);
+								  defaultCpusetGroup,
+								  MaxCpuSetLength);
 			/* Add old value to default group
 			* sub new value from default group */
 			char *cpuset= getCpuSetByRole(newCaps.cpuset);
