@@ -9,7 +9,6 @@
 -- start_ignore
 DROP VIEW IF EXISTS rg_alter_tran_status;
 DROP VIEW IF EXISTS rg_alter_tran_runtime_status;
-DROP FUNCTION IF EXISTS rg_alter_tran_runtime_cap(group_name text, cap_id int);
 DROP FUNCTION IF EXISTS rg_alter_tran_func();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub_fail();
@@ -22,51 +21,43 @@ CREATE LANGUAGE plpython3u;
 CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 
-CREATE OR REPLACE VIEW rg_alter_tran_status AS SELECT groupname, concurrency, cpu_rate_limit, memory_limit FROM gp_toolkit.gp_resgroup_config WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b') ORDER BY groupname;
+CREATE OR REPLACE VIEW rg_alter_tran_heap_status_local AS
+SELECT gp_id.gp_segment_id, c.groupname::text, c.concurrency::int, c.cpu_rate_limit::int, c.memory_limit::int
+FROM gp_toolkit.gp_resgroup_config c, gp_id
+WHERE c.groupname IN ('rg_alter_tran', 'rg_alter_tran_b');
 
--- Return a resource group runtime cap from QD shared-memory dump.
---
--- cap_id values:
---   1 - concurrency
---   2 - cpu_rate_limit
---   3 - memory_limit
---   4 - memory_shared_quota
---   5 - memory_spill_ratio
---   6 - memory_auditor
-CREATE OR REPLACE FUNCTION rg_alter_tran_runtime_cap(group_name text, cap_id int)
-RETURNS int
-AS $$
-import json
+CREATE OR REPLACE VIEW rg_alter_tran_heap_status AS
+SELECT -1::int AS gp_segment_id, groupname::text, concurrency::int, cpu_rate_limit::int, memory_limit::int
+FROM gp_toolkit.gp_resgroup_config
+WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b')
+UNION ALL
+SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit
+FROM gp_dist_random('rg_alter_tran_heap_status_local')
+ORDER BY groupname, gp_segment_id;
 
-res = plpy.execute("""
-    SELECT oid FROM pg_resgroup WHERE rsgname = %s
-""" % plpy.quote_literal(group_name))
+CREATE OR REPLACE VIEW rg_alter_tran_runtime_status AS
+SELECT (seg->>'segid')::int AS gp_segment_id, r.rsgname::text AS groupname,
+       (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 1) AS concurrency,
+       (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 2) AS cpu_rate_limit,
+       (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 3) AS memory_limit
+FROM pg_resgroup_get_status_kv('dump') d,
+     json_array_elements((d.value::json)->'info') AS seg,
+     json_array_elements(seg->'groups') AS grp,
+     pg_resgroup r
+WHERE r.rsgname IN ('rg_alter_tran', 'rg_alter_tran_b')
+  AND (grp->>'group_id')::oid = r.oid
+ORDER BY groupname, gp_segment_id;
 
-if len(res) != 1:
-    return None
+-- Use PL/pgSQL to run heap and runtime checks as separate statements;
+-- one SQL query may fail with "multiple segworker groups is not supported".
+CREATE OR REPLACE FUNCTION rg_alter_tran_all_status() RETURNS TABLE(gp_segment_id int, groupname text, concurrency int, cpu_rate_limit int, memory_limit int) AS $$ BEGIN RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_heap_status'; RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_runtime_status'; END; $$ LANGUAGE plpgsql EXECUTE ON MASTER;
 
-group_id = int(res[0]["oid"])
-cap_key = str(cap_id)
-
-res = plpy.execute("SELECT value FROM pg_resgroup_get_status_kv('dump')")
-dump = json.loads(res[0]["value"])
-
-for seg in dump["info"]:
-    if seg["segid"] != -1:
-        continue
-
-    for group in seg["groups"]:
-        if int(group["group_id"]) != group_id:
-            continue
-
-        for cap in group["caps"]:
-            if cap_key in cap:
-                return int(cap[cap_key])
-
-return None
-$$ LANGUAGE plpython3u;
-
-CREATE OR REPLACE VIEW rg_alter_tran_runtime_status AS SELECT groupname, rg_alter_tran_runtime_cap(groupname, 1) AS concurrency, rg_alter_tran_runtime_cap(groupname, 2) AS cpu_rate_limit, rg_alter_tran_runtime_cap(groupname, 3) AS memory_limit FROM (VALUES ('rg_alter_tran'), ('rg_alter_tran_b')) AS v(groupname) ORDER BY groupname;
+-- Group all data into one line per group to minimize output
+CREATE OR REPLACE VIEW rg_alter_tran_status AS
+SELECT groupname, concurrency, cpu_rate_limit, memory_limit
+FROM rg_alter_tran_all_status()
+GROUP BY groupname, concurrency, cpu_rate_limit, memory_limit
+ORDER BY groupname;
 
 SELECT * FROM rg_alter_tran_status;
 
@@ -129,8 +120,6 @@ ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 21;
 ALTER RESOURCE GROUP rg_alter_tran_b SET MEMORY_LIMIT 8;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
-
 
 -- Test ALTER current resource group
 
@@ -167,7 +156,6 @@ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 10;
 ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
 
 -- 14 Subtransaction rollback followed by the same final value.
 -- The rolled back callback and the real callback have the same target value;
@@ -179,7 +167,6 @@ ROLLBACK TO SAVEPOINT s1;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
 
 -- 15 Several ALTERs of the same limit type in one transaction.
 -- Only the final catalog value should be applied.
@@ -188,7 +175,6 @@ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 12;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
 
 -- 16 ALTER changes value and then changes it back in the same transaction.
 -- Final runtime state should stay equal to the committed catalog value.
@@ -197,7 +183,6 @@ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 14;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
 
 -- 17 Rolled back callback with stale full snapshot must not overwrite
 -- another committed field.
@@ -209,7 +194,6 @@ ALTER RESOURCE GROUP rg_alter_tran SET MEMORY_LIMIT 9;
 ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-SELECT * FROM rg_alter_tran_runtime_status;
 
 
 -- Concurrent ALTERs
@@ -243,7 +227,6 @@ SELECT * FROM rg_alter_tran_status;
 -- cleanup
 DROP VIEW rg_alter_tran_status;
 DROP VIEW rg_alter_tran_runtime_status;
-DROP FUNCTION rg_alter_tran_runtime_cap(group_name text, cap_id int);
 DROP FUNCTION rg_alter_tran_func();
 DROP FUNCTION rg_alter_tran_func_sub();
 DROP FUNCTION rg_alter_tran_func_sub_fail();
