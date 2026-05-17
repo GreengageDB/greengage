@@ -198,24 +198,33 @@ SELECT * FROM rg_alter_tran_status;
 
 -- Concurrent ALTERs
 
--- 18 Error during pg_resgroup_move_query when ALTER is uncommitted.
+-- 18 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- the same resource group
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
 2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 19 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+-- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- different resource group
 1: BEGIN;
-1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 17;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17;
+2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
+1: ROLLBACK;
+SELECT * FROM rg_alter_tran_status;
+
+-- 20 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 18;
 2&: DROP RESOURCE GROUP rg_alter_tran_b;
 1: ROLLBACK;
 2<:
 SELECT * FROM rg_alter_tran_status;
 
--- 20 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
+-- 21 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
-1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 18;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 19;
 2&: CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 1: ROLLBACK;
 2<:
