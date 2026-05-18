@@ -5360,7 +5360,7 @@ dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_expl
 	if (is_explicit)
 		CdbDispatchSetCommandForSync(buffer.data);
 	else
-		CdbDispatchSetCommand(buffer.data, false, false);
+		CdbDispatchSetCommand(buffer.data, false);
 }
 
 /*

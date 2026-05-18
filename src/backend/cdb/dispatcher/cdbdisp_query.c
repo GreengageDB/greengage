@@ -392,7 +392,16 @@ cdbdisp_dispatchSetCommandInternal(const char *strCommand,
  * Cursors only allocate reader gangs, so primary writer and idle reader gangs can be dispatched to.
  */
 void
-CdbDispatchSetCommand(const char *strCommand, bool isLocal, bool cancelOnError)
+CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
+{
+	return cdbdisp_dispatchSetCommandInternal(strCommand, false, cancelOnError, false);
+}
+
+/*
+ * Just like CdbDispatchSetCommand(), but can pass locality of SET.
+ */
+void
+CdbDispatchSetCommandLocal(const char *strCommand, bool isLocal, bool cancelOnError)
 {
 	return cdbdisp_dispatchSetCommandInternal(strCommand, isLocal, cancelOnError, false);
 }

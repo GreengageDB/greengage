@@ -4150,3 +4150,36 @@ begin
   v_test := 0 || v_test;  -- fail
 end;
 $$;
+
+-- Test consistency and passage of SET LOCAL GUC to writing commands
+--start_ignore
+drop schema if exists s cascade;
+--end_ignore
+
+create schema s;
+
+do $$
+begin
+  set local search_path to s;
+  create table test_table(a int) distributed by (a);
+  drop table test_table;
+end $$;
+
+-- check existence on master
+select c.gp_segment_id from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relname = 'test_table'
+  and c.relkind = 'r'
+  and n.nspname = 's';
+
+--check existence on segments
+select c.gp_segment_id
+from gp_dist_random('pg_class') c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relname = 'test_table'
+  and c.relkind = 'r'
+  and n.nspname = 's'
+group by c.gp_segment_id
+order by c.gp_segment_id;
+
+drop schema s cascade;

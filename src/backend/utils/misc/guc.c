@@ -8706,7 +8706,7 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			else
 				appendStringInfo(&buffer, "RESET %s", stmt->name);
 
-			CdbDispatchSetCommand(buffer.data, false, false);
+			CdbDispatchSetCommand(buffer.data, false);
 		}
 	}
 }
@@ -8854,7 +8854,7 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 		}
 	}
 
-	CdbDispatchSetCommand(buffer.data, false, false);
+	CdbDispatchSetCommandLocal(buffer.data, is_local, false);
 }
 
 /*
@@ -8945,7 +8945,7 @@ set_config_by_name(PG_FUNCTION_ARGS)
 			pfree(quoted_value);
 		pfree(quoted_name);
 
-		CdbDispatchSetCommand(buffer.data, is_local, false /* cancelOnError */ );
+		CdbDispatchSetCommandLocal(buffer.data, is_local, false /* cancelOnError */ );
 	}
 
 	/* get the new current value */
