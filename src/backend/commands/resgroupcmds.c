@@ -104,7 +104,6 @@ static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
 											ResourceGroupCallbackContext *ctx);
 
 static List *resgroup_alter_tran_callbacks = NIL;
-static bool alter_tran_callback_registered = false;
 
 /*
  * CREATE RESOURCE GROUP
@@ -570,6 +569,7 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 
 		if (IsInTransactionChain(isTopLevel))
 		{
+			static bool alter_tran_callback_registered = false;
 			/*
 			 * In transaction, collect ALTER data for later synchronous apply.
 			 */

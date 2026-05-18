@@ -4,7 +4,7 @@
 
 !\retcode gpconfig -c gp_resource_group_enable_alter_in_transaction -v on;
 
-!\retcode gpstop -arf;
+!\retcode gpstop -raq -M fast;
 
 -- start_ignore
 DROP VIEW IF EXISTS rg_alter_tran_status;
@@ -52,7 +52,8 @@ ORDER BY groupname, gp_segment_id;
 -- one SQL query may fail with "multiple segworker groups is not supported".
 CREATE OR REPLACE FUNCTION rg_alter_tran_all_status() RETURNS TABLE(gp_segment_id int, groupname text, concurrency int, cpu_rate_limit int, memory_limit int) AS $$ BEGIN RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_heap_status'; RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_runtime_status'; END; $$ LANGUAGE plpgsql EXECUTE ON MASTER;
 
--- Group all data into one line per group to minimize output
+-- Group matching data into one line per group; inconsistent values produce
+-- multiple lines per group and make the test fail by output diff.
 CREATE OR REPLACE VIEW rg_alter_tran_status AS
 SELECT groupname, concurrency, cpu_rate_limit, memory_limit
 FROM rg_alter_tran_all_status()
@@ -245,4 +246,4 @@ DROP RESOURCE GROUP rg_alter_tran_b;
 
 !\retcode gpconfig -r gp_resource_group_enable_alter_in_transaction;
 
-!\retcode gpstop -arf;
+!\retcode gpstop -raq -M fast;
