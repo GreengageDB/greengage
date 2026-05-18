@@ -28,7 +28,9 @@ fi
 processes=3
 
 rm -rf allure-results
+rm -rf coverage
 mkdir allure-results -pm 777
+mkdir coverage -pm 777
 mkdir ssh_keys -p
 if [ ! -e "ssh_keys/id_rsa" ]
 then
@@ -46,6 +48,18 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
+  services=$(docker compose -p $project -f ci/docker-compose.yaml config --services | tr '\n' ' ')
+  
+  # Setup coverage collection
+  for service in $services
+  do
+    docker compose -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
+      echo 'import coverage; coverage.process_startup()' > /usr/local/greengage-db-devel/lib/python/sitecustomize.py &&
+      echo 'export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave' >> /usr/local/greengage-db-devel/greengage_path.sh &&
+      echo 'export PROJECT=$project' >> /usr/local/greengage-db-devel/greengage_path.sh" &
+  done
+  wait
+
   docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
@@ -55,6 +69,31 @@ run_feature() {
       -f pretty" \
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
+
+  docker compose -p "$project" -f "$docker_compose_path" exec -T \
+    -e FEATURE="$feature" -e PROJECT="$project" \
+    cdw bash -eux <<'EOF'
+      set -ex
+      cd /tmp/coverage-data
+
+      if [ "$(ls "$PROJECT"-coverage-data/ | wc -l)" -gt 0 ]; then
+          coverage combine --append \
+            --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave \
+            "$PROJECT"-coverage-data/coverage-data*
+          mv "$PROJECT"-coverage-data/coverage-data /tmp/coverage-data/coverage-data-"$PROJECT"
+          rm -r "$PROJECT"-coverage-data
+      fi
+
+      LOCK_FILE=/tmp/coverage-data/coverage.lock
+			flock "$LOCK_FILE" -c "
+        coverage combine --append \
+          --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
+          coverage-data*
+        coverage html \
+          --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
+          --show-contexts -d ./coverage-html
+      "
+EOF
 
   if [[ -z $CI ]]; then
     docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
