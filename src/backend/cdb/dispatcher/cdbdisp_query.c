@@ -404,7 +404,7 @@ CdbDispatchSetCommand(const char *strCommand, bool isLocal, bool cancelOnError)
 void
 CdbDispatchSetCommandForSync(const char *strCommand)
 {
-	return cdbdisp_dispatchSetCommandInternal(strCommand, false, true);
+	return cdbdisp_dispatchSetCommandInternal(strCommand, false, false, true);
 }
 
 /*
