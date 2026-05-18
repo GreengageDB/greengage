@@ -365,21 +365,21 @@ RPM_TOPDIR := $(CURDIR)/../RPM
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
 	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
-	$(eval DISTRO_CODENAME := $(shell lsb_release -sc))
+	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
 version-info : version-vars
 	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
 	@echo "FULL_VERSION: $(FULL_VERSION)"
-	@echo "DISTRO_CODENAME: $(DISTRO_CODENAME)"
+	@echo "VERSION_CODENAME: $(VERSION_CODENAME)"
 	@echo "IS_RELEASE: $(IS_RELEASE)"
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
 changelog : debian/changelog
 debian/changelog : version-vars
-	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(DISTRO_CODENAME); urgency=low" > $@
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
 	@echo "  * $(BUILD_TYPE)" >> $@
 	@echo "" >> $@

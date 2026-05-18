@@ -30,7 +30,7 @@ The main components are:
 1. **Version Management**:
    - `../VERSION`: Generates version file using `../getversion`
    - `version-vars`: Sets build variables (`FULL_VERSION`, `PACKAGE_VERSION`,
-     `DISTRO_CODENAME`, `IS_RELEASE`, `BUILD_TYPE`) from `../VERSION` file
+     `VERSION_CODENAME`, `IS_RELEASE`, `BUILD_TYPE`) from `../VERSION` file
    - `version-info`: Displays version information for debugging
 
 2. **Packaging Targets**:
