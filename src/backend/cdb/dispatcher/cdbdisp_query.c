@@ -312,10 +312,8 @@ cdbdisp_dispatchSetCommandInternal(const char *strCommand,
 	 * In case we are not in two-phase commit -- setup and activate DTX.
 	 * This is needed, as there may be writing commands that can be affected by SET.
 	 */
-	if (isLocal) {
-		setupDtxTransaction();
-		flags |= DF_NEED_TWO_PHASE;
-	}
+	if (isLocal) 
+		sendDtxExplicitBegin();
 
 	/*
 	 * Dispatch a command with DF_SYNC_SET flag if we are performing a config
