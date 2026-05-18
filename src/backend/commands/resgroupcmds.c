@@ -1299,30 +1299,21 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 
 	if (event == XACT_EVENT_ABORT)
 	{
-		foreach (lc, resgroup_alter_tran_callbacks)
-			pfree(lfirst(lc));
-
-		list_free(resgroup_alter_tran_callbacks);
+		list_free_deep(resgroup_alter_tran_callbacks);
 		resgroup_alter_tran_callbacks = NIL;
-		return;
 	}
-
-	if (event == XACT_EVENT_COMMIT)
+	else if (event == XACT_EVENT_COMMIT)
 	{
 		foreach (lc, resgroup_alter_tran_callbacks)
 		{
 			ResourceGroupCallbackContext *ctx = lfirst(lc);
-
 			ResGroupAlterOnCommit(ctx);
-			pfree(ctx);
 		}
 
-		list_free(resgroup_alter_tran_callbacks);
+		list_free_deep(resgroup_alter_tran_callbacks);
 		resgroup_alter_tran_callbacks = NIL;
-		return;
 	}
-
-	if (event == XACT_EVENT_PRE_COMMIT)
+	else if (event == XACT_EVENT_PRE_COMMIT)
 	{
 		List	   *prepared = NIL;
 		Relation	rel;
@@ -1360,7 +1351,6 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 
 		list_free(resgroup_alter_tran_callbacks);
 		resgroup_alter_tran_callbacks = prepared;
-		return;
 	}
 }
 
