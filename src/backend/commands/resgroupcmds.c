@@ -567,6 +567,7 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
+
 		if (IsInTransactionChain(isTopLevel))
 		{
 			/*
@@ -574,7 +575,8 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 			 */
 			Assert(gp_resource_group_enable_alter_in_transaction);
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-			resgroup_alter_tran_callbacks = lappend(
+			resgroup_alter_tran_callbacks =
+										lappend(
 												resgroup_alter_tran_callbacks,
 												callbackCtx);
 			MemoryContextSwitchTo(oldcxt);
