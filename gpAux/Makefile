@@ -355,6 +355,7 @@ PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print 
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
 ARTIFACTS_DIR := $(CURDIR)/../Package
+RPM_TOPDIR := $(CURDIR)/../RPM
 
 ../VERSION :
 	@echo "Update $@"
@@ -405,7 +406,26 @@ pkg-deb : debian/changelog debian/install
 											-o -name "*.changes" \) \
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
-.PHONY: pkg pkg-deb changelog version-vars version-info
+# Build RPM package
+pkg-rpm : GPROOT = /opt/greengagedb
+pkg-rpm : GPDIR  = $(PACKAGE_NAME)
+pkg-rpm : version-vars
+	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+	rpmbuild -bb \
+		--define "_topdir $(RPM_TOPDIR)" \
+		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "gpdb_release 1" \
+		--define "gproot $(GPROOT)" \
+		--define "gpdir $(GPDIR)" \
+		--define "sourcedir $(CURDIR)/.." \
+		rpm/greengage6.spec
+	@mkdir -p $(ARTIFACTS_DIR)
+	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
+		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+	@rm -rf $(RPM_TOPDIR)
+
+.PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools

@@ -1,0 +1,62 @@
+# Run command: `make -C ./gpdb_src/gpAux pkg-rpm`
+
+%{!?gproot: %global gproot /opt/greengagedb}
+%{!?gpdir:  %global gpdir  greengage6}
+%global     prefix %{gproot}/%{gpdir}
+
+Name:    greengage6
+Version: %{gpdb_version}
+Release: %{gpdb_release}%{?dist}
+Summary: Greengage MPP database engine
+License: ASL 2.0
+URL:     https://greengagedb.org
+
+Requires: iproute
+Requires: iputils
+Requires: less
+Requires: net-tools
+Requires: openssh-clients
+Requires: openssh-server
+Requires: openssl
+Requires: rsync
+Requires: zip
+
+%if 0%{?rhel} >= 9
+Requires: python3
+%else
+Requires: python2
+%endif
+
+Conflicts: greengage-loaders
+
+%description
+Greengage Database (GPDB) is an advanced, fully featured, open
+source data warehouse, based on PostgreSQL. It provides powerful and
+rapid analytics on petabyte scale data volumes. Uniquely geared toward
+big data analytics, Greengage Database is powered by the world's most
+advanced cost-based query optimizer delivering high analytical query
+performance on large data volumes.
+
+%install
+rm -rf %{buildroot}
+env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS \
+    make dist \
+        DESTDIR=%{buildroot} \
+        GPROOT=%{gproot} \
+        GPDIR=%{gpdir} \
+        PARALLEL_MAKE_OPTS=%{?_smp_mflags} \
+        -C %{sourcedir}/gpAux
+
+# Remove executable bit from scripts without shebang
+find %{buildroot}%{prefix} -type f \
+    \( -name "*.py" -o -name "*.pm" -o -name "*.sh" \) \
+    -executable | while read f; do \
+        head -1 "$f" | grep -q '^#!' || chmod -x "$f"; \
+    done
+find %{buildroot}%{prefix} -name "*.md" -executable \
+    -exec chmod -x {} +
+
+%files
+%{prefix}
+
+%changelog
