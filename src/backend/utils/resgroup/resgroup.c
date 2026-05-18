@@ -943,8 +943,11 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	ResGroupCaps	oldCaps;
 	ResGroupCaps	newCaps;
 	volatile int	savedInterruptHoldoffCount;
+	volatile MemoryContext oldMemoryContext;
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
+
+	oldMemoryContext = CurrentMemoryContext;
 
 	PG_TRY();
 	{
@@ -1011,6 +1014,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	PG_CATCH();
 	{
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
+		MemoryContextSwitchTo(oldMemoryContext);
 		if (elog_demote(WARNING))
 		{
 			EmitErrorReport();
