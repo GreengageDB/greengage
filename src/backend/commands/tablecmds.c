@@ -2253,6 +2253,21 @@ MergeAttributes(List *schema, List *supers, char relpersistence, bool isPartitio
 		 */
 		relation = heap_openrv(parent, ShareUpdateExclusiveLock);
 
+		/*
+		 * We do not allow partitioned tables and partitions to participate in
+		 * regular inheritance.
+		 */
+		if (!isPartitioned && rel_is_partitioned(RelationGetRelid(relation)))
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("cannot inherit from partitioned table \"%s\"",
+							RelationGetRelationName(relation))));
+		if (!isPartitioned && rel_is_child_partition(RelationGetRelid(relation)))
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("cannot inherit from partition \"%s\"",
+							RelationGetRelationName(relation))));
+
 		if (relation->rd_rel->relkind != RELKIND_RELATION)
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -13682,6 +13697,19 @@ ATExecAddInherit(Relation child_rel, Node *node, LOCKMODE lockmode)
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot inherit from temporary relation \"%s\"",
 						RelationGetRelationName(parent_rel))));
+
+	/* Prevent partitioned tables from becoming inheritance parents */
+	if (!is_partition && rel_is_partitioned(RelationGetRelid(parent_rel)))
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot inherit from partitioned table \"%s\"",
+						parent->relname)));
+
+	/* Likewise for partitions */
+	if (!is_partition && rel_is_child_partition(RelationGetRelid(parent_rel)))
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot inherit from a partition")));
 
 	if (is_partition)
 	{
