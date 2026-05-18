@@ -1316,9 +1316,12 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 	else if (event == XACT_EVENT_PRE_COMMIT)
 	{
 		List	   *prepared = NIL;
+		List	   *rejected = NIL;
 		Relation	rel;
 
 		Assert(gp_resource_group_enable_alter_in_transaction);
+
+		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 
 		/* Keep only final catalog changes. */
 		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
@@ -1335,22 +1338,24 @@ alterResgroupTranCallback(XactEvent event, void *arg)
 										 &ctx->caps,
 										 &finalCaps))
 			{
-				pfree(ctx);
+				rejected = lappend(rejected, ctx);
 				continue;
 			}
 			/* Drop duplicate target callbacks. */
 			if (resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
 			{
-				pfree(ctx);
+				rejected = lappend(rejected, ctx);
 				continue;
 			}
 			prepared = lappend(prepared, ctx);
 		}
-
+		MemoryContextSwitchTo(oldcxt);
 		heap_close(rel, AccessShareLock);
 
 		list_free(resgroup_alter_tran_callbacks);
 		resgroup_alter_tran_callbacks = prepared;
+
+		list_free_deep(rejected);
 	}
 }
 
