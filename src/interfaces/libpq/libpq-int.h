@@ -197,6 +197,15 @@ typedef struct
 	void	   *noticeProcArg;
 } PGNoticeHooks;
 
+/* Fields needed for metadata handling */
+typedef struct
+{
+	PQmetadataReceiver metadataRec; /* notice message receiver */
+	void	   *metadataRecArg;
+	PQmetadataProcessor metadataProc;
+	void       *metadataProcArg;
+} PGMetadataHooks;
+
 typedef struct PGEvent
 {
 	PGEventProc proc;			/* the function to call on events */
@@ -277,6 +286,7 @@ struct pg_result
 	PQaoRelTupCount *aotupcounts;
 	int		nWaits;
 	int		*waitGxids;
+
 };
 
 /* PGAsyncStatusType defines the state of the query-execution state machine */
@@ -538,6 +548,9 @@ struct pg_conn
 	/* Buffer for receiving various parts of messages */
 	PQExpBufferData workBuffer; /* expansible string */
 	char       *diffoptions;  /* MPP: transfer changed GUCs(require sync) from QD to QEs */
+
+	/* Callback procedures for metadata message processing */
+	PGMetadataHooks metadataHooks;
 };
 
 /* PGcancel stores all data necessary to cancel a connection. A copy of this

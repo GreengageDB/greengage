@@ -54,7 +54,7 @@
 #define VALID_LONG_MESSAGE_TYPE(id) \
 	((id) == 'T' || (id) == 'D' || (id) == 'd' || (id) == 'V' || \
 	 (id) == 'E' || (id) == 'N' || (id) == 'A' || (id) == 'Y' || \
-	 (id) == 'y' || (id) == 'o')
+	 (id) == 'y' || (id) == 'o' || (id) == 'M')
 
 
 static void handleSyncLoss(PGconn *conn, char id, int msgLength);
@@ -70,6 +70,8 @@ static void reportErrorPosition(PQExpBuffer msg, const char *query,
 					int loc, int encoding);
 static int build_startup_packet(const PGconn *conn, char *packet,
 					 const PQEnvironmentOption *options);
+static int pgGetMetadataMessage(PGconn *conn, int length);
+void pgGetMetaData(PGconn *conn);
 
 
 /*
@@ -286,6 +288,11 @@ pqParseInput3(PGconn *conn)
 						return;
 					conn->asyncStatus = PGASYNC_READY;
 					break;
+				case 'M':       /* CDB: backend sends metadata 'M' message */
+					if (pgGetMetadataMessage(conn, msgLength))
+						return;
+					break;
+				break;
 				case 'Z':		/* backend is ready for new query */
 					if (getReadyForQuery(conn))
 						return;
@@ -2364,4 +2371,49 @@ build_startup_packet(const PGconn *conn, char *packet,
 	packet_len++;
 
 	return packet_len;
+}
+
+static int
+pgGetMetadataMessage(PGconn *conn, int length)
+{
+	if (conn->metadataHooks.metadataRec == NULL)
+	{
+		return pqSkipnchar(length, conn);
+	}
+
+	int payload_len = length - sizeof(ggMetadataQueueId);
+
+	/*
+	 * Since the metadata might be pretty long, we create an own buffer
+	 * rather than using conn->workBuffer.  workBuffer is intended
+	 * for stuff that is expected to be short.
+	 *
+	 * we can not use palloc/pqAlloc here as this is a handler.
+	 */
+
+	ggMetadataChunk *chunk = malloc(sizeof(ggMetadataChunk) + payload_len);
+	if (chunk == NULL)
+		return 1;
+
+	chunk->next = NULL;
+	chunk->metadataLen = payload_len;
+
+	int32 queue_id;
+
+	if (pqGetInt(&queue_id, sizeof(ggMetadataQueueId), conn))
+	{
+		free(chunk);
+		return 1;
+	}
+
+	if (pqGetnchar(chunk->payload, payload_len, conn))
+	{
+		free(chunk);
+		return 1;
+	}		
+
+	/* pass ownership of the link too the handler */
+	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk, queue_id);
+
+	return 0;
 }
