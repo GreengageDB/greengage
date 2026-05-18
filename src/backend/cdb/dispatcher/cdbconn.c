@@ -986,7 +986,7 @@ PQMetadataNextQueueId()
 void
 PQCreateMetadataQueue(ggMetadataQueueId queue_id)
 {
-	MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
+	MemoryContext oldcontext = MemoryContextSwitchTo(TopTransactionContext);
 
 	ggMetadataQueue *queue = palloc0(sizeof(ggMetadataQueue));
 	queue->id = queue_id;
