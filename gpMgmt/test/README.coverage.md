@@ -15,10 +15,12 @@ for the files you are modifying.
     the link. I chose one of the hacky solutions and added a `sitecustomize.py`
     to my GPDB installation, because it was simple and it worked:
 
-        $ cat > /usr/local/gpdb/lib/python/sitecustomize.py <<EOF
+        $ cat > $GPHOME/lib/python/sitecustomize.py <<EOF
         import coverage
         coverage.process_startup()
         EOF
+
+    or just run `make -C gpMgmt/bin coverage-setup`
 
 3.  Set up a [Coverage configuration file](https://coverage.readthedocs.io/en/latest/config.html)
     with your preferred options. See the `coveragerc` file in this directory.  Note that file
@@ -32,7 +34,7 @@ for the files you are modifying.
 
         export COVERAGE_PROCESS_START=/<absolute_path_to_file>/<coverage configuration file>
         
-        (e.g. export COVERAGE_PROCESS_START=~/workspace/gpdb/gpMgmt/test/coveragerc)
+        (e.g. export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit)
 
     This will instrument all Python subprocesses that are spawned, and write
     coverage data to the location specified in our config file.
@@ -43,27 +45,32 @@ for the files you are modifying.
         $ python -m unittest gppylib.test.unit.test_unit_gpstop
 
 6.  After you have run all the tests you want, [combine the data files](https://coverage.readthedocs.io/en/latest/cmd.html#combining-data-files)
-    that were generated into a single `.coverage` file.  Note that you still have to `combine` the files if you only have a
-    single coverage-data file; otherwise the `report` will fail.
+    that were generated into a single `coverage-data` file.  Note that you still have to `combine` the files if you only have a
+    single coverage-data file; otherwise the `report` will fail. You also need to provide rcfile - path ot config file for handling path resolution correctly.
 
         $ cd /tmp
         $ ls -a
         . .. coverage-data.mdw.10392.109492 coverage-data.mdw.10394.945371 coverage-data.mdw.10405.277583
-        $ coverage combine coverage-data.*
+        $ coverage combine --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit coverage-data*
         $ ls -a
-        . .. .coverage
+        . .. coverage-data
 
-     You can combine files from multiple test runs as follows.  You generate the .coverage file for one run,
+     You can combine files from multiple test runs as follows.  You generate the coverage-data file for one run,
      and then run this step to merge the two results after the second run:
 
-        $ coverage combine --append coverage-data.*
+        $ coverage combine --append --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit coverage-data*
+
+     When combining files with different [contexts](https://coverage.readthedocs.io/en/7.13.5/contexts.html)
+     you should combine them separately according to used context: static or dynamic. In current system behave tests
+     have static context and unit-tests have dynamic context, so you should combine behave tests together apart of
+     unit tests (and vice versa). After that you can combine them all together with `coveragerc_combine_report` configuration file.
         
 7.  Generate a report. [You have many options](https://coverage.readthedocs.io/en/latest/cmd.html#reporting);
     you can generate a stdout report and then a browseable html report.  Note you can click on each file to see
-    the details of coverage for that file.
+    the details of coverage for that file. You also need to provide rcfile path for this task.
 
         $ coverage report
-        $ coverage html -d /tmp/coverage-html
+        $ coverage html --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report -d ./coverage-html
         $ open /tmp/coverage-html/index.html
 
     Your usage model might involve determining code coverage, adding tests, and then checking the resulting change
@@ -75,25 +82,4 @@ for the files you are modifying.
 
         $ unset COVERAGE_PROCESS_START
 
-
-# Performance Impact
-Read [how coverage works](https://coverage.readthedocs.io/en/latest/howitworks.html) to learn about the potential
-performance impacts.  In short, each function is instrumented.  We ran `gpMgmt/bin> make unitdevel` and saw no performance
-impact(the run time difference was less than 3 seconds for a 30 second runtime).  As you'd expect, if you construct a Python program
-with a tight loop of a simple function call, you can get much worse performance.
-
-    # Takes 45 seconds without coverage and 180 seconds with coverage(simply unset COVERAGE_PROCESS_START).
-    class _Example:
-        def __init__(self):
-            pass
-
-        def add_numbers(self, x, y):
-            return x + y
-
-    if __name__ == '__main__':
-        for i in range(0,100000000):
-            _Example().add_numbers(1,6)
-            if i%10000000 == 0:
-                print "."
-
-In short, we'd expect the performance hit to be small for most test code, since that tends not to run in a tight loop.
+    Or remove hook from step 2.
