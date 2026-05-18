@@ -3,6 +3,7 @@
 %{!?gproot: %global gproot /opt/greengagedb}
 %{!?gpdir:  %global gpdir  greengage6}
 %global     prefix %{gproot}/%{gpdir}
+%global   __os_install_post %(echo '%{__os_install_post}' | sed -e 's|/usr/lib/rpm/check-buildroot||g')
 
 Name:    greengage6
 Version: %{gpdb_version}
