@@ -287,7 +287,10 @@ cdbdisp_markNamedPortalGangsDestroyed(void)
 }
 
 static void
-cdbdisp_dispatchSetCommandInternal(const char *strCommand, bool cancelOnError, bool isSync)
+cdbdisp_dispatchSetCommandInternal(const char *strCommand,
+	                               bool isLocal,
+								   bool cancelOnError,
+								   bool isSync)
 {
 	CdbDispatcherState *ds;
 	DispatchCommandQueryParms *pQueryParms;
@@ -303,6 +306,16 @@ cdbdisp_dispatchSetCommandInternal(const char *strCommand, bool cancelOnError, b
 		 strCommand);
 
 	SIMPLE_FAULT_INJECTOR("dispatch_set_command");
+
+	/*
+	 * If we are getting a SET LOCAL, make its effect till the end of transaction.
+	 * In case we are not in two-phase commit -- setup and activate DTX.
+	 * This is needed, as there may be writing commands that can be affected by SET.
+	 */
+	if (isLocal) {
+		setupDtxTransaction();
+		flags |= DF_NEED_TWO_PHASE;
+	}
 
 	/*
 	 * Dispatch a command with DF_SYNC_SET flag if we are performing a config
@@ -379,9 +392,9 @@ cdbdisp_dispatchSetCommandInternal(const char *strCommand, bool cancelOnError, b
  * Cursors only allocate reader gangs, so primary writer and idle reader gangs can be dispatched to.
  */
 void
-CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
+CdbDispatchSetCommand(const char *strCommand, bool isLocal, bool cancelOnError)
 {
-	return cdbdisp_dispatchSetCommandInternal(strCommand, cancelOnError, false);
+	return cdbdisp_dispatchSetCommandInternal(strCommand, isLocal, cancelOnError, false);
 }
 
 /*

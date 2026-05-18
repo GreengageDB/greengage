@@ -70,7 +70,9 @@ extern void CdbDispatchPlan(struct QueryDesc *queryDesc,
  * Special for sending SET commands that change GUC variables, so they go to all
  * gangs, both reader and writer
  */
-extern void CdbDispatchSetCommand(const char *strCommand, bool cancelOnError);
+extern void CdbDispatchSetCommand(const char *strCommand,
+								  bool isLocal,
+								  bool cancelOnError);
 
 /*
  * The same as CdbDispatchSetCommand(), but bypasses priveleges and always uses

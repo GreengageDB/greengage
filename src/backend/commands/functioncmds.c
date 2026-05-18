@@ -2677,8 +2677,6 @@ ExecuteDoStmt(DoStmt *stmt, bool atomic)
 
 	ReleaseSysCache(languageTuple);
 
-	sendDtxExplicitBegin();
-
 	/* execute the inline handler */
 	OidFunctionCall1(laninline, PointerGetDatum(codeblock));
 }
