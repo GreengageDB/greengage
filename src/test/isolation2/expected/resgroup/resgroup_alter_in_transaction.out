@@ -256,6 +256,12 @@ SELECT * FROM rg_alter_tran_status;
 -- 14 Subtransaction rollback followed by the same final value.
 -- The rolled back callback and the real callback have the same target value;
 -- only one apply should matter.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
 BEGIN;
 BEGIN
 SAVEPOINT s1;
@@ -274,6 +280,19 @@ SELECT * FROM rg_alter_tran_status;
  rg_alter_tran   | 11          | 10             | 7            
  rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
+
+-- Should be only one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1' 
+ 
+(1 row)
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
 
 -- 15 Several ALTERs of the same limit type in one transaction.
 -- Only the final catalog value should be applied.

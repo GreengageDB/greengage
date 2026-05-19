@@ -16,6 +16,7 @@ DROP FUNCTION IF EXISTS rg_alter_tran_func_own_group();
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
 CREATE LANGUAGE plpython3u;
+CREATE EXTENSION gp_inject_fault;
 -- end_ignore
 
 CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
@@ -161,6 +162,8 @@ SELECT * FROM rg_alter_tran_status;
 -- 14 Subtransaction rollback followed by the same final value.
 -- The rolled back callback and the real callback have the same target value;
 -- only one apply should matter.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+
 BEGIN;
 SAVEPOINT s1;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
@@ -168,6 +171,10 @@ ROLLBACK TO SAVEPOINT s1;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
+
+-- Should be only one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
 
 -- 15 Several ALTERs of the same limit type in one transaction.
 -- Only the final catalog value should be applied.
