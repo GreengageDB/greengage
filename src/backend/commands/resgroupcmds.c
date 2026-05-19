@@ -567,13 +567,11 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
 
-		if (gp_resource_group_enable_alter_in_transaction &&
-			IsInTransactionChain(isTopLevel))
+		if (gp_resource_group_enable_alter_in_transaction)
 		{
 			/*
-			 * In a transaction chain, collect ALTERs and apply them together at
-			 * COMMIT. Even without an explicit user transaction, segments may
-			 * reach this path inside internal DTX.
+			 * In transactional mode, collect ALTERs and apply them together at
+			 * COMMIT after PRE_COMMIT validates final catalog state.
 			 */
 			static bool alter_tran_callback_registered = false;
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
@@ -596,7 +594,8 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		else
 		{
 			/*
-			 * Outside transaction, register a one-shot callback for this ALTER.
+			 * Without transactional mode, register a one-shot callback for
+			 * only this ALTER.
 			 */
 			RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
 		}
