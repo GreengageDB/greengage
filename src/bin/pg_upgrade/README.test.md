@@ -30,7 +30,7 @@ export SQL_SCHEMA=/home/gpadmin/dump.sql
 bash   ${GREENGAGE7_SRC}/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh
 ```
 
-## Running test from the image
+## Running tests from the image
 
 All the necessary environment variables are already present inside the docker image, so the only thing left is to setup gpadmin user:
 ```bash
