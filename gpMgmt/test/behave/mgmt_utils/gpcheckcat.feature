@@ -169,6 +169,15 @@ Feature: gpcheckcat tests
         Then gpcheckcat should return a return code of 0
         And the user runs "dropdb constraint_db"
 
+    Scenario: gpcheckcat should report replicated tables policy violation via default volatile expressions
+        Given database "policy_violation_db" is dropped and recreated
+        And the user runs "psql policy_violation_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/violate_replicated_policy.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -R replicated_distribution_policy policy_violation_db"
+        Then gpcheckcat should return a return code of 3
+        Then gpcheckcat should print "2 columns, containing volatile expressions as defaults, have violated replicated table's distribution policy" to stdout
+        And the user runs "dropdb constraint_db"
+
     Scenario: gpcheckcat should report, but not repair, invalid policy issues
         Given database "policy_db" is dropped and recreated
           And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -565,8 +574,22 @@ Feature: gpcheckcat tests
         And gpcheckcat should not print "SUMMARY REPORT: FAILED" to stdout
         And gpcheckcat should not print "has a dependency issue on oid" to stdout
         And gpcheckcat should print "Found no catalog issue" to stdout
+        And the user runs "psql -d check_dependency_error -c "DROP OWNED BY foo; DROP ROLE foo""
+        Then psql should return a return code of 0
         And the user runs "dropdb check_dependency_error"
-        And the user runs "psql -c "DROP ROLE foo""
+
+    Scenario: gpcheckcat should not report inconsistency because of scram-sha-256 passwords
+        Given database "check_scram_passwords" is dropped and recreated
+        And the user runs "psql -d check_scram_passwords -c "SET password_hash_algorithm = 'scram-sha-256'; CREATE ROLE foo PASSWORD 'bar';""
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat check_scram_passwords"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should not print "SUMMARY REPORT: FAILED" to stdout
+        And gpcheckcat should not print "inconsistent_pg_authid" to stdout
+        And gpcheckcat should print "Found no catalog issue" to stdout
+        And the user runs "psql -d check_scram_passwords -c "DROP ROLE foo""
+        Then psql should return a return code of 0
+        And the user runs "dropdb check_scram_passwords"
 
     Scenario: gpcheckcat should succeed if attributes of pg_description and pg_shdescription catalogue table has errors
         Given database "miss_attr_db5" is dropped and recreated

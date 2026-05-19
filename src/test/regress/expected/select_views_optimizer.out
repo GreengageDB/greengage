@@ -1387,10 +1387,10 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_normal WHERE f_leak(cnum);
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
-         ->  Seq Scan on credit_card
+         ->  Seq Scan on credit_card r
                Filter: f_leak(cnum)
-         ->  Index Scan using customer_dist_key_cid_key on customer
-               Index Cond: ((dist_key = credit_card.dist_key) AND (cid = credit_card.cid))
+         ->  Index Scan using customer_dist_key_cid_key on customer l
+               Index Cond: ((dist_key = r.dist_key) AND (cid = r.cid))
                Filter: (name = 'regress_alice'::text)
  Optimizer: Pivotal Optimizer (GPORCA) version 2.67.0
 (9 rows)

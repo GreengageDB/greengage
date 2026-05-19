@@ -12,7 +12,7 @@
 -- 5. these two ratios should be the same.
 
 create extension if not exists gp_inject_fault;
-create or replace language plpythonu;
+create or replace language plpython3u;
 
 create table t_qmem(a int);
 select gp_inject_fault('rg_qmem_qd_qe', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
@@ -62,7 +62,7 @@ ratio2 = int(round(float(qd_opmem) / qe_opmem))
 
 return ratio1 == ratio2
 
-$$ language plpythonu;
+$$ language plpython3u;
 
 select rg_qmem_test();
 select gp_inject_fault('rg_qmem_qd_qe', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;

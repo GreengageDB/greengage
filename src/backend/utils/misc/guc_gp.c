@@ -3047,7 +3047,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"optimizer_enable_table_alias", PGC_USERSET, DEVELOPER_OPTIONS,
+		{"optimizer_enable_table_alias", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Enable using table aliases to make plan explain more descriptive"),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -5066,7 +5066,7 @@ struct config_string ConfigureNamesString_gp[] =
 	},
 
 	{
-		{"gp_role", PGC_SUSET, CLIENT_CONN_OTHER,
+		{"gp_role", PGC_BACKEND, GP_WORKER_IDENTITY,
 			gettext_noop("Sets the role for the session."),
 			gettext_noop("Valid values are DISPATCH, EXECUTE, and UTILITY."),
 			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE

@@ -495,11 +495,11 @@ assign_gp_session_role(const char *newval, void *extra)
 
 
 /*
- * Check and Assign routines for "gp_role" option.  This variable has context
- * PGC_SUSET so that is can only be set by a superuser via the SET command.
- * (It can also be set using an option on postmaster start, but this isn't
- * interesting beccause the derived global CdbRole is always set (along with
- * CdbSessionRole) on backend startup for a new connection.
+ * Check and Assign routines for "gp_role" option.
+ * Note: initially, this variable had context PGC_SUSET so that is could only
+ * be set by a superuser via the SET command. In greengage, we swapped it
+ * to PGC_BACKEND, as the code responsible for changing Gp_role at runtime
+ * is outdated.
  *
  * See src/backend/util/misc/guc.c for option definition.
  */
@@ -548,6 +548,16 @@ assign_gp_role(const char *newval, void *extra)
 		cdb_cleanup(0, 0);
 
 	Gp_role = newrole;
+
+	/*
+	 * The functionality of the code below is questionable,
+	 * as it can easily result in a segmentation fault,
+	 * for example, when trying to 'set gp_role to dispatch;'
+	 * during a running session
+	 *
+	 * We work around this issue by not allowing to change
+	 * gp_role at runtime.
+	 */
 
 	if (do_connect)
 	{

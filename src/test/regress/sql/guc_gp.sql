@@ -190,32 +190,32 @@ set allow_segment_DML to off;
 
 -- test for guc dev_opt_unsafe_truncate_in_subtransaction
 -- start_ignore
-CREATE LANGUAGE plpythonu;
+CREATE LANGUAGE plpython3u;
 -- end_ignore
 CREATE OR REPLACE FUNCTION run_all_in_one() RETURNS VOID AS
 $$
-     plpy.execute('CREATE TABLE unsafe_truncate(a int, b int) DISTRIBUTED BY (a)')
-     plpy.execute('INSERT INTO unsafe_truncate SELECT * FROM generate_series(1, 10)')
-     for i in range(1,4):
-         plpy.execute('UPDATE unsafe_truncate SET b = b + 1')
-         plpy.execute('CREATE TABLE foobar AS SELECT * FROM unsafe_truncate DISTRIBUTED BY (a)')
+    plpy.execute('CREATE TABLE unsafe_truncate(a int, b int) DISTRIBUTED BY (a)')
+    plpy.execute('INSERT INTO unsafe_truncate SELECT * FROM generate_series(1, 10)')
+    for i in range(1,4):
+        plpy.execute('UPDATE unsafe_truncate SET b = b + 1')
+        plpy.execute('CREATE TABLE foobar AS SELECT * FROM unsafe_truncate DISTRIBUTED BY (a)')
 
-         before_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
-         plpy.execute('truncate unsafe_truncate')
-         after_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
+        before_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
+        plpy.execute('truncate unsafe_truncate')
+        after_truncate = plpy.execute('SELECT relfilenode FROM gp_dist_random(\'pg_class\') WHERE relname=\'unsafe_truncate\' ORDER BY gp_segment_id')
 
-         plpy.execute('DROP TABLE unsafe_truncate')
-         plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
+        plpy.execute('DROP TABLE unsafe_truncate')
+        plpy.execute('ALTER TABLE foobar RENAME TO unsafe_truncate')
 
-         if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
-	     plpy.info('iteration:%d unsafe truncate performed' % (i))
-         else:
-	     plpy.info('iteration:%d safe truncate performed' % (i))
+        if before_truncate[0]['relfilenode'] == after_truncate[0]['relfilenode']:
+            plpy.info('iteration:%d unsafe truncate performed' % (i))
+        else:
+            plpy.info('iteration:%d safe truncate performed' % (i))
 
-	 plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
-     plpy.execute('DROP TABLE unsafe_truncate')
-     plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
-$$ language plpythonu;
+        plpy.execute('SET dev_opt_unsafe_truncate_in_subtransaction TO ON')
+    plpy.execute('DROP TABLE unsafe_truncate')
+    plpy.execute('RESET dev_opt_unsafe_truncate_in_subtransaction')
+$$ language plpython3u;
 
 select run_all_in_one();
 
@@ -440,5 +440,9 @@ FETCH c2;
 FETCH c1;
 FETCH c2;
 END;
+
+-- test that it is impossible to switch gp_role and gp_session_role amidst of a session
+SET gp_role TO EXECUTE;
+SET gp_session_role TO EXECUTE;
 
 DROP TABLE guc_gp_t1;

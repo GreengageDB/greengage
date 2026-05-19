@@ -1,0 +1,8 @@
+CREATE FUNCTION gp_check_libpq_events()
+RETURNS bool
+AS '@abs_builddir@/regress@DLSUFFIX@'
+LANGUAGE C EXECUTE ON MASTER;
+
+SELECT gp_check_libpq_events();
+
+DROP FUNCTION gp_check_libpq_events();

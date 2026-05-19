@@ -9,7 +9,7 @@ create schema hashjoin_spill;
 set search_path to hashjoin_spill;
 
 -- start_ignore
-create language plpythonu;
+create language plpython3u;
 select disable_xform('CXformLeftJoin2RightJoin'); -- disable right join in orca to force left join spilling
 -- end_ignore
 
@@ -34,7 +34,7 @@ for i in range(len(rv)):
         result.append(cur_row)
 return result
 $$
-language plpythonu;
+language plpython3u;
 
 CREATE TABLE test_hj_spill (i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int);
 insert into test_hj_spill SELECT i,i,i%1000,i,i,i,i,i from
