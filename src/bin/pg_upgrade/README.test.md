@@ -32,14 +32,14 @@ bash   ${GREENGAGE7_SRC}/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh
 
 ## Running tests from the image
 
-All the necessary environment variables are already present inside the docker image, so the only thing left is to setup gpadmin user:
+Docker image already has all the necessary environment variables set to run the test WITHOUT a schema. The only thing left is to setup gpadmin user:
 ```bash
 docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest .
 docker run --rm gpdb7_pgupgrade bash -c \
     "gpdb_src/concourse/scripts/setup_gpadmin_user.bash && su gpadmin /home/gpadmin/gpdb_src/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh"
 ```
 
-Note, that SQL_SCHEMA is empty by default. To specify a schema, mount a directory with it into the docker image:
+To specify a schema, mount a directory with it into the docker image:
 ```bash
 mkdir dump_dir
 echo "create database test2;" > dump_dir/dump.sql
