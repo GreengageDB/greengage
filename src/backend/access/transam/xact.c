@@ -85,6 +85,11 @@
 #include "utils/vmem_tracker.h"
 #include "cdb/cdbdisp.h"
 
+
+extern void AtCommit_MetadataQueues();
+extern void AtAbort_MetadataQueues();
+
+
 /*
  *	User-tweakable parameters
  */
@@ -2847,6 +2852,8 @@ CommitTransaction(void)
 	if(Gp_role == GP_ROLE_DISPATCH)
 		MoveDbSessionLockRelease();
 
+	AtCommit_MetadataQueues();
+
 	AtCommit_TablespaceStorage();
 
 	AtEOXact_AppendOnly();
@@ -3368,6 +3375,8 @@ AbortTransaction(void)
 
 		DoPendingDbDeletes(false);
 		DatabaseStorageResetSessionLock();
+
+		AtAbort_MetadataQueues();
 
 		AtAbort_TablespaceStorage();
 		AtEOXact_AppendOnly();

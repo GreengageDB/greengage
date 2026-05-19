@@ -15,6 +15,7 @@
  */
 #include "postgres.h"
 
+#include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
@@ -981,6 +982,32 @@ PQMetadataNextQueueId()
 {
 	static ggMetadataQueueId queueId = 0;
 	return queueId++;
+}
+
+extern void 		AtAbort_MetadataQueues();
+extern void 		AtCommit_MetadataQueues();
+
+/* Callback executed at transaction end */
+static void
+PQDeleteMetadataQueues()
+{
+	while (ggMetadataQueues)
+	{
+		ListCell *lc = list_head(ggMetadataQueues);
+		ggMetadataQueue *queue = (ggMetadataQueue *) lfirst(lc);
+		elog(WARNING, "Metadata queue %u was not deleted in transaction after use", queue->id);
+		PQDeleteMetadataQueue(queue->id);
+	}
+}
+
+void AtCommit_MetadataQueues()
+{
+	PQDeleteMetadataQueues();
+}
+
+void AtAbort_MetadataQueues()
+{
+	PQDeleteMetadataQueues();
 }
 
 void

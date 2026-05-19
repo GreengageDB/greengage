@@ -1,6 +1,7 @@
 
 create extension if not exists test_metadata;
 
+begin;
 -- Create two queues
 SELECT test_create_metadata_queue() as queue1
 \gset
@@ -56,3 +57,5 @@ SELECT test_count_metadata(:queue2);
 -- Delete two queues
 SELECT test_delete_metadata_queue(:queue1);
 SELECT test_delete_metadata_queue(:queue2);
+
+commit;
