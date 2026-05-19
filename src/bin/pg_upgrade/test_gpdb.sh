@@ -211,7 +211,7 @@ usage()
 {
 	local appname=`basename $0`
 	echo "usage: $appname -o <dir> -b <dir> [options]"
-	echo " -o <dir>     old cluster data directory"
+	echo " -O <dir>     old cluster data directory"
 	echo " -b <dir>     new cluster executable directory"
 	echo " -B <dir>     old cluster executable directory (defaults to new binaries)"
 	echo " -s           Run smoketest only"
@@ -312,9 +312,9 @@ main() {
 	local temp_root=`pwd`/tmp_check
 	local base_dir=`pwd`
 	
-	while getopts ":o:b:B:sCkKmrp" opt; do
+	while getopts ":O:b:B:sCkKmrp" opt; do
 		case ${opt} in
-			o )
+			O )
 				realpath OLD_DATADIR "${OPTARG}"
 				;;
 			b )
@@ -418,7 +418,7 @@ main() {
 	
 	########################## START: NEW cluster creation
 	
-	echo "Switching to gpdb-6 env..."
+	echo "Switching to gpdb-7 env..."
 	. ${NEW_BINDIR}/../greengage_path.sh
 	
 	# Create a new gpdemo cluster in the NEW_DATADIR. Using the new datadir for the
@@ -426,7 +426,7 @@ main() {
 	# using a demo cluster anyway, this is acceptable.
 	export DEMO_PORT_BASE=17432
 	export NUM_PRIMARY_MIRROR_PAIRS=3
-	export COORDINATOR_DATADIR=${temp_root}
+	export COORDINATOR_DATADIR=${temp_root} # Assuming that $NEW_DATADIR is $temp_root
 	cp ${OLD_DATADIR}/../lalshell .
 	
 	LANG=en_US.utf8 BLDWRAP_POSTGRES_CONF_ADDONS=fsync=off ${temp_root}/../../../../gpAux/gpdemo/demo_cluster.sh ${DEMOCLUSTER_OPTS}
