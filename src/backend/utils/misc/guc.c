@@ -7095,7 +7095,7 @@ set_config_option(const char *name, const char *value,
 	 * Anyway, master executes SET as LOCAL, so on next transaction
 	 * GUC will resynchronize and everything will be back in place.
 	 */
-	if ( Gp_role == GP_ROLE_EXECUTE &&
+	if (Gp_role == GP_ROLE_EXECUTE &&
 		action == GUC_ACTION_LOCAL)
 		action = GUC_ACTION_SET;
 
