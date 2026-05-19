@@ -162,8 +162,8 @@ SELECT * FROM rg_alter_tran_status;
 -- 14 Subtransaction rollback followed by the same final value.
 -- The rolled back callback and the real callback have the same target value;
 -- only one apply should matter.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
-
 BEGIN;
 SAVEPOINT s1;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
@@ -171,7 +171,6 @@ ROLLBACK TO SAVEPOINT s1;
 ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
-
 -- Should be only one in `num times hit`
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
@@ -241,16 +240,68 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 2q:
 
+
+-- Crash recovery
+
+-- 22 Coordinator segfault before COMMIT must not apply ALTERs.
+1: SELECT gp_inject_fault('exec_simple_query_start', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 1;
+1: SELECT gp_inject_fault('exec_simple_query_start', 'segv', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+-- The backend dies at the very start of COMMIT.
+1: @post_run 'echo ""' : COMMIT;
+-- Wait until coordinator accepts connections again.
+! while [ `psql -tc "SELECT 1;" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
+1q:
+1: SELECT * FROM rg_alter_tran_status;
+
+-- 23 Segment segfault before COMMIT must not apply ALTERs.
+-- Crash before COMMIT: during COMMIT, coordinator changes may already be
+-- durable and replayed.
+1: SELECT gp_inject_fault('qe_exec_finished', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 2;
+1: SELECT gp_inject_fault('qe_exec_finished', 'segv', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+-- Crash a segment before COMMIT is issued.
+1: @post_run 'echo ""': SELECT 1 FROM gp_dist_random('gp_id');
+1: COMMIT;
+-- Wait until distributed queries work again.
+! while [ `psql -tc "SELECT count(*) FROM gp_dist_random('gp_id');" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
+1: SELECT * FROM rg_alter_tran_status;
+
+-- 24 Coordinator segfault after COMMIT must replay ALTERs.
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 3;
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'segv', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+-- The backend dies after COMMIT while applying runtime state.
+1: @post_run 'echo ""' : COMMIT;
+-- Wait until coordinator accepts connections again.
+! while [ `psql -tc "SELECT 1;" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
+1q:
+1: SELECT * FROM rg_alter_tran_status;
+
+-- 25 Segment segfault after COMMIT must replay ALTERs.
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 4;
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'segv', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+-- The segment dies after COMMIT while applying runtime state.
+1: @post_run 'echo ""' : COMMIT;
+-- Wait until distributed queries work again.
+! while [ `psql -tc "SELECT count(*) FROM gp_dist_random('gp_id');" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
+1q:
+1: SELECT * FROM rg_alter_tran_status;
+
 -- cleanup
-DROP VIEW rg_alter_tran_status;
-DROP VIEW rg_alter_tran_runtime_status;
-DROP FUNCTION rg_alter_tran_func();
-DROP FUNCTION rg_alter_tran_func_sub();
-DROP FUNCTION rg_alter_tran_func_sub_fail();
-DROP FUNCTION rg_alter_tran_func_own_group();
-DROP RESOURCE GROUP rg_alter_tran;
-DROP RESOURCE GROUP rg_alter_tran_b;
+1: DROP VIEW rg_alter_tran_status;
+1: DROP VIEW rg_alter_tran_runtime_status;
+1: DROP FUNCTION rg_alter_tran_func();
+1: DROP FUNCTION rg_alter_tran_func_sub();
+1: DROP FUNCTION rg_alter_tran_func_sub_fail();
+1: DROP FUNCTION rg_alter_tran_func_own_group();
+1: DROP RESOURCE GROUP rg_alter_tran;
+1: DROP RESOURCE GROUP rg_alter_tran_b;
 
 !\retcode gpconfig -r gp_resource_group_enable_alter_in_transaction;
-
 !\retcode gpstop -raq -M fast;

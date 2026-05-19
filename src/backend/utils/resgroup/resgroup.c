@@ -945,6 +945,8 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	volatile int	savedInterruptHoldoffCount;
 	volatile MemoryContext oldMemoryContext;
 
+	SIMPLE_FAULT_INJECTOR("resgroup_alter_on_commit");
+
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
 	oldMemoryContext = CurrentMemoryContext;
@@ -954,8 +956,6 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		savedInterruptHoldoffCount = InterruptHoldoffCount;
 		group = groupHashFind(callbackCtx->groupid, true);
 
-		SIMPLE_FAULT_INJECTOR("resgroup_alter_on_commit");
-		
 		oldCaps = group->caps;
 		newCaps = oldCaps;
 
