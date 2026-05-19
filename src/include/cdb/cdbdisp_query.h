@@ -73,13 +73,6 @@ extern void CdbDispatchPlan(struct QueryDesc *queryDesc,
 extern void CdbDispatchSetCommand(const char *strCommand, bool cancelOnError);
 
 /*
- * The same as CdbDispatchSetCommand(), but passes locality of SET.
- */
-extern void CdbDispatchSetCommandLocal(const char *strCommand,
-									   bool isLocal,
-									   bool cancelOnError);
-
-/*
  * The same as CdbDispatchSetCommand(), but bypasses priveleges and always uses
  * PGC_S_CLIENT context.
  */
