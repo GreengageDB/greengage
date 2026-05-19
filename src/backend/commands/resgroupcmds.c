@@ -567,13 +567,15 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
 
-		if (IsInTransactionChain(isTopLevel))
+		if (gp_resource_group_enable_alter_in_transaction &&
+			IsInTransactionChain(isTopLevel))
 		{
-			static bool alter_tran_callback_registered = false;
 			/*
-			 * In transaction, collect ALTER data for later synchronous apply.
+			 * In a transaction chain, collect ALTERs and apply them together at
+			 * COMMIT. Even without an explicit user transaction, segments may
+			 * reach this path inside internal DTX.
 			 */
-			Assert(gp_resource_group_enable_alter_in_transaction);
+			static bool alter_tran_callback_registered = false;
 			MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 			resgroup_alter_tran_callbacks =
 										lappend(
