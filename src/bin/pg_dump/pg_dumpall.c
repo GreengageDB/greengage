@@ -1320,6 +1320,14 @@ dumpRoles(PGconn *conn)
 			else
 				appendPQExpBufferStr(buf, " NOBYPASSRLS");
 		}
+		else
+		{
+			/*
+			 * Default to NOBYPASSRLS for dumps from Greengage 6 to make
+			 * them consistent with dumps from Greenage 7.
+			 */
+			appendPQExpBufferStr(buf, " NOBYPASSRLS");
+		}
 
 		if (strcmp(PQgetvalue(res, i, i_rolconnlimit), "-1") != 0)
 			appendPQExpBuffer(buf, " CONNECTION LIMIT %s",
