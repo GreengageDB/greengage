@@ -394,9 +394,8 @@ static void groupMemOnNotifyForCgroup(ResGroupData *group);
 static void groupMemOnDumpForCgroup(ResGroupData *group, StringInfo str);
 static void groupApplyCgroupMemInc(ResGroupData *group);
 static void groupApplyCgroupMemDec(ResGroupData *group);
-static void resGroupCapFieldApply(ResGroupLimitType limittype,
-								  ResGroupCaps *dst,
-								  const ResGroupCaps *src);
+static void resGroupCapFieldApply(ResGroupCaps *dst,
+							const ResourceGroupCallbackContext *callbackCtx);
 
 static void cpusetOperation(char *cpuset1,
 							const char *cpuset2,
@@ -892,14 +891,16 @@ ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 }
 
 /*
- * Apply only the field changed by limittype to the target capability snapshot.
+ * Apply only the field changed by callbackCtx->limittype to the target
+ * capability snapshot.
  */
 static void
-resGroupCapFieldApply(ResGroupLimitType limittype,
-					  ResGroupCaps *dst,
-					  const ResGroupCaps *src)
+resGroupCapFieldApply(ResGroupCaps *dst,
+					  const ResourceGroupCallbackContext *callbackCtx)
 {
-	switch (limittype)
+	const ResGroupCaps *src = &callbackCtx->caps;
+
+	switch (callbackCtx->limittype)
 	{
 		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
 			dst->concurrency = src->concurrency;
@@ -927,7 +928,8 @@ resGroupCapFieldApply(ResGroupLimitType limittype,
 	}
 	ereport(ERROR,
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
-			(errmsg("invalid resource group limit type: %d", limittype))));
+			(errmsg("invalid resource group limit type: %d",
+					 callbackCtx->limittype))));
 }
 
 /*
@@ -943,13 +945,10 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	ResGroupCaps	oldCaps;
 	ResGroupCaps	newCaps;
 	volatile int	savedInterruptHoldoffCount;
-	volatile MemoryContext oldMemoryContext;
 
 	SIMPLE_FAULT_INJECTOR("resgroup_alter_on_commit");
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
-
-	oldMemoryContext = CurrentMemoryContext;
 
 	PG_TRY();
 	{
@@ -959,9 +958,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		oldCaps = group->caps;
 		newCaps = oldCaps;
 
-		resGroupCapFieldApply(callbackCtx->limittype,
-							  &newCaps,
-							  &callbackCtx->caps);
+		resGroupCapFieldApply(&newCaps, callbackCtx);
 
 		group->caps = newCaps;
 
@@ -1016,7 +1013,6 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	PG_CATCH();
 	{
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
-		MemoryContextSwitchTo(oldMemoryContext);
 		if (elog_demote(WARNING))
 		{
 			EmitErrorReport();

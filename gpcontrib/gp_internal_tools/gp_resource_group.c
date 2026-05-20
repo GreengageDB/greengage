@@ -104,34 +104,26 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 					 errmsg("cannot move query while a resource group is being edited")));
 		}
 
-		PG_TRY();
-		{
-			groupId = GetResGroupIdForName(groupName);
-			if (groupId == InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_UNDEFINED_OBJECT),
-						(errmsg("cannot find resource group: %s", groupName))));
+		groupId = GetResGroupIdForName(groupName);
+		if (groupId == InvalidOid)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 (errmsg("cannot find resource group: %s", groupName))));
 
-			sessionId = GetSessionIdByPid(pid);
-			if (sessionId == -1)
-				ereport(ERROR,
-						(errcode(ERRCODE_UNDEFINED_OBJECT),
-						(errmsg("cannot find process: %d", pid))));
+		sessionId = GetSessionIdByPid(pid);
+		if (sessionId == -1)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 (errmsg("cannot find process: %d", pid))));
 
-			currentGroupId = ResGroupGetGroupIdBySessionId(sessionId);
-			if (currentGroupId == InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_UNDEFINED_OBJECT),
-						(errmsg("process %d is in IDLE state", pid))));
-			if (currentGroupId != groupId)
-				ResGroupMoveQuery(sessionId, groupId, groupName);
-		}
-		PG_CATCH();
-		{
-			UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
+		currentGroupId = ResGroupGetGroupIdBySessionId(sessionId);
+		if (currentGroupId == InvalidOid)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 (errmsg("process %d is in IDLE state", pid))));
+
+		if (currentGroupId != groupId)
+			ResGroupMoveQuery(sessionId, groupId, groupName);
 
 		UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
 	}
