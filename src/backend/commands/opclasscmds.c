@@ -343,7 +343,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 				opfamilyoid,	/* oid of containing opfamily */
 				opclassoid;		/* oid of opclass we create */
 	int			maxOpNumber,	/* amstrategies value */
-				optsProcNumber,	/* amoptsprocnum value */
+				optsProcNumber, /* amoptsprocnum value */
 				maxProcNumber;	/* amsupport value */
 	bool		amstorage;		/* amstorage flag */
 	List	   *operators;		/* OpFamilyMember list for operators */
@@ -808,7 +808,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 	Oid			amoid,			/* our AM's oid */
 				opfamilyoid;	/* oid of opfamily */
 	int			maxOpNumber,	/* amstrategies value */
-				optsProcNumber,	/* amopclassopts value */
+				optsProcNumber, /* amopclassopts value */
 				maxProcNumber;	/* amsupport value */
 	HeapTuple	tup;
 	Form_pg_am	amform;
@@ -1288,6 +1288,7 @@ assignProcTypes(OpFamilyMember *member, Oid amoid, Oid typeoid,
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 						 errmsg("btree equal image functions must return boolean")));
+
 			/*
 			 * pg_amproc functions are indexed by (lefttype, righttype), but
 			 * an equalimage function can only be called at CREATE INDEX time.
@@ -1694,105 +1695,6 @@ dropProcedures(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 
 		performDeletion(&object, DROP_RESTRICT, 0);
 	}
-}
-
-/*
- * Deletion subroutines for use by dependency.c.
- */
-void
-RemoveOpFamilyById(Oid opfamilyOid)
-{
-	Relation	rel;
-	HeapTuple	tup;
-
-	rel = table_open(OperatorFamilyRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(OPFAMILYOID, ObjectIdGetDatum(opfamilyOid));
-	if (!HeapTupleIsValid(tup)) /* should not happen */
-		elog(ERROR, "cache lookup failed for opfamily %u", opfamilyOid);
-
-	CatalogTupleDelete(rel, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(rel, RowExclusiveLock);
-}
-
-void
-RemoveOpClassById(Oid opclassOid)
-{
-	Relation	rel;
-	HeapTuple	tup;
-
-	rel = table_open(OperatorClassRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(CLAOID, ObjectIdGetDatum(opclassOid));
-	if (!HeapTupleIsValid(tup)) /* should not happen */
-		elog(ERROR, "cache lookup failed for opclass %u", opclassOid);
-
-	CatalogTupleDelete(rel, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(rel, RowExclusiveLock);
-}
-
-void
-RemoveAmOpEntryById(Oid entryOid)
-{
-	Relation	rel;
-	HeapTuple	tup;
-	ScanKeyData skey[1];
-	SysScanDesc scan;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_amop_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(entryOid));
-
-	rel = table_open(AccessMethodOperatorRelationId, RowExclusiveLock);
-
-	scan = systable_beginscan(rel, AccessMethodOperatorOidIndexId, true,
-							  NULL, 1, skey);
-
-	/* we expect exactly one match */
-	tup = systable_getnext(scan);
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "could not find tuple for amop entry %u", entryOid);
-
-	CatalogTupleDelete(rel, &tup->t_self);
-
-	systable_endscan(scan);
-	table_close(rel, RowExclusiveLock);
-}
-
-void
-RemoveAmProcEntryById(Oid entryOid)
-{
-	Relation	rel;
-	HeapTuple	tup;
-	ScanKeyData skey[1];
-	SysScanDesc scan;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_amproc_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(entryOid));
-
-	rel = table_open(AccessMethodProcedureRelationId, RowExclusiveLock);
-
-	scan = systable_beginscan(rel, AccessMethodProcedureOidIndexId, true,
-							  NULL, 1, skey);
-
-	/* we expect exactly one match */
-	tup = systable_getnext(scan);
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "could not find tuple for amproc entry %u", entryOid);
-
-	CatalogTupleDelete(rel, &tup->t_self);
-
-	systable_endscan(scan);
-	table_close(rel, RowExclusiveLock);
 }
 
 /*

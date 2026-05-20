@@ -382,7 +382,7 @@ retry_masked:
 				REMEMBER_EPIPE(spinfo, true);
 
 #ifdef ECONNRESET
-				/* FALLTHROUGH */
+				/* FALL THRU */
 
 			case ECONNRESET:
 #endif
@@ -438,20 +438,20 @@ PQsslAttributeNames(PGconn *conn)
 	return result;
 }
 
-PQsslKeyPassHook_type
-PQgetSSLKeyPassHook(void)
+PQsslKeyPassHook_OpenSSL_type
+PQgetSSLKeyPassHook_OpenSSL(void)
 {
 	return NULL;
 }
 
 void
-PQsetSSLKeyPassHook(PQsslKeyPassHook_type hook)
+PQsetSSLKeyPassHook_OpenSSL(PQsslKeyPassHook_OpenSSL_type hook)
 {
 	return;
 }
 
 int
-PQdefaultSSLKeyPassHook(char *buf, int size, PGconn *conn)
+PQdefaultSSLKeyPassHook_OpenSSL(char *buf, int size, PGconn *conn)
 {
 	return 0;
 }

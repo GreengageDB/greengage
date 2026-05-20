@@ -355,6 +355,12 @@ class GPCatalog():
         # transaction state, hence it can be different so skip it from checks.
         self._tables['pg_index']._setKnownDifferences("indpred indcheckxmin")
 
+        # GG-424 : Inconsistent rolpassword
+        # rolpassword is inconsistent if scram-sha-256 encryption is used.
+        # Salt is generated locally on each segment, so the hashes are
+        # inconsistent between segments.
+        self._tables['pg_authid']._setKnownDifferences("rolpassword")
+
     def _validate(self):
         """
         Check that all tables defined in the catalog have either been marked

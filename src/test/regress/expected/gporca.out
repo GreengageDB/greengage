@@ -12968,20 +12968,21 @@ select * from foo join (select a, count(*) + 5 as cnt from tbitmap where tbitmap
 -- 11 bitmap with two groupbys
 explain (costs off)
 select * from foo join (select a, count(*) as cnt from (select distinct a, b from tbitmap) grby1 group by a) grby2 on foo.a=grby2.a;
-                     QUERY PLAN                      
------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (tbitmap.a = foo.a)
+         Hash Cond: (grby1.a = foo.a)
          ->  HashAggregate
-               Group Key: tbitmap.a
-               ->  HashAggregate
-                     Group Key: tbitmap.a, tbitmap.b
-                     ->  Seq Scan on tbitmap
+               Group Key: grby1.a
+               ->  Subquery Scan on grby1
+                     ->  HashAggregate
+                           Group Key: tbitmap.a, tbitmap.b
+                           ->  Seq Scan on tbitmap
          ->  Hash
                ->  Seq Scan on foo
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 select * from foo join (select a, count(*) as cnt from (select distinct a, b from tbitmap) grby1 group by a) grby2 on foo.a=grby2.a;
    a   |   b   |   c   |   a   | cnt 
@@ -13114,26 +13115,27 @@ select * from foo join (select b, count(*) as cnt from tbtree group by b) grby o
 -- 17 group by columns don't intersect - no index scan
 explain (costs off)
 select * from foo join (select min_a, count(*) as cnt from (select min(a) as min_a, b from tbitmap group by b) grby1 group by min_a) grby2 on foo.a=grby2.min_a;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((min(tbitmap.a)) = foo.a)
+         Hash Cond: (grby1.min_a = foo.a)
          ->  Finalize HashAggregate
-               Group Key: (min(tbitmap.a))
+               Group Key: grby1.min_a
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: (min(tbitmap.a))
+                     Hash Key: grby1.min_a
                      ->  Partial HashAggregate
-                           Group Key: min(tbitmap.a)
-                           ->  HashAggregate
-                                 Group Key: tbitmap.b
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: tbitmap.b
-                                       ->  Seq Scan on tbitmap
+                           Group Key: grby1.min_a
+                           ->  Subquery Scan on grby1
+                                 ->  HashAggregate
+                                       Group Key: tbitmap.b
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: tbitmap.b
+                                             ->  Seq Scan on tbitmap
          ->  Hash
                ->  Seq Scan on foo
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 reset optimizer_join_order;
 reset optimizer_enable_hashjoin;

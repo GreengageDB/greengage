@@ -72,7 +72,7 @@ ExecLimit_guts(PlanState *pstate)
 			 */
 			recompute_limits(node);
 
-			/* FALLTHROUGH */
+			/* FALL THRU */
 
 		case LIMIT_RESCAN:
 
@@ -219,7 +219,7 @@ ExecLimit_guts(PlanState *pstate)
 			}
 
 			Assert(node->lstate == LIMIT_WINDOWEND_TIES);
-			/* FALLTHROUGH */
+			/* FALL THRU */
 
 		case LIMIT_WINDOWEND_TIES:
 			if (ScanDirectionIsForward(direction))

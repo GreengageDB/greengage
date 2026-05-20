@@ -781,7 +781,7 @@ LockAcquire(const LOCKTAG *locktag,
  * reportMemoryError specifies whether a lock request that fills the lock
  * table should generate an ERROR or not.  Passing "false" allows the caller
  * to attempt to recover from lock-table-full situations, perhaps by forcibly
- * cancelling other lock holders and then retrying.  Note, however, that the
+ * canceling other lock holders and then retrying.  Note, however, that the
  * return code for that is LOCKACQUIRE_NOT_AVAIL, so that it's unsafe to use
  * in combination with dontWait = true, as the cause of failure couldn't be
  * distinguished.
@@ -1002,13 +1002,13 @@ LockAcquireExtended(const LOCKTAG *locktag,
 		 * FastPathStrongRelationLocks->counts becomes visible after we test
 		 * it has yet to begin to transfer fast-path locks.
 		 */
-		LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+		LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 		if (FastPathStrongRelationLocks->count[fasthashcode] != 0)
 			acquired = false;
 		else
 			acquired = FastPathGrantRelationLock(locktag->locktag_field2,
 												 lockmode);
-		LWLockRelease(&MyProc->backendLock);
+		LWLockRelease(&MyProc->fpInfoLock);
 		if (acquired)
 		{
 			/*
@@ -1108,7 +1108,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 			found_conflict = true;
 		else
 			found_conflict = LockCheckConflicts(lockMethodTable, lockmode,
-										lock, proclock);
+												lock, proclock);
 	}
 	else
 	{
@@ -1142,7 +1142,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 		{
 			/* Writer holds the same lock, bypass waitMask check. */
 			found_conflict = LockCheckConflicts(lockMethodTable, lockmode,
-										lock, proclock);
+												lock, proclock);
 		}
 		else
 		{
@@ -1158,7 +1158,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 				found_conflict = true;
 			else
 				found_conflict = LockCheckConflicts(lockMethodTable, lockmode,
-											lock, proclock);
+													lock, proclock);
 		}
 	}
 
@@ -2086,7 +2086,7 @@ WaitOnLock(LOCALLOCK *locallock, ResourceOwner owner)
 	 */
 	PG_TRY();
 	{
-		if (ProcSleep(locallock, lockMethodTable) != STATUS_OK)
+		if (ProcSleep(locallock, lockMethodTable) != PROC_WAIT_STATUS_OK)
 		{
 			/*
 			 * We failed as a result of a deadlock, see CheckDeadLock(). Quit
@@ -2137,7 +2137,7 @@ WaitOnLock(LOCALLOCK *locallock, ResourceOwner owner)
 /*
  * Remove a proc from the wait-queue it is on (caller must know it is on one).
  * This is only used when the proc has failed to get the lock, so we set its
- * waitStatus to STATUS_ERROR.
+ * waitStatus to PROC_WAIT_STATUS_ERROR.
  *
  * Appropriate partition lock must be held by caller.  Also, caller is
  * responsible for signaling the proc if needed.
@@ -2155,7 +2155,7 @@ RemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Make lockmethod is appropriate. */
 	Assert(lockmethodid != RESOURCE_LOCKMETHOD);
 	/* Make sure proc is waiting */
-	Assert(proc->waitStatus == STATUS_WAITING);
+	Assert(proc->waitStatus == PROC_WAIT_STATUS_WAITING);
 	Assert(proc->links.next != NULL);
 	Assert(waitLock);
 	Assert(waitLock->waitProcs.size > 0);
@@ -2178,7 +2178,7 @@ RemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Clean up the proc's own state, and pass it the ok/fail signal */
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
-	proc->waitStatus = STATUS_ERROR;
+	proc->waitStatus = PROC_WAIT_STATUS_ERROR;
 
 	/*
 	 * Delete the proclock immediately if it represents no already-held locks.
@@ -2326,10 +2326,10 @@ LockRelease(const LOCKTAG *locktag, LOCKMODE lockmode, bool sessionLock)
 		 * We might not find the lock here, even if we originally entered it
 		 * here.  Another backend may have moved it to the main table.
 		 */
-		LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+		LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 		released = FastPathUnGrantRelationLock(locktag->locktag_field2,
 											   lockmode);
-		LWLockRelease(&MyProc->backendLock);
+		LWLockRelease(&MyProc->fpInfoLock);
 		if (released)
 		{
 			RemoveLocalLock(locallock);
@@ -2602,7 +2602,7 @@ LockReleaseAll(LOCKMETHODID lockmethodid, bool allLocks)
 			 */
 			if (!have_fast_path_lwlock)
 			{
-				LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+				LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 				have_fast_path_lwlock = true;
 			}
 
@@ -2619,7 +2619,7 @@ LockReleaseAll(LOCKMETHODID lockmethodid, bool allLocks)
 			 * transferred to the main lock table.  That's going to require
 			 * some extra work, so release our fast-path lock before starting.
 			 */
-			LWLockRelease(&MyProc->backendLock);
+			LWLockRelease(&MyProc->fpInfoLock);
 			have_fast_path_lwlock = false;
 
 			/*
@@ -2645,7 +2645,7 @@ LockReleaseAll(LOCKMETHODID lockmethodid, bool allLocks)
 
 	/* Done with the fast-path data structures */
 	if (have_fast_path_lwlock)
-		LWLockRelease(&MyProc->backendLock);
+		LWLockRelease(&MyProc->fpInfoLock);
 
 	/*
 	 * Now, scan each lock partition separately.
@@ -3049,7 +3049,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 		PGPROC	   *proc = &ProcGlobal->allProcs[i];
 		uint32		f;
 
-		LWLockAcquire(&proc->backendLock, LW_EXCLUSIVE);
+		LWLockAcquire(&proc->fpInfoLock, LW_EXCLUSIVE);
 
 		/*
 		 * If the target backend isn't referencing the same database as the
@@ -3058,8 +3058,8 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 		 *
 		 * proc->databaseId is set at backend startup time and never changes
 		 * thereafter, so it might be safe to perform this test before
-		 * acquiring &proc->backendLock.  In particular, it's certainly safe
-		 * to assume that if the target backend holds any fast-path locks, it
+		 * acquiring &proc->fpInfoLock.  In particular, it's certainly safe to
+		 * assume that if the target backend holds any fast-path locks, it
 		 * must have performed a memory-fencing operation (in particular, an
 		 * LWLock acquisition) since setting proc->databaseId.  However, it's
 		 * less clear that our backend is certain to have performed a memory
@@ -3068,7 +3068,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 		 */
 		if (proc->databaseId != locktag->locktag_field1)
 		{
-			LWLockRelease(&proc->backendLock);
+			LWLockRelease(&proc->fpInfoLock);
 			continue;
 		}
 
@@ -3095,7 +3095,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 				if (!proclock)
 				{
 					LWLockRelease(partitionLock);
-					LWLockRelease(&proc->backendLock);
+					LWLockRelease(&proc->fpInfoLock);
 					return false;
 				}
 				/* Set holdTillEndXact of proclock */
@@ -3109,7 +3109,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 			/* No need to examine remaining slots. */
 			break;
 		}
-		LWLockRelease(&proc->backendLock);
+		LWLockRelease(&proc->fpInfoLock);
 	}
 	return true;
 }
@@ -3131,7 +3131,7 @@ FastPathGetRelationLockEntry(LOCALLOCK *locallock)
 	Oid			relid = locktag->locktag_field2;
 	uint32		f;
 
-	LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+	LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 
 	for (f = 0; f < FP_LOCK_SLOTS_PER_BACKEND; f++)
 	{
@@ -3154,7 +3154,7 @@ FastPathGetRelationLockEntry(LOCALLOCK *locallock)
 		if (!proclock)
 		{
 			LWLockRelease(partitionLock);
-			LWLockRelease(&MyProc->backendLock);
+			LWLockRelease(&MyProc->fpInfoLock);
 			ereport(ERROR,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
 					 errmsg("out of shared memory"),
@@ -3169,7 +3169,7 @@ FastPathGetRelationLockEntry(LOCALLOCK *locallock)
 		break;
 	}
 
-	LWLockRelease(&MyProc->backendLock);
+	LWLockRelease(&MyProc->fpInfoLock);
 
 	/* Lock may have already been transferred by some other backend. */
 	if (proclock == NULL)
@@ -3295,7 +3295,7 @@ GetLockConflicts(const LOCKTAG *locktag, LOCKMODE lockmode, int *countp)
 			if (proc == MyProc)
 				continue;
 
-			LWLockAcquire(&proc->backendLock, LW_SHARED);
+			LWLockAcquire(&proc->fpInfoLock, LW_SHARED);
 
 			/*
 			 * If the target backend isn't referencing the same database as
@@ -3307,7 +3307,7 @@ GetLockConflicts(const LOCKTAG *locktag, LOCKMODE lockmode, int *countp)
 			 */
 			if (proc->databaseId != locktag->locktag_field1)
 			{
-				LWLockRelease(&proc->backendLock);
+				LWLockRelease(&proc->fpInfoLock);
 				continue;
 			}
 
@@ -3345,7 +3345,7 @@ GetLockConflicts(const LOCKTAG *locktag, LOCKMODE lockmode, int *countp)
 				break;
 			}
 
-			LWLockRelease(&proc->backendLock);
+			LWLockRelease(&proc->fpInfoLock);
 		}
 	}
 
@@ -4054,7 +4054,7 @@ GetLockStatusData(void)
 		uint32		f;
 		DistributedTransactionId	distribXid;
 
-		LWLockAcquire(&proc->backendLock, LW_SHARED);
+		LWLockAcquire(&proc->fpInfoLock, LW_SHARED);
 
 		distribXid = (Gp_role == GP_ROLE_DISPATCH)? tmGxact->gxid : proc->localDistribXactData.distribXid;
 
@@ -4125,7 +4125,7 @@ GetLockStatusData(void)
 			el++;
 		}
 
-		LWLockRelease(&proc->backendLock);
+		LWLockRelease(&proc->fpInfoLock);
 	}
 
 	/*
@@ -4855,7 +4855,7 @@ lock_twophase_postabort(TransactionId xid, uint16 info,
  *		as MyProc->lxid, you might wonder if we really need both.  The
  *		difference is that MyProc->lxid is set and cleared unlocked, and
  *		examined by procarray.c, while fpLocalTransactionId is protected by
- *		backendLock and is used only by the locking subsystem.  Doing it this
+ *		fpInfoLock and is used only by the locking subsystem.  Doing it this
  *		way makes it easier to verify that there are no funny race conditions.
  *
  *		We don't bother recording this lock in the local lock table, since it's
@@ -4867,7 +4867,7 @@ VirtualXactLockTableInsert(VirtualTransactionId vxid)
 {
 	Assert(VirtualTransactionIdIsValid(vxid));
 
-	LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+	LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 
 	Assert(MyProc->backendId == vxid.backendId);
 	Assert(MyProc->fpLocalTransactionId == InvalidLocalTransactionId);
@@ -4876,7 +4876,7 @@ VirtualXactLockTableInsert(VirtualTransactionId vxid)
 	MyProc->fpVXIDLock = true;
 	MyProc->fpLocalTransactionId = vxid.localTransactionId;
 
-	LWLockRelease(&MyProc->backendLock);
+	LWLockRelease(&MyProc->fpInfoLock);
 }
 
 /*
@@ -4896,14 +4896,14 @@ VirtualXactLockTableCleanup(void)
 	/*
 	 * Clean up shared memory state.
 	 */
-	LWLockAcquire(&MyProc->backendLock, LW_EXCLUSIVE);
+	LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
 
 	fastpath = MyProc->fpVXIDLock;
 	lxid = MyProc->fpLocalTransactionId;
 	MyProc->fpVXIDLock = false;
 	MyProc->fpLocalTransactionId = InvalidLocalTransactionId;
 
-	LWLockRelease(&MyProc->backendLock);
+	LWLockRelease(&MyProc->fpInfoLock);
 
 	/*
 	 * If fpVXIDLock has been cleared without touching fpLocalTransactionId,
@@ -4959,13 +4959,13 @@ VirtualXactLock(VirtualTransactionId vxid, bool wait)
 	 * against the ones we're waiting for.  The target backend will only set
 	 * or clear lxid while holding this lock.
 	 */
-	LWLockAcquire(&proc->backendLock, LW_EXCLUSIVE);
+	LWLockAcquire(&proc->fpInfoLock, LW_EXCLUSIVE);
 
 	/* If the transaction has ended, our work here is done. */
 	if (proc->backendId != vxid.backendId
 		|| proc->fpLocalTransactionId != vxid.localTransactionId)
 	{
-		LWLockRelease(&proc->backendLock);
+		LWLockRelease(&proc->fpInfoLock);
 		return true;
 	}
 
@@ -4975,7 +4975,7 @@ VirtualXactLock(VirtualTransactionId vxid, bool wait)
 	 */
 	if (!wait)
 	{
-		LWLockRelease(&proc->backendLock);
+		LWLockRelease(&proc->fpInfoLock);
 		return false;
 	}
 
@@ -5000,7 +5000,7 @@ VirtualXactLock(VirtualTransactionId vxid, bool wait)
 		if (!proclock)
 		{
 			LWLockRelease(partitionLock);
-			LWLockRelease(&proc->backendLock);
+			LWLockRelease(&proc->fpInfoLock);
 			ereport(ERROR,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
 					 errmsg("out of shared memory"),
@@ -5014,7 +5014,7 @@ VirtualXactLock(VirtualTransactionId vxid, bool wait)
 	}
 
 	/* Done with proc->fpLockBits */
-	LWLockRelease(&proc->backendLock);
+	LWLockRelease(&proc->fpInfoLock);
 
 	/* Time to wait. */
 	(void) LockAcquire(&tag, ShareLock, false, false);
@@ -5035,7 +5035,7 @@ setFPHoldTillEndXact(Oid relid)
 	bool result = false;
 	PGPROC *proc = MyProc;
 
-	LWLockAcquire(&proc->backendLock, LW_EXCLUSIVE);
+	LWLockAcquire(&proc->fpInfoLock, LW_EXCLUSIVE);
 
 	for (f = 0; f < FP_LOCK_SLOTS_PER_BACKEND; ++f)
 	{
@@ -5051,7 +5051,7 @@ setFPHoldTillEndXact(Oid relid)
 		break;
 	}
 
-	LWLockRelease(&proc->backendLock);
+	LWLockRelease(&proc->fpInfoLock);
 
 	return result;
 }

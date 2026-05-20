@@ -976,7 +976,7 @@ ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 	 * further down in the plan tree.
 	 */
 	ps = queryDesc->planstate;
-	if (IsA(ps, GatherState) &&((Gather *) ps->plan)->invisible)
+	if (IsA(ps, GatherState) && ((Gather *) ps->plan)->invisible)
 	{
 		ps = outerPlanState(ps);
 		es->hide_workers = true;
@@ -2966,7 +2966,7 @@ show_scan_qual(List *qual, const char *qlabel,
 {
 	bool		useprefix;
 
-	useprefix = (IsA(planstate->plan, SubqueryScan) ||es->verbose);
+	useprefix = (IsA(planstate->plan, SubqueryScan) || es->verbose);
 	show_qual(qual, qlabel, planstate, ancestors, useprefix, es);
 }
 
@@ -3708,8 +3708,8 @@ show_incremental_sort_info(IncrementalSortState *incrsortstate,
 	 * we don't need to do anything if there were 0 full groups.
 	 *
 	 * We still have to continue after this block if there are no full groups,
-	 * though, since it's possible that we have workers that did real work even
-	 * if the leader didn't participate.
+	 * though, since it's possible that we have workers that did real work
+	 * even if the leader didn't participate.
 	 */
 	if (fullsortGroupInfo->groupCount > 0)
 	{
@@ -3736,8 +3736,8 @@ show_incremental_sort_info(IncrementalSortState *incrsortstate,
 			&incrsortstate->shared_info->sinfo[n];
 
 			/*
-			 * If a worker hasn't processed any sort groups at all, then exclude
-			 * it from output since it either didn't launch or didn't
+			 * If a worker hasn't processed any sort groups at all, then
+			 * exclude it from output since it either didn't launch or didn't
 			 * contribute anything meaningful.
 			 */
 			fullsortGroupInfo = &incsort_info->fullsortGroupInfo;
@@ -3745,8 +3745,8 @@ show_incremental_sort_info(IncrementalSortState *incrsortstate,
 			/*
 			 * Since we never have any prefix groups unless we've first sorted
 			 * a full groups and transitioned modes (copying the tuples into a
-			 * prefix group), we don't need to do anything if there were 0 full
-			 * groups.
+			 * prefix group), we don't need to do anything if there were 0
+			 * full groups.
 			 */
 			if (fullsortGroupInfo->groupCount == 0)
 				continue;
@@ -3870,8 +3870,8 @@ show_hash_info(HashState *hashstate, ExplainState *es)
 static void
 show_hashagg_info(AggState *aggstate, ExplainState *es)
 {
-	Agg		*agg	   = (Agg *)aggstate->ss.ps.plan;
-	int64	 memPeakKb = (aggstate->hash_mem_peak + 1023) / 1024;
+	Agg		   *agg = (Agg *) aggstate->ss.ps.plan;
+	int64		memPeakKb = (aggstate->hash_mem_peak + 1023) / 1024;
 
 	Assert(IsA(aggstate, AggState));
 
@@ -5180,7 +5180,7 @@ ExplainOpenGroup(const char *objtype, const char *labelname,
 			/*
 			 * In YAML format, the grouping stack is an integer list.  0 means
 			 * we've emitted nothing at this grouping level AND this grouping
-			 * level is unlabelled and must be marked with "- ".  See
+			 * level is unlabeled and must be marked with "- ".  See
 			 * ExplainYAMLLineStarting().
 			 */
 			ExplainYAMLLineStarting(es);
@@ -5543,7 +5543,7 @@ ExplainJSONLineEnding(ExplainState *es)
  *
  * YAML lines are ordinarily indented by two spaces per indentation level.
  * The text emitted for each property begins just prior to the preceding
- * line-break, except for the first property in an unlabelled group, for which
+ * line-break, except for the first property in an unlabeled group, for which
  * it begins immediately after the "- " that introduces the group.  The first
  * property of the group appears on the same line as the opening "- ".
  */

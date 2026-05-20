@@ -630,7 +630,7 @@ MemoryContextSetPeakSpace(MemoryContext context, Size nbytes)
 Size
 MemoryContextMemAllocated(MemoryContext context, bool recurse)
 {
-	Size	total = context->mem_allocated;
+	Size		total = context->mem_allocated;
 
 	AssertArg(MemoryContextIsValid(context));
 

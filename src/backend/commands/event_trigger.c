@@ -72,12 +72,6 @@ typedef struct EventTriggerQueryState
 
 static EventTriggerQueryState *currentEventTriggerState = NULL;
 
-typedef struct
-{
-	const char *obtypename;
-	bool		supported;
-} event_trigger_support_data;
-
 /* Support for dropped objects */
 typedef struct SQLDropObject
 {
@@ -359,28 +353,6 @@ filter_list_to_array(List *filterlist)
 
 	return PointerGetDatum(construct_array(data, l, TEXTOID,
 										   -1, false, TYPALIGN_INT));
-}
-
-/*
- * Guts of event trigger deletion.
- */
-void
-RemoveEventTriggerById(Oid trigOid)
-{
-	Relation	tgrel;
-	HeapTuple	tup;
-
-	tgrel = table_open(EventTriggerRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(EVENTTRIGGEROID, ObjectIdGetDatum(trigOid));
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for event trigger %u", trigOid);
-
-	CatalogTupleDelete(tgrel, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(tgrel, RowExclusiveLock);
 }
 
 /*
@@ -839,20 +811,8 @@ EventTriggerTableRewrite(Node *parsetree, Oid tableOid, int reason)
 	EventTriggerData trigdata;
 
 	/*
-	 * Event Triggers are completely disabled in standalone mode.  There are
-	 * (at least) two reasons for this:
-	 *
-	 * 1. A sufficiently broken event trigger might not only render the
-	 * database unusable, but prevent disabling itself to fix the situation.
-	 * In this scenario, restarting in standalone mode provides an escape
-	 * hatch.
-	 *
-	 * 2. BuildEventTriggerCache relies on systable_beginscan_ordered, and
-	 * therefore will malfunction if pg_event_trigger's indexes are damaged.
-	 * To allow recovery from a damaged index, we need some operating mode
-	 * wherein event triggers are disabled.  (Or we could implement
-	 * heapscan-and-sort logic for that case, but having disaster recovery
-	 * scenarios depend on code that's otherwise untested isn't appetizing.)
+	 * See EventTriggerDDLCommandStart for a discussion about why event
+	 * triggers are disabled in single user mode.
 	 */
 	if (!IsUnderPostmaster)
 		return;

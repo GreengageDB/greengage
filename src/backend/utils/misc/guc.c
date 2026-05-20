@@ -479,18 +479,9 @@ static const struct config_enum_entry plan_cache_mode_options[] = {
 	{NULL, 0, false}
 };
 
-/*
- * password_encryption used to be a boolean, so accept all the likely
- * variants of "on", too. "off" used to store passwords in plaintext,
- * but we don't support that anymore.
- */
 static const struct config_enum_entry password_encryption_options[] = {
 	{"md5", PASSWORD_TYPE_MD5, false},
 	{"scram-sha-256", PASSWORD_TYPE_SCRAM_SHA_256, false},
-	{"on", PASSWORD_TYPE_MD5, true},
-	{"true", PASSWORD_TYPE_MD5, true},
-	{"yes", PASSWORD_TYPE_MD5, true},
-	{"1", PASSWORD_TYPE_MD5, true},
 	{NULL, 0, false}
 };
 
@@ -1055,22 +1046,12 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"enable_hashagg_disk", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Enables the planner's use of hashed aggregation plans that are expected to exceed work_mem."),
+		{"hashagg_avoid_disk_plan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Causes the planner to avoid hashed aggregation plans that are expected to use the disk."),
 			NULL,
 			GUC_EXPLAIN
 		},
-		&enable_hashagg_disk,
-		true,
-		NULL, NULL, NULL
-	},
-	{
-		{"enable_groupingsets_hash_disk", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Enables the planner's use of hashed aggregation plans for groupingsets when the total size of the hash tables is expected to exceed work_mem."),
-			NULL,
-			GUC_EXPLAIN
-		},
-		&enable_groupingsets_hash_disk,
+		&hashagg_avoid_disk_plan,
 		false,
 		NULL, NULL, NULL
 	},
@@ -4814,13 +4795,11 @@ static struct config_enum ConfigureNamesEnum[] =
 
 	{
 		{"password_encryption", PGC_USERSET, CONN_AUTH_AUTH,
-			gettext_noop("Encrypt passwords."),
-			gettext_noop("When a password is specified in CREATE USER or "
-						 "ALTER USER without writing either ENCRYPTED or UNENCRYPTED, "
-						 "this parameter determines whether the password is to be encrypted.")
+			gettext_noop("Chooses the algorithm for encrypting passwords."),
+			NULL
 		},
 		&Password_encryption,
-		PASSWORD_TYPE_MD5, password_encryption_options,
+		PASSWORD_TYPE_SCRAM_SHA_256, password_encryption_options,
 		NULL, NULL, NULL
 	},
 
@@ -8703,7 +8682,7 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 		case VAR_SET_DEFAULT:
 			if (stmt->is_local)
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
-			/* FALLTHROUGH */
+			/* fall through */
 		case VAR_RESET:
 			if (strcmp(stmt->name, "transaction_isolation") == 0 &&
 				Gp_role != GP_ROLE_EXECUTE)
@@ -12169,7 +12148,7 @@ check_backtrace_functions(char **newval, void **extra, GucSource source)
 		else if ((*newval)[i] == ' ' ||
 				 (*newval)[i] == '\n' ||
 				 (*newval)[i] == '\t')
-			;	/* ignore these */
+			;					/* ignore these */
 		else
 			someval[j++] = (*newval)[i];	/* copy anything else */
 	}

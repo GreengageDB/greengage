@@ -858,8 +858,8 @@ ExecInitBitmapHeapScanForPartition(BitmapHeapScan *node, EState *estate, int efl
 		ExecInitQual(node->bitmapqualorig, (PlanState *) scanstate);
 
 	/*
-	 * Maximum number of prefetches for the tablespace if configured, otherwise
-	 * the current value of the effective_io_concurrency GUC.
+	 * Maximum number of prefetches for the tablespace if configured,
+	 * otherwise the current value of the effective_io_concurrency GUC.
 	 */
 	scanstate->prefetch_maximum =
 		get_tablespace_io_concurrency(currentRelation->rd_rel->reltablespace);

@@ -78,7 +78,7 @@ static int	initialize_SSL(PGconn *conn);
 static PostgresPollingStatusType open_client_SSL(PGconn *);
 static char *SSLerrmessage(unsigned long ecode);
 static void SSLerrfree(char *buf);
-static int PQssl_passwd_cb(char *buf, int size, int rwflag, void *userdata);
+static int	PQssl_passwd_cb(char *buf, int size, int rwflag, void *userdata);
 
 static int	my_sock_read(BIO *h, char *buf, int size);
 static int	my_sock_write(BIO *h, const char *buf, int size);
@@ -102,7 +102,7 @@ static long win32_ssl_create_mutex = 0;
 #endif
 #endif							/* ENABLE_THREAD_SAFETY */
 
-static PQsslKeyPassHook_type PQsslKeyPassHook = NULL;
+static PQsslKeyPassHook_OpenSSL_type PQsslKeyPassHook = NULL;
 static int	ssl_protocol_version_to_openssl(const char *protocol);
 
 /* ------------------------------------------------------------ */
@@ -520,7 +520,7 @@ pgtls_verify_peer_name_matches_certificate_guts(PGconn *conn,
 												int *names_examined,
 												char **first_name)
 {
-	STACK_OF(GENERAL_NAME) *peer_san;
+	STACK_OF(GENERAL_NAME) * peer_san;
 	int			i;
 	int			rc = 0;
 
@@ -826,17 +826,16 @@ initialize_SSL(PGconn *conn)
 	}
 
 	/*
-	 * Delegate the client cert password prompt to the libpq wrapper
-	 * callback if any is defined.
+	 * Delegate the client cert password prompt to the libpq wrapper callback
+	 * if any is defined.
 	 *
 	 * If the application hasn't installed its own and the sslpassword
-	 * parameter is non-null, we install ours now to make sure we
-	 * supply PGconn->sslpassword to OpenSSL instead of letting it
-	 * prompt on stdin.
+	 * parameter is non-null, we install ours now to make sure we supply
+	 * PGconn->sslpassword to OpenSSL instead of letting it prompt on stdin.
 	 *
-	 * This will replace OpenSSL's default PEM_def_callback (which
-	 * prompts on stdin), but we're only setting it for this SSL
-	 * context so it's harmless.
+	 * This will replace OpenSSL's default PEM_def_callback (which prompts on
+	 * stdin), but we're only setting it for this SSL context so it's
+	 * harmless.
 	 */
 	if (PQsslKeyPassHook
 		|| (conn->sslpassword && strlen(conn->sslpassword) > 0))
@@ -859,7 +858,7 @@ initialize_SSL(PGconn *conn)
 		if (ssl_min_ver == -1)
 		{
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid value \"%s\" for minimum version of SSL protocol\n"),
+							  libpq_gettext("invalid value \"%s\" for minimum SSL protocol version\n"),
 							  conn->ssl_min_protocol_version);
 			SSL_CTX_free(SSL_context);
 			return -1;
@@ -870,7 +869,7 @@ initialize_SSL(PGconn *conn)
 			char	   *err = SSLerrmessage(ERR_get_error());
 
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("could not set minimum version of SSL protocol: %s\n"),
+							  libpq_gettext("could not set minimum SSL protocol version: %s\n"),
 							  err);
 			SSLerrfree(err);
 			SSL_CTX_free(SSL_context);
@@ -888,7 +887,7 @@ initialize_SSL(PGconn *conn)
 		if (ssl_max_ver == -1)
 		{
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("invalid value \"%s\" for maximum version of SSL protocol\n"),
+							  libpq_gettext("invalid value \"%s\" for maximum SSL protocol version\n"),
 							  conn->ssl_max_protocol_version);
 			SSL_CTX_free(SSL_context);
 			return -1;
@@ -899,7 +898,7 @@ initialize_SSL(PGconn *conn)
 			char	   *err = SSLerrmessage(ERR_get_error());
 
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("could not set maximum version of SSL protocol: %s\n"),
+							  libpq_gettext("could not set maximum SSL protocol version: %s\n"),
 							  err);
 			SSLerrfree(err);
 			SSL_CTX_free(SSL_context);
@@ -1212,14 +1211,14 @@ initialize_SSL(PGconn *conn)
 			/*
 			 * We'll try to load the file in DER (binary ASN.1) format, and if
 			 * that fails too, report the original error. This could mask
-			 * issues where there's something wrong with a DER-format cert, but
-			 * we'd have to duplicate openssl's format detection to be smarter
-			 * than this. We can't just probe for a leading -----BEGIN because
-			 * PEM can have leading non-matching lines and blanks. OpenSSL
-			 * doesn't expose its get_name(...) and its PEM routines don't
-			 * differentiate between failure modes in enough detail to let us
-			 * tell the difference between "not PEM, try DER" and "wrong
-			 * password".
+			 * issues where there's something wrong with a DER-format cert,
+			 * but we'd have to duplicate openssl's format detection to be
+			 * smarter than this. We can't just probe for a leading -----BEGIN
+			 * because PEM can have leading non-matching lines and blanks.
+			 * OpenSSL doesn't expose its get_name(...) and its PEM routines
+			 * don't differentiate between failure modes in enough detail to
+			 * let us tell the difference between "not PEM, try DER" and
+			 * "wrong password".
 			 */
 			if (SSL_use_PrivateKey_file(conn->ssl, fnbuf, SSL_FILETYPE_ASN1) != 1)
 			{
@@ -1677,14 +1676,14 @@ err:
  * prevent openssl from ever prompting on stdin.
  */
 int
-PQdefaultSSLKeyPassHook(char *buf, int size, PGconn *conn)
+PQdefaultSSLKeyPassHook_OpenSSL(char *buf, int size, PGconn *conn)
 {
 	if (conn->sslpassword)
 	{
 		if (strlen(conn->sslpassword) + 1 > size)
 			fprintf(stderr, libpq_gettext("WARNING: sslpassword truncated\n"));
 		strncpy(buf, conn->sslpassword, size);
-		buf[size-1] = '\0';
+		buf[size - 1] = '\0';
 		return strlen(buf);
 	}
 	else
@@ -1694,14 +1693,14 @@ PQdefaultSSLKeyPassHook(char *buf, int size, PGconn *conn)
 	}
 }
 
-PQsslKeyPassHook_type
-PQgetSSLKeyPassHook(void)
+PQsslKeyPassHook_OpenSSL_type
+PQgetSSLKeyPassHook_OpenSSL(void)
 {
 	return PQsslKeyPassHook;
 }
 
 void
-PQsetSSLKeyPassHook(PQsslKeyPassHook_type hook)
+PQsetSSLKeyPassHook_OpenSSL(PQsslKeyPassHook_OpenSSL_type hook)
 {
 	PQsslKeyPassHook = hook;
 }
@@ -1709,17 +1708,17 @@ PQsetSSLKeyPassHook(PQsslKeyPassHook_type hook)
 /*
  * Supply a password to decrypt a client certificate.
  *
- * This must match OpenSSL type pem_passwd_cb.
+ * This must match OpenSSL type pem_password_cb.
  */
 static int
 PQssl_passwd_cb(char *buf, int size, int rwflag, void *userdata)
 {
-	PGconn *conn = userdata;
+	PGconn	   *conn = userdata;
 
 	if (PQsslKeyPassHook)
 		return PQsslKeyPassHook(buf, size, conn);
 	else
-		return PQdefaultSSLKeyPassHook(buf, size, conn);
+		return PQdefaultSSLKeyPassHook_OpenSSL(buf, size, conn);
 }
 
 /*

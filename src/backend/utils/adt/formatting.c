@@ -3425,7 +3425,7 @@ DCH_from_char(FormatNode *node, const char *in, TmFromChar *out,
 			case DCH_FF5:
 			case DCH_FF6:
 				out->ff = n->key->id - DCH_FF1 + 1;
-				/* FALLTHROUGH */
+				/* fall through */
 			case DCH_US:		/* microsecond */
 				len = from_char_parse_int_len(&out->us, &s,
 											  n->key->id == DCH_US ? 6 :
@@ -5036,7 +5036,7 @@ NUM_prepare_locale(NUMProc *Np)
 		if (lconv->thousands_sep && *lconv->thousands_sep)
 			Np->L_thousands_sep = lconv->thousands_sep;
 		/* Make sure thousands separator doesn't match decimal point symbol. */
-		else if (strcmp(Np->decimal, ",") !=0)
+		else if (strcmp(Np->decimal, ",") != 0)
 			Np->L_thousands_sep = ",";
 		else
 			Np->L_thousands_sep = ".";

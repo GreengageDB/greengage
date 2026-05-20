@@ -697,6 +697,10 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 {
 	{"arabic", "ar"},
 	{"arabic", "Arabic"},
+	{"basque", "eu"},
+	{"basque", "Basque"},
+	{"catalan", "ca"},
+	{"catalan", "Catalan"},
 	{"danish", "da"},
 	{"danish", "Danish"},
 	{"dutch", "nl"},
@@ -713,6 +717,8 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 	{"german", "German"},
 	{"greek", "el"},
 	{"greek", "Greek"},
+	{"hindi", "hi"},
+	{"hindi", "Hindi"},
 	{"hungarian", "hu"},
 	{"hungarian", "Hungarian"},
 	{"indonesian", "id"},
@@ -1230,12 +1236,18 @@ setup_config(void)
 							  "#update_process_title = off");
 #endif
 
-	if (strcmp(authmethodlocal, "scram-sha-256") == 0 ||
-		strcmp(authmethodhost, "scram-sha-256") == 0)
+	/*
+	 * Change password_encryption setting to md5 if md5 was chosen as an
+	 * authentication method, unless scram-sha-256 was also chosen.
+	 */
+	if ((strcmp(authmethodlocal, "md5") == 0 &&
+		 strcmp(authmethodhost, "scram-sha-256") != 0) ||
+		(strcmp(authmethodhost, "md5") == 0 &&
+		 strcmp(authmethodlocal, "scram-sha-256") != 0))
 	{
 		conflines = replace_token(conflines,
-								  "#password_encryption = md5",
-								  "password_encryption = scram-sha-256");
+								  "#password_encryption = scram-sha-256",
+								  "password_encryption = md5");
 	}
 
 	/*
@@ -1494,7 +1506,7 @@ setup_auth(FILE *cmdfd)
 
 	if (superuser_password)
 		PG_CMD_PRINTF("ALTER USER \"%s\" WITH PASSWORD E'%s';\n\n",
-					   username, escape_quotes(superuser_password));
+					  username, escape_quotes(superuser_password));
 }
 
 /*
@@ -1727,8 +1739,8 @@ setup_collation(FILE *cmdfd)
 	 * that it wins if libc defines a locale named ucs_basic.
 	 */
 	PG_CMD_PRINTF("INSERT INTO pg_collation (oid, collname, collnamespace, collowner, collprovider, collisdeterministic, collencoding, collcollate, collctype)"
-				   "VALUES (pg_nextoid('pg_catalog.pg_collation', 'oid', 'pg_catalog.pg_collation_oid_index'), 'ucs_basic', 'pg_catalog'::regnamespace, %u, '%c', true, %d, 'C', 'C');\n\n",
-				   BOOTSTRAP_SUPERUSERID, COLLPROVIDER_LIBC, PG_UTF8);
+				  "VALUES (pg_nextoid('pg_catalog.pg_collation', 'oid', 'pg_catalog.pg_collation_oid_index'), 'ucs_basic', 'pg_catalog'::regnamespace, %u, '%c', true, %d, 'C', 'C');\n\n",
+				  BOOTSTRAP_SUPERUSERID, COLLPROVIDER_LIBC, PG_UTF8);
 
 	/* Now import all collations we can find in the operating system */
 	PG_CMD_PUTS("SELECT pg_import_system_collations('pg_catalog');\n\n");
@@ -1867,7 +1879,7 @@ setup_privileges(FILE *cmdfd)
 		"    SELECT"
 		"        oid,"
 		"        (SELECT oid FROM pg_class WHERE "
-		"		  relname = 'pg_largeobject_metadata'),"
+		"         relname = 'pg_largeobject_metadata'),"
 		"        0,"
 		"        lomacl,"
 		"        'i'"
@@ -1892,7 +1904,7 @@ setup_privileges(FILE *cmdfd)
 		"    SELECT"
 		"        oid,"
 		"        (SELECT oid FROM pg_class WHERE "
-		"		  relname = 'pg_foreign_data_wrapper'),"
+		"         relname = 'pg_foreign_data_wrapper'),"
 		"        0,"
 		"        fdwacl,"
 		"        'i'"
@@ -1905,7 +1917,7 @@ setup_privileges(FILE *cmdfd)
 		"    SELECT"
 		"        oid,"
 		"        (SELECT oid FROM pg_class "
-		"		  WHERE relname = 'pg_foreign_server'),"
+		"         WHERE relname = 'pg_foreign_server'),"
 		"        0,"
 		"        srvacl,"
 		"        'i'"
@@ -1972,15 +1984,15 @@ setup_schema(FILE *cmdfd)
 	free(lines);
 
 	PG_CMD_PRINTF("UPDATE information_schema.sql_implementation_info "
-				   "  SET character_value = '%s' "
-				   "  WHERE implementation_info_name = 'DBMS VERSION';\n\n",
-				   infoversion);
+				  "  SET character_value = '%s' "
+				  "  WHERE implementation_info_name = 'DBMS VERSION';\n\n",
+				  infoversion);
 
 	PG_CMD_PRINTF("COPY information_schema.sql_features "
-				   "  (feature_id, feature_name, sub_feature_id, "
-				   "  sub_feature_name, is_supported, comments) "
-				   " FROM E'%s';\n\n",
-				   escape_quotes(features_file));
+				  "  (feature_id, feature_name, sub_feature_id, "
+				  "  sub_feature_name, is_supported, comments) "
+				  " FROM E'%s';\n\n",
+				  escape_quotes(features_file));
 }
 
 static int
@@ -2606,12 +2618,7 @@ check_need_password(const char *authmethodlocal, const char *authmethodhost)
 		 strcmp(authmethodhost, "scram-sha-256") == 0) &&
 		!(pwprompt || pwfilename))
 	{
-		pg_log_error("must specify a password for the superuser to enable %s authentication",
-					 (strcmp(authmethodlocal, "md5") == 0 ||
-					  strcmp(authmethodlocal, "password") == 0 ||
-					  strcmp(authmethodlocal, "scram-sha-256") == 0)
-					 ? authmethodlocal
-					 : authmethodhost);
+		pg_log_error("must specify a password for the superuser to enable password authentication");
 		exit(1);
 	}
 }

@@ -25,7 +25,7 @@
 
 #include "pqexpbuffer.h"
 
-PGconn *conn = NULL;
+PGconn	   *conn = NULL;
 
 /*
  * Files are fetched max CHUNKSIZE bytes at a time.

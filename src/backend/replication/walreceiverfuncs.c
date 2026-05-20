@@ -201,7 +201,7 @@ ShutdownWalRcv(void)
 		case WALRCV_WAITING:
 		case WALRCV_RESTARTING:
 			walrcv->walRcvState = WALRCV_STOPPING;
-			/* FALLTHROUGH */
+			/* fall through */
 		case WALRCV_STOPPING:
 			walrcvpid = walrcv->pid;
 			break;
@@ -277,10 +277,10 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo,
 		walrcv->conninfo[0] = '\0';
 
 	/*
-	 * Use configured replication slot if present, and ignore the value
-	 * of create_temp_slot as the slot name should be persistent.  Otherwise,
-	 * use create_temp_slot to determine whether this WAL receiver should
-	 * create a temporary slot by itself and use it, or not.
+	 * Use configured replication slot if present, and ignore the value of
+	 * create_temp_slot as the slot name should be persistent.  Otherwise, use
+	 * create_temp_slot to determine whether this WAL receiver should create a
+	 * temporary slot by itself and use it, or not.
 	 */
 	if (slotname != NULL && slotname[0] != '\0')
 	{

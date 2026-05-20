@@ -1104,7 +1104,7 @@ ResWaitOnLock(LOCALLOCK *locallock, ResourceOwner owner, ResPortalIncrement *inc
 	 *
 	 * NOTE: self-deadlocks will throw (do a non-local return).
 	 */
-	if (ResProcSleep(ExclusiveLock, locallock, incrementSet) != STATUS_OK)
+	if (ResProcSleep(ExclusiveLock, locallock, incrementSet) != PROC_WAIT_STATUS_OK)
 	{
 		/*
 		 * We failed as a result of a deadlock, see CheckDeadLock(). Quit now.
@@ -1207,7 +1207,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 			ResGrantLock(lock, proc->waitProcLock);
 			ResLockUpdateLimit(lock, proc->waitProcLock, incrementSet, true, false);
 
-			proc = ResProcWakeup(proc, STATUS_OK);
+			proc = ResProcWakeup(proc, PROC_WAIT_STATUS_OK);
 		}
 		else
 		{
@@ -1228,7 +1228,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
  * (could we just use ProcWakeup here?)
  */
 PGPROC *
-ResProcWakeup(PGPROC *proc, int waitStatus)
+ResProcWakeup(PGPROC *proc, ProcWaitStatus waitStatus)
 {
 	PGPROC	   *retProc;
 
@@ -1298,7 +1298,7 @@ ResRemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Clean up the proc's own state */
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
-	proc->waitStatus = STATUS_ERROR;
+	proc->waitStatus = PROC_WAIT_STATUS_ERROR;
 
 	/*
 	 * Remove the waited on portal increment.

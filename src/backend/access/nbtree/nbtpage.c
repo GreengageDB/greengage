@@ -1566,7 +1566,8 @@ _bt_pagedel(Relation rel, Buffer leafbuf, TransactionId *oldestBtpoXact)
 				BTScanInsert itup_key;
 				ItemId		itemid;
 				IndexTuple	targetkey;
-				BlockNumber leftsib, leafblkno;
+				BlockNumber leftsib,
+							leafblkno;
 				Buffer		sleafbuf;
 
 				itemid = PageGetItemId(page, P_HIKEY);
@@ -1598,8 +1599,6 @@ _bt_pagedel(Relation rel, Buffer leafbuf, TransactionId *oldestBtpoXact)
 				itup_key->pivotsearch = true;
 				stack = _bt_search(rel, itup_key, &sleafbuf, BT_READ, NULL);
 				/* won't need a second lock or pin on leafbuf */
-				Assert(leafblkno == BufferGetBlockNumber(sleafbuf) ||
-					   !itup_key->heapkeyspace);
 				_bt_relbuf(rel, sleafbuf);
 
 				/*
@@ -1607,6 +1606,15 @@ _bt_pagedel(Relation rel, Buffer leafbuf, TransactionId *oldestBtpoXact)
 				 * within _bt_mark_page_halfdead.  We must do it that way
 				 * because it's possible that leafbuf can no longer be
 				 * deleted.  We need to recheck.
+				 *
+				 * Note: We can't simply hold on to the sleafbuf lock instead,
+				 * because it's barely possible that sleafbuf is not the same
+				 * page as leafbuf.  This happens when leafbuf split after our
+				 * original lock was dropped, but before _bt_search finished
+				 * its descent.  We rely on the assumption that we'll find
+				 * leafbuf isn't safe to delete anymore in this scenario.
+				 * (Page deletion can cope with the stack being to the left of
+				 * leafbuf, but not to the right of leafbuf.)
 				 */
 				LockBuffer(leafbuf, BT_WRITE);
 				continue;
@@ -1734,9 +1742,8 @@ _bt_mark_page_halfdead(Relation rel, Buffer leafbuf, BTStack stack)
 	 * Before attempting to lock the parent page, check that the right sibling
 	 * is not in half-dead state.  A half-dead right sibling would have no
 	 * downlink in the parent, which would be highly confusing later when we
-	 * delete the downlink that follows the leafbuf page's downlink.  It would
-	 * fail the "right sibling of target page is also the next child in parent
-	 * page" cross-check below.
+	 * delete the downlink.  It would fail the "right sibling of target page
+	 * is also the next child in parent page" cross-check below.
 	 */
 	if (_bt_rightsib_halfdeadflag(rel, leafrightsib))
 	{
@@ -1777,6 +1784,7 @@ _bt_mark_page_halfdead(Relation rel, Buffer leafbuf, BTStack stack)
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 
 #ifdef USE_ASSERT_CHECKING
+
 	/*
 	 * This is just an assertion because _bt_lock_subtree_parent should have
 	 * guaranteed tuple has the expected contents
@@ -2368,7 +2376,8 @@ _bt_lock_subtree_parent(Relation rel, BlockNumber child, BTStack stack,
 						Buffer *subtreeparent, OffsetNumber *poffset,
 						BlockNumber *topparent, BlockNumber *topparentrightsib)
 {
-	BlockNumber parent, leftsibparent;
+	BlockNumber parent,
+				leftsibparent;
 	OffsetNumber parentoffset,
 				maxoff;
 	Buffer		pbuf;
@@ -2439,9 +2448,9 @@ _bt_lock_subtree_parent(Relation rel, BlockNumber child, BTStack stack,
 	/*
 	 * Now make sure that the parent deletion is itself safe by examining the
 	 * child's grandparent page.  Recurse, passing the parent page as the
-	 * child page (child's grandparent is the parent on the next level up).
-	 * If parent deletion is unsafe, then child deletion must also be unsafe
-	 * (in which case caller cannot delete any pages at all).
+	 * child page (child's grandparent is the parent on the next level up). If
+	 * parent deletion is unsafe, then child deletion must also be unsafe (in
+	 * which case caller cannot delete any pages at all).
 	 */
 	*topparent = parent;
 	*topparentrightsib = opaque->btpo_next;

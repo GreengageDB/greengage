@@ -80,7 +80,7 @@ InitializeBackupManifest(backup_manifest_info *manifest,
 void
 AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 						const char *pathname, size_t size, pg_time_t mtime,
-						pg_checksum_context * checksum_ctx)
+						pg_checksum_context *checksum_ctx)
 {
 	char		pathbuf[MAXPGPATH];
 	int			pathlen;
@@ -103,11 +103,11 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	}
 
 	/*
-	 * Each file's entry needs to be separated from any entry that follows by a
-	 * comma, but there's no comma before the first one or after the last one.
-	 * To make that work, adding a file to the manifest starts by terminating
-	 * the most recently added line, with a comma if appropriate, but does not
-	 * terminate the line inserted for this file.
+	 * Each file's entry needs to be separated from any entry that follows by
+	 * a comma, but there's no comma before the first one or after the last
+	 * one. To make that work, adding a file to the manifest starts by
+	 * terminating the most recently added line, with a comma if appropriate,
+	 * but does not terminate the line inserted for this file.
 	 */
 	initStringInfo(&buf);
 	if (manifest->first_file)
@@ -135,7 +135,7 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	{
 		appendStringInfoString(&buf, "{ \"Encoded-Path\": \"");
 		enlargeStringInfo(&buf, 2 * pathlen);
-		buf.len += hex_encode((char *) pathname, pathlen,
+		buf.len += hex_encode(pathname, pathlen,
 							  &buf.data[buf.len]);
 		appendStringInfoString(&buf, "\", ");
 	}
@@ -319,7 +319,7 @@ SendBackupManifest(backup_manifest_info *manifest)
 	if (BufFileSeek(manifest->buffile, 0, 0L, SEEK_SET))
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not rewind temporary file: %m")));
+				 errmsg("could not rewind temporary file")));
 
 	/* Send CopyOutResponse message */
 	pq_beginmessage(&protobuf, 'H');
@@ -365,15 +365,10 @@ static void
 AppendStringToManifest(backup_manifest_info *manifest, char *s)
 {
 	int			len = strlen(s);
-	size_t		written;
 
 	Assert(manifest != NULL);
 	if (manifest->still_checksumming)
 		pg_sha256_update(&manifest->manifest_ctx, (uint8 *) s, len);
-	written = BufFileWrite(manifest->buffile, s, len);
-	if (written != len)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not write to temporary file: %m")));
+	BufFileWrite(manifest->buffile, s, len);
 	manifest->manifest_size += len;
 }

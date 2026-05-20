@@ -2291,8 +2291,8 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 
 			/*
 			 * After a tuple in a partition goes through a trigger, the user
-			 * could have changed the partition key enough that the tuple
-			 * no longer fits the partition.  Verify that.
+			 * could have changed the partition key enough that the tuple no
+			 * longer fits the partition.  Verify that.
 			 */
 			if (trigger->tgisclone &&
 				!ExecPartitionCheck(relinfo, slot, estate, false))
@@ -3957,7 +3957,7 @@ AfterTriggerExecute(EState *estate,
 											 trig_tuple_slot2))
 					elog(ERROR, "failed to fetch tuple2 for AFTER trigger");
 			}
-			/* FALLTHROUGH */
+			/* fall through */
 		case AFTER_TRIGGER_FDW_REUSE:
 
 			/*

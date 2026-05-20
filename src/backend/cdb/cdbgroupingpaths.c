@@ -1104,7 +1104,7 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	/* Would the hash table fit in memory? */
 	hashentrysize = MAXALIGN(initial_agg_path->pathtarget->width) + MAXALIGN(SizeofMinimalTupleHeader);
 
-	if (enable_hashagg_disk ||
+	if (!hashagg_avoid_disk_plan ||
 		hashentrysize * dNumGroups < work_mem * 1024L)
 	{
 		Path	   *path;

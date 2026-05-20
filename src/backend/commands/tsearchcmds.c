@@ -313,29 +313,6 @@ DefineTSParser(List *names, List *parameters)
 	return address;
 }
 
-/*
- * Guts of TS parser deletion.
- */
-void
-RemoveTSParserById(Oid prsId)
-{
-	Relation	relation;
-	HeapTuple	tup;
-
-	relation = table_open(TSParserRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(TSPARSEROID, ObjectIdGetDatum(prsId));
-
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for text search parser %u", prsId);
-
-	CatalogTupleDelete(relation, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(relation, RowExclusiveLock);
-}
-
 /* ---------------------- TS Dictionary commands -----------------------*/
 
 /*
@@ -541,30 +518,6 @@ DefineTSDictionary(List *names, List *parameters)
 	}
 
 	return address;
-}
-
-/*
- * Guts of TS dictionary deletion.
- */
-void
-RemoveTSDictionaryById(Oid dictId)
-{
-	Relation	relation;
-	HeapTuple	tup;
-
-	relation = table_open(TSDictionaryRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(TSDICTOID, ObjectIdGetDatum(dictId));
-
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for text search dictionary %u",
-			 dictId);
-
-	CatalogTupleDelete(relation, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(relation, RowExclusiveLock);
 }
 
 /*
@@ -882,30 +835,6 @@ DefineTSTemplate(List *names, List *parameters)
 	}
 
 	return address;
-}
-
-/*
- * Guts of TS template deletion.
- */
-void
-RemoveTSTemplateById(Oid tmplId)
-{
-	Relation	relation;
-	HeapTuple	tup;
-
-	relation = table_open(TSTemplateRelationId, RowExclusiveLock);
-
-	tup = SearchSysCache1(TSTEMPLATEOID, ObjectIdGetDatum(tmplId));
-
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for text search template %u",
-			 tmplId);
-
-	CatalogTupleDelete(relation, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	table_close(relation, RowExclusiveLock);
 }
 
 /* ---------------------- TS Configuration commands -----------------------*/

@@ -5183,10 +5183,8 @@ XLOGShmemInit(void)
 		/* both should be present or neither */
 		Assert(foundCFile && foundXLog);
 
-		/* Initialize local copy of WALInsertLocks and register the tranche */
+		/* Initialize local copy of WALInsertLocks */
 		WALInsertLocks = XLogCtl->Insert.WALInsertLocks;
-		LWLockRegisterTranche(LWTRANCHE_WAL_INSERT,
-							  "wal_insert");
 
 		if (localControlFile)
 			pfree(localControlFile);
@@ -5222,7 +5220,6 @@ XLOGShmemInit(void)
 		(WALInsertLockPadded *) allocptr;
 	allocptr += sizeof(WALInsertLockPadded) * NUM_XLOGINSERT_LOCKS;
 
-	LWLockRegisterTranche(LWTRANCHE_WAL_INSERT, "wal_insert");
 	for (i = 0; i < NUM_XLOGINSERT_LOCKS; i++)
 	{
 		LWLockInitialize(&WALInsertLocks[i].l.lock, LWTRANCHE_WAL_INSERT);
@@ -6160,7 +6157,7 @@ recoveryApplyDelay(XLogReaderState *record)
 {
 	uint8		xact_info;
 	TimestampTz xtime;
-	TimestampTz	delayUntil;
+	TimestampTz delayUntil;
 	long		secs;
 	int			microsecs;
 
@@ -6577,7 +6574,11 @@ StartupXLOG(void)
 	switch (ControlFile->state)
 	{
 		case DB_SHUTDOWNED:
-			/* This is the expected case, so don't be chatty in standalone mode */
+
+			/*
+			 * This is the expected case, so don't be chatty in standalone
+			 * mode
+			 */
 			ereport(IsPostmasterEnvironment ? LOG : NOTICE,
 					(errmsg("database system was shut down at %s",
 							str_time(ControlFile->time))));
@@ -10378,6 +10379,8 @@ XLogReportParameters(void)
 			XLogFlush(recptr);
 		}
 
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
+
 		ControlFile->MaxConnections = MaxConnections;
 		ControlFile->max_worker_processes = max_worker_processes;
 		ControlFile->max_wal_senders = max_wal_senders;
@@ -10387,6 +10390,8 @@ XLogReportParameters(void)
 		ControlFile->wal_log_hints = wal_log_hints;
 		ControlFile->track_commit_timestamp = track_commit_timestamp;
 		UpdateControlFile();
+
+		LWLockRelease(ControlFileLock);
 	}
 }
 
@@ -10638,7 +10643,9 @@ xlog_redo(XLogReaderState *record)
 		}
 
 		/* ControlFile->checkPointCopy always tracks the latest ckpt XID */
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
 		ControlFile->checkPointCopy.nextFullXid = checkPoint.nextFullXid;
+		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
 		SpinLockAcquire(&XLogCtl->info_lck);
@@ -10700,7 +10707,9 @@ xlog_redo(XLogReaderState *record)
 			SetTransactionIdLimit(checkPoint.oldestXid,
 								  checkPoint.oldestXidDB);
 		/* ControlFile->checkPointCopy always tracks the latest ckpt XID */
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
 		ControlFile->checkPointCopy.nextFullXid = checkPoint.nextFullXid;
+		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
 		SpinLockAcquire(&XLogCtl->info_lck);
@@ -11184,8 +11193,7 @@ issue_xlog_fsync(int fd, XLogSegNo segno)
 XLogRecPtr
 do_pg_start_backup(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 				   StringInfo labelfile, List **tablespaces,
-				   StringInfo tblspcmapfile, bool infotbssize,
-				   bool needtblspcmapfile)
+				   StringInfo tblspcmapfile, bool needtblspcmapfile)
 {
 	bool		exclusive = (labelfile == NULL);
 	bool		backup_started_in_recovery = false;
@@ -11405,14 +11413,6 @@ do_pg_start_backup(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 
 		datadirpathlen = strlen(DataDir);
 
-		/*
-		 * Report that we are now estimating the total backup size
-		 * if we're streaming base backup as requested by pg_basebackup
-		 */
-		if (tablespaces)
-			pgstat_progress_update_param(PROGRESS_BASEBACKUP_PHASE,
-										 PROGRESS_BASEBACKUP_PHASE_ESTIMATE_BACKUP_SIZE);
-
 		/* Collect information about all tablespaces */
 		tblspcdir = AllocateDir("pg_tblspc");
 		while ((de = ReadDir(tblspcdir, "pg_tblspc")) != NULL)
@@ -11477,8 +11477,7 @@ do_pg_start_backup(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 			ti->oid = pstrdup(de->d_name);
 			ti->path = pstrdup(buflinkpath.data);
 			ti->rpath = relpath ? pstrdup(relpath) : NULL;
-			ti->size = infotbssize ?
-				sendTablespace(fullpath, ti->oid, true, NULL) : -1;
+			ti->size = -1;
 
 			if (tablespaces)
 				*tablespaces = lappend(*tablespaces, ti);
@@ -12130,7 +12129,7 @@ do_pg_stop_backup(char *labelfile, bool waitforarchive, TimeLineID *stoptli_p)
 void
 do_pg_abort_backup(int code, Datum arg)
 {
-	bool	emit_warning = DatumGetBool(arg);
+	bool		emit_warning = DatumGetBool(arg);
 
 	/*
 	 * Quick exit if session is not keeping around a non-exclusive backup
@@ -12886,8 +12885,8 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 					 */
 
 					/*
-					 * We should be able to move to XLOG_FROM_STREAM
-					 * only in standby mode.
+					 * We should be able to move to XLOG_FROM_STREAM only in
+					 * standby mode.
 					 */
 					Assert(StandbyMode);
 
@@ -12974,6 +12973,7 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 		{
 			case XLOG_FROM_ARCHIVE:
 			case XLOG_FROM_PG_WAL:
+
 				/*
 				 * WAL receiver must not be running when reading WAL from
 				 * archive or pg_wal.
@@ -13011,8 +13011,8 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 					bool		havedata;
 
 					/*
-					 * We should be able to move to XLOG_FROM_STREAM
-					 * only in standby mode.
+					 * We should be able to move to XLOG_FROM_STREAM only in
+					 * standby mode.
 					 */
 					Assert(StandbyMode);
 
