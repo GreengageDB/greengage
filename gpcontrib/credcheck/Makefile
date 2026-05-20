@@ -22,6 +22,8 @@ TESTS = 01_username 02_password 03_rename 04_alter_pwd \
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
+TAP_TESTS = 1
+
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)

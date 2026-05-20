@@ -28,6 +28,12 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/parallel.h"
+#if PG_VERSION_NUM >= 150000
+#include "access/xlog.h"
+#include "access/xlog_internal.h"
+#include "access/xloginsert.h"
+#include "access/xlogreader.h"
+#endif
 
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
@@ -80,6 +86,72 @@ static const uint32 PGPH_FILE_HEADER = 0x48504750;
 static const uint32 PGPH_VERSION = 100;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
 #define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
+
+#if PG_VERSION_NUM >= 150000
+/*
+ * Custom WAL resource manager used to keep the password history file in
+ * sync between the primary and its standbys.
+ *
+ * RM_EXPERIMENTAL_ID is used until a stable id is reserved for credcheck;
+ * see access/rmgrlist.h.
+ */
+#define RM_CREDCHECK_ID			RM_EXPERIMENTAL_ID
+#define CREDCHECK_RMGR_NAME		"credcheck"
+
+#define XLOG_CREDCHECK_PWD_ADD			0x10
+#define XLOG_CREDCHECK_PWD_REMOVE		0x20
+#define XLOG_CREDCHECK_PWD_REMOVE_USER	0x30
+#define XLOG_CREDCHECK_PWD_RENAME		0x40
+#define XLOG_CREDCHECK_PWD_RESET		0x50
+#define XLOG_CREDCHECK_PWD_TIMESTAMP	0x60
+
+typedef struct xl_credcheck_pwd_add
+{
+	char		rolename[NAMEDATALEN];
+	char		password_hash[PG_SHA256_DIGEST_STRING_LENGTH];
+	TimestampTz	password_date;
+} xl_credcheck_pwd_add;
+
+typedef struct xl_credcheck_pwd_remove
+{
+	char		rolename[NAMEDATALEN];
+	char		password_hash[PG_SHA256_DIGEST_STRING_LENGTH];
+} xl_credcheck_pwd_remove;
+
+typedef struct xl_credcheck_pwd_remove_user
+{
+	char		rolename[NAMEDATALEN];
+} xl_credcheck_pwd_remove_user;
+
+typedef struct xl_credcheck_pwd_rename
+{
+	char		oldname[NAMEDATALEN];
+	char		newname[NAMEDATALEN];
+} xl_credcheck_pwd_rename;
+
+typedef struct xl_credcheck_pwd_reset
+{
+	bool		has_user;
+	char		rolename[NAMEDATALEN];	/* valid iff has_user */
+} xl_credcheck_pwd_reset;
+
+typedef struct xl_credcheck_pwd_timestamp
+{
+	char		rolename[NAMEDATALEN];
+	TimestampTz	new_timestamp;
+} xl_credcheck_pwd_timestamp;
+
+static void credcheck_rmgr_redo(XLogReaderState *record);
+static void credcheck_rmgr_desc(StringInfo buf, XLogReaderState *record);
+static const char *credcheck_rmgr_identify(uint8 info);
+
+static RmgrData credcheck_rmgr = {
+	.rm_name = CREDCHECK_RMGR_NAME,
+	.rm_redo = credcheck_rmgr_redo,
+	.rm_desc = credcheck_rmgr_desc,
+	.rm_identify = credcheck_rmgr_identify,
+};
+#endif		/* PG_VERSION_NUM >= 150000 */
 
 static bool statement_has_password = false;
 static bool no_password_logging    = true;
@@ -891,6 +963,308 @@ password_guc()
 
 }
 
+#if PG_VERSION_NUM >= 150000
+/*
+ * WAL emission helpers.  Each one inserts a single fixed-size record
+ * describing a mutation of the in-memory password history hash, so that
+ * the change can be replayed on a standby through credcheck_rmgr_redo().
+ *
+ * Callers must hold pgph->lock in exclusive mode.
+ */
+static void
+credcheck_xlog_pwd_add(const char *rolename, const char *password_hash,
+					   TimestampTz password_date)
+{
+	xl_credcheck_pwd_add xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	strlcpy(xlrec.password_hash, password_hash, PG_SHA256_DIGEST_STRING_LENGTH);
+	xlrec.password_date = password_date;
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_ADD);
+}
+
+static void
+credcheck_xlog_pwd_remove(const char *rolename, const char *password_hash)
+{
+	xl_credcheck_pwd_remove xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	strlcpy(xlrec.password_hash, password_hash, PG_SHA256_DIGEST_STRING_LENGTH);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_REMOVE);
+}
+
+static void
+credcheck_xlog_pwd_remove_user(const char *rolename)
+{
+	xl_credcheck_pwd_remove_user xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_REMOVE_USER);
+}
+
+static void
+credcheck_xlog_pwd_rename(const char *oldname, const char *newname)
+{
+	xl_credcheck_pwd_rename xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.oldname, oldname, NAMEDATALEN);
+	strlcpy(xlrec.newname, newname, NAMEDATALEN);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_RENAME);
+}
+
+static void
+credcheck_xlog_pwd_reset(const char *rolename)
+{
+	xl_credcheck_pwd_reset xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	if (rolename)
+	{
+		xlrec.has_user = true;
+		strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	}
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+
+	/*
+	 * pg_password_history_reset() is callable from a read-only SELECT, so
+	 * the surrounding transaction will not flush WAL on commit.  Force a
+	 * flush so that walsenders (and pg_current_wal_lsn() observers) see the
+	 * record promptly.
+	 */
+	XLogFlush(XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_RESET));
+}
+
+static void
+credcheck_xlog_pwd_timestamp(const char *rolename, TimestampTz new_timestamp)
+{
+	xl_credcheck_pwd_timestamp xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	xlrec.new_timestamp = new_timestamp;
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+
+	/* See credcheck_xlog_pwd_reset() for why we flush. */
+	XLogFlush(XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_TIMESTAMP));
+}
+
+/*
+ * Replay a credcheck WAL record on a standby (or during crash recovery on
+ * the primary).  After applying the change to the in-memory hash we flush
+ * the resulting state to the on-disk password history file, mirroring the
+ * behaviour of the foreground code paths.
+ */
+static void
+credcheck_rmgr_redo(XLogReaderState *record)
+{
+	uint8		info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+	char	   *rec = XLogRecGetData(record);
+
+	if (!pgph || !pgph_hash)
+		return;
+
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+	switch (info)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+		{
+			pgphHashKey key;
+			xl_credcheck_pwd_add *xlrec = (xl_credcheck_pwd_add *) rec;
+
+			memset(&key, 0, sizeof(key));
+			strlcpy(key.rolename, xlrec->rolename, NAMEDATALEN);
+			strlcpy(key.password_hash, xlrec->password_hash,
+					PG_SHA256_DIGEST_STRING_LENGTH);
+			(void) pgph_entry_alloc(&key, xlrec->password_date);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE:
+		{
+			pgphHashKey key;
+			xl_credcheck_pwd_remove *xlrec = (xl_credcheck_pwd_remove *) rec;
+
+			memset(&key, 0, sizeof(key));
+			strlcpy(key.rolename, xlrec->rolename, NAMEDATALEN);
+			strlcpy(key.password_hash, xlrec->password_hash,
+					PG_SHA256_DIGEST_STRING_LENGTH);
+			(void) hash_search(pgph_hash, &key, HASH_REMOVE, NULL);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+		{
+			HASH_SEQ_STATUS hash_seq;
+			pgphEntry  *entry;
+			xl_credcheck_pwd_remove_user *xlrec = (xl_credcheck_pwd_remove_user *) rec;
+
+			hash_seq_init(&hash_seq, pgph_hash);
+			while ((entry = hash_seq_search(&hash_seq)) != NULL)
+			{
+				if (strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					hash_search(pgph_hash, &entry->key, HASH_REMOVE, NULL);
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RENAME:
+		{
+			HASH_SEQ_STATUS hash_seq;
+			pgphEntry  *entry;
+			xl_credcheck_pwd_rename *xlrec = (xl_credcheck_pwd_rename *) rec;
+
+			hash_seq_init(&hash_seq, pgph_hash);
+			while ((entry = hash_seq_search(&hash_seq)) != NULL)
+			{
+				if (strcmp(entry->key.rolename, xlrec->oldname) == 0)
+				{
+					pgphHashKey key;
+
+					memset(&key, 0, sizeof(key));
+					strlcpy(key.rolename, xlrec->newname, NAMEDATALEN);
+					strlcpy(key.password_hash, entry->key.password_hash,
+							PG_SHA256_DIGEST_STRING_LENGTH);
+					hash_update_hash_key(pgph_hash, entry, &key);
+				}
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RESET:
+		{
+			HASH_SEQ_STATUS hash_seq;
+			pgphEntry  *entry;
+			xl_credcheck_pwd_reset *xlrec = (xl_credcheck_pwd_reset *) rec;
+
+			hash_seq_init(&hash_seq, pgph_hash);
+			while ((entry = hash_seq_search(&hash_seq)) != NULL)
+			{
+				if (!xlrec->has_user ||
+					strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					hash_search(pgph_hash, &entry->key, HASH_REMOVE, NULL);
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+		{
+			HASH_SEQ_STATUS hash_seq;
+			pgphEntry  *entry;
+			xl_credcheck_pwd_timestamp *xlrec = (xl_credcheck_pwd_timestamp *) rec;
+
+			hash_seq_init(&hash_seq, pgph_hash);
+			while ((entry = hash_seq_search(&hash_seq)) != NULL)
+			{
+				if (strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					entry->password_date = xlrec->new_timestamp;
+			}
+			break;
+		}
+		default:
+			LWLockRelease(pgph->lock);
+			elog(PANIC, "credcheck_rmgr_redo: unknown op code %u", info);
+	}
+
+	flush_password_history();
+
+	LWLockRelease(pgph->lock);
+}
+
+static void
+credcheck_rmgr_desc(StringInfo buf, XLogReaderState *record)
+{
+	char	   *rec = XLogRecGetData(record);
+	uint8		info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+
+	switch (info)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+		{
+			xl_credcheck_pwd_add *xlrec = (xl_credcheck_pwd_add *) rec;
+
+			appendStringInfo(buf, "add role \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE:
+		{
+			xl_credcheck_pwd_remove *xlrec = (xl_credcheck_pwd_remove *) rec;
+
+			appendStringInfo(buf, "remove role \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+		{
+			xl_credcheck_pwd_remove_user *xlrec = (xl_credcheck_pwd_remove_user *) rec;
+
+			appendStringInfo(buf, "remove user \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RENAME:
+		{
+			xl_credcheck_pwd_rename *xlrec = (xl_credcheck_pwd_rename *) rec;
+
+			appendStringInfo(buf, "rename \"%s\" to \"%s\"",
+							 xlrec->oldname, xlrec->newname);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RESET:
+		{
+			xl_credcheck_pwd_reset *xlrec = (xl_credcheck_pwd_reset *) rec;
+
+			if (xlrec->has_user)
+				appendStringInfo(buf, "reset user \"%s\"", xlrec->rolename);
+			else
+				appendStringInfoString(buf, "reset all");
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+		{
+			xl_credcheck_pwd_timestamp *xlrec = (xl_credcheck_pwd_timestamp *) rec;
+
+			appendStringInfo(buf, "timestamp user \"%s\"", xlrec->rolename);
+			break;
+		}
+	}
+}
+
+static const char *
+credcheck_rmgr_identify(uint8 info)
+{
+	switch (info & ~XLR_INFO_MASK)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+			return "PWD_ADD";
+		case XLOG_CREDCHECK_PWD_REMOVE:
+			return "PWD_REMOVE";
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+			return "PWD_REMOVE_USER";
+		case XLOG_CREDCHECK_PWD_RENAME:
+			return "PWD_RENAME";
+		case XLOG_CREDCHECK_PWD_RESET:
+			return "PWD_RESET";
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+			return "PWD_TIMESTAMP";
+	}
+	return NULL;
+}
+#endif		/* PG_VERSION_NUM >= 150000 */
+
 #if PG_VERSION_NUM >= 120000
 static void
 save_password_in_history(const char *username, const char *password)
@@ -937,6 +1311,9 @@ save_password_in_history(const char *username, const char *password)
 		/* Flush the new entry to disk */
 		if (entry)
 		{
+#if PG_VERSION_NUM >= 150000
+			credcheck_xlog_pwd_add(username, encrypted_password, dt_now);
+#endif
 			elog(DEBUG1, "entry added, flush change to disk");
 			flush_password_history();
 		}
@@ -984,6 +1361,9 @@ rename_user_in_history(const char *username, const char *newname)
 
 	if (num_changed > 0)
 	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_rename(username, newname);
+#endif
 		elog(DEBUG1, "%d entries in paswword history hash table have been mofidied for user %s",
 													num_changed,
 													username);
@@ -1111,6 +1491,10 @@ remove_password_from_history(const char *username, const char *password, int num
 			/* we need to remove the entries that exceed history size */
 			if ((num_user_entries - i) >= password_reuse_history)
 			{
+#if PG_VERSION_NUM >= 150000
+				credcheck_xlog_pwd_remove(entries[i]->key.rolename,
+										  entries[i]->key.password_hash);
+#endif
 				elog(DEBUG1, "removing entry %d from the history (%s, %s)", i,
 											entries[i]->key.rolename,
 											entries[i]->key.password_hash);
@@ -1163,7 +1547,12 @@ remove_user_from_history(const char *username)
 
 	/* Flush the new entry to disk */
 	if (num_removed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_remove_user(username);
+#endif
 		flush_password_history();
+	}
 
 	LWLockRelease(pgph->lock);
 }
@@ -1355,6 +1744,11 @@ _PG_init(void)
 					gettext_noop("maximum of entries in the auth failure cache"), NULL,
 					&pgaf_max, 1024, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
 					NULL, NULL, NULL);
+
+#if PG_VERSION_NUM >= 150000
+		/* Register custom WAL rmgr that replicates the password history. */
+		RegisterCustomRmgr(RM_CREDCHECK_ID, &credcheck_rmgr);
+#endif
 	}
 
 	DefineCustomBoolVariable("credcheck.no_password_logging",
@@ -2260,6 +2654,18 @@ pg_password_history_reset(PG_FUNCTION_ARGS)
 	if (!superuser())
 		ereport(ERROR, (errmsg("only superuser can reset password history")));
 
+	/*
+	 * Mutations are replicated through the credcheck custom WAL resource
+	 * manager, so this function must not be invoked while in recovery.
+	 */
+#if PG_VERSION_NUM >= 150000
+	if (RecoveryInProgress())
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("recovery is in progress"),
+				 errhint("pg_password_history_reset() cannot be executed during recovery.")));
+#endif
+
 	/* Get the username to filter the entries to remove if one specified */
 	if (PG_NARGS() > 0)
 		username = PG_GETARG_CSTRING(0);
@@ -2283,7 +2689,12 @@ pg_password_history_reset(PG_FUNCTION_ARGS)
 
 	/* Flush the new entry to disk */
 	if (num_removed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_reset(username);
+#endif
 		flush_password_history();
+	}
 
 	LWLockRelease(pgph->lock);
 
@@ -2400,6 +2811,18 @@ pg_password_history_timestamp(PG_FUNCTION_ARGS)
 	if (!superuser())
 		ereport(ERROR, (errmsg("only superuser can change timestamp in password history")));
 
+	/*
+	 * Mutations are replicated through the credcheck custom WAL resource
+	 * manager, so this function must not be invoked while in recovery.
+	 */
+#if PG_VERSION_NUM >= 150000
+	if (RecoveryInProgress())
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("recovery is in progress"),
+				 errhint("pg_password_history_timestamp() cannot be executed during recovery.")));
+#endif
+
 	/* Lookup the hash table entry with exclusive lock. */
 	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
 
@@ -2415,7 +2838,12 @@ pg_password_history_timestamp(PG_FUNCTION_ARGS)
 
 	/* Flush the new entry to disk */
 	if (num_changed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_timestamp(username, new_timestamp);
+#endif
 		flush_password_history();
+	}
 
 	LWLockRelease(pgph->lock);
 
