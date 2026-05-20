@@ -258,7 +258,7 @@ SELECT * FROM rg_alter_tran_status;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 1;
 1: SELECT gp_inject_fault('exec_simple_query_start', 'segv', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
--- The backend dies at the very start of COMMIT.
+-- The backend dies before COMMIT is issued.
 1: @post_run 'echo ""': SELECT 1;
 -- Wait until coordinator accepts connections again.
 ! while [ `psql -tc "SELECT 1;" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;

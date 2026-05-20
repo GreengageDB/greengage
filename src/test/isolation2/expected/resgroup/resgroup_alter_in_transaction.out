@@ -466,7 +466,7 @@ ALTER
 -----------------
  Success:        
 (1 row)
--- The backend dies at the very start of COMMIT.
+-- The backend dies before COMMIT is issued.
 1: @post_run 'echo ""': SELECT 1;
 
 -- Wait until coordinator accepts connections again.
