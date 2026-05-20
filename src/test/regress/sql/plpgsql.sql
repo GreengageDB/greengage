@@ -4170,16 +4170,16 @@ select c.gp_segment_id from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where c.relname = 'test_table'
   and c.relkind = 'r'
-  and n.nspname = 's';
+  and n.nspname = 's'
+
+union all
 
 --check existence on segments
-select c.gp_segment_id
-from gp_dist_random('pg_class') c
+select c.gp_segment_id from gp_dist_random('pg_class') c
 join pg_namespace n on n.oid = c.relnamespace
 where c.relname = 'test_table'
   and c.relkind = 'r'
   and n.nspname = 's'
-group by c.gp_segment_id
-order by c.gp_segment_id;
+order by gp_segment_id;
 
 drop schema s cascade;

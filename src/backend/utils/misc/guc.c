@@ -7089,13 +7089,12 @@ set_config_option(const char *name, const char *value,
 	}
 
 	/*
-	 * Make SET LOCAL just SET when executing on segments.
-	 * It is needed for correct passage of local GUCs as they might be discarded.
-	 * Anyway, master executes SET as LOCAL, so on next transaction
-	 * GUC will resynchronize and everything will be back in place.
+	 * Make SET LOCAL just SET when executing on segments. It is needed for
+	 * correct passage of local GUCs as they might be discarded. Anyway,
+	 * master executes SET as LOCAL, so on next transaction GUC will
+	 * resynchronize and everything will be back in place.
 	 */
-	if (Gp_role == GP_ROLE_EXECUTE &&
-		action == GUC_ACTION_LOCAL)
+	if (Gp_role == GP_ROLE_EXECUTE && action == GUC_ACTION_LOCAL)
 		action = GUC_ACTION_SET;
 
 	/*
