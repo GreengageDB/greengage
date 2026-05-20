@@ -319,7 +319,8 @@ static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 bool force_array_type);
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
-													const TableInfo *tblinfo);
+													const TableInfo *tblinfo,
+													bool force_array_type);
 static void binary_upgrade_set_pg_class_oids(Archive *fout,
 											 PQExpBuffer upgrade_buffer,
 											 Oid pg_class_oid, bool is_index);
@@ -4937,11 +4938,12 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 static void
 binary_upgrade_set_type_oids_by_rel(Archive *fout,
 										PQExpBuffer upgrade_buffer,
-										const TableInfo *tblinfo)
+										const TableInfo *tblinfo,
+										bool force_array_type)
 {
 	TypeInfo *typinfo = findTypeByOid(tblinfo->reltype);
 	binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-											 typinfo, false);
+											 typinfo, force_array_type);
 }
 
 static void
@@ -16891,6 +16893,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 	char	   *ftoptions = NULL;
 	char	   *srvname = NULL;
 	char	   *partkeydef = NULL;
+	bool	   force_array_type = false;
 
 	/* We had better have loaded per-column details about this table */
 	Assert(tbinfo->interesting);
@@ -16905,8 +16908,9 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 		pg_log_warning("WITH OIDS is not supported anymore (table \"%s\")",
 					   qrelname);
 
-	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo);
+	if (dopt->binary_upgrade) {
+		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo, false);
+	}
 
 	/* Is it a table or a view? */
 	if (tbinfo->relkind == RELKIND_VIEW)
@@ -17071,8 +17075,21 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 						if (tbinfo->relstorage == 'x')
 							hasExternalPartitions = true;
 
+						if (!tbinfo->aotbl) {
+							/*
+							 * Array types for children of a partitioned table are created
+							 * only starting from Greengage 7, so specify arbitrary OIDs for
+							 * them.
+							 *
+							 * Also, don't do it for AO tables, we don't create array types
+							 * for them.
+							 */
+							force_array_type = true;
+						}
+
+
 						binary_upgrade_set_pg_class_oids(fout, q, part_oid, false);
-						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo);
+						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo, force_array_type);
 					}
 				}
 
