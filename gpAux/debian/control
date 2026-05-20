@@ -3,7 +3,8 @@ Maintainer: Greengage <greengage@greengagedb.org>
 Section: database
 Build-Depends: debhelper (>= 13),
 	 dh-python,
-	 lsb-release
+	 lsb-release,
+   sigar-headers
 
 Package: greengage6
 Priority: optional
@@ -16,6 +17,7 @@ Depends: ${shlibs:Depends},
 	 openssh-server,
 	 openssl,
 	 rsync,
+   sigar,
 	 zip,
 	 net-tools,
 	 ${pythonRequires}
