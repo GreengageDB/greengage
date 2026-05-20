@@ -889,7 +889,7 @@ static ggMetadataQueue *PQMetadataFindQueue(ggMetadataQueueId queue_id)
 	ListCell *lc;
 	foreach(lc, ggMetadataQueues)
 	{
-		ggMetadataQueue *queue = (ggMetadataQueue *) lfirst(lc);
+		ggMetadataQueue *queue = lfirst(lc);
 		if (queue->id == queue_id)
 			return queue;
 	}
@@ -899,7 +899,7 @@ static ggMetadataQueue *PQMetadataFindQueue(ggMetadataQueueId queue_id)
 static void
 MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueId queue_id)
 {
-	SegmentDatabaseDescriptor *segdbDesc = (SegmentDatabaseDescriptor *)arg;
+	SegmentDatabaseDescriptor *segdbDesc = arg;
 
 	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
 	if (queue)
@@ -978,34 +978,33 @@ PQCleanMetadata(ggMetadataQueueId queue_id)
 
 
 ggMetadataQueueId
-PQMetadataNextQueueId()
+PQMetadataNextQueueId(void)
 {
 	static ggMetadataQueueId queueId = 0;
 	return queueId++;
 }
 
-extern void 		AtAbort_MetadataQueues();
-extern void 		AtCommit_MetadataQueues();
-
 /* Callback executed at transaction end */
 static void
-PQDeleteMetadataQueues()
+PQDeleteMetadataQueues(void)
 {
 	while (ggMetadataQueues)
 	{
 		ListCell *lc = list_head(ggMetadataQueues);
-		ggMetadataQueue *queue = (ggMetadataQueue *) lfirst(lc);
+		ggMetadataQueue *queue = lfirst(lc);
 		elog(WARNING, "Metadata queue %u was not deleted in transaction after use", queue->id);
 		PQDeleteMetadataQueue(queue->id);
 	}
 }
 
-void AtCommit_MetadataQueues()
+void
+AtCommit_MetadataQueues(void)
 {
 	PQDeleteMetadataQueues();
 }
 
-void AtAbort_MetadataQueues()
+void
+AtAbort_MetadataQueues(void)
 {
 	PQDeleteMetadataQueues();
 }

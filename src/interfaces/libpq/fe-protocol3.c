@@ -2373,6 +2373,12 @@ build_startup_packet(const PGconn *conn, char *packet,
 	return packet_len;
 }
 
+/*
+ * Read a Metadata response message.
+ * Entry: 'M' message type has already been consumed.
+ * Exit: returns 0 if successfully consumed message.
+ *		 returns 1 otherwise.
+*/
 static int
 pgGetMetadataMessage(PGconn *conn, int length)
 {
@@ -2410,7 +2416,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	{
 		free(chunk);
 		return 1;
-	}		
+	}
 
 	/* pass ownership of the link too the handler */
 	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk, queue_id);

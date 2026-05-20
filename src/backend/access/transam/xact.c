@@ -84,10 +84,7 @@
 #include "utils/workfile_mgr.h"
 #include "utils/vmem_tracker.h"
 #include "cdb/cdbdisp.h"
-
-
-extern void AtCommit_MetadataQueues();
-extern void AtAbort_MetadataQueues();
+#include "cdb/cdbconn.h"
 
 
 /*

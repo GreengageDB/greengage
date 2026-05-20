@@ -16,6 +16,10 @@
 #ifndef CDBCONN_H
 #define CDBCONN_H
 
+/*
+ * allow using of this header from the core code
+ */
+typedef struct pg_conn PGconn;
 
 /* --------------------------------------------------------------------------------------------------
  * Structure for segment database definition and working values
@@ -105,5 +109,8 @@ void cdbconn_setQEIdentifier(SegmentDatabaseDescriptor *segdbDesc, int sliceInde
 bool cdbconn_signalQE(SegmentDatabaseDescriptor *segdbDesc, char *errbuf, bool isCancel);
 
 extern void forwardQENotices(void);
+
+extern void 		AtCommit_MetadataQueues(void);
+extern void 		AtAbort_MetadataQueues(void);
 
 #endif   /* CDBCONN_H */
