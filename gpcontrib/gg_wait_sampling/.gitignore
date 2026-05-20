@@ -1,0 +1,6 @@
+*.o
+*.so
+/.deps/
+/log/
+/results/
+/tmp_check/
