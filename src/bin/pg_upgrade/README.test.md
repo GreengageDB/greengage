@@ -44,7 +44,7 @@ docker run --rm \
 Note, that the command above will pull the latest Greengage images from the github repository, meaning that they wouldn't have your local changes.
 Therefore, when building the pg_upgrade image, it is possible to provide locally built Greengage images via `GGDB6_IMAGE` and `GGDB7_IMAGE` build arguments. Any combination of images (e.g., none, only Greengage 6, only Greengage 7, or both Greengage 6 and Greengage 7) will work. Here is an example how to specify a local Greengage 7 image:
 ```bash
-# Assuming that you at the root of the Greengage 7 source code
+# Assuming that the current directory is the root of the Greengage 7 source code
 docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
 docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest --build-arg GGDB7_IMAGE=gpdb7_u22:latest .
 docker run --rm \
