@@ -286,7 +286,6 @@ struct pg_result
 	PQaoRelTupCount *aotupcounts;
 	int		nWaits;
 	int		*waitGxids;
-
 };
 
 /* PGAsyncStatusType defines the state of the query-execution state machine */

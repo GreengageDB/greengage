@@ -2378,7 +2378,7 @@ build_startup_packet(const PGconn *conn, char *packet,
  * Entry: 'M' message type has already been consumed.
  * Exit: returns 0 if successfully consumed message.
  *		 returns 1 otherwise.
-*/
+ */
 static int
 pgGetMetadataMessage(PGconn *conn, int length)
 {

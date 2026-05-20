@@ -884,7 +884,8 @@ typedef struct ggMetadataQueue
 /* List of ggMetadataQueue */
 static List *ggMetadataQueues = NIL;
 
-static ggMetadataQueue * PQMetadataFindQueue(ggMetadataQueueId queue_id)
+static ggMetadataQueue *
+PQMetadataFindQueue(ggMetadataQueueId queue_id)
 {
 	ListCell   *lc;
 
@@ -899,7 +900,7 @@ static ggMetadataQueue * PQMetadataFindQueue(ggMetadataQueueId queue_id)
 }
 
 static void
-MPPmetadataReceiver(void *arg, ggMetadataChunk * metadata_chunk, ggMetadataQueueId queue_id)
+MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueId queue_id)
 {
 	SegmentDatabaseDescriptor *segdbDesc = arg;
 
@@ -936,7 +937,7 @@ PQgetNextMetadata(ggMetadataChunkIterator it)
 }
 
 void
-PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor * out_desc)
+PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc)
 {
 	Assert(it != NULL);
 	Assert(out_desc != NULL);
@@ -959,7 +960,7 @@ PQgetMetadataCount(ggMetadataQueueId queue_id)
 }
 
 static void
-PQCleanMetadataInternal(ggMetadataQueue * queue)
+PQCleanMetadataInternal(ggMetadataQueue *queue)
 {
 	ggMetadataChunk *chunk = queue->chunks;
 
