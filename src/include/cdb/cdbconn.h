@@ -17,7 +17,7 @@
 #define CDBCONN_H
 
 /*
- * allow using of this header from the core code
+ * allow usage of this header from the core code
  */
 typedef struct pg_conn PGconn;
 

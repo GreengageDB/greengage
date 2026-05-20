@@ -50,9 +50,9 @@ test_send_empty_metadata(PG_FUNCTION_ARGS)
 Datum
 test_send_metadata(PG_FUNCTION_ARGS)
 {
-	uint32				len = PG_GETARG_UINT32(0);
-	uint32				id = PG_GETARG_UINT32(1);
-	ggMetadataQueueId 	queue_id = PG_GETARG_INT32(2);
+	uint32		len = PG_GETARG_UINT32(0);
+	uint32		id = PG_GETARG_UINT32(1);
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(2);
 
 	char	   *metadata = palloc(len);
 
@@ -132,8 +132,8 @@ test_check_metadata(PG_FUNCTION_ARGS)
 Datum
 test_count_metadata(PG_FUNCTION_ARGS)
 {
-	ggMetadataQueueId	queue_id = PG_GETARG_INT32(0);
-	int					count = PQgetMetadataCount(queue_id);
+	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
+	int			count = PQgetMetadataCount(queue_id);
 
 	PG_RETURN_INT32(count);
 }
@@ -142,6 +142,7 @@ Datum
 test_clean_metadata(PG_FUNCTION_ARGS)
 {
 	ggMetadataQueueId queue_id = PG_GETARG_INT32(0);
+
 	PQCleanMetadata(queue_id);
 	PG_RETURN_INT32(0);
 }
