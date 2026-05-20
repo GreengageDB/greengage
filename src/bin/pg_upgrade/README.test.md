@@ -35,8 +35,22 @@ bash   ${GREENGAGE7_SRC}/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh
 Docker image already has all the necessary environment variables set to run the test WITHOUT a schema. The only thing left is to setup gpadmin user:
 ```bash
 docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest .
-docker run --rm gpdb7_pgupgrade bash -c \
-    "gpdb_src/concourse/scripts/setup_gpadmin_user.bash && su gpadmin /home/gpadmin/gpdb_src/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh"
+docker run --rm \
+    gpdb7_pgupgrade bash -c \
+    "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+     su gpadmin /home/gpadmin/gpdb_src/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh"
+```
+
+Note, that the command above will pull the latest Greengage images from the github repository, meaning that they wouldn't have your local changes.
+Therefore, when building the pg_upgrade image, it is possible to provide locally built Greengage images via `GGDB6_IMAGE` and `GGDB7_IMAGE` build arguments. Any combination of images (e.g., none, only Greengage 6, only Greengage 7, or both Greengage 6 and Greengage 7) will work. Here is an example how to specify a local Greengage 7 image:
+```bash
+# Assuming that you at the root of the Greengage 7 source code
+docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
+docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest --build-arg GGDB7_IMAGE=gpdb7_u22:latest .
+docker run --rm \
+    gpdb7_pgupgrade bash -c \
+    "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+     su gpadmin /home/gpadmin/gpdb_src/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh"
 ```
 
 To specify a schema, mount a directory with it into the docker image:
