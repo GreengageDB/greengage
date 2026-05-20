@@ -2524,6 +2524,9 @@ psql_completion(const char *text, int start, int end)
 	/* Limited completion support for partition bound specification */
 	else if (TailMatches("PARTITION", "OF", MatchAny))
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
+	/* Complete DISTRIBUTED with BY, RANDOMLY or REPLICATED */
+	else if (TailMatches("DISTRIBUTED"))
+			COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
 	/* Complete CREATE TABLE <name> with '(', OF or PARTITION OF */
 	else if (TailMatches("CREATE", "TABLE", MatchAny) ||
 			 TailMatches("CREATE", "TEMP|TEMPORARY|UNLOGGED", "TABLE", MatchAny))
@@ -2535,9 +2538,9 @@ psql_completion(const char *text, int start, int end)
 	/* Complete CREATE TABLE name (...) with supported options */
 	else if (TailMatches("CREATE", "TABLE", MatchAny, "(*)") ||
 			 TailMatches("CREATE", "UNLOGGED", "TABLE", MatchAny, "(*)"))
-		COMPLETE_WITH("INHERITS (", "PARTITION BY", "USING", "TABLESPACE", "WITH (");
+		COMPLETE_WITH("DISTRIBUTED", "INHERITS (", "PARTITION BY", "USING", "TABLESPACE", "WITH (");
 	else if (TailMatches("CREATE", "TEMP|TEMPORARY", "TABLE", MatchAny, "(*)"))
-		COMPLETE_WITH("INHERITS (", "ON COMMIT", "PARTITION BY",
+		COMPLETE_WITH("DISTRIBUTED", "INHERITS (", "ON COMMIT", "PARTITION BY",
 					  "TABLESPACE", "WITH (");
 	/* Complete CREATE TABLE (...) USING with table access methods */
 	else if (TailMatches("CREATE", "TABLE", MatchAny, "(*)", "USING") ||
