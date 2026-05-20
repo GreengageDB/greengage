@@ -1969,7 +1969,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				explain_get_index_name(bitmapindexscan->indexid);
 
 				if (es->format == EXPLAIN_FORMAT_TEXT)
-					appendStringInfo(es->str, " on %s", indexname);
+					appendStringInfo(es->str, " on %s",
+									 quote_identifier(indexname));
 				else
 					ExplainPropertyText("Index Name", indexname, es);
 			}
@@ -3493,8 +3494,8 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			ExplainIndentText(es);
-			appendStringInfo(es->str, "Sort Method:  %s  %s: %ldkB",
-				sortMethod, spaceType, (long) agg->vsum);
+			appendStringInfo(es->str, "Sort Method:  %s  %s: " INT64_FORMAT "kB",
+				sortMethod, spaceType, (int64) agg->vsum);
 			if (es->verbose)
 			{
 				appendStringInfo(es->str, "  Max Memory: %ldkB  Avg Memory: %ldkB (%d segments)",
@@ -3536,7 +3537,7 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 			TuplesortInstrumentation *sinstrument;
 			const char *sortMethod;
 			const char *spaceType;
-			long		spaceUsed;
+			int64		spaceUsed;
 
 			sinstrument = &sortstate->shared_info->sinstrument[n];
 			if (sinstrument->sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
@@ -3552,7 +3553,7 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 			{
 				ExplainIndentText(es);
 				appendStringInfo(es->str,
-								 "Sort Method: %s  %s: %ldkB\n",
+								 "Sort Method: %s  %s: " INT64_FORMAT "kB\n",
 								 sortMethod, spaceType, spaceUsed);
 			}
 			else
@@ -3616,23 +3617,23 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 
 		if (groupInfo->maxMemorySpaceUsed > 0)
 		{
-			long		avgSpace = groupInfo->totalMemorySpaceUsed / groupInfo->groupCount;
+			int64		avgSpace = groupInfo->totalMemorySpaceUsed / groupInfo->groupCount;
 			const char *spaceTypeName;
 
 			spaceTypeName = tuplesort_space_type_name(SORT_SPACE_TYPE_MEMORY);
-			appendStringInfo(es->str, "  Average %s: %ldkB  Peak %s: %ldkB",
+			appendStringInfo(es->str, "  Average %s: " INT64_FORMAT "kB  Peak %s: " INT64_FORMAT "kB",
 							 spaceTypeName, avgSpace,
 							 spaceTypeName, groupInfo->maxMemorySpaceUsed);
 		}
 
 		if (groupInfo->maxDiskSpaceUsed > 0)
 		{
-			long		avgSpace = groupInfo->totalDiskSpaceUsed / groupInfo->groupCount;
+			int64		avgSpace = groupInfo->totalDiskSpaceUsed / groupInfo->groupCount;
 
 			const char *spaceTypeName;
 
 			spaceTypeName = tuplesort_space_type_name(SORT_SPACE_TYPE_DISK);
-			appendStringInfo(es->str, "  Average %s: %ldkB  Peak %s: %ldkB",
+			appendStringInfo(es->str, "  Average %s: " INT64_FORMAT "kB  Peak %s: " INT64_FORMAT "kB",
 							 spaceTypeName, avgSpace,
 							 spaceTypeName, groupInfo->maxDiskSpaceUsed);
 		}
@@ -3650,7 +3651,7 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 
 		if (groupInfo->maxMemorySpaceUsed > 0)
 		{
-			long		avgSpace = groupInfo->totalMemorySpaceUsed / groupInfo->groupCount;
+			int64		avgSpace = groupInfo->totalMemorySpaceUsed / groupInfo->groupCount;
 			const char *spaceTypeName;
 			StringInfoData memoryName;
 
@@ -3667,7 +3668,7 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 		}
 		if (groupInfo->maxDiskSpaceUsed > 0)
 		{
-			long		avgSpace = groupInfo->totalDiskSpaceUsed / groupInfo->groupCount;
+			int64		avgSpace = groupInfo->totalDiskSpaceUsed / groupInfo->groupCount;
 			const char *spaceTypeName;
 			StringInfoData diskName;
 
@@ -3873,29 +3874,116 @@ show_hashagg_info(AggState *aggstate, ExplainState *es)
 	Agg		   *agg = (Agg *) aggstate->ss.ps.plan;
 	int64		memPeakKb = (aggstate->hash_mem_peak + 1023) / 1024;
 
-	Assert(IsA(aggstate, AggState));
-
 	if (agg->aggstrategy != AGG_HASHED &&
 		agg->aggstrategy != AGG_MIXED)
 		return;
 
-	if (es->costs && aggstate->hash_planned_partitions > 0)
+	if (es->format != EXPLAIN_FORMAT_TEXT)
 	{
-		ExplainPropertyInteger("Planned Partitions", NULL,
-							   aggstate->hash_planned_partitions, es);
+
+		if (es->costs)
+			ExplainPropertyInteger("Planned Partitions", NULL,
+								   aggstate->hash_planned_partitions, es);
+
+		/*
+		 * During parallel query the leader may have not helped out.  We
+		 * detect this by checking how much memory it used.  If we find it
+		 * didn't do any work then we don't show its properties.
+		 */
+		if (es->analyze && aggstate->hash_mem_peak > 0)
+		{
+			ExplainPropertyInteger("HashAgg Batches", NULL,
+								   aggstate->hash_batches_used, es);
+			ExplainPropertyInteger("Peak Memory Usage", "kB", memPeakKb, es);
+			ExplainPropertyInteger("Disk Usage", "kB",
+								   aggstate->hash_disk_used, es);
+		}
+	}
+	else
+	{
+		bool		gotone = false;
+
+		if (es->costs && aggstate->hash_planned_partitions > 0)
+		{
+			ExplainIndentText(es);
+			appendStringInfo(es->str, "Planned Partitions: %d",
+							 aggstate->hash_planned_partitions);
+			gotone = true;
+		}
+
+		/*
+		 * During parallel query the leader may have not helped out.  We
+		 * detect this by checking how much memory it used.  If we find it
+		 * didn't do any work then we don't show its properties.
+		 */
+		if (es->analyze && aggstate->hash_mem_peak > 0)
+		{
+			if (!gotone)
+				ExplainIndentText(es);
+			else
+				appendStringInfoString(es->str, "  ");
+
+			appendStringInfo(es->str, "Batches: %d  Memory Usage: " INT64_FORMAT "kB",
+							 aggstate->hash_batches_used, memPeakKb);
+			gotone = true;
+
+			/* Only display disk usage if we spilled to disk */
+			if (aggstate->hash_batches_used > 1)
+			{
+				appendStringInfo(es->str, "  Disk Usage: " UINT64_FORMAT "kB",
+					aggstate->hash_disk_used);
+			}
+		}
+
+		if (gotone)
+			appendStringInfoChar(es->str, '\n');
 	}
 
-	if (!es->analyze)
-		return;
-
-	/* EXPLAIN ANALYZE */
-	ExplainPropertyInteger("Peak Memory Usage", "kB", memPeakKb, es);
-	if (aggstate->hash_batches_used > 0)
+	/* Display stats for each parallel worker */
+	if (es->analyze && aggstate->shared_info != NULL)
 	{
-		ExplainPropertyInteger("Disk Usage", "kB",
-							   aggstate->hash_disk_used, es);
-		ExplainPropertyInteger("HashAgg Batches", NULL,
-							   aggstate->hash_batches_used, es);
+		for (int n = 0; n < aggstate->shared_info->num_workers; n++)
+		{
+			AggregateInstrumentation *sinstrument;
+			uint64		hash_disk_used;
+			int			hash_batches_used;
+
+			sinstrument = &aggstate->shared_info->sinstrument[n];
+			/* Skip workers that didn't do anything */
+			if (sinstrument->hash_mem_peak == 0)
+				continue;
+			hash_disk_used = sinstrument->hash_disk_used;
+			hash_batches_used = sinstrument->hash_batches_used;
+			memPeakKb = (sinstrument->hash_mem_peak + 1023) / 1024;
+
+			if (es->workers_state)
+				ExplainOpenWorker(n, es);
+
+			if (es->format == EXPLAIN_FORMAT_TEXT)
+			{
+				ExplainIndentText(es);
+
+				appendStringInfo(es->str, "Batches: %d  Memory Usage: " INT64_FORMAT "kB",
+								 hash_batches_used, memPeakKb);
+
+				/* Only display disk usage if we spilled to disk */
+				if (hash_batches_used > 1)
+					appendStringInfo(es->str, "  Disk Usage: " UINT64_FORMAT "kB",
+									 hash_disk_used);
+				appendStringInfoChar(es->str, '\n');
+			}
+			else
+			{
+				ExplainPropertyInteger("HashAgg Batches", NULL,
+									   hash_batches_used, es);
+				ExplainPropertyInteger("Peak Memory Usage", "kB", memPeakKb,
+									   es);
+				ExplainPropertyInteger("Disk Usage", "kB", hash_disk_used, es);
+			}
+
+			if (es->workers_state)
+				ExplainCloseWorker(n, es);
+		}
 	}
 }
 
@@ -4028,6 +4116,10 @@ show_join_pruning_info(List *join_prune_ids, ExplainState *es)
  *
  * We allow plugins to get control here so that plans involving hypothetical
  * indexes can be explained.
+ *
+ * Note: names returned by this function should be "raw"; the caller will
+ * apply quoting if needed.  Formerly the convention was to do quoting here,
+ * but we don't want that in non-text output formats.
  */
 static const char *
 explain_get_index_name(Oid indexId)
@@ -4040,11 +4132,10 @@ explain_get_index_name(Oid indexId)
 		result = NULL;
 	if (result == NULL)
 	{
-		/* default behavior: look in the catalogs and quote it */
+		/* default behavior: look it up in the catalogs */
 		result = get_rel_name(indexId);
 		if (result == NULL)
 			elog(ERROR, "cache lookup failed for index %u", indexId);
-		result = quote_identifier(result);
 	}
 	return result;
 }
@@ -4224,7 +4315,7 @@ ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir,
 	{
 		if (ScanDirectionIsBackward(indexorderdir))
 			appendStringInfoString(es->str, " Backward");
-		appendStringInfo(es->str, " using %s", indexname);
+		appendStringInfo(es->str, " using %s", quote_identifier(indexname));
 	}
 	else
 	{

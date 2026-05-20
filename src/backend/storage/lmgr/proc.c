@@ -81,9 +81,8 @@ int			IdleInTransactionSessionTimeout = 0;
 int			IdleSessionGangTimeout = 0;
 bool		log_lock_waits = false;
 
-/* Pointer to this process's PGPROC and PGXACT structs, if any */
+/* Pointer to this process's PGPROC struct, if any */
 PGPROC	   *MyProc = NULL;
-PGXACT	   *MyPgXact = NULL;
 TMGXACT	   *MyTmGxact = NULL;
 TMGXACTLOCAL	*MyTmGxactLocal = NULL;
 
@@ -125,21 +124,17 @@ Size
 ProcGlobalShmemSize(void)
 {
 	Size		size = 0;
+	Size		TotalProcs =
+		add_size(MaxBackends, add_size(NUM_AUXILIARY_PROCS, max_prepared_xacts));
 
 	/* ProcGlobal */
 	size = add_size(size, sizeof(PROC_HDR));
-	/* MyProcs, including autovacuum workers and launcher */
-	size = add_size(size, mul_size(MaxBackends, sizeof(PGPROC)));
-	/* AuxiliaryProcs */
-	size = add_size(size, mul_size(NUM_AUXILIARY_PROCS, sizeof(PGPROC)));
-	/* Prepared xacts */
-	size = add_size(size, mul_size(max_prepared_xacts, sizeof(PGPROC)));
-	/* ProcStructLock */
+	size = add_size(size, mul_size(TotalProcs, sizeof(PGPROC)));
 	size = add_size(size, sizeof(slock_t));
 
-	size = add_size(size, mul_size(MaxBackends, sizeof(PGXACT)));
-	size = add_size(size, mul_size(NUM_AUXILIARY_PROCS, sizeof(PGXACT)));
-	size = add_size(size, mul_size(max_prepared_xacts, sizeof(PGXACT)));
+	size = add_size(size, mul_size(TotalProcs, sizeof(*ProcGlobal->xids)));
+	size = add_size(size, mul_size(TotalProcs, sizeof(*ProcGlobal->subxidStates)));
+	size = add_size(size, mul_size(TotalProcs, sizeof(*ProcGlobal->vacuumFlags)));
 
 	return size;
 }
@@ -186,7 +181,6 @@ void
 InitProcGlobal(void)
 {
 	PGPROC	   *procs;
-	PGXACT	   *pgxacts;
 	TMGXACT	   *tmgxacts;
 	int			i,
 				j;
@@ -231,16 +225,19 @@ InitProcGlobal(void)
 	ProcGlobal->allProcCount = MaxBackends + NUM_AUXILIARY_PROCS;
 
 	/*
-	 * Also allocate a separate array of PGXACT structures.  This is separate
-	 * from the main PGPROC array so that the most heavily accessed data is
-	 * stored contiguously in memory in as few cache lines as possible. This
-	 * provides significant performance benefits, especially on a
-	 * multiprocessor system.  There is one PGXACT structure for every PGPROC
-	 * structure.
+	 * Allocate arrays mirroring PGPROC fields in a dense manner. See
+	 * PROC_HDR.
+	 *
+	 * XXX: It might make sense to increase padding for these arrays, given
+	 * how hotly they are accessed.
 	 */
-	pgxacts = (PGXACT *) ShmemAlloc(TotalProcs * sizeof(PGXACT));
-	MemSet(pgxacts, 0, TotalProcs * sizeof(PGXACT));
-	ProcGlobal->allPgXact = pgxacts;
+	ProcGlobal->xids =
+		(TransactionId *) ShmemAlloc(TotalProcs * sizeof(*ProcGlobal->xids));
+	MemSet(ProcGlobal->xids, 0, TotalProcs * sizeof(*ProcGlobal->xids));
+	ProcGlobal->subxidStates = (XidCacheStatus *) ShmemAlloc(TotalProcs * sizeof(*ProcGlobal->subxidStates));
+	MemSet(ProcGlobal->subxidStates, 0, TotalProcs * sizeof(*ProcGlobal->subxidStates));
+	ProcGlobal->vacuumFlags = (uint8 *) ShmemAlloc(TotalProcs * sizeof(*ProcGlobal->vacuumFlags));
+	MemSet(ProcGlobal->vacuumFlags, 0, TotalProcs * sizeof(*ProcGlobal->vacuumFlags));
 
 	/*
 	 * Also allocate a separate array of TMGXACT structures out of the same
@@ -411,7 +408,7 @@ InitProcess(void)
 				(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
 				 errmsg("sorry, too many clients already")));
 	}
-	MyPgXact = &ProcGlobal->allPgXact[MyProc->pgprocno];
+
 	MyTmGxact = &ProcGlobal->allTmGxact[MyProc->pgprocno];
 	MyTmGxactLocal = (TMGXACTLOCAL*)MemoryContextAllocZero(TopMemoryContext, sizeof(TMGXACTLOCAL));
 	if (MyTmGxactLocal == NULL)
@@ -459,9 +456,9 @@ InitProcess(void)
 	MyProc->lxid = InvalidLocalTransactionId;
 	MyProc->fpVXIDLock = false;
 	MyProc->fpLocalTransactionId = InvalidLocalTransactionId;
-	MyPgXact->xid = InvalidTransactionId;
-	MyPgXact->xmin = InvalidTransactionId;
 	MyProc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
+	MyProc->xid = InvalidTransactionId;
+	MyProc->xmin = InvalidTransactionId;
 	MyProc->pid = MyProcPid;
 	/* backendId, databaseId and roleId will be filled in later */
 	MyProc->backendId = InvalidBackendId;
@@ -470,10 +467,10 @@ InitProcess(void)
 	MyProc->tempNamespaceId = InvalidOid;
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
 	MyProc->delayChkpt = false;
-	MyPgXact->vacuumFlags = 0;
+	MyProc->vacuumFlags = 0;
 	/* NB -- autovac launcher intentionally does not set IS_AUTOVACUUM */
 	if (IsAutoVacuumWorkerProcess())
-		MyPgXact->vacuumFlags |= PROC_IS_AUTOVACUUM;
+		MyProc->vacuumFlags |= PROC_IS_AUTOVACUUM;
 	MyProc->lwWaiting = false;
 	MyProc->lwWaitMode = 0;
 	MyProc->waitLock = NULL;
@@ -690,7 +687,6 @@ InitAuxiliaryProcess(void)
 
 	MyProc = auxproc;
 	lockHolderProcPtr = auxproc;
-	MyPgXact = &ProcGlobal->allPgXact[auxproc->pgprocno];
 	MyTmGxact = &ProcGlobal->allTmGxact[auxproc->pgprocno];
 	MyTmGxactLocal = (TMGXACTLOCAL*)MemoryContextAllocZero(TopMemoryContext, sizeof(TMGXACTLOCAL));
 	if (MyTmGxactLocal == NULL)
@@ -707,9 +703,9 @@ InitAuxiliaryProcess(void)
 	MyProc->lxid = InvalidLocalTransactionId;
 	MyProc->fpVXIDLock = false;
 	MyProc->fpLocalTransactionId = InvalidLocalTransactionId;
-	MyPgXact->xid = InvalidTransactionId;
-	MyPgXact->xmin = InvalidTransactionId;
 	MyProc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
+	MyProc->xid = InvalidTransactionId;
+	MyProc->xmin = InvalidTransactionId;
 	MyProc->backendId = InvalidBackendId;
 	MyProc->databaseId = InvalidOid;
 	MyProc->roleId = InvalidOid;
@@ -719,7 +715,7 @@ InitAuxiliaryProcess(void)
 	MyProc->tempNamespaceId = InvalidOid;
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
 	MyProc->delayChkpt = false;
-	MyPgXact->vacuumFlags = 0;
+	MyProc->vacuumFlags = 0;
 	MyProc->lwWaiting = false;
 	MyProc->lwWaitMode = 0;
 	MyProc->waitLock = NULL;
@@ -1528,7 +1524,7 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 		if (deadlock_state == DS_BLOCKED_BY_AUTOVACUUM && allow_autovacuum_cancel)
 		{
 			PGPROC	   *autovac = GetBlockingAutoVacuumPgproc();
-			PGXACT	   *autovac_pgxact = &ProcGlobal->allPgXact[autovac->pgprocno];
+			uint8		vacuumFlags;
 
 			LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 
@@ -1536,8 +1532,9 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 			 * Only do it if the worker is not working to protect against Xid
 			 * wraparound.
 			 */
-			if ((autovac_pgxact->vacuumFlags & PROC_IS_AUTOVACUUM) &&
-				!(autovac_pgxact->vacuumFlags & PROC_VACUUM_FOR_WRAPAROUND))
+			vacuumFlags = ProcGlobal->vacuumFlags[proc->pgxactoff];
+			if ((vacuumFlags & PROC_IS_AUTOVACUUM) &&
+				!(vacuumFlags & PROC_VACUUM_FOR_WRAPAROUND))
 			{
 				int			pid = autovac->pid;
 				StringInfoData locktagbuf;

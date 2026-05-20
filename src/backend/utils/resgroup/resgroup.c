@@ -4362,7 +4362,7 @@ bool CpusetIsEmpty(const char *cpuset)
  */
 void SetCpusetEmpty(char *cpuset, int cpusetSize)
 {
-	StrNCpy(cpuset, DefaultCpuset, cpusetSize);
+	strlcpy(cpuset, DefaultCpuset, cpusetSize);
 }
 
 /*

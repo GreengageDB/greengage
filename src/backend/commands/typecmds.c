@@ -135,7 +135,8 @@ static char *domainAddConstraint(Oid domainOid, Oid domainNamespace,
 								 const char *domainName, ObjectAddress *constrAddr);
 static Node *replace_domain_constraint_value(ParseState *pstate,
 											 ColumnRef *cref);
-static void AlterTypeRecurse(Oid typeOid, HeapTuple tup, Relation catalog,
+static void AlterTypeRecurse(Oid typeOid, bool isImplicitArray,
+							 HeapTuple tup, Relation catalog,
 							 AlterTypeRecurseParams *atparams);
 
 
@@ -1739,21 +1740,31 @@ findTypeInputFunction(List *procname, Oid typeOid)
 {
 	Oid			argList[3];
 	Oid			procOid;
+	Oid			procOid2;
 
 	/*
 	 * Input functions can take a single argument of type CSTRING, or three
-	 * arguments (string, typioparam OID, typmod).  They must return the
-	 * target type.
+	 * arguments (string, typioparam OID, typmod).  Whine about ambiguity if
+	 * both forms exist.
 	 */
 	argList[0] = CSTRINGOID;
+	argList[1] = OIDOID;
+	argList[2] = INT4OID;
 
 	procOid = LookupFuncName(procname, 1, argList, true);
-	if (!OidIsValid(procOid))
+	procOid2 = LookupFuncName(procname, 3, argList, true);
+	if (OidIsValid(procOid))
 	{
-		argList[1] = OIDOID;
-		argList[2] = INT4OID;
-
-		procOid = LookupFuncName(procname, 3, argList, true);
+		if (OidIsValid(procOid2))
+			ereport(ERROR,
+					(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
+					 errmsg("type input function %s has multiple matches",
+							NameListToString(procname))));
+	}
+	else
+	{
+		procOid = procOid2;
+		/* If not found, reference the 1-argument signature in error msg */
 		if (!OidIsValid(procOid))
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -1761,6 +1772,7 @@ findTypeInputFunction(List *procname, Oid typeOid)
 							func_signature_string(procname, 1, NIL, argList))));
 	}
 
+	/* Input functions must return the target type. */
 	if (get_func_rettype(procOid) != typeOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
@@ -1826,21 +1838,31 @@ findTypeReceiveFunction(List *procname, Oid typeOid)
 {
 	Oid			argList[3];
 	Oid			procOid;
+	Oid			procOid2;
 
 	/*
 	 * Receive functions can take a single argument of type INTERNAL, or three
-	 * arguments (internal, typioparam OID, typmod).  They must return the
-	 * target type.
+	 * arguments (internal, typioparam OID, typmod).  Whine about ambiguity if
+	 * both forms exist.
 	 */
 	argList[0] = INTERNALOID;
+	argList[1] = OIDOID;
+	argList[2] = INT4OID;
 
 	procOid = LookupFuncName(procname, 1, argList, true);
-	if (!OidIsValid(procOid))
+	procOid2 = LookupFuncName(procname, 3, argList, true);
+	if (OidIsValid(procOid))
 	{
-		argList[1] = OIDOID;
-		argList[2] = INT4OID;
-
-		procOid = LookupFuncName(procname, 3, argList, true);
+		if (OidIsValid(procOid2))
+			ereport(ERROR,
+					(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
+					 errmsg("type receive function %s has multiple matches",
+							NameListToString(procname))));
+	}
+	else
+	{
+		procOid = procOid2;
+		/* If not found, reference the 1-argument signature in error msg */
 		if (!OidIsValid(procOid))
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -1848,6 +1870,7 @@ findTypeReceiveFunction(List *procname, Oid typeOid)
 							func_signature_string(procname, 1, NIL, argList))));
 	}
 
+	/* Receive functions must return the target type. */
 	if (get_func_rettype(procOid) != typeOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
@@ -4013,8 +4036,8 @@ AlterType(AlterTypeStmt *stmt)
 				 errmsg("%s is not a base type",
 						format_type_be(typeOid))));
 
-	/* OK, recursively update this type and any domains over it */
-	AlterTypeRecurse(typeOid, tup, catalog, &atparams);
+	/* OK, recursively update this type and any arrays/domains over it */
+	AlterTypeRecurse(typeOid, false, tup, catalog, &atparams);
 
 	/* Clean up */
 	ReleaseSysCache(tup);
@@ -4030,13 +4053,15 @@ AlterType(AlterTypeStmt *stmt)
  * AlterTypeRecurse: one recursion step for AlterType()
  *
  * Apply the changes specified by "atparams" to the type identified by
- * "typeOid", whose existing pg_type tuple is "tup".  Then search for any
- * domains over this type, and recursively apply (most of) the same changes
- * to those domains.
+ * "typeOid", whose existing pg_type tuple is "tup".  If necessary,
+ * recursively update its array type as well.  Then search for any domains
+ * over this type, and recursively apply (most of) the same changes to those
+ * domains.
  *
  * We need this because the system generally assumes that a domain inherits
  * many properties from its base type.  See DefineDomain() above for details
- * of what is inherited.
+ * of what is inherited.  Arrays inherit a smaller number of properties,
+ * but not none.
  *
  * There's a race condition here, in that some other transaction could
  * concurrently add another domain atop this base type; we'd miss updating
@@ -4048,7 +4073,8 @@ AlterType(AlterTypeStmt *stmt)
  * committed.
  */
 static void
-AlterTypeRecurse(Oid typeOid, HeapTuple tup, Relation catalog,
+AlterTypeRecurse(Oid typeOid, bool isImplicitArray,
+				 HeapTuple tup, Relation catalog,
 				 AlterTypeRecurseParams *atparams)
 {
 	Datum		values[Natts_pg_type];
@@ -4109,11 +4135,42 @@ AlterTypeRecurse(Oid typeOid, HeapTuple tup, Relation catalog,
 							 NULL,	/* don't have defaultExpr handy */
 							 NULL,	/* don't have typacl handy */
 							 0, /* we rejected composite types above */
-							 false, /* and we rejected implicit arrays above */
-							 false, /* so it can't be a dependent type */
+							 isImplicitArray,	/* it might be an array */
+							 isImplicitArray,	/* dependent iff it's array */
 							 true);
 
 	InvokeObjectPostAlterHook(TypeRelationId, typeOid, 0);
+
+	/*
+	 * Arrays inherit their base type's typmodin and typmodout, but none of
+	 * the other properties we're concerned with here.  Recurse to the array
+	 * type if needed.
+	 */
+	if (!isImplicitArray &&
+		(atparams->updateTypmodin || atparams->updateTypmodout))
+	{
+		Oid			arrtypoid = ((Form_pg_type) GETSTRUCT(newtup))->typarray;
+
+		if (OidIsValid(arrtypoid))
+		{
+			HeapTuple	arrtup;
+			AlterTypeRecurseParams arrparams;
+
+			arrtup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(arrtypoid));
+			if (!HeapTupleIsValid(arrtup))
+				elog(ERROR, "cache lookup failed for type %u", arrtypoid);
+
+			memset(&arrparams, 0, sizeof(arrparams));
+			arrparams.updateTypmodin = atparams->updateTypmodin;
+			arrparams.updateTypmodout = atparams->updateTypmodout;
+			arrparams.typmodinOid = atparams->typmodinOid;
+			arrparams.typmodoutOid = atparams->typmodoutOid;
+
+			AlterTypeRecurse(arrtypoid, true, arrtup, catalog, &arrparams);
+
+			ReleaseSysCache(arrtup);
+		}
+	}
 
 	/*
 	 * Now we need to recurse to domains.  However, some properties are not
@@ -4122,6 +4179,12 @@ AlterTypeRecurse(Oid typeOid, HeapTuple tup, Relation catalog,
 	atparams->updateReceive = false;	/* domains use F_DOMAIN_RECV */
 	atparams->updateTypmodin = false;	/* domains don't have typmods */
 	atparams->updateTypmodout = false;
+
+	/* Skip the scan if nothing remains to be done */
+	if (!(atparams->updateStorage ||
+		  atparams->updateSend ||
+		  atparams->updateAnalyze))
+		return;
 
 	/* Search pg_type for possible domains over this type */
 	ScanKeyInit(&key[0],
@@ -4143,7 +4206,7 @@ AlterTypeRecurse(Oid typeOid, HeapTuple tup, Relation catalog,
 		if (domainForm->typtype != TYPTYPE_DOMAIN)
 			continue;
 
-		AlterTypeRecurse(domainForm->oid, domainTup, catalog, atparams);
+		AlterTypeRecurse(domainForm->oid, false, domainTup, catalog, atparams);
 	}
 
 	systable_endscan(scan);

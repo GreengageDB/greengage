@@ -511,7 +511,7 @@ AtExecGPExchangePartition(Relation rel, AlterTableCmd *cmd)
 		atstmt->relation = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
 										pstrdup(RelationGetRelationName(rel)),
 										pc->location);
-		atstmt->relkind = OBJECT_TABLE;
+		atstmt->objtype = OBJECT_TABLE;
 		atstmt->missing_ok = false;
 		atstmt->cmds = list_make1(atcmd);
 		atstmt->is_internal = true; /* set this to avoid transform */
@@ -538,7 +538,7 @@ AtExecGPExchangePartition(Relation rel, AlterTableCmd *cmd)
 		atstmt->relation = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
 										pstrdup(RelationGetRelationName(rel)),
 										pc->location);
-		atstmt->relkind = OBJECT_TABLE;
+		atstmt->objtype = OBJECT_TABLE;
 		atstmt->missing_ok = false;
 		atstmt->cmds = list_make1(atcmd);
 		atstmt->is_internal = true; /* set this to avoid transform */
@@ -684,7 +684,7 @@ AtExecGPSplitPartition(Relation rel, AlterTableCmd *cmd)
 		atstmt->relation = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
 										pstrdup(RelationGetRelationName(rel)),
 										pc->location);
-		atstmt->relkind = OBJECT_TABLE;
+		atstmt->objtype = OBJECT_TABLE;
 		atstmt->missing_ok = false;
 		atstmt->cmds = list_make1(atcmd);
 		atstmt->is_internal = true; /* set this to avoid transform */
@@ -1327,7 +1327,7 @@ ATExecGPPartCmds(Relation origrel, AlterTableCmd *cmd)
 			newstmt->relation = makeRangeVar(get_namespace_name(rel->rd_rel->relnamespace),
 											 pstrdup(RelationGetRelationName(rel)), -1);
 			newstmt->cmds = list_make1(cmd);
-			newstmt->relkind = OBJECT_TABLE;
+			newstmt->objtype = OBJECT_TABLE;
 			newstmt->missing_ok = false;
 
 			stmts = lappend(stmts, newstmt);
@@ -1422,7 +1422,7 @@ ATExecGPPartCmds(Relation origrel, AlterTableCmd *cmd)
 
 			partrelid = GpFindTargetPartition(rel, pid, false);
 			targetrelation = table_open(partrelid, AccessExclusiveLock);
-			StrNCpy(targetrelname, RelationGetRelationName(targetrelation),
+			strlcpy(targetrelname, RelationGetRelationName(targetrelation),
 					NAMEDATALEN);
 			namespaceId = RelationGetNamespace(targetrelation);
 			table_close(targetrelation, AccessExclusiveLock);

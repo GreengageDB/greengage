@@ -301,7 +301,7 @@ transformOptionalSelectInto(ParseState *pstate, Node *parseTree)
 
 			ctas->query = parseTree;
 			ctas->into = stmt->intoClause;
-			ctas->relkind = OBJECT_TABLE;
+			ctas->objtype = OBJECT_TABLE;
 			ctas->is_select_into = true;
 
 			/*
@@ -3055,7 +3055,7 @@ transformCreateTableAsStmt(ParseState *pstate, CreateTableAsStmt *stmt)
 	stmt->query = (Node *) query;
 
 	/* additional work needed for CREATE MATERIALIZED VIEW */
-	if (stmt->relkind == OBJECT_MATVIEW)
+	if (stmt->objtype == OBJECT_MATVIEW)
 	{
 		/*
 		 * Prohibit a data-modifying CTE in the query used to create a

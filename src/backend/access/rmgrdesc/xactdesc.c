@@ -391,12 +391,6 @@ xact_desc_distributed_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, 
 }
 
 static void
-xact_desc_distributed_forget(StringInfo buf, xl_xact_distributed_forget *xlrec)
-{
-	appendStringInfo(buf, "gxid = "UINT64_FORMAT, xlrec->gxid);
-}
-
-static void
 xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec)
 {
 	xl_xact_parsed_abort parsed;
@@ -490,6 +484,13 @@ xact_desc(StringInfo buf, XLogReaderState *record)
 		appendStringInfo(buf, "xtop %u: ", xlrec->xtop);
 		xact_desc_assignment(buf, xlrec);
 	}
+	else if (info == XLOG_XACT_INVALIDATIONS)
+	{
+		xl_xact_invals *xlrec = (xl_xact_invals *) rec;
+
+		standby_desc_invalidations(buf, xlrec->nmsgs, xlrec->msgs, InvalidOid,
+								   InvalidOid, false);
+	}
 	else if (info == XLOG_XACT_DISTRIBUTED_COMMIT)
 	{
 		xl_xact_commit *xlrec = (xl_xact_commit *) rec;
@@ -497,13 +498,6 @@ xact_desc(StringInfo buf, XLogReaderState *record)
 		appendStringInfo(buf, "distributed commit ");
 		xact_desc_distributed_commit(buf, XLogRecGetInfo(record), xlrec,
 						 XLogRecGetOrigin(record));
-	}
-	else if (info == XLOG_XACT_DISTRIBUTED_FORGET)
-	{
-		xl_xact_distributed_forget *xlrec = (xl_xact_distributed_forget *) rec;
-
-		appendStringInfo(buf, "distributed forget ");
-		xact_desc_distributed_forget(buf, xlrec);
 	}
 }
 
@@ -532,11 +526,11 @@ xact_identify(uint8 info)
 		case XLOG_XACT_ASSIGNMENT:
 			id = "ASSIGNMENT";
 			break;
+		case XLOG_XACT_INVALIDATIONS:
+			id = "INVALIDATION";
+			break;
 		case XLOG_XACT_DISTRIBUTED_COMMIT:
 			id = "DISTRIBUTED_COMMIT";
-			break;
-		case XLOG_XACT_DISTRIBUTED_FORGET:
-			id = "DISTRIBUTED_FORGET";
 			break;
 	}
 

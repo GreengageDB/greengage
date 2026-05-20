@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-dnl configure.in
+dnl configure.ac
 dnl
 dnl Developers, please strive to achieve this order:
 dnl
@@ -26,7 +26,7 @@ AC_SUBST(PG_PACKAGE_VERSION)
 
 dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 dnl Untested combinations of 'autoconf' and PostgreSQL versions are not
-dnl recommended.  You can remove the check from 'configure.in' but it is then
+dnl recommended.  You can remove the check from 'configure.ac' but it is then
 dnl your responsibility whether the result works or not.])])
 AC_COPYRIGHT([Copyright (c) 1996-2020, PostgreSQL Global Development Group])
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
@@ -541,6 +541,8 @@ if test "$GCC" = yes -a "$ICC" = no; then
   PGAC_PROG_CXX_CFLAGS_OPT([-Wmissing-format-attribute])
   PGAC_PROG_CC_CFLAGS_OPT([-Wimplicit-fallthrough=3])
   PGAC_PROG_CXX_CFLAGS_OPT([-Wimplicit-fallthrough=3])
+  PGAC_PROG_CC_CFLAGS_OPT([-Wcast-function-type])
+  PGAC_PROG_CXX_CFLAGS_OPT([-Wcast-function-type])
   # This was included in -Wall/-Wformat in older GCC versions
   PGAC_PROG_CC_CFLAGS_OPT([-Wformat-security])
   PGAC_PROG_CXX_CFLAGS_OPT([-Wformat-security])
@@ -1437,6 +1439,9 @@ fi
 
 if test "$with_openssl" = yes ; then
   dnl Order matters!
+  # Minimum required OpenSSL version is 1.0.1
+  AC_DEFINE(OPENSSL_API_COMPAT, [0x10001000L],
+            [Define to the OpenSSL API version in use. This avoids deprecation warnings from newer OpenSSL versions.])
   if test "$PORTNAME" != "win32"; then
      AC_CHECK_LIB(crypto, CRYPTO_new_ex_data, [], [AC_MSG_ERROR([library 'crypto' is required for OpenSSL])])
      AC_CHECK_LIB(ssl,    SSL_new, [], [AC_MSG_ERROR([library 'ssl' is required for OpenSSL])])

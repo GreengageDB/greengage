@@ -135,7 +135,6 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	Relation	class_rel;
 	Oid			toast_relid;
 	Oid			toast_idxid;
-	Oid			toast_typid = InvalidOid;
 	Oid			namespaceid;
 	char		toast_relname[NAMEDATALEN];
 	char		toast_idxname[NAMEDATALEN];
@@ -201,9 +200,6 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 			toastOid = GetPreassignedOidForRelation(namespaceid, toast_relname);
 			if (!OidIsValid(toastOid))
 				return false;
-			toast_typid = GetPreassignedOidForType(namespaceid, toast_relname);
-			if (!OidIsValid(toast_typid))
-				return false;
 		}
 	}
 
@@ -242,14 +238,6 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	TupleDescAttr(tupdesc, 1)->attstorage = TYPSTORAGE_PLAIN;
 	TupleDescAttr(tupdesc, 2)->attstorage = TYPSTORAGE_PLAIN;
 
-	/*
-	 * Use binary-upgrade override for pg_type.oid, if supplied.  We might be
-	 * in the post-schema-restore phase where we are doing ALTER TABLE to
-	 * create TOAST tables that didn't exist in the old cluster.
-	 *
-	 * GPDB: already got the OIDs above
-	 */
-
 	/* Toast table is shared if and only if its parent is. */
 	shared_relation = rel->rd_rel->relisshared;
 
@@ -260,7 +248,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 										   namespaceid,
 										   rel->rd_rel->reltablespace,
 										   toastOid,
-										   toast_typid,
+										   InvalidOid,
 										   InvalidOid,
 										   rel->rd_rel->relowner,
 										   RelationIsAoRows(rel) ?
@@ -370,8 +358,8 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	table_close(class_rel, RowExclusiveLock);
 
 	/*
-	 * Register dependency from the toast table to the master, so that the
-	 * toast table will be deleted if the master is.  Skip this in bootstrap
+	 * Register dependency from the toast table to the main, so that the
+	 * toast table will be deleted if the main is.  Skip this in bootstrap
 	 * mode.
 	 */
 	if (!IsBootstrapProcessingMode())

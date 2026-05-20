@@ -22,6 +22,7 @@
 #include "access/multixact.h"
 #include "access/nbtree.h"
 #include "access/subtrans.h"
+#include "access/syncscan.h"
 #include "access/twophase.h"
 #include "access/distributedlog.h"
 #include "cdb/cdblocaldistribxact.h"
@@ -145,6 +146,7 @@ CreateSharedMemoryAndSemaphores(void)
 		size = add_size(size, SpinlockSemaSize());
 		size = add_size(size, hash_estimate_size(SHMEM_INDEX_SIZE,
 												 sizeof(ShmemIndexEnt)));
+		size = add_size(size, dsm_estimate_size());
 		size = add_size(size, BufferShmemSize());
 		size = add_size(size, LockShmemSize());
 		size = add_size(size, PredicateLockShmemSize());
@@ -276,6 +278,8 @@ CreateSharedMemoryAndSemaphores(void)
 	 * Set up shmem.c index hashtable
 	 */
 	InitShmemIndex();
+
+	dsm_shmem_init();
 
 	/*
 	 * Set up xlog, clog, and buffers

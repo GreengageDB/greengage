@@ -71,6 +71,7 @@ extern void DistributedLog_InitOldestXmin(void);
 /* XLOG stuff */
 #define DISTRIBUTEDLOG_ZEROPAGE		0x00
 #define DISTRIBUTEDLOG_TRUNCATE		0x10
+#define DISTRIBUTEDLOG_FORGET		0x20
 
 extern void DistributedLog_redo(XLogReaderState *record);
 extern void DistributedLog_desc(StringInfo buf, XLogReaderState *record);

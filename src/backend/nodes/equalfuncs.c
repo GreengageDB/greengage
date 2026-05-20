@@ -1165,7 +1165,7 @@ _equalAlterTableStmt(const AlterTableStmt *a, const AlterTableStmt *b)
 {
 	COMPARE_NODE_FIELD(relation);
 	COMPARE_NODE_FIELD(cmds);
-	COMPARE_SCALAR_FIELD(relkind);
+	COMPARE_SCALAR_FIELD(objtype);
 	COMPARE_SCALAR_FIELD(missing_ok);
 
 	/* No need to compare AT workspace fields.  */
@@ -1896,7 +1896,7 @@ _equalCreateTableAsStmt(const CreateTableAsStmt *a, const CreateTableAsStmt *b)
 {
 	COMPARE_NODE_FIELD(query);
 	COMPARE_NODE_FIELD(into);
-	COMPARE_SCALAR_FIELD(relkind);
+	COMPARE_SCALAR_FIELD(objtype);
 	COMPARE_SCALAR_FIELD(is_select_into);
 	COMPARE_SCALAR_FIELD(if_not_exists);
 

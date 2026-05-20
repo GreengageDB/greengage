@@ -459,7 +459,6 @@ retry:
 	slot->segmateSync = 0;
 	/* Remember the writer proc for IsCurrentTransactionIdForReader */
 	slot->writer_proc = MyProc;
-	slot->writer_xact = MyPgXact;
 
 	LWLockRelease(SharedSnapshotLock);
 

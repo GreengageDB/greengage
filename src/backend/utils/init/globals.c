@@ -89,7 +89,7 @@ char		postgres_exec_path[MAXPGPATH];	/* full path to backend */
 
 BackendId	MyBackendId = InvalidBackendId;
 
-BackendId	ParallelMasterBackendId = InvalidBackendId;
+BackendId	ParallelLeaderBackendId = InvalidBackendId;
 
 Oid			MyDatabaseId = InvalidOid;
 
@@ -143,6 +143,7 @@ int			max_statement_mem = 2048000;
  * do not enforce per-query memory limit
  */
 int			gp_vmem_limit_per_query = 0;
+double		hash_mem_multiplier = 1.0;
 int			maintenance_work_mem = 65536;
 int			max_parallel_maintenance_workers = 2;
 

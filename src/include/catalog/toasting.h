@@ -102,7 +102,7 @@ DECLARE_TOAST(pg_tablespace, 4185, 4186);
 #define PgTablespaceToastIndex 4186
 
 /* GPDB additional normal catalogs */
-DECLARE_TOAST(gp_partition_template, 5024, 5025);
+DECLARE_TOAST(gp_partition_template, 8024, 8025);
 DECLARE_TOAST(pg_attribute_encoding, 6233, 6234);
 DECLARE_TOAST(pg_type_encoding, 6222, 6223);
 DECLARE_TOAST(pg_extprotocol, 7173, 7174);

@@ -1317,8 +1317,6 @@ ExecShutdownNode(PlanState *node)
 
 	check_stack_depth();
 
-	planstate_tree_walker(node, ExecShutdownNode, NULL);
-
 	/*
 	 * Treat the node as running while we shut it down, but only if it's run
 	 * at least once already.  We don't expect much CPU consumption during
@@ -1331,6 +1329,8 @@ ExecShutdownNode(PlanState *node)
 	 */
 	if (node->instrument && node->instrument->running)
 		InstrStartNode(node->instrument);
+
+	planstate_tree_walker(node, ExecShutdownNode, NULL);
 
 	switch (nodeTag(node))
 	{

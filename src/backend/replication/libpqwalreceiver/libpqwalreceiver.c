@@ -21,6 +21,7 @@
 
 #include "access/xlog.h"
 #include "catalog/pg_type.h"
+#include "common/connect.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "libpq/pqcomm.h"
@@ -219,6 +220,22 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	{
 		*err = pchomp(PQerrorMessage(conn->streamConn));
 		return NULL;
+	}
+
+	if (logical)
+	{
+		PGresult   *res;
+
+		res = libpqrcv_PQexec(conn->streamConn,
+							  ALWAYS_SECURE_SEARCH_PATH_SQL);
+		if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		{
+			PQclear(res);
+			ereport(ERROR,
+					(errmsg("could not clear search path: %s",
+							pchomp(PQerrorMessage(conn->streamConn)))));
+		}
+		PQclear(res);
 	}
 
 	conn->logical = logical;
@@ -431,6 +448,10 @@ libpqrcv_startstreaming(WalReceiverConn *conn,
 		appendStringInfo(&cmd, ", publication_names %s", pubnames_literal);
 		PQfreemem(pubnames_literal);
 		pfree(pubnames_str);
+
+		if (options->proto.logical.binary &&
+			PQserverVersion(conn->streamConn) >= 140000)
+			appendStringInfoString(&cmd, ", binary 'true'");
 
 		appendStringInfoChar(&cmd, ')');
 	}

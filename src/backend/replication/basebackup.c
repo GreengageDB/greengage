@@ -103,6 +103,8 @@ static int	compareWalFileNames(const ListCell *a, const ListCell *b);
 static void throttle(size_t increment);
 static void update_basebackup_progress(int64 delta);
 static bool is_checksummed_file(const char *fullpath, const char *filename);
+static int	basebackup_read_file(int fd, char *buf, size_t nbytes, off_t offset,
+								 const char *filename, bool partial_read_ok);
 
 /* Was the backup currently in-progress initiated in recovery mode? */
 static bool backup_started_in_recovery = false;
@@ -119,18 +121,6 @@ static char *statrelpath = NULL;
  * How frequently to throttle, as a fraction of the specified rate-second.
  */
 #define THROTTLING_FREQUENCY	8
-
-/*
- * Checks whether we encountered any error in fread().  fread() doesn't give
- * any clue what has happened, so we check with ferror().  Also, neither
- * fread() nor ferror() set errno, so we just throw a generic error.
- */
-#define CHECK_FREAD_ERROR(fp, filename) \
-do { \
-	if (ferror(fp)) \
-		ereport(ERROR, \
-				(errmsg("could not read from file \"%s\"", filename))); \
-} while (0)
 
 /* The actual number of bytes, transfer of which may cause sleep. */
 static uint64 throttling_sample;
@@ -193,7 +183,7 @@ static const char *const excludeDirContents[] =
 
 	/*
 	 * It is generally not useful to backup the contents of this directory
-	 * even if the intention is to restore to another master. See backup.sgml
+	 * even if the intention is to restore to another primary. See backup.sgml
 	 * for a more detailed description.
 	 */
 	"pg_replslot",
@@ -300,7 +290,7 @@ perform_base_backup(basebackup_options *opt)
 	XLogRecPtr	endptr;
 	TimeLineID	endtli;
 	StringInfo	labelfile;
-	StringInfo	tblspc_map_file = NULL;
+	StringInfo	tblspc_map_file;
 	backup_manifest_info manifest;
 	int			datadirpathlen;
 	List	   *tablespaces = NIL;
@@ -469,25 +459,23 @@ perform_base_backup(basebackup_options *opt)
 			if (ti->path == NULL)
 			{
 				struct stat statbuf;
+				bool	sendtblspclinks = true;
 
 				/* In the main tar, include the backup_label first... */
 				sendFileWithContent(BACKUP_LABEL_FILE, labelfile->data,
 									&manifest);
 
-				/*
-				 * Send tablespace_map file if required and then the bulk of
-				 * the files.
-				 */
-				if (tblspc_map_file && opt->sendtblspcmapfile)
+				/* Then the tablespace_map file, if required... */
+				if (opt->sendtblspcmapfile)
 				{
 					sendFileWithContent(TABLESPACE_MAP, tblspc_map_file->data,
 										&manifest);
-					sendDir(".", 1, false, tablespaces, false,
-							&manifest, NULL, opt->exclude);
+					sendtblspclinks = false;
 				}
-				else
-					sendDir(".", 1, false, tablespaces, true,
-							&manifest, NULL, opt->exclude);
+
+				/* Then the bulk of the files... */
+				sendDir(".", 1, false, tablespaces, sendtblspclinks,
+						&manifest, NULL, opt->exclude);
 
 				/* ... and pg_control after everything else. */
 				if (lstat(XLOG_CONTROL_FILE, &statbuf) != 0)
@@ -647,7 +635,7 @@ perform_base_backup(basebackup_options *opt)
 		foreach(lc, walFileList)
 		{
 			char	   *walFileName = (char *) lfirst(lc);
-			FILE	   *fp;
+			int			fd;
 			char		buf[TAR_SEND_SIZE];
 			size_t		cnt;
 			pgoff_t		len = 0;
@@ -655,8 +643,8 @@ perform_base_backup(basebackup_options *opt)
 			snprintf(pathbuf, MAXPGPATH, XLOGDIR "/%s", walFileName);
 			XLogFromFileName(walFileName, &tli, &segno, wal_segment_size);
 
-			fp = AllocateFile(pathbuf, "rb");
-			if (fp == NULL)
+			fd = OpenTransientFile(pathbuf, O_RDONLY | PG_BINARY);
+			if (fd < 0)
 			{
 				int			save_errno = errno;
 
@@ -673,7 +661,7 @@ perform_base_backup(basebackup_options *opt)
 						 errmsg("could not open file \"%s\": %m", pathbuf)));
 			}
 
-			if (fstat(fileno(fp), &statbuf) != 0)
+			if (fstat(fd, &statbuf) != 0)
 				ereport(ERROR,
 						(errcode_for_file_access(),
 						 errmsg("could not stat file \"%s\": %m",
@@ -689,9 +677,10 @@ perform_base_backup(basebackup_options *opt)
 			/* send the WAL file itself */
 			_tarWriteHeader(pathbuf, NULL, &statbuf, false);
 
-			while ((cnt = fread(buf, 1,
-								Min(sizeof(buf), wal_segment_size - len),
-								fp)) > 0)
+			while ((cnt = basebackup_read_file(fd, buf,
+											   Min(sizeof(buf),
+												   wal_segment_size - len),
+											   len, pathbuf, true)) > 0)
 			{
 				CheckXLogRemoved(segno, tli);
 				/* Send the chunk as a CopyData message */
@@ -706,8 +695,6 @@ perform_base_backup(basebackup_options *opt)
 				if (len == wal_segment_size)
 					break;
 			}
-
-			CHECK_FREAD_ERROR(fp, pathbuf);
 
 			if (len != wal_segment_size)
 			{
@@ -726,7 +713,7 @@ perform_base_backup(basebackup_options *opt)
 			 */
 			Assert(wal_segment_size % TAR_BLOCK_SIZE == 0);
 
-			FreeFile(fp);
+			CloseTransientFile(fd);
 
 			/*
 			 * Mark file as archived, otherwise files can get archived again
@@ -1766,7 +1753,7 @@ sendFile(const char *readfilename, const char *tarfilename,
 		 struct stat *statbuf, bool missing_ok, Oid dboid,
 		 backup_manifest_info *manifest, const char *spcoid)
 {
-	FILE	   *fp;
+	int			fd;
 	BlockNumber blkno = 0;
 	bool		block_retry = false;
 	char		buf[TAR_SEND_SIZE];
@@ -1785,8 +1772,8 @@ sendFile(const char *readfilename, const char *tarfilename,
 
 	pg_checksum_init(&checksum_ctx, manifest->checksum_type);
 
-	fp = AllocateFile(readfilename, "rb");
-	if (fp == NULL)
+	fd = OpenTransientFile(readfilename, O_RDONLY | PG_BINARY);
+	if (fd < 0)
 	{
 		if (errno == ENOENT && missing_ok)
 			return false;
@@ -1828,8 +1815,27 @@ sendFile(const char *readfilename, const char *tarfilename,
 		}
 	}
 
-	while ((cnt = fread(buf, 1, Min(sizeof(buf), statbuf->st_size - len), fp)) > 0)
+	/*
+	 * Loop until we read the amount of data the caller told us to expect. The
+	 * file could be longer, if it was extended while we were sending it, but
+	 * for a base backup we can ignore such extended data. It will be restored
+	 * from WAL.
+	 */
+	while (len < statbuf->st_size)
 	{
+		/* Try to read some more data. */
+		cnt = basebackup_read_file(fd, buf,
+								   Min(sizeof(buf), statbuf->st_size - len),
+								   len, readfilename, true);
+
+		/*
+		 * If we hit end-of-file, a concurrent truncation must have occurred.
+		 * That's not an error condition, because WAL replay will fix things
+		 * up.
+		 */
+		if (cnt == 0)
+			break;
+
 		/*
 		 * The checksums are verified at block level, so we iterate over the
 		 * buffer in chunks of BLCKSZ, after making sure that
@@ -1880,16 +1886,15 @@ sendFile(const char *readfilename, const char *tarfilename,
 						 */
 						if (block_retry == false)
 						{
-							/* Reread the failed block */
-							if (fseek(fp, -(cnt - BLCKSZ * i), SEEK_CUR) == -1)
-							{
-								ereport(ERROR,
-										(errcode_for_file_access(),
-										 errmsg("could not fseek in file \"%s\": %m",
-												readfilename)));
-							}
+							int			reread_cnt;
 
-							if (fread(buf + BLCKSZ * i, 1, BLCKSZ, fp) != BLCKSZ)
+							/* Reread the failed block */
+							reread_cnt =
+								basebackup_read_file(fd, buf + BLCKSZ * i,
+													 BLCKSZ, len + BLCKSZ * i,
+													 readfilename,
+													 false);
+							if (reread_cnt == 0)
 							{
 								/*
 								 * If we hit end-of-file, a concurrent
@@ -1899,24 +1904,8 @@ sendFile(const char *readfilename, const char *tarfilename,
 								 * code that handles that case. (We must fix
 								 * up cnt first, though.)
 								 */
-								if (feof(fp))
-								{
-									cnt = BLCKSZ * i;
-									break;
-								}
-
-								ereport(ERROR,
-										(errcode_for_file_access(),
-										 errmsg("could not reread block %d of file \"%s\": %m",
-												blkno, readfilename)));
-							}
-
-							if (fseek(fp, cnt - BLCKSZ * i - BLCKSZ, SEEK_CUR) == -1)
-							{
-								ereport(ERROR,
-										(errcode_for_file_access(),
-										 errmsg("could not fseek in file \"%s\": %m",
-												readfilename)));
+								cnt = BLCKSZ * i;
+								break;
 							}
 
 							/* Set flag so we know a retry was attempted */
@@ -1959,19 +1948,7 @@ sendFile(const char *readfilename, const char *tarfilename,
 
 		len += cnt;
 		throttle(cnt);
-
-		if (feof(fp) || len >= statbuf->st_size)
-		{
-			/*
-			 * Reached end of file. The file could be longer, if it was
-			 * extended while we were sending it, but for a base backup we can
-			 * ignore such extended data. It will be restored from WAL.
-			 */
-			break;
-		}
 	}
-
-	CHECK_FREAD_ERROR(fp, readfilename);
 
 	/* If the file was truncated while we were sending it, pad it with zeros */
 	if (len < statbuf->st_size)
@@ -2001,7 +1978,7 @@ sendFile(const char *readfilename, const char *tarfilename,
 		update_basebackup_progress(pad);
 	}
 
-	FreeFile(fp);
+	CloseTransientFile(fd);
 
 	if (checksum_failures > 1)
 	{
@@ -2186,4 +2163,36 @@ update_basebackup_progress(int64 delta)
 	}
 
 	pgstat_progress_update_multi_param(nparam, index, val);
+}
+
+/*
+ * Read some data from a file, setting a wait event and reporting any error
+ * encountered.
+ *
+ * If partial_read_ok is false, also report an error if the number of bytes
+ * read is not equal to the number of bytes requested.
+ *
+ * Returns the number of bytes read.
+ */
+static int
+basebackup_read_file(int fd, char *buf, size_t nbytes, off_t offset,
+					 const char *filename, bool partial_read_ok)
+{
+	int			rc;
+
+	pgstat_report_wait_start(WAIT_EVENT_BASEBACKUP_READ);
+	rc = pg_pread(fd, buf, nbytes, offset);
+	pgstat_report_wait_end();
+
+	if (rc < 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not read file \"%s\": %m", filename)));
+	if (!partial_read_ok && rc > 0 && rc != nbytes)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not read file \"%s\": read %d of %zu",
+						filename, rc, nbytes)));
+
+	return rc;
 }

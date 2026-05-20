@@ -21,6 +21,7 @@
 
 #include "access/aomd.h"
 #include "access/xact.h"
+#include "access/xlog.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
@@ -228,8 +229,8 @@ smgropen(RelFileNode rnode, BackendId backend, SMgrImpl which)
 		/* hash_search already filled in the lookup key */
 		reln->smgr_owner = NULL;
 		reln->smgr_targblock = InvalidBlockNumber;
-		reln->smgr_fsm_nblocks = InvalidBlockNumber;
-		reln->smgr_vm_nblocks = InvalidBlockNumber;
+		for (int i = 0; i <= MAX_FORKNUM; ++i)
+			reln->smgr_cached_nblocks[i] = InvalidBlockNumber;
 		reln->smgr_which = which;
 		reln->storageManager = smgr(backend, rnode, which);
 
@@ -540,6 +541,16 @@ smgrextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 										 buffer, skipFsync);
     if (file_extend_hook)
         (*file_extend_hook)(reln->smgr_rnode);
+
+	/*
+	 * Normally we expect this to increase nblocks by one, but if the cached
+	 * value isn't as expected, just invalidate it so the next call asks the
+	 * kernel.
+	 */
+	if (reln->smgr_cached_nblocks[forknum] == blocknum)
+		reln->smgr_cached_nblocks[forknum] = blocknum + 1;
+	else
+		reln->smgr_cached_nblocks[forknum] = InvalidBlockNumber;
 }
 
 /*
@@ -613,7 +624,20 @@ smgrwriteback(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 BlockNumber
 smgrnblocks(SMgrRelation reln, ForkNumber forknum)
 {
-	return (*reln->storageManager).smgr_nblocks(reln, forknum);
+	BlockNumber result;
+
+	/*
+	 * For now, we only use cached values in recovery due to lack of a shared
+	 * invalidation mechanism for changes in file size.
+	 */
+	if (InRecovery && reln->smgr_cached_nblocks[forknum] != InvalidBlockNumber)
+		return reln->smgr_cached_nblocks[forknum];
+
+	result = (*reln->storageManager).smgr_nblocks(reln, forknum);
+
+	reln->smgr_cached_nblocks[forknum] = result;
+
+	return result;
 }
 
 /*
@@ -652,20 +676,19 @@ smgrtruncate(SMgrRelation reln, ForkNumber *forknum, int nforks, BlockNumber *nb
 	/* Do the truncation */
 	for (i = 0; i < nforks; i++)
 	{
+		/* Make the cached size is invalid if we encounter an error. */
+		reln->smgr_cached_nblocks[forknum[i]] = InvalidBlockNumber;
+
 		(*reln->storageManager).smgr_truncate(reln, forknum[i], nblocks[i]);
 
 		/*
-		 * We might as well update the local smgr_fsm_nblocks and
-		 * smgr_vm_nblocks settings. The smgr cache inval message that this
-		 * function sent will cause other backends to invalidate their copies
-		 * of smgr_fsm_nblocks and smgr_vm_nblocks, and these ones too at the
-		 * next command boundary. But these ensure they aren't outright wrong
-		 * until then.
+		 * We might as well update the local smgr_cached_nblocks values. The
+		 * smgr cache inval message that this function sent will cause other
+		 * backends to invalidate their copies of smgr_fsm_nblocks and
+		 * smgr_vm_nblocks, and these ones too at the next command boundary.
+		 * But these ensure they aren't outright wrong until then.
 		 */
-		if (forknum[i] == FSM_FORKNUM)
-			reln->smgr_fsm_nblocks = nblocks[i];
-		if (forknum[i] == VISIBILITYMAP_FORKNUM)
-			reln->smgr_vm_nblocks = nblocks[i];
+		reln->smgr_cached_nblocks[forknum[i]] = nblocks[i];
 	}
 
 	if (file_truncate_hook)

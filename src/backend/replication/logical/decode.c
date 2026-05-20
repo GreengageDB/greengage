@@ -94,10 +94,26 @@ void
 LogicalDecodingProcessRecord(LogicalDecodingContext *ctx, XLogReaderState *record)
 {
 	XLogRecordBuffer buf;
+	TransactionId txid;
 
 	buf.origptr = ctx->reader->ReadRecPtr;
 	buf.endptr = ctx->reader->EndRecPtr;
 	buf.record = record;
+
+	txid = XLogRecGetTopXid(record);
+
+	/*
+	 * If the top-level xid is valid, we need to assign the subxact to the
+	 * top-level xact. We need to do this for all records, hence we do it
+	 * before the switch.
+	 */
+	if (TransactionIdIsValid(txid))
+	{
+		ReorderBufferAssignChild(ctx->reorder,
+								 txid,
+								 record->decoded_record->xl_xid,
+								 buf.origptr);
+	}
 
 	/* cast so we get a warning when new rmgrs are added */
 	switch ((RmgrId) XLogRecGetRmid(record))
@@ -228,13 +244,8 @@ DecodeXactOp(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 	/*
 	 * If the snapshot isn't yet fully built, we cannot decode anything, so
 	 * bail out.
-	 *
-	 * However, it's critical to process XLOG_XACT_ASSIGNMENT records even
-	 * when the snapshot is being built: it is possible to get later records
-	 * that require subxids to be properly assigned.
 	 */
-	if (SnapBuildCurrentState(builder) < SNAPBUILD_FULL_SNAPSHOT &&
-		info != XLOG_XACT_ASSIGNMENT)
+	if (SnapBuildCurrentState(builder) < SNAPBUILD_FULL_SNAPSHOT)
 		return;
 
 	switch (info)
@@ -276,22 +287,42 @@ DecodeXactOp(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 				break;
 			}
 		case XLOG_XACT_ASSIGNMENT:
+
+			/*
+			 * We assign subxact to the toplevel xact while processing each
+			 * record if required.  So, we don't need to do anything here. See
+			 * LogicalDecodingProcessRecord.
+			 */
+			break;
+		case XLOG_XACT_INVALIDATIONS:
 			{
-				xl_xact_assignment *xlrec;
-				int			i;
-				TransactionId *sub_xid;
+				TransactionId xid;
+				xl_xact_invals *invals;
 
-				xlrec = (xl_xact_assignment *) XLogRecGetData(r);
+				xid = XLogRecGetXid(r);
+				invals = (xl_xact_invals *) XLogRecGetData(r);
 
-				sub_xid = &xlrec->xsub[0];
-
-				for (i = 0; i < xlrec->nsubxacts; i++)
+				/*
+				 * Execute the invalidations for xid-less transactions,
+				 * otherwise, accumulate them so that they can be processed at
+				 * the commit time.
+				 */
+				if (TransactionIdIsValid(xid))
 				{
-					ReorderBufferAssignChild(reorder, xlrec->xtop,
-											 *(sub_xid++), buf->origptr);
+					if (!ctx->fast_forward)
+						ReorderBufferAddInvalidations(reorder, xid,
+													  buf->origptr,
+													  invals->nmsgs,
+													  invals->msgs);
+					ReorderBufferXidSetCatalogChanges(ctx->reorder, xid,
+													  buf->origptr);
 				}
-				break;
+				else if ((!ctx->fast_forward))
+					ReorderBufferImmediateInvalidation(ctx->reorder,
+													   invals->nmsgs,
+													   invals->msgs);
 			}
+			break;
 		case XLOG_XACT_PREPARE:
 
 			/*
@@ -344,15 +375,11 @@ DecodeStandbyOp(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 		case XLOG_STANDBY_LOCK:
 			break;
 		case XLOG_INVALIDATIONS:
-			{
-				xl_invalidations *invalidations =
-				(xl_invalidations *) XLogRecGetData(r);
 
-				if (!ctx->fast_forward)
-					ReorderBufferImmediateInvalidation(ctx->reorder,
-													   invalidations->nmsgs,
-													   invalidations->msgs);
-			}
+			/*
+			 * We are processing the invalidations at the command level via
+			 * XLOG_XACT_INVALIDATIONS.  So we don't need to do anything here.
+			 */
 			break;
 		default:
 			elog(ERROR, "unexpected RM_STANDBY_ID record type: %u", info);
@@ -583,19 +610,6 @@ DecodeCommit(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 		commit_time = parsed->origin_timestamp;
 	}
 
-	/*
-	 * Process invalidation messages, even if we're not interested in the
-	 * transaction's contents, since the various caches need to always be
-	 * consistent.
-	 */
-	if (parsed->nmsgs > 0)
-	{
-		if (!ctx->fast_forward)
-			ReorderBufferAddInvalidations(ctx->reorder, xid, buf->origptr,
-										  parsed->nmsgs, parsed->msgs);
-		ReorderBufferXidSetCatalogChanges(ctx->reorder, xid, buf->origptr);
-	}
-
 	SnapBuildCommitTxn(ctx->snapshot_builder, buf->origptr, xid,
 					   parsed->nsubxacts, parsed->subxacts);
 
@@ -722,7 +736,9 @@ DecodeInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 	change->data.tp.clear_toast_afterwards = true;
 
-	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr, change);
+	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr,
+							 change,
+							 xlrec->flags & XLH_INSERT_ON_TOAST_RELATION);
 }
 
 /*
@@ -789,7 +805,8 @@ DecodeUpdate(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 	change->data.tp.clear_toast_afterwards = true;
 
-	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr, change);
+	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr,
+							 change, false);
 }
 
 /*
@@ -846,7 +863,8 @@ DecodeDelete(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 	change->data.tp.clear_toast_afterwards = true;
 
-	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr, change);
+	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr,
+							 change, false);
 }
 
 /*
@@ -882,7 +900,7 @@ DecodeTruncate(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 	memcpy(change->data.truncate.relids, xlrec->relids,
 		   xlrec->nrelids * sizeof(Oid));
 	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r),
-							 buf->origptr, change);
+							 buf->origptr, change, false);
 }
 
 /*
@@ -982,7 +1000,7 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 			change->data.tp.clear_toast_afterwards = false;
 
 		ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r),
-								 buf->origptr, change);
+								 buf->origptr, change, false);
 
 		/* move to the next xl_multi_insert_tuple entry */
 		data += datalen;
@@ -1020,7 +1038,8 @@ DecodeSpecConfirm(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 	change->data.tp.clear_toast_afterwards = true;
 
-	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr, change);
+	ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r), buf->origptr,
+							 change, false);
 }
 
 
