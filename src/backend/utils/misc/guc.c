@@ -6306,7 +6306,6 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 			 * record it and restore QE before next query start
 			 */
 			if (Gp_role == GP_ROLE_DISPATCH
-					&& !IsTransactionBlock()
 					&& changed
 					&& ((isCommit) || (!isCommit && gp_guc_need_restore))
 					&& (gconf->flags & GUC_GPDB_NEED_SYNC))
