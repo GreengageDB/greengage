@@ -260,3 +260,43 @@ SharedFilePath(char *path, SharedFileSet *fileset, const char *name)
 	SharedFileSetPath(dirpath, fileset, ChooseTablespace(fileset, name));
 	snprintf(path, MAXPGPATH, "%s/%s", dirpath, name);
 }
+
+void
+SharedFileSetUnpin(SharedFileSet *fileset)
+{
+	bool delete_all = false;
+
+	SpinLockAcquire(&fileset->mutex);
+
+	if (fileset->refcnt == 0)
+	{
+		SpinLockRelease(&fileset->mutex);
+		elog(ERROR, "could not unpin a SharedFileSet that is already destroyed");
+	}
+
+	fileset->refcnt--;
+
+	if (fileset->refcnt == 0)
+		delete_all = true;
+
+	SpinLockRelease(&fileset->mutex);
+
+	if (delete_all)
+		SharedFileSetDeleteAll(fileset);
+}
+
+void
+SharedFileSetPin(SharedFileSet *fileset)
+{
+	SpinLockAcquire(&fileset->mutex);
+
+	if (fileset->refcnt == 0)
+	{
+		SpinLockRelease(&fileset->mutex);
+		elog(ERROR, "could not pin a SharedFileSet that is already destroyed");
+	}
+
+	fileset->refcnt++;
+
+	SpinLockRelease(&fileset->mutex);
+}

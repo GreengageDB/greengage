@@ -150,7 +150,6 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 
 				shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 				tuplestore_make_shared_many(ts,
-											get_shareinput_fileset(),
 											rwfile_prefix,
 											sisc->nconsumers + 1);
 
@@ -231,7 +230,7 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 			Assert(sisc->cross_slice);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
-			ts = tuplestore_open_shared_extended(get_shareinput_fileset(), rwfile_prefix, skip_waiting);
+			ts = tuplestore_open_shared_extended(rwfile_prefix, skip_waiting);
 
 			MemoryContextSwitchTo(old_context);
 		}
