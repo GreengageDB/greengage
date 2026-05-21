@@ -2527,6 +2527,9 @@ psql_completion(const char *text, int start, int end)
 	/* Complete DISTRIBUTED with BY, RANDOMLY or REPLICATED */
 	else if (TailMatches("DISTRIBUTED"))
 			COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
+	/* Complete INHERITS ( with table list */
+	else if (TailMatches("INHERITS", "("))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
 	/* Complete CREATE TABLE <name> with '(', OF or PARTITION OF */
 	else if (TailMatches("CREATE", "TABLE", MatchAny) ||
 			 TailMatches("CREATE", "TEMP|TEMPORARY|UNLOGGED", "TABLE", MatchAny))
