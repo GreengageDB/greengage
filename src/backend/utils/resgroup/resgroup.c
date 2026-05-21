@@ -933,10 +933,11 @@ resGroupCapFieldApply(ResGroupCaps *dst,
 }
 
 /*
- * Apply the new resgroup caps.
+ * Apply the new resgroup caps and update dependent runtime state.
  *
- * Only callbackCtx->limittype is applied. The previous state is read
- * from shared memory.
+ * Each callback keeps a full capability snapshot, but only its limittype is
+ * installed over the current shared-memory state. This lets multiple callbacks
+ * from one transaction update different fields without overwriting each other.
  */
 void
 ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
