@@ -81,6 +81,7 @@
  * individual ShareInputScan whenever its reference count reaches zero.
  */
 static dsm_handle *shareinput_Xslice_dsm_handle_ptr;
+static SharedFileSet *shareinput_Xslice_fileset;
 
 /*
  * For local (i.e. intra-slice) variants, we use a 'shareinput_local_state'
@@ -613,6 +614,55 @@ ShareInputShmemInit(void)
 
 	shareinput_Xslice_dsm_handle_ptr =
 		ShmemInitStruct("ShareInputScan DSM handle", sizeof(dsm_handle), &found);
+}
+
+/*
+ * Get reference to the SharedFileSet used to hold all the tuplestore files.
+ *
+ * This is exported so that it can also be used by the INITPLAN function
+ * tuplestores.
+ */
+SharedFileSet *
+get_shareinput_fileset(void)
+{
+	dsm_handle		handle;
+
+	if (shareinput_Xslice_fileset == NULL)
+	{
+		dsm_segment *seg;
+
+		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
+
+		handle = *shareinput_Xslice_dsm_handle_ptr;
+
+		if (handle)
+		{
+			seg = dsm_attach(handle);
+			if (seg == NULL)
+				elog(ERROR, "could not attach to ShareInputScan DSM segment");
+			dsm_pin_mapping(seg);
+
+			shareinput_Xslice_fileset = dsm_segment_address(seg);
+		}
+		else
+		{
+			seg = dsm_create(sizeof(SharedFileSet), 0);
+			dsm_pin_segment(seg);
+			*shareinput_Xslice_dsm_handle_ptr = dsm_segment_handle(seg);
+			dsm_pin_mapping(seg);
+
+			shareinput_Xslice_fileset = dsm_segment_address(seg);
+		}
+
+		if (shareinput_Xslice_fileset->refcnt == 0)
+			SharedFileSetInit(shareinput_Xslice_fileset, seg);
+		else
+			SharedFileSetAttach(shareinput_Xslice_fileset, seg);
+
+		LWLockRelease(ShareInputScanLock);
+	}
+
+	return shareinput_Xslice_fileset;
 }
 
 void
