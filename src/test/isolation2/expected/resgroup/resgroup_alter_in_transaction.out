@@ -9,7 +9,7 @@
 (exited with code 0)
 
 
-CREATE RESOURCE GROUP rg_alter_tran   WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
+CREATE RESOURCE GROUP rg_alter_tran WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE
 CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
 CREATE
@@ -20,12 +20,13 @@ CREATE
 CREATE OR REPLACE VIEW rg_alter_tran_heap_status AS SELECT -1::int AS gp_segment_id, groupname::text, concurrency::int, cpu_rate_limit::int, memory_limit::int FROM gp_toolkit.gp_resgroup_config WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b') UNION ALL SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM gp_dist_random('rg_alter_tran_heap_status_local') ORDER BY groupname, gp_segment_id;
 CREATE
 
-CREATE OR REPLACE VIEW rg_alter_tran_runtime_status AS SELECT (seg->>'segid')::int AS gp_segment_id, r.rsgname::text AS groupname, (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 1) AS concurrency, (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 2) AS cpu_rate_limit, (SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 3) AS memory_limit FROM pg_resgroup_get_status_kv('dump') d, json_array_elements((d.value::json)->'info') AS seg, json_array_elements(seg->'groups') AS grp, pg_resgroup r WHERE r.rsgname IN ('rg_alter_tran', 'rg_alter_tran_b') AND (grp->>'group_id')::oid = r.oid ORDER BY groupname, gp_segment_id;
+CREATE OR REPLACE VIEW rg_alter_tran_runtime_status AS SELECT (seg->>'segid')::int AS gp_segment_id, r.rsgname::text AS groupname, ( SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 1 ) AS concurrency, ( SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 2 ) AS cpu_rate_limit, ( SELECT cap.value::int FROM json_array_elements(grp->'caps') AS cap_obj, json_each_text(cap_obj) AS cap WHERE cap.key::int = 3 ) AS memory_limit FROM pg_resgroup_get_status_kv('dump') d, json_array_elements((d.value::json)->'info') AS seg, json_array_elements(seg->'groups') AS grp, pg_resgroup r WHERE r.rsgname IN ('rg_alter_tran', 'rg_alter_tran_b') AND (grp->>'group_id')::oid = r.oid ORDER BY groupname, gp_segment_id;
 CREATE
 
 -- Use PL/pgSQL to run heap and runtime checks as separate statements;
 -- one SQL query may fail with "multiple segworker groups is not supported".
-CREATE OR REPLACE FUNCTION rg_alter_tran_all_status() RETURNS TABLE(gp_segment_id int, groupname text, concurrency int, cpu_rate_limit int, memory_limit int) AS $$ BEGIN RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_heap_status'; RETURN QUERY EXECUTE 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_runtime_status'; END; $$ LANGUAGE plpgsql EXECUTE ON MASTER;
+CREATE OR REPLACE FUNCTION rg_alter_tran_all_status() RETURNS TABLE(gp_segment_id int, groupname text, concurrency int, cpu_rate_limit int, memory_limit int) AS $$ BEGIN /* inside a function */ RETURN QUERY EXECUTE /* inside a function */ 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_heap_status'; /* inside a function */ 
+RETURN QUERY EXECUTE /* inside a function */ 'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_runtime_status'; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql EXECUTE ON MASTER;
 CREATE
 
 -- Group matching data into one line per group; inconsistent values produce
@@ -94,8 +95,9 @@ SELECT * FROM rg_alter_tran_status;
 (2 rows)
 
 -- 4 Applying settings with calling function.
-CREATE OR REPLACE FUNCTION rg_alter_tran_func() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11; END; $body$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION rg_alter_tran_func() RETURNS void AS $$ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 11; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 CREATE
+
 SELECT rg_alter_tran_func();
  rg_alter_tran_func 
 --------------------
@@ -110,8 +112,9 @@ SELECT * FROM rg_alter_tran_status;
 
 -- 5 Applying settings with using subtransactions in DO block.
 -- No error, subtransaction commits.
-DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+DO $$ BEGIN /* inside a function */ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 13; /* inside a function */ EXCEPTION WHEN OTHERS THEN /* inside a function */ NULL; /* inside a function */ END; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 DO
+
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
@@ -121,8 +124,9 @@ SELECT * FROM rg_alter_tran_status;
 
 -- 6 Not applying settings with rollback subtransactions in DO block.
 -- ALTER happens inside a subtransaction that is rolled back.
-DO $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 15; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+DO $$ BEGIN /* inside a function */ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 15; /* inside a function */ RAISE EXCEPTION 'rollback the subxact'; /* inside a function */ EXCEPTION WHEN OTHERS THEN /* inside a function */ NULL; /* inside a function */ END; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 DO
+
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
@@ -131,8 +135,9 @@ SELECT * FROM rg_alter_tran_status;
 (2 rows)
 
 -- 7 Applying settings with using subtransactions in function.
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub() RETURNS void AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub() RETURNS void AS $$ BEGIN /* inside a function */ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17; /* inside a function */ EXCEPTION WHEN OTHERS THEN /* inside a function */ NULL; /* inside a function */ END; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 CREATE
+
 SELECT rg_alter_tran_func_sub();
  rg_alter_tran_func_sub 
 ------------------------
@@ -146,8 +151,9 @@ SELECT * FROM rg_alter_tran_status;
 (2 rows)
 
 -- 8 Not applying settings with rollback subtransactions in function.
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub_fail() RETURNS void AS $body$ BEGIN BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 19; RAISE EXCEPTION 'rollback the subxact'; EXCEPTION WHEN OTHERS THEN NULL; END; END; $body$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_sub_fail() RETURNS void AS $$ BEGIN /* inside a function */ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 19; /* inside a function */ RAISE EXCEPTION 'rollback the subxact'; /* inside a function */ EXCEPTION WHEN OTHERS THEN /* inside a function */ NULL; /* inside a function */ END; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 CREATE
+
 SELECT rg_alter_tran_func_sub_fail();
  rg_alter_tran_func_sub_fail 
 -----------------------------
@@ -204,12 +210,13 @@ SELECT * FROM rg_alter_tran_status;
 
 -- 11 WARNING during ALTER in function of the resource group under
 -- which the request is being executed.
-CREATE OR REPLACE FUNCTION rg_alter_tran_func_own_group() RETURNS void AS $body$ BEGIN ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 23; END; $body$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION rg_alter_tran_func_own_group() RETURNS void AS $$ BEGIN /* inside a function */ ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 23; /* inside a function */ END; /* inside a function */ $$ LANGUAGE plpgsql;
 CREATE
+
 ! curuser="$(psql -At -d isolation2resgrouptest -c 'SELECT current_user')" && psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP rg_alter_tran" >/dev/null && psql -d isolation2resgrouptest -c "BEGIN; SELECT rg_alter_tran_func_own_group(); COMMIT;"; psql -d isolation2resgrouptest -c "ALTER ROLE \"$curuser\" RESOURCE GROUP admin_group" >/dev/null;
 WARNING:  resource group "rg_alter_tran" settings will be applied after COMMIT
 CONTEXT:  SQL statement "ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 23"
-PL/pgSQL function rg_alter_tran_func_own_group() line 1 at SQL statement
+PL/pgSQL function rg_alter_tran_func_own_group() line 3 at SQL statement
 COMMIT
 
 SELECT * FROM rg_alter_tran_status;
@@ -261,11 +268,13 @@ SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segmen
 -----------------
  Success:        
 (1 row)
+
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
  gp_inject_fault 
 -----------------
  Success:        
 (1 row)
+
 BEGIN;
 BEGIN
 SAVEPOINT s1;
@@ -284,6 +293,7 @@ SELECT * FROM rg_alter_tran_status;
  rg_alter_tran   | 11          | 10             | 7            
  rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
+
 -- Should be only one in `num times hit`
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
  gp_inject_fault                                                                                                                                                                                                                 
@@ -291,6 +301,7 @@ SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segme
  Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1' 
  
 (1 row)
+
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
  gp_inject_fault 
 -----------------
