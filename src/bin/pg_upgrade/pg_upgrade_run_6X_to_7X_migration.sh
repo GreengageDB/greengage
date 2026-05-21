@@ -7,15 +7,22 @@ set -euo pipefail
 # but it seems too much for a 50-line script. In any case, perform some redundant
 # checks before running the script.
 
-if [ -z "${GREENGAGE7_INSTALLATION:-}" ] || \
-   [ -z "${GREENGAGE6_INSTALLATION:-}" ] || \
-   [ -z "${GREENGAGE7_SRC:-}" ] || \
-   [ -z "${GREENGAGE6_SRC:-}" ]; then
-	echo "This scrips expects the following environment variables to be set:"
-    echo "  GREENGAGE7_INSTALLATION"
-    echo "  GREENGAGE6_INSTALLATION"
-    echo "  GREENGAGE7_SRC"
-    echo "  GREENGAGE6_SRC"
+
+all_paths_are_set=true
+
+for path in GREENGAGE7_INSTALLATION \
+            GREENGAGE6_INSTALLATION \
+            GREENGAGE7_SRC \
+            GREENGAGE6_SRC;
+do
+    if [ -z ${!path:-} ]; then
+        echo "This test expects the following environment variable: ${path}"
+        all_paths_are_set=false
+    fi
+done
+
+if [ ${all_paths_are_set} = false ]; then
+    echo "Not all required enviroment variable are set. Exiting."
     exit 1
 fi
 
