@@ -98,7 +98,6 @@
 
 #include "cdb/cdbvars.h"
 #include "executor/instrument.h"        /* struct Instrumentation */
-#include "executor/nodeShareInputScan.h" /* get_shareinput_fileset */
 #include "utils/workfile_mgr.h"
 
 
@@ -378,8 +377,9 @@ static unsigned int getlen(Tuplestorestate *state, bool eofOK);
 static void *copytup_heap(Tuplestorestate *state, void *tup);
 static void writetup_heap(Tuplestorestate *state, void *tup);
 static void *readtup_heap(Tuplestorestate *state, unsigned int len);
-static SharedFileSet *attach_shareinput_fileset(dsm_handle handle);
+static void attach_shareinput_fileset(dsm_handle handle);
 static SharedFileSet *create_shareinput_fileset(dsm_handle *handle_out);
+static SharedFileSet *get_shareinput_fileset(dsm_handle handle_out);
 
 
 char *
@@ -1924,6 +1924,9 @@ get_shared_state(const char *filename)
 					(errcode(ERRCODE_OUT_OF_MEMORY),
 					errmsg("out of shared tuplestore slots")));
 		}
+
+		SharedFileSet *fileset = NULL;
+
 		sstate->session_id = gp_session_id;
 		sstate->num_current = 0;
 		sstate->num_done = 0;
@@ -1935,9 +1938,20 @@ get_shared_state(const char *filename)
 		 * writer is ready anyway.
 		 */
 		sstate->num_total = UINT32_MAX;
-		sstate->sfs_creator_pid = 0;
-		sstate->sfs_handle = DSM_HANDLE_INVALID;
-		sstate->sfs_number = 0;
+		/* Unlock in case of error */
+		PG_TRY();
+		{
+			fileset = create_shareinput_fileset(&(sstate->sfs_handle));
+		}
+		PG_CATCH();
+		{
+			sstate->aborting = true;
+			LWLockRelease(ShareInputScanLock);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+		sstate->sfs_creator_pid = fileset->creator_pid;
+		sstate->sfs_number = fileset->number;
 
 		pg_atomic_init_u32(&sstate->ready, 0);
 		ConditionVariableInit(&sstate->ready_done_cv);
@@ -1945,7 +1959,20 @@ get_shared_state(const char *filename)
 		elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): initialized shared state",
 			 filename, currentSliceId);
 	}
-
+	else
+	{
+		PG_TRY();
+		{
+			attach_shareinput_fileset(sstate->sfs_handle);
+		}
+		PG_CATCH();
+		{
+			sstate->aborting = true;
+			LWLockRelease(ShareInputScanLock);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+	}
 	/*
 	 * This ensures the shared state won't be suddenly deleted after we
 	 * release the lock.
@@ -1973,7 +2000,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
 	ResourceOwner oldowner;
 	TuplestoreSharingState *sstate;
     SharedFileSet *fileset;
-    dsm_handle handle = DSM_HANDLE_INVALID;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
 
@@ -2004,26 +2030,10 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
 				errmsg("tuplestore operation aborted, canceling")));
 	}
 
-	/* Unlock in case of error */
+	state->share_status = TSHARE_WRITER;
 	PG_TRY();
 	{
-		/*
-		* The first participant may have been a reader. The writer is the one
-		* who creates the actual SharedFileSet and BufFile.
-		*/
-		if (sstate->sfs_handle == DSM_HANDLE_INVALID)
-		{
-			fileset = create_shareinput_fileset(&handle);
-
-			sstate->sfs_handle = handle;
-			sstate->sfs_creator_pid = fileset->creator_pid;
-			sstate->sfs_number = fileset->number;
-		}
-		else
-		{
-			handle = sstate->sfs_handle;
-			fileset = attach_shareinput_fileset(handle);
-		}
+		fileset = get_shareinput_fileset(sstate->sfs_handle);
 	}
 	PG_CATCH();
 	{
@@ -2033,8 +2043,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	state->share_status = TSHARE_WRITER;
 	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
 	state->shared_state = sstate;
@@ -2047,9 +2055,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
 	PG_TRY();
 	{
 		state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
-		CurrentResourceOwner = oldowner;
-		state->shared_state->num_total = ntotal;
-		state->shared_state->created = true;
 	}
 	PG_CATCH();
 	{
@@ -2061,6 +2066,10 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	CurrentResourceOwner = oldowner;
+	state->shared_state->num_total = ntotal;
+	state->shared_state->created = true;
 
 	/*
 	 * For now, be conservative and always use trailing length words for
@@ -2185,7 +2194,6 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
 	SharedFileSet *fileset = NULL;
-	dsm_handle 	handle;
 	int			eflags;
 
 	/*
@@ -2214,8 +2222,6 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
 				 errmsg("tuplestore operation aborted, canceling")));
 	}
 
-	LWLockRelease(ShareInputScanLock);
-
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
 
 	state = tuplestore_begin_common(eflags,
@@ -2233,18 +2239,31 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
 	state->frozen = false;
 	state->shared_filename = pstrdup(filename);
 
+	PG_TRY();
+	{
+		fileset = get_shareinput_fileset(sstate->sfs_handle);
+	}
+	PG_CATCH();
+	{
+		sstate->aborting = true;
+		sstate->num_current--;
+		LWLockRelease(ShareInputScanLock);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	state->fileset = fileset;
+
 	/* Remember this tuplestore in case we have to close it while aborting */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
+
+	LWLockRelease(ShareInputScanLock);
 
 	/* Only open file if requested */
 	if (!skip_open) {
 		/* Wait until writer is ready */
 		tuplestore_reader_waitready(sstate);
 
-		handle = sstate->sfs_handle;
-		fileset = attach_shareinput_fileset(handle);
-
-		state->fileset = fileset;
 		state->myfile = BufFileOpenShared(fileset, filename);
 		state->readptrs[0].file = 0;
 		state->readptrs[0].offset = 0L;
@@ -2314,7 +2333,7 @@ AtAbort_SharedTuplestores()
 		
 		if (handle != DSM_HANDLE_INVALID) 
 		{
-			SharedFileSet *sisc_fileset = attach_shareinput_fileset(handle);
+			SharedFileSet *sisc_fileset = get_shareinput_fileset(handle);
 		
 			/*
 			* No one is using it, and we're aborting so no one will use it
@@ -2372,10 +2391,10 @@ create_shareinput_fileset(dsm_handle *handle_out)
 	 */
 	SharedFileSetPin(fileset);
 
-    return fileset;
+	return fileset;
 }
 
-static SharedFileSet *
+static void
 attach_shareinput_fileset(dsm_handle handle)
 {
     dsm_segment *seg;
@@ -2400,10 +2419,25 @@ attach_shareinput_fileset(dsm_handle handle)
         fileset = dsm_segment_address(seg);
         SharedFileSetAttach(fileset, seg);
     }
-    else
+}
+
+static SharedFileSet *
+get_shareinput_fileset(dsm_handle handle)
+{
+    dsm_segment *seg;
+    SharedFileSet *fileset;
+
+    if (handle == DSM_HANDLE_INVALID)
+        elog(ERROR, "invalid ShareInputScan SharedFileSet DSM handle");
+
+    seg = dsm_find_mapping(handle);
+
+    if (seg == NULL)
     {
-        fileset = dsm_segment_address(seg);
+		elog(ERROR, "could not get SharedFileSet from DSM segment");
     }
+
+	fileset = dsm_segment_address(seg);
 
     return fileset;
 }

@@ -29,6 +29,4 @@ extern void ShareInputReaderNotifyDone(ShareInputScanState *node); /* obsolete *
 extern Size ShareInputShmemSize(void);
 extern void ShareInputShmemInit(void);
 
-extern SharedFileSet *get_shareinput_fileset(void);
-
 #endif   /* NODESHAREINPUTSCAN_H */
