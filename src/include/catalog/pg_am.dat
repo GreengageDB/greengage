@@ -19,7 +19,7 @@
 { oid => '6131', oid_symbol => 'AO_ROW_TABLE_AM_OID',
   descr => 'row-oriented append-optimized table access method',
   amname => 'ao_row', amhandler => 'ao_row_tableam_handler', amtype => 't' },
-{ oid => '3435', oid_symbol => 'AO_COLUMN_TABLE_AM_OID',
+{ oid => '8435', oid_symbol => 'AO_COLUMN_TABLE_AM_OID',
   descr => 'column-oriented append-optimized table access method',
   amname => 'ao_column', amhandler => 'ao_column_tableam_handler', amtype => 't' },
 

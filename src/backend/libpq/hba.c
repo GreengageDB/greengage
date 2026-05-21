@@ -29,6 +29,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "common/ip.h"
+#include "common/string.h"
 #include "funcapi.h"
 #include "libpq/ifaddr.h"
 #include "libpq/libpq.h"
@@ -54,7 +55,6 @@
 
 
 #define MAX_TOKEN	256
-#define MAX_LINE	8192
 
 /* callback data for check_network_callback */
 typedef struct check_network_data
@@ -166,11 +166,19 @@ pg_isblank(const char c)
 /*
  * Grab one token out of the string pointed to by *lineptr.
  *
- * Tokens are strings of non-blank
- * characters bounded by blank characters, commas, beginning of line, and
- * end of line. Blank means space or tab. Tokens can be delimited by
- * double quotes (this allows the inclusion of blanks, but not newlines).
- * Comments (started by an unquoted '#') are skipped.
+ * Tokens are strings of non-blank characters bounded by blank characters,
+ * commas, beginning of line, and end of line.  Blank means space or tab.
+ *
+ * Tokens can be delimited by double quotes (this allows the inclusion of
+ * blanks or '#', but not newlines).  As in SQL, write two double-quotes
+ * to represent a double quote.
+ *
+ * Comments (started by an unquoted '#') are skipped, i.e. the remainder
+ * of the line is ignored.
+ *
+ * (Note that line continuation processing happens before tokenization.
+ * Thus, if a continuation occurs within quoted text or a comment, the
+ * quoted text or comment is considered to continue to the next line.)
  *
  * The token, if any, is returned at *buf (a buffer of size bufsz), and
  * *lineptr is advanced past the token.
@@ -470,6 +478,7 @@ static MemoryContext
 tokenize_file(const char *filename, FILE *file, List **tok_lines, int elevel)
 {
 	int			line_number = 1;
+	StringInfoData buf;
 	MemoryContext linecxt;
 	MemoryContext oldcxt;
 
@@ -478,47 +487,60 @@ tokenize_file(const char *filename, FILE *file, List **tok_lines, int elevel)
 									ALLOCSET_SMALL_SIZES);
 	oldcxt = MemoryContextSwitchTo(linecxt);
 
+	initStringInfo(&buf);
+
 	*tok_lines = NIL;
 
 	while (!feof(file) && !ferror(file))
 	{
-		char		rawline[MAX_LINE];
 		char	   *lineptr;
 		List	   *current_line = NIL;
 		char	   *err_msg = NULL;
+		int			last_backslash_buflen = 0;
+		int			continuations = 0;
 
-		if (!fgets(rawline, sizeof(rawline), file))
+		/* Collect the next input line, handling backslash continuations */
+		resetStringInfo(&buf);
+
+		while (pg_get_line_append(file, &buf))
 		{
+			/* Strip trailing newline, including \r in case we're on Windows */
+			buf.len = pg_strip_crlf(buf.data);
+
+			/*
+			 * Check for backslash continuation.  The backslash must be after
+			 * the last place we found a continuation, else two backslashes
+			 * followed by two \n's would behave surprisingly.
+			 */
+			if (buf.len > last_backslash_buflen &&
+				buf.data[buf.len - 1] == '\\')
+			{
+				/* Continuation, so strip it and keep reading */
+				buf.data[--buf.len] = '\0';
+				last_backslash_buflen = buf.len;
+				continuations++;
+				continue;
+			}
+
+			/* Nope, so we have the whole line */
+			break;
+		}
+
+		if (ferror(file))
+		{
+			/* I/O error! */
 			int			save_errno = errno;
 
-			if (!ferror(file))
-				break;			/* normal EOF */
-			/* I/O error! */
 			ereport(elevel,
 					(errcode_for_file_access(),
 					 errmsg("could not read file \"%s\": %m", filename)));
 			err_msg = psprintf("could not read file \"%s\": %s",
 							   filename, strerror(save_errno));
-			rawline[0] = '\0';
+			break;
 		}
-		if (strlen(rawline) == MAX_LINE - 1)
-		{
-			/* Line too long! */
-			ereport(elevel,
-					(errcode(ERRCODE_CONFIG_FILE_ERROR),
-					 errmsg("authentication file line too long"),
-					 errcontext("line %d of configuration file \"%s\"",
-								line_number, filename)));
-			err_msg = "authentication file line too long";
-		}
-
-		/* Strip trailing linebreak from rawline */
-		lineptr = rawline + strlen(rawline) - 1;
-		while (lineptr >= rawline && (*lineptr == '\n' || *lineptr == '\r'))
-			*lineptr-- = '\0';
 
 		/* Parse fields */
-		lineptr = rawline;
+		lineptr = buf.data;
 		while (*lineptr && err_msg == NULL)
 		{
 			List	   *current_field;
@@ -538,12 +560,12 @@ tokenize_file(const char *filename, FILE *file, List **tok_lines, int elevel)
 			tok_line = (TokenizedLine *) palloc(sizeof(TokenizedLine));
 			tok_line->fields = current_line;
 			tok_line->line_num = line_number;
-			tok_line->raw_line = pstrdup(rawline);
+			tok_line->raw_line = pstrdup(buf.data);
 			tok_line->err_msg = err_msg;
 			*tok_lines = lappend(*tok_lines, tok_line);
 		}
 
-		line_number++;
+		line_number += continuations + 1;
 	}
 
 	MemoryContextSwitchTo(oldcxt);
@@ -1166,8 +1188,11 @@ parse_hba_line(TokenizedLine *tok_line, int elevel)
 
 			ret = pg_getaddrinfo_all(str, NULL, &hints, &gai_result);
 			if (ret == 0 && gai_result)
+			{
 				memcpy(&parsedline->addr, gai_result->ai_addr,
 					   gai_result->ai_addrlen);
+				parsedline->addrlen = gai_result->ai_addrlen;
+			}
 			else if (ret == EAI_NONAME)
 				parsedline->hostname = str;
 			else
@@ -1216,6 +1241,7 @@ parse_hba_line(TokenizedLine *tok_line, int elevel)
 										token->string);
 					return NULL;
 				}
+				parsedline->masklen = parsedline->addrlen;
 				pfree(str);
 			}
 			else if (!parsedline->hostname)
@@ -1266,6 +1292,7 @@ parse_hba_line(TokenizedLine *tok_line, int elevel)
 
 				memcpy(&parsedline->mask, gai_result->ai_addr,
 					   gai_result->ai_addrlen);
+				parsedline->masklen = gai_result->ai_addrlen;
 				pg_freeaddrinfo_all(hints.ai_family, gai_result);
 
 				if (parsedline->addr.ss_family != parsedline->mask.ss_family)
@@ -1723,29 +1750,25 @@ parse_hba_auth_opt(char *name, char *val, HbaLine *hbaline,
 			*err_msg = "clientcert can only be configured for \"hostssl\" rows";
 			return false;
 		}
-		if (strcmp(val, "1") == 0
-			|| strcmp(val, "verify-ca") == 0)
-		{
-			hbaline->clientcert = clientCertCA;
-		}
-		else if (strcmp(val, "verify-full") == 0)
+
+		if (strcmp(val, "verify-full") == 0)
 		{
 			hbaline->clientcert = clientCertFull;
 		}
-		else if (strcmp(val, "0") == 0
-				 || strcmp(val, "no-verify") == 0)
+		else if (strcmp(val, "verify-ca") == 0)
 		{
 			if (hbaline->auth_method == uaCert)
 			{
 				ereport(elevel,
 						(errcode(ERRCODE_CONFIG_FILE_ERROR),
-						 errmsg("clientcert can not be set to \"no-verify\" when using \"cert\" authentication"),
+						 errmsg("clientcert only accepts \"verify-full\" when using \"cert\" authentication"),
 						 errcontext("line %d of configuration file \"%s\"",
 									line_num, HbaFileName)));
-				*err_msg = "clientcert can not be set to \"no-verify\" when using \"cert\" authentication";
+				*err_msg = "clientcert can only be set to \"verify-full\" when using \"cert\" authentication";
 				return false;
 			}
-			hbaline->clientcert = clientCertOff;
+
+			hbaline->clientcert = clientCertCA;
 		}
 		else
 		{
@@ -2535,20 +2558,26 @@ fill_hba_line(Tuplestorestate *tuple_store, TupleDesc tupdesc,
 				}
 				else
 				{
-					if (pg_getnameinfo_all(&hba->addr, sizeof(hba->addr),
-										   buffer, sizeof(buffer),
-										   NULL, 0,
-										   NI_NUMERICHOST) == 0)
+					/*
+					 * Note: if pg_getnameinfo_all fails, it'll set buffer to
+					 * "???", which we want to return.
+					 */
+					if (hba->addrlen > 0)
 					{
-						clean_ipv6_addr(hba->addr.ss_family, buffer);
+						if (pg_getnameinfo_all(&hba->addr, hba->addrlen,
+											   buffer, sizeof(buffer),
+											   NULL, 0,
+											   NI_NUMERICHOST) == 0)
+							clean_ipv6_addr(hba->addr.ss_family, buffer);
 						addrstr = pstrdup(buffer);
 					}
-					if (pg_getnameinfo_all(&hba->mask, sizeof(hba->mask),
-										   buffer, sizeof(buffer),
-										   NULL, 0,
-										   NI_NUMERICHOST) == 0)
+					if (hba->masklen > 0)
 					{
-						clean_ipv6_addr(hba->mask.ss_family, buffer);
+						if (pg_getnameinfo_all(&hba->mask, hba->masklen,
+											   buffer, sizeof(buffer),
+											   NULL, 0,
+											   NI_NUMERICHOST) == 0)
+							clean_ipv6_addr(hba->mask.ss_family, buffer);
 						maskstr = pstrdup(buffer);
 					}
 				}

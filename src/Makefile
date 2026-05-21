@@ -69,7 +69,6 @@ clean:
 	$(MAKE) -C test $@
 	$(MAKE) -C tutorial NO_PGXS=1 $@
 	$(MAKE) -C test/isolation $@
-	$(MAKE) -C test/thread $@
 	$(MAKE) -C $(MOCK_DIR) $@
 	$(MAKE) -C $(CMOCKERY_DIR) $@
 
@@ -77,7 +76,6 @@ distclean maintainer-clean:
 	$(MAKE) -C test $@
 	$(MAKE) -C tutorial NO_PGXS=1 $@
 	$(MAKE) -C test/isolation $@
-	$(MAKE) -C test/thread $@
 	$(MAKE) -C $(MOCK_DIR) $@
 	$(MAKE) -C $(CMOCKERY_DIR) $@
 	rm -f Makefile.port Makefile.global

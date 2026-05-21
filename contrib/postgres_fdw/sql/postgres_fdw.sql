@@ -307,7 +307,6 @@ EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE c1 IS NULL;        -- Nu
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE c1 IS NOT NULL;    -- NullTest
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE round(abs(c1), 0) = 1; -- FuncExpr
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE c1 = -c1;          -- OpExpr(l)
-EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE 1 = c1!;           -- OpExpr(r)
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE (c1 IS NOT NULL) IS DISTINCT FROM (c1 IS NOT NULL); -- DistinctExpr
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE c1 = ANY(ARRAY[c2, 1, c1 + 0]); -- ScalarArrayOpExpr
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM ft1 t1 WHERE c1 = (ARRAY[c1,c2,3])[1]; -- SubscriptingRef
@@ -2654,3 +2653,47 @@ SELECT count(*) FROM ft1;
 -- error here
 PREPARE TRANSACTION 'fdw_tpc';
 ROLLBACK;
+
+-- ===================================================================
+-- reestablish new connection
+-- ===================================================================
+
+-- Terminate the backend having the specified application_name and wait for
+-- the termination to complete.
+CREATE OR REPLACE PROCEDURE terminate_backend_and_wait(appname text) AS $$
+BEGIN
+    PERFORM pg_terminate_backend(pid) FROM pg_stat_activity
+    WHERE application_name = appname;
+    LOOP
+        PERFORM * FROM pg_stat_activity WHERE application_name = appname;
+        EXIT WHEN NOT FOUND;
+        PERFORM pg_sleep(1), pg_stat_clear_snapshot();
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Change application_name of remote connection to special one
+-- so that we can easily terminate the connection later.
+ALTER SERVER loopback OPTIONS (application_name 'fdw_retry_check');
+SELECT 1 FROM ft1 LIMIT 1;
+
+-- Terminate the remote connection.
+CALL terminate_backend_and_wait('fdw_retry_check');
+
+-- This query should detect the broken connection when starting new remote
+-- transaction, reestablish new connection, and then succeed.
+BEGIN;
+SELECT 1 FROM ft1 LIMIT 1;
+
+-- If the query detects the broken connection when starting new remote
+-- subtransaction, it doesn't reestablish new connection and should fail.
+-- The text of the error might vary across platforms, so don't show it.
+CALL terminate_backend_and_wait('fdw_retry_check');
+SAVEPOINT s;
+\set VERBOSITY sqlstate
+SELECT 1 FROM ft1 LIMIT 1;    -- should fail
+\set VERBOSITY default
+COMMIT;
+
+-- Clean up
+DROP PROCEDURE terminate_backend_and_wait(text);

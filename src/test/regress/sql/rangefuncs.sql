@@ -649,6 +649,22 @@ explain (verbose, costs off)
 select * from testrngfunc();
 select * from testrngfunc();
 
+create or replace function testrngfunc() returns setof rngfunc_type as $$
+  select 1, 2 union select 3, 4 order by 1;
+$$ language sql immutable;
+
+explain (verbose, costs off)
+select testrngfunc();
+select testrngfunc();
+explain (verbose, costs off)
+select * from testrngfunc();
+select * from testrngfunc();
+
+-- Check a couple of error cases while we're here
+select * from testrngfunc() as t(f1 int8,f2 int8);  -- fail, composite result
+select * from pg_get_keywords() as t(f1 int8,f2 int8);  -- fail, OUT params
+select * from sin(3) as t(f1 int8,f2 int8);  -- fail, scalar result type
+
 drop type rngfunc_type cascade;
 
 --

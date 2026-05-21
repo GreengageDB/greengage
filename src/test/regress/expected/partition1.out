@@ -311,6 +311,8 @@ partition by list (rankgender)
  partition bb values (CAST ('(1,M)' AS rank_partkey))
 );
 ERROR:  partition "rank_1_prt_bb" would overlap partition "rank_1_prt_1"
+LINE 10:  partition bb values (CAST ('(1,M)' AS rank_partkey))
+                                     ^
 -- RANGE validation
 -- legal if end of aa not inclusive
 create table ggg (a char(1), b date, d char(3))
@@ -2411,7 +2413,7 @@ PARTITION BY list (b)
  PARTITION t2 values (2));
 -- the following statement should fail because index cols does not contain part key
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(a);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "t_idx_col_contain_partkey" lacks column "b" which is part of the partition key.
 -- the following statement should work
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(a, b);
@@ -2443,7 +2445,7 @@ SUBPARTITION BY LIST (r_name) SUBPARTITION TEMPLATE
 );
 -- should fail, must contain all the partition keys of all levels
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(r_regionkey);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "t_idx_col_contain_partkey_1_prt_region1" lacks column "r_name" which is part of the partition key.
 -- should work
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(r_regionkey, r_name);

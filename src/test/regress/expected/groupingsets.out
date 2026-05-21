@@ -504,6 +504,52 @@ select x, not x as not_x, q2 from
    |       |  4567890123456789
 (5 rows)
 
+-- check qual push-down rules for a subquery with grouping sets
+explain (verbose, costs off)
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Subquery Scan on ss
+   Output: ss.x, ss.q1, ss.sum
+   Filter: ((ss.x = 1) AND (ss.q1 = 123))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: 1, i1.q1, (sum(i1.q2))
+         Merge Key: i1.q1
+         ->  Finalize GroupAggregate
+               Output: (1), i1.q1, sum(i1.q2)
+               Group Key: 1, i1.q1, (GROUPINGSET_ID())
+               ->  Sort
+                     Output: 1, i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
+                     Sort Key: i1.q1, (GROUPINGSET_ID())
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: 1, i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
+                           Hash Key: 1, i1.q1, (GROUPINGSET_ID())
+                           ->  Partial GroupAggregate
+                                 Output: (1), i1.q1, PARTIAL sum(i1.q2), GROUPINGSET_ID()
+                                 Group Key: 1
+                                 Sort Key: i1.q1
+                                   Group Key: i1.q1
+                                 ->  Seq Scan on public.int8_tbl i1
+                                       Output: 1, i1.q1, i1.q2
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashagg = 'off', optimizer = 'off'
+(24 rows)
+
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+ x | q1 | sum 
+---+----+-----
+(0 rows)
+
 -- simple rescan tests
 select a, b, sum(v.x)
   from (values (1),(2)) v(x), gstest_data(v.x)
@@ -1742,6 +1788,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 set enable_indexscan = false;
 set work_mem = '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set hash_mem_multiplier = 2;
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -1790,6 +1837,7 @@ explain (costs off)
  Optimizer: Postgres query optimizer
 (12 rows)
 
+reset hash_mem_multiplier;
 set work_mem = '384kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 explain (costs off)

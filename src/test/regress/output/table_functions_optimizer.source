@@ -2628,7 +2628,7 @@ FROM sessionize_static(
     ),
     '1 minute' ) AS sessionize(id integer, "time" timestamp, sessionnum integer)
 ORDER BY id, time; -- FAIL, double qualified
-ERROR:  a column definition list is only allowed for functions returning "record"
+ERROR:  a column definition list is redundant for a function with OUT parameters
 LINE 10:     '1 minute' ) AS sessionize(id integer, "time" timestamp,...
                                         ^
 -- Describe with qualification fails
@@ -2643,7 +2643,7 @@ FROM sessionize_dynamic(
     ),
     '1 minute' ) AS sessionize(id integer, "time" timestamp, sessionnum integer)
 ORDER BY id, time; -- FAIL, double qualified
-ERROR:  a column definition list is only allowed for functions returning "record"
+ERROR:  a column definition list is redundant for a function with OUT parameters
 LINE 10:     '1 minute' ) AS sessionize(id integer, "time" timestamp,...
                                         ^
 -- Otherwise results should match

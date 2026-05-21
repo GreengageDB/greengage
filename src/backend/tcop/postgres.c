@@ -4811,7 +4811,8 @@ PostgresMain(int argc, char *argv[],
 	}
 
 	/*
-	 * Set up signal handlers and masks.
+	 * Set up signal handlers.  (InitPostmasterChild or InitStandaloneProcess
+	 * has already set up BlockSig and made that the active signal mask.)
 	 *
 	 * Note that postmaster blocked all signals before forking child process,
 	 * so there is no race condition whereby we might receive a signal before
@@ -4833,6 +4834,9 @@ PostgresMain(int argc, char *argv[],
 		pqsignal(SIGTERM, die); /* cancel current query and exit */
 
 		/*
+		 * In a postmaster child backend, replace SignalHandlerForCrashExit
+		 * with quickdie, so we can tell the client we're dying.
+		 *
 		 * In a standalone backend, SIGQUIT can be generated from the keyboard
 		 * easily, while SIGTERM cannot, so we make both signals do die()
 		 * rather than quickdie().
@@ -4872,16 +4876,6 @@ PostgresMain(int argc, char *argv[],
 #endif
 #endif
 	}
-
-	pqinitmask();
-
-	if (IsUnderPostmaster)
-	{
-		/* We allow SIGQUIT (quickdie) at all times */
-		sigdelset(&BlockSig, SIGQUIT);
-	}
-
-	PG_SETMASK(&BlockSig);		/* block everything except SIGQUIT */
 
 	if (!IsUnderPostmaster)
 	{

@@ -20,6 +20,7 @@
 #include "common.h"
 #include "common/connect.h"
 #include "common/logging.h"
+#include "common/string.h"
 #include "fe_utils/cancel.h"
 #include "fe_utils/string_utils.h"
 
@@ -53,7 +54,7 @@ handle_help_version_opts(int argc, char *argv[],
  * Make a database connection with the given parameters.
  *
  * An interactive password prompt is automatically issued if needed and
- * allowed by prompt_password.
+ * allowed by cparams->prompt_password.
  *
  * If allow_password_reuse is true, we will try to re-use any password
  * given during previous calls to this routine.  (Callers should not pass
@@ -61,24 +62,24 @@ handle_help_version_opts(int argc, char *argv[],
  * as before, else we might create password exposure hazards.)
  */
 PGconn *
-connectDatabase(const char *dbname, const char *pghost,
-				const char *pgport, const char *pguser,
-				enum trivalue prompt_password, const char *progname,
+connectDatabase(const ConnParams *cparams, const char *progname,
 				bool echo, bool fail_ok, bool allow_password_reuse)
 {
 	PGconn	   *conn;
 	bool		new_pass;
-	static bool have_password = false;
-	static char password[100];
+	static char *password = NULL;
 
-	if (!allow_password_reuse)
-		have_password = false;
+	/* Callers must supply at least dbname; other params can be NULL */
+	Assert(cparams->dbname);
 
-	if (!have_password && prompt_password == TRI_YES)
+	if (!allow_password_reuse && password)
 	{
-		simple_prompt("Password: ", password, sizeof(password), false);
-		have_password = true;
+		free(password);
+		password = NULL;
 	}
+
+	if (cparams->prompt_password == TRI_YES && password == NULL)
+		password = simple_prompt("Password: ", false);
 
 	/*
 	 * Start the connection.  Loop until we have a password if requested by
@@ -86,23 +87,35 @@ connectDatabase(const char *dbname, const char *pghost,
 	 */
 	do
 	{
-		const char *keywords[7];
-		const char *values[7];
+		const char *keywords[8];
+		const char *values[8];
+		int			i = 0;
 
-		keywords[0] = "host";
-		values[0] = pghost;
-		keywords[1] = "port";
-		values[1] = pgport;
-		keywords[2] = "user";
-		values[2] = pguser;
-		keywords[3] = "password";
-		values[3] = have_password ? password : NULL;
-		keywords[4] = "dbname";
-		values[4] = dbname;
-		keywords[5] = "fallback_application_name";
-		values[5] = progname;
-		keywords[6] = NULL;
-		values[6] = NULL;
+		/*
+		 * If dbname is a connstring, its entries can override the other
+		 * values obtained from cparams; but in turn, override_dbname can
+		 * override the dbname component of it.
+		 */
+		keywords[i] = "host";
+		values[i++] = cparams->pghost;
+		keywords[i] = "port";
+		values[i++] = cparams->pgport;
+		keywords[i] = "user";
+		values[i++] = cparams->pguser;
+		keywords[i] = "password";
+		values[i++] = password;
+		keywords[i] = "dbname";
+		values[i++] = cparams->dbname;
+		if (cparams->override_dbname)
+		{
+			keywords[i] = "dbname";
+			values[i++] = cparams->override_dbname;
+		}
+		keywords[i] = "fallback_application_name";
+		values[i++] = progname;
+		keywords[i] = NULL;
+		values[i++] = NULL;
+		Assert(i <= lengthof(keywords));
 
 		new_pass = false;
 		conn = PQconnectdbParams(keywords, values, true);
@@ -110,7 +123,7 @@ connectDatabase(const char *dbname, const char *pghost,
 		if (!conn)
 		{
 			pg_log_error("could not connect to database %s: out of memory",
-						 dbname);
+						 cparams->dbname);
 			exit(1);
 		}
 
@@ -119,11 +132,12 @@ connectDatabase(const char *dbname, const char *pghost,
 		 */
 		if (PQstatus(conn) == CONNECTION_BAD &&
 			PQconnectionNeedsPassword(conn) &&
-			prompt_password != TRI_NO)
+			cparams->prompt_password != TRI_NO)
 		{
 			PQfinish(conn);
-			simple_prompt("Password: ", password, sizeof(password), false);
-			have_password = true;
+			if (password)
+				free(password);
+			password = simple_prompt("Password: ", false);
 			new_pass = true;
 		}
 	} while (new_pass);
@@ -137,10 +151,11 @@ connectDatabase(const char *dbname, const char *pghost,
 			return NULL;
 		}
 		pg_log_error("could not connect to database %s: %s",
-					 dbname, PQerrorMessage(conn));
+					 cparams->dbname, PQerrorMessage(conn));
 		exit(1);
 	}
 
+	/* Start strict; callers may override this. */
 	PQclear(executeQuery(conn, ALWAYS_SECURE_SEARCH_PATH_SQL, echo));
 
 	return conn;
@@ -148,27 +163,30 @@ connectDatabase(const char *dbname, const char *pghost,
 
 /*
  * Try to connect to the appropriate maintenance database.
+ *
+ * This differs from connectDatabase only in that it has a rule for
+ * inserting a default "dbname" if none was given (which is why cparams
+ * is not const).  Note that cparams->dbname should typically come from
+ * a --maintenance-db command line parameter.
  */
 PGconn *
-connectMaintenanceDatabase(const char *maintenance_db,
-						   const char *pghost, const char *pgport,
-						   const char *pguser, enum trivalue prompt_password,
+connectMaintenanceDatabase(ConnParams *cparams,
 						   const char *progname, bool echo)
 {
 	PGconn	   *conn;
 
 	/* If a maintenance database name was specified, just connect to it. */
-	if (maintenance_db)
-		return connectDatabase(maintenance_db, pghost, pgport, pguser,
-							   prompt_password, progname, echo, false, false);
+	if (cparams->dbname)
+		return connectDatabase(cparams, progname, echo, false, false);
 
 	/* Otherwise, try postgres first and then template1. */
-	conn = connectDatabase("postgres", pghost, pgport, pguser, prompt_password,
-						   progname, echo, true, false);
+	cparams->dbname = "postgres";
+	conn = connectDatabase(cparams, progname, echo, true, false);
 	if (!conn)
-		conn = connectDatabase("template1", pghost, pgport, pguser,
-							   prompt_password, progname, echo, false, false);
-
+	{
+		cparams->dbname = "template1";
+		conn = connectDatabase(cparams, progname, echo, false, false);
+	}
 	return conn;
 }
 
@@ -444,14 +462,21 @@ yesno_prompt(const char *question)
 
 	for (;;)
 	{
-		char		resp[10];
+		char	   *resp;
 
-		simple_prompt(prompt, resp, sizeof(resp), true);
+		resp = simple_prompt(prompt, true);
 
 		if (strcmp(resp, _(PG_YESLETTER)) == 0)
+		{
+			free(resp);
 			return true;
+		}
 		if (strcmp(resp, _(PG_NOLETTER)) == 0)
+		{
+			free(resp);
 			return false;
+		}
+		free(resp);
 
 		printf(_("Please answer \"%s\" or \"%s\".\n"),
 			   _(PG_YESLETTER), _(PG_NOLETTER));

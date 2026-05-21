@@ -234,7 +234,7 @@ get_legacy_cdbhash_opclass_for_base_type(Oid orig_typid)
 		case OIDVECTOROID:
 			opclass_name = "cdbhash_oidvector_ops";
 			break;
-		case CASHOID:
+		case MONEYOID:
 			opclass_name = "cdbhash_cash_ops";
 			break;
 		case UUIDOID:

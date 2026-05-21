@@ -154,6 +154,24 @@ select * from trigtest;
 
 drop table trigtest;
 
+-- Check behavior with an implicit column default, too (bug #16644)
+create table trigtest (a integer, id integer default 0) distributed by (id);
+
+create trigger trigger_return_old
+	before insert or delete or update on trigtest
+	for each row execute procedure trigger_return_old();
+
+insert into trigtest values(1);
+select a from trigtest;
+
+alter table trigtest add column b integer default 42 not null;
+
+select a, b from trigtest;
+update trigtest set a = 2 where a = 1 returning a, b;
+select a, b from trigtest;
+
+drop table trigtest;
+
 create sequence ttdummy_seq increment 10 start 0 minvalue 0 cache 1;
 
 create table tttest (
@@ -430,7 +448,7 @@ create table trigtest2 (i int references trigtest(i) on delete cascade);
 
 create function trigtest() returns trigger as $$
 begin
-	raise notice '% % % %', TG_RELNAME, TG_OP, TG_WHEN, TG_LEVEL;
+	raise notice '% % % %', TG_TABLE_NAME, TG_OP, TG_WHEN, TG_LEVEL;
 	return new;
 end;$$ language plpgsql;
 
@@ -666,7 +684,7 @@ begin
         argstr := argstr || TG_argv[i];
     end loop;
 
-    raise notice '% % % % (%)', TG_RELNAME, TG_WHEN, TG_OP, TG_LEVEL, argstr;
+    raise notice '% % % % (%)', TG_TABLE_NAME, TG_WHEN, TG_OP, TG_LEVEL, argstr;
 
     if TG_LEVEL = 'ROW' then
         if TG_OP = 'INSERT' then

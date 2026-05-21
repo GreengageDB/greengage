@@ -112,7 +112,7 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	initStringInfo(&buf);
 	if (manifest->first_file)
 	{
-		appendStringInfoString(&buf, "\n");
+		appendStringInfoChar(&buf, '\n');
 		manifest->first_file = false;
 	}
 	else
@@ -152,7 +152,7 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	enlargeStringInfo(&buf, 128);
 	buf.len += pg_strftime(&buf.data[buf.len], 128, "%Y-%m-%d %H:%M:%S %Z",
 						   pg_gmtime(&mtime));
-	appendStringInfoString(&buf, "\"");
+	appendStringInfoChar(&buf, '"');
 
 	/* Add checksum information. */
 	if (checksum_ctx->type != CHECKSUM_TYPE_NONE)
@@ -168,7 +168,7 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 		enlargeStringInfo(&buf, 2 * checksumlen);
 		buf.len += hex_encode((char *) checksumbuf, checksumlen,
 							  &buf.data[buf.len]);
-		appendStringInfoString(&buf, "\"");
+		appendStringInfoChar(&buf, '"');
 	}
 
 	/* Close out the object. */
@@ -272,7 +272,7 @@ AddWALInfoToBackupManifest(backup_manifest_info *manifest, XLogRecPtr startptr,
 	 */
 	if (!found_start_timeline)
 		ereport(ERROR,
-				errmsg("start timeline %u not found history of timeline %u",
+				errmsg("start timeline %u not found in history of timeline %u",
 					   starttli, endtli));
 
 	/* Terminate the list of WAL ranges. */

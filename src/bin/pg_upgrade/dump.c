@@ -54,10 +54,12 @@ generate_old_dump(void)
 
 		parallel_exec_prog(log_file_name, NULL,
 						   "%s \"%s/pg_dump\" %s --schema-only --quote-all-identifiers "
-						   "--binary-upgrade --format=custom %s --file=\"%s\" %s",
+						   "--binary-upgrade --format=custom %s %s --file=\"%s\" %s",
 						   PG_OPTIONS_UTILITY_MODE_VERSION(old_cluster.major_version),
 						   new_cluster.bindir, cluster_conn_opts(&old_cluster),
 						   log_opts.verbose ? "--verbose" : "",
+						   user_opts.ind_coll_unknown ?
+						   "--index-collation-versions-unknown" : "",
 						   sql_file_name, escaped_connstr.data);
 
 		termPQExpBuffer(&escaped_connstr);

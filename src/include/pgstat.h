@@ -58,19 +58,22 @@ typedef enum StatMsgType
 	PGSTAT_MTYPE_RESETSHAREDCOUNTER,
 	PGSTAT_MTYPE_RESETSINGLECOUNTER,
 	PGSTAT_MTYPE_RESETSLRUCOUNTER,
+	PGSTAT_MTYPE_RESETREPLSLOTCOUNTER,
 	PGSTAT_MTYPE_AUTOVAC_START,
 	PGSTAT_MTYPE_VACUUM,
 	PGSTAT_MTYPE_ANALYZE,
 	PGSTAT_MTYPE_ARCHIVER,
 	PGSTAT_MTYPE_QUEUESTAT, /* GPDB */
 	PGSTAT_MTYPE_BGWRITER,
+	PGSTAT_MTYPE_WAL,
 	PGSTAT_MTYPE_SLRU,
 	PGSTAT_MTYPE_FUNCSTAT,
 	PGSTAT_MTYPE_FUNCPURGE,
 	PGSTAT_MTYPE_RECOVERYCONFLICT,
 	PGSTAT_MTYPE_TEMPFILE,
 	PGSTAT_MTYPE_DEADLOCK,
-	PGSTAT_MTYPE_CHECKSUMFAILURE
+	PGSTAT_MTYPE_CHECKSUMFAILURE,
+	PGSTAT_MTYPE_REPLSLOT,
 } StatMsgType;
 
 /* ----------
@@ -125,7 +128,8 @@ typedef struct PgStat_TableCounts
 typedef enum PgStat_Shared_Reset_Target
 {
 	RESET_ARCHIVER,
-	RESET_BGWRITER
+	RESET_BGWRITER,
+	RESET_WAL
 } PgStat_Shared_Reset_Target;
 
 /* Possible object types for resetting single counters */
@@ -360,6 +364,18 @@ typedef struct PgStat_MsgResetslrucounter
 } PgStat_MsgResetslrucounter;
 
 /* ----------
+ * PgStat_MsgResetreplslotcounter Sent by the backend to tell the collector
+ *								to reset replication slot counter(s)
+ * ----------
+ */
+typedef struct PgStat_MsgResetreplslotcounter
+{
+	PgStat_MsgHdr m_hdr;
+	char		m_slotname[NAMEDATALEN];
+	bool		clearall;
+} PgStat_MsgResetreplslotcounter;
+
+/* ----------
  * PgStat_MsgAutovacStart		Sent by the autovacuum daemon to signal
  *								that a database is going to be processed
  * ----------
@@ -455,6 +471,16 @@ typedef struct PgStat_MsgBgWriter
 } PgStat_MsgBgWriter;
 
 /* ----------
+ * PgStat_MsgWal			Sent by backends and background processes to update WAL statistics.
+ * ----------
+ */
+typedef struct PgStat_MsgWal
+{
+	PgStat_MsgHdr m_hdr;
+	PgStat_Counter m_wal_buffers_full;
+} PgStat_MsgWal;
+
+/* ----------
  * PgStat_MsgSLRU			Sent by a backend to update SLRU statistics.
  * ----------
  */
@@ -470,6 +496,25 @@ typedef struct PgStat_MsgSLRU
 	PgStat_Counter m_flush;
 	PgStat_Counter m_truncate;
 } PgStat_MsgSLRU;
+
+/* ----------
+ * PgStat_MsgReplSlot	Sent by a backend or a wal sender to update replication
+ *						slot statistics.
+ * ----------
+ */
+typedef struct PgStat_MsgReplSlot
+{
+	PgStat_MsgHdr m_hdr;
+	char		m_slotname[NAMEDATALEN];
+	bool		m_drop;
+	PgStat_Counter m_spill_txns;
+	PgStat_Counter m_spill_count;
+	PgStat_Counter m_spill_bytes;
+	PgStat_Counter m_stream_txns;
+	PgStat_Counter m_stream_count;
+	PgStat_Counter m_stream_bytes;
+} PgStat_MsgReplSlot;
+
 
 /* ----------
  * PgStat_MsgRecoveryConflict	Sent by the backend upon recovery conflict
@@ -609,12 +654,14 @@ typedef union PgStat_Msg
 	PgStat_MsgResetsharedcounter msg_resetsharedcounter;
 	PgStat_MsgResetsinglecounter msg_resetsinglecounter;
 	PgStat_MsgResetslrucounter msg_resetslrucounter;
+	PgStat_MsgResetreplslotcounter msg_resetreplslotcounter;
 	PgStat_MsgAutovacStart msg_autovacuum_start;
 	PgStat_MsgVacuum msg_vacuum;
 	PgStat_MsgAnalyze msg_analyze;
 	PgStat_MsgArchiver msg_archiver;
 	PgStat_MsgQueuestat msg_queuestat;  /* GPDB */
 	PgStat_MsgBgWriter msg_bgwriter;
+	PgStat_MsgWal msg_wal;
 	PgStat_MsgSLRU msg_slru;
 	PgStat_MsgFuncstat msg_funcstat;
 	PgStat_MsgFuncpurge msg_funcpurge;
@@ -622,6 +669,7 @@ typedef union PgStat_Msg
 	PgStat_MsgDeadlock msg_deadlock;
 	PgStat_MsgTempFile msg_tempfile;
 	PgStat_MsgChecksumFailure msg_checksumfailure;
+	PgStat_MsgReplSlot msg_replslot;
 } PgStat_Msg;
 
 
@@ -633,7 +681,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BC9D
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BC9F
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -807,6 +855,15 @@ typedef struct PgStat_GlobalStats
 } PgStat_GlobalStats;
 
 /*
+ * WAL statistics kept in the stats collector
+ */
+typedef struct PgStat_WalStats
+{
+	PgStat_Counter wal_buffers_full;
+	TimestampTz stat_reset_timestamp;
+} PgStat_WalStats;
+
+/*
  * SLRU statistics kept in the stats collector
  */
 typedef struct PgStat_SLRUStats
@@ -821,6 +878,20 @@ typedef struct PgStat_SLRUStats
 	TimestampTz stat_reset_timestamp;
 } PgStat_SLRUStats;
 
+/*
+ * Replication slot statistics kept in the stats collector
+ */
+typedef struct PgStat_ReplSlotStats
+{
+	char		slotname[NAMEDATALEN];
+	PgStat_Counter spill_txns;
+	PgStat_Counter spill_count;
+	PgStat_Counter spill_bytes;
+	PgStat_Counter stream_txns;
+	PgStat_Counter stream_count;
+	PgStat_Counter stream_bytes;
+	TimestampTz stat_reset_timestamp;
+} PgStat_ReplSlotStats;
 
 /* ----------
  * Backend states
@@ -999,6 +1070,7 @@ typedef enum
 	WAIT_EVENT_BASEBACKUP_READ = PG_WAIT_IO,
 	WAIT_EVENT_BUFFILE_READ,
 	WAIT_EVENT_BUFFILE_WRITE,
+	WAIT_EVENT_BUFFILE_TRUNCATE,
 	WAIT_EVENT_CONTROL_FILE_READ,
 	WAIT_EVENT_CONTROL_FILE_SYNC,
 	WAIT_EVENT_CONTROL_FILE_SYNC_UPDATE,
@@ -1064,7 +1136,11 @@ typedef enum
 	WAIT_EVENT_WAL_READ,
 	WAIT_EVENT_WAL_SYNC,
 	WAIT_EVENT_WAL_SYNC_METHOD_ASSIGN,
-	WAIT_EVENT_WAL_WRITE
+	WAIT_EVENT_WAL_WRITE,
+	WAIT_EVENT_LOGICAL_CHANGES_READ,
+	WAIT_EVENT_LOGICAL_CHANGES_WRITE,
+	WAIT_EVENT_LOGICAL_SUBXACT_READ,
+	WAIT_EVENT_LOGICAL_SUBXACT_WRITE
 } WaitEventIO;
 
 /* ----------
@@ -1349,6 +1425,11 @@ extern bool pgstat_collect_queuelevel;
 extern PgStat_MsgBgWriter BgWriterStats;
 
 /*
+ * WAL statistics counter is updated by backends and background processes
+ */
+extern PgStat_MsgWal WalStats;
+
+/*
  * Updated by pgstat_count_buffer_*_time macros
  */
 extern PgStat_Counter pgStatBlockReadTime;
@@ -1388,6 +1469,7 @@ extern void pgstat_reset_counters(void);
 extern void pgstat_reset_shared_counters(const char *);
 extern void pgstat_reset_single_counter(Oid objectid, PgStat_Single_Reset_Type type);
 extern void pgstat_reset_slru_counter(const char *);
+extern void pgstat_reset_replslot_counter(const char *name);
 
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
@@ -1400,6 +1482,9 @@ extern void pgstat_report_recovery_conflict(int reason);
 extern void pgstat_report_deadlock(void);
 extern void pgstat_report_checksum_failures_in_db(Oid dboid, int failurecount);
 extern void pgstat_report_checksum_failure(void);
+extern void pgstat_report_replslot(const char *slotname, int spilltxns, int spillcount,
+								   int spillbytes, int streamtxns, int streamcount, int streambytes);
+extern void pgstat_report_replslot_drop(const char *slotname);
 
 extern void pgstat_initialize(void);
 extern void pgstat_bestart(void);
@@ -1642,6 +1727,7 @@ extern void pgstat_twophase_postabort(TransactionId xid, uint16 info,
 
 extern void pgstat_send_archiver(const char *xlog, bool failed);
 extern void pgstat_send_bgwriter(void);
+extern void pgstat_send_wal(void);
 
 struct CdbDispatchResults;
 struct pg_result;
@@ -1667,7 +1753,9 @@ extern PgStat_StatFuncEntry *pgstat_fetch_stat_funcentry(Oid funcid);
 extern int	pgstat_fetch_stat_numbackends(void);
 extern PgStat_ArchiverStats *pgstat_fetch_stat_archiver(void);
 extern PgStat_GlobalStats *pgstat_fetch_global(void);
+extern PgStat_WalStats *pgstat_fetch_stat_wal(void);
 extern PgStat_SLRUStats *pgstat_fetch_slru(void);
+extern PgStat_ReplSlotStats *pgstat_fetch_replslot(int *nslots_p);
 
 extern void pgstat_count_slru_page_zeroed(int slru_idx);
 extern void pgstat_count_slru_page_hit(int slru_idx);

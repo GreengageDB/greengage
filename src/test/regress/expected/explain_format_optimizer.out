@@ -475,8 +475,7 @@ explain_filter
             Index Cond: "(id = boxes.apple_id)"
             Rows Removed by Index Recheck: N
   Optimizer: "Pivotal Optimizer (GPORCA)"
-  Planning: 
-    Planning Time: N.N
+  Planning Time: N.N
   Triggers: 
   Slice statistics: 
     - Slice: N
@@ -600,7 +599,7 @@ Execution Time: N.N ms
 -- Check explain analyze json format output with jit enable
 select explain_filter_to_json('EXPLAIN (ANALYZE, FORMAT json) SELECT * FROM jit_explain_output LIMIT 10;');
 explain_filter_to_json
-[{"JIT": {"slice": {"slice": 0, "Timing": 0.0, "functions": 0.0}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Planning": {"Planning Time": 0.0}, "Triggers": [], "Optimizer": "Pivotal Optimizer (GPORCA)", "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
+[{"JIT": {"slice": {"slice": 0, "Timing": 0.0, "functions": 0.0}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Triggers": [], "Optimizer": "Pivotal Optimizer (GPORCA)", "Planning Time": 0.0, "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
 (1 row)
 RESET jit;
 RESET jit_above_cost;

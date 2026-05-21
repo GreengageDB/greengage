@@ -38,15 +38,15 @@ SELECT ssl_client_serial();
 (1 row)
 
 SELECT ssl_client_dn();
-                                   ssl_client_dn                                    
-------------------------------------------------------------------------------------
- /CN=client.example.com/C=CN/ST=Qingdao/L=ClientLocality/O=SSLINFO-Client/OU=Client
+                          ssl_client_dn                          
+-----------------------------------------------------------------
+ /CN=client.example.com/C=CN/ST=Qingdao/L=ClientLocality/O=SSLIN
 (1 row)
 
 SELECT ssl_issuer_dn();
-                               ssl_issuer_dn                               
----------------------------------------------------------------------------
- /CN=root.example.com/C=CN/ST=Beijing/L=RootLocality/O=SSLINFO-dev/OU=Test
+                          ssl_issuer_dn                          
+-----------------------------------------------------------------
+ /CN=root.example.com/C=CN/ST=Beijing/L=RootLocality/O=SSLINFO-d
 (1 row)
 
 SELECT ssl_client_dn_field('CN') AS client_dn_CN;

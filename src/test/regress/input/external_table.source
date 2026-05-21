@@ -42,7 +42,7 @@ FORMAT 'text' (delimiter '|');
 
 -- Only tables with custom protocol should create dependency, due to a bug there
 -- used to be entries created for non custom protocol tables with refobjid=0.
-SELECT * FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
+SELECT count(*) FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
 
 -- drop tables
 

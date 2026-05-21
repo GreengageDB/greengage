@@ -258,7 +258,7 @@ CREATE [ OR REPLACE ] FUNCTION
        The name of the language that the function is implemented in.
        It can be <literal>sql</literal>, <literal>c</literal>,
        <literal>internal</literal>, or the name of a user-defined
-       procedural language, e.g. <literal>plpgsql</literal>.  Enclosing the
+       procedural language, e.g., <literal>plpgsql</literal>.  Enclosing the
        name in single quotes is deprecated and requires matching case.
       </para>
      </listitem>
@@ -432,11 +432,11 @@ CREATE [ OR REPLACE ] FUNCTION
       Functions should be labeled parallel unsafe if they modify any database
       state, or if they make changes to the transaction such as using
       sub-transactions, or if they access sequences or attempt to make
-      persistent changes to settings (e.g. <literal>setval</literal>).  They should
+      persistent changes to settings (e.g., <literal>setval</literal>).  They should
       be labeled as parallel restricted if they access temporary tables,
       client connection state, cursors, prepared statements, or miscellaneous
       backend-local state which the system cannot synchronize in parallel mode
-      (e.g.  <literal>setseed</literal> cannot be executed other than by the group
+      (e.g.,  <literal>setseed</literal> cannot be executed other than by the group
       leader because a change made by another process would not be reflected
       in the leader).  In general, if a function is labeled as being safe when
       it is restricted or unsafe, or if it is labeled as being restricted when
@@ -558,7 +558,7 @@ CREATE [ OR REPLACE ] FUNCTION
        the SQL function. The string <replaceable
        class="parameter">obj_file</replaceable> is the name of the shared
        library file containing the compiled C function, and is interpreted
-       as for the <xref linkend="sql-load"/> command.  The string
+       as for the <link linkend="sql-load"><command>LOAD</command></link> command.  The string
        <replaceable class="parameter">link_symbol</replaceable> is the
        function's link symbol, that is, the name of the function in the C
        language source code.  If the link symbol is omitted, it is assumed to

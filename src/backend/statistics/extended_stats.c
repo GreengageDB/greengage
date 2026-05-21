@@ -233,7 +233,7 @@ ComputeExtStatisticsRows(Relation onerel,
 	foreach(lc, lstats)
 	{
 		StatExtEntry *stat = (StatExtEntry *) lfirst(lc);
-		int			stattarget = stat->stattarget;
+		int			stattarget;
 		VacAttrStats **stats;
 		int			nattrs = bms_num_members(stat->columns);
 
@@ -1416,7 +1416,7 @@ statext_mcv_clauselist_selectivity(PlannerInfo *root, List *clauses, int varReli
 		stat_sel = mcv_sel + other_sel;
 		CLAMP_PROBABILITY(stat_sel);
 
-		/* Factor the estimate from this MCV to the oveall estimate. */
+		/* Factor the estimate from this MCV to the overall estimate. */
 		sel *= stat_sel;
 	}
 

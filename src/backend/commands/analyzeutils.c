@@ -1216,7 +1216,7 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 		int32		relpages = get_rel_relpages(partRelid);
 
 		/* Partition is not analyzed */
-		if (relTuples == 0.0 && relpages == 0)
+		if (relTuples < 0.0)
 		{
 			if (relid_exclude == InvalidOid)
 				ereport(elevel,
@@ -1240,7 +1240,7 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 		float4		relTuples = get_rel_reltuples(partRelid);
 
 		/* Partition is analyzed and we detect it is empty */
-		if (relTuples == 0.0)
+		if (relTuples <= 0.0)
 			continue;
 
 		all_parts_empty = false;

@@ -994,6 +994,10 @@ describeOperators(const char *pattern, bool verbose, bool showSystem)
 	 * anyway, for now, because (1) third-party modules may still be following
 	 * the old convention, and (2) we'd need to do it anyway when talking to a
 	 * pre-9.1 server.
+	 *
+	 * The support for postfix operators in this query is dead code as of
+	 * Postgres 14, but we need to keep it for as long as we support talking
+	 * to pre-v14 servers.
 	 */
 
 	printfPQExpBuffer(&buf,
@@ -3081,8 +3085,13 @@ describeOneTableDetails(const char *schemaname,
 							  "        a.attnum = s.attnum AND NOT attisdropped)) AS columns,\n"
 							  "  'd' = any(stxkind) AS ndist_enabled,\n"
 							  "  'f' = any(stxkind) AS deps_enabled,\n"
-							  "  'm' = any(stxkind) AS mcv_enabled\n"
-							  "FROM pg_catalog.pg_statistic_ext stat "
+							  "  'm' = any(stxkind) AS mcv_enabled,\n");
+
+			if (pset.sversion >= 130000)
+				appendPQExpBufferStr(&buf, "  stxstattarget\n");
+			else
+				appendPQExpBufferStr(&buf, "  -1 AS stxstattarget\n");
+			appendPQExpBuffer(&buf, "FROM pg_catalog.pg_statistic_ext stat\n"
 							  "WHERE stxrelid = '%s'\n"
 							  "ORDER BY 1;",
 							  oid);
@@ -3129,6 +3138,11 @@ describeOneTableDetails(const char *schemaname,
 					appendPQExpBuffer(&buf, ") ON %s FROM %s",
 									  PQgetvalue(result, i, 4),
 									  PQgetvalue(result, i, 1));
+
+					/* Show the stats target if it's not default */
+					if (strcmp(PQgetvalue(result, i, 8), "-1") != 0)
+						appendPQExpBuffer(&buf, "; STATISTICS %s",
+										  PQgetvalue(result, i, 8));
 
 					printTableAddFooter(&cont, buf.data);
 				}
@@ -4636,7 +4650,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 	int			cols_so_far;
-	bool		translate_columns[] = {false, false, true, false, false /* Storage */, false, false, false, false, false};
+	bool		translate_columns[] = {false, false, true, false, false /* Storage */, false, false, false, false, false, false};
 
 	/* If tabtypes is empty, we default to \dtvmsE (but see also command.c) */
 	if (!(showTables || showIndexes || showViews || showMatViews || showSeq || showForeign))
@@ -4692,7 +4706,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 		if (isGPDB7000OrLater())
 		{
 			/* In GPDB7, we can have user defined access method, display the access method name directly */
-			appendPQExpBuffer(&buf, ", a.amname as \"%s\"\n", gettext_noop("Storage"));
+			appendPQExpBuffer(&buf, ", am.amname as \"%s\"\n", gettext_noop("Storage"));
 		}
 		else
 		{
@@ -4740,6 +4754,16 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 		 */
 
 		/*
+		 * Access methods exist for tables, materialized views and indexes.
+		 * This has been introduced in PostgreSQL 12 for tables.
+		 */
+		if (pset.sversion >= 120000 && !pset.hide_tableam &&
+			(showTables || showMatViews || showIndexes))
+			appendPQExpBuffer(&buf,
+							  ",\n  am.amname as \"%s\"",
+							  gettext_noop("Access Method"));
+
+		/*
 		 * As of PostgreSQL 9.0, use pg_table_size() to show a more accurate
 		 * size of a table, including FSM, VM and TOAST tables.
 		 */
@@ -4762,7 +4786,13 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 						 "\n     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace");
 	if (showTables && isGPDB7000OrLater())
 		appendPQExpBufferStr(&buf,
-							"\n     LEFT JOIN pg_catalog.pg_am a ON a.oid = c.relam");
+							 "\n     LEFT JOIN pg_catalog.pg_am am ON am.oid = c.relam");
+	else
+	if (pset.sversion >= 120000 && !pset.hide_tableam &&
+		(showTables || showMatViews || showIndexes))
+		appendPQExpBufferStr(&buf,
+							 "\n     LEFT JOIN pg_catalog.pg_am am ON am.oid = c.relam");
+
 	if (showIndexes)
 		appendPQExpBufferStr(&buf,
 							 "\n     LEFT JOIN pg_catalog.pg_index i ON i.indexrelid = c.oid"
@@ -6993,7 +7023,7 @@ describeSubscriptions(const char *pattern, bool verbose)
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 	static const bool translate_columns[] = {false, false, false, false,
-	false, false, false};
+	false, false, false, false};
 
 	if (pset.sversion < 100000)
 	{
@@ -7019,11 +7049,13 @@ describeSubscriptions(const char *pattern, bool verbose)
 
 	if (verbose)
 	{
-		/* Binary mode is only supported in v14 and higher */
+		/* Binary mode and streaming are only supported in v14 and higher */
 		if (pset.sversion >= 140000)
 			appendPQExpBuffer(&buf,
-							  ", subbinary AS \"%s\"\n",
-							  gettext_noop("Binary"));
+							  ", subbinary AS \"%s\"\n"
+							  ", substream AS \"%s\"\n",
+							  gettext_noop("Binary"),
+							  gettext_noop("Streaming"));
 
 		appendPQExpBuffer(&buf,
 						  ",  subsynccommit AS \"%s\"\n"
@@ -7135,17 +7167,16 @@ listOperatorClasses(const char *access_method_pattern,
 						  " pg_catalog.pg_get_userbyid(c.opcowner) AS \"%s\"\n",
 						  gettext_noop("Operator family"),
 						  gettext_noop("Owner"));
-	appendPQExpBuffer(&buf,
-					  "\nFROM pg_catalog.pg_opclass c\n"
-					  "  LEFT JOIN pg_catalog.pg_am am on am.oid = c.opcmethod\n"
-					  "  LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.opcnamespace\n"
-					  "  LEFT JOIN pg_catalog.pg_type t ON t.oid = c.opcintype\n"
-					  "  LEFT JOIN pg_catalog.pg_namespace tn ON tn.oid = t.typnamespace\n"
-		);
+	appendPQExpBufferStr(&buf,
+						 "\nFROM pg_catalog.pg_opclass c\n"
+						 "  LEFT JOIN pg_catalog.pg_am am on am.oid = c.opcmethod\n"
+						 "  LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.opcnamespace\n"
+						 "  LEFT JOIN pg_catalog.pg_type t ON t.oid = c.opcintype\n"
+						 "  LEFT JOIN pg_catalog.pg_namespace tn ON tn.oid = t.typnamespace\n");
 	if (verbose)
-		appendPQExpBuffer(&buf,
-						  "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = c.opcfamily\n"
-						  "  LEFT JOIN pg_catalog.pg_namespace ofn ON ofn.oid = of.opfnamespace\n");
+		appendPQExpBufferStr(&buf,
+							 "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = c.opcfamily\n"
+							 "  LEFT JOIN pg_catalog.pg_namespace ofn ON ofn.oid = of.opfnamespace\n");
 
 	if (access_method_pattern)
 		have_where = processSQLNamePattern(pset.db, &buf, access_method_pattern,
@@ -7214,11 +7245,10 @@ listOperatorFamilies(const char *access_method_pattern,
 		appendPQExpBuffer(&buf,
 						  ",\n  pg_catalog.pg_get_userbyid(f.opfowner) AS \"%s\"\n",
 						  gettext_noop("Owner"));
-	appendPQExpBuffer(&buf,
-					  "\nFROM pg_catalog.pg_opfamily f\n"
-					  "  LEFT JOIN pg_catalog.pg_am am on am.oid = f.opfmethod\n"
-					  "  LEFT JOIN pg_catalog.pg_namespace n ON n.oid = f.opfnamespace\n"
-		);
+	appendPQExpBufferStr(&buf,
+						 "\nFROM pg_catalog.pg_opfamily f\n"
+						 "  LEFT JOIN pg_catalog.pg_am am on am.oid = f.opfmethod\n"
+						 "  LEFT JOIN pg_catalog.pg_namespace n ON n.oid = f.opfnamespace\n");
 
 	if (access_method_pattern)
 		have_where = processSQLNamePattern(pset.db, &buf, access_method_pattern,
@@ -7238,7 +7268,7 @@ listOperatorFamilies(const char *access_method_pattern,
 							  "tn.nspname", "t.typname",
 							  "pg_catalog.format_type(t.oid, NULL)",
 							  "pg_catalog.pg_type_is_visible(t.oid)");
-		appendPQExpBuffer(&buf, "  )\n");
+		appendPQExpBufferStr(&buf, "  )\n");
 	}
 
 	appendPQExpBufferStr(&buf, "ORDER BY 1, 2;");
@@ -7305,14 +7335,14 @@ listOpFamilyOperators(const char *access_method_pattern,
 		appendPQExpBuffer(&buf,
 						  ", ofs.opfname AS \"%s\"\n",
 						  gettext_noop("Sort opfamily"));
-	appendPQExpBuffer(&buf,
-					  "FROM pg_catalog.pg_amop o\n"
-					  "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = o.amopfamily\n"
-					  "  LEFT JOIN pg_catalog.pg_am am ON am.oid = of.opfmethod AND am.oid = o.amopmethod\n"
-					  "  LEFT JOIN pg_catalog.pg_namespace nsf ON of.opfnamespace = nsf.oid\n");
+	appendPQExpBufferStr(&buf,
+						 "FROM pg_catalog.pg_amop o\n"
+						 "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = o.amopfamily\n"
+						 "  LEFT JOIN pg_catalog.pg_am am ON am.oid = of.opfmethod AND am.oid = o.amopmethod\n"
+						 "  LEFT JOIN pg_catalog.pg_namespace nsf ON of.opfnamespace = nsf.oid\n");
 	if (verbose)
-		appendPQExpBuffer(&buf,
-						  "  LEFT JOIN pg_catalog.pg_opfamily ofs ON ofs.oid = o.amopsortfamily\n");
+		appendPQExpBufferStr(&buf,
+							 "  LEFT JOIN pg_catalog.pg_opfamily ofs ON ofs.oid = o.amopsortfamily\n");
 
 	if (access_method_pattern)
 		have_where = processSQLNamePattern(pset.db, &buf, access_method_pattern,
@@ -7391,12 +7421,12 @@ listOpFamilyFunctions(const char *access_method_pattern,
 						  ", ap.amproc::pg_catalog.regprocedure AS \"%s\"\n",
 						  gettext_noop("Function"));
 
-	appendPQExpBuffer(&buf,
-					  "FROM pg_catalog.pg_amproc ap\n"
-					  "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = ap.amprocfamily\n"
-					  "  LEFT JOIN pg_catalog.pg_am am ON am.oid = of.opfmethod\n"
-					  "  LEFT JOIN pg_catalog.pg_namespace ns ON of.opfnamespace = ns.oid\n"
-					  "  LEFT JOIN pg_catalog.pg_proc p ON ap.amproc = p.oid\n");
+	appendPQExpBufferStr(&buf,
+						 "FROM pg_catalog.pg_amproc ap\n"
+						 "  LEFT JOIN pg_catalog.pg_opfamily of ON of.oid = ap.amprocfamily\n"
+						 "  LEFT JOIN pg_catalog.pg_am am ON am.oid = of.opfmethod\n"
+						 "  LEFT JOIN pg_catalog.pg_namespace ns ON of.opfnamespace = ns.oid\n"
+						 "  LEFT JOIN pg_catalog.pg_proc p ON ap.amproc = p.oid\n");
 
 	if (access_method_pattern)
 		have_where = processSQLNamePattern(pset.db, &buf, access_method_pattern,
