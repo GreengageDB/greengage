@@ -2037,7 +2037,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 {
 	ResourceOwner oldowner;
 	TuplestoreSharingState *sstate;
-    SharedFileSet *fileset;
+    SharedFileSet *real_fileset;
     dsm_handle handle = DSM_HANDLE_INVALID;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
@@ -2056,7 +2056,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-	sstate = get_shared_state(filename);
+	sstate = get_shared_state(NULL, filename);
 	Assert(sstate->session_id == gp_session_id);
 
 	if (sstate->aborting)
@@ -2071,20 +2071,20 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 
 	if (sstate->sfs_handle == DSM_HANDLE_INVALID)
 	{
-		fileset = create_shareinput_fileset(&handle);
+		real_fileset = create_shareinput_fileset(&handle);
 
 		sstate->sfs_handle = handle;
-		sstate->sfs_creator_pid = fileset->creator_pid;
-		sstate->sfs_number = fileset->number;
+		sstate->sfs_creator_pid = real_fileset->creator_pid;
+		sstate->sfs_number = real_fileset->number;
 	}
 	else
 	{
 		handle = sstate->sfs_handle;
-		fileset = attach_shareinput_fileset(handle);
+		real_fileset = attach_shareinput_fileset(handle);
 	}
 
 	state->share_status = TSHARE_WRITER;
-	state->fileset = fileset;
+	state->fileset = real_fileset;
 	state->shared_filename = pstrdup(filename);
 	state->shared_state = sstate;
 
@@ -2103,7 +2103,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	/* Make sure the file only exists if and only if shared state was successfully created */
 	PG_TRY();
 	{
-		state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
+		state->myfile = BufFileCreateShared(real_fileset, filename, state->work_set);
 	}
 	PG_CATCH();
 	{
@@ -2240,11 +2240,11 @@ tuplestore_reader_waitready(TuplestoreSharingState *sstate)
  * if this might be called on segments.
  */
 Tuplestorestate *
-tuplestore_open_shared_extended(const char *filename, bool skip_open)
+tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bool skip_open)
 {
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
-	SharedFileSet *fileset = NULL;
+	SharedFileSet *real_fileset = NULL;
 	dsm_handle 	handle = DSM_HANDLE_INVALID;
 	int			eflags;
 
@@ -2258,7 +2258,7 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-	sstate = get_shared_state(filename);
+	sstate = get_shared_state(NULL, filename);
 	Assert(sstate->session_id == gp_session_id);
 
 	/*
@@ -2315,10 +2315,10 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
 
 		LWLockRelease(ShareInputScanLock);
 
-		fileset = attach_shareinput_fileset(handle);
+		real_fileset = attach_shareinput_fileset(handle);
 
-		state->fileset = fileset;
-		state->myfile = BufFileOpenShared(fileset, filename);
+		state->fileset = real_fileset;
+		state->myfile = BufFileOpenShared(real_fileset, filename);
 		state->readptrs[0].file = 0;
 		state->readptrs[0].offset = 0L;
 		state->status = TSS_READFILE;

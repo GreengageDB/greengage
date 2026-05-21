@@ -198,6 +198,7 @@ CreateSharedMemoryAndSemaphores(int port)
 		size = add_size(size, CheckpointerShmemSize());
 		size = add_size(size, CancelBackendMsgShmemSize());
 		size = add_size(size, WorkFileShmemSize());
+		/* size = add_size(size, ShareInputShmemSize()); */
 		size = add_size(size, SharedTuplestoreShmemSize());
 
 #ifdef FAULT_INJECTOR
@@ -379,6 +380,7 @@ CreateSharedMemoryAndSemaphores(int port)
 	AsyncShmemInit();
 	BackendCancelShmemInit();
 	WorkFileShmemInit();
+	/* ShareInputShmemInit(); */
 	SharedTuplestoreShmemInit();
 
 	/*

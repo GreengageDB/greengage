@@ -83,7 +83,7 @@
  * individual ShareInputScan whenever its reference count reaches zero.
  */
 static dsm_handle *shareinput_Xslice_dsm_handle_ptr;
-static SharedFileSet *shareinput_Xslice_fileset;
+/* static SharedFileSet *shareinput_Xslice_fileset; */
 
 /*
  * For local (i.e. intra-slice) variants, we use a 'shareinput_local_state'
