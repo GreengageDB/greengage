@@ -1028,8 +1028,6 @@ PQCreateMetadataQueue(ggMetadataQueueId queue_id)
 	ggMetadataQueue *queue = palloc0(sizeof(ggMetadataQueue));
 
 	queue->id = queue_id;
-	queue->chunks = NULL;
-	queue->count = 0;
 
 	ggMetadataQueues = lappend(ggMetadataQueues, queue);
 
