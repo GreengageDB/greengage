@@ -142,8 +142,12 @@ distclean maintainer-clean:
 installcheck-resgroup:
 	$(MAKE) -C src/test/isolation2 $@
 
+$(call recurse, installcheck-resgroup, gpcontrib)
+
 installcheck-resgroup-v2:
 	$(MAKE) -C src/test/isolation2 $@
+
+$(call recurse, installcheck-resgroup-v2, gpcontrib)
 
 # Create or destroy a demo cluster.
 create-demo-cluster:
