@@ -52,8 +52,8 @@ segments/mirrors. The smoketest can be invoked by "make check" in the
 contrib/pg_upgrade directory.
 
 Also, it is worth mentioning that most of the pg_upgrade tests are performed
-in the ggupgrade repository. This decision was made by the Greenplum team to
-reduce amount of code duplication between ggupgrade and test scripts.
+in the ggupgrade repository. This decision was made initially to reduce
+amount of code duplication between ggupgrade and test scripts.
 
 In spite of this, we have added a 6.x to 7.x migration test to the core
 Greengage repository. The reason being that is it simply more convenient
