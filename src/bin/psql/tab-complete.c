@@ -2518,6 +2518,15 @@ psql_completion(const char *text, int start, int end)
 	/* Complete PARTITION BY with RANGE ( or LIST ( or ... */
 	else if (TailMatches("PARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (", "HASH (");
+	/* Complete PARTITION BY RANGE|LIST with classical partitioning syntax */
+	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") || TailMatches("SUBPARTITION", "TEMPLATE", "(*)"))
+		COMPLETE_WITH("(", "SUBPARTITION BY");
+	else if (TailMatches("BY", "SUBPARTITION"))
+		COMPLETE_WITH("RANGE (", "LIST (");
+	else if (TailMatches("SUBPARTITION", "BY", "RANGE|LIST", "(*)"))
+		COMPLETE_WITH("(", "SUBPARTITION");
+	else if (TailMatches("SUBPARTITION", "BY", "RANGE|LIST", "(*)", "SUBPARTITION"))
+		COMPLETE_WITH("BY", "TEMPLATE (");
 	/* If we have xxx PARTITION OF, provide a list of partitioned tables */
 	else if (TailMatches("PARTITION", "OF"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_partitioned_tables, "");
