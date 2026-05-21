@@ -1,0 +1,40 @@
+# .coveragerc to control coverage.py
+[run]
+data_file = /tmp/coverage-data/coverage-data
+
+[paths]
+source =
+        /home/gpadmin/gpdb_src/gpMgmt/bin
+        /home/gpadmin/gpdb_src/gpMgmt/bin
+        $GPHOME/bin
+
+source2 =
+        /home/gpadmin/gpdb_src/gpMgmt/sbin
+        /home/gpadmin/gpdb_src/gpMgmt/sbin
+        $GPHOME/sbin
+
+source3 =
+        /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
+        /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
+        $GPHOME/lib/python/gppylib
+
+source4 =
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
+        $GPHOME/bin/gp_replica_check.py
+
+[report]
+omit =
+        */__init__.py*
+        */test/*
+        $GPHOME/lib/python/pygresql/*
+        $GPHOME/lib/python/yaml/*
+        $GPHOME/lib/python/sitecustomize.py
+        $GPHOME/lib/python/subprocess32.py
+        $GPHOME/lib/python/subprocess32.pyc
+        $GPHOME/bin/lib/pexpect/*
+        $GPHOME/lib/python/psutil/*
+        */dist-packages/*
+        /usr/local/bin/behave
+        /usr/local/bin/coverage
+        /tmp/*
