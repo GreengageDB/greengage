@@ -2435,7 +2435,7 @@ AtAbort_SharedTuplestores()
  * 
  * Previously we used get_shareinput_fileset() for this purposes
  * except we shouldn't have been. As this function have been creating 
- * dsm_segments that lived until postmaster, holding segment, went down. That
+ * dsm_segments that lived until postmaster death, holding segment, went down. That
  * behavior have been creating problem, when this postmasters have been reused
  * as shareinput fileset were never updated. To keep filesets consistent
  * this system was reworked so from now we use hashtable for sharefilesets
