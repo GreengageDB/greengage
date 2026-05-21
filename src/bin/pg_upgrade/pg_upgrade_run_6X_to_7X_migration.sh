@@ -35,7 +35,9 @@ fi
 
 set -x
 
-# Create demo cluster
+# Create Greengage 6 demo cluster.
+# Its default PORT_BASE is 6000, which is inconsistent with Greengage 7 and PGPORT
+# environment variable below.
 export PORT_BASE=7000
 cd     ${GREENGAGE6_SRC}/gpAux/gpdemo
 source ${GREENGAGE6_INSTALLATION}/greengage_path.sh
