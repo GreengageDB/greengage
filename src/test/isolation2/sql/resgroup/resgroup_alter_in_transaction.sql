@@ -316,10 +316,36 @@ ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
 
+-- 18 CPUSET and CPU_RATE_LIMIT are mutually exclusive.
+-- Only the final CPU_RATE_LIMIT apply callback should run.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_RATE_LIMIT 30;
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be only one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
 
 -- Concurrent ALTERs
 
--- 18 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- the same resource group
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
@@ -327,7 +353,7 @@ SELECT * FROM rg_alter_tran_status;
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 20 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- different resource group
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17;
@@ -335,7 +361,7 @@ SELECT * FROM rg_alter_tran_status;
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 20 Verify pg_resgroup_move_query releases its lock after transaction abort.
+-- 21 Verify pg_resgroup_move_query releases its lock after transaction abort.
 -- After the error aborts transaction 1, parallel ALTER must not wait.
 1: BEGIN;
 1: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
@@ -343,7 +369,7 @@ SELECT * FROM rg_alter_tran_status;
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 21 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+-- 22 DROP RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 19;
 2&: DROP RESOURCE GROUP rg_alter_tran_b;
@@ -351,7 +377,7 @@ SELECT * FROM rg_alter_tran_status;
 2<:
 SELECT * FROM rg_alter_tran_status;
 
--- 22 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
+-- 23 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 20;
 2&: CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
@@ -365,7 +391,7 @@ SELECT * FROM rg_alter_tran_status;
 
 -- Crash recovery
 
--- 23 Coordinator segfault before COMMIT must not apply ALTERs.
+-- 24 Coordinator segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('exec_simple_query_start', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 1;
@@ -377,7 +403,7 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 1: SELECT * FROM rg_alter_tran_status;
 
--- 24 Segment segfault before COMMIT must not apply ALTERs.
+-- 25 Segment segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('qe_exec_finished', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 2;
@@ -389,7 +415,7 @@ SELECT * FROM rg_alter_tran_status;
 ! while [ `psql -tc "SELECT count(*) FROM gp_dist_random('gp_id');" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
 1: SELECT * FROM rg_alter_tran_status;
 
--- 25 Coordinator segfault after COMMIT must replay ALTERs.
+-- 26 Coordinator segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 3;
@@ -401,7 +427,7 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 1: SELECT * FROM rg_alter_tran_status;
 
--- 26 Segment segfault after COMMIT must replay ALTERs.
+-- 27 Segment segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 4;

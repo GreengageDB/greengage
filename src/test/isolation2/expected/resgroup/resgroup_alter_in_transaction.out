@@ -369,10 +369,53 @@ SELECT * FROM rg_alter_tran_status;
  rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
 
+-- 18 CPUSET and CPU_RATE_LIMIT are mutually exclusive.
+-- Only the final CPU_RATE_LIMIT apply callback should run.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ALTER
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_RATE_LIMIT 30;
+ALTER
+COMMIT;
+COMMIT
+SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_rate_limit | memory_limit 
+-----------------+-------------+----------------+--------------
+ rg_alter_tran   | 15          | 30             | 10           
+ rg_alter_tran_b | 21          | 10             | 8            
+(2 rows)
+
+-- Should be only one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1' 
+ 
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
 
 -- Concurrent ALTERs
 
--- 18 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- the same resource group
 1: BEGIN;
 BEGIN
@@ -385,11 +428,11 @@ ROLLBACK
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
 
--- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 20 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- different resource group
 1: BEGIN;
 BEGIN
@@ -402,11 +445,11 @@ ROLLBACK
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 21          | 10             | 8            
 (2 rows)
 
--- 20 Verify pg_resgroup_move_query releases its lock after transaction abort.
+-- 21 Verify pg_resgroup_move_query releases its lock after transaction abort.
 -- After the error aborts transaction 1, parallel ALTER must not wait.
 1: BEGIN;
 BEGIN
@@ -419,11 +462,11 @@ ROLLBACK
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 18          | 10             | 8            
 (2 rows)
 
--- 21 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+-- 22 DROP RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 19;
@@ -436,10 +479,10 @@ DROP
 SELECT * FROM rg_alter_tran_status;
  groupname     | concurrency | cpu_rate_limit | memory_limit 
 ---------------+-------------+----------------+--------------
- rg_alter_tran | 15          | 10             | 10           
+ rg_alter_tran | 15          | 30             | 10           
 (1 row)
 
--- 22 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
+-- 23 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 20;
@@ -452,7 +495,7 @@ CREATE
 SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
@@ -462,7 +505,7 @@ SELECT * FROM rg_alter_tran_status;
 
 -- Crash recovery
 
--- 23 Coordinator segfault before COMMIT must not apply ALTERs.
+-- 24 Coordinator segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('exec_simple_query_start', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
@@ -487,11 +530,11 @@ ALTER
 1: SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
--- 24 Segment segfault before COMMIT must not apply ALTERs.
+-- 25 Segment segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('qe_exec_finished', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -517,11 +560,11 @@ COMMIT
 1: SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 15          | 10             | 10           
+ rg_alter_tran   | 15          | 30             | 10           
  rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
--- 25 Coordinator segfault after COMMIT must replay ALTERs.
+-- 26 Coordinator segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
@@ -546,11 +589,11 @@ ALTER
 1: SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 3           | 10             | 10           
+ rg_alter_tran   | 3           | 30             | 10           
  rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
--- 26 Segment segfault after COMMIT must replay ALTERs.
+-- 27 Segment segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -575,7 +618,7 @@ ALTER
 1: SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_rate_limit | memory_limit 
 -----------------+-------------+----------------+--------------
- rg_alter_tran   | 4           | 10             | 10           
+ rg_alter_tran   | 4           | 30             | 10           
  rg_alter_tran_b | 2           | 10             | 10           
 (2 rows)
 
