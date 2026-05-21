@@ -2528,7 +2528,7 @@ psql_completion(const char *text, int start, int end)
 	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") ||
 		TailMatches("SUBPARTITION", "TEMPLATE", "(*)"))
 		COMPLETE_WITH("(", "SUBPARTITION BY");
-	else if (TailMatches("BY", "SUBPARTITION"))
+	else if (TailMatches("SUBPARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (");
 	else if (TailMatches("SUBPARTITION", "BY", "RANGE|LIST", "(*)"))
 		COMPLETE_WITH("(", "SUBPARTITION");
