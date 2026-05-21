@@ -202,8 +202,6 @@ typedef struct
 {
 	PQmetadataReceiver metadataRec; /* notice message receiver */
 	void	   *metadataRecArg;
-	PQmetadataProcessor metadataProc;
-	void       *metadataProcArg;
 } PGMetadataHooks;
 
 typedef struct PGEvent
