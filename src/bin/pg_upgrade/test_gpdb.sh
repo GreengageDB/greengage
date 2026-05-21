@@ -5,7 +5,7 @@
 # Test driver for upgrading a Greengage cluster with pg_upgrade.
 # The upgraded cluster will be a newly created gpdemo
 # cluster created by this script.  This test assumes that all pre-upgrade 
-# clusters, whether for 5 or 6, have been created as standard gpdemo clusters.
+# clusters, whether for 6 or 7, have been created as standard gpdemo clusters.
 # This test is independent of the user data contents of the pre-upgrade 
 # database, though of course you can run ICW into the gpdemo cluster before
 # upgrading to get some coverage of object types.
@@ -15,16 +15,17 @@
 # upgrade it performs another pg_dumpall, if the two dumps match then the 
 # upgrade created a new identical copy of the cluster.
 
-# Here are two example runs, one for a 6 cluster and then one for a 5 cluster:
-# bash test_gpdb.sh -b /usr/local/gpdb/bin -o ~/workspace/gpdb/gpAux/gpdemo/datadirs
-# bash test_gpdb.sh -b /usr/local/gpdb/bin -o ~/workspace/gpdb5/gpAux/gpdemo/datadirs
-#                   -B /usr/local/gpdb5/bin
+# Here are two example runs, one for a 7 cluster and then one for a 6 cluster:
+# bash test_gpdb.sh -b /usr/local/gpdb/bin -O ~/workspace/gpdb/gpAux/gpdemo/datadirs
+# bash test_gpdb.sh -b /usr/local/gpdb/bin -O ~/workspace/gpdb6/gpAux/gpdemo/datadirs
+#                   -B /usr/local/gpdb6/bin
 #
 # Keep in mind this script is relatively fragile since it depends on specific
 # paths and locations relative to the standard gpdemo cluster.
 #
-# It has been tested on demo clusters transitioning from (6 to 6)
-# or from (5 to 6; on a private branch).
+# It has been tested on demo clusters transitioning from (7 to 7).
+# Details on how to run transition from 6 to 7 are described in
+# src/bin/pg_upgrade/README.test.md
 
 OLD_BINDIR=
 OLD_DATADIR=
@@ -210,7 +211,7 @@ upgrade_segment()
 usage()
 {
 	local appname=`basename $0`
-	echo "usage: $appname -o <dir> -b <dir> [options]"
+	echo "usage: $appname -O <dir> -b <dir> [options]"
 	echo " -O <dir>     old cluster data directory"
 	echo " -b <dir>     new cluster executable directory"
 	echo " -B <dir>     old cluster executable directory (defaults to new binaries)"
