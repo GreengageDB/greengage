@@ -111,6 +111,7 @@ extern int gp_resource_group_move_timeout;
 extern bool gp_resource_group_bypass_direct_dispatch;
 extern char *gp_resource_group_cgroup_parent;
 extern bool gp_resource_group_retrieve;
+extern bool gp_resource_group_enable_alter_in_transaction;
 
 /*
  * Non-GUC global variables.
