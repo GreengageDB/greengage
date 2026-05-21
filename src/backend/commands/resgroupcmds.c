@@ -96,9 +96,8 @@ static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
-static bool resGroupCapFieldMatches(ResGroupLimitType limittype,
-									const ResGroupCaps *recorded,
-									const ResGroupCaps *current);
+static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+									const ResGroupCaps *caps);
 static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
 											ResourceGroupCallbackContext *ctx);
 
@@ -1188,37 +1187,44 @@ dropResgroupCallback(XactEvent event, void *arg)
 }
 
 /*
- * Check whether the field changed by limittype has the same value in both
- * capability snapshots.
+ * Check whether the field changed by this callback has the same value in
+ * the given capability snapshot.
  */
 static bool
-resGroupCapFieldMatches(ResGroupLimitType limittype,
-						const ResGroupCaps *left,
-						const ResGroupCaps *right)
+resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+						const ResGroupCaps *caps)
 {
-	switch (limittype)
+	switch (ctx->limittype)
 	{
 		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
-			return left->concurrency == right->concurrency;
+			return ctx->caps.concurrency == caps->concurrency;
+
 		case RESGROUP_LIMIT_TYPE_CPU:
 		case RESGROUP_LIMIT_TYPE_CPUSET:
-			return left->cpuRateLimit == right->cpuRateLimit &&
-				   strcmp(left->cpuset, right->cpuset) == 0;
+			return ctx->caps.cpuRateLimit == caps->cpuRateLimit &&
+				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
+
 		case RESGROUP_LIMIT_TYPE_MEMORY:
-			return left->memLimit == right->memLimit;
+			return ctx->caps.memLimit == caps->memLimit;
+
 		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
-			return left->memSharedQuota == right->memSharedQuota;
+			return ctx->caps.memSharedQuota == caps->memSharedQuota;
+
 		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
-			return left->memSpillRatio == right->memSpillRatio;
+			return ctx->caps.memSpillRatio == caps->memSpillRatio;
+
 		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
-			return left->memAuditor == right->memAuditor;
+			return ctx->caps.memAuditor == caps->memAuditor;
+
 		case RESGROUP_LIMIT_TYPE_UNKNOWN:
 		case RESGROUP_LIMIT_TYPE_COUNT:
 			break;
 	}
+
 	ereport(ERROR,
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
-			(errmsg("invalid resource group limit type: %d", limittype))));
+			 errmsg("invalid resource group limit type: %d", ctx->limittype)));
+
 	return false;
 }
 
@@ -1241,9 +1247,7 @@ resgroupAlterCallbackAlreadyPrepared(List *prepared,
 		if (prev->limittype != ctx->limittype)
 			continue;
 
-		if (resGroupCapFieldMatches(ctx->limittype,
-									&prev->caps,
-									&ctx->caps))
+		if (resGroupCapFieldMatches(ctx, &prev->caps))
 			return true;
 	}
 
@@ -1295,7 +1299,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 
-		/* Keep only final catalog changes. */
+		/* Keep only final, non-duplicate callbacks. */
 		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 
 		foreach (lc, resgroup_alter_callbacks)
@@ -1305,21 +1309,11 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-			/* Skip changes rolled back or overwritten before commit. */
-			if (!resGroupCapFieldMatches(ctx->limittype,
-										 &ctx->caps,
-										 &finalCaps))
-			{
+			if (resGroupCapFieldMatches(ctx, &finalCaps) &&
+				!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+				prepared = lappend(prepared, ctx);
+			else
 				rejected = lappend(rejected, ctx);
-				continue;
-			}
-			/* Drop duplicate target callbacks. */
-			if (resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
-			{
-				rejected = lappend(rejected, ctx);
-				continue;
-			}
-			prepared = lappend(prepared, ctx);
 		}
 		MemoryContextSwitchTo(oldcxt);
 		heap_close(rel, AccessShareLock);
