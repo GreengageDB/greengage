@@ -1076,7 +1076,6 @@ static const char *const table_storage_parameters[] = {
 	"compresslevel",
 	"compresstype",
 	"fillfactor",
-	"gp_autovacuum_scope",
 	"gpdr_exclude",
 	"log_autovacuum_min_duration",
 	"orientation",
