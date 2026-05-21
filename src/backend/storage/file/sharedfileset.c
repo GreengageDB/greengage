@@ -260,7 +260,10 @@ SharedFilePath(char *path, SharedFileSet *fileset, const char *name)
 	SharedFileSetPath(dirpath, fileset, ChooseTablespace(fileset, name));
 	snprintf(path, MAXPGPATH, "%s/%s", dirpath, name);
 }
-
+/*
+ * Unpins shareinput fileset from HTAB.
+ * See comments on SharedFileSetPin() for more information. 
+ */
 void
 SharedFileSetUnpin(SharedFileSet *fileset)
 {
@@ -285,6 +288,18 @@ SharedFileSetUnpin(SharedFileSet *fileset)
 		SharedFileSetDeleteAll(fileset);
 }
 
+/*
+ * Beside pinning SharedFileSet with standard dsm commands
+ * exclusively for shareinput_filesets we need to make extra 
+ * pinning - as HTAB should be also considered as holder.
+ * Otherwise we might get into situation, when, for instance,
+ * writer will complete it's part of the job, detach and destroy
+ * set with on_dsm_detach(). 
+ * 
+ * When all jobs will be done, this fileset will be unpinned from HTAB's
+ * owning in tuplestore_cleanup() or AtAbort_SharedTuplestores() and
+ * cleared with according callback.
+ */
 void
 SharedFileSetPin(SharedFileSet *fileset)
 {

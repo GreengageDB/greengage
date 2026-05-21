@@ -663,6 +663,8 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 		Assert(sstate->session_id == gp_session_id);
+
+		/* Remember handle, so we will detach in any way. */
 		local_detach_handle = sstate->sfs_handle;
 		/*
 		 * If we are aborting, set the variable in shared memory.
@@ -673,7 +675,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		if (should_abort)
 		{
 			sstate->aborting = true;
-			ConditionVariableBroadcast(&sstate->ready_done_cv); // fixme
+			ConditionVariableBroadcast(&sstate->ready_done_cv);
 		}
 			
 		sstate->num_done++;
@@ -725,9 +727,9 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		/*
 		 * External cleanup happens outside ShareInputScanLock.
 		 *
-		 * state->fileset can be NULL here. This happens for skip_open /
-		 * squelch paths, but such a participant can still become the last
-		 * user and therefore be responsible for deleting the shared file.
+		 * state->fileset can be NULL here. This happens for skip_open 
+		 * paths, and such participants can still become last users 
+		 * and therefore be responsible for deleting the shared file.
 		 */
 		if (should_remove_entry)
 		{
@@ -764,11 +766,14 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 
 	if (state->myfile)
 		BufFileClose(state->myfile);
+
+	/* Detach manually so we don't get warning */
 	if (local_detach_handle != DSM_HANDLE_INVALID)
 	{
 		dsm_segment *seg;
 
 		seg = dsm_find_mapping(local_detach_handle);
+		/* Check if we already detached and destroyed segment */
 		if (seg != NULL)
 			dsm_detach(seg);
 	}
@@ -2106,7 +2111,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 
 		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 		sstate->aborting = true;
-		ConditionVariableBroadcast(&sstate->ready_done_cv); //fixme
+		ConditionVariableBroadcast(&sstate->ready_done_cv);
 		LWLockRelease(ShareInputScanLock);
 		PG_RE_THROW();
 	}
@@ -2385,6 +2390,7 @@ AtAbort_SharedTuplestores()
 		
 		if (handle != DSM_HANDLE_INVALID) 
 		{
+			/* Get handler for fileset. */
 			fileset = attach_shareinput_fileset(handle);
 		
 			/*
@@ -2404,8 +2410,13 @@ AtAbort_SharedTuplestores()
 					sstate->tag, currentSliceId);
 			}
 
+			/* 
+			 * Unpin fileset from htab if not NULL. 
+			 * Possibly can be NULL if skip_open was true in process of creation. 
+			 */
 			if (fileset != NULL)
 				SharedFileSetUnpin(fileset);
+			/* Release the global pin */
 			dsm_unpin_segment(handle);
 		}
 		
@@ -2418,6 +2429,19 @@ AtAbort_SharedTuplestores()
 	LWLockRelease(ShareInputScanLock);
 }
 
+/*
+ * Initializes given dsm_handle with further initialization of 
+ * shareinput fileset by this handle. After that pins fileset to HTAB.
+ * 
+ * Previously we used get_shareinput_fileset() for this purposes
+ * except we shouldn't have been. As this function have been creating 
+ * dsm_segments that live until postmaster, holding segment, went down. That
+ * behavior have been creating problem, when this postmasters have been reused
+ * as shareinput fileset were never updated. To keep filesets consistent
+ * this system was reworked so from now we use hashtable for sharefilesets
+ * where handle for according fileset is placed and kept until query execution
+ * ends (either successfully or with abort). 
+ */
 static SharedFileSet *
 create_shareinput_fileset(dsm_handle *handle_out)
 {
@@ -2447,6 +2471,9 @@ create_shareinput_fileset(dsm_handle *handle_out)
     return fileset;
 }
 
+/*
+ * Returns shareinput fileset placed in dsm.
+ */
 static SharedFileSet *
 attach_shareinput_fileset(dsm_handle handle)
 {
