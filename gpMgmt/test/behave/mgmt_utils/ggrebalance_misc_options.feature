@@ -88,6 +88,12 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
          And all files in gpAdminLogs directory are deleted
+        # make a dry run without '-d' option to check default datadirs
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --target-hosts 'sdw2, sdw3' -p --skip-resource-estimation"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "To:   sdw2:20500:/data1/primary/gpseg0" to logfile with latest timestamp
+         And ggrebalance should print "To:   sdw3:21500:/data1/mirror/gpseg0" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance --non-interactive-mode -x 4 --target-hosts 'sdw2, sdw3' -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
@@ -114,6 +120,12 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+         And all files in gpAdminLogs directory are deleted
+        # make a dry run without '-d' option to check default datadirs
+        When the user runs "ggrebalance --non-interactive-mode -x 4 --add-hosts 'sdw2, sdw3' --remove-hosts 'sdw1' -p --skip-resource-estimation"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "To:   sdw2:20500:/data1/primary/gpseg0" to logfile with latest timestamp
+         And ggrebalance should print "To:   sdw3:21500:/data1/mirror/gpseg0" to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
         When the user runs "ggrebalance --non-interactive-mode -x 4 --add-hosts 'sdw2, sdw3' --remove-hosts 'sdw1' -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 0
@@ -299,6 +311,19 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_sdw_/dbfast/new\_seg_'"
          And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_sdw_/dbfast\_mirror/new\_seg_'"
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
+         And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 6, row count = 100
+         And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
+         And the temporary file "/tmp/ggrebalance_target_datadirs" is removed
+        When the user runs "ggrebalance -c"
+         And all files in gpAdminLogs directory are deleted
+         And there is a file "/tmp/ggrebalance_target_datadirs" with hosts "/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_{hostname}/new_dbfast/new_seg{content}|/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs_{hostname}/new_dbfast_mirror/new_seg{content}"
+        When the user runs "ggrebalance --non-interactive-mode -x 6 --add-hosts sdw3 --target-datadirs-file /tmp/ggrebalance_target_datadirs"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_sdw_/new\_dbfast/new\_seg_'"
+         And the cluster configuration has some segments where "datadir like '/home/gpadmin/gpdb\_src/gpAux/gpdemo/datadirs\_sdw_/new\_dbfast\_mirror/new\_seg_'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 6, row count = 100

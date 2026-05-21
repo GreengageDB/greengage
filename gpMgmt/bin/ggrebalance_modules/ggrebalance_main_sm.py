@@ -372,7 +372,7 @@ class GGRebalanceMainSM:
             if self.plan != None:
                 self.logger.error("Can't start a new operation, because the previous one was interrupted. "
                                   "Please try to launch again without a plan to continue from the interrupted state, "
-                                  "or use '--rollback' or '--cleanup' options.")
+                                  "or use '--rollback' or '--clean' options.")
                 self.trigger('move_to_STATE_ERROR')
                 return
 

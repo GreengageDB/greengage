@@ -210,10 +210,6 @@ def validate_options(options, args, parser):
     if options.duration:
         options.end = datetime.now() + options.duration
 
-    if (option_is_set('target_hosts') or option_is_set('add_hosts')) and not option_is_set('target_datadirs'):
-        logger.error("--target-datadirs option is required when using --target-hosts or --add-hosts")
-        parser.exit(1)
-
     if option_is_set('mirror_mode') and options.mirror_mode not in ('grouped', 'spread'):
         logger.error('Mirroring strategy %s is not supported' % options.mirror_mode)
         parser.exit(1)
