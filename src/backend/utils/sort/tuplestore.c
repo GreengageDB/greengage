@@ -2311,29 +2311,31 @@ AtAbort_SharedTuplestores()
 			continue;
 
 		dsm_handle handle = sstate->sfs_handle;
-		SharedFileSet *sisc_fileset = attach_shareinput_fileset(handle);
-		/*
-		 * No one is using it, and we're aborting so no one will use it
-		 * in the future either. It's safe to delete the files now.
-		 * Also delete the shared memory entry. We do not need to delete
-		 * files if the SharedFileSet was already cleaned up.
-		 */
-		if (sstate->created &&
-			sstate->sfs_creator_pid == sisc_fileset->creator_pid &&
-			sstate->sfs_number == sisc_fileset->number)
+		
+		if (handle != DSM_HANDLE_INVALID) 
 		{
-			BufFileDeleteShared(sisc_fileset, sstate->tag);
-			sstate->created = false;
-			elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted on abort",
-				 sstate->tag, currentSliceId);
-		}
+			SharedFileSet *sisc_fileset = attach_shareinput_fileset(handle);
+		
+			/*
+			* No one is using it, and we're aborting so no one will use it
+			* in the future either. It's safe to delete the files now.
+			* Also delete the shared memory entry. We do not need to delete
+			* files if the SharedFileSet was already cleaned up.
+			*/
+			if (sstate->created &&
+				sstate->sfs_creator_pid == sisc_fileset->creator_pid &&
+				sstate->sfs_number == sisc_fileset->number)
+			{
+				BufFileDeleteShared(sisc_fileset, sstate->tag);
+				sstate->created = false;
+				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted on abort",
+					sstate->tag, currentSliceId);
+			}
 
-		if (handle != DSM_HANDLE_INVALID)
-		{
 			SharedFileSetUnpin(sisc_fileset);
 			dsm_unpin_segment(handle);
 		}
-
+		
 		if (hash_search(shared_tuplestores,
 						sstate->tag,
 						HASH_REMOVE, NULL) == NULL)
