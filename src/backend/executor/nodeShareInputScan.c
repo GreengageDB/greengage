@@ -150,6 +150,7 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 
 				shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 				tuplestore_make_shared_many(ts,
+											NULL,
 											rwfile_prefix,
 											sisc->nconsumers + 1);
 
@@ -230,7 +231,7 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 			Assert(sisc->cross_slice);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
-			ts = tuplestore_open_shared_extended(rwfile_prefix, skip_waiting);
+			ts = tuplestore_open_shared_extended(NULL, rwfile_prefix, skip_waiting);
 
 			MemoryContextSwitchTo(old_context);
 		}
@@ -617,6 +618,8 @@ ShareInputShmemInit(void)
 }
 
 /*
+ * Legacy ABI entry point. Is not supported.
+ *
  * Get reference to the SharedFileSet used to hold all the tuplestore files.
  *
  * This is exported so that it can also be used by the INITPLAN function
@@ -625,44 +628,7 @@ ShareInputShmemInit(void)
 SharedFileSet *
 get_shareinput_fileset(void)
 {
-	dsm_handle		handle;
-
-	if (shareinput_Xslice_fileset == NULL)
-	{
-		dsm_segment *seg;
-
-		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
-
-		handle = *shareinput_Xslice_dsm_handle_ptr;
-
-		if (handle)
-		{
-			seg = dsm_attach(handle);
-			if (seg == NULL)
-				elog(ERROR, "could not attach to ShareInputScan DSM segment");
-			dsm_pin_mapping(seg);
-
-			shareinput_Xslice_fileset = dsm_segment_address(seg);
-		}
-		else
-		{
-			seg = dsm_create(sizeof(SharedFileSet), 0);
-			dsm_pin_segment(seg);
-			*shareinput_Xslice_dsm_handle_ptr = dsm_segment_handle(seg);
-			dsm_pin_mapping(seg);
-
-			shareinput_Xslice_fileset = dsm_segment_address(seg);
-		}
-
-		if (shareinput_Xslice_fileset->refcnt == 0)
-			SharedFileSetInit(shareinput_Xslice_fileset, seg);
-		else
-			SharedFileSetAttach(shareinput_Xslice_fileset, seg);
-
-		LWLockRelease(ShareInputScanLock);
-	}
-
-	return shareinput_Xslice_fileset;
+	ereport(ERROR, errmsg("Unsupported sharefileset getter."));
 }
 
 void

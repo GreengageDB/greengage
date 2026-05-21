@@ -112,7 +112,8 @@ FunctionNext_guts(FunctionScanState *node)
 				MemoryContextSwitchTo(CurTransactionContext);
 			function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), node->initplanId);
 
-			node->ts_state = tuplestore_open_shared(rwfile_prefix);
+			node->ts_state = tuplestore_open_shared(NULL,
+													rwfile_prefix);
 			MemoryContextSwitchTo(old_context);
 		}
 

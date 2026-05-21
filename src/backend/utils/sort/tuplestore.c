@@ -745,10 +745,6 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 					fileset->number == delete_sfs_number)
 				{
 					BufFileDeleteShared(fileset, delete_tag);
-
-					elog((Debug_shareinput_xslice ? LOG : DEBUG1),
-						 "SISC (file=%s, slice=%d): file deleted",
-						 delete_tag, currentSliceId);
 				}
 			}
 
@@ -1967,7 +1963,7 @@ SharedTuplestoreShmemInit(void)
 }
 
 static TuplestoreSharingState *
-get_shared_state(const char *filename)
+get_shared_state(SharedFileSet *fileset, const char *filename)
 {
 	TuplestoreSharingState *sstate;
 	bool		found;
@@ -2032,7 +2028,7 @@ get_shared_state(const char *filename)
  * opened before it is automatically deleted.
  */
 void
-tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32 ntotal)
+tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, const char *filename, uint32 ntotal)
 {
 	ResourceOwner oldowner;
 	TuplestoreSharingState *sstate;
@@ -2146,9 +2142,9 @@ tuplestore_make_shared_many(Tuplestorestate *state, const char *filename, uint32
  * after both the writer and a single reader close it.
  */
 void
-tuplestore_make_shared(Tuplestorestate *state, const char *filename)
+tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const char *filename)
 {
-	tuplestore_make_shared_many(state, filename, 2);
+	tuplestore_make_shared_many(state, fileset, filename, 2);
 }
 
 static void
@@ -2337,9 +2333,9 @@ tuplestore_open_shared_extended(const char *filename, bool skip_open)
  * if this might be called on segments.
  */
 Tuplestorestate *
-tuplestore_open_shared(const char *filename)
+tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 {
-	return tuplestore_open_shared_extended(filename, false);
+	return tuplestore_open_shared_extended(fileset, filename, false);
 }
 
 /*

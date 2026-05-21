@@ -1250,6 +1250,7 @@ PG_TRY();
 											  false, /* interXact */
 											  PlanStateOperatorMemKB((PlanState *)(node->planstate)));
 		tuplestore_make_shared(node->ts_state,
+							   NULL,
 							   rwfile_prefix);
 		MemoryContextSwitchTo(old_context);
 		CurrentResourceOwner = old_resowner;
