@@ -23,6 +23,8 @@ env:
     github.event.workflow_run.head_branch == 'next', '8',
     ''
     ) }}
+  TARGET_OS: 'ubuntu'
+  TARGET_OS_VERSION: ${{ github.event.workflow_run.head_branch == '6.x' && '24.04' || '' }}
 
 jobs:
   create-sql-dump-regression:
@@ -33,13 +35,6 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       !startsWith(github.event.workflow_run.head_branch, 'refs/tags/')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target_os: ubuntu
-          # - target_os: ubuntu
-          #   target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -48,7 +43,7 @@ jobs:
     steps:
       - name: Determine Greengage Image name
         run: |
-          image="ghcr.io/${{ github.repository }}/ggdb${VERSION}_${{ matrix.target_os }}${{ matrix.target_os_version }}:${RUN_HEAD_SHA}"
+          image="ghcr.io/${{ github.repository }}/ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}:${RUN_HEAD_SHA}"
           echo "IMAGE=${image,,}" >> $GITHUB_ENV
 
       - name: Display trigger information
@@ -83,8 +78,8 @@ jobs:
         with:
           image: ${{ env.IMAGE }}
           optimizer: postgres
-          target_os: ${{ matrix.target_os }}
-          target_os_version: ${{ matrix.target_os_version }}
+          target_os: ${{ env.TARGET_OS }}
+          target_os_version: ${{ env.TARGET_OS_VERSION }}
           dump_db: "true"
 
       - name: Upload SQL Dump
@@ -92,8 +87,8 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }}
-          path: /mnt/logs/${{ matrix.target_os }}${{ matrix.target_os_version }}_postgres_sqldump.tar
+          name: sqldump_ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}
+          path: /mnt/logs/${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}_postgres_sqldump.tar
           if-no-files-found: error
 
       - name: Report artifact info
@@ -103,7 +98,7 @@ jobs:
           ## SQL Dump Creation Report
           | Field         | Value |
           |---------------|-------|
-          | Artifact name | sqldump_ggdb${{ env.VERSION }}_${{ matrix.target_os }}${{ matrix.target_os_version }} |
+          | Artifact name | sqldump_ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }} |
           | Artifact URL  | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload.outputs.artifact-id }} |
           EOF
 
@@ -130,6 +125,6 @@ jobs:
           )
           echo "::notice::SQL dump(s) uploaded: ${success_count}"
           if [ "${success_count}" -eq 0 ]; then
-            echo "::error::No SQL dumps were created - no images found for any matrix configuration"
+            echo "::error::No SQL dumps were created - no images found"
             exit 1
           fi
