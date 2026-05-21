@@ -2307,6 +2307,13 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_available_extension_versions);
 	}
 
+	/* Distribution rules for CREATE WRITABLE EXTERNAL tables, 
+	beacause they interfere with CREATE TABLE distribution rules 
+	(REPLICATED is not allowed) */
+	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL") &&
+		TailMatches("DISTRIBUTED"))
+		COMPLETE_WITH("BY (", "RANDOMLY");
+
 	/* CREATE FOREIGN */
 	else if (Matches("CREATE", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
@@ -2517,8 +2524,9 @@ psql_completion(const char *text, int start, int end)
 	/* Complete PARTITION BY with RANGE ( or LIST ( or ... */
 	else if (TailMatches("PARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (", "HASH (");
-	/* Complete PARTITION BY RANGE|LIST with classical partitioning syntax */
-	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") || TailMatches("SUBPARTITION", "TEMPLATE", "(*)"))
+	/* Complete PARTITION BY RANGE|LIST with classic partitioning syntax */
+	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") ||
+		TailMatches("SUBPARTITION", "TEMPLATE", "(*)"))
 		COMPLETE_WITH("(", "SUBPARTITION BY");
 	else if (TailMatches("BY", "SUBPARTITION"))
 		COMPLETE_WITH("RANGE (", "LIST (");
