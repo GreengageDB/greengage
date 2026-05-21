@@ -66,6 +66,8 @@
 #include "port/atomics.h"
 
 /*
+ * UNUSED VARIABLES. WE KEEP TO REDUCE CONFLICTS ON FUTURE POSTGRES UPDASTE.
+ *
  * The tuplestore files for all share input scans are held in one SharedFileSet.
  * The SharedFileSet is attached to a single DSM segment that persists until
  * postmaster shutdown. When the reference count of the SharedFileSet reaches
@@ -602,12 +604,22 @@ shareinput_create_bufname_prefix(char* p, int size, int share_id)
 			 gp_session_id, MyProc->queryCommandId, share_id);
 }
 
+/*
+ * Legacy ABI entry point. Is not supported.
+ *
+ * Kept to reduce conflicts on future postgres updaste.
+ */
 Size
 ShareInputShmemSize(void)
 {
 	return sizeof(dsm_handle);
 }
 
+/*
+ * Legacy ABI entry point. Is not supported.
+ *
+ * Kept to reduce conflicts on future postgres updaste.
+ */
 void
 ShareInputShmemInit(void)
 {
