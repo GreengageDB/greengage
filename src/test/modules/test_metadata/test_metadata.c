@@ -5,6 +5,7 @@
 #include "libpq/libpq.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
+#include "cdb/cdbconn.h"
 
 PG_MODULE_MAGIC;
 
