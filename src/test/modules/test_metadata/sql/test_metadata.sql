@@ -59,3 +59,15 @@ SELECT test_delete_metadata_queue(:queue1);
 SELECT test_delete_metadata_queue(:queue2);
 
 commit;
+
+
+begin;
+SELECT test_create_metadata_queue() as queue1
+\gset
+
+SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+
+SELECT 1/0; -- Error
+
+rollback;

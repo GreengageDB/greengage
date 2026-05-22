@@ -193,3 +193,21 @@ SELECT test_delete_metadata_queue(:queue2);
 (1 row)
 
 commit;
+begin;
+SELECT test_create_metadata_queue() as queue1
+\gset
+SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |                 42
+             2 |                 42
+             1 |                 42
+(3 rows)
+
+SELECT 1/0; -- Error
+WARNING:  Metadata queue 2 was not deleted in transaction after use
+ERROR:  division by zero
+rollback;
