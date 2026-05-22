@@ -293,6 +293,23 @@ _SPI_commit(bool chain)
 		/* Do the deed */
 		CommitTransactionCommand();
 
+		/* Resync GUCs */
+		if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+		{
+			StartTransactionCommand();
+			if (chain)
+				RestoreTransactionCharacteristics();
+			ListCell   *lc;
+
+			foreach(lc, gp_guc_restore_list)
+			{
+				struct config_generic *gconfig = (struct config_generic *) lfirst(lc);
+
+				DispatchSyncPGVariable(gconfig);
+			}
+			CommitTransactionCommand();
+		}
+
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
@@ -384,6 +401,23 @@ _SPI_rollback(bool chain)
 
 		/* Do the deed */
 		AbortCurrentTransaction();
+
+		/* Resync GUCs */
+		if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+		{
+			StartTransactionCommand();
+			if (chain)
+				RestoreTransactionCharacteristics();
+			ListCell   *lc;
+
+			foreach(lc, gp_guc_restore_list)
+			{
+				struct config_generic *gconfig = (struct config_generic *) lfirst(lc);
+
+				DispatchSyncPGVariable(gconfig);
+			}
+			CommitTransactionCommand();
+		}
 
 		/* Immediately start a new transaction */
 		StartTransactionCommand();

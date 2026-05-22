@@ -4174,4 +4174,30 @@ with c as (
 join pg_namespace n on n.oid = c.relnamespace
 where c.relname = 'test_table' and c.relkind = 'r' and n.nspname = 's';
 
+-- Test recovery of GUC after SET LOCAL and transaction control commands inside DO
+do $$
+declare
+    result_1 text;
+    result_2 text;
+    result_3 text;
+    result_4 text;
+begin
+    select string_agg(setting, '|') into result_1 from gp_dist_random('pg_settings') where name = 'search_path';
+    set local search_path = 'test';
+    select string_agg(setting, '|') into result_2 from gp_dist_random('pg_settings') where name = 'search_path';
+    commit;
+    select string_agg(setting, '|') into result_3 from gp_dist_random('pg_settings') where name = 'search_path';
+
+    set local search_path = 'test';
+    rollback;
+    select string_agg(setting, '|') into result_4 from gp_dist_random('pg_settings') where name = 'search_path';
+
+    raise notice '
+    before SET LOCAL: %
+    after SET LOCAL:  %
+    after commit:  %
+    after rollback:  %', 
+    result_1, result_2, result_3, result_4;
+end $$;
+
 drop schema s cascade;
