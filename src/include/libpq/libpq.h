@@ -75,5 +75,4 @@ extern void secure_close(Port *port);
 extern ssize_t secure_read(Port *port, void *ptr, size_t len);
 extern ssize_t secure_write(Port *port, void *ptr, size_t len);
 
-
 #endif   /* LIBPQ_H */
