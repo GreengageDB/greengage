@@ -53,10 +53,10 @@ greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_f
 NOTSUBMAKEMAKE=$(MAKE)
 
 check: test_gpdb.sh all
-	bash $< -C -r -s -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
+	bash $< -C -r -s -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
 
 perfcheck: test_gpdb.sh all
-	bash $< -p -r -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
+	bash $< -p -r -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
 
 # installcheck is not supported because there's no meaningful way to test
 # pg_upgrade against a single already-running server
