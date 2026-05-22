@@ -2387,6 +2387,13 @@ pgGetMetadataMessage(PGconn *conn, int length)
 		return pqSkipnchar(length, conn);
 	}
 
+	int32 queue_id;
+
+	if (pqGetInt(&queue_id, sizeof(ggMetadataQueueId), conn))
+	{
+		return 1;
+	}
+
 	int payload_len = length - sizeof(ggMetadataQueueId);
 
 	/*
@@ -2403,14 +2410,6 @@ pgGetMetadataMessage(PGconn *conn, int length)
 
 	chunk->next = NULL;
 	chunk->metadataLen = payload_len;
-
-	int32 queue_id;
-
-	if (pqGetInt(&queue_id, sizeof(ggMetadataQueueId), conn))
-	{
-		free(chunk);
-		return 1;
-	}
 
 	if (pqGetnchar(chunk->payload, payload_len, conn))
 	{
