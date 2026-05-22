@@ -78,6 +78,7 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "mb/pg_wchar.h"
+#include "cdb/cdbconn.h"
 
 
 /* --------------------------------

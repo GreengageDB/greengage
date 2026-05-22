@@ -288,10 +288,12 @@ pqParseInput3(PGconn *conn)
 						return;
 					conn->asyncStatus = PGASYNC_READY;
 					break;
+#ifndef FRONTEND
 				case 'M':       /* CDB: backend sends metadata 'M' message */
 					if (pgGetMetadataMessage(conn, msgLength))
 						return;
 					break;
+#endif
 				case 'Z':		/* backend is ready for new query */
 					if (getReadyForQuery(conn))
 						return;
