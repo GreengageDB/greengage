@@ -10,9 +10,7 @@
 create function sp_parallel_restricted(int) returns int as
   $$begin return $1; end$$ language plpgsql parallel restricted;
 
--- Serializable isolation would disable parallel query, so explicitly use an
--- arbitrary other level.
-begin isolation level repeatable read;
+begin;
 
 -- encourage use of parallel plans
 set parallel_setup_cost=0;
@@ -406,9 +404,10 @@ EXPLAIN (analyze, timing off, summary off, costs off) SELECT * FROM tenk1;
 ROLLBACK TO SAVEPOINT settings;
 
 -- provoke error in worker
+-- (make the error message long enough to require multiple bufferloads)
 SAVEPOINT settings;
 SET LOCAL force_parallel_mode = 1;
-select stringu1::int2 from tenk1 where unique1 = 1;
+select (stringu1 || repeat('abcd', 5000))::int2 from tenk1 where unique1 = 1;
 ROLLBACK TO SAVEPOINT settings;
 
 -- test interaction with set-returning functions
@@ -435,6 +434,10 @@ ORDER BY 1;
 -- test interaction with SRFs
 SELECT * FROM information_schema.foreign_data_wrapper_options
 ORDER BY 1, 2, 3;
+
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT generate_series(1, two), array(select generate_series(1, two))
+  FROM tenk1 ORDER BY tenthous;
 
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as

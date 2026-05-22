@@ -21,14 +21,14 @@ dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
 AC_INIT([Greenplum Database], [8.0.0-alpha.0], [support@greenplum.org], [], [https://greengagedb.org/])
-[PG_PACKAGE_VERSION=14alpha0]
+[PG_PACKAGE_VERSION=14beta2]
 AC_SUBST(PG_PACKAGE_VERSION)
 
-dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
-dnl Untested combinations of 'autoconf' and PostgreSQL versions are not
-dnl recommended.  You can remove the check from 'configure.ac' but it is then
-dnl your responsibility whether the result works or not.])])
-AC_COPYRIGHT([Copyright (c) 1996-2020, PostgreSQL Global Development Group])
+m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
+Untested combinations of 'autoconf' and PostgreSQL versions are not
+recommended.  You can remove the check from 'configure.ac' but it is then
+your responsibility whether the result works or not.])])
+AC_COPYRIGHT([Copyright (c) 1996-2021, PostgreSQL Global Development Group])
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
 AC_CONFIG_AUX_DIR(config)
 AC_PREFIX_DEFAULT(/usr/local/gpdb)
@@ -508,9 +508,12 @@ BITCODE_CFLAGS=""
 user_BITCODE_CXXFLAGS=$BITCODE_CXXFLAGS
 BITCODE_CXXFLAGS=""
 
-# set CFLAGS_VECTOR from the environment, if available
-if test "$ac_env_CFLAGS_VECTOR_set" = set; then
-  CFLAGS_VECTOR=$ac_env_CFLAGS_VECTOR_value
+# set CFLAGS_UNROLL_LOOPS and CFLAGS_VECTORIZE from the environment, if present
+if test "$ac_env_CFLAGS_UNROLL_LOOPS_set" = set; then
+  CFLAGS_UNROLL_LOOPS=$ac_env_CFLAGS_UNROLL_LOOPS_value
+fi
+if test "$ac_env_CFLAGS_VECTORIZE_set" = set; then
+  CFLAGS_VECTORIZE=$ac_env_CFLAGS_VECTORIZE_value
 fi
 
 # Some versions of GCC support some additional useful warning flags.
@@ -568,9 +571,10 @@ if test "$GCC" = yes -a "$ICC" = no; then
   # implicit-fallthrough level 3 (GCC's default).
   PGAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-fallthrough=3])
   PGAC_PROG_CXX_CFLAGS_OPT([-fexcess-precision=standard])
+  # Optimization flags for specific files that benefit from loop unrolling
+  PGAC_PROG_CC_VAR_OPT(CFLAGS_UNROLL_LOOPS, [-funroll-loops])
   # Optimization flags for specific files that benefit from vectorization
-  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTOR, [-funroll-loops])
-  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTOR, [-ftree-vectorize])
+  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTORIZE, [-ftree-vectorize])
   # We want to suppress clang's unhelpful unused-command-line-argument warnings
   # but gcc won't complain about unrecognized -Wno-foo switches, so we have to
   # test for the positive form and if that works, add the negative form
@@ -623,7 +627,8 @@ elif test "$PORTNAME" = "hpux"; then
   PGAC_PROG_CXX_CFLAGS_OPT([+Olibmerrno])
 fi
 
-AC_SUBST(CFLAGS_VECTOR)
+AC_SUBST(CFLAGS_UNROLL_LOOPS)
+AC_SUBST(CFLAGS_VECTORIZE)
 
 # Determine flags used to emit bitcode for JIT inlining. Need to test
 # for behaviour changing compiler flags, to keep compatibility with
@@ -978,15 +983,6 @@ AC_MSG_RESULT([$with_bonjour])
 
 
 #
-# OpenSSL
-#
-AC_MSG_CHECKING([whether to build with OpenSSL support])
-PGAC_ARG_BOOL(with, openssl, no, [build with OpenSSL support],
-              [AC_DEFINE([USE_OPENSSL], 1, [Define to build with OpenSSL support. (--with-openssl)])])
-AC_MSG_RESULT([$with_openssl])
-AC_SUBST(with_openssl)
-
-#
 # SELinux
 #
 AC_MSG_CHECKING([whether to build with SELinux support])
@@ -1044,22 +1040,18 @@ if test "$with_ossp_uuid" = yes ; then
   with_uuid=ossp
 fi
 
-if test "$with_uuid" = bsd ; then
-  AC_DEFINE([HAVE_UUID_BSD], 1, [Define to 1 if you have BSD UUID support.])
-  UUID_EXTRA_OBJS="md5.o sha1.o"
-elif test "$with_uuid" = e2fs ; then
-  AC_DEFINE([HAVE_UUID_E2FS], 1, [Define to 1 if you have E2FS UUID support.])
-  UUID_EXTRA_OBJS="md5.o sha1.o"
-elif test "$with_uuid" = ossp ; then
-  AC_DEFINE([HAVE_UUID_OSSP], 1, [Define to 1 if you have OSSP UUID support.])
-  UUID_EXTRA_OBJS=""
-elif test "$with_uuid" = no ; then
-  UUID_EXTRA_OBJS=""
-else
-  AC_MSG_ERROR([--with-uuid must specify one of bsd, e2fs, or ossp])
+if test "$with_uuid" != no ; then
+  if test "$with_uuid" = bsd ; then
+    AC_DEFINE([HAVE_UUID_BSD], 1, [Define to 1 if you have BSD UUID support.])
+  elif test "$with_uuid" = e2fs ; then
+    AC_DEFINE([HAVE_UUID_E2FS], 1, [Define to 1 if you have E2FS UUID support.])
+  elif test "$with_uuid" = ossp ; then
+    AC_DEFINE([HAVE_UUID_OSSP], 1, [Define to 1 if you have OSSP UUID support.])
+  else
+    AC_MSG_ERROR([--with-uuid must specify one of bsd, e2fs, or ossp])
+  fi
 fi
 AC_SUBST(with_uuid)
-AC_SUBST(UUID_EXTRA_OBJS)
 
 
 #
@@ -1123,6 +1115,31 @@ AC_SUBST(with_system_tzdata)
 PGAC_ARG_BOOL(with, zlib, yes,
               [do not use Zlib])
 AC_SUBST(with_zlib)
+
+#
+# LZ4
+#
+AC_MSG_CHECKING([whether to build with LZ4 support])
+PGAC_ARG_BOOL(with, lz4, no, [build with LZ4 support],
+              [AC_DEFINE([USE_LZ4], 1, [Define to 1 to build with LZ4 support. (--with-lz4)])])
+AC_MSG_RESULT([$with_lz4])
+AC_SUBST(with_lz4)
+
+if test "$with_lz4" = yes; then
+  PKG_CHECK_MODULES(LZ4, liblz4)
+  # We only care about -I, -D, and -L switches;
+  # note that -llz4 will be added by AC_CHECK_LIB below.
+  for pgac_option in $LZ4_CFLAGS; do
+    case $pgac_option in
+      -I*|-D*) CPPFLAGS="$CPPFLAGS $pgac_option";;
+    esac
+  done
+  for pgac_option in $LZ4_LIBS; do
+    case $pgac_option in
+      -L*) LDFLAGS="$LDFLAGS $pgac_option";;
+    esac
+  done
+fi
 
 #
 # bzip2
@@ -1353,6 +1370,10 @@ AC_SEARCH_LIBS(shmget, cygipc)
 # *BSD:
 AC_SEARCH_LIBS(backtrace_symbols, execinfo)
 
+if test "$enable_thread_safety" = yes; then
+  AC_SEARCH_LIBS(pthread_barrier_wait, pthread)
+fi
+
 if test "$with_readline" = yes; then
   PGAC_CHECK_READLINE
   if test x"$pgac_cv_check_readline" = x"no"; then
@@ -1437,7 +1458,21 @@ if test "$enable_mapreduce" = yes ; then
   LIBS="$_LIBS"
 fi
 
+#
+# SSL Library
+#
+# There is currently only one supported SSL/TLS library: OpenSSL.
+#
+PGAC_ARG_REQ(with, ssl, [LIB], [use LIB for SSL/TLS support (openssl)])
+if test x"$with_ssl" = x"" ; then
+  with_ssl=no
+fi
+PGAC_ARG_BOOL(with, openssl, no, [obsolete spelling of --with-ssl=openssl])
 if test "$with_openssl" = yes ; then
+  with_ssl=openssl
+fi
+
+if test "$with_ssl" = openssl ; then
   dnl Order matters!
   # Minimum required OpenSSL version is 1.0.1
   AC_DEFINE(OPENSSL_API_COMPAT, [0x10001000L],
@@ -1456,12 +1491,16 @@ if test "$with_openssl" = yes ; then
   # defines OPENSSL_VERSION_NUMBER to claim version 2.0.0, even though it
   # doesn't have these OpenSSL 1.1.0 functions. So check for individual
   # functions.
-  AC_CHECK_FUNCS([OPENSSL_init_ssl BIO_get_data BIO_meth_new ASN1_STRING_get0_data])
+  AC_CHECK_FUNCS([OPENSSL_init_ssl BIO_get_data BIO_meth_new ASN1_STRING_get0_data HMAC_CTX_new HMAC_CTX_free])
   # OpenSSL versions before 1.1.0 required setting callback functions, for
   # thread-safety. In 1.1.0, it's no longer required, and CRYPTO_lock()
   # function was removed.
   AC_CHECK_FUNCS([CRYPTO_lock])
+  AC_DEFINE([USE_OPENSSL], 1, [Define to 1 to build with OpenSSL support. (--with-ssl=openssl)])
+elif test "$with_ssl" != no ; then
+  AC_MSG_ERROR([--with-ssl must specify openssl])
 fi
+AC_SUBST(with_ssl)
 
 if test "$with_rt" = yes ; then
   AC_CHECK_LIB(rt, clock_gettime, [],
@@ -1492,6 +1531,10 @@ fi
 
 if test "$with_libxslt" = yes ; then
   AC_CHECK_LIB(xslt, xsltCleanupGlobals, [], [AC_MSG_ERROR([library 'xslt' is required for XSLT support])])
+fi
+
+if test "$with_lz4" = yes ; then
+  AC_CHECK_LIB(lz4, LZ4_compress_default, [], [AC_MSG_ERROR([library 'lz4' is required for LZ4 support])])
 fi
 
 # Note: We can test for libldap_r only after we know PTHREAD_LIBS
@@ -1587,6 +1630,7 @@ AC_CHECK_HEADERS(m4_normalize([
 	sys/shm.h
 	sys/sockio.h
 	sys/tas.h
+	sys/uio.h
 	sys/un.h
 	termios.h
 	ucred.h
@@ -1673,6 +1717,10 @@ failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zlib to disable zlib support.])])
 fi
 
+if test "$with_lz4" = yes; then
+  AC_CHECK_HEADERS(lz4.h, [], [AC_MSG_ERROR([lz4.h header file is required for LZ4])])
+fi
+
 # Check for bzlib.h
 if test "$with_libbz2" = yes ; then
   AC_CHECK_HEADER(bzlib.h, [], [AC_MSG_ERROR([header file <bzlib.h> is required for bzip2 support])], [])
@@ -1688,7 +1736,7 @@ if test "$with_gssapi" = yes ; then
 	[AC_CHECK_HEADERS(gssapi.h, [], [AC_MSG_ERROR([gssapi.h header file is required for GSSAPI])])])
 fi
 
-if test "$with_openssl" = yes ; then
+if test "$with_ssl" = openssl ; then
   AC_CHECK_HEADER(openssl/ssl.h, [], [AC_MSG_ERROR([header file <openssl/ssl.h> is required for OpenSSL])])
   AC_CHECK_HEADER(openssl/err.h, [], [AC_MSG_ERROR([header file <openssl/err.h> is required for OpenSSL])])
 fi
@@ -2011,6 +2059,7 @@ AC_CHECK_FUNCS(m4_normalize([
 	pstat
 	pthread_is_threaded_np
 	readlink
+	readv
 	setproctitle
 	setproctitle_fast
 	setsid
@@ -2018,9 +2067,11 @@ AC_CHECK_FUNCS(m4_normalize([
 	strchrnul
 	strsignal
 	symlink
+	syncfs
 	sync_file_range
 	uselocale
 	wcstombs_l
+	writev
 ]))
 
 # For upstream Postgres, the getifaddrs() symbol is optional, but the GPDB
@@ -2093,7 +2144,9 @@ AC_REPLACE_FUNCS(m4_normalize([
 	link
 	mkdtemp
 	pread
+	preadv
 	pwrite
+	pwritev
 	random
 	srandom
 	strlcat
@@ -2101,6 +2154,10 @@ AC_REPLACE_FUNCS(m4_normalize([
 	strnlen
 	strtof
 ]))
+
+if test "$enable_thread_safety" = yes; then
+  AC_REPLACE_FUNCS(pthread_barrier_wait)
+fi
 
 if test "$PORTNAME" = "win32" -o "$PORTNAME" = "cygwin"; then
 	# Cygwin and (apparently, based on test results) Mingw both
@@ -2116,11 +2173,13 @@ fi
 case $host_os in
         # Windows uses a specialised env handler
         mingw*)
+                AC_DEFINE(HAVE_SETENV, 1, [Define to 1 because replacement version used.])
                 AC_DEFINE(HAVE_UNSETENV, 1, [Define to 1 because replacement version used.])
+                ac_cv_func_setenv=yes
                 ac_cv_func_unsetenv=yes
                 ;;
         *)
-                AC_REPLACE_FUNCS([unsetenv])
+                AC_REPLACE_FUNCS([setenv unsetenv])
                 ;;
 esac
 
@@ -2166,6 +2225,7 @@ if test "$PORTNAME" = "win32"; then
   AC_LIBOBJ(win32error)
   AC_LIBOBJ(win32security)
   AC_LIBOBJ(win32setlocale)
+  AC_LIBOBJ(win32stat)
   AC_DEFINE([HAVE_SYMLINK], 1,
             [Define to 1 if you have the `symlink' function.])
   AC_CHECK_TYPES(MINIDUMP_TYPE, [pgac_minidump_type=yes], [pgac_minidump_type=no], [
@@ -2539,40 +2599,23 @@ else
   SHMEM_IMPLEMENTATION="src/backend/port/win32_shmem.c"
 fi
 
-# Select random number source
-#
-# You can override this logic by setting the appropriate USE_*RANDOM flag to 1
-# in the template or configure command line.
-
-# If not selected manually, try to select a source automatically.
-if test x"$USE_OPENSSL_RANDOM" = x"" && test x"$USE_WIN32_RANDOM" = x"" && test x"$USE_DEV_URANDOM" = x"" ; then
-  if test x"$with_openssl" = x"yes" ; then
-    USE_OPENSSL_RANDOM=1
-  elif test "$PORTNAME" = "win32" ; then
-    USE_WIN32_RANDOM=1
-  else
-    AC_CHECK_FILE([/dev/urandom], [], [])
-
-    if test x"$ac_cv_file__dev_urandom" = x"yes" ; then
-      USE_DEV_URANDOM=1
-    fi
-  fi
-fi
-
+# Select random number source. If a TLS library is used then it will be the
+# first choice, else the native platform sources (Windows API or /dev/urandom)
+# will be used.
 AC_MSG_CHECKING([which random number source to use])
-if test x"$USE_OPENSSL_RANDOM" = x"1" ; then
-  AC_DEFINE(USE_OPENSSL_RANDOM, 1, [Define to use OpenSSL for random number generation])
+if test x"$with_ssl" = x"openssl" ; then
   AC_MSG_RESULT([OpenSSL])
-elif test x"$USE_WIN32_RANDOM" = x"1" ; then
-  AC_DEFINE(USE_WIN32_RANDOM, 1, [Define to use native Windows API for random number generation])
+elif test x"$PORTNAME" = x"win32" ; then
   AC_MSG_RESULT([Windows native])
-elif test x"$USE_DEV_URANDOM" = x"1" ; then
-  AC_DEFINE(USE_DEV_URANDOM, 1, [Define to use /dev/urandom for random number generation])
-  AC_MSG_RESULT([/dev/urandom])
 else
-  AC_MSG_ERROR([
+  AC_MSG_RESULT([/dev/urandom])
+  AC_CHECK_FILE([/dev/urandom], [], [])
+
+  if test x"$ac_cv_file__dev_urandom" = x"no" ; then
+    AC_MSG_ERROR([
 no source of strong random numbers was found
-PostgreSQL can use OpenSSL or /dev/urandom as a source of random numbers.])
+PostgreSQL can use OpenSSL, native Windows API or /dev/urandom as a source of random numbers.])
+  fi
 fi
 
 # If not set in template file, set bytes to use libc memset()
@@ -2681,20 +2724,18 @@ AC_MSG_CHECKING([thread safety of required library functions])
 
 _CFLAGS="$CFLAGS"
 _LIBS="$LIBS"
-CFLAGS="$CFLAGS $PTHREAD_CFLAGS -DIN_CONFIGURE"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
 AC_RUN_IFELSE(
-  [AC_LANG_SOURCE([[#include "$srcdir/src/test/thread/thread_test.c"]])],
+  [AC_LANG_SOURCE([[#include "$srcdir/config/thread_test.c"]])],
   [AC_MSG_RESULT(yes)],
   [AC_MSG_RESULT(no)
   AC_MSG_ERROR([thread test program failed
-This platform is not thread-safe.  Check the file 'config.log' or compile
-and run src/test/thread/thread_test for the exact reason.
-Use --disable-thread-safety to disable thread safety.])],
+This platform is not thread-safe.  Check the file 'config.log' for the
+exact reason, or use --disable-thread-safety to disable thread safety.])],
   [AC_MSG_RESULT(maybe)
   AC_MSG_WARN([
 *** Skipping thread test program because of cross-compile build.
-*** Run the program in src/test/thread on the target machine.
 ])])
 CFLAGS="$_CFLAGS"
 LIBS="$_LIBS"
@@ -2794,8 +2835,10 @@ AC_SUBST(PG_VERSION_NUM)
 # literally, so that it's possible to override it at build time using
 # a command like "make ... PG_SYSROOT=path".  This has to be done after
 # we've finished all configure checks that depend on CPPFLAGS.
+# The same for LDFLAGS, too.
 if test x"$PG_SYSROOT" != x; then
   CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+  LDFLAGS=`echo "$LDFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
 fi
 AC_SUBST(PG_SYSROOT)
 

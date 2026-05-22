@@ -135,7 +135,7 @@
  *		- Protects both PredXact and SerializableXidHash.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -438,7 +438,7 @@ static void SetPossibleUnsafeConflict(SERIALIZABLEXACT *roXact, SERIALIZABLEXACT
 static void ReleaseRWConflict(RWConflict conflict);
 static void FlagSxactUnsafe(SERIALIZABLEXACT *sxact);
 
-static bool SerialPagePrecedesLogically(int p, int q);
+static bool SerialPagePrecedesLogically(int page1, int page2);
 static void SerialInit(void);
 static void SerialAdd(TransactionId xid, SerCommitSeqNo minConflictCommitSeqNo);
 static SerCommitSeqNo SerialGetMinConflictCommitSeqNo(TransactionId xid);
@@ -784,28 +784,80 @@ FlagSxactUnsafe(SERIALIZABLEXACT *sxact)
 /*------------------------------------------------------------------------*/
 
 /*
- * We will work on the page range of 0..SERIAL_MAX_PAGE.
- * Compares using wraparound logic, as is required by slru.c.
+ * Decide whether a Serial page number is "older" for truncation purposes.
+ * Analogous to CLOGPagePrecedes().
  */
 static bool
-SerialPagePrecedesLogically(int p, int q)
+SerialPagePrecedesLogically(int page1, int page2)
 {
-	int			diff;
+	TransactionId xid1;
+	TransactionId xid2;
+
+	xid1 = ((TransactionId) page1) * SERIAL_ENTRIESPERPAGE;
+	xid1 += FirstNormalTransactionId + 1;
+	xid2 = ((TransactionId) page2) * SERIAL_ENTRIESPERPAGE;
+	xid2 += FirstNormalTransactionId + 1;
+
+	return (TransactionIdPrecedes(xid1, xid2) &&
+			TransactionIdPrecedes(xid1, xid2 + SERIAL_ENTRIESPERPAGE - 1));
+}
+
+#ifdef USE_ASSERT_CHECKING
+static void
+SerialPagePrecedesLogicallyUnitTests(void)
+{
+	int			per_page = SERIAL_ENTRIESPERPAGE,
+				offset = per_page / 2;
+	int			newestPage,
+				oldestPage,
+				headPage,
+				targetPage;
+	TransactionId newestXact,
+				oldestXact;
+
+	/* GetNewTransactionId() has assigned the last XID it can safely use. */
+	newestPage = 2 * SLRU_PAGES_PER_SEGMENT - 1;	/* nothing special */
+	newestXact = newestPage * per_page + offset;
+	Assert(newestXact / per_page == newestPage);
+	oldestXact = newestXact + 1;
+	oldestXact -= 1U << 31;
+	oldestPage = oldestXact / per_page;
 
 	/*
-	 * We have to compare modulo (SERIAL_MAX_PAGE+1)/2.  Both inputs should be
-	 * in the range 0..SERIAL_MAX_PAGE.
+	 * In this scenario, the SLRU headPage pertains to the last ~1000 XIDs
+	 * assigned.  oldestXact finishes, ~2B XIDs having elapsed since it
+	 * started.  Further transactions cause us to summarize oldestXact to
+	 * tailPage.  Function must return false so SerialAdd() doesn't zero
+	 * tailPage (which may contain entries for other old, recently-finished
+	 * XIDs) and half the SLRU.  Reaching this requires burning ~2B XIDs in
+	 * single-user mode, a negligible possibility.
 	 */
-	Assert(p >= 0 && p <= SERIAL_MAX_PAGE);
-	Assert(q >= 0 && q <= SERIAL_MAX_PAGE);
+	headPage = newestPage;
+	targetPage = oldestPage;
+	Assert(!SerialPagePrecedesLogically(headPage, targetPage));
 
-	diff = p - q;
-	if (diff >= ((SERIAL_MAX_PAGE + 1) / 2))
-		diff -= SERIAL_MAX_PAGE + 1;
-	else if (diff < -((int) (SERIAL_MAX_PAGE + 1) / 2))
-		diff += SERIAL_MAX_PAGE + 1;
-	return diff < 0;
+	/*
+	 * In this scenario, the SLRU headPage pertains to oldestXact.  We're
+	 * summarizing an XID near newestXact.  (Assume few other XIDs used
+	 * SERIALIZABLE, hence the minimal headPage advancement.  Assume
+	 * oldestXact was long-running and only recently reached the SLRU.)
+	 * Function must return true to make SerialAdd() create targetPage.
+	 *
+	 * Today's implementation mishandles this case, but it doesn't matter
+	 * enough to fix.  Verify that the defect affects just one page by
+	 * asserting correct treatment of its prior page.  Reaching this case
+	 * requires burning ~2B XIDs in single-user mode, a negligible
+	 * possibility.  Moreover, if it does happen, the consequence would be
+	 * mild, namely a new transaction failing in SimpleLruReadPage().
+	 */
+	headPage = oldestPage;
+	targetPage = newestPage;
+	Assert(SerialPagePrecedesLogically(headPage, targetPage - 1));
+#if 0
+	Assert(SerialPagePrecedesLogically(headPage, targetPage));
+#endif
 }
+#endif
 
 /*
  * Initialize for the tracking of old serializable committed xids.
@@ -821,9 +873,11 @@ SerialInit(void)
 	SerialSlruCtl->PagePrecedes = SerialPagePrecedesLogically;
 	SimpleLruInit(SerialSlruCtl, "Serial",
 				  NUM_SERIAL_BUFFERS, 0, SerialSLRULock, "pg_serial",
-				  LWTRANCHE_SERIAL_BUFFER);
-	/* Override default assumption that writes should be fsync'd */
-	SerialSlruCtl->do_fsync = false;
+				  LWTRANCHE_SERIAL_BUFFER, SYNC_HANDLER_NONE);
+#ifdef USE_ASSERT_CHECKING
+	SerialPagePrecedesLogicallyUnitTests();
+#endif
+	SlruPagePrecedesUnitTests(SerialSlruCtl, SERIAL_ENTRIESPERPAGE);
 
 	/*
 	 * Create or attach to the SerialControl structure.
@@ -1032,7 +1086,7 @@ CheckPointPredicate(void)
 	}
 	else
 	{
-		/*
+		/*----------
 		 * The SLRU is no longer needed. Truncate to head before we set head
 		 * invalid.
 		 *
@@ -1041,6 +1095,25 @@ CheckPointPredicate(void)
 		 * that we leave behind will appear to be new again. In that case it
 		 * won't be removed until XID horizon advances enough to make it
 		 * current again.
+		 *
+		 * XXX: This should happen in vac_truncate_clog(), not in checkpoints.
+		 * Consider this scenario, starting from a system with no in-progress
+		 * transactions and VACUUM FREEZE having maximized oldestXact:
+		 * - Start a SERIALIZABLE transaction.
+		 * - Start, finish, and summarize a SERIALIZABLE transaction, creating
+		 *   one SLRU page.
+		 * - Consume XIDs to reach xidStopLimit.
+		 * - Finish all transactions.  Due to the long-running SERIALIZABLE
+		 *   transaction, earlier checkpoints did not touch headPage.  The
+		 *   next checkpoint will change it, but that checkpoint happens after
+		 *   the end of the scenario.
+		 * - VACUUM to advance XID limits.
+		 * - Consume ~2M XIDs, crossing the former xidWrapLimit.
+		 * - Start, finish, and summarize a SERIALIZABLE transaction.
+		 *   SerialAdd() declines to create the targetPage, because headPage
+		 *   is not regarded as in the past relative to that targetPage.  The
+		 *   transaction instigating the summarize fails in
+		 *   SimpleLruReadPage().
 		 */
 		tailPage = serialControl->headPage;
 		serialControl->headPage = -1;
@@ -1052,7 +1125,7 @@ CheckPointPredicate(void)
 	SimpleLruTruncate(SerialSlruCtl, tailPage);
 
 	/*
-	 * Flush dirty SLRU pages to disk
+	 * Write dirty SLRU pages to disk
 	 *
 	 * This is not actually necessary from a correctness point of view. We do
 	 * it merely as a debugging aid.
@@ -1061,7 +1134,7 @@ CheckPointPredicate(void)
 	 * before deleting the file in which they sit, which would be completely
 	 * pointless.
 	 */
-	SimpleLruFlush(SerialSlruCtl, true);
+	SimpleLruWriteAll(SerialSlruCtl, true);
 }
 
 /*------------------------------------------------------------------------*/
@@ -1098,7 +1171,6 @@ InitPredicateLocks(void)
 	 * Allocate hash table for PREDICATELOCKTARGET structs.  This stores
 	 * per-predicate-lock-target information.
 	 */
-	MemSet(&info, 0, sizeof(info));
 	info.keysize = sizeof(PREDICATELOCKTARGETTAG);
 	info.entrysize = sizeof(PREDICATELOCKTARGET);
 	info.num_partitions = NUM_PREDICATELOCK_PARTITIONS;
@@ -1131,7 +1203,6 @@ InitPredicateLocks(void)
 	 * Allocate hash table for PREDICATELOCK structs.  This stores per
 	 * xact-lock-of-a-target information.
 	 */
-	MemSet(&info, 0, sizeof(info));
 	info.keysize = sizeof(PREDICATELOCKTAG);
 	info.entrysize = sizeof(PREDICATELOCK);
 	info.hash = predicatelock_hash;
@@ -1214,7 +1285,6 @@ InitPredicateLocks(void)
 	 * Allocate hash table for SERIALIZABLEXID structs.  This stores per-xid
 	 * information for serializable transactions which have accessed data.
 	 */
-	MemSet(&info, 0, sizeof(info));
 	info.keysize = sizeof(SERIALIZABLEXIDTAG);
 	info.entrysize = sizeof(SERIALIZABLEXID);
 
@@ -1532,7 +1602,7 @@ GetSafeSnapshot(Snapshot origSnapshot)
 		/* else, need to retry... */
 		ereport(DEBUG2,
 				(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-				 errmsg("deferrable snapshot was unsafe; trying a new one")));
+				 errmsg_internal("deferrable snapshot was unsafe; trying a new one")));
 		ReleasePredicateLocks(false, false);
 	}
 
@@ -1855,7 +1925,6 @@ CreateLocalPredicateLockHash(void)
 
 	/* Initialize the backend-local hash table of parent locks */
 	Assert(LocalPredicateLockHash == NULL);
-	MemSet(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(PREDICATELOCKTARGETTAG);
 	hash_ctl.entrysize = sizeof(LOCALPREDICATELOCK);
 	LocalPredicateLockHash = hash_create("Local predicate lock",

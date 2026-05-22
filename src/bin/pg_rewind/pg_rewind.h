@@ -3,7 +3,7 @@
  * pg_rewind.h
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *-------------------------------------------------------------------------
@@ -20,10 +20,9 @@
 
 /* Configuration options */
 extern char *datadir_target;
-extern char *datadir_source;
-extern char *connstr_source;
 extern bool showprogress;
 extern bool dry_run;
+extern bool do_sync;
 extern int	WalSegSz;
 
 extern int32 dbid_target;
@@ -33,9 +32,6 @@ extern const char *progname;
 /* Target history */
 extern TimeLineHistoryEntry *targetHistory;
 extern int	targetNentries;
-
-/* general state */
-extern PGconn *conn;
 
 /* Progress counters */
 extern uint64 fetch_size;

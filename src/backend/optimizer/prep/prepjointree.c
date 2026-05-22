@@ -16,7 +16,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -88,6 +88,9 @@ static void pull_up_union_leaf_queries(Node *setOp, PlannerInfo *root,
 									   int childRToffset);
 static void make_setop_translation_list(Query *query, Index newvarno,
 										AppendRelInfo *appinfo);
+static bool is_simple_subquery(PlannerInfo *root, Query *subquery,
+							   RangeTblEntry *rte,
+							   JoinExpr *lowest_outer_join);
 static Node *pull_up_simple_values(PlannerInfo *root, Node *jtnode,
 								   RangeTblEntry *rte);
 static bool is_simple_values(PlannerInfo *root, RangeTblEntry *rte);
@@ -99,7 +102,8 @@ static bool is_simple_union_all(Query *subquery);
 static bool is_simple_union_all_recurse(Node *setOp, Query *setOpQuery,
 										List *colTypes);
 static bool is_safe_append_member(Query *subquery);
-static bool jointree_contains_lateral_outer_refs(Node *jtnode, bool restricted,
+static bool jointree_contains_lateral_outer_refs(PlannerInfo *root,
+												 Node *jtnode, bool restricted,
 												 Relids safe_upper_varnos);
 static void perform_pullup_replace_vars(PlannerInfo *root,
 										pullup_replace_vars_context *rvcontext,
@@ -1085,15 +1089,18 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 	subroot->eq_classes = NIL;
 	subroot->ec_merging_done = false;
 	subroot->non_eq_clauses = NIL;
+	subroot->all_result_relids = NULL;
+	subroot->leaf_result_relids = NULL;
 	subroot->append_rel_list = NIL;
+	subroot->row_identity_vars = NIL;
 	subroot->rowMarks = NIL;
 	memset(subroot->upper_rels, 0, sizeof(subroot->upper_rels));
 	memset(subroot->upper_targets, 0, sizeof(subroot->upper_targets));
 	subroot->processed_tlist = NIL;
+	subroot->update_colnos = NIL;
 	subroot->grouping_map = NULL;
 	subroot->minmax_aggs = NIL;
 	subroot->qual_security_level = 0;
-	subroot->inhTargetKind = INHKIND_NONE;
 	subroot->hasRecursion = false;
 	subroot->wt_param_id = -1;
 	subroot->non_recursive_path = NULL;
@@ -1585,7 +1592,7 @@ make_setop_translation_list(Query *query, Index newvarno,
  * In GPDB, 'rte' can be passed as NULL, if this is a sublink, rather
  * than a subselect in the FROM list, that we are trying to pull up.
  */
-bool
+static bool
 is_simple_subquery(PlannerInfo *root, Query *subquery, RangeTblEntry *rte,
 				   JoinExpr *lowest_outer_join)
 {
@@ -1667,7 +1674,8 @@ is_simple_subquery(PlannerInfo *root, Query *subquery, RangeTblEntry *rte,
 			safe_upper_varnos = NULL;	/* doesn't matter */
 		}
 
-		if (jointree_contains_lateral_outer_refs((Node *) subquery->jointree,
+		if (jointree_contains_lateral_outer_refs(root,
+												 (Node *) subquery->jointree,
 												 restricted, safe_upper_varnos))
 			return false;
 
@@ -1686,7 +1694,9 @@ is_simple_subquery(PlannerInfo *root, Query *subquery, RangeTblEntry *rte,
 		 */
 		if (lowest_outer_join != NULL)
 		{
-			Relids		lvarnos = pull_varnos_of_level((Node *) subquery->targetList, 1);
+			Relids		lvarnos = pull_varnos_of_level(root,
+													   (Node *) subquery->targetList,
+													   1);
 
 			if (!bms_is_subset(lvarnos, safe_upper_varnos))
 				return false;
@@ -2119,7 +2129,8 @@ is_safe_append_member(Query *subquery)
  * in safe_upper_varnos.
  */
 static bool
-jointree_contains_lateral_outer_refs(Node *jtnode, bool restricted,
+jointree_contains_lateral_outer_refs(PlannerInfo *root, Node *jtnode,
+									 bool restricted,
 									 Relids safe_upper_varnos)
 {
 	if (jtnode == NULL)
@@ -2134,7 +2145,8 @@ jointree_contains_lateral_outer_refs(Node *jtnode, bool restricted,
 		/* First, recurse to check child joins */
 		foreach(l, f->fromlist)
 		{
-			if (jointree_contains_lateral_outer_refs(lfirst(l),
+			if (jointree_contains_lateral_outer_refs(root,
+													 lfirst(l),
 													 restricted,
 													 safe_upper_varnos))
 				return true;
@@ -2142,7 +2154,7 @@ jointree_contains_lateral_outer_refs(Node *jtnode, bool restricted,
 
 		/* Then check the top-level quals */
 		if (restricted &&
-			!bms_is_subset(pull_varnos_of_level(f->quals, 1),
+			!bms_is_subset(pull_varnos_of_level(root, f->quals, 1),
 						   safe_upper_varnos))
 			return true;
 	}
@@ -2161,18 +2173,20 @@ jointree_contains_lateral_outer_refs(Node *jtnode, bool restricted,
 		}
 
 		/* Check the child joins */
-		if (jointree_contains_lateral_outer_refs(j->larg,
+		if (jointree_contains_lateral_outer_refs(root,
+												 j->larg,
 												 restricted,
 												 safe_upper_varnos))
 			return true;
-		if (jointree_contains_lateral_outer_refs(j->rarg,
+		if (jointree_contains_lateral_outer_refs(root,
+												 j->rarg,
 												 restricted,
 												 safe_upper_varnos))
 			return true;
 
 		/* Check the JOIN's qual clauses */
 		if (restricted &&
-			!bms_is_subset(pull_varnos_of_level(j->quals, 1),
+			!bms_is_subset(pull_varnos_of_level(root, j->quals, 1),
 						   safe_upper_varnos))
 			return true;
 	}
@@ -2599,7 +2613,8 @@ pullup_replace_vars_callback(Var *var,
 				 * level-zero var must belong to the subquery.
 				 */
 				if ((rcon->target_rte->lateral ?
-					 bms_overlap(pull_varnos((Node *) newnode), rcon->relids) :
+					 bms_overlap(pull_varnos(rcon->root, (Node *) newnode),
+								 rcon->relids) :
 					 contain_vars_of_level((Node *) newnode, 0)) &&
 					!contain_nonstrict_functions((Node *) newnode))
 				{
@@ -3038,7 +3053,7 @@ reduce_outer_joins_pass2(Node *jtnode,
 			overlap = list_intersection(local_nonnullable_vars,
 										forced_null_vars);
 			if (overlap != NIL &&
-				bms_overlap(pull_varnos((Node *) overlap),
+				bms_overlap(pull_varnos(root, (Node *) overlap),
 							right_state->relids))
 				jointype = JOIN_ANTI;
 		}
@@ -3495,6 +3510,7 @@ remove_result_refs(PlannerInfo *root, int varno, Node *newjtloc)
 		subrelids = get_relids_in_jointree(newjtloc, false);
 		Assert(!bms_is_empty(subrelids));
 		substitute_phv_relids((Node *) root->parse, varno, subrelids);
+		fix_append_rel_relids(root->append_rel_list, varno, subrelids);
 	}
 
 	/*

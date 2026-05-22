@@ -8,7 +8,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_cast.h
@@ -42,7 +42,7 @@ CATALOG(pg_cast,2605,CastRelationId)
 	Oid			casttarget BKI_LOOKUP(pg_type);
 
 	/* cast function; 0 = binary coercible */
-	Oid			castfunc BKI_LOOKUP(pg_proc);
+	Oid			castfunc BKI_LOOKUP_OPT(pg_proc);
 
 	/* contexts in which cast can be used */
 	char		castcontext;
@@ -62,6 +62,11 @@ FOREIGN_KEY(castfunc REFERENCES pg_proc(oid));
  * ----------------
  */
 typedef FormData_pg_cast *Form_pg_cast;
+
+DECLARE_UNIQUE_INDEX_PKEY(pg_cast_oid_index, 2660, on pg_cast using btree(oid oid_ops));
+#define CastOidIndexId	2660
+DECLARE_UNIQUE_INDEX(pg_cast_source_target_index, 2661, on pg_cast using btree(castsource oid_ops, casttarget oid_ops));
+#define CastSourceTargetIndexId  2661
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 

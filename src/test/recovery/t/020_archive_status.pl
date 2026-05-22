@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 #
 # Tests related to WAL archiving and recovery.
 #
@@ -65,7 +68,7 @@ is( $primary->safe_psql(
 		FROM pg_stat_archiver
 	}),
 	"0|$segment_name_1",
-	'pg_stat_archiver failed to archive $segment_name_1');
+	"pg_stat_archiver failed to archive $segment_name_1");
 
 # Crash the cluster for the next test in charge of checking that non-archived
 # WAL segments are not removed.
@@ -146,7 +149,7 @@ $standby1->start;
 # that all segments needed are restored from the archives.
 $standby1->poll_query_until('postgres',
 	qq{ SELECT pg_wal_lsn_diff(pg_last_wal_replay_lsn(), '$primary_lsn') >= 0 }
-) or die "Timed out while waiting for xlog replay on standby2";
+) or die "Timed out while waiting for xlog replay on standby1";
 
 $standby1->safe_psql('postgres', q{CHECKPOINT});
 

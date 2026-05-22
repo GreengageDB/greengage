@@ -23,7 +23,7 @@
  * for aborts (whether sync or async), since the post-crash assumption would
  * be that such transactions failed anyway.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/clog.c
@@ -42,6 +42,7 @@
 #include "pg_trace.h"
 #include "pgstat.h"
 #include "storage/proc.h"
+#include "storage/sync.h"
 
 /*
  * Defines for CLOG page sizes.  A page is the same BLCKSZ as is used
@@ -450,7 +451,12 @@ TransactionGroupUpdateXidStatus(TransactionId xid, XidStatus status,
 		if (nextidx != INVALID_PGPROCNO &&
 			ProcGlobal->allProcs[nextidx].clogGroupMemberPage != proc->clogGroupMemberPage)
 		{
+			/*
+			 * Ensure that this proc is not a member of any clog group that
+			 * needs an XID status update.
+			 */
 			proc->clogGroupMember = false;
+			pg_atomic_write_u32(&proc->clogGroupNext, INVALID_PGPROCNO);
 			return false;
 		}
 
@@ -801,7 +807,9 @@ CLOGShmemInit(void)
 {
 	XactCtl->PagePrecedes = CLOGPagePrecedes;
 	SimpleLruInit(XactCtl, "Xact", CLOGShmemBuffers(), CLOG_LSNS_PER_PAGE,
-				  XactSLRULock, "pg_xact", LWTRANCHE_XACT_BUFFER);
+				  XactSLRULock, "pg_xact", LWTRANCHE_XACT_BUFFER,
+				  SYNC_HANDLER_CLOG);
+	SlruPagePrecedesUnitTests(XactCtl, CLOG_XACTS_PER_PAGE);
 }
 
 /*
@@ -881,11 +889,6 @@ TrimCLOG(void)
 	LWLockAcquire(XactSLRULock, LW_EXCLUSIVE);
 
 	/*
-	 * Re-Initialize our idea of the latest page number.
-	 */
-	XactCtl->shared->latest_page_number = pageno;
-
-	/*
 	 * Zero out the remainder of the current clog page.  Under normal
 	 * circumstances it should be zeroes already, but it seems at least
 	 * theoretically possible that XLOG replay will have settled on a nextXID
@@ -919,40 +922,18 @@ TrimCLOG(void)
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-ShutdownCLOG(void)
-{
-	/* Flush dirty CLOG pages to disk */
-	TRACE_POSTGRESQL_CLOG_CHECKPOINT_START(false);
-	SimpleLruFlush(XactCtl, false);
-
-	/*
-	 * fsync pg_xact to ensure that any files flushed previously are durably
-	 * on disk.
-	 */
-	fsync_fname("pg_xact", true);
-
-	TRACE_POSTGRESQL_CLOG_CHECKPOINT_DONE(false);
-}
-
-/*
  * Perform a checkpoint --- either during shutdown, or on-the-fly
  */
 void
 CheckPointCLOG(void)
 {
-	/* Flush dirty CLOG pages to disk */
-	TRACE_POSTGRESQL_CLOG_CHECKPOINT_START(true);
-	SimpleLruFlush(XactCtl, true);
-
 	/*
-	 * fsync pg_xact to ensure that any files flushed previously are durably
-	 * on disk.
+	 * Write dirty CLOG pages to disk.  This may result in sync requests
+	 * queued for later handling by ProcessSyncRequests(), as part of the
+	 * checkpoint.
 	 */
-	fsync_fname("pg_xact", true);
-
+	TRACE_POSTGRESQL_CLOG_CHECKPOINT_START(true);
+	SimpleLruWriteAll(XactCtl, true);
 	TRACE_POSTGRESQL_CLOG_CHECKPOINT_DONE(true);
 }
 
@@ -1042,13 +1023,22 @@ TruncateCLOG(TransactionId oldestXact, Oid oldestxid_datoid)
 
 
 /*
- * Decide which of two CLOG page numbers is "older" for truncation purposes.
+ * Decide whether a CLOG page number is "older" for truncation purposes.
  *
  * We need to use comparison of TransactionIds here in order to do the right
- * thing with wraparound XID arithmetic.  However, if we are asked about
- * page number zero, we don't want to hand InvalidTransactionId to
- * TransactionIdPrecedes: it'll get weird about permanent xact IDs.  So,
- * offset both xids by FirstNormalTransactionId to avoid that.
+ * thing with wraparound XID arithmetic.  However, TransactionIdPrecedes()
+ * would get weird about permanent xact IDs.  So, offset both such that xid1,
+ * xid2, and xid2 + CLOG_XACTS_PER_PAGE - 1 are all normal XIDs; this offset
+ * is relevant to page 0 and to the page preceding page 0.
+ *
+ * The page containing oldestXact-2^31 is the important edge case.  The
+ * portion of that page equaling or following oldestXact-2^31 is expendable,
+ * but the portion preceding oldestXact-2^31 is not.  When oldestXact-2^31 is
+ * the first XID of a page and segment, the entire page and segment is
+ * expendable, and we could truncate the segment.  Recognizing that case would
+ * require making oldestXact, not just the page containing oldestXact,
+ * available to this callback.  The benefit would be rare and small, so we
+ * don't optimize that edge case.
  */
 static bool
 CLOGPagePrecedes(int page1, int page2)
@@ -1057,11 +1047,12 @@ CLOGPagePrecedes(int page1, int page2)
 	TransactionId xid2;
 
 	xid1 = ((TransactionId) page1) * CLOG_XACTS_PER_PAGE;
-	xid1 += FirstNormalTransactionId;
+	xid1 += FirstNormalTransactionId + 1;
 	xid2 = ((TransactionId) page2) * CLOG_XACTS_PER_PAGE;
-	xid2 += FirstNormalTransactionId;
+	xid2 += FirstNormalTransactionId + 1;
 
-	return TransactionIdPrecedes(xid1, xid2);
+	return (TransactionIdPrecedes(xid1, xid2) &&
+			TransactionIdPrecedes(xid1, xid2 + CLOG_XACTS_PER_PAGE - 1));
 }
 
 
@@ -1130,16 +1121,19 @@ clog_redo(XLogReaderState *record)
 
 		memcpy(&xlrec, XLogRecGetData(record), sizeof(xl_clog_truncate));
 
-		/*
-		 * During XLOG replay, latest_page_number isn't set up yet; insert a
-		 * suitable value to bypass the sanity test in SimpleLruTruncate.
-		 */
-		XactCtl->shared->latest_page_number = xlrec.pageno;
-
 		AdvanceOldestClogXid(xlrec.oldestXact);
 
 		SimpleLruTruncate(XactCtl, xlrec.pageno);
 	}
 	else
 		elog(PANIC, "clog_redo: unknown op code %u", info);
+}
+
+/*
+ * Entrypoint for sync.c to sync clog files.
+ */
+int
+clogsyncfiletag(const FileTag *ftag, char *path)
+{
+	return SlruSyncFileTag(XactCtl, ftag, path);
 }

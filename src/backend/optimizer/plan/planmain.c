@@ -11,7 +11,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -294,6 +294,13 @@ query_planner(PlannerInfo *root,
 	 * from baserels to otherrels here, so we must have computed it already.
 	 */
 	add_other_rels_to_query(root);
+
+	/*
+	 * Distribute any UPDATE/DELETE row identity variables to the target
+	 * relations.  This can't be done till we've finished expansion of
+	 * appendrels.
+	 */
+	distribute_row_identity_vars(root);
 
 	/*
 	 * Ready to do the primary planning.

@@ -15,7 +15,7 @@
  * there's hardly any use case for using these without superuser-rights
  * anyway.
  *
- * Copyright (c) 2007-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2007-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/pageinspect/heapfuncs.c
@@ -338,7 +338,7 @@ tuple_data_split_internal(Oid relid, char *tupdata,
 		attr = TupleDescAttr(tupdesc, i);
 
 		/*
-		 * Tuple header can specify less attributes than tuple descriptor as
+		 * Tuple header can specify fewer attributes than tuple descriptor as
 		 * ALTER TABLE ADD COLUMN without DEFAULT keyword does not actually
 		 * change tuples in pages, so attributes with numbers greater than
 		 * (t_infomask2 & HEAP_NATTS_MASK) should be treated as NULL.

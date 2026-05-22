@@ -132,13 +132,15 @@ VACUUM no_index_cleanup;
 -- Both parent relation and toast are cleaned up.
 ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true);
 VACUUM no_index_cleanup;
+ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = auto);
+VACUUM no_index_cleanup;
 -- Parameter is set for both the parent table and its toast relation.
 INSERT INTO no_index_cleanup(i, t) VALUES (generate_series(31,60),
     repeat('1234567890',269));
 DELETE FROM no_index_cleanup WHERE i < 45;
 -- Only toast index is cleaned up.
-ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = false,
-    toast.vacuum_index_cleanup = true);
+ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = off,
+    toast.vacuum_index_cleanup = yes);
 VACUUM no_index_cleanup;
 -- Only parent is cleaned up.
 ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true,
@@ -146,7 +148,7 @@ ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true,
 VACUUM no_index_cleanup;
 -- Test some extra relations.
 VACUUM (INDEX_CLEANUP FALSE) vaccluster;
-VACUUM (INDEX_CLEANUP FALSE) vactst; -- index cleanup option is ignored if no indexes
+VACUUM (INDEX_CLEANUP AUTO) vactst; -- index cleanup option is ignored if no indexes
 VACUUM (INDEX_CLEANUP FALSE, FREEZE TRUE) vaccluster;
 
 -- TRUNCATE option
@@ -217,6 +219,12 @@ RESET default_transaction_isolation;
 BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 ANALYZE vactst;
 COMMIT;
+
+-- PROCESS_TOAST option
+ALTER TABLE vactst ADD COLUMN t TEXT;
+ALTER TABLE vactst ALTER COLUMN t SET STORAGE EXTERNAL;
+VACUUM (PROCESS_TOAST FALSE) vactst;
+VACUUM (PROCESS_TOAST FALSE, FULL) vactst;
 
 DROP TABLE vaccluster;
 DROP TABLE vactst;

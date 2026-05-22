@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/bin/psql/command.c
  */
@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <pwd.h>
+#include <utime.h>
 #ifndef WIN32
 #include <sys/stat.h>			/* for stat() */
 #include <fcntl.h>				/* open() flags */
@@ -26,6 +27,7 @@
 #include "command.h"
 #include "common.h"
 #include "common/logging.h"
+#include "common/string.h"
 #include "copy.h"
 #include "crosstabview.h"
 #include "describe.h"
@@ -36,6 +38,7 @@
 #include "input.h"
 #include "large_obj.h"
 #include "libpq-fe.h"
+#include "libpq/pqcomm.h"
 #include "mainloop.h"
 #include "portability/instr_time.h"
 #include "pqexpbuffer.h"
@@ -69,6 +72,9 @@ static backslashResult exec_command_copyright(PsqlScanState scan_state, bool act
 static backslashResult exec_command_crosstabview(PsqlScanState scan_state, bool active_branch);
 static backslashResult exec_command_d(PsqlScanState scan_state, bool active_branch,
 									  const char *cmd);
+static bool exec_command_dfo(PsqlScanState scan_state, const char *cmd,
+							 const char *pattern,
+							 bool show_verbose, bool show_system);
 static backslashResult exec_command_edit(PsqlScanState scan_state, bool active_branch,
 										 PQExpBuffer query_buf, PQExpBuffer previous_buf);
 static backslashResult exec_command_ef_ev(PsqlScanState scan_state, bool active_branch,
@@ -145,11 +151,11 @@ static void save_query_text_state(PsqlScanState scan_state, ConditionalStack cst
 								  PQExpBuffer query_buf);
 static void discard_query_text(PsqlScanState scan_state, ConditionalStack cstack,
 							   PQExpBuffer query_buf);
-static void copy_previous_query(PQExpBuffer query_buf, PQExpBuffer previous_buf);
+static bool copy_previous_query(PQExpBuffer query_buf, PQExpBuffer previous_buf);
 static bool do_connect(enum trivalue reuse_previous_specification,
 					   char *dbname, char *user, char *host, char *port);
 static bool do_edit(const char *filename_arg, PQExpBuffer query_buf,
-					int lineno, bool *edited);
+					int lineno, bool discard_on_quit, bool *edited);
 static bool do_shell(const char *command);
 static bool do_watch(PQExpBuffer query_buf, double sleep);
 static bool lookup_object_oid(EditableObjectType obj_type, const char *desc,
@@ -415,7 +421,7 @@ exec_command(const char *cmd,
 	 * the individual command subroutines.
 	 */
 	if (status == PSQL_CMD_SEND)
-		copy_previous_query(query_buf, previous_buf);
+		(void) copy_previous_query(query_buf, previous_buf);
 
 	return status;
 }
@@ -603,12 +609,9 @@ exec_command_conninfo(PsqlScanState scan_state, bool active_branch)
 			char	   *host = PQhost(pset.db);
 			char	   *hostaddr = PQhostaddr(pset.db);
 
-			/*
-			 * If the host is an absolute path, the connection is via socket
-			 * unless overridden by hostaddr
-			 */
-			if (is_absolute_path(host))
+			if (is_unixsock_path(host))
 			{
+				/* hostaddr overrides host */
 				if (hostaddr && *hostaddr)
 					printf(_("You are connected to database \"%s\" as user \"%s\" on address \"%s\" at port \"%s\".\n"),
 						   db, PQuser(pset.db), hostaddr, PQport(pset.db));
@@ -790,7 +793,8 @@ exec_command_d(PsqlScanState scan_state, bool active_branch, const char *cmd)
 					case 'p':
 					case 't':
 					case 'w':
-						success = describeFunctions(&cmd[2], pattern, show_verbose, show_system);
+						success = exec_command_dfo(scan_state, cmd, pattern,
+												   show_verbose, show_system);
 						break;
 					default:
 						status = PSQL_CMD_UNKNOWN;
@@ -811,7 +815,8 @@ exec_command_d(PsqlScanState scan_state, bool active_branch, const char *cmd)
 				success = listSchemas(pattern, show_verbose, show_system);
 				break;
 			case 'o':
-				success = describeOperators(pattern, show_verbose, show_system);
+				success = exec_command_dfo(scan_state, cmd, pattern,
+										   show_verbose, show_system);
 				break;
 			case 'O':
 				success = listCollations(pattern, show_verbose, show_system);
@@ -929,6 +934,9 @@ exec_command_d(PsqlScanState scan_state, bool active_branch, const char *cmd)
 				else
 					success = listExtensions(pattern);
 				break;
+			case 'X':			/* Extended Statistics */
+				success = listExtendedStats(pattern);
+				break;
 			case 'y':			/* Event Triggers */
 				success = listEventTriggers(pattern, show_verbose);
 				break;
@@ -946,6 +954,45 @@ exec_command_d(PsqlScanState scan_state, bool active_branch, const char *cmd)
 		status = PSQL_CMD_ERROR;
 
 	return status;
+}
+
+/* \df and \do; messy enough to split out of exec_command_d */
+static bool
+exec_command_dfo(PsqlScanState scan_state, const char *cmd,
+				 const char *pattern,
+				 bool show_verbose, bool show_system)
+{
+	bool		success;
+	char	   *arg_patterns[FUNC_MAX_ARGS];
+	int			num_arg_patterns = 0;
+
+	/* Collect argument-type patterns too */
+	if (pattern)				/* otherwise it was just \df or \do */
+	{
+		char	   *ap;
+
+		while ((ap = psql_scan_slash_option(scan_state,
+											OT_NORMAL, NULL, true)) != NULL)
+		{
+			arg_patterns[num_arg_patterns++] = ap;
+			if (num_arg_patterns >= FUNC_MAX_ARGS)
+				break;			/* protect limited-size array */
+		}
+	}
+
+	if (cmd[1] == 'f')
+		success = describeFunctions(&cmd[2], pattern,
+									arg_patterns, num_arg_patterns,
+									show_verbose, show_system);
+	else
+		success = describeOperators(pattern,
+									arg_patterns, num_arg_patterns,
+									show_verbose, show_system);
+
+	while (--num_arg_patterns >= 0)
+		free(arg_patterns[num_arg_patterns]);
+
+	return success;
 }
 
 /*
@@ -1001,14 +1048,27 @@ exec_command_edit(PsqlScanState scan_state, bool active_branch,
 			}
 			if (status != PSQL_CMD_ERROR)
 			{
+				bool		discard_on_quit;
+
 				expand_tilde(&fname);
 				if (fname)
+				{
 					canonicalize_path(fname);
+					/* Always clear buffer if the file isn't modified */
+					discard_on_quit = true;
+				}
+				else
+				{
+					/*
+					 * If query_buf is empty, recall previous query for
+					 * editing.  But in that case, the query buffer should be
+					 * emptied if editing doesn't modify the file.
+					 */
+					discard_on_quit = copy_previous_query(query_buf,
+														  previous_buf);
+				}
 
-				/* If query_buf is empty, recall previous query for editing */
-				copy_previous_query(query_buf, previous_buf);
-
-				if (do_edit(fname, query_buf, lineno, NULL))
+				if (do_edit(fname, query_buf, lineno, discard_on_quit, NULL))
 					status = PSQL_CMD_NEWEDIT;
 				else
 					status = PSQL_CMD_ERROR;
@@ -1131,7 +1191,7 @@ exec_command_ef_ev(PsqlScanState scan_state, bool active_branch,
 		{
 			bool		edited = false;
 
-			if (!do_edit(NULL, query_buf, lineno, &edited))
+			if (!do_edit(NULL, query_buf, lineno, true, &edited))
 				status = PSQL_CMD_ERROR;
 			else if (!edited)
 				puts(_("No changes"));
@@ -1964,11 +2024,11 @@ exec_command_password(PsqlScanState scan_state, bool active_branch)
 	{
 		char	   *opt0 = psql_scan_slash_option(scan_state,
 												  OT_SQLID, NULL, true);
-		char		pw1[100];
-		char		pw2[100];
+		char	   *pw1;
+		char	   *pw2;
 
-		simple_prompt("Enter new password: ", pw1, sizeof(pw1), false);
-		simple_prompt("Enter it again: ", pw2, sizeof(pw2), false);
+		pw1 = simple_prompt("Enter new password: ", false);
+		pw2 = simple_prompt("Enter it again: ", false);
 
 		if (strcmp(pw1, pw2) != 0)
 		{
@@ -2013,6 +2073,8 @@ exec_command_password(PsqlScanState scan_state, bool active_branch)
 
 		if (opt0)
 			free(opt0);
+		free(pw1);
+		free(pw2);
 	}
 	else
 		ignore_slash_options(scan_state);
@@ -2058,8 +2120,7 @@ exec_command_prompt(PsqlScanState scan_state, bool active_branch,
 
 			if (!pset.inputfile)
 			{
-				result = (char *) pg_malloc(4096);
-				simple_prompt(prompt_text, result, 4096, true);
+				result = simple_prompt(prompt_text, true);
 			}
 			else
 			{
@@ -2296,17 +2357,8 @@ exec_command_setenv(PsqlScanState scan_state, bool active_branch,
 		else
 		{
 			/* Set variable to the value of the next argument */
-			char	   *newval;
-
-			newval = psprintf("%s=%s", envvar, envval);
-			putenv(newval);
+			setenv(envvar, envval, 1);
 			success = true;
-
-			/*
-			 * Do not free newval here, it will screw up the environment if
-			 * you do. See putenv man page for details. That means we leak a
-			 * bit of memory here, but not enough to worry about.
-			 */
 		}
 		free(envvar);
 		free(envval);
@@ -2642,7 +2694,7 @@ exec_command_watch(PsqlScanState scan_state, bool active_branch,
 		}
 
 		/* If query_buf is empty, recall and execute previous query */
-		copy_previous_query(query_buf, previous_buf);
+		(void) copy_previous_query(query_buf, previous_buf);
 
 		success = do_watch(query_buf, sleep);
 
@@ -2966,12 +3018,19 @@ discard_query_text(PsqlScanState scan_state, ConditionalStack cstack,
  * This is used by various slash commands for which re-execution of a
  * previous query is a common usage.  For convenience, we allow the
  * case of query_buf == NULL (and do nothing).
+ *
+ * Returns "true" if the previous query was copied into the query
+ * buffer, else "false".
  */
-static void
+static bool
 copy_previous_query(PQExpBuffer query_buf, PQExpBuffer previous_buf)
 {
 	if (query_buf && query_buf->len == 0)
+	{
 		appendPQExpBufferStr(query_buf, previous_buf->data);
+		return true;
+	}
+	return false;
 }
 
 /*
@@ -2982,19 +3041,19 @@ copy_previous_query(PQExpBuffer query_buf, PQExpBuffer previous_buf)
 static char *
 prompt_for_password(const char *username)
 {
-	char		buf[100];
+	char	   *result;
 
 	if (username == NULL || username[0] == '\0')
-		simple_prompt("Password: ", buf, sizeof(buf), false);
+		result = simple_prompt("Password: ", false);
 	else
 	{
 		char	   *prompt_text;
 
 		prompt_text = psprintf(_("Password for user %s: "), username);
-		simple_prompt(prompt_text, buf, sizeof(buf), false);
+		result = simple_prompt(prompt_text, false);
 		free(prompt_text);
 	}
-	return pg_strdup(buf);
+	return result;
 }
 
 static bool
@@ -3009,34 +3068,13 @@ param_is_newly_set(const char *old_val, const char *new_val)
 	return false;
 }
 
-/* return whether the connection has 'hostaddr' in its conninfo */
-static bool
-has_hostaddr(PGconn *conn)
-{
-	bool		used = false;
-	PQconninfoOption *ciopt = PQconninfo(conn);
-
-	for (PQconninfoOption *p = ciopt; p->keyword != NULL; p++)
-	{
-		if (strcmp(p->keyword, "hostaddr") == 0 && p->val != NULL)
-		{
-			used = true;
-			break;
-		}
-	}
-
-	PQconninfoFree(ciopt);
-	return used;
-}
-
 /*
  * do_connect -- handler for \connect
  *
- * Connects to a database with given parameters. Absent an established
- * connection, all parameters are required. Given -reuse-previous=off or a
- * connection string without -reuse-previous=on, NULL values will pass through
- * to PQconnectdbParams(), so the libpq defaults will be used. Otherwise, NULL
- * values will be replaced with the ones in the current connection.
+ * Connects to a database with given parameters.  If we are told to re-use
+ * parameters, parameters from the previous connection are used where the
+ * command's own options do not supply a value.  Otherwise, libpq defaults
+ * are used.
  *
  * In interactive mode, if connection fails with the given parameters,
  * the old connection will be kept.
@@ -3046,28 +3084,27 @@ do_connect(enum trivalue reuse_previous_specification,
 		   char *dbname, char *user, char *host, char *port)
 {
 	PGconn	   *o_conn = pset.db,
-			   *n_conn;
+			   *n_conn = NULL;
+	PQconninfoOption *cinfo;
+	int			nconnopts = 0;
+	bool		same_host = false;
 	char	   *password = NULL;
-	char	   *hostaddr = NULL;
-	bool		keep_password;
+	char	   *client_encoding;
+	bool		success = true;
+	bool		keep_password = true;
 	bool		has_connection_string;
 	bool		reuse_previous;
-	PQExpBufferData connstr;
-
-	if (!o_conn && (!dbname || !user || !host || !port))
-	{
-		/*
-		 * We don't know the supplied connection parameters and don't want to
-		 * connect to the wrong database by using defaults, so require all
-		 * parameters to be specified.
-		 */
-		pg_log_error("All connection parameters must be supplied because no "
-					 "database connection exists");
-		return false;
-	}
 
 	has_connection_string = dbname ?
 		recognized_connection_string(dbname) : false;
+
+	/* Complain if we have additional arguments after a connection string. */
+	if (has_connection_string && (user || host || port))
+	{
+		pg_log_error("Do not give user, host, or port separately when using a connection string");
+		return false;
+	}
+
 	switch (reuse_previous_specification)
 	{
 		case TRI_YES:
@@ -3081,68 +3118,183 @@ do_connect(enum trivalue reuse_previous_specification,
 			break;
 	}
 
-	/* If the old connection does not exist, there is nothing to reuse. */
-	if (!o_conn)
-		reuse_previous = false;
-
-	/* Silently ignore arguments subsequent to a connection string. */
-	if (has_connection_string)
-	{
-		user = NULL;
-		host = NULL;
-		port = NULL;
-	}
-
 	/*
-	 * Grab missing values from the old connection.  If we grab host (or host
-	 * is the same as before) and hostaddr was set, grab that too.
+	 * If we intend to re-use connection parameters, collect them out of the
+	 * old connection, then replace individual values as necessary.  (We may
+	 * need to resort to looking at pset.dead_conn, if the connection died
+	 * previously.)  Otherwise, obtain a PQconninfoOption array containing
+	 * libpq's defaults, and modify that.  Note this function assumes that
+	 * PQconninfo, PQconndefaults, and PQconninfoParse will all produce arrays
+	 * containing the same options in the same order.
 	 */
 	if (reuse_previous)
 	{
-		if (!user)
-			user = PQuser(o_conn);
-		if (host && strcmp(host, PQhost(o_conn)) == 0 &&
-			has_hostaddr(o_conn))
+		if (o_conn)
+			cinfo = PQconninfo(o_conn);
+		else if (pset.dead_conn)
+			cinfo = PQconninfo(pset.dead_conn);
+		else
 		{
-			hostaddr = PQhostaddr(o_conn);
+			/* This is reachable after a non-interactive \connect failure */
+			pg_log_error("No database connection exists to re-use parameters from");
+			return false;
 		}
-		if (!host)
-		{
-			host = PQhost(o_conn);
-			if (has_hostaddr(o_conn))
-				hostaddr = PQhostaddr(o_conn);
-		}
-		if (!port)
-			port = PQport(o_conn);
 	}
-
-	/*
-	 * Any change in the parameters read above makes us discard the password.
-	 * We also discard it if we're to use a conninfo rather than the
-	 * positional syntax.
-	 */
-	if (has_connection_string)
-		keep_password = false;
 	else
-		keep_password =
-			(user && PQuser(o_conn) && strcmp(user, PQuser(o_conn)) == 0) &&
-			(host && PQhost(o_conn) && strcmp(host, PQhost(o_conn)) == 0) &&
-			(port && PQport(o_conn) && strcmp(port, PQport(o_conn)) == 0);
+		cinfo = PQconndefaults();
 
-	/*
-	 * Grab missing dbname from old connection.  No password discard if this
-	 * changes: passwords aren't (usually) database-specific.
-	 */
-	if (!dbname && reuse_previous)
+	if (cinfo)
 	{
-		initPQExpBuffer(&connstr);
-		appendPQExpBufferStr(&connstr, "dbname=");
-		appendConnStrVal(&connstr, PQdb(o_conn));
-		dbname = connstr.data;
-		/* has_connection_string=true would be a dead store */
+		if (has_connection_string)
+		{
+			/* Parse the connstring and insert values into cinfo */
+			PQconninfoOption *replcinfo;
+			char	   *errmsg;
+
+			replcinfo = PQconninfoParse(dbname, &errmsg);
+			if (replcinfo)
+			{
+				PQconninfoOption *ci;
+				PQconninfoOption *replci;
+				bool		have_password = false;
+
+				for (ci = cinfo, replci = replcinfo;
+					 ci->keyword && replci->keyword;
+					 ci++, replci++)
+				{
+					Assert(strcmp(ci->keyword, replci->keyword) == 0);
+					/* Insert value from connstring if one was provided */
+					if (replci->val)
+					{
+						/*
+						 * We know that both val strings were allocated by
+						 * libpq, so the least messy way to avoid memory leaks
+						 * is to swap them.
+						 */
+						char	   *swap = replci->val;
+
+						replci->val = ci->val;
+						ci->val = swap;
+
+						/*
+						 * Check whether connstring provides options affecting
+						 * password re-use.  While any change in user, host,
+						 * hostaddr, or port causes us to ignore the old
+						 * connection's password, we don't force that for
+						 * dbname, since passwords aren't database-specific.
+						 */
+						if (replci->val == NULL ||
+							strcmp(ci->val, replci->val) != 0)
+						{
+							if (strcmp(replci->keyword, "user") == 0 ||
+								strcmp(replci->keyword, "host") == 0 ||
+								strcmp(replci->keyword, "hostaddr") == 0 ||
+								strcmp(replci->keyword, "port") == 0)
+								keep_password = false;
+						}
+						/* Also note whether connstring contains a password. */
+						if (strcmp(replci->keyword, "password") == 0)
+							have_password = true;
+					}
+					else if (!reuse_previous)
+					{
+						/*
+						 * When we have a connstring and are not re-using
+						 * parameters, swap *all* entries, even those not set
+						 * by the connstring.  This avoids absorbing
+						 * environment-dependent defaults from the result of
+						 * PQconndefaults().  We don't want to do that because
+						 * they'd override service-file entries if the
+						 * connstring specifies a service parameter, whereas
+						 * the priority should be the other way around.  libpq
+						 * can certainly recompute any defaults we don't pass
+						 * here.  (In this situation, it's a bit wasteful to
+						 * have called PQconndefaults() at all, but not doing
+						 * so would require yet another major code path here.)
+						 */
+						replci->val = ci->val;
+						ci->val = NULL;
+					}
+				}
+				Assert(ci->keyword == NULL && replci->keyword == NULL);
+
+				/* While here, determine how many option slots there are */
+				nconnopts = ci - cinfo;
+
+				PQconninfoFree(replcinfo);
+
+				/*
+				 * If the connstring contains a password, tell the loop below
+				 * that we may use it, regardless of other settings (i.e.,
+				 * cinfo's password is no longer an "old" password).
+				 */
+				if (have_password)
+					keep_password = true;
+
+				/* Don't let code below try to inject dbname into params. */
+				dbname = NULL;
+			}
+			else
+			{
+				/* PQconninfoParse failed */
+				if (errmsg)
+				{
+					pg_log_error("%s", errmsg);
+					PQfreemem(errmsg);
+				}
+				else
+					pg_log_error("out of memory");
+				success = false;
+			}
+		}
+		else
+		{
+			/*
+			 * If dbname isn't a connection string, then we'll inject it and
+			 * the other parameters into the keyword array below.  (We can't
+			 * easily insert them into the cinfo array because of memory
+			 * management issues: PQconninfoFree would misbehave on Windows.)
+			 * However, to avoid dependencies on the order in which parameters
+			 * appear in the array, make a preliminary scan to set
+			 * keep_password and same_host correctly.
+			 *
+			 * While any change in user, host, or port causes us to ignore the
+			 * old connection's password, we don't force that for dbname,
+			 * since passwords aren't database-specific.
+			 */
+			PQconninfoOption *ci;
+
+			for (ci = cinfo; ci->keyword; ci++)
+			{
+				if (user && strcmp(ci->keyword, "user") == 0)
+				{
+					if (!(ci->val && strcmp(user, ci->val) == 0))
+						keep_password = false;
+				}
+				else if (host && strcmp(ci->keyword, "host") == 0)
+				{
+					if (ci->val && strcmp(host, ci->val) == 0)
+						same_host = true;
+					else
+						keep_password = false;
+				}
+				else if (port && strcmp(ci->keyword, "port") == 0)
+				{
+					if (!(ci->val && strcmp(port, ci->val) == 0))
+						keep_password = false;
+				}
+			}
+
+			/* While here, determine how many option slots there are */
+			nconnopts = ci - cinfo;
+		}
 	}
 	else
-		connstr.data = NULL;
+	{
+		/* We failed to create the cinfo structure */
+		pg_log_error("out of memory");
+		success = false;
+	}
 
 	/*
 	 * If the user asked to be prompted for a password, ask for one now. If
@@ -3154,76 +3306,84 @@ do_connect(enum trivalue reuse_previous_specification,
 	 * the postmaster's log.  But libpq offers no API that would let us obtain
 	 * a password and then continue with the first connection attempt.
 	 */
-	if (pset.getPassword == TRI_YES)
+	if (pset.getPassword == TRI_YES && success)
 	{
 		/*
-		 * If a connstring or URI is provided, we can't be sure we know which
-		 * username will be used, since we haven't parsed that argument yet.
+		 * If a connstring or URI is provided, we don't know which username
+		 * will be used, since we haven't dug that out of the connstring.
 		 * Don't risk issuing a misleading prompt.  As in startup.c, it does
-		 * not seem worth working harder, since this getPassword option is
+		 * not seem worth working harder, since this getPassword setting is
 		 * normally only used in noninteractive cases.
 		 */
 		password = prompt_for_password(has_connection_string ? NULL : user);
 	}
-	else if (o_conn && keep_password)
-	{
-		password = PQpass(o_conn);
-		if (password && *password)
-			password = pg_strdup(password);
-		else
-			password = NULL;
-	}
 
-	while (true)
-	{
-#define PARAMS_ARRAY_SIZE	9
-		const char **keywords = pg_malloc(PARAMS_ARRAY_SIZE * sizeof(*keywords));
-		const char **values = pg_malloc(PARAMS_ARRAY_SIZE * sizeof(*values));
-		int			paramnum = -1;
+	/*
+	 * Consider whether to force client_encoding to "auto" (overriding
+	 * anything in the connection string).  We do so if we have a terminal
+	 * connection and there is no PGCLIENTENCODING environment setting.
+	 */
+	if (pset.notty || getenv("PGCLIENTENCODING"))
+		client_encoding = NULL;
+	else
+		client_encoding = "auto";
 
-		keywords[++paramnum] = "host";
-		values[paramnum] = host;
-		if (hostaddr && *hostaddr)
-		{
-			keywords[++paramnum] = "hostaddr";
-			values[paramnum] = hostaddr;
-		}
-		keywords[++paramnum] = "port";
-		values[paramnum] = port;
-		keywords[++paramnum] = "user";
-		values[paramnum] = user;
+	/* Loop till we have a connection or fail, which we might've already */
+	while (success)
+	{
+		const char **keywords = pg_malloc((nconnopts + 1) * sizeof(*keywords));
+		const char **values = pg_malloc((nconnopts + 1) * sizeof(*values));
+		int			paramnum = 0;
+		PQconninfoOption *ci;
 
 		/*
-		 * Position in the array matters when the dbname is a connection
-		 * string, because settings in a connection string override earlier
-		 * array entries only.  Thus, user= in the connection string always
-		 * takes effect, but client_encoding= often will not.
+		 * Copy non-default settings into the PQconnectdbParams parameter
+		 * arrays; but inject any values specified old-style, as well as any
+		 * interactively-obtained password, and a couple of fields we want to
+		 * set forcibly.
 		 *
-		 * If you change this code, also change the initial-connection code in
-		 * main().  For no good reason, a connection string password= takes
-		 * precedence in main() but not here.
+		 * If you change this code, see also the initial-connection code in
+		 * main().
 		 */
-		keywords[++paramnum] = "dbname";
-		values[paramnum] = dbname;
-		keywords[++paramnum] = "password";
-		values[paramnum] = password;
-		keywords[++paramnum] = "fallback_application_name";
-		values[paramnum] = pset.progname;
-		keywords[++paramnum] = "client_encoding";
-		values[paramnum] = (pset.notty || getenv("PGCLIENTENCODING")) ? NULL : "auto";
+		for (ci = cinfo; ci->keyword; ci++)
+		{
+			keywords[paramnum] = ci->keyword;
 
+			if (dbname && strcmp(ci->keyword, "dbname") == 0)
+				values[paramnum++] = dbname;
+			else if (user && strcmp(ci->keyword, "user") == 0)
+				values[paramnum++] = user;
+			else if (host && strcmp(ci->keyword, "host") == 0)
+				values[paramnum++] = host;
+			else if (host && !same_host && strcmp(ci->keyword, "hostaddr") == 0)
+			{
+				/* If we're changing the host value, drop any old hostaddr */
+				values[paramnum++] = NULL;
+			}
+			else if (port && strcmp(ci->keyword, "port") == 0)
+				values[paramnum++] = port;
+			/* If !keep_password, we unconditionally drop old password */
+			else if ((password || !keep_password) &&
+					 strcmp(ci->keyword, "password") == 0)
+				values[paramnum++] = password;
+			else if (strcmp(ci->keyword, "fallback_application_name") == 0)
+				values[paramnum++] = pset.progname;
+			else if (client_encoding &&
+					 strcmp(ci->keyword, "client_encoding") == 0)
+				values[paramnum++] = client_encoding;
+			else if (ci->val)
+				values[paramnum++] = ci->val;
+			/* else, don't bother making libpq parse this keyword */
+		}
 		/* add array terminator */
-		keywords[++paramnum] = NULL;
+		keywords[paramnum] = NULL;
 		values[paramnum] = NULL;
 
-		n_conn = PQconnectdbParams(keywords, values, true);
+		/* Note we do not want libpq to re-expand the dbname parameter */
+		n_conn = PQconnectdbParams(keywords, values, false);
 
 		pg_free(keywords);
 		pg_free(values);
-
-		/* We can immediately discard the password -- no longer needed */
-		if (password)
-			pg_free(password);
 
 		if (PQstatus(n_conn) == CONNECTION_OK)
 			break;
@@ -3240,9 +3400,28 @@ do_connect(enum trivalue reuse_previous_specification,
 			 */
 			password = prompt_for_password(PQuser(n_conn));
 			PQfinish(n_conn);
+			n_conn = NULL;
 			continue;
 		}
 
+		/*
+		 * We'll report the error below ... unless n_conn is NULL, indicating
+		 * that libpq didn't have enough memory to make a PGconn.
+		 */
+		if (n_conn == NULL)
+			pg_log_error("out of memory");
+
+		success = false;
+	}							/* end retry loop */
+
+	/* Release locally allocated data, whether we succeeded or not */
+	if (password)
+		pg_free(password);
+	if (cinfo)
+		PQconninfoFree(cinfo);
+
+	if (!success)
+	{
 		/*
 		 * Failed to connect to the database. In interactive mode, keep the
 		 * previous connection to the DB; in scripting mode, close our
@@ -3250,7 +3429,11 @@ do_connect(enum trivalue reuse_previous_specification,
 		 */
 		if (pset.cur_cmd_interactive)
 		{
-			pg_log_info("%s", PQerrorMessage(n_conn));
+			if (n_conn)
+			{
+				pg_log_info("%s", PQerrorMessage(n_conn));
+				PQfinish(n_conn);
+			}
 
 			/* pset.db is left unmodified */
 			if (o_conn)
@@ -3258,27 +3441,39 @@ do_connect(enum trivalue reuse_previous_specification,
 		}
 		else
 		{
-			pg_log_error("\\connect: %s", PQerrorMessage(n_conn));
+			if (n_conn)
+			{
+				pg_log_error("\\connect: %s", PQerrorMessage(n_conn));
+				PQfinish(n_conn);
+			}
+
 			if (o_conn)
 			{
 				/*
-				 * Transition to having no connection.  Keep this bit in sync
-				 * with CheckConnection().
+				 * Transition to having no connection.
+				 *
+				 * Unlike CheckConnection(), we close the old connection
+				 * immediately to prevent its parameters from being re-used.
+				 * This is so that a script cannot accidentally reuse
+				 * parameters it did not expect to.  Otherwise, the state
+				 * cleanup should be the same as in CheckConnection().
 				 */
 				PQfinish(o_conn);
 				pset.db = NULL;
 				ResetCancelConn();
 				UnsyncVariables();
 			}
+
+			/* On the same reasoning, release any dead_conn to prevent reuse */
+			if (pset.dead_conn)
+			{
+				PQfinish(pset.dead_conn);
+				pset.dead_conn = NULL;
+			}
 		}
 
-		PQfinish(n_conn);
-		if (connstr.data)
-			termPQExpBuffer(&connstr);
 		return false;
 	}
-	if (connstr.data)
-		termPQExpBuffer(&connstr);
 
 	/*
 	 * Replace the old connection with the new one, and update
@@ -3300,12 +3495,9 @@ do_connect(enum trivalue reuse_previous_specification,
 			char	   *host = PQhost(pset.db);
 			char	   *hostaddr = PQhostaddr(pset.db);
 
-			/*
-			 * If the host is an absolute path, the connection is via socket
-			 * unless overridden by hostaddr
-			 */
-			if (is_absolute_path(host))
+			if (is_unixsock_path(host))
 			{
+				/* hostaddr overrides host */
 				if (hostaddr && *hostaddr)
 					printf(_("You are now connected to database \"%s\" as user \"%s\" on address \"%s\" at port \"%s\".\n"),
 						   PQdb(pset.db), PQuser(pset.db), hostaddr, PQport(pset.db));
@@ -3328,8 +3520,15 @@ do_connect(enum trivalue reuse_previous_specification,
 				   PQdb(pset.db), PQuser(pset.db));
 	}
 
+	/* Drop no-longer-needed connection(s) */
 	if (o_conn)
 		PQfinish(o_conn);
+	if (pset.dead_conn)
+	{
+		PQfinish(pset.dead_conn);
+		pset.dead_conn = NULL;
+	}
+
 	return true;
 }
 
@@ -3512,10 +3711,11 @@ UnsyncVariables(void)
 
 
 /*
- * do_edit -- handler for \e
+ * helper for do_edit(): actually invoke the editor
  *
- * If you do not specify a filename, the current query buffer will be copied
- * into a temporary one.
+ * Returns true on success, false if we failed to invoke the editor or
+ * it returned nonzero status.  (An error message is printed for failed-
+ * to-invoke cases, but not if the editor returns nonzero status.)
  */
 static bool
 editFile(const char *fname, int lineno)
@@ -3584,17 +3784,29 @@ editFile(const char *fname, int lineno)
 }
 
 
-/* call this one */
+/*
+ * do_edit -- handler for \e
+ *
+ * If you do not specify a filename, the current query buffer will be copied
+ * into a temporary file.
+ *
+ * After this function is done, the resulting file will be copied back into the
+ * query buffer.  As an exception to this, the query buffer will be emptied
+ * if the file was not modified (or the editor failed) and the caller passes
+ * "discard_on_quit" = true.
+ *
+ * If "edited" isn't NULL, *edited will be set to true if the query buffer
+ * is successfully replaced.
+ */
 static bool
 do_edit(const char *filename_arg, PQExpBuffer query_buf,
-		int lineno, bool *edited)
+		int lineno, bool discard_on_quit, bool *edited)
 {
 	char		fnametmp[MAXPGPATH];
 	FILE	   *stream = NULL;
 	const char *fname;
 	bool		error = false;
 	int			fd;
-
 	struct stat before,
 				after;
 
@@ -3619,13 +3831,13 @@ do_edit(const char *filename_arg, PQExpBuffer query_buf,
 						 !ret ? strerror(errno) : "");
 			return false;
 		}
+#endif
 
 		/*
 		 * No canonicalize_path() here. EDIT.EXE run from CMD.EXE prepends the
 		 * current directory to the supplied path unless we use only
 		 * backslashes, so we do that.
 		 */
-#endif
 #ifndef WIN32
 		snprintf(fnametmp, sizeof(fnametmp), "%s%spsql.edit.%d.sql", tmpdir,
 				 "/", (int) getpid());
@@ -3675,6 +3887,24 @@ do_edit(const char *filename_arg, PQExpBuffer query_buf,
 					pg_log_error("%s: %m", fname);
 				error = true;
 			}
+			else
+			{
+				struct utimbuf ut;
+
+				/*
+				 * Try to set the file modification time of the temporary file
+				 * a few seconds in the past.  Otherwise, the low granularity
+				 * (one second, or even worse on some filesystems) that we can
+				 * portably measure with stat(2) could lead us to not
+				 * recognize a modification, if the user typed very quickly.
+				 *
+				 * This is a rather unlikely race condition, so don't error
+				 * out if the utime(2) call fails --- that would make the cure
+				 * worse than the disease.
+				 */
+				ut.modtime = ut.actime = time(NULL) - 2;
+				(void) utime(fname, &ut);
+			}
 		}
 	}
 
@@ -3694,7 +3924,10 @@ do_edit(const char *filename_arg, PQExpBuffer query_buf,
 		error = true;
 	}
 
-	if (!error && before.st_mtime != after.st_mtime)
+	/* file was edited if the size or modification time has changed */
+	if (!error &&
+		(before.st_size != after.st_size ||
+		 before.st_mtime != after.st_mtime))
 	{
 		stream = fopen(fname, PG_BINARY_R);
 		if (!stream)
@@ -3715,6 +3948,7 @@ do_edit(const char *filename_arg, PQExpBuffer query_buf,
 			{
 				pg_log_error("%s: %m", fname);
 				error = true;
+				resetPQExpBuffer(query_buf);
 			}
 			else if (edited)
 			{
@@ -3723,6 +3957,15 @@ do_edit(const char *filename_arg, PQExpBuffer query_buf,
 
 			fclose(stream);
 		}
+	}
+	else
+	{
+		/*
+		 * If the file was not modified, and the caller requested it, discard
+		 * the query buffer.
+		 */
+		if (discard_on_quit)
+			resetPQExpBuffer(query_buf);
 	}
 
 	/* remove temp file */

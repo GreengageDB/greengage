@@ -3,7 +3,7 @@
  * ts_utils.h
  *	  helper utilities for tsearch
  *
- * Copyright (c) 1998-2020, PostgreSQL Global Development Group
+ * Copyright (c) 1998-2021, PostgreSQL Global Development Group
  *
  * src/include/tsearch/ts_utils.h
  *
@@ -199,6 +199,9 @@ typedef TSTernaryValue (*TSExecuteCallback) (void *arg, QueryOperand *val,
 
 extern bool TS_execute(QueryItem *curitem, void *arg, uint32 flags,
 					   TSExecuteCallback chkcond);
+extern TSTernaryValue TS_execute_ternary(QueryItem *curitem, void *arg,
+										 uint32 flags,
+										 TSExecuteCallback chkcond);
 extern bool tsquery_requires_match(QueryItem *curitem);
 
 /*

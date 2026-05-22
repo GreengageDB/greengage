@@ -11,7 +11,7 @@
  *
  * Portions Copyright (c) 2006-2011, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/c.h
@@ -100,16 +100,50 @@
  *
  * GCC: https://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html
  * GCC: https://gcc.gnu.org/onlinedocs/gcc/Type-Attributes.html
+ * Clang: https://clang.llvm.org/docs/AttributeReference.html
  * Sunpro: https://docs.oracle.com/cd/E18659_01/html/821-1384/gjzke.html
  * XLC: https://www.ibm.com/support/knowledgecenter/SSGH2K_13.1.2/com.ibm.xlc131.aix.doc/language_ref/function_attributes.html
  * XLC: https://www.ibm.com/support/knowledgecenter/SSGH2K_13.1.2/com.ibm.xlc131.aix.doc/language_ref/type_attrib.html
  */
+
+/*
+ * For compilers which don't support __has_attribute, we just define
+ * __has_attribute(x) to 0 so that we can define macros for various
+ * __attribute__s more easily below.
+ */
+#ifndef __has_attribute
+#define __has_attribute(attribute) 0
+#endif
 
 /* only GCC supports the unused attribute */
 #ifdef __GNUC__
 #define pg_attribute_unused() __attribute__((unused))
 #else
 #define pg_attribute_unused()
+#endif
+
+/*
+ * pg_nodiscard means the compiler should warn if the result of a function
+ * call is ignored.  The name "nodiscard" is chosen in alignment with
+ * (possibly future) C and C++ standards.  For maximum compatibility, use it
+ * as a function declaration specifier, so it goes before the return type.
+ */
+#ifdef __GNUC__
+#define pg_nodiscard __attribute__((warn_unused_result))
+#else
+#define pg_nodiscard
+#endif
+
+/*
+ * Place this macro before functions that should be allowed to make misaligned
+ * accesses.  Think twice before using it on non-x86-specific code!
+ * Testing can be done with "-fsanitize=alignment -fsanitize-trap=alignment"
+ * on clang, or "-fsanitize=alignment -fno-sanitize-recover=alignment" on gcc.
+ */
+#if __clang_major__ >= 7 || __GNUC__ >= 8
+#define pg_attribute_no_sanitize_alignment() __attribute__((no_sanitize("alignment")))
+#else
+#define pg_attribute_no_sanitize_alignment()
 #endif
 
 /*
@@ -180,6 +214,39 @@
 #define pg_noinline
 #endif
 
+/*
+ * For now, just define pg_attribute_cold and pg_attribute_hot to be empty
+ * macros on minGW 8.1.  There appears to be a compiler bug that results in
+ * compilation failure.  At this time, we still have at least one buildfarm
+ * animal running that compiler, so this should make that green again. It's
+ * likely this compiler is not popular enough to warrant keeping this code
+ * around forever, so let's just remove it once the last buildfarm animal
+ * upgrades.
+ */
+#if defined(__MINGW64__) && __GNUC__ == 8 && __GNUC_MINOR__ == 1
+
+#define pg_attribute_cold
+#define pg_attribute_hot
+
+#else
+/*
+ * Marking certain functions as "hot" or "cold" can be useful to assist the
+ * compiler in arranging the assembly code in a more efficient way.
+ */
+#if __has_attribute (cold)
+#define pg_attribute_cold __attribute__((cold))
+#else
+#define pg_attribute_cold
+#endif
+
+#if __has_attribute (hot)
+#define pg_attribute_hot __attribute__((hot))
+#else
+#define pg_attribute_hot
+#endif
+
+#endif							/* defined(__MINGW64__) && __GNUC__ == 8 &&
+								 * __GNUC_MINOR__ == 1 */
 /*
  * Mark a point as unreachable in a portable fashion.  This should preferably
  * be something that the compiler understands, to aid code generation.
@@ -551,14 +618,6 @@ typedef uint32 CommandId;
 #define FirstCommandId	((CommandId) 0)
 #define InvalidCommandId	(~(CommandId)0)
 
-/*
- * Array indexing support
- */
-#define MAXDIM 6
-typedef struct
-{
-	int			indx[MAXDIM];
-}			IntArray;
 
 /* ----------------
  *		Variable-length datatypes all share the 'struct varlena' header.
@@ -1156,7 +1215,8 @@ typedef union PGAlignedXLogBlock
  *	access to the original string and translated string, and for cases where
  *	immediate translation is not possible, like when initializing global
  *	variables.
- *		http://www.gnu.org/software/autoconf/manual/gettext/Special-cases.html
+ *
+ *	https://www.gnu.org/software/gettext/manual/html_node/Special-cases.html
  */
 #define gettext_noop(x) (x)
 
@@ -1303,14 +1363,21 @@ extern unsigned long long strtoull(const char *str, char **endptr, int base);
 
 /*
  * When there is no sigsetjmp, its functionality is provided by plain
- * setjmp. Incidentally, nothing provides setjmp's functionality in
- * that case.  We now support the case only on Windows.
+ * setjmp.  We now support the case only on Windows.  However, it seems
+ * that MinGW-64 has some longstanding issues in its setjmp support,
+ * so on that toolchain we cheat and use gcc's builtins.
  */
 #ifdef WIN32
+#ifdef __MINGW64__
+typedef intptr_t sigjmp_buf[5];
+#define sigsetjmp(x,y) __builtin_setjmp(x)
+#define siglongjmp __builtin_longjmp
+#else							/* !__MINGW64__ */
 #define sigjmp_buf jmp_buf
 #define sigsetjmp(x,y) setjmp(x)
 #define siglongjmp longjmp
-#endif
+#endif							/* __MINGW64__ */
+#endif							/* WIN32 */
 
 /* EXEC_BACKEND defines */
 #ifdef EXEC_BACKEND

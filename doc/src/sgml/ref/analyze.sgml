@@ -174,7 +174,7 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
    just after making major changes in the contents of a table.  Accurate
    statistics will help the planner to choose the most appropriate query
    plan, and thereby improve the speed of query processing.  A common
-   strategy for read-mostly databases is to run <xref linkend="sql-vacuum"/>
+   strategy for read-mostly databases is to run <link linkend="sql-vacuum"><command>VACUUM</command></link>
    and <command>ANALYZE</command> once a day during a low-usage time of day.
    (This will not be sufficient if there is heavy update activity.)
   </para>
@@ -205,7 +205,7 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
    will change slightly each time <command>ANALYZE</command> is run,
    even if the actual table contents did not change.  This might result
    in small changes in the planner's estimated costs shown by
-   <xref linkend="sql-explain"/>.
+   <link linkend="sql-explain"><command>EXPLAIN</command></link>.
    In rare situations, this non-determinism will cause the planner's
    choices of query plans to change after <command>ANALYZE</command> is run.
    To avoid this, raise the amount of statistics collected by
@@ -216,8 +216,8 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
    The extent of analysis can be controlled by adjusting the
    <xref linkend="guc-default-statistics-target"/> configuration variable, or
    on a column-by-column basis by setting the per-column statistics
-   target with <command>ALTER TABLE ... ALTER COLUMN ... SET
-   STATISTICS</command> (see <xref linkend="sql-altertable"/>).
+   target with <link linkend="sql-altertable"><command>ALTER TABLE ... ALTER COLUMN ... SET
+   STATISTICS</command></link>.
    The target value sets the
    maximum number of entries in the most-common-value list and the
    maximum number of bins in the histogram.  The default target value
@@ -246,25 +246,42 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
    with the largest possible statistics target.  If this inaccuracy leads to
    bad query plans, a more accurate value can be determined manually and then
    installed with
-   <command>ALTER TABLE ... ALTER COLUMN ... SET (n_distinct = ...)</command>
-   (see <xref linkend="sql-altertable"/>).
+   <link linkend="sql-altertable"><command>ALTER TABLE ... ALTER COLUMN ... SET (n_distinct = ...)</command></link>.
   </para>
 
   <para>
-    If the table being analyzed has one or more children,
-    <command>ANALYZE</command> will gather statistics twice: once on the
-    rows of the parent table only, and a second time on the rows of the
-    parent table with all of its children.  This second set of statistics
-    is needed when planning queries that traverse the entire inheritance
-    tree.  The autovacuum daemon, however, will only consider inserts or
-    updates on the parent table itself when deciding whether to trigger an
-    automatic analyze for that table.  If that table is rarely inserted into
-    or updated, the inheritance statistics will not be up to date unless you
-    run <command>ANALYZE</command> manually.
+   If the table being analyzed is partitioned, <command>ANALYZE</command>
+   will gather statistics by sampling blocks randomly from its partitions;
+   in addition, it will recurse into each partition and update its statistics.
+   (However, in multi-level partitioning scenarios, each leaf partition
+   will only be analyzed once.)
+   By contrast, if the table being analyzed has inheritance children,
+   <command>ANALYZE</command> will gather statistics for it twice:
+   once on the rows of the parent table only, and a second time on the
+   rows of the parent table with all of its children.  This second set of
+   statistics is needed when planning queries that traverse the entire
+   inheritance tree.  The child tables themselves are not individually
+   analyzed in this case.
   </para>
 
   <para>
-    If any of the child tables are foreign tables whose foreign data wrappers
+   The autovacuum daemon counts inserts, updates and deletes in the
+   partitions to determine if auto-analyze is needed.  However, adding
+   or removing partitions does not affect autovacuum daemon decisions,
+   so triggering a manual <command>ANALYZE</command> is recommended
+   when this occurs.
+  </para>
+
+  <para>
+   Tuples changed in inheritance children do not count towards analyze
+   on the parent table.  If the parent table is empty or rarely modified,
+   it may never be processed by autovacuum.  It's necessary to
+   periodically run a manual <command>ANALYZE</command> to keep the
+   statistics of the table hierarchy up to date.
+  </para>
+
+  <para>
+    If any of the child tables or partitions are foreign tables whose foreign data wrappers
     do not support <command>ANALYZE</command>, those child tables are ignored while
     gathering inheritance statistics.
   </para>
@@ -273,6 +290,12 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
     If the table being analyzed is completely empty, <command>ANALYZE</command>
     will not record new statistics for that table.  Any existing statistics
     will be retained.
+  </para>
+
+  <para>
+    Each backend running <command>ANALYZE</command> will report its progress
+    in the <structname>pg_stat_progress_analyze</structname> view. See
+    <xref linkend="analyze-progress-reporting"/> for details.
   </para>
  </refsect1>
 
@@ -292,6 +315,7 @@ ANALYZE [ VERBOSE ] [ <replaceable class="parameter">table_and_columns</replacea
    <member><xref linkend="app-vacuumdb"/></member>
    <member><xref linkend="runtime-config-resource-vacuum-cost"/></member>
    <member><xref linkend="autovacuum"/></member>
+   <member><xref linkend="analyze-progress-reporting"/></member>
   </simplelist>
  </refsect1>
 </refentry>

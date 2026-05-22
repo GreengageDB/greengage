@@ -4,7 +4,7 @@
  *		Common support routines for bin/scripts/
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/scripts/common.c
@@ -20,7 +20,9 @@
 #include "common.h"
 #include "common/connect.h"
 #include "common/logging.h"
+#include "common/string.h"
 #include "fe_utils/cancel.h"
+#include "fe_utils/query_utils.h"
 #include "fe_utils/string_utils.h"
 
 #define ERRCODE_UNDEFINED_TABLE  "42P01"
@@ -351,7 +353,7 @@ splitTableColumnsSpec(const char *spec, int encoding,
 			cp++;
 		}
 		else
-			cp += PQmblen(cp, encoding);
+			cp += PQmblenBounded(cp, encoding);
 	}
 	*table = pnstrdup(spec, cp - spec);
 	*columns = cp;
@@ -444,14 +446,21 @@ yesno_prompt(const char *question)
 
 	for (;;)
 	{
-		char		resp[10];
+		char	   *resp;
 
-		simple_prompt(prompt, resp, sizeof(resp), true);
+		resp = simple_prompt(prompt, true);
 
 		if (strcmp(resp, _(PG_YESLETTER)) == 0)
+		{
+			free(resp);
 			return true;
+		}
 		if (strcmp(resp, _(PG_NOLETTER)) == 0)
+		{
+			free(resp);
 			return false;
+		}
+		free(resp);
 
 		printf(_("Please answer \"%s\" or \"%s\".\n"),
 			   _(PG_YESLETTER), _(PG_NOLETTER));

@@ -3,7 +3,7 @@
  * pgoutput.h
  *		Logical Replication output plugin
  *
- * Copyright (c) 2015-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2015-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		pgoutput.h
@@ -25,6 +25,8 @@ typedef struct PGOutputData
 	List	   *publication_names;
 	List	   *publications;
 	bool		binary;
+	bool		streaming;
+	bool		messages;
 } PGOutputData;
 
 #endif							/* PGOUTPUT_H */

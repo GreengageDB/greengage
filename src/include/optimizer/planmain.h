@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/planmain.h
@@ -118,17 +118,18 @@ extern void create_lateral_join_info(PlannerInfo *root);
 extern List *deconstruct_jointree(PlannerInfo *root);
 extern void distribute_restrictinfo_to_rels(PlannerInfo *root,
 											RestrictInfo *restrictinfo);
-extern void process_implied_equality(PlannerInfo *root,
-									 Oid opno,
-									 Oid collation,
-									 Expr *item1,
-									 Expr *item2,
-									 Relids qualscope,
-									 Relids nullable_relids,
-									 Index security_level,
-									 bool below_outer_join,
-									 bool both_const);
-extern RestrictInfo *build_implied_join_equality(Oid opno,
+extern RestrictInfo *process_implied_equality(PlannerInfo *root,
+											  Oid opno,
+											  Oid collation,
+											  Expr *item1,
+											  Expr *item2,
+											  Relids qualscope,
+											  Relids nullable_relids,
+											  Index security_level,
+											  bool below_outer_join,
+											  bool both_const);
+extern RestrictInfo *build_implied_join_equality(PlannerInfo *root,
+												 Oid opno,
 												 Oid collation,
 												 Expr *item1,
 												 Expr *item2,

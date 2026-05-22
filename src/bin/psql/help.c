@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/bin/psql/help.c
  */
@@ -134,10 +134,7 @@ usage(unsigned short int pager)
 	fprintf(output, _("  -p, --port=PORT          database server port (default: \"%s\")\n"),
 			env ? env : DEF_PGPORT_STR);
 	/* Display default user */
-	env = getenv("PGUSER");
-	if (!env)
-		env = user;
-	fprintf(output, _("  -U, --username=USERNAME  database user name (default: \"%s\")\n"), env);
+	fprintf(output, _("  -U, --username=USERNAME  database user name (default: \"%s\")\n"), user);
 	fprintf(output, _("  -w, --no-password        never prompt for password\n"));
 	fprintf(output, _("  -W, --password           force password prompt (should happen automatically)\n"));
 
@@ -171,7 +168,7 @@ slashUsage(unsigned short int pager)
 	 * Use "psql --help=commands | wc" to count correctly.  It's okay to count
 	 * the USE_READLINE line even in builds without that.
 	 */
-	output = PageOutput(133, pager ? &(pset.popt.topt) : NULL);
+	output = PageOutput(135, pager ? &(pset.popt.topt) : NULL);
 
 	fprintf(output, _("General\n"));
 	fprintf(output, _("  \\copyright             show PostgreSQL usage and distribution terms\n"));
@@ -233,7 +230,7 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\dAc[+] [AMPTRN [TYPEPTRN]]  list operator classes\n"));
 	fprintf(output, _("  \\dAf[+] [AMPTRN [TYPEPTRN]]  list operator families\n"));
 	fprintf(output, _("  \\dAo[+] [AMPTRN [OPFPTRN]]   list operators of operator families\n"));
-	fprintf(output, _("  \\dAp    [AMPTRN [OPFPTRN]]   list support functions of operator families\n"));
+	fprintf(output, _("  \\dAp[+] [AMPTRN [OPFPTRN]]   list support functions of operator families\n"));
 	fprintf(output, _("  \\db[+]  [PATTERN]      list tablespaces\n"));
 	fprintf(output, _("  \\dc[S+] [PATTERN]      list conversions\n"));
 	fprintf(output, _("  \\dC[+]  [PATTERN]      list casts\n"));
@@ -245,7 +242,8 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\des[+] [PATTERN]      list foreign servers\n"));
 	fprintf(output, _("  \\deu[+] [PATTERN]      list user mappings\n"));
 	fprintf(output, _("  \\dew[+] [PATTERN]      list foreign-data wrappers\n"));
-	fprintf(output, _("  \\df[anptw][S+] [PATRN] list [only agg/normal/procedures/trigger/window] functions\n"));
+	fprintf(output, _("  \\df[anptw][S+] [FUNCPTRN [TYPEPTRN ...]]\n"
+					  "                         list [only agg/normal/procedure/trigger/window] functions\n"));
 	fprintf(output, _("  \\dF[+]  [PATTERN]      list text search configurations\n"));
 	fprintf(output, _("  \\dFd[+] [PATTERN]      list text search dictionaries\n"));
 	fprintf(output, _("  \\dFp[+] [PATTERN]      list text search parsers\n"));
@@ -256,7 +254,8 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\dL[S+] [PATTERN]      list procedural languages\n"));
 	fprintf(output, _("  \\dm[S+] [PATTERN]      list materialized views\n"));
 	fprintf(output, _("  \\dn[S+] [PATTERN]      list schemas\n"));
-	fprintf(output, _("  \\do[S]  [PATTERN]      list operators\n"));
+	fprintf(output, _("  \\do[S+] [OPPTRN [TYPEPTRN [TYPEPTRN]]]\n"
+					  "                         list operators\n"));
 	fprintf(output, _("  \\dO[S+] [PATTERN]      list collations\n"));
 	fprintf(output, _("  \\dp     [PATTERN]      list table, view, and sequence access privileges\n"));
 	fprintf(output, _("  \\dP[itn+] [PATTERN]    list [only index/table] partitioned relations [n=nested]\n"));
@@ -271,7 +270,8 @@ slashUsage(unsigned short int pager)
 	/* In GPDB, we use \dE for both external and foreign tables. */
 	fprintf(output, _("  \\dE[S+] [PATTERN]      list foreign and external tables\n"));
 	fprintf(output, _("  \\dx[+]  [PATTERN]      list extensions\n"));
-	fprintf(output, _("  \\dy     [PATTERN]      list event triggers\n"));
+	fprintf(output, _("  \\dX     [PATTERN]      list extended statistics\n"));
+	fprintf(output, _("  \\dy[+]  [PATTERN]      list event triggers\n"));
 	fprintf(output, _("  \\l[+]   [PATTERN]      list databases\n"));
 	fprintf(output, _("  \\sf[+]  FUNCNAME       show a function's definition\n"));
 	fprintf(output, _("  \\sv[+]  VIEWNAME       show a view's definition\n"));
@@ -380,6 +380,8 @@ helpVariables(unsigned short int pager)
 					  "    the number of result rows to fetch and display at a time (0 = unlimited)\n"));
 	fprintf(output, _("  HIDE_TABLEAM\n"
 					  "    if set, table access methods are not displayed\n"));
+	fprintf(output, _("  HIDE_TOAST_COMPRESSION\n"
+					  "    if set, compression methods are not displayed\n"));
 	fprintf(output, _("  HISTCONTROL\n"
 					  "    controls command history [ignorespace, ignoredups, ignoreboth]\n"));
 	fprintf(output, _("  HISTFILE\n"
@@ -491,10 +493,10 @@ helpVariables(unsigned short int pager)
 					  "    same as the dbname connection parameter\n"));
 	fprintf(output, _("  PGHOST\n"
 					  "    same as the host connection parameter\n"));
-	fprintf(output, _("  PGPASSWORD\n"
-					  "    connection password (not recommended)\n"));
 	fprintf(output, _("  PGPASSFILE\n"
 					  "    password file name\n"));
+	fprintf(output, _("  PGPASSWORD\n"
+					  "    connection password (not recommended)\n"));
 	fprintf(output, _("  PGPORT\n"
 					  "    same as the port connection parameter\n"));
 	fprintf(output, _("  PGUSER\n"
@@ -538,6 +540,7 @@ helpSQL(const char *topic, unsigned short int pager)
 		int			i;
 		int			j;
 
+		/* Find screen width to determine how many columns will fit */
 #ifdef TIOCGWINSZ
 		struct winsize screen_size;
 
@@ -575,56 +578,63 @@ helpSQL(const char *topic, unsigned short int pager)
 	else
 	{
 		int			i,
-					j,
-					x = 0;
-		bool		help_found = false;
+					pass;
 		FILE	   *output = NULL;
 		size_t		len,
-					wordlen;
-		int			nl_count = 0;
+					wordlen,
+					j;
+		int			nl_count;
 
 		/*
+		 * len is the amount of the input to compare to the help topic names.
 		 * We first try exact match, then first + second words, then first
 		 * word only.
 		 */
 		len = strlen(topic);
 
-		for (x = 1; x <= 3; x++)
+		for (pass = 1; pass <= 3; pass++)
 		{
-			if (x > 1)			/* Nothing on first pass - try the opening
+			if (pass > 1)		/* Nothing on first pass - try the opening
 								 * word(s) */
 			{
 				wordlen = j = 1;
-				while (topic[j] != ' ' && j++ < len)
+				while (j < len && topic[j++] != ' ')
 					wordlen++;
-				if (x == 2)
+				if (pass == 2 && j < len)
 				{
-					j++;
-					while (topic[j] != ' ' && j++ <= len)
+					wordlen++;
+					while (j < len && topic[j++] != ' ')
 						wordlen++;
 				}
-				if (wordlen >= len) /* Don't try again if the same word */
+				if (wordlen >= len)
 				{
-					if (!output)
-						output = PageOutput(nl_count, pager ? &(pset.popt.topt) : NULL);
-					break;
+					/* Failed to shorten input, so try next pass if any */
+					continue;
 				}
 				len = wordlen;
 			}
 
-			/* Count newlines for pager */
+			/*
+			 * Count newlines for pager.  This logic must agree with what the
+			 * following loop will do!
+			 */
+			nl_count = 0;
 			for (i = 0; QL_HELP[i].cmd; i++)
 			{
 				if (pg_strncasecmp(topic, QL_HELP[i].cmd, len) == 0 ||
 					strcmp(topic, "*") == 0)
 				{
-					nl_count += 5 + QL_HELP[i].nl_count;
+					/* magic constant here must match format below! */
+					nl_count += 7 + QL_HELP[i].nl_count;
 
 					/* If we have an exact match, exit.  Fixes \h SELECT */
 					if (pg_strcasecmp(topic, QL_HELP[i].cmd) == 0)
 						break;
 				}
 			}
+			/* If no matches, don't open the output yet */
+			if (nl_count == 0)
+				continue;
 
 			if (!output)
 				output = PageOutput(nl_count, pager ? &(pset.popt.topt) : NULL);
@@ -639,10 +649,10 @@ helpSQL(const char *topic, unsigned short int pager)
 
 					initPQExpBuffer(&buffer);
 					QL_HELP[i].syntaxfunc(&buffer);
-					help_found = true;
 					url = psprintf("https://www.postgresql.org/docs/%s/%s.html",
 								   strstr(PG_VERSION, "devel") ? "devel" : PG_MAJORVERSION,
 								   QL_HELP[i].docbook_id);
+					/* # of newlines in format must match constant above! */
 					fprintf(output, _("Command:     %s\n"
 									  "Description: %s\n"
 									  "Syntax:\n%s\n\n"
@@ -652,17 +662,24 @@ helpSQL(const char *topic, unsigned short int pager)
 							buffer.data,
 							url);
 					free(url);
+					termPQExpBuffer(&buffer);
+
 					/* If we have an exact match, exit.  Fixes \h SELECT */
 					if (pg_strcasecmp(topic, QL_HELP[i].cmd) == 0)
 						break;
 				}
 			}
-			if (help_found)		/* Don't keep trying if we got a match */
-				break;
+			break;
 		}
 
-		if (!help_found)
-			fprintf(output, _("No help available for \"%s\".\nTry \\h with no arguments to see available help.\n"), topic);
+		/* If we never found anything, report that */
+		if (!output)
+		{
+			output = PageOutput(2, pager ? &(pset.popt.topt) : NULL);
+			fprintf(output, _("No help available for \"%s\".\n"
+							  "Try \\h with no arguments to see available help.\n"),
+					topic);
+		}
 
 		ClosePager(output);
 	}

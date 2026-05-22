@@ -4,7 +4,7 @@
  *		Functions for direct access to files
  *
  *
- * Copyright (c) 2004-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2004-2021, PostgreSQL Global Development Group
  *
  * Author: Andreas Pflug <pgadmin@pse-consulting.de>
  *
@@ -75,10 +75,13 @@ convert_and_check_filename(text *arg)
 	 * files on the server as the PG user, so no need to do any further checks
 	 * here.
 	 */
-	if (is_member_of_role(GetUserId(), DEFAULT_ROLE_READ_SERVER_FILES))
+	if (is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
 		return filename;
 
-	/* User isn't a member of the default role, so check if it's allowable */
+	/*
+	 * User isn't a member of the pg_read_server_files role, so check if it's
+	 * allowable
+	 */
 	if (is_absolute_path(filename))
 	{
 		/* Disallow '/a/b/data/..' */
@@ -181,16 +184,15 @@ read_binary_file(const char *filename, int64 seek_offset, int64 bytes_to_read,
 #define MIN_READ_SIZE 4096
 
 			/*
-			 * If not at end of file, and sbuf.len is equal to
-			 * MaxAllocSize - 1, then either the file is too large, or
-			 * there is nothing left to read. Attempt to read one more
-			 * byte to see if the end of file has been reached. If not,
-			 * the file is too large; we'd rather give the error message
-			 * for that ourselves.
+			 * If not at end of file, and sbuf.len is equal to MaxAllocSize -
+			 * 1, then either the file is too large, or there is nothing left
+			 * to read. Attempt to read one more byte to see if the end of
+			 * file has been reached. If not, the file is too large; we'd
+			 * rather give the error message for that ourselves.
 			 */
 			if (sbuf.len == MaxAllocSize - 1)
 			{
-				char	rbuf[1];
+				char		rbuf[1];
 
 				if (fread(rbuf, 1, 1, file) != 0 || !feof(file))
 					ereport(ERROR,
@@ -275,7 +277,7 @@ pg_read_file(PG_FUNCTION_ARGS)
 				 errmsg("must be superuser to read files with adminpack 1.0"),
 		/* translator: %s is a SQL function name */
 				 errhint("Consider using %s, which is part of core, instead.",
-						 "pg_file_read()")));
+						 "pg_read_file()")));
 
 	/* handle optional arguments */
 	if (PG_NARGS() >= 3)

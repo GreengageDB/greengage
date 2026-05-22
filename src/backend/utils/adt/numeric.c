@@ -11,7 +11,7 @@
  * Transactions on Mathematical Software, Vol. 24, No. 4, December 1998,
  * pages 359-367.
  *
- * Copyright (c) 1998-2020, PostgreSQL Global Development Group
+ * Copyright (c) 1998-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/adt/numeric.c
@@ -484,51 +484,7 @@ static void dump_var(const char *str, NumericVar *var);
 		(v)->neg_digits = NULL; 	\
 	} while (0)
 
-#define quick_init_var(v) \
-	do { \
-		(v)->buf = (v)->ndb;	\
-		(v)->digits = NULL; 	\
-	} while (0)
-
-
-#define init_var(v) \
-	do { \
-		quick_init_var((v));	\
-		(v)->ndigits = (v)->weight = (v)->sign = (v)->dscale = 0; \
-	} while (0)
-
-
-#define digitbuf_alloc(ndigits)  \
-	((NumericDigit *) palloc((ndigits) * sizeof(NumericDigit)))
-
-#define digitbuf_free(v)	\
-	do { \
-		if ((v)->buf != (v)->ndb)	\
-		{							\
-		 	pfree((v)->buf); 		\
-			(v)->buf = (v)->ndb;	\
-		}	\
-	} while (0)
-
-#define free_var(v)	\
-				digitbuf_free((v));
-
-/*
- * init_alloc_var() -
- *
- *	Init a var and allocate digit buffer of ndigits digits (plus a spare
- *  digit for rounding).
- *  Called when first using a var.
- */
-#define	init_alloc_var(v, n) \
-	do 	{	\
-		(v)->buf = (v)->ndb;	\
-		(v)->ndigits = (n);	\
-		if ((n) > NUMERIC_LOCAL_NMAX)	\
-			(v)->buf = digitbuf_alloc((n) + 1);	\
-		(v)->buf[0] = 0;	\
-		(v)->digits = (v)->buf + 1;	\
-	} while (0)
+#define init_var(v)		memset(v, 0, sizeof(NumericVar))
 
 #define NUMERIC_DIGITS(num) (NUMERIC_HEADER_IS_SHORT(num) ? \
 	(num)->choice.n_short.n_data : (num)->choice.n_long.n_data)
@@ -634,7 +590,8 @@ static void round_var(NumericVar *var, int rscale);
 static void trunc_var(NumericVar *var, int rscale);
 static void strip_var(NumericVar *var);
 static void compute_bucket(Numeric operand, Numeric bound1, Numeric bound2,
-						   const NumericVar *count_var, NumericVar *result_var);
+						   const NumericVar *count_var, bool reversed_bounds,
+						   NumericVar *result_var);
 
 static void accum_sum_add(NumericSumAccum *accum, const NumericVar *var1);
 static void accum_sum_rescale(NumericSumAccum *accum, const NumericVar *val);
@@ -1786,10 +1743,11 @@ width_bucket_numeric(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION),
 					 errmsg("operand, lower bound, and upper bound cannot be NaN")));
-		else
+		/* We allow "operand" to be infinite; cmp_numerics will cope */
+		if (NUMERIC_IS_INF(bound1) || NUMERIC_IS_INF(bound2))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION),
-					 errmsg("operand, lower bound, and upper bound cannot be infinity")));
+					 errmsg("lower and upper bounds must be finite")));
 	}
 
 	quick_init_var(&result_var);
@@ -1813,8 +1771,8 @@ width_bucket_numeric(PG_FUNCTION_ARGS)
 			else if (cmp_numerics(operand, bound2) >= 0)
 				add_var(&count_var, &const_one, &result_var);
 			else
-				compute_bucket(operand, bound1, bound2,
-							   &count_var, &result_var);
+				compute_bucket(operand, bound1, bound2, &count_var, false,
+							   &result_var);
 			break;
 
 			/* bound1 > bound2 */
@@ -1824,8 +1782,8 @@ width_bucket_numeric(PG_FUNCTION_ARGS)
 			else if (cmp_numerics(operand, bound2) <= 0)
 				add_var(&count_var, &const_one, &result_var);
 			else
-				compute_bucket(operand, bound1, bound2,
-							   &count_var, &result_var);
+				compute_bucket(operand, bound1, bound2, &count_var, true,
+							   &result_var);
 			break;
 	}
 
@@ -1844,11 +1802,13 @@ width_bucket_numeric(PG_FUNCTION_ARGS)
 /*
  * If 'operand' is not outside the bucket range, determine the correct
  * bucket for it to go. The calculations performed by this function
- * are derived directly from the SQL2003 spec.
+ * are derived directly from the SQL2003 spec. Note however that we
+ * multiply by count before dividing, to avoid unnecessary roundoff error.
  */
 static void
 compute_bucket(Numeric operand, Numeric bound1, Numeric bound2,
-			   const NumericVar *count_var, NumericVar *result_var)
+			   const NumericVar *count_var, bool reversed_bounds,
+			   NumericVar *result_var)
 {
 	NumericVar	bound1_var;
 	NumericVar	bound2_var;
@@ -1858,23 +1818,21 @@ compute_bucket(Numeric operand, Numeric bound1, Numeric bound2,
 	init_var_from_num(bound2, &bound2_var);
 	init_var_from_num(operand, &operand_var);
 
-	if (cmp_var(&bound1_var, &bound2_var) < 0)
+	if (!reversed_bounds)
 	{
 		sub_var(&operand_var, &bound1_var, &operand_var);
 		sub_var(&bound2_var, &bound1_var, &bound2_var);
-		div_var(&operand_var, &bound2_var, result_var,
-				select_div_scale(&operand_var, &bound2_var), true);
 	}
 	else
 	{
 		sub_var(&bound1_var, &operand_var, &operand_var);
-		sub_var(&bound1_var, &bound2_var, &bound1_var);
-		div_var(&operand_var, &bound1_var, result_var,
-				select_div_scale(&operand_var, &bound1_var), true);
+		sub_var(&bound1_var, &bound2_var, &bound2_var);
 	}
 
-	mul_var(result_var, count_var, result_var,
-			result_var->dscale + count_var->dscale);
+	mul_var(&operand_var, count_var, &operand_var,
+			operand_var.dscale + count_var->dscale);
+	div_var(&operand_var, &bound2_var, result_var,
+			select_div_scale(&operand_var, &bound2_var), true);
 	add_var(result_var, &const_one, result_var);
 	floor_var(result_var, result_var);
 
@@ -4412,23 +4370,90 @@ numeric_trim_scale(PG_FUNCTION_ARGS)
  * ----------------------------------------------------------------------
  */
 
-
-Datum
-int4_numeric(PG_FUNCTION_ARGS)
+Numeric
+int64_to_numeric(int64 val)
 {
-	int32		val = PG_GETARG_INT32(0);
 	Numeric		res;
 	NumericVar	result;
 
 	quick_init_var(&result);
 
-	int64_to_numericvar((int64) val, &result);
+	int64_to_numericvar(val, &result);
 
 	res = make_result(&result);
 
 	free_var(&result);
 
-	PG_RETURN_NUMERIC(res);
+	return res;
+}
+
+/*
+ * Convert val1/(10**val2) to numeric.  This is much faster than normal
+ * numeric division.
+ */
+Numeric
+int64_div_fast_to_numeric(int64 val1, int log10val2)
+{
+	Numeric		res;
+	NumericVar	result;
+	int64		saved_val1 = val1;
+	int			w;
+	int			m;
+
+	/* how much to decrease the weight by */
+	w = log10val2 / DEC_DIGITS;
+	/* how much is left */
+	m = log10val2 % DEC_DIGITS;
+
+	/*
+	 * If there is anything left, multiply the dividend by what's left, then
+	 * shift the weight by one more.
+	 */
+	if (m > 0)
+	{
+		static int	pow10[] = {1, 10, 100, 1000};
+
+		StaticAssertStmt(lengthof(pow10) == DEC_DIGITS, "mismatch with DEC_DIGITS");
+		if (unlikely(pg_mul_s64_overflow(val1, pow10[DEC_DIGITS - m], &val1)))
+		{
+			/*
+			 * If it doesn't fit, do the whole computation in numeric the slow
+			 * way.  Note that va1l may have been overwritten, so use
+			 * saved_val1 instead.
+			 */
+			int			val2 = 1;
+
+			for (int i = 0; i < log10val2; i++)
+				val2 *= 10;
+			res = numeric_div_opt_error(int64_to_numeric(saved_val1), int64_to_numeric(val2), NULL);
+			res = DatumGetNumeric(DirectFunctionCall2(numeric_round,
+													  NumericGetDatum(res),
+													  Int32GetDatum(log10val2)));
+			return res;
+		}
+		w++;
+	}
+
+	init_var(&result);
+
+	int64_to_numericvar(val1, &result);
+
+	result.weight -= w;
+	result.dscale += w * DEC_DIGITS - (DEC_DIGITS - m);
+
+	res = make_result(&result);
+
+	free_var(&result);
+
+	return res;
+}
+
+Datum
+int4_numeric(PG_FUNCTION_ARGS)
+{
+	int32		val = PG_GETARG_INT32(0);
+
+	PG_RETURN_NUMERIC(int64_to_numeric(val));
 }
 
 int32
@@ -4452,11 +4477,11 @@ numeric_int4_opt_error(Numeric num, bool *have_error)
 			if (NUMERIC_IS_NAN(num))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot convert NaN to integer")));
+						 errmsg("cannot convert NaN to %s", "integer")));
 			else
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot convert infinity to integer")));
+						 errmsg("cannot convert infinity to %s", "integer")));
 		}
 	}
 
@@ -4513,18 +4538,8 @@ Datum
 int8_numeric(PG_FUNCTION_ARGS)
 {
 	int64		val = PG_GETARG_INT64(0);
-	Numeric		res;
-	NumericVar	result;
 
-	quick_init_var(&result);
-
-	int64_to_numericvar(val, &result);
-
-	res = make_result(&result);
-
-	free_var(&result);
-
-	PG_RETURN_NUMERIC(res);
+	PG_RETURN_NUMERIC(int64_to_numeric(val));
 }
 
 
@@ -4540,11 +4555,11 @@ numeric_int8(PG_FUNCTION_ARGS)
 		if (NUMERIC_IS_NAN(num))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert NaN to bigint")));
+					 errmsg("cannot convert NaN to %s", "bigint")));
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert infinity to bigint")));
+					 errmsg("cannot convert infinity to %s", "bigint")));
 	}
 
 	/* Convert to variable format and thence to int8 */
@@ -4563,18 +4578,8 @@ Datum
 int2_numeric(PG_FUNCTION_ARGS)
 {
 	int16		val = PG_GETARG_INT16(0);
-	Numeric		res;
-	NumericVar	result;
 
-	quick_init_var(&result);
-
-	int64_to_numericvar((int64) val, &result);
-
-	res = make_result(&result);
-
-	free_var(&result);
-
-	PG_RETURN_NUMERIC(res);
+	PG_RETURN_NUMERIC(int64_to_numeric(val));
 }
 
 
@@ -4591,11 +4596,11 @@ numeric_int2(PG_FUNCTION_ARGS)
 		if (NUMERIC_IS_NAN(num))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert NaN to smallint")));
+					 errmsg("cannot convert NaN to %s", "smallint")));
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert infinity to smallint")));
+					 errmsg("cannot convert infinity to %s", "smallint")));
 	}
 
 	/* Convert to variable format and thence to int8 */
@@ -4782,11 +4787,11 @@ numeric_pg_lsn(PG_FUNCTION_ARGS)
 		if (NUMERIC_IS_NAN(num))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert NaN to pg_lsn")));
+					 errmsg("cannot convert NaN to %s", "pg_lsn")));
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot convert infinity to pg_lsn")));
+					 errmsg("cannot convert infinity to %s", "pg_lsn")));
 	}
 
 	/* Convert to variable format and thence to pg_lsn */
@@ -5653,11 +5658,7 @@ int2_accum(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_accum(state, (int128) PG_GETARG_INT16(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int2_numeric,
-													 PG_GETARG_DATUM(1)));
-		do_numeric_accum(state, newval);
+		do_numeric_accum(state, int64_to_numeric(PG_GETARG_INT16(1)));
 #endif
 	}
 
@@ -5680,11 +5681,7 @@ int4_accum(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_accum(state, (int128) PG_GETARG_INT32(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int4_numeric,
-													 PG_GETARG_DATUM(1)));
-		do_numeric_accum(state, newval);
+		do_numeric_accum(state, int64_to_numeric(PG_GETARG_INT32(1)));
 #endif
 	}
 
@@ -5703,13 +5700,7 @@ int8_accum(PG_FUNCTION_ARGS)
 		state = makeNumericAggState(fcinfo, true);
 
 	if (!PG_ARGISNULL(1))
-	{
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int8_numeric,
-													 PG_GETARG_DATUM(1)));
-		do_numeric_accum(state, newval);
-	}
+		do_numeric_accum(state, int64_to_numeric(PG_GETARG_INT64(1)));
 
 	PG_RETURN_POINTER(state);
 }
@@ -5943,11 +5934,7 @@ int8_avg_accum(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_accum(state, (int128) PG_GETARG_INT64(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int8_numeric,
-													 PG_GETARG_DATUM(1)));
-		do_numeric_accum(state, newval);
+		do_numeric_accum(state, int64_to_numeric(PG_GETARG_INT64(1)));
 #endif
 	}
 
@@ -6150,13 +6137,8 @@ int2_accum_inv(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_discard(state, (int128) PG_GETARG_INT16(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int2_numeric,
-													 PG_GETARG_DATUM(1)));
-
 		/* Should never fail, all inputs have dscale 0 */
-		if (!do_numeric_discard(state, newval))
+		if (!do_numeric_discard(state, int64_to_numeric(PG_GETARG_INT16(1))))
 			elog(ERROR, "do_numeric_discard failed unexpectedly");
 #endif
 	}
@@ -6180,13 +6162,8 @@ int4_accum_inv(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_discard(state, (int128) PG_GETARG_INT32(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int4_numeric,
-													 PG_GETARG_DATUM(1)));
-
 		/* Should never fail, all inputs have dscale 0 */
-		if (!do_numeric_discard(state, newval))
+		if (!do_numeric_discard(state, int64_to_numeric(PG_GETARG_INT32(1))))
 			elog(ERROR, "do_numeric_discard failed unexpectedly");
 #endif
 	}
@@ -6207,13 +6184,8 @@ int8_accum_inv(PG_FUNCTION_ARGS)
 
 	if (!PG_ARGISNULL(1))
 	{
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int8_numeric,
-													 PG_GETARG_DATUM(1)));
-
 		/* Should never fail, all inputs have dscale 0 */
-		if (!do_numeric_discard(state, newval))
+		if (!do_numeric_discard(state, int64_to_numeric(PG_GETARG_INT64(1))))
 			elog(ERROR, "do_numeric_discard failed unexpectedly");
 	}
 
@@ -6236,13 +6208,8 @@ int8_avg_accum_inv(PG_FUNCTION_ARGS)
 #ifdef HAVE_INT128
 		do_int128_discard(state, (int128) PG_GETARG_INT64(1));
 #else
-		Numeric		newval;
-
-		newval = DatumGetNumeric(DirectFunctionCall1(int8_numeric,
-													 PG_GETARG_DATUM(1)));
-
 		/* Should never fail, all inputs have dscale 0 */
-		if (!do_numeric_discard(state, newval))
+		if (!do_numeric_discard(state, int64_to_numeric(PG_GETARG_INT64(1))))
 			elog(ERROR, "do_numeric_discard failed unexpectedly");
 #endif
 	}
@@ -6297,8 +6264,7 @@ numeric_poly_avg(PG_FUNCTION_ARGS)
 
 	int128_to_numericvar(state->sumX, &result);
 
-	countd = DirectFunctionCall1(int8_numeric,
-								 Int64GetDatumFast(state->N));
+	countd = NumericGetDatum(int64_to_numeric(state->N));
 	sumd = NumericGetDatum(make_result(&result));
 
 	free_var(&result);
@@ -6334,7 +6300,7 @@ numeric_avg(PG_FUNCTION_ARGS)
 	if (state->nInfcount > 0)
 		PG_RETURN_NUMERIC(make_result(&const_ninf));
 
-	N_datum = DirectFunctionCall1(int8_numeric, Int64GetDatum(state->N));
+	N_datum = NumericGetDatum(int64_to_numeric(state->N));
 
 	init_var(&sumX_var);
 	accum_sum_final(&state->sumX, &sumX_var);
@@ -6794,7 +6760,6 @@ Datum
 int8_sum(PG_FUNCTION_ARGS)
 {
 	Numeric		oldsum;
-	Datum		newval;
 
 	if (PG_ARGISNULL(0))
 	{
@@ -6802,8 +6767,7 @@ int8_sum(PG_FUNCTION_ARGS)
 		if (PG_ARGISNULL(1))
 			PG_RETURN_NULL();	/* still no non-null */
 		/* This is the first non-null input. */
-		newval = DirectFunctionCall1(int8_numeric, PG_GETARG_DATUM(1));
-		PG_RETURN_DATUM(newval);
+		PG_RETURN_NUMERIC(int64_to_numeric(PG_GETARG_INT64(1)));
 	}
 
 	/*
@@ -6819,10 +6783,9 @@ int8_sum(PG_FUNCTION_ARGS)
 		PG_RETURN_NUMERIC(oldsum);
 
 	/* OK to do the addition. */
-	newval = DirectFunctionCall1(int8_numeric, PG_GETARG_DATUM(1));
-
 	PG_RETURN_DATUM(DirectFunctionCall2(numeric_add,
-										NumericGetDatum(oldsum), newval));
+										NumericGetDatum(oldsum),
+										NumericGetDatum(int64_to_numeric(PG_GETARG_INT64(1)))));
 }
 
 /*
@@ -7000,10 +6963,8 @@ int8_avg(PG_FUNCTION_ARGS)
 	if (transdata->count == 0)
 		PG_RETURN_NULL();
 
-	countd = DirectFunctionCall1(int8_numeric,
-								 Int64GetDatumFast(transdata->count));
-	sumd = DirectFunctionCall1(int8_numeric,
-							   Int64GetDatumFast(transdata->sum));
+	countd = NumericGetDatum(int64_to_numeric(transdata->count));
+	sumd = NumericGetDatum(int64_to_numeric(transdata->sum));
 
 	PG_RETURN_DATUM(DirectFunctionCall2(numeric_div, sumd, countd));
 }
@@ -8743,11 +8704,22 @@ mul_var(const NumericVar *var1, const NumericVar *var2, NumericVar *result,
 		 * Add the appropriate multiple of var2 into the accumulator.
 		 *
 		 * As above, digits of var2 can be ignored if they don't contribute,
-		 * so we only include digits for which i1+i2+2 <= res_ndigits - 1.
+		 * so we only include digits for which i1+i2+2 < res_ndigits.
+		 *
+		 * This inner loop is the performance bottleneck for multiplication,
+		 * so we want to keep it simple enough so that it can be
+		 * auto-vectorized.  Accordingly, process the digits left-to-right
+		 * even though schoolbook multiplication would suggest right-to-left.
+		 * Since we aren't propagating carries in this loop, the order does
+		 * not matter.
 		 */
-		for (i2 = Min(var2ndigits - 1, res_ndigits - i1 - 3), i = i1 + i2 + 2;
-			 i2 >= 0; i2--)
-			dig[i--] += var1digit * var2digits[i2];
+		{
+			int			i2limit = Min(var2ndigits, res_ndigits - i1 - 2);
+			int		   *dig_i1_2 = &dig[i1 + 2];
+
+			for (i2 = 0; i2 < i2limit; i2++)
+				dig_i1_2[i2] += var1digit * var2digits[i2];
+		}
 	}
 
 	/*
@@ -10761,7 +10733,7 @@ power_var_int(const NumericVar *base, int exp, NumericVar *result, int rscale)
 	 * to around log10(abs(exp)) digits, so work with this many extra digits
 	 * of precision (plus a few more for good measure).
 	 */
-	sig_digits += (int) log(Abs(exp)) + 8;
+	sig_digits += (int) log(fabs((double) exp)) + 8;
 
 	/*
 	 * Now we can proceed with the multiplications.

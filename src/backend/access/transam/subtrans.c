@@ -19,7 +19,7 @@
  * data across crashes.  During database startup, we simply force the
  * currently-active page of SUBTRANS to zeroes.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/subtrans.c
@@ -197,9 +197,8 @@ SUBTRANSShmemInit(void)
 	SubTransCtl->PagePrecedes = SubTransPagePrecedes;
 	SimpleLruInit(SubTransCtl, "Subtrans", NUM_SUBTRANS_BUFFERS, 0,
 				  SubtransSLRULock, "pg_subtrans",
-				  LWTRANCHE_SUBTRANS_BUFFER);
-	/* Override default assumption that writes should be fsync'd */
-	SubTransCtl->do_fsync = false;
+				  LWTRANCHE_SUBTRANS_BUFFER, SYNC_HANDLER_NONE);
+	SlruPagePrecedesUnitTests(SubTransCtl, SUBTRANS_XACTS_PER_PAGE);
 }
 
 /*
@@ -287,37 +286,20 @@ StartupSUBTRANS(TransactionId oldestActiveXID)
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-ShutdownSUBTRANS(void)
-{
-	/*
-	 * Flush dirty SUBTRANS pages to disk
-	 *
-	 * This is not actually necessary from a correctness point of view. We do
-	 * it merely as a debugging aid.
-	 */
-	TRACE_POSTGRESQL_SUBTRANS_CHECKPOINT_START(false);
-	SimpleLruFlush(SubTransCtl, false);
-	TRACE_POSTGRESQL_SUBTRANS_CHECKPOINT_DONE(false);
-}
-
-/*
  * Perform a checkpoint --- either during shutdown, or on-the-fly
  */
 void
 CheckPointSUBTRANS(void)
 {
 	/*
-	 * Flush dirty SUBTRANS pages to disk
+	 * Write dirty SUBTRANS pages to disk
 	 *
 	 * This is not actually necessary from a correctness point of view. We do
 	 * it merely to improve the odds that writing of dirty pages is done by
 	 * the checkpoint process and not by backends.
 	 */
 	TRACE_POSTGRESQL_SUBTRANS_CHECKPOINT_START(true);
-	SimpleLruFlush(SubTransCtl, true);
+	SimpleLruWriteAll(SubTransCtl, true);
 	TRACE_POSTGRESQL_SUBTRANS_CHECKPOINT_DONE(true);
 }
 
@@ -380,13 +362,8 @@ TruncateSUBTRANS(TransactionId oldestXact)
 
 
 /*
- * Decide which of two SUBTRANS page numbers is "older" for truncation purposes.
- *
- * We need to use comparison of TransactionIds here in order to do the right
- * thing with wraparound XID arithmetic.  However, if we are asked about
- * page number zero, we don't want to hand InvalidTransactionId to
- * TransactionIdPrecedes: it'll get weird about permanent xact IDs.  So,
- * offset both xids by FirstNormalTransactionId to avoid that.
+ * Decide whether a SUBTRANS page number is "older" for truncation purposes.
+ * Analogous to CLOGPagePrecedes().
  */
 static bool
 SubTransPagePrecedes(int page1, int page2)
@@ -394,10 +371,11 @@ SubTransPagePrecedes(int page1, int page2)
 	TransactionId xid1;
 	TransactionId xid2;
 
-	xid1 = ((uint32) page1) * SUBTRANS_XACTS_PER_PAGE;
-	xid1 += FirstNormalTransactionId;
-	xid2 = ((uint32) page2) * SUBTRANS_XACTS_PER_PAGE;
-	xid2 += FirstNormalTransactionId;
+	xid1 = ((TransactionId) page1) * SUBTRANS_XACTS_PER_PAGE;
+	xid1 += FirstNormalTransactionId + 1;
+	xid2 = ((TransactionId) page2) * SUBTRANS_XACTS_PER_PAGE;
+	xid2 += FirstNormalTransactionId + 1;
 
-	return TransactionIdPrecedes(xid1, xid2);
+	return (TransactionIdPrecedes(xid1, xid2) &&
+			TransactionIdPrecedes(xid1, xid2 + SUBTRANS_XACTS_PER_PAGE - 1));
 }

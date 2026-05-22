@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2001-2020, PostgreSQL Global Development Group
+# Copyright (c) 2001-2021, PostgreSQL Global Development Group
 #
 # src/backend/utils/mb/Unicode/convutils.pm
 
@@ -381,7 +381,7 @@ sub print_radix_table
 		header  => "Dummy map, for invalid values",
 		min_idx => 0,
 		max_idx => $widest_range,
-		label => "dummy map"
+		label   => "dummy map"
 	  };
 
 	###

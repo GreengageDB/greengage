@@ -136,8 +136,10 @@ ROLLBACK;
       the output column list for each node in the plan tree, schema-qualify
       table and function names, always label variables in expressions with
       their range table alias, and always print the name of each trigger for
-      which statistics are displayed.  This parameter defaults to
-      <literal>FALSE</literal>.
+      which statistics are displayed.  The query identifier will also be
+      displayed if one has been computed, see <xref
+      linkend="guc-compute-query-id"/> for more details.  This parameter
+      defaults to <literal>FALSE</literal>.
      </para>
     </listitem>
    </varlistentry>
@@ -187,8 +189,7 @@ ROLLBACK;
       query processing.
       The number of blocks shown for an
       upper-level node includes those used by all its child nodes.  In text
-      format, only non-zero values are printed.  This parameter may only be
-      used when <literal>ANALYZE</literal> is also enabled.  It defaults to
+      format, only non-zero values are printed.  It defaults to
       <literal>FALSE</literal>.
      </para>
     </listitem>
@@ -199,9 +200,9 @@ ROLLBACK;
     <listitem>
      <para>
       Include information on WAL record generation. Specifically, include the
-      number of records, number of full page images (fpi) and amount of WAL
-      bytes generated.  In text format, only non-zero values are printed.  This
-      parameter may only be used when <literal>ANALYZE</literal> is also
+      number of records, number of full page images (fpi) and the amount of WAL
+      generated in bytes. In text format, only non-zero values are printed.
+      This parameter may only be used when <literal>ANALYZE</literal> is also
       enabled.  It defaults to <literal>FALSE</literal>.
      </para>
     </listitem>
@@ -303,7 +304,7 @@ ROLLBACK;
    the <link linkend="autovacuum">autovacuum daemon</link> will take care
    of that automatically.  But if a table has recently had substantial
    changes in its contents, you might need to do a manual
-   <xref linkend="sql-analyze"/> rather than wait for autovacuum to catch up
+   <link linkend="sql-analyze"><command>ANALYZE</command></link> rather than wait for autovacuum to catch up
    with the changes.
   </para>
 

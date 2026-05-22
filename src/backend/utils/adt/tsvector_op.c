@@ -3,7 +3,7 @@
  * tsvector_op.c
  *	  operations over tsvector
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -1852,6 +1852,18 @@ TS_execute(QueryItem *curitem, void *arg, uint32 flags,
 	 * need to check again.
 	 */
 	return TS_execute_recurse(curitem, arg, flags, chkcond) != TS_NO;
+}
+
+/*
+ * Evaluate tsquery boolean expression.
+ *
+ * This is the same as TS_execute except that TS_MAYBE is returned as-is.
+ */
+TSTernaryValue
+TS_execute_ternary(QueryItem *curitem, void *arg, uint32 flags,
+				   TSExecuteCallback chkcond)
+{
+	return TS_execute_recurse(curitem, arg, flags, chkcond);
 }
 
 /*

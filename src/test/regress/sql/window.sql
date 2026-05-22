@@ -64,12 +64,14 @@ SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHER
 SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
 
 SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
+SELECT lag(ten, four, 0.7) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10 ORDER BY four, ten;
 
 SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
 
 SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
 
 SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
+SELECT lead(ten * 2, 1, -1.4) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10 ORDER BY four, ten;
 
 SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
 
@@ -956,6 +958,28 @@ SELECT
   lead(1) OVER (PARTITION BY depname ORDER BY salary, enroll_date),
   lag(1) OVER (PARTITION BY depname ORDER BY salary,enroll_date,empno)
 FROM empsalary;
+
+-- Test incremental sorting
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT depname,
+          empno,
+          salary,
+          enroll_date,
+          row_number() OVER (PARTITION BY depname ORDER BY enroll_date) AS first_emp,
+          row_number() OVER (PARTITION BY depname ORDER BY enroll_date DESC) AS last_emp
+   FROM empsalary) emp
+WHERE first_emp = 1 OR last_emp = 1;
+
+SELECT * FROM
+  (SELECT depname,
+          empno,
+          salary,
+          enroll_date,
+          row_number() OVER (PARTITION BY depname ORDER BY enroll_date) AS first_emp,
+          row_number() OVER (PARTITION BY depname ORDER BY enroll_date DESC) AS last_emp
+   FROM empsalary) emp
+WHERE first_emp = 1 OR last_emp = 1;
 
 -- cleanup
 DROP TABLE empsalary;

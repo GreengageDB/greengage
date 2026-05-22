@@ -52,7 +52,7 @@
  *	 HeapTupleSatisfiesAny()
  *		  all tuples are visible
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -689,8 +689,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 	{
 		if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
 			return TM_Ok;
-		if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-			HeapTupleHeaderIndicatesMovedPartitions(tuple))
+		if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 			return TM_Updated;	/* updated by other */
 		else
 			return TM_Deleted;	/* deleted by other */
@@ -735,8 +734,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 
 		if (TransactionIdDidCommit(xmax))
 		{
-			if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-				HeapTupleHeaderIndicatesMovedPartitions(tuple))
+			if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 				return TM_Updated;
 			else
 				return TM_Deleted;
@@ -796,8 +794,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 
 	SetHintBits(tuple, buffer, relation, HEAP_XMAX_COMMITTED,
 				HeapTupleHeaderGetRawXmax(tuple));
-	if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-		HeapTupleHeaderIndicatesMovedPartitions(tuple))
+	if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 		return TM_Updated;		/* updated by other */
 	else
 		return TM_Deleted;		/* deleted by other */
@@ -1753,29 +1750,29 @@ HeapTupleSatisfiesHistoricMVCC(Relation relation, HeapTuple htup, Snapshot snaps
 
 		/*
 		 * another transaction might have (tried to) delete this tuple or
-		 * cmin/cmax was stored in a combocid. So we need to lookup the actual
-		 * values externally.
+		 * cmin/cmax was stored in a combo CID. So we need to lookup the
+		 * actual values externally.
 		 */
 		resolved = ResolveCminCmaxDuringDecoding(HistoricSnapshotGetTupleCids(), snapshot,
 												 htup, buffer,
 												 &cmin, &cmax);
 
 		/*
-		 * If we haven't resolved the combocid to cmin/cmax, that means we
-		 * have not decoded the combocid yet. That means the cmin is
+		 * If we haven't resolved the combo CID to cmin/cmax, that means we
+		 * have not decoded the combo CID yet. That means the cmin is
 		 * definitely in the future, and we're not supposed to see the tuple
 		 * yet.
 		 *
 		 * XXX This only applies to decoding of in-progress transactions. In
 		 * regular logical decoding we only execute this code at commit time,
-		 * at which point we should have seen all relevant combocids. So
+		 * at which point we should have seen all relevant combo CIDs. So
 		 * ideally, we should error out in this case but in practice, this
 		 * won't happen. If we are too worried about this then we can add an
 		 * elog inside ResolveCminCmaxDuringDecoding.
 		 *
-		 * XXX For the streaming case, we can track the largest combocid
-		 * assigned, and error out based on this (when unable to resolve
-		 * combocid below that observed maximum value).
+		 * XXX For the streaming case, we can track the largest combo CID
+		 * assigned, and error out based on this (when unable to resolve combo
+		 * CID below that observed maximum value).
 		 */
 		if (!resolved)
 			return false;
@@ -1849,21 +1846,21 @@ HeapTupleSatisfiesHistoricMVCC(Relation relation, HeapTuple htup, Snapshot snaps
 												 &cmin, &cmax);
 
 		/*
-		 * If we haven't resolved the combocid to cmin/cmax, that means we
-		 * have not decoded the combocid yet. That means the cmax is
+		 * If we haven't resolved the combo CID to cmin/cmax, that means we
+		 * have not decoded the combo CID yet. That means the cmax is
 		 * definitely in the future, and we're still supposed to see the
 		 * tuple.
 		 *
 		 * XXX This only applies to decoding of in-progress transactions. In
 		 * regular logical decoding we only execute this code at commit time,
-		 * at which point we should have seen all relevant combocids. So
+		 * at which point we should have seen all relevant combo CIDs. So
 		 * ideally, we should error out in this case but in practice, this
 		 * won't happen. If we are too worried about this then we can add an
 		 * elog inside ResolveCminCmaxDuringDecoding.
 		 *
-		 * XXX For the streaming case, we can track the largest combocid
-		 * assigned, and error out based on this (when unable to resolve
-		 * combocid below that observed maximum value).
+		 * XXX For the streaming case, we can track the largest combo CID
+		 * assigned, and error out based on this (when unable to resolve combo
+		 * CID below that observed maximum value).
 		 */
 		if (!resolved || cmax == InvalidCommandId)
 			return true;

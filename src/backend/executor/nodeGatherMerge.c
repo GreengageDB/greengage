@@ -3,7 +3,7 @@
  * nodeGatherMerge.c
  *		Scan a plan in multiple workers, and do order-preserving merge.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -700,9 +700,9 @@ gather_merge_readnext(GatherMergeState *gm_state, int reader, bool nowait)
 	Assert(tup);
 
 	/* Build the TupleTableSlot for the given tuple */
-	ExecStoreMinimalTuple(tup,		/* tuple to store */
-						  gm_state->gm_slots[reader],	/* slot in which to store
-														 * the tuple */
+	ExecStoreMinimalTuple(tup,	/* tuple to store */
+						  gm_state->gm_slots[reader],	/* slot in which to
+														 * store the tuple */
 						  true);	/* pfree tuple when done with it */
 
 	return true;

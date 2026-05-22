@@ -216,7 +216,8 @@ CREATE TEMPORARY TABLE bitwise_test(
 -- empty case
 SELECT
   BIT_AND(i2) AS "?",
-  BIT_OR(i4)  AS "?"
+  BIT_OR(i4)  AS "?",
+  BIT_XOR(i8) AS "?"
 FROM bitwise_test;
 
 COPY bitwise_test FROM STDIN NULL 'null';
@@ -238,7 +239,14 @@ SELECT
   BIT_OR(i8)  AS "7",
   BIT_OR(i)   AS "?",
   BIT_OR(x)   AS "7",
-  BIT_OR(y)   AS "1101"
+  BIT_OR(y)   AS "1101",
+
+  BIT_XOR(i2) AS "5",
+  BIT_XOR(i4) AS "5",
+  BIT_XOR(i8) AS "5",
+  BIT_XOR(i)  AS "?",
+  BIT_XOR(x)  AS "7",
+  BIT_XOR(y)  AS "1101"
 FROM bitwise_test;
 
 --
@@ -1185,7 +1193,7 @@ ROLLBACK;
 -- Secondly test the case of a parallel aggregate combiner function
 -- returning NULL. For that use normal transition function, but a
 -- combiner function returning NULL.
-BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
 CREATE FUNCTION balkifnull(int8, int8)
 RETURNS int8
 PARALLEL SAFE
@@ -1218,7 +1226,7 @@ SELECT balk(hundred) FROM tenk1;
 ROLLBACK;
 
 -- test coverage for aggregate combine/serial/deserial functions
-BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
 
 SET parallel_setup_cost = 0;
 SET parallel_tuple_cost = 0;
@@ -1281,9 +1289,11 @@ select v||'a', case when v||'a' = 'aa' then 1 else 0 end, count(*)
 -- Make sure that generation of HashAggregate for uniqification purposes
 -- does not lead to array overflow due to unexpected duplicate hash keys
 -- see CAFeeJoKKu0u+A_A9R9316djW-YW3-+Gtgvy3ju655qRHR3jtdA@mail.gmail.com
+set enable_resultcache to off;
 explain (costs off)
   select 1 from tenk1
    where (hundred, thousand) in (select twothousand, twothousand from onek);
+reset enable_resultcache;
 
 --
 -- Hash Aggregation Spill tests

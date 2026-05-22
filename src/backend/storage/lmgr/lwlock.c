@@ -20,7 +20,7 @@
  * appropriate value for a free lock.  The meaning of the variable is up to
  * the caller, the lightweight lock code just assigns and compares it.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -146,8 +146,6 @@ static const char *const BuiltinTrancheNames[] = {
 	"WALInsert",
 	/* LWTRANCHE_BUFFER_CONTENT: */
 	"BufferContent",
-	/* LWTRANCHE_BUFFER_IO: */
-	"BufferIO",
 	/* LWTRANCHE_REPLICATION_ORIGIN_STATE: */
 	"ReplicationOriginState",
 	/* LWTRANCHE_REPLICATION_SLOT_IO: */
@@ -344,7 +342,6 @@ init_lwlock_stats(void)
 											 ALLOCSET_DEFAULT_SIZES);
 	MemoryContextAllowInCriticalSection(lwlock_stats_cxt, true);
 
-	MemSet(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(lwlock_stats_key);
 	ctl.entrysize = sizeof(lwlock_stats);
 	ctl.hcxt = lwlock_stats_cxt;
@@ -472,8 +469,7 @@ CreateLWLocks(void)
 	StaticAssertStmt(LW_VAL_EXCLUSIVE > (uint32) MAX_BACKENDS,
 					 "MAX_BACKENDS too big for lwlock.c");
 
-	StaticAssertStmt(sizeof(LWLock) <= LWLOCK_MINIMAL_SIZE &&
-					 sizeof(LWLock) <= LWLOCK_PADDED_SIZE,
+	StaticAssertStmt(sizeof(LWLock) <= LWLOCK_PADDED_SIZE,
 					 "Miscalculated LWLock padding");
 
 	if (!IsUnderPostmaster)
@@ -527,18 +523,17 @@ InitializeLWLocks(void)
 		LWLockInitialize(&lock->lock, id);
 
 	/* Initialize buffer mapping LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS;
+	lock = MainLWLockArray + BUFFER_MAPPING_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_BUFFER_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_BUFFER_MAPPING);
 
 	/* Initialize lmgrs' LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
+	lock = MainLWLockArray + LOCK_MANAGER_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_LOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_LOCK_MANAGER);
 
 	/* Initialize predicate lmgrs' LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS +
-		NUM_BUFFER_PARTITIONS + NUM_LOCK_PARTITIONS;
+	lock = MainLWLockArray + PREDICATELOCK_MANAGER_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_PREDICATELOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_PREDICATE_LOCK_MANAGER);
 
@@ -1325,7 +1320,8 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 #endif
 
 		LWLockReportWaitStart(lock);
-		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_WAIT_START_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), mode);
 
 		for (;;)
 		{
@@ -1347,7 +1343,8 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 		}
 #endif
 
-		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_WAIT_DONE_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), mode);
 		LWLockReportWaitEnd();
 
 		LOG_LWDEBUG("LWLockAcquire", lock, "awakened");
@@ -1356,7 +1353,8 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 		result = false;
 	}
 
-	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_NAME(lock), mode);
+	if (TRACE_POSTGRESQL_LWLOCK_ACQUIRE_ENABLED())
+		TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_NAME(lock), mode);
 
 	/* Add lock to list of locks held by this backend */
 	held_lwlocks[num_held_lwlocks].lock = lock;
@@ -1407,14 +1405,16 @@ LWLockConditionalAcquire(LWLock *lock, LWLockMode mode)
 		RESUME_INTERRUPTS();
 
 		LOG_LWDEBUG("LWLockConditionalAcquire", lock, "failed");
-		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_FAIL(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_FAIL_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_FAIL(T_NAME(lock), mode);
 	}
 	else
 	{
 		/* Add lock to list of locks held by this backend */
 		held_lwlocks[num_held_lwlocks].lock = lock;
 		held_lwlocks[num_held_lwlocks++].mode = mode;
-		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE(T_NAME(lock), mode);
 	}
 	return !mustwait;
 }
@@ -1486,7 +1486,8 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 #endif
 
 			LWLockReportWaitStart(lock);
-			TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), mode);
+			if (TRACE_POSTGRESQL_LWLOCK_WAIT_START_ENABLED())
+				TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), mode);
 
 			for (;;)
 			{
@@ -1504,7 +1505,8 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 				Assert(nwaiters < MAX_BACKENDS);
 			}
 #endif
-			TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), mode);
+			if (TRACE_POSTGRESQL_LWLOCK_WAIT_DONE_ENABLED())
+				TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), mode);
 			LWLockReportWaitEnd();
 
 			LOG_LWDEBUG("LWLockAcquireOrWait", lock, "awakened");
@@ -1534,7 +1536,8 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 		/* Failed to get lock, so release interrupt holdoff */
 		RESUME_INTERRUPTS();
 		LOG_LWDEBUG("LWLockAcquireOrWait", lock, "failed");
-		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_FAIL(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_FAIL_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_FAIL(T_NAME(lock), mode);
 	}
 	else
 	{
@@ -1542,7 +1545,8 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 		/* Add lock to list of locks held by this backend */
 		held_lwlocks[num_held_lwlocks].lock = lock;
 		held_lwlocks[num_held_lwlocks++].mode = mode;
-		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT(T_NAME(lock), mode);
+		if (TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT(T_NAME(lock), mode);
 	}
 
 	return !mustwait;
@@ -1702,7 +1706,8 @@ LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval)
 #endif
 
 		LWLockReportWaitStart(lock);
-		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), LW_EXCLUSIVE);
+		if (TRACE_POSTGRESQL_LWLOCK_WAIT_START_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), LW_EXCLUSIVE);
 
 		for (;;)
 		{
@@ -1721,15 +1726,14 @@ LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval)
 		}
 #endif
 
-		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), LW_EXCLUSIVE);
+		if (TRACE_POSTGRESQL_LWLOCK_WAIT_DONE_ENABLED())
+			TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), LW_EXCLUSIVE);
 		LWLockReportWaitEnd();
 
 		LOG_LWDEBUG("LWLockWaitForVar", lock, "awakened");
 
 		/* Now loop back and check the status of the lock again. */
 	}
-
-	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_NAME(lock), LW_EXCLUSIVE);
 
 	/*
 	 * Fix the process wait semaphore's count for any absorbed wakeups.
@@ -1849,6 +1853,8 @@ LWLockRelease(LWLock *lock)
 	/* nobody else can have that kind of lock */
 	Assert(!(oldstate & LW_VAL_EXCLUSIVE));
 
+	if (TRACE_POSTGRESQL_LWLOCK_RELEASE_ENABLED())
+		TRACE_POSTGRESQL_LWLOCK_RELEASE(T_NAME(lock));
 
 	/*
 	 * We're still waiting for backends to get scheduled, don't wake them up
@@ -1871,8 +1877,6 @@ LWLockRelease(LWLock *lock)
 		LOG_LWDEBUG("LWLockRelease", lock, "releasing waiters");
 		LWLockWakeup(lock);
 	}
-
-	TRACE_POSTGRESQL_LWLOCK_RELEASE(T_NAME(lock));
 
 	/*
 	 * Now okay to allow cancel/die interrupts.

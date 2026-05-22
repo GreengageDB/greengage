@@ -3,7 +3,20 @@
  * filemap.c
  *	  A data structure for keeping track of files that have changed.
  *
- * Copyright (c) 2013-2020, PostgreSQL Global Development Group
+ * This source file contains the logic to decide what to do with different
+ * kinds of files, and the data structure to support it.  Before modifying
+ * anything, pg_rewind collects information about all the files and their
+ * attributes in the target and source data directories.  It also scans the
+ * WAL log in the target, and collects information about data blocks that
+ * were changed.  All this information is stored in a hash table, using the
+ * file path relative to the root of the data directory as the key.
+ *
+ * After collecting all the information required, the decide_file_actions()
+ * function scans the hash table and decides what action needs to be taken
+ * for each file.  Finally, it sorts the array to the final order that the
+ * actions should be executed in.
+ *
+ * Copyright (c) 2013-2021, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -15,13 +28,33 @@
 
 #include "catalog/catalog.h"
 #include "catalog/pg_tablespace_d.h"
+#include "common/hashfn.h"
 #include "common/string.h"
 #include "datapagemap.h"
 #include "filemap.h"
 #include "pg_rewind.h"
 #include "storage/fd.h"
 
-filemap_t  *filemap = NULL;
+/*
+ * Define a hash table which we can use to store information about the files
+ * appearing in source and target systems.
+ */
+static uint32 hash_string_pointer(const char *s);
+#define SH_PREFIX		filehash
+#define SH_ELEMENT_TYPE	file_entry_t
+#define SH_KEY_TYPE		const char *
+#define	SH_KEY			path
+#define SH_HASH_KEY(tb, key)	hash_string_pointer(key)
+#define SH_EQUAL(tb, a, b)		(strcmp(a, b) == 0)
+#define	SH_SCOPE		static inline
+#define SH_RAW_ALLOCATOR	pg_malloc0
+#define SH_DECLARE
+#define SH_DEFINE
+#include "lib/simplehash.h"
+
+#define FILEHASH_INITIAL_SIZE	1000
+
+static filehash_hash *filehash;
 
 static bool isRelDataFile(const char *path);
 static char *datasegpath(RelFileNode rnode, ForkNumber forknum,
@@ -29,8 +62,10 @@ static char *datasegpath(RelFileNode rnode, ForkNumber forknum,
 static int	path_cmp(const void *a, const void *b);
 
 static file_entry_t *get_filemap_entry(const char *path, bool create);
+
+static file_entry_t *insert_filehash_entry(const char *path);
+static file_entry_t *lookup_filehash_entry(const char *path);
 static int	final_filemap_cmp(const void *a, const void *b);
-static void filemap_list_to_array(filemap_t *map);
 static bool check_file_excluded(const char *path, bool is_source);
 
 /*
@@ -143,21 +178,49 @@ static const struct exclude_list_item excludeFiles[] =
 };
 
 /*
- * Create a new file map (stored in the global pointer "filemap").
+ * Initialize the hash table for the file map.
  */
 void
-filemap_create(void)
+filehash_init(void)
 {
-	filemap_t  *map;
+	filehash = filehash_create(FILEHASH_INITIAL_SIZE, NULL);
+}
 
-	map = pg_malloc(sizeof(filemap_t));
-	map->first = map->last = NULL;
-	map->nlist = 0;
-	map->array = NULL;
-	map->narray = 0;
+/* Look up entry for 'path', creating a new one if it doesn't exist */
+static file_entry_t *
+insert_filehash_entry(const char *path)
+{
+	file_entry_t *entry;
+	bool		found;
 
-	Assert(filemap == NULL);
-	filemap = map;
+	entry = filehash_insert(filehash, path, &found);
+	if (!found)
+	{
+		entry->path = pg_strdup(path);
+		entry->isrelfile = isRelDataFile(path);
+
+		entry->target_exists = false;
+		entry->target_type = FILE_TYPE_UNDEFINED;
+		entry->target_size = 0;
+		entry->target_link_target = NULL;
+		entry->target_pages_to_overwrite.bitmap = NULL;
+		entry->target_pages_to_overwrite.bitmapsize = 0;
+
+		entry->source_exists = false;
+		entry->source_type = FILE_TYPE_UNDEFINED;
+		entry->source_size = 0;
+		entry->source_link_target = NULL;
+
+		entry->action = FILE_ACTION_UNDECIDED;
+	}
+
+	return entry;
+}
+
+static file_entry_t *
+lookup_filehash_entry(const char *path)
+{
+	return filehash_lookup(filehash, path);
 }
 
 /* Look up or create entry for 'path' */
@@ -252,7 +315,9 @@ process_source_file(const char *path, file_type_t type, size_t size,
 		pg_fatal("data file \"%s\" in source is not a regular file", path);
 
 	/* Remember this source file */
-	entry = get_filemap_entry(path, true);
+	entry = insert_filehash_entry(path);
+	if (entry->source_exists)
+		pg_fatal("duplicate source file \"%s\"", path);
 	entry->source_exists = true;
 	entry->source_type = type;
 	entry->source_size = size;
@@ -262,9 +327,7 @@ process_source_file(const char *path, file_type_t type, size_t size,
 /*
  * Callback for processing target file list.
  *
- * All source files must be already processed before calling this.  We record
- * the type and size of file, so that decide_file_action() can later decide
- * what to do with it.
+ * Record the type and size of the file, like process_source_file() does.
  */
 void
 process_target_file(const char *path, file_type_t type, size_t size,
@@ -322,7 +385,9 @@ process_target_file(const char *path, file_type_t type, size_t size,
 		type = FILE_TYPE_DIRECTORY;
 
 	/* Remember this target file */
-	entry = get_filemap_entry(path, true);
+	entry = insert_filehash_entry(path);
+	if (entry->target_exists)
+		pg_fatal("duplicate source file \"%s\"", path);
 	entry->target_exists = true;
 	entry->target_type = type;
 	entry->target_size = size;
@@ -336,7 +401,7 @@ process_target_file(const char *path, file_type_t type, size_t size,
  * if so, records it in 'target_pages_to_overwrite' bitmap.
  *
  * NOTE: All the files on both systems must have already been added to the
- * file map!
+ * hash table!
  */
 void
 process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
@@ -353,41 +418,46 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	blkno_inseg = blkno % RELSEG_SIZE;
 
 	path = datasegpath(rnode, forknum, segno);
-	entry = get_filemap_entry(path, false);
+	entry = lookup_filehash_entry(path);
 	pfree(path);
 
-	if (entry && entry->target_exists)
+	/*
+	 * If the block still exists in both systems, remember it. Otherwise we
+	 * can safely ignore it.
+	 *
+	 * If the block is beyond the EOF in the source system, or the file
+	 * doesn't exist in the source at all, we're going to truncate/remove it
+	 * away from the target anyway. Likewise, if it doesn't exist in the
+	 * target anymore, we will copy it over with the "tail" from the source
+	 * system, anyway.
+	 *
+	 * It is possible to find WAL for a file that doesn't exist on either
+	 * system anymore. It means that the relation was dropped later in the
+	 * target system, and independently on the source system too, or that it
+	 * was created and dropped in the target system and it never existed in
+	 * the source. Either way, we can safely ignore it.
+	 */
+	if (entry)
 	{
 		int64		end_offset;
 
 		Assert(entry->isrelfile);
 
-		if (entry->target_type != FILE_TYPE_REGULAR)
-			pg_fatal("unexpected page modification for non-regular file \"%s\"",
-					 entry->path);
+		if (entry->target_exists)
+		{
+			if (entry->target_type != FILE_TYPE_REGULAR)
+				pg_fatal("unexpected page modification for non-regular file \"%s\"",
+						 entry->path);
 
-		/*
-		 * If the block beyond the EOF in the source system, no need to
-		 * remember it now, because we're going to truncate it away from the
-		 * target anyway. Also no need to remember the block if it's beyond
-		 * the current EOF in the target system; we will copy it over with the
-		 * "tail" from the source system, anyway.
-		 */
-		end_offset = (blkno_inseg + 1) * BLCKSZ;
-		if (end_offset <= entry->source_size &&
-			end_offset <= entry->target_size)
-			datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
-	}
-	else
-	{
-		/*
-		 * If we don't have any record of this file in the file map, it means
-		 * that it's a relation that doesn't exist in the source system.  It
-		 * could exist in the target system; we haven't moved the target-only
-		 * entries from the linked list to the array yet!  But in any case, if
-		 * it doesn't exist in the source it will be removed from the target
-		 * too, and we can safely ignore it.
-		 */
+			if (entry->source_exists)
+			{
+				off_t		end_offset;
+
+				end_offset = (blkno_inseg + 1) * BLCKSZ;
+				if (end_offset <= entry->source_size && end_offset <= entry->target_size)
+					datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
+			}
+		}
 	}
 }
 
@@ -563,32 +633,31 @@ action_to_str(file_action_t action)
  * Calculate the totals needed for progress reports.
  */
 void
-calculate_totals(void)
+calculate_totals(filemap_t *filemap)
 {
 	file_entry_t *entry;
 	int			i;
-	filemap_t  *map = filemap;
 
-	map->total_size = 0;
-	map->fetch_size = 0;
+	filemap->total_size = 0;
+	filemap->fetch_size = 0;
 
-	for (i = 0; i < map->narray; i++)
+	for (i = 0; i < filemap->nentries; i++)
 	{
-		entry = map->array[i];
+		entry = filemap->entries[i];
 
 		if (entry->source_type != FILE_TYPE_REGULAR)
 			continue;
 
-		map->total_size += entry->source_size;
+		filemap->total_size += entry->source_size;
 
 		if (entry->action == FILE_ACTION_COPY)
 		{
-			map->fetch_size += entry->source_size;
+			filemap->fetch_size += entry->source_size;
 			continue;
 		}
 
 		if (entry->action == FILE_ACTION_COPY_TAIL)
-			map->fetch_size += (entry->source_size - entry->target_size);
+			filemap->fetch_size += (entry->source_size - entry->target_size);
 
 		if (entry->target_pages_to_overwrite.bitmapsize > 0)
 		{
@@ -597,7 +666,7 @@ calculate_totals(void)
 
 			iter = datapagemap_iterate(&entry->target_pages_to_overwrite);
 			while (datapagemap_next(iter, &blk))
-				map->fetch_size += BLCKSZ;
+				filemap->fetch_size += BLCKSZ;
 
 			pg_free(iter);
 		}
@@ -605,15 +674,14 @@ calculate_totals(void)
 }
 
 void
-print_filemap(void)
+print_filemap(filemap_t *filemap)
 {
-	filemap_t  *map = filemap;
 	file_entry_t *entry;
 	int			i;
 
-	for (i = 0; i < map->narray; i++)
+	for (i = 0; i < filemap->nentries; i++)
 	{
-		entry = map->array[i];
+		entry = filemap->entries[i];
 		if (entry->action != FILE_ACTION_NONE ||
 			entry->target_pages_to_overwrite.bitmapsize > 0)
 		{
@@ -735,15 +803,6 @@ datasegpath(RelFileNode rnode, ForkNumber forknum, BlockNumber segno)
 		return path;
 }
 
-static int
-path_cmp(const void *a, const void *b)
-{
-	file_entry_t *fa = *((file_entry_t **) a);
-	file_entry_t *fb = *((file_entry_t **) b);
-
-	return strcmp(fa->path, fb->path);
-}
-
 /*
  * In the final stage, the filemap is sorted so that removals come last.
  * From disk space usage point of view, it would be better to do removals
@@ -817,6 +876,9 @@ decide_file_action(file_entry_t *entry)
 				return FILE_ACTION_COPY;
 			case FILE_TYPE_FIFO:
 				return FILE_ACTION_NONE;
+				return FILE_ACTION_CREATE;
+			case FILE_TYPE_REGULAR:
+				return FILE_ACTION_COPY;
 			case FILE_TYPE_UNDEFINED:
 				pg_fatal("unknown file type for \"%s\"", entry->path);
 				break;
@@ -925,22 +987,52 @@ decide_file_action(file_entry_t *entry)
 
 /*
  * Decide what to do with each file.
+ *
+ * Returns a 'filemap' with the entries in the order that their actions
+ * should be executed.
  */
-void
+filemap_t *
 decide_file_actions(void)
 {
 	int			i;
+	filehash_iterator it;
+	file_entry_t *entry;
+	filemap_t  *filemap;
 
-	filemap_list_to_array(filemap);
-
-	for (i = 0; i < filemap->narray; i++)
+	filehash_start_iterate(filehash, &it);
+	while ((entry = filehash_iterate(filehash, &it)) != NULL)
 	{
-		file_entry_t *entry = filemap->array[i];
-
 		entry->action = decide_file_action(entry);
 	}
 
-	/* Sort the actions to the order that they should be performed */
-	qsort(filemap->array, filemap->narray, sizeof(file_entry_t *),
+	/*
+	 * Turn the hash table into an array, and sort in the order that the
+	 * actions should be performed.
+	 */
+	filemap = pg_malloc(offsetof(filemap_t, entries) +
+						filehash->members * sizeof(file_entry_t *));
+	filemap->nentries = filehash->members;
+	filehash_start_iterate(filehash, &it);
+	i = 0;
+	while ((entry = filehash_iterate(filehash, &it)) != NULL)
+	{
+		filemap->entries[i++] = entry;
+	}
+
+	qsort(&filemap->entries, filemap->nentries, sizeof(file_entry_t *),
 		  final_filemap_cmp);
+
+	return filemap;
+}
+
+
+/*
+ * Helper function for filemap hash table.
+ */
+static uint32
+hash_string_pointer(const char *s)
+{
+	unsigned char *ss = (unsigned char *) s;
+
+	return hash_bytes(ss, strlen(s));
 }

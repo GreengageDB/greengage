@@ -17,7 +17,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/buffile.h
@@ -55,8 +55,10 @@ extern long BufFileAppend(BufFile *target, BufFile *source);
 
 extern BufFile *BufFileCreateShared(SharedFileSet *fileset, const char *name, struct workfile_set *work_set);
 extern void BufFileExportShared(BufFile *file);
-extern BufFile *BufFileOpenShared(SharedFileSet *fileset, const char *name);
+extern BufFile *BufFileOpenShared(SharedFileSet *fileset, const char *name,
+								  int mode);
 extern void BufFileDeleteShared(SharedFileSet *fileset, const char *name);
+extern void BufFileTruncateShared(BufFile *file, int fileno, off_t offset);
 
 extern void *BufFileReadFromBuffer(BufFile *file, size_t size);
 

@@ -6,7 +6,7 @@
  *
  * Transforms tokenized jsonpath into tree of JsonPathParseItem structs.
  *
- * Copyright (c) 2019-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2019-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	src/backend/utils/adt/jsonpath_gram.y
@@ -153,7 +153,7 @@ scalar_value:
 	| FALSE_P						{ $$ = makeItemBool(false); }
 	| NUMERIC_P						{ $$ = makeItemNumeric(&$1); }
 	| INT_P							{ $$ = makeItemNumeric(&$1); }
-	| VARIABLE_P 					{ $$ = makeItemVariable(&$1); }
+	| VARIABLE_P					{ $$ = makeItemVariable(&$1); }
 	;
 
 comp_op:
@@ -175,12 +175,12 @@ predicate:
 	| expr comp_op expr				{ $$ = makeItemBinary($2, $1, $3); }
 	| predicate AND_P predicate		{ $$ = makeItemBinary(jpiAnd, $1, $3); }
 	| predicate OR_P predicate		{ $$ = makeItemBinary(jpiOr, $1, $3); }
-	| NOT_P delimited_predicate 	{ $$ = makeItemUnary(jpiNot, $2); }
+	| NOT_P delimited_predicate		{ $$ = makeItemUnary(jpiNot, $2); }
 	| '(' predicate ')' IS_P UNKNOWN_P
 									{ $$ = makeItemUnary(jpiIsUnknown, $2); }
 	| expr STARTS_P WITH_P starts_with_initial
 									{ $$ = makeItemBinary(jpiStartsWith, $1, $4); }
-	| expr LIKE_REGEX_P STRING_P 	{ $$ = makeItemLikeRegex($1, &$3, NULL); }
+	| expr LIKE_REGEX_P STRING_P	{ $$ = makeItemLikeRegex($1, &$3, NULL); }
 	| expr LIKE_REGEX_P STRING_P FLAG_P STRING_P
 									{ $$ = makeItemLikeRegex($1, &$3, &$5); }
 	;
@@ -441,7 +441,7 @@ makeItemList(List *list)
 	while (end->next)
 		end = end->next;
 
-	for_each_cell(cell, list, list_second_cell(list))
+	for_each_from(cell, list, 1)
 	{
 		JsonPathParseItem *c = (JsonPathParseItem *) lfirst(cell);
 

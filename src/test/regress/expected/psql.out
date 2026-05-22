@@ -106,6 +106,10 @@ select 10 as test01, 20 as test02, 'Hello' as test03 \gset pref01_
 select 10 as "bad name"
 \gset
 invalid variable name: "bad name"
+select 97 as "EOF", 'ok' as _foo \gset IGNORE
+attempt to \gset into specially treated variable "IGNOREEOF" ignored
+\echo :IGNORE_foo :IGNOREEOF
+ok 0
 -- multiple backslash commands in one line
 select 1 as x, 2 as y \gset pref01_ \\ \echo :pref01_x
 1
@@ -2816,20 +2820,28 @@ Argument data types | numeric
 Type                | func
 
 \pset tuples_only false
--- check conditional tableam display
--- Create a heap2 table am handler with heapam handler
+-- check conditional am display
+\pset expanded off
+CREATE SCHEMA tableam_display;
+CREATE ROLE regress_display_role;
+ALTER SCHEMA tableam_display OWNER TO regress_display_role;
+SET search_path TO tableam_display;
 CREATE ACCESS METHOD heap_psql TYPE TABLE HANDLER heap_tableam_handler;
+SET ROLE TO regress_display_role;
+-- Use only relations with a physical size of zero.
 CREATE TABLE tbl_heap_psql(f1 int, f2 char(100)) using heap_psql;
 CREATE TABLE tbl_heap(f1 int, f2 char(100)) using heap;
+CREATE VIEW view_heap_psql AS SELECT f1 from tbl_heap_psql;
+CREATE MATERIALIZED VIEW mat_view_heap_psql USING heap_psql AS SELECT f1 from tbl_heap_psql;
 \d+ tbl_heap_psql
-                                   Table "public.tbl_heap_psql"
+                              Table "tableam_display.tbl_heap_psql"
  Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
 --------+----------------+-----------+----------+---------+----------+--------------+-------------
  f1     | integer        |           |          |         | plain    |              | 
  f2     | character(100) |           |          |         | extended |              | 
 
 \d+ tbl_heap
-                                     Table "public.tbl_heap"
+                                 Table "tableam_display.tbl_heap"
  Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
 --------+----------------+-----------+----------+---------+----------+--------------+-------------
  f1     | integer        |           |          |         | plain    |              | 
@@ -2837,7 +2849,7 @@ CREATE TABLE tbl_heap(f1 int, f2 char(100)) using heap;
 
 \set HIDE_TABLEAM off
 \d+ tbl_heap_psql
-                                   Table "public.tbl_heap_psql"
+                              Table "tableam_display.tbl_heap_psql"
  Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
 --------+----------------+-----------+----------+---------+----------+--------------+-------------
  f1     | integer        |           |          |         | plain    |              | 
@@ -2845,16 +2857,68 @@ CREATE TABLE tbl_heap(f1 int, f2 char(100)) using heap;
 Access method: heap_psql
 
 \d+ tbl_heap
-                                     Table "public.tbl_heap"
+                                 Table "tableam_display.tbl_heap"
  Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
 --------+----------------+-----------+----------+---------+----------+--------------+-------------
  f1     | integer        |           |          |         | plain    |              | 
  f2     | character(100) |           |          |         | extended |              | 
 Access method: heap
 
+-- AM is displayed for tables, indexes and materialized views.
+\d+
+                                                           List of relations
+     Schema      |        Name        |       Type        |        Owner         | Persistence | Access method |  Size   | Description 
+-----------------+--------------------+-------------------+----------------------+-------------+---------------+---------+-------------
+ tableam_display | mat_view_heap_psql | materialized view | regress_display_role | permanent   | heap_psql     | 0 bytes | 
+ tableam_display | tbl_heap           | table             | regress_display_role | permanent   | heap          | 0 bytes | 
+ tableam_display | tbl_heap_psql      | table             | regress_display_role | permanent   | heap_psql     | 0 bytes | 
+ tableam_display | view_heap_psql     | view              | regress_display_role | permanent   |               | 0 bytes | 
+(4 rows)
+
+\dt+
+                                                  List of relations
+     Schema      |     Name      | Type  |        Owner         | Persistence | Access method |  Size   | Description 
+-----------------+---------------+-------+----------------------+-------------+---------------+---------+-------------
+ tableam_display | tbl_heap      | table | regress_display_role | permanent   | heap          | 0 bytes | 
+ tableam_display | tbl_heap_psql | table | regress_display_role | permanent   | heap_psql     | 0 bytes | 
+(2 rows)
+
+\dm+
+                                                           List of relations
+     Schema      |        Name        |       Type        |        Owner         | Persistence | Access method |  Size   | Description 
+-----------------+--------------------+-------------------+----------------------+-------------+---------------+---------+-------------
+ tableam_display | mat_view_heap_psql | materialized view | regress_display_role | permanent   | heap_psql     | 0 bytes | 
+(1 row)
+
+-- But not for views and sequences.
+\dv+
+                                          List of relations
+     Schema      |      Name      | Type |        Owner         | Persistence |  Size   | Description 
+-----------------+----------------+------+----------------------+-------------+---------+-------------
+ tableam_display | view_heap_psql | view | regress_display_role | permanent   | 0 bytes | 
+(1 row)
+
 \set HIDE_TABLEAM on
-DROP TABLE tbl_heap, tbl_heap_psql;
+\d+
+                                                   List of relations
+     Schema      |        Name        |       Type        |        Owner         | Persistence |  Size   | Description 
+-----------------+--------------------+-------------------+----------------------+-------------+---------+-------------
+ tableam_display | mat_view_heap_psql | materialized view | regress_display_role | permanent   | 0 bytes | 
+ tableam_display | tbl_heap           | table             | regress_display_role | permanent   | 0 bytes | 
+ tableam_display | tbl_heap_psql      | table             | regress_display_role | permanent   | 0 bytes | 
+ tableam_display | view_heap_psql     | view              | regress_display_role | permanent   | 0 bytes | 
+(4 rows)
+
+RESET ROLE;
+RESET search_path;
+DROP SCHEMA tableam_display CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table tableam_display.tbl_heap_psql
+drop cascades to table tableam_display.tbl_heap
+drop cascades to view tableam_display.view_heap_psql
+drop cascades to materialized view tableam_display.mat_view_heap_psql
 DROP ACCESS METHOD heap_psql;
+DROP ROLE regress_display_role;
 -- test numericlocale (as best we can without control of psql's locale)
 \pset format aligned
 \pset expanded off
@@ -5033,11 +5097,13 @@ List of access methods
 (0 rows)
 
 \dAc brin pg*.oid*
-                   List of operator classes
-  AM  | Input type | Storage type | Operator class | Default? 
-------+------------+--------------+----------------+----------
- brin | oid        |              | oid_minmax_ops | yes
-(1 row)
+                      List of operator classes
+  AM  | Input type | Storage type |    Operator class    | Default? 
+------+------------+--------------+----------------------+----------
+ brin | oid        |              | oid_bloom_ops        | no
+ brin | oid        |              | oid_minmax_multi_ops | no
+ brin | oid        |              | oid_minmax_ops       | yes
+(3 rows)
 
 \dAf spgist
           List of operator families
@@ -5121,4 +5187,105 @@ List of access methods
  hash   | uuid_ops        | uuid                 | uuid                  |      1 | uuid_hash
  hash   | uuid_ops        | uuid                 | uuid                  |      2 | uuid_hash_extended
 (8 rows)
+
+-- check \df, \do with argument specifications
+\df *sqrt
+                             List of functions
+   Schema   |     Name     | Result data type | Argument data types | Type 
+------------+--------------+------------------+---------------------+------
+ pg_catalog | dsqrt        | double precision | double precision    | func
+ pg_catalog | numeric_sqrt | numeric          | numeric             | func
+ pg_catalog | sqrt         | double precision | double precision    | func
+ pg_catalog | sqrt         | numeric          | numeric             | func
+(4 rows)
+
+\df *sqrt num*
+                             List of functions
+   Schema   |     Name     | Result data type | Argument data types | Type 
+------------+--------------+------------------+---------------------+------
+ pg_catalog | numeric_sqrt | numeric          | numeric             | func
+ pg_catalog | sqrt         | numeric          | numeric             | func
+(2 rows)
+
+\df int*pl
+                            List of functions
+   Schema   |    Name     | Result data type | Argument data types | Type 
+------------+-------------+------------------+---------------------+------
+ pg_catalog | int24pl     | integer          | smallint, integer   | func
+ pg_catalog | int28pl     | bigint           | smallint, bigint    | func
+ pg_catalog | int2pl      | smallint         | smallint, smallint  | func
+ pg_catalog | int42pl     | integer          | integer, smallint   | func
+ pg_catalog | int48pl     | bigint           | integer, bigint     | func
+ pg_catalog | int4pl      | integer          | integer, integer    | func
+ pg_catalog | int82pl     | bigint           | bigint, smallint    | func
+ pg_catalog | int84pl     | bigint           | bigint, integer     | func
+ pg_catalog | int8pl      | bigint           | bigint, bigint      | func
+ pg_catalog | interval_pl | interval         | interval, interval  | func
+(10 rows)
+
+\df int*pl int4
+                          List of functions
+   Schema   |  Name   | Result data type | Argument data types | Type 
+------------+---------+------------------+---------------------+------
+ pg_catalog | int42pl | integer          | integer, smallint   | func
+ pg_catalog | int48pl | bigint           | integer, bigint     | func
+ pg_catalog | int4pl  | integer          | integer, integer    | func
+(3 rows)
+
+\df int*pl * pg_catalog.int8
+                          List of functions
+   Schema   |  Name   | Result data type | Argument data types | Type 
+------------+---------+------------------+---------------------+------
+ pg_catalog | int28pl | bigint           | smallint, bigint    | func
+ pg_catalog | int48pl | bigint           | integer, bigint     | func
+ pg_catalog | int8pl  | bigint           | bigint, bigint      | func
+(3 rows)
+
+\df acl* aclitem[]
+                                                                    List of functions
+   Schema   |    Name     | Result data type |                                        Argument data types                                         | Type 
+------------+-------------+------------------+----------------------------------------------------------------------------------------------------+------
+ pg_catalog | aclcontains | boolean          | aclitem[], aclitem                                                                                 | func
+ pg_catalog | aclexplode  | SETOF record     | acl aclitem[], OUT grantor oid, OUT grantee oid, OUT privilege_type text, OUT is_grantable boolean | func
+ pg_catalog | aclinsert   | aclitem[]        | aclitem[], aclitem                                                                                 | func
+ pg_catalog | aclremove   | aclitem[]        | aclitem[], aclitem                                                                                 | func
+(4 rows)
+
+\df has_database_privilege oid text
+                                  List of functions
+   Schema   |          Name          | Result data type | Argument data types | Type 
+------------+------------------------+------------------+---------------------+------
+ pg_catalog | has_database_privilege | boolean          | oid, text           | func
+ pg_catalog | has_database_privilege | boolean          | oid, text, text     | func
+(2 rows)
+
+\df has_database_privilege oid text -
+                                  List of functions
+   Schema   |          Name          | Result data type | Argument data types | Type 
+------------+------------------------+------------------+---------------------+------
+ pg_catalog | has_database_privilege | boolean          | oid, text           | func
+(1 row)
+
+\dfa bit* small*
+                          List of functions
+   Schema   |  Name   | Result data type | Argument data types | Type 
+------------+---------+------------------+---------------------+------
+ pg_catalog | bit_and | smallint         | smallint            | agg
+ pg_catalog | bit_or  | smallint         | smallint            | agg
+ pg_catalog | bit_xor | smallint         | smallint            | agg
+(3 rows)
+
+\do - pg_catalog.int4
+                               List of operators
+   Schema   | Name | Left arg type | Right arg type | Result type | Description 
+------------+------+---------------+----------------+-------------+-------------
+ pg_catalog | -    |               | integer        | integer     | negate
+(1 row)
+
+\do && anyarray *
+                               List of operators
+   Schema   | Name | Left arg type | Right arg type | Result type | Description 
+------------+------+---------------+----------------+-------------+-------------
+ pg_catalog | &&   | anyarray      | anyarray       | boolean     | overlaps
+(1 row)
 

@@ -231,12 +231,6 @@ InitArchiveFmt_Tar(ArchiveHandle *AH)
 
 		ctx->hasSeek = checkSeek(ctx->tarFH);
 
-		/*
-		 * Forcibly unmark the header as read since we use the lookahead
-		 * buffer
-		 */
-		AH->readHeader = 0;
-
 		ctx->FH = (void *) tarOpen(AH, "toc.dat", 'r');
 		ReadHead(AH);
 		ReadToc(AH);
@@ -1270,7 +1264,7 @@ _tarPositionTo(ArchiveHandle *AH, const char *filename)
 		/* Header doesn't match, so read to next header */
 		len = th->fileLen;
 		len += tarPaddingBytesRequired(th->fileLen);
-		blks = len / TAR_BLOCK_SIZE;		/* # of tar blocks */
+		blks = len / TAR_BLOCK_SIZE;	/* # of tar blocks */
 
 		for (i = 0; i < blks; i++)
 			_tarReadRaw(AH, &header[0], TAR_BLOCK_SIZE, NULL, ctx->tarFH);

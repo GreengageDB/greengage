@@ -47,6 +47,13 @@ ERROR:  cannot use generated column "b" in column generation expression
 LINE 1: ...AYS AS (a * 2) STORED, c int GENERATED ALWAYS AS (b * 3) STO...
                                                              ^
 DETAIL:  A generated column cannot reference another generated column.
+-- a whole-row var is a self-reference on steroids, so disallow that too
+CREATE TABLE gtest_err_2c (a int PRIMARY KEY,
+    b int GENERATED ALWAYS AS (num_nulls(gtest_err_2c)) STORED);
+ERROR:  cannot use whole-row variable in column generation expression
+LINE 2:     b int GENERATED ALWAYS AS (num_nulls(gtest_err_2c)) STOR...
+                                                 ^
+DETAIL:  This would cause the generated column to depend on its own value.
 -- invalid reference
 CREATE TABLE gtest_err_3 (a int PRIMARY KEY, b int GENERATED ALWAYS AS (c * 2) STORED);
 ERROR:  column "c" does not exist
@@ -65,6 +72,7 @@ ERROR:  both identity and generation expression specified for column "b" of tabl
 LINE 1: ...t PRIMARY KEY, b int GENERATED ALWAYS AS identity GENERATED ...
                                                              ^
 -- reference to system column not allowed in generated column
+-- (except tableoid, which we test below)
 CREATE TABLE gtest_err_6a (a int PRIMARY KEY, b bool GENERATED ALWAYS AS (xmin <> 37) STORED);
 ERROR:  cannot use system column "xmin" in column generation expression
 LINE 1: ...a (a int PRIMARY KEY, b bool GENERATED ALWAYS AS (xmin <> 37...
@@ -101,17 +109,30 @@ CREATE TABLE gtest_err_9b (a int GENERATED ALWAYS AS (b * 2) STORED, b int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest1 VALUES (1);
-INSERT INTO gtest1 VALUES (2, DEFAULT);
+INSERT INTO gtest1 VALUES (2, DEFAULT);  -- ok
 INSERT INTO gtest1 VALUES (3, 33);  -- error
-ERROR:  cannot insert into column "b"
+ERROR:  cannot insert a non-DEFAULT value into column "b"
 DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1 VALUES (3, 33), (4, 44);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1 VALUES (3, DEFAULT), (4, 44);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1 VALUES (3, 33), (4, DEFAULT);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1 VALUES (3, DEFAULT), (4, DEFAULT);  -- ok
 SELECT * FROM gtest1 ORDER BY a;
  a | b 
 ---+---
  1 | 2
  2 | 4
-(2 rows)
+ 3 | 6
+ 4 | 8
+(4 rows)
 
+DELETE FROM gtest1 WHERE a >= 3;
 UPDATE gtest1 SET b = DEFAULT WHERE a = 1;
 UPDATE gtest1 SET b = 11 WHERE a = 1;  -- error
 ERROR:  column "b" can only be updated to DEFAULT
@@ -189,9 +210,37 @@ SELECT * FROM gtest1v;
  3 | 6
 (1 row)
 
-INSERT INTO gtest1v VALUES (4, 8);  -- fails
-ERROR:  cannot insert into column "b"
+INSERT INTO gtest1v VALUES (4, 8);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
 DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1v VALUES (5, DEFAULT);  -- ok
+INSERT INTO gtest1v VALUES (6, 66), (7, 77);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1v VALUES (6, DEFAULT), (7, 77);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1v VALUES (6, 66), (7, DEFAULT);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1v VALUES (6, DEFAULT), (7, DEFAULT);  -- ok
+ALTER VIEW gtest1v ALTER COLUMN b SET DEFAULT 100;
+INSERT INTO gtest1v VALUES (8, DEFAULT);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+INSERT INTO gtest1v VALUES (8, DEFAULT), (9, DEFAULT);  -- error
+ERROR:  cannot insert a non-DEFAULT value into column "b"
+DETAIL:  Column "b" is a generated column.
+SELECT * FROM gtest1v;
+ a | b  
+---+----
+ 3 |  6
+ 5 | 10
+ 6 | 12
+ 7 | 14
+(4 rows)
+
+DELETE FROM gtest1v WHERE a >= 5;
 DROP VIEW gtest1v;
 -- CTEs
 WITH foo AS (SELECT * FROM gtest1) SELECT * FROM foo;
@@ -250,6 +299,17 @@ SELECT * FROM gtest_normal;
  2 | 4
 (2 rows)
 
+CREATE TABLE gtest_normal_child2 (a int, b int GENERATED ALWAYS AS (a * 3) STORED);
+ALTER TABLE gtest_normal_child2 INHERIT gtest_normal;
+INSERT INTO gtest_normal_child2 (a) VALUES (3);
+SELECT * FROM gtest_normal;
+ a | b 
+---+---
+ 1 |  
+ 2 | 4
+ 3 | 9
+(3 rows)
+
 -- test inheritance mismatches between parent and child
 CREATE TABLE gtestx (x int, b int GENERATED ALWAYS AS (a * 22) STORED) INHERITS (gtest1);  -- error
 NOTICE:  merging column "b" with inherited definition
@@ -261,6 +321,16 @@ ERROR:  column "b" inherits from generated column but specifies default
 CREATE TABLE gtestx (x int, b int GENERATED ALWAYS AS IDENTITY) INHERITS (gtest1);  -- error
 NOTICE:  merging column "b" with inherited definition
 ERROR:  column "b" inherits from generated column but specifies identity
+CREATE TABLE gtestxx_1 (a int NOT NULL, b int);
+ALTER TABLE gtestxx_1 INHERIT gtest1;  -- error
+ERROR:  column "b" in child table must be a generated column
+CREATE TABLE gtestxx_2 (a int NOT NULL, b int GENERATED ALWAYS AS (a * 22) STORED);
+ALTER TABLE gtestxx_2 INHERIT gtest1;  -- error
+ERROR:  column "b" in child table has a conflicting generation expression
+CREATE TABLE gtestxx_3 (a int NOT NULL, b int GENERATED ALWAYS AS (a * 2) STORED);
+ALTER TABLE gtestxx_3 INHERIT gtest1;  -- ok
+CREATE TABLE gtestxx_4 (b int GENERATED ALWAYS AS (a * 2) STORED, a int NOT NULL);
+ALTER TABLE gtestxx_4 INHERIT gtest1;  -- ok
 -- test multiple inheritance mismatches
 CREATE TABLE gtesty (x int, b int);
 CREATE TABLE gtest1_2 () INHERITS (gtest1, gtesty);  -- error
@@ -403,14 +473,16 @@ DROP TYPE double_int;
 -- using tableoid is allowed
 CREATE TABLE gtest_tableoid (
   a int PRIMARY KEY,
-  b bool GENERATED ALWAYS AS (tableoid <> 0) STORED
+  b bool GENERATED ALWAYS AS (tableoid = 'gtest_tableoid'::regclass) STORED
 );
 INSERT INTO gtest_tableoid VALUES (1), (2);
+ALTER TABLE gtest_tableoid ADD COLUMN
+  c regclass GENERATED ALWAYS AS (tableoid) STORED;
 SELECT * FROM gtest_tableoid;
- a | b 
----+---
- 1 | t
- 2 | t
+ a | b |       c        
+---+---+----------------
+ 1 | t | gtest_tableoid
+ 2 | t | gtest_tableoid
 (2 rows)
 
 -- drop column behavior
@@ -820,13 +892,14 @@ CREATE TABLE gtest30 (
     b int GENERATED ALWAYS AS (a * 2) STORED
 );
 CREATE TABLE gtest30_1 () INHERITS (gtest30);
-ALTER TABLE ONLY gtest30 ALTER COLUMN b DROP EXPRESSION;
+ALTER TABLE ONLY gtest30 ALTER COLUMN b DROP EXPRESSION;  -- error
+ERROR:  ALTER TABLE / DROP EXPRESSION must be applied to child tables too
 \d gtest30
-              Table "public.gtest30"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
+                            Table "public.gtest30"
+ Column |  Type   | Collation | Nullable |              Default               
+--------+---------+-----------+----------+------------------------------------
  a      | integer |           |          | 
- b      | integer |           |          | 
+ b      | integer |           |          | generated always as (a * 2) stored
 Number of child tables: 1 (Use \d+ to list them.)
 
 \d gtest30_1

@@ -24,7 +24,7 @@
  * with collations that match the remote table's columns, which we can
  * consider to be user error.
  *
- * Portions Copyright (c) 2012-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2012-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		  contrib/postgres_fdw/deparse.c
@@ -56,6 +56,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+#include "commands/tablecmds.h"
 
 /*
  * Global context for foreign_expr_walker's search of an expression tree.
@@ -426,23 +427,28 @@ foreign_expr_walker(Node *node,
 					return false;
 
 				/*
-				 * Recurse to remaining subexpressions.  Since the container
-				 * subscripts must yield (noncollatable) integers, they won't
-				 * affect the inner_cxt state.
+				 * Recurse into the remaining subexpressions.  The container
+				 * subscripts will not affect collation of the SubscriptingRef
+				 * result, so do those first and reset inner_cxt afterwards.
 				 */
 				if (!foreign_expr_walker((Node *) sr->refupperindexpr,
 										 glob_cxt, &inner_cxt))
 					return false;
+				inner_cxt.collation = InvalidOid;
+				inner_cxt.state = FDW_COLLATE_NONE;
 				if (!foreign_expr_walker((Node *) sr->reflowerindexpr,
 										 glob_cxt, &inner_cxt))
 					return false;
+				inner_cxt.collation = InvalidOid;
+				inner_cxt.state = FDW_COLLATE_NONE;
 				if (!foreign_expr_walker((Node *) sr->refexpr,
 										 glob_cxt, &inner_cxt))
 					return false;
 
 				/*
-				 * Container subscripting should yield same collation as
-				 * input, but for safety use same logic as for function nodes.
+				 * Container subscripting typically yields same collation as
+				 * refexpr's, but in case it doesn't, use same logic as for
+				 * function nodes.
 				 */
 				collation = sr->refcollid;
 				if (collation == InvalidOid)
@@ -1270,7 +1276,7 @@ deparseLockingClause(deparse_expr_cxt *context)
 		 * that DECLARE CURSOR ... FOR UPDATE is supported, which it isn't
 		 * before 8.3.
 		 */
-		if (relid == root->parse->resultRelation &&
+		if (bms_is_member(relid, root->all_result_relids) &&
 			(root->parse->commandType == CMD_UPDATE ||
 			 root->parse->commandType == CMD_DELETE))
 		{
@@ -1700,13 +1706,16 @@ deparseRangeTblRef(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel,
  * The statement text is appended to buf, and we also create an integer List
  * of the columns being retrieved by WITH CHECK OPTION or RETURNING (if any),
  * which is returned to *retrieved_attrs.
+ *
+ * This also stores end position of the VALUES clause, so that we can rebuild
+ * an INSERT for a batch of rows later.
  */
 void
 deparseInsertSql(StringInfo buf, RangeTblEntry *rte,
 				 Index rtindex, Relation rel,
 				 List *targetAttrs, bool doNothing,
 				 List *withCheckOptionList, List *returningList,
-				 List **retrieved_attrs)
+				 List **retrieved_attrs, int *values_end_len)
 {
 	AttrNumber	pindex;
 	bool		first;
@@ -1749,6 +1758,7 @@ deparseInsertSql(StringInfo buf, RangeTblEntry *rte,
 	}
 	else
 		appendStringInfoString(buf, " DEFAULT VALUES");
+	*values_end_len = buf->len;
 
 	if (doNothing)
 		appendStringInfoString(buf, " ON CONFLICT DO NOTHING");
@@ -1756,6 +1766,55 @@ deparseInsertSql(StringInfo buf, RangeTblEntry *rte,
 	deparseReturningList(buf, rte, rtindex, rel,
 						 rel->trigdesc && rel->trigdesc->trig_insert_after_row,
 						 withCheckOptionList, returningList, retrieved_attrs);
+}
+
+/*
+ * rebuild remote INSERT statement
+ *
+ * Provided a number of rows in a batch, builds INSERT statement with the
+ * right number of parameters.
+ */
+void
+rebuildInsertSql(StringInfo buf, char *orig_query,
+				 int values_end_len, int num_cols,
+				 int num_rows)
+{
+	int			i,
+				j;
+	int			pindex;
+	bool		first;
+
+	/* Make sure the values_end_len is sensible */
+	Assert((values_end_len > 0) && (values_end_len <= strlen(orig_query)));
+
+	/* Copy up to the end of the first record from the original query */
+	appendBinaryStringInfo(buf, orig_query, values_end_len);
+
+	/*
+	 * Add records to VALUES clause (we already have parameters for the first
+	 * row, so start at the right offset).
+	 */
+	pindex = num_cols + 1;
+	for (i = 0; i < num_rows; i++)
+	{
+		appendStringInfoString(buf, ", (");
+
+		first = true;
+		for (j = 0; j < num_cols; j++)
+		{
+			if (!first)
+				appendStringInfoString(buf, ", ");
+			first = false;
+
+			appendStringInfo(buf, "$%d", pindex);
+			pindex++;
+		}
+
+		appendStringInfoChar(buf, ')');
+	}
+
+	/* Copy stuff after VALUES clause from the original query */
+	appendStringInfoString(buf, orig_query + values_end_len);
 }
 
 /*
@@ -1810,6 +1869,7 @@ deparseUpdateSql(StringInfo buf, RangeTblEntry *rte,
  * 'foreignrel' is the RelOptInfo for the target relation or the join relation
  *		containing all base relations in the query
  * 'targetlist' is the tlist of the underlying foreign-scan plan node
+ *		(note that this only contains new-value expressions and junk attrs)
  * 'targetAttrs' is the target columns of the UPDATE
  * 'remote_conds' is the qual clauses that must be evaluated remotely
  * '*params_list' is an output list of exprs that will become remote Params
@@ -1831,8 +1891,9 @@ deparseDirectUpdateSql(StringInfo buf, PlannerInfo *root,
 	deparse_expr_cxt context;
 	int			nestlevel;
 	bool		first;
-	ListCell   *lc;
 	RangeTblEntry *rte = planner_rt_fetch(rtindex, root);
+	ListCell   *lc,
+			   *lc2;
 
 	/* Set up context struct for recursion */
 	context.root = root;
@@ -1851,14 +1912,13 @@ deparseDirectUpdateSql(StringInfo buf, PlannerInfo *root,
 	nestlevel = set_transmission_modes();
 
 	first = true;
-	foreach(lc, targetAttrs)
+	forboth(lc, targetlist, lc2, targetAttrs)
 	{
-		int			attnum = lfirst_int(lc);
-		TargetEntry *tle = get_tle_by_resno(targetlist, attnum);
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+		int			attnum = lfirst_int(lc2);
 
-		if (!tle)
-			elog(ERROR, "attribute number %d not found in UPDATE targetlist",
-				 attnum);
+		/* update's new-value expressions shouldn't be resjunk */
+		Assert(!tle->resjunk);
 
 		if (!first)
 			appendStringInfoString(buf, ", ");
@@ -2112,6 +2172,38 @@ deparseAnalyzeSql(StringInfo buf, Relation rel, List **retrieved_attrs)
 	 */
 	appendStringInfoString(buf, " FROM ");
 	deparseRelation(buf, rel);
+}
+
+/*
+ * Construct a simple "TRUNCATE rel" statement
+ */
+void
+deparseTruncateSql(StringInfo buf,
+				   List *rels,
+				   DropBehavior behavior,
+				   bool restart_seqs)
+{
+	ListCell   *cell;
+
+	appendStringInfoString(buf, "TRUNCATE ");
+
+	foreach(cell, rels)
+	{
+		Relation	rel = lfirst(cell);
+
+		if (cell != list_head(rels))
+			appendStringInfoString(buf, ", ");
+
+		deparseRelation(buf, rel);
+	}
+
+	appendStringInfo(buf, " %s IDENTITY",
+					 restart_seqs ? "RESTART" : "CONTINUE");
+
+	if (behavior == DROP_RESTRICT)
+		appendStringInfoString(buf, " RESTRICT");
+	else if (behavior == DROP_CASCADE)
+		appendStringInfoString(buf, " CASCADE");
 }
 
 /*
@@ -2706,7 +2798,6 @@ deparseOpExpr(OpExpr *node, deparse_expr_cxt *context)
 	HeapTuple	tuple;
 	Form_pg_operator form;
 	char		oprkind;
-	ListCell   *arg;
 
 	/* Retrieve information about the operator from system catalog. */
 	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
@@ -2716,18 +2807,16 @@ deparseOpExpr(OpExpr *node, deparse_expr_cxt *context)
 	oprkind = form->oprkind;
 
 	/* Sanity check. */
-	Assert((oprkind == 'r' && list_length(node->args) == 1) ||
-		   (oprkind == 'l' && list_length(node->args) == 1) ||
+	Assert((oprkind == 'l' && list_length(node->args) == 1) ||
 		   (oprkind == 'b' && list_length(node->args) == 2));
 
 	/* Always parenthesize the expression. */
 	appendStringInfoChar(buf, '(');
 
-	/* Deparse left operand. */
-	if (oprkind == 'r' || oprkind == 'b')
+	/* Deparse left operand, if any. */
+	if (oprkind == 'b')
 	{
-		arg = list_head(node->args);
-		deparseExpr(lfirst(arg), context);
+		deparseExpr(linitial(node->args), context);
 		appendStringInfoChar(buf, ' ');
 	}
 
@@ -2735,12 +2824,8 @@ deparseOpExpr(OpExpr *node, deparse_expr_cxt *context)
 	deparseOperatorName(buf, form);
 
 	/* Deparse right operand. */
-	if (oprkind == 'l' || oprkind == 'b')
-	{
-		arg = list_tail(node->args);
-		appendStringInfoChar(buf, ' ');
-		deparseExpr(lfirst(arg), context);
-	}
+	appendStringInfoChar(buf, ' ');
+	deparseExpr(llast(node->args), context);
 
 	appendStringInfoChar(buf, ')');
 

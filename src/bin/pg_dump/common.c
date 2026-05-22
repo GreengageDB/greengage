@@ -4,7 +4,7 @@
  *	Catalog routines used by pg_dump; long ago these were shared
  *	by another dump tool, but not anymore.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -74,6 +74,30 @@ typedef struct _catalogIdMapEntry
 #define SH_DECLARE
 #define SH_DEFINE
 #include "lib/simplehash.h"
+/*
+ * These variables are static to avoid the notational cruft of having to pass
+ * them into findTableByOid() and friends.  For each of these arrays, we build
+ * a sorted-by-OID index array immediately after the objects are fetched,
+ * and then we use binary search in findTableByOid() and friends.  (qsort'ing
+ * the object arrays themselves would be simpler, but it doesn't work because
+ * pg_dump.c may have already established pointers between items.)
+ */
+static DumpableObject **tblinfoindex;
+static DumpableObject **typinfoindex;
+static DumpableObject **funinfoindex;
+static DumpableObject **oprinfoindex;
+static DumpableObject **collinfoindex;
+static DumpableObject **nspinfoindex;
+static DumpableObject **extinfoindex;
+static DumpableObject **pubinfoindex;
+static int	numTables;
+static int	numTypes;
+static int	numFuncs;
+static int	numOperators;
+static int	numCollations;
+static int	numNamespaces;
+static int	numExtensions;
+static int	numPublications;
 
 #define CATALOGIDHASH_INITIAL_SIZE	10000
 
@@ -96,6 +120,7 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 {
 	TableInfo  *tblinfo;
 	ExtensionInfo *extinfo;
+	PublicationInfo *pubinfo;
 	InhInfo    *inhinfo;
 	int			numTables;
 	int			numTypes;
@@ -272,7 +297,9 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	getPolicies(fout, tblinfo, numTables);
 
 	pg_log_info("reading publications");
-	(void) getPublications(fout, &numPublications);
+	pubinfo = getPublications(fout, &numPublications);
+	pubinfoindex = buildIndexArray(pubinfo, numPublications,
+								   sizeof(PublicationInfo));
 
 	pg_log_info("reading publication membership");
 	getPublicationTables(fout, tblinfo, numTables);
@@ -480,9 +507,11 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
  * - Detect child columns that have a generation expression when their parents
  *   also have one.  Generation expressions are always inherited, so there is
  *   no need to set them again in child tables, and there is no syntax for it
- *   either.  (Exception: In binary upgrade mode we dump them because
- *   inherited tables are recreated standalone first and then reattached to
- *   the parent.)
+ *   either.  Exceptions: If it's a partition or we are in binary upgrade
+ *   mode, we dump them because in those cases inherited tables are recreated
+ *   standalone first and then reattached to the parent.  (See also the logic
+ *   in dumpTableSchema().)  In that situation, the generation expressions
+ *   must match the parent, enforced by ALTER TABLE.
  *
  * modifies tblinfo
  */
@@ -528,7 +557,7 @@ flagInhAttrs(DumpOptions *dopt, TableInfo *tblinfo, int numTables)
 		{
 			bool		foundNotNull;	/* Attr was NOT NULL in a parent */
 			bool		foundDefault;	/* Found a default in a parent */
-			bool		foundGenerated;	/* Found a generated in a parent */
+			bool		foundGenerated; /* Found a generated in a parent */
 
 			/* no point in examining dropped columns */
 			if (tbinfo->attisdropped[j])
@@ -593,7 +622,7 @@ flagInhAttrs(DumpOptions *dopt, TableInfo *tblinfo, int numTables)
 			}
 
 			/* Remove generation expression from child */
-			if (foundGenerated && !dopt->binary_upgrade)
+			if (foundGenerated && !tbinfo->ispartition && !dopt->binary_upgrade)
 				tbinfo->attrdefs[j] = NULL;
 		}
 	}
@@ -717,7 +746,110 @@ findObjectByCatalogId(CatalogId catalogId)
 	entry = catalogid_lookup(catalogIdHash, catalogId);
 	if (entry == NULL)
 		return NULL;
-	return entry->dobj;
+	low = catalogIdMap;
+	high = catalogIdMap + (numCatalogIds - 1);
+	while (low <= high)
+	{
+		DumpableObject **middle;
+		int			difference;
+
+		middle = low + (high - low) / 2;
+		/* comparison must match DOCatalogIdCompare, below */
+		difference = oidcmp((*middle)->catId.oid, catalogId.oid);
+		if (difference == 0)
+			difference = oidcmp((*middle)->catId.tableoid, catalogId.tableoid);
+		if (difference == 0)
+			return *middle;
+		else if (difference < 0)
+			low = middle + 1;
+		else
+			high = middle - 1;
+	}
+	return NULL;
+}
+
+/*
+ * Find a DumpableObject by OID, in a pre-sorted array of one type of object
+ *
+ * Returns NULL for unknown OID
+ */
+static DumpableObject *
+findObjectByOid(Oid oid, DumpableObject **indexArray, int numObjs)
+{
+	DumpableObject **low;
+	DumpableObject **high;
+
+	/*
+	 * This is the same as findObjectByCatalogId except we assume we need not
+	 * look at table OID because the objects are all the same type.
+	 *
+	 * We could use bsearch() here, but the notational cruft of calling
+	 * bsearch is nearly as bad as doing it ourselves; and the generalized
+	 * bsearch function is noticeably slower as well.
+	 */
+	if (numObjs <= 0)
+		return NULL;
+	low = indexArray;
+	high = indexArray + (numObjs - 1);
+	while (low <= high)
+	{
+		DumpableObject **middle;
+		int			difference;
+
+		middle = low + (high - low) / 2;
+		difference = oidcmp((*middle)->catId.oid, oid);
+		if (difference == 0)
+			return *middle;
+		else if (difference < 0)
+			low = middle + 1;
+		else
+			high = middle - 1;
+	}
+	return NULL;
+}
+
+/*
+ * Build an index array of DumpableObject pointers, sorted by OID
+ */
+static DumpableObject **
+buildIndexArray(void *objArray, int numObjs, Size objSize)
+{
+	DumpableObject **ptrs;
+	int			i;
+
+	if (numObjs <= 0)
+		return NULL;
+
+	ptrs = (DumpableObject **) pg_malloc(numObjs * sizeof(DumpableObject *));
+	for (i = 0; i < numObjs; i++)
+		ptrs[i] = (DumpableObject *) ((char *) objArray + i * objSize);
+
+	/* We can use DOCatalogIdCompare to sort since its first key is OID */
+	if (numObjs > 1)
+		qsort((void *) ptrs, numObjs, sizeof(DumpableObject *),
+			  DOCatalogIdCompare);
+
+	return ptrs;
+}
+
+/*
+ * qsort comparator for pointers to DumpableObjects
+ */
+static int
+DOCatalogIdCompare(const void *p1, const void *p2)
+{
+	const DumpableObject *obj1 = *(DumpableObject *const *) p1;
+	const DumpableObject *obj2 = *(DumpableObject *const *) p2;
+	int			cmpval;
+
+	/*
+	 * Compare OID first since it's usually unique, whereas there will only be
+	 * a few distinct values of tableoid.
+	 */
+	cmpval = oidcmp(obj1->catId.oid, obj2->catId.oid);
+	if (cmpval == 0)
+		cmpval = oidcmp(obj1->catId.tableoid, obj2->catId.tableoid);
+	return cmpval;
 }
 
 /*
@@ -936,8 +1068,21 @@ findExtensionByOid(Oid oid)
 
 /*
  * findPublicationByOid
- *	  finds the DumpableObject for the publication with the given oid
+ *	  finds the entry (in pubinfo) of the publication with the given oid
  *	  returns NULL if not found
+ */
+PublicationInfo *
+findPublicationByOid(Oid oid)
+{
+	return (PublicationInfo *) findObjectByOid(oid, pubinfoindex, numPublications);
+}
+
+/*
+ * findIndexByOid
+ *		find the entry of the index with the given oid
+ *
+ * This one's signature is different from the previous ones because we lack a
+ * global array of all indexes, so caller must pass their array as argument.
  */
 PublicationInfo *
 findPublicationByOid(Oid oid)

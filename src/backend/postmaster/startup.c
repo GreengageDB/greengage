@@ -9,7 +9,7 @@
  * though.)
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -35,6 +35,17 @@
 
 bool am_startup = false;
 
+#ifndef USE_POSTMASTER_DEATH_SIGNAL
+/*
+ * On systems that need to make a system call to find out if the postmaster has
+ * gone away, we'll do so only every Nth call to HandleStartupProcInterrupts().
+ * This only affects how long it takes us to detect the condition while we're
+ * busy replaying WAL.  Latch waits and similar which should react immediately
+ * through the usual techniques.
+ */
+#define POSTMASTER_POLL_RATE_LIMIT 1024
+#endif
+
 /*
  * Flags set by interrupt handlers for later service in the redo loop.
  */
@@ -51,6 +62,9 @@ static volatile sig_atomic_t in_restore_command = false;
 /* Signal handlers */
 static void StartupProcTriggerHandler(SIGNAL_ARGS);
 static void StartupProcSigHupHandler(SIGNAL_ARGS);
+
+/* Callbacks */
+static void StartupProcExit(int code, Datum arg);
 
 
 /* --------------------------------
@@ -135,6 +149,10 @@ StartupRereadConfig(void)
 void
 HandleStartupProcInterrupts(void)
 {
+#ifdef POSTMASTER_POLL_RATE_LIMIT
+	static uint32 postmaster_poll_count = 0;
+#endif
+
 	/*
 	 * Process any requests or signals received recently.
 	 */
@@ -152,9 +170,15 @@ HandleStartupProcInterrupts(void)
 
 	/*
 	 * Emergency bailout if postmaster has died.  This is to avoid the
-	 * necessity for manual cleanup of all postmaster children.
+	 * necessity for manual cleanup of all postmaster children.  Do this less
+	 * frequently on systems for which we don't have signals to make that
+	 * cheap.
 	 */
-	if (IsUnderPostmaster && !PostmasterIsAlive())
+	if (IsUnderPostmaster &&
+#ifdef POSTMASTER_POLL_RATE_LIMIT
+		postmaster_poll_count++ % POSTMASTER_POLL_RATE_LIMIT == 0 &&
+#endif
+		!PostmasterIsAlive())
 		exit(1);
 
 	/* Process barrier events */
@@ -175,6 +199,19 @@ HandleCrash(SIGNAL_ARGS)
 }
 
 
+/* --------------------------------
+ *		signal handler routines
+ * --------------------------------
+ */
+static void
+StartupProcExit(int code, Datum arg)
+{
+	/* Shutdown the recovery environment */
+	if (standbyState != STANDBY_DISABLED)
+		ShutdownRecoveryTransactionEnvironment();
+}
+
+
 /* ----------------------------------
  *	Startup Process main entry point
  * ----------------------------------
@@ -183,13 +220,16 @@ void
 StartupProcessMain(void)
 {
 	am_startup = true;
+	/* Arrange to clean up at startup process exit */
+	on_shmem_exit(StartupProcExit, 0);
+
 	/*
 	 * Properly accept or ignore signals the postmaster might send us.
 	 */
 	pqsignal(SIGHUP, StartupProcSigHupHandler); /* reload config file */
 	pqsignal(SIGINT, SIG_IGN);	/* ignore query cancel */
 	pqsignal(SIGTERM, StartupProcShutdownHandler);	/* request shutdown */
-	pqsignal(SIGQUIT, SignalHandlerForCrashExit);
+	/* SIGQUIT handler was already set up by InitPostmasterChild */
 	InitializeTimeouts();		/* establishes SIGALRM handler */
 	pqsignal(SIGPIPE, SIG_IGN);
 	pqsignal(SIGUSR1, procsignal_sigusr1_handler);

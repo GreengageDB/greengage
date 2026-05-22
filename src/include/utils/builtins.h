@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/builtins.h
@@ -33,26 +33,22 @@ extern void domain_check(Datum value, bool isnull, Oid domainType,
 extern int	errdatatype(Oid datatypeOid);
 extern int	errdomainconstraint(Oid datatypeOid, const char *conname);
 
-/* encode.c */
-extern uint64 hex_encode(const char *src, size_t len, char *dst);
-extern uint64 hex_decode(const char *src, size_t len, char *dst);
-
 /* int.c */
 extern int2vector *buildint2vector(const int16 *int2s, int n);
 
 /* name.c */
-extern void	namestrcpy(Name name, const char *str);
+extern void namestrcpy(Name name, const char *str);
 extern int	namestrcmp(Name name, const char *str);
 
 /* numutils.c */
 extern int32 pg_atoi(const char *s, int size, int c);
 extern int16 pg_strtoint16(const char *s);
 extern int32 pg_strtoint32(const char *s);
-extern int pg_itoa(int16 i, char *a);
-extern int pg_ultoa_n(uint32 l, char *a);
-extern int pg_ulltoa_n(uint64 l, char *a);
-extern int pg_ltoa(int32 l, char *a);
-extern int pg_lltoa(int64 ll, char *a);
+extern int	pg_itoa(int16 i, char *a);
+extern int	pg_ultoa_n(uint32 l, char *a);
+extern int	pg_ulltoa_n(uint64 l, char *a);
+extern int	pg_ltoa(int32 l, char *a);
+extern int	pg_lltoa(int64 ll, char *a);
 extern char *pg_ultostr_zeropad(char *str, uint32 value, int32 minwidth);
 extern char *pg_ultostr(char *str, uint32 value);
 extern uint64 pg_strtouint64(const char *str, char **endptr, int base);

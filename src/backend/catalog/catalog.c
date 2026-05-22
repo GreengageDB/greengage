@@ -5,7 +5,7 @@
  *		bits of hard-wired knowledge
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -26,7 +26,6 @@
 #include "access/table.h"
 #include "access/transam.h"
 #include "catalog/catalog.h"
-#include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_amop.h"
@@ -45,7 +44,6 @@
 #include "catalog/pg_subscription.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
-#include "catalog/toasting.h"
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "utils/fmgroids.h"
@@ -129,6 +127,13 @@ aorelpathbackend(RelFileNode node, BackendId backend, int32 segno)
 	}
 	return fullpath;
 }
+
+/*
+ * Parameters to determine when to emit a log message in
+ * GetNewOidWithIndex()
+ */
+#define GETNEWOID_LOG_THRESHOLD 1000000
+#define GETNEWOID_LOG_MAX_INTERVAL 128000000
 
 /*
  * IsSystemRelation
@@ -399,6 +404,7 @@ IsSharedRelation(Oid relationId)
 		return true;
 
 	/* These are their indexes (see indexing.h) */
+	/* These are their indexes */
 	if (relationId == AuthIdRolnameIndexId ||
 		relationId == AuthIdOidIndexId ||
 		relationId == AuthMemRoleMemIndexId ||
@@ -444,6 +450,7 @@ IsSharedRelation(Oid relationId)
 	}
 
 	/* These are their toast tables and toast indexes (see toasting.h) */
+	/* These are their toast tables and toast indexes */
 	if (relationId == PgAuthidToastTable ||
 		relationId == PgAuthidToastIndex ||
 		relationId == PgDatabaseToastTable ||
@@ -551,6 +558,8 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	SysScanDesc scan;
 	ScanKeyData key;
 	bool		collides;
+	uint64		retries = 0;
+	uint64		retries_before_log = GETNEWOID_LOG_THRESHOLD;
 
 	/* Only system relations are supported */
 	Assert(IsSystemRelation(relation));
@@ -590,6 +599,37 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 			collides = true;
 
 		systable_endscan(scan);
+
+		/*
+		 * Log that we iterate more than GETNEWOID_LOG_THRESHOLD but have not
+		 * yet found OID unused in the relation. Then repeat logging with
+		 * exponentially increasing intervals until we iterate more than
+		 * GETNEWOID_LOG_MAX_INTERVAL. Finally repeat logging every
+		 * GETNEWOID_LOG_MAX_INTERVAL unless an unused OID is found. This
+		 * logic is necessary not to fill up the server log with the similar
+		 * messages.
+		 */
+		if (retries >= retries_before_log)
+		{
+			ereport(LOG,
+					(errmsg("still searching for an unused OID in relation \"%s\"",
+							RelationGetRelationName(relation)),
+					 errdetail_plural("OID candidates have been checked %llu time, but no unused OID has been found yet.",
+									  "OID candidates have been checked %llu times, but no unused OID has been found yet.",
+									  retries,
+									  (unsigned long long) retries)));
+
+			/*
+			 * Double the number of retries to do before logging next until it
+			 * reaches GETNEWOID_LOG_MAX_INTERVAL.
+			 */
+			if (retries_before_log * 2 <= GETNEWOID_LOG_MAX_INTERVAL)
+				retries_before_log *= 2;
+			else
+				retries_before_log += GETNEWOID_LOG_MAX_INTERVAL;
+		}
+
+		retries++;
 	} while (collides);
 
 	/*
@@ -603,6 +643,17 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	if (Gp_role == GP_ROLE_EXECUTE && RelationNeedsSynchronizedOIDs(relation))
 		elog(PANIC, "allocated OID %u for relation \"%s\" in segment",
 			 newOid, RelationGetRelationName(relation));
+	 * If at least one log message is emitted, also log the completion of OID
+	 * assignment.
+	 */
+	if (retries > GETNEWOID_LOG_THRESHOLD)
+	{
+		ereport(LOG,
+				(errmsg_plural("new OID has been assigned in relation \"%s\" after %llu retry",
+							   "new OID has been assigned in relation \"%s\" after %llu retries",
+							   retries,
+							   RelationGetRelationName(relation), (unsigned long long) retries)));
+	}
 
 	return newOid;
 }

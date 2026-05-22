@@ -3,7 +3,7 @@
  * parsexlog.c
  *	  Functions for reading Write-Ahead-Log
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *-------------------------------------------------------------------------
@@ -58,6 +58,9 @@ static int	SimpleXLogPageRead(XLogReaderState *xlogreader,
  * Read WAL from the datadir/pg_wal, starting from 'startpoint' on timeline
  * index 'tliIndex' in target timeline history, until 'endpoint'. Make note of
  * the data blocks touched by the WAL records, and return them in a page map.
+ *
+ * 'endpoint' is the end of the last record to read. The record starting at
+ * 'endpoint' is the first one that is not read.
  */
 void
 extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
@@ -87,16 +90,22 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 
 			if (errormsg)
 				pg_fatal("could not read WAL record at %X/%X: %s",
-						 (uint32) (errptr >> 32), (uint32) (errptr),
+						 LSN_FORMAT_ARGS(errptr),
 						 errormsg);
 			else
 				pg_fatal("could not read WAL record at %X/%X",
-						 (uint32) (errptr >> 32), (uint32) (errptr));
+						 LSN_FORMAT_ARGS(errptr));
 		}
 
 		extractPageInfo(xlogreader);
 
-	} while (xlogreader->ReadRecPtr != endpoint);
+	} while (xlogreader->EndRecPtr < endpoint);
+
+	/*
+	 * If 'endpoint' didn't point exactly at a record boundary, the caller
+	 * messed up.
+	 */
+	Assert(xlogreader->EndRecPtr == endpoint);
 
 	XLogReaderFree(xlogreader);
 	if (xlogreadfd != -1)
@@ -134,10 +143,10 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, int tliIndex,
 	{
 		if (errormsg)
 			pg_fatal("could not read WAL record at %X/%X: %s",
-					 (uint32) (ptr >> 32), (uint32) (ptr), errormsg);
+					 LSN_FORMAT_ARGS(ptr), errormsg);
 		else
 			pg_fatal("could not read WAL record at %X/%X",
-					 (uint32) (ptr >> 32), (uint32) (ptr));
+					 LSN_FORMAT_ARGS(ptr));
 	}
 	endptr = xlogreader->EndRecPtr;
 
@@ -200,17 +209,17 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 		{
 			if (errormsg)
 				pg_fatal("could not find previous WAL record at %X/%X: %s",
-						 (uint32) (searchptr >> 32), (uint32) (searchptr),
+						 LSN_FORMAT_ARGS(searchptr),
 						 errormsg);
 			else
 				pg_fatal("could not find previous WAL record at %X/%X",
-						 (uint32) (searchptr >> 32), (uint32) (searchptr));
+						 LSN_FORMAT_ARGS(searchptr));
 		}
 
 		/*
 		 * Check if it is a checkpoint record. This checkpoint record needs to
 		 * be the latest checkpoint before WAL forked and not the checkpoint
-		 * where the primary has been stopped to be rewinded.
+		 * where the primary has been stopped to be rewound.
 		 */
 		info = XLogRecGetInfo(xlogreader) & ~XLR_INFO_MASK;
 		if (searchptr < forkptr &&
@@ -422,7 +431,7 @@ extractPageInfo(XLogReaderState *record)
 		 */
 		pg_fatal("WAL record modifies a relation, but record type is not recognized: "
 				 "lsn: %X/%X, rmgr: %s, info: %02X",
-				 (uint32) (record->ReadRecPtr >> 32), (uint32) (record->ReadRecPtr),
+				 LSN_FORMAT_ARGS(record->ReadRecPtr),
 				 RmgrNames[rmid], info);
 	}
 	else if (rmid == RM_APPEND_ONLY_ID)

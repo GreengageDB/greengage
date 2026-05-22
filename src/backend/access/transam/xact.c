@@ -5,7 +5,7 @@
  *
  * See src/backend/access/transam/README for more information.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -656,7 +656,7 @@ GetStableLatestTransactionId(void)
 		lxid = MyProc->lxid;
 		stablexid = GetTopTransactionIdIfAny();
 		if (!TransactionIdIsValid(stablexid))
-			stablexid = ReadNewTransactionId();
+			stablexid = ReadNextTransactionId();
 	}
 
 	Assert(TransactionIdIsValid(stablexid));
@@ -1681,7 +1681,7 @@ RecordTransactionCommit(void)
 
 		TransactionTreeSetCommitTsData(xid, nchildren, children,
 									   replorigin_session_origin_timestamp,
-									   replorigin_session_origin, false);
+									   replorigin_session_origin);
 	}
 
 #ifdef IMPLEMENT_ASYNC_COMMIT
@@ -3217,15 +3217,6 @@ PrepareTransaction(void)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot PREPARE a transaction that has exported snapshots")));
 
-	/*
-	 * Don't allow PREPARE but for transaction that has/might kill logical
-	 * replication workers.
-	 */
-	if (XactManipulatesLogicalReplicationWorkers())
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot PREPARE a transaction that has manipulated logical replication workers")));
-
 	/* Prevent cancel/die interrupt while cleaning up */
 	HOLD_INTERRUPTS();
 
@@ -4075,6 +4066,13 @@ CommitTransactionCommand(void)
 				Assert(s->parent == NULL);
 				CommitTransaction();
 				s->blockState = TBLOCK_DEFAULT;
+				if (s->chain)
+				{
+					StartTransaction();
+					s->blockState = TBLOCK_INPROGRESS;
+					s->chain = false;
+					RestoreTransactionCharacteristics();
+				}
 			}
 			else if (s->blockState == TBLOCK_PREPARE)
 			{
@@ -6074,7 +6072,6 @@ CommitSubTransaction(void)
 	AtEOSubXact_HashTables(true, s->nestingLevel);
 	AtEOSubXact_PgStat(true, s->nestingLevel);
 	AtSubCommit_Snapshot(s->nestingLevel);
-	AtEOSubXact_ApplyLauncher(true, s->nestingLevel);
 
 	/*
 	 * We need to restore the upper transaction's read-only state, in case the
@@ -6236,7 +6233,6 @@ AbortSubTransaction(void)
 		AtEOSubXact_HashTables(false, s->nestingLevel);
 		AtEOSubXact_PgStat(false, s->nestingLevel);
 		AtSubAbort_Snapshot(s->nestingLevel);
-		AtEOSubXact_ApplyLauncher(false, s->nestingLevel);
 	}
 
 	/*
@@ -6556,7 +6552,7 @@ static void
 ShowTransactionState(const char *str)
 {
 	/* skip work if message will definitely not be printed */
-	if (log_min_messages <= DEBUG5 || client_min_messages <= DEBUG5)
+	if (message_level_is_interesting(DEBUG5))
 		ShowTransactionStateRec(str, CurrentTransactionState);
 }
 
@@ -6583,7 +6579,6 @@ ShowTransactionStateRec(const char *str, TransactionState s)
 	if (s->parent)
 		ShowTransactionStateRec(str, s->parent);
 
-	/* use ereport to suppress computation if msg will not be printed */
 	ereport(DEBUG5,
 			(errmsg_internal("%s(%d) name: %s; blockState: %s; state: %s, xid/subid/cid: %u/%u/%u%s%s",
 							 str, s->nestingLevel,
@@ -7048,10 +7043,12 @@ XactLogAbortRecord(TimestampTz abort_time,
 		xl_dbinfo.tsId = MyDatabaseTableSpace;
 	}
 
-	/* dump transaction origin information only for abort prepared */
+	/*
+	 * Dump transaction origin information only for abort prepared. We need
+	 * this during recovery to update the replication origin progress.
+	 */
 	if ((replorigin_session_origin != InvalidRepOriginId) &&
-		TransactionIdIsValid(twophase_xid) &&
-		XLogLogicalInfoActive())
+		TransactionIdIsValid(twophase_xid))
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_ORIGIN;
 
@@ -7158,7 +7155,7 @@ xact_redo_commit(xl_xact_parsed_commit *parsed,
 
 	/* Set the transaction commit timestamp and metadata */
 	TransactionTreeSetCommitTsData(xid, parsed->nsubxacts, parsed->subxacts,
-								   commit_time, origin_id, false);
+								   commit_time, origin_id);
 
 	if (standbyState == STANDBY_DISABLED)
 	{
@@ -7299,7 +7296,8 @@ xact_redo_distributed_commit(xl_xact_parsed_commit *parsed,
 }
 
 static void
-xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid)
+xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
+				XLogRecPtr lsn, RepOriginId origin_id)
 {
 	TransactionId max_xid;
 
@@ -7348,6 +7346,13 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid)
 			StandbyReleaseLockTree(xid, parsed->nsubxacts, parsed->subxacts);
 	}
 
+	if (parsed->xinfo & XACT_XINFO_HAS_ORIGIN)
+	{
+		/* recover apply progress */
+		replorigin_advance(origin_id, parsed->origin_lsn, lsn,
+						   false /* backward */ , false /* WAL */ );
+	}
+
 	/* Make sure files supposed to be dropped are dropped */
 	DropRelationFiles(parsed->xnodes, parsed->nrels, true);
 	DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
@@ -7391,7 +7396,8 @@ xact_redo(XLogReaderState *record)
 		xl_xact_parsed_abort parsed;
 
 		ParseAbortRecord(XLogRecGetInfo(record), xlrec, &parsed);
-		xact_redo_abort(&parsed, XLogRecGetXid(record));
+		xact_redo_abort(&parsed, XLogRecGetXid(record),
+						record->EndRecPtr, XLogRecGetOrigin(record));
 	}
 	else if (info == XLOG_XACT_ABORT_PREPARED)
 	{
@@ -7399,7 +7405,8 @@ xact_redo(XLogReaderState *record)
 		xl_xact_parsed_abort parsed;
 
 		ParseAbortRecord(XLogRecGetInfo(record), xlrec, &parsed);
-		xact_redo_abort(&parsed, parsed.twophase_xid);
+		xact_redo_abort(&parsed, parsed.twophase_xid,
+						record->EndRecPtr, XLogRecGetOrigin(record));
 
 		/* Delete TwoPhaseState gxact entry and/or 2PC file. */
 		LWLockAcquire(TwoPhaseStateLock, LW_EXCLUSIVE);

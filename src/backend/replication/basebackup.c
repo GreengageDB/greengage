@@ -3,7 +3,7 @@
  * basebackup.c
  *	  code for taking a base backup and streaming it to a standby
  *
- * Portions Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/replication/basebackup.c
@@ -330,21 +330,7 @@ perform_base_backup(basebackup_options *opt)
 								 PROGRESS_BASEBACKUP_PHASE_WAIT_CHECKPOINT);
 	startptr = do_pg_start_backup(opt->label, opt->fastcheckpoint, &starttli,
 								  labelfile, &tablespaces,
-								  tblspc_map_file, opt->sendtblspcmapfile);
-	Assert(!XLogRecPtrIsInvalid(startptr));
-
-	elogif(!debug_basebackup, LOG,
-		   "basebackup perform -- "
-		   "Basebackup start xlog location = %X/%X",
-		   (uint32) (startptr >> 32), (uint32) startptr);
-
-	/*
-	 * Set xlogCleanUpTo so that checkpoint process knows
-	 * which old xlog files should not be cleaned
-	 */
-	WalSndSetXLogCleanUpTo(startptr);
-
-	SIMPLE_FAULT_INJECTOR("base_backup_post_create_checkpoint");
+								  tblspc_map_file);
 
 	/*
 	 * Once do_pg_start_backup has been called, ensure that any failure causes
@@ -459,7 +445,7 @@ perform_base_backup(basebackup_options *opt)
 			if (ti->path == NULL)
 			{
 				struct stat statbuf;
-				bool	sendtblspclinks = true;
+				bool		sendtblspclinks = true;
 
 				/* In the main tar, include the backup_label first... */
 				sendFileWithContent(BACKUP_LABEL_FILE, labelfile->data,
@@ -767,12 +753,22 @@ perform_base_backup(basebackup_options *opt)
 	{
 		if (total_checksum_failures > 1)
 			ereport(WARNING,
-					(errmsg("%lld total checksum verification failures", total_checksum_failures)));
+					(errmsg_plural("%lld total checksum verification failure",
+								   "%lld total checksum verification failures",
+								   total_checksum_failures,
+								   total_checksum_failures)));
 
 		ereport(ERROR,
 				(errcode(ERRCODE_DATA_CORRUPTED),
 				 errmsg("checksum verification failure during base backup")));
 	}
+
+	/*
+	 * Make sure to free the manifest before the resource owners as manifests
+	 * use cryptohash contexts that may depend on resource owners (like
+	 * OpenSSL).
+	 */
+	FreeBackupManifest(&manifest);
 
 	/* clean up the resource owner we created */
 	WalSndResourceCleanup(true);
@@ -1217,7 +1213,7 @@ SendXlogRecPtrResult(XLogRecPtr ptr, TimeLineID tli)
 	pq_sendint16(&buf, 2);		/* number of columns */
 
 	len = snprintf(str, sizeof(str),
-				   "%X/%X", (uint32) (ptr >> 32), (uint32) ptr);
+				   "%X/%X", LSN_FORMAT_ARGS(ptr));
 	pq_sendint32(&buf, len);
 	pq_sendbytes(&buf, str, len);
 
@@ -1243,7 +1239,9 @@ sendFileWithContent(const char *filename, const char *content,
 				len;
 	pg_checksum_context checksum_ctx;
 
-	pg_checksum_init(&checksum_ctx, manifest->checksum_type);
+	if (pg_checksum_init(&checksum_ctx, manifest->checksum_type) < 0)
+		elog(ERROR, "could not initialize checksum of file \"%s\"",
+			 filename);
 
 	len = strlen(content);
 
@@ -1278,6 +1276,10 @@ sendFileWithContent(const char *filename, const char *content,
 		pq_putmessage('d', buf, pad);
 		update_basebackup_progress(pad);
 	}
+
+	if (pg_checksum_update(&checksum_ctx, (uint8 *) content, len) < 0)
+		elog(ERROR, "could not update checksum of file \"%s\"",
+			 filename);
 
 	elogif(debug_basebackup, LOG,
 			"basebackup send file -- Sent file '%s' with content \n%s.",
@@ -1770,7 +1772,9 @@ sendFile(const char *readfilename, const char *tarfilename,
 	bool		verify_checksum = false;
 	pg_checksum_context checksum_ctx;
 
-	pg_checksum_init(&checksum_ctx, manifest->checksum_type);
+	if (pg_checksum_init(&checksum_ctx, manifest->checksum_type) < 0)
+		elog(ERROR, "could not initialize checksum of file \"%s\"",
+			 readfilename);
 
 	fd = OpenTransientFile(readfilename, O_RDONLY | PG_BINARY);
 	if (fd < 0)
@@ -1848,7 +1852,7 @@ sendFile(const char *readfilename, const char *tarfilename,
 		{
 			ereport(WARNING,
 					(errmsg("could not verify checksum in file \"%s\", block "
-							"%d: read buffer size %d and page size %d "
+							"%u: read buffer size %d and page size %d "
 							"differ",
 							readfilename, blkno, (int) cnt, BLCKSZ)));
 			verify_checksum = false;
@@ -1921,7 +1925,7 @@ sendFile(const char *readfilename, const char *tarfilename,
 						if (checksum_failures <= 5)
 							ereport(WARNING,
 									(errmsg("checksum verification failed in "
-											"file \"%s\", block %d: calculated "
+											"file \"%s\", block %u: calculated "
 											"%X but expected %X",
 											readfilename, blkno, checksum,
 											phdr->pd_checksum)));
@@ -1944,7 +1948,8 @@ sendFile(const char *readfilename, const char *tarfilename,
 		update_basebackup_progress(cnt);
 
 		/* Also feed it to the checksum machinery. */
-		pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt);
+		if (pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt) < 0)
+			elog(ERROR, "could not update checksum of base backup");
 
 		len += cnt;
 		throttle(cnt);
@@ -1958,7 +1963,8 @@ sendFile(const char *readfilename, const char *tarfilename,
 		{
 			cnt = Min(sizeof(buf), statbuf->st_size - len);
 			pq_putmessage('d', buf, cnt);
-			pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt);
+			if (pg_checksum_update(&checksum_ctx, (uint8 *) buf, cnt) < 0)
+				elog(ERROR, "could not update checksum of base backup");
 			update_basebackup_progress(cnt);
 			len += cnt;
 			throttle(cnt);
@@ -1966,8 +1972,8 @@ sendFile(const char *readfilename, const char *tarfilename,
 	}
 
 	/*
-	 * Pad to a block boundary, per tar format requirements. (This small
-	 * piece of data is probably not worth throttling, and is not checksummed
+	 * Pad to a block boundary, per tar format requirements. (This small piece
+	 * of data is probably not worth throttling, and is not checksummed
 	 * because it's not actually part of the file.)
 	 */
 	pad = tarPaddingBytesRequired(len);

@@ -7,7 +7,7 @@
  * Client-side code should include postgres_fe.h instead.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1995, Regents of the University of California
  *
  * src/include/postgres.h
@@ -56,7 +56,9 @@
 /*
  * struct varatt_external is a traditional "TOAST pointer", that is, the
  * information needed to fetch a Datum stored out-of-line in a TOAST table.
- * The data is compressed if and only if va_extsize < va_rawsize - VARHDRSZ.
+ * The data is compressed if and only if the external size stored in
+ * va_extinfo is less than va_rawsize - VARHDRSZ.
+ *
  * This struct must not contain any padding, because we sometimes compare
  * these pointers using memcmp.
  *
@@ -68,10 +70,18 @@
 typedef struct varatt_external
 {
 	int32		va_rawsize;		/* Original data size (includes header) */
-	int32		va_extsize;		/* External saved size (doesn't) */
+	uint32		va_extinfo;		/* External saved size (without header) and
+								 * compression method */
 	Oid			va_valueid;		/* Unique ID of value within TOAST table */
 	Oid			va_toastrelid;	/* RelID of TOAST table containing it */
 }			varatt_external;
+
+/*
+ * These macros define the "saved size" portion of va_extinfo.  Its remaining
+ * two high-order bits identify the compression method.
+ */
+#define VARLENA_EXTSIZE_BITS	30
+#define VARLENA_EXTSIZE_MASK	((1U << VARLENA_EXTSIZE_BITS) - 1)
 
 /*
  * struct varatt_indirect is a "TOAST pointer" representing an out-of-line
@@ -152,7 +162,8 @@ typedef union
 	struct						/* Compressed-in-line format */
 	{
 		uint32		va_header;
-		uint32		va_rawsize; /* Original data size (excludes header) */
+		uint32		va_tcinfo;	/* Original data size (excludes header) and
+								 * compression method; see va_extinfo */
 		char		va_data[FLEXIBLE_ARRAY_MEMBER]; /* Compressed data */
 	}			va_compressed;
 } varattrib_4b;
@@ -240,26 +251,60 @@ typedef struct
 	(((varattrib_1b_e *) (PTR))->va_header = 0x80, \
 	 ((varattrib_1b_e *) (PTR))->va_tag = (tag))
 
-#define VARHDRSZ_SHORT			offsetof(varattrib_1b, va_data)
-#define VARATT_SHORT_MAX		0x7F
-#define VARATT_CAN_MAKE_SHORT(PTR) \
-	(VARATT_IS_4B_U(PTR) && \
-	 (VARSIZE(PTR) - VARHDRSZ + VARHDRSZ_SHORT) <= VARATT_SHORT_MAX)
-#define VARATT_CONVERTED_SHORT_SIZE(PTR) \
-	(VARSIZE(PTR) - VARHDRSZ + VARHDRSZ_SHORT)
+#else							/* !WORDS_BIGENDIAN */
 
-/* In Postgres, this is 2, but in GPDB, it's 4, due to padding */
-#define VARHDRSZ_EXTERNAL		offsetof(varattrib_1b_e, va_data)
+#define VARATT_IS_4B(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x01) == 0x00)
+#define VARATT_IS_4B_U(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x03) == 0x00)
+#define VARATT_IS_4B_C(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x03) == 0x02)
+#define VARATT_IS_1B(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x01) == 0x01)
+#define VARATT_IS_1B_E(PTR) \
+	((((varattrib_1b *) (PTR))->va_header) == 0x01)
+#define VARATT_NOT_PAD_BYTE(PTR) \
+	(*((uint8 *) (PTR)) != 0)
+
+/* VARSIZE_4B() should only be used on known-aligned data */
+#define VARSIZE_4B(PTR) \
+	((((varattrib_4b *) (PTR))->va_4byte.va_header >> 2) & 0x3FFFFFFF)
+#define VARSIZE_1B(PTR) \
+	((((varattrib_1b *) (PTR))->va_header >> 1) & 0x7F)
+#define VARTAG_1B_E(PTR) \
+	(((varattrib_1b_e *) (PTR))->va_tag)
+
+#define SET_VARSIZE_4B(PTR,len) \
+	(((varattrib_4b *) (PTR))->va_4byte.va_header = (((uint32) (len)) << 2))
+#define SET_VARSIZE_4B_C(PTR,len) \
+	(((varattrib_4b *) (PTR))->va_4byte.va_header = (((uint32) (len)) << 2) | 0x02)
+#define SET_VARSIZE_1B(PTR,len) \
+	(((varattrib_1b *) (PTR))->va_header = (((uint8) (len)) << 1) | 0x01)
+#define SET_VARTAG_1B_E(PTR,tag) \
+	(((varattrib_1b_e *) (PTR))->va_header = 0x01, \
+	 ((varattrib_1b_e *) (PTR))->va_tag = (tag))
+
+#endif							/* WORDS_BIGENDIAN */
 
 #define VARDATA_4B(PTR)		(((varattrib_4b *) (PTR))->va_4byte.va_data)
 #define VARDATA_4B_C(PTR)	(((varattrib_4b *) (PTR))->va_compressed.va_data)
 #define VARDATA_1B(PTR)		(((varattrib_1b *) (PTR))->va_data)
 #define VARDATA_1B_E(PTR)	(((varattrib_1b_e *) (PTR))->va_data)
 
-#define VARRAWSIZE_4B_C(PTR) \
-	(((varattrib_4b *) (PTR))->va_compressed.va_rawsize)
+/*
+ * Externally visible TOAST macros begin here.
+ */
 
-/* Externally visible macros */
+#define VARHDRSZ_EXTERNAL		offsetof(varattrib_1b_e, va_data)
+#define VARHDRSZ_COMPRESSED		offsetof(varattrib_4b, va_compressed.va_data)
+#define VARHDRSZ_SHORT			offsetof(varattrib_1b, va_data)
+
+#define VARATT_SHORT_MAX		0x7F
+#define VARATT_CAN_MAKE_SHORT(PTR) \
+	(VARATT_IS_4B_U(PTR) && \
+	 (VARSIZE(PTR) - VARHDRSZ + VARHDRSZ_SHORT) <= VARATT_SHORT_MAX)
+#define VARATT_CONVERTED_SHORT_SIZE(PTR) \
+	(VARSIZE(PTR) - VARHDRSZ + VARHDRSZ_SHORT)
 
 /*
  * In consumers oblivious to data alignment, call PG_DETOAST_DATUM_PACKED(),
@@ -323,6 +368,37 @@ typedef struct
 /* caution: this will return a possibly unaligned pointer */
 #define VARDATA_ANY(PTR) \
 	 (VARATT_IS_1B(PTR) ? VARDATA_1B(PTR) : VARDATA_4B(PTR))
+
+/* Decompressed size and compression method of an external compressed Datum */
+#define VARDATA_COMPRESSED_GET_EXTSIZE(PTR) \
+	(((varattrib_4b *) (PTR))->va_compressed.va_tcinfo & VARLENA_EXTSIZE_MASK)
+#define VARDATA_COMPRESSED_GET_COMPRESS_METHOD(PTR) \
+	(((varattrib_4b *) (PTR))->va_compressed.va_tcinfo >> VARLENA_EXTSIZE_BITS)
+
+/* Same, when working directly with a struct varatt_external */
+#define VARATT_EXTERNAL_GET_EXTSIZE(toast_pointer) \
+	((toast_pointer).va_extinfo & VARLENA_EXTSIZE_MASK)
+#define VARATT_EXTERNAL_GET_COMPRESS_METHOD(toast_pointer) \
+	((toast_pointer).va_extinfo >> VARLENA_EXTSIZE_BITS)
+
+#define VARATT_EXTERNAL_SET_SIZE_AND_COMPRESS_METHOD(toast_pointer, len, cm) \
+	do { \
+		Assert((cm) == TOAST_PGLZ_COMPRESSION_ID || \
+			   (cm) == TOAST_LZ4_COMPRESSION_ID); \
+		((toast_pointer).va_extinfo = \
+			(len) | ((uint32) (cm) << VARLENA_EXTSIZE_BITS)); \
+	} while (0)
+
+/*
+ * Testing whether an externally-stored value is compressed now requires
+ * comparing size stored in va_extinfo (the actual length of the external data)
+ * to rawsize (the original uncompressed datum's size).  The latter includes
+ * VARHDRSZ overhead, the former doesn't.  We never use compression unless it
+ * actually saves space, so we expect either equality or less-than.
+ */
+#define VARATT_EXTERNAL_IS_COMPRESSED(toast_pointer) \
+	(VARATT_EXTERNAL_GET_EXTSIZE(toast_pointer) < \
+	 (toast_pointer).va_rawsize - VARHDRSZ)
 
 
 /* ----------------------------------------------------------------

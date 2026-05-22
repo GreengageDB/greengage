@@ -4,7 +4,7 @@
  *	  Search code for postgres btrees.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -169,7 +169,7 @@ _bt_search(Relation rel, BTScanInsert key, Buffer *bufP, int access,
 		 * we're on the level 1 and asked to lock leaf page in write mode,
 		 * then lock next page in write mode, because it must be a leaf.
 		 */
-		if (opaque->btpo.level == 1 && access == BT_WRITE)
+		if (opaque->btpo_level == 1 && access == BT_WRITE)
 			page_access = BT_WRITE;
 
 		/* drop the read lock on the page, then acquire one on its child */
@@ -860,7 +860,7 @@ _bt_first(IndexScanDesc scan, ScanDirection dir)
 	ScanKeyData notnullkeys[INDEX_MAX_KEYS];
 	int			keysCount = 0;
 	int			i;
-	bool		status = true;
+	bool		status;
 	StrategyNumber strat_total;
 	BTScanPosItem *currItem;
 	BlockNumber blkno;
@@ -880,7 +880,11 @@ _bt_first(IndexScanDesc scan, ScanDirection dir)
 	 * never be satisfied (eg, x == 1 AND x > 2).
 	 */
 	if (!so->qual_ok)
+	{
+		/* Notify any other workers that we're done with this scan key. */
+		_bt_parallel_done(scan);
 		return false;
+	}
 
 	/*
 	 * For parallel scans, get the starting page from shared state. If the
@@ -1858,7 +1862,7 @@ _bt_steppage(IndexScanDesc scan, ScanDirection dir)
 {
 	BTScanOpaque so = (BTScanOpaque) scan->opaque;
 	BlockNumber blkno = InvalidBlockNumber;
-	bool		status = true;
+	bool		status;
 
 	Assert(BTScanPosIsValid(so->currPos));
 
@@ -1967,7 +1971,7 @@ _bt_readnextpage(IndexScanDesc scan, BlockNumber blkno, ScanDirection dir)
 	Relation	rel;
 	Page		page;
 	BTPageOpaque opaque;
-	bool		status = true;
+	bool		status;
 
 	rel = scan->indexRelation;
 
@@ -2337,9 +2341,9 @@ _bt_get_endpoint(Relation rel, uint32 level, bool rightmost,
 		}
 
 		/* Done? */
-		if (opaque->btpo.level == level)
+		if (opaque->btpo_level == level)
 			break;
-		if (opaque->btpo.level < level)
+		if (opaque->btpo_level < level)
 			ereport(ERROR,
 					(errcode(ERRCODE_INDEX_CORRUPTED),
 					 errmsg_internal("btree level %u not found in index \"%s\"",

@@ -50,7 +50,7 @@
  * there is a window (caused by pgstat delay) on which a worker may choose a
  * table that was already vacuumed; this is a bug in the current design.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -123,6 +123,7 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_database.h"
+#include "catalog/pg_inherits.h"
 #include "commands/dbcommands.h"
 #include "commands/vacuum.h"
 #include "lib/ilist.h"
@@ -380,6 +381,10 @@ static void FreeWorkerInfo(int code, Datum arg);
 static autovac_table *table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 											TupleDesc pg_class_desc,
 											int effective_multixact_freeze_max_age);
+static void recheck_relation_needs_vacanalyze(Oid relid, AutoVacOpts *avopts,
+											  Form_pg_class classForm,
+											  int effective_multixact_freeze_max_age,
+											  bool *dovacuum, bool *doanalyze, bool *wraparound);
 static void relation_needs_vacanalyze(Oid relid, AutoVacOpts *relopts,
 									  Form_pg_class classForm,
 									  PgStat_StatTabEntry *tabentry,
@@ -491,7 +496,7 @@ AutoVacLauncherMain(int argc, char *argv[])
 	init_ps_display(NULL);
 
 	ereport(DEBUG1,
-			(errmsg("autovacuum launcher started")));
+			(errmsg_internal("autovacuum launcher started")));
 
 	if (PostAuthDelay)
 		pg_usleep(PostAuthDelay * 1000000L);
@@ -506,8 +511,8 @@ AutoVacLauncherMain(int argc, char *argv[])
 	pqsignal(SIGHUP, SignalHandlerForConfigReload);
 	pqsignal(SIGINT, StatementCancelHandler);
 	pqsignal(SIGTERM, SignalHandlerForShutdownRequest);
+	/* SIGQUIT handler was already set up by InitPostmasterChild */
 
-	pqsignal(SIGQUIT, quickdie);
 	InitializeTimeouts();		/* establishes SIGALRM handler */
 
 	pqsignal(SIGPIPE, SIG_IGN);
@@ -547,6 +552,13 @@ AutoVacLauncherMain(int argc, char *argv[])
 	 * If an exception is encountered, processing resumes here.
 	 *
 	 * This code is a stripped down version of PostgresMain error recovery.
+	 *
+	 * Note that we use sigsetjmp(..., 1), so that the prevailing signal mask
+	 * (to wit, BlockSig) will be restored when longjmp'ing to here.  Thus,
+	 * signals other than SIGQUIT will be blocked until we complete error
+	 * recovery.  It might seem that this policy makes the HOLD_INTERRUPTS()
+	 * call redundant, but it is not since InterruptPending might be set
+	 * already.
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
@@ -901,7 +913,7 @@ static void
 AutoVacLauncherShutdown(void)
 {
 	ereport(DEBUG1,
-			(errmsg("autovacuum launcher shutting down")));
+			(errmsg_internal("autovacuum launcher shutting down")));
 	AutoVacuumShmem->av_launcherpid = 0;
 
 	proc_exit(0);				/* done */
@@ -1244,7 +1256,7 @@ do_start_worker(void)
 	 * pass without forcing a vacuum.  (This limit can be tightened for
 	 * particular tables, but not loosened.)
 	 */
-	recentXid = ReadNewTransactionId();
+	recentXid = ReadNextTransactionId();
 	xidForceLimit = recentXid - autovacuum_freeze_max_age;
 	/* ensure it's a "normal" XID, else TransactionIdPrecedes misbehaves */
 	/* this can cause the limit to go backwards by 3, but that's OK */
@@ -1603,7 +1615,8 @@ AutoVacWorkerMain(int argc, char *argv[])
 	 */
 	pqsignal(SIGINT, StatementCancelHandler);
 	pqsignal(SIGTERM, die);
-	pqsignal(SIGQUIT, quickdie);
+	/* SIGQUIT handler was already set up by InitPostmasterChild */
+
 	InitializeTimeouts();		/* establishes SIGALRM handler */
 
 	pqsignal(SIGPIPE, SIG_IGN);
@@ -1628,7 +1641,15 @@ AutoVacWorkerMain(int argc, char *argv[])
 	/*
 	 * If an exception is encountered, processing resumes here.
 	 *
-	 * See notes in postgres.c about the design of this coding.
+	 * Unlike most auxiliary processes, we don't attempt to continue
+	 * processing after an error; we just clean up and exit.  The autovac
+	 * launcher is responsible for spawning another worker later.
+	 *
+	 * Note that we use sigsetjmp(..., 1), so that the prevailing signal mask
+	 * (to wit, BlockSig) will be restored when longjmp'ing to here.  Thus,
+	 * signals other than SIGQUIT will be blocked until we exit.  It might
+	 * seem that this policy makes the HOLD_INTERRUPTS() call redundant, but
+	 * it is not since InterruptPending might be set already.
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
@@ -1760,8 +1781,8 @@ AutoVacWorkerMain(int argc, char *argv[])
 		InitPostgres(NULL, dbid, NULL, InvalidOid, dbname, false);
 		SetProcessingMode(NormalProcessing);
 		set_ps_display(dbname);
-		ereport(LOG,
-				(errmsg("autovacuum: processing database \"%s\"", dbname)));
+		ereport(DEBUG1,
+				(errmsg_internal("autovacuum: processing database \"%s\"", dbname)));
 
 #ifdef FAULT_INJECTOR
 		FaultInjector_InjectFaultIfSet(
@@ -1773,7 +1794,7 @@ AutoVacWorkerMain(int argc, char *argv[])
 			pg_usleep(PostAuthDelay * 1000000L);
 
 		/* And do an appropriate amount of work */
-		recentXid = ReadNewTransactionId();
+		recentXid = ReadNextTransactionId();
 		recentMulti = ReadNextMultiXactId();
 
 		do_autovacuum();
@@ -1924,7 +1945,7 @@ autovac_balance_cost(void)
 		}
 
 		if (worker->wi_proc != NULL)
-			elog(DEBUG2, "autovac_balance_cost(pid=%u db=%u, rel=%u, dobalance=%s cost_limit=%d, cost_limit_base=%d, cost_delay=%g)",
+			elog(DEBUG2, "autovac_balance_cost(pid=%d db=%u, rel=%u, dobalance=%s cost_limit=%d, cost_limit_base=%d, cost_delay=%g)",
 				 worker->wi_proc->pid, worker->wi_dboid, worker->wi_tableoid,
 				 worker->wi_dobalance ? "yes" : "no",
 				 worker->wi_cost_limit, worker->wi_cost_limit_base,
@@ -2035,6 +2056,7 @@ do_autovacuum(void)
 	int			effective_multixact_freeze_max_age;
 	bool		did_vacuum = false;
 	bool		found_concurrent_worker = false;
+	bool		updated = false;
 	int			i;
 
 	/*
@@ -2109,7 +2131,6 @@ do_autovacuum(void)
 	pg_class_desc = CreateTupleDescCopy(RelationGetDescr(classRel));
 
 	/* create hash table for toast <-> main relid mapping */
-	MemSet(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(Oid);
 	ctl.entrysize = sizeof(av_relation);
 
@@ -2121,12 +2142,19 @@ do_autovacuum(void)
 	/*
 	 * Scan pg_class to determine which tables to vacuum.
 	 *
-	 * We do this in two passes: on the first one we collect the list of plain
-	 * relations and materialized views, and on the second one we collect
-	 * TOAST tables. The reason for doing the second pass is that during it we
-	 * want to use the main relation's pg_class.reloptions entry if the TOAST
-	 * table does not have any, and we cannot obtain it unless we know
-	 * beforehand what's the main table OID.
+	 * We do this in three passes: First we let pgstat collector know about
+	 * the partitioned table ancestors of all partitions that have recently
+	 * acquired rows for analyze.  This informs the second pass about the
+	 * total number of tuple count in partitioning hierarchies.
+	 *
+	 * On the second pass, we collect the list of plain relations,
+	 * materialized views and partitioned tables.  On the third one we collect
+	 * TOAST tables.
+	 *
+	 * The reason for doing the third pass is that during it we want to use
+	 * the main relation's pg_class.reloptions entry if the TOAST table does
+	 * not have any, and we cannot obtain it unless we know beforehand what's
+	 * the main table OID.
 	 *
 	 * We need to check TOAST tables separately because in cases with short,
 	 * wide tables there might be proportionally much more activity in the
@@ -2135,7 +2163,44 @@ do_autovacuum(void)
 	relScan = table_beginscan_catalog(classRel, 0, NULL);
 
 	/*
-	 * On the first pass, we collect main tables to vacuum, and also the main
+	 * First pass: before collecting the list of tables to vacuum, let stat
+	 * collector know about partitioned-table ancestors of each partition.
+	 */
+	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
+	{
+		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(tuple);
+		Oid			relid = classForm->oid;
+		PgStat_StatTabEntry *tabentry;
+
+		/* Only consider permanent leaf partitions */
+		if (!classForm->relispartition ||
+			classForm->relkind == RELKIND_PARTITIONED_TABLE ||
+			classForm->relpersistence == RELPERSISTENCE_TEMP)
+			continue;
+
+		/*
+		 * No need to do this for partitions that haven't acquired any rows.
+		 */
+		tabentry = pgstat_fetch_stat_tabentry(relid);
+		if (tabentry &&
+			tabentry->changes_since_analyze -
+			tabentry->changes_since_analyze_reported > 0)
+		{
+			pgstat_report_anl_ancestors(relid);
+			updated = true;
+		}
+	}
+
+	/* Acquire fresh stats for the next passes, if needed */
+	if (updated)
+	{
+		autovac_refresh_stats();
+		dbentry = pgstat_fetch_stat_dbentry(MyDatabaseId);
+		shared = pgstat_fetch_stat_dbentry(InvalidOid);
+	}
+
+	/*
+	 * On the second pass, we collect main tables to vacuum, and also the main
 	 * table relid to TOAST relid mapping.
 	 */
 	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
@@ -2153,6 +2218,7 @@ do_autovacuum(void)
 			classForm->relkind != RELKIND_AOSEGMENTS &&
 			classForm->relkind != RELKIND_AOBLOCKDIR &&
 			classForm->relkind != RELKIND_AOVISIMAP)
+			classForm->relkind != RELKIND_PARTITIONED_TABLE)
 			continue;
 
 		relid = classForm->oid;
@@ -2234,7 +2300,7 @@ do_autovacuum(void)
 
 	table_endscan(relScan);
 
-	/* second pass: check TOAST tables */
+	/* third pass: check TOAST tables */
 	ScanKeyInit(&key,
 				Anum_pg_class_relkind,
 				BTEqualStrategyNumber, F_CHAREQ,
@@ -2589,7 +2655,7 @@ do_autovacuum(void)
 						   tab->at_datname, tab->at_nspname, tab->at_relname);
 			EmitErrorReport();
 
-			/* this resets ProcGlobal->vacuumFlags[i] too */
+			/* this resets ProcGlobal->statusFlags[i] too */
 			AbortOutOfAnyTransaction();
 			FlushErrorState();
 			MemoryContextResetAndDeleteChildren(PortalContext);
@@ -2611,7 +2677,7 @@ do_autovacuum(void)
 
 		did_vacuum = true;
 
-		/* ProcGlobal->vacuumFlags[i] are reset at the next end of xact */
+		/* ProcGlobal->statusFlags[i] are reset at the next end of xact */
 
 		/* be tidy */
 deleted:
@@ -2788,7 +2854,7 @@ perform_work_item(AutoVacuumWorkItem *workitem)
 				   cur_datname, cur_nspname, cur_relname);
 		EmitErrorReport();
 
-		/* this resets ProcGlobal->vacuumFlags[i] too */
+		/* this resets ProcGlobal->statusFlags[i] too */
 		AbortOutOfAnyTransaction();
 		FlushErrorState();
 		MemoryContextResetAndDeleteChildren(PortalContext);
@@ -2819,6 +2885,11 @@ deleted2:
  *
  * Given a relation's pg_class tuple, return the AutoVacOpts portion of
  * reloptions, if set; otherwise, return NULL.
+ *
+ * Note: callers do not have a relation lock on the table at this point,
+ * so the table could have been dropped, and its catalog rows gone, after
+ * we acquired the pg_class row.  If pg_class had a TOAST table, this would
+ * be a risk; fortunately, it doesn't.
  */
 static AutoVacOpts *
 extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
@@ -2833,6 +2904,8 @@ extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOBLOCKDIR ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind ==  RELKIND_AOVISIMAP);
 
+		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_PARTITIONED_TABLE ||
+		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE);
 
 	relopts = extractRelOptions(tup, pg_class_desc, NULL);
 	if (relopts == NULL)
@@ -2887,17 +2960,9 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 	bool		dovacuum;
 	bool		doanalyze;
 	autovac_table *tab = NULL;
-	PgStat_StatTabEntry *tabentry;
-	PgStat_StatDBEntry *shared;
-	PgStat_StatDBEntry *dbentry;
 	bool		wraparound;
 	AutoVacOpts *avopts;
-
-	/* use fresh stats */
-	autovac_refresh_stats();
-
-	shared = pgstat_fetch_stat_dbentry(InvalidOid);
-	dbentry = pgstat_fetch_stat_dbentry(MyDatabaseId);
+	static bool reuse_stats = false;
 
 	/* fetch the relation's relcache entry */
 	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
@@ -2921,17 +2986,38 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 			avopts = &hentry->ar_reloptions;
 	}
 
-	/* fetch the pgstat table entry */
-	tabentry = get_pgstat_tabentry_relid(relid, classForm->relisshared,
-										 shared, dbentry);
+	/*
+	 * Reuse the stats to recheck whether a relation needs to be vacuumed or
+	 * analyzed if it was reloaded before and has not been cleared yet. This
+	 * is necessary to avoid frequent refresh of stats, especially when there
+	 * are very large number of relations and the refresh can cause lots of
+	 * overhead.
+	 *
+	 * If we determined that a relation needs to be vacuumed or analyzed,
+	 * based on the old stats, we refresh stats and recheck the necessity
+	 * again. Because a relation may have already been vacuumed or analyzed by
+	 * someone since the last reload of stats.
+	 */
+	if (reuse_stats)
+	{
+		recheck_relation_needs_vacanalyze(relid, avopts, classForm,
+										  effective_multixact_freeze_max_age,
+										  &dovacuum, &doanalyze, &wraparound);
 
-	relation_needs_vacanalyze(relid, avopts, classForm, tabentry,
-							  effective_multixact_freeze_max_age,
-							  &dovacuum, &doanalyze, &wraparound);
+		/* Quick exit if a relation doesn't need to be vacuumed or analyzed */
+		if (!doanalyze && !dovacuum)
+		{
+			heap_freetuple(classTup);
+			return NULL;
+		}
+	}
 
-	/* ignore ANALYZE for toast tables */
-	if (classForm->relkind == RELKIND_TOASTVALUE)
-		doanalyze = false;
+	/* Use fresh stats and recheck again */
+	autovac_refresh_stats();
+
+	recheck_relation_needs_vacanalyze(relid, avopts, classForm,
+									  effective_multixact_freeze_max_age,
+									  &dovacuum, &doanalyze, &wraparound);
 
 	/* OK, it needs something done */
 	if (doanalyze || dovacuum)
@@ -2992,12 +3078,19 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 		tab = palloc(sizeof(autovac_table));
 		tab->at_relid = relid;
 		tab->at_sharedrel = classForm->relisshared;
-		tab->at_params.options = VACOPT_SKIPTOAST |
-			(dovacuum ? VACOPT_VACUUM : 0) |
+
+		/* Note that this skips toast relations */
+		tab->at_params.options = (dovacuum ? VACOPT_VACUUM : 0) |
 			(doanalyze ? VACOPT_ANALYZE : 0) |
 			(!wraparound ? VACOPT_SKIP_LOCKED : 0);
-		tab->at_params.index_cleanup = VACOPT_TERNARY_DEFAULT;
-		tab->at_params.truncate = VACOPT_TERNARY_DEFAULT;
+
+		/*
+		 * index_cleanup and truncate are unspecified at first in autovacuum.
+		 * They will be filled in with usable values using their reloptions
+		 * (or reloption defaults) later.
+		 */
+		tab->at_params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
+		tab->at_params.truncate = VACOPTVALUE_UNSPECIFIED;
 		/* As of now, we don't support parallel vacuum for autovacuum */
 		tab->at_params.nworkers = -1;
 		tab->at_params.freeze_min_age = freeze_min_age;
@@ -3020,11 +3113,64 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 		tab->at_dobalance =
 			!(avopts && (avopts->vacuum_cost_limit > 0 ||
 						 avopts->vacuum_cost_delay > 0));
+
+		/*
+		 * When we decide to do vacuum or analyze, the existing stats cannot
+		 * be reused in the next cycle because it's cleared at the end of
+		 * vacuum or analyze (by AtEOXact_PgStat()).
+		 */
+		reuse_stats = false;
+	}
+	else
+	{
+		/*
+		 * If neither vacuum nor analyze is necessary, the existing stats is
+		 * not cleared and can be reused in the next cycle.
+		 */
+		reuse_stats = true;
 	}
 
 	heap_freetuple(classTup);
-
 	return tab;
+}
+
+/*
+ * recheck_relation_needs_vacanalyze
+ *
+ * Subroutine for table_recheck_autovac.
+ *
+ * Fetch the pgstat of a relation and recheck whether a relation
+ * needs to be vacuumed or analyzed.
+ */
+static void
+recheck_relation_needs_vacanalyze(Oid relid,
+								  AutoVacOpts *avopts,
+								  Form_pg_class classForm,
+								  int effective_multixact_freeze_max_age,
+								  bool *dovacuum,
+								  bool *doanalyze,
+								  bool *wraparound)
+{
+	PgStat_StatTabEntry *tabentry;
+	PgStat_StatDBEntry *shared = NULL;
+	PgStat_StatDBEntry *dbentry = NULL;
+
+	if (classForm->relisshared)
+		shared = pgstat_fetch_stat_dbentry(InvalidOid);
+	else
+		dbentry = pgstat_fetch_stat_dbentry(MyDatabaseId);
+
+	/* fetch the pgstat table entry */
+	tabentry = get_pgstat_tabentry_relid(relid, classForm->relisshared,
+										 shared, dbentry);
+
+	relation_needs_vacanalyze(relid, avopts, classForm, tabentry,
+							  effective_multixact_freeze_max_age,
+							  dovacuum, doanalyze, wraparound);
+
+	/* ignore ANALYZE for toast tables */
+	if (classForm->relkind == RELKIND_TOASTVALUE)
+		*doanalyze = false;
 }
 
 /*
@@ -3192,6 +3338,10 @@ relation_needs_vacanalyze(Oid relid,
 		vactuples = tabentry->n_dead_tuples;
 		instuples = tabentry->inserts_since_vacuum;
 		anltuples = tabentry->changes_since_analyze;
+
+		/* If the table hasn't yet been vacuumed, take reltuples as zero */
+		if (reltuples < 0)
+			reltuples = 0;
 
 		vacthresh = (float4) vac_base_thresh + vac_scale_factor * reltuples;
 		vacinsthresh = (float4) vac_ins_base_thresh + vac_ins_scale_factor * reltuples;

@@ -8,7 +8,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994-5, Regents of the University of California
  *
  *
@@ -43,6 +43,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/toasting.h"
 #include "commands/cluster.h"
+#include "commands/defrem.h"
 #include "commands/progress.h"
 #include "commands/tablecmds.h"
 #include "commands/vacuum.h"
@@ -116,8 +117,29 @@ static List *get_tables_to_cluster(MemoryContext cluster_context);
  *---------------------------------------------------------------------------
  */
 void
-cluster(ClusterStmt *stmt, bool isTopLevel)
+cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 {
+	ListCell   *lc;
+	ClusterParams params = {0};
+	bool		verbose = false;
+
+	/* Parse option list */
+	foreach(lc, stmt->params)
+	{
+		DefElem    *opt = (DefElem *) lfirst(lc);
+
+		if (strcmp(opt->defname, "verbose") == 0)
+			verbose = defGetBoolean(opt);
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("unrecognized CLUSTER option \"%s\"",
+							opt->defname),
+					 parser_errposition(pstate, opt->location)));
+	}
+
+	params.options = (verbose ? CLUOPT_VERBOSE : 0);
+
 	if (stmt->relation != NULL)
 	{
 		/* This is the single-relation case. */
@@ -198,6 +220,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 										GetAssignedOidsForDispatch(),
 										NULL);
 		}
+		cluster_rel(tableOid, indexOid, &params);
 	}
 	else
 	{
@@ -240,6 +263,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		{
 			RelToCluster *rvtc = (RelToCluster *) lfirst(rv);
 			bool		dispatch;
+			ClusterParams cluster_params = params;
 
 			/* Start a new transaction for each relation. */
 			StartTransactionCommand();
@@ -262,6 +286,9 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 											NULL);
 			}
 
+			cluster_params.options |= CLUOPT_RECHECK;
+			cluster_rel(rvtc->tableOid, rvtc->indexOid,
+						&cluster_params);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
 		}
@@ -295,12 +322,12 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
  * this function errors out when the relation is an AO table. Otherwise, this
  * functions prints out a warning message when the relation is an AO table.
  */
-bool
-cluster_rel(Oid tableOid, Oid indexOid, int options, bool printError)
+void
+cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 {
 	Relation	OldHeap;
-	bool		verbose = ((options & CLUOPT_VERBOSE) != 0);
-	bool		recheck = ((options & CLUOPT_RECHECK) != 0);
+	bool		verbose = ((params->options & CLUOPT_VERBOSE) != 0);
+	bool		recheck = ((params->options & CLUOPT_RECHECK) != 0);
 
 	/* Check for user-requested abort. */
 	CHECK_FOR_INTERRUPTS();
@@ -1617,6 +1644,7 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 	ObjectAddress object;
 	Oid			mapped_tables[4];
 	int			reindex_flags;
+	ReindexParams reindex_params = {0};
 	int			i;
 
 	/* Report that we are now swapping relation files */
@@ -1678,14 +1706,14 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 	pgstat_progress_update_param(PROGRESS_CLUSTER_PHASE,
 								 PROGRESS_CLUSTER_PHASE_REBUILD_INDEX);
 
-	reindex_relation(OIDOldHeap, reindex_flags, 0);
+	reindex_relation(OIDOldHeap, reindex_flags, &reindex_params);
 
 	/* Report that we are now doing clean up */
 	pgstat_progress_update_param(PROGRESS_CLUSTER_PHASE,
 								 PROGRESS_CLUSTER_PHASE_FINAL_CLEANUP);
 
 	/*
-	 * If the relation being rebuild is pg_class, swap_relation_files()
+	 * If the relation being rebuilt is pg_class, swap_relation_files()
 	 * couldn't update pg_class's own pg_class entry (check comments in
 	 * swap_relation_files()), thus relfrozenxid was not updated. That's
 	 * annoying because a potential reason for doing a VACUUM FULL is a

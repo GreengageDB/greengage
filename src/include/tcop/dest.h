@@ -57,7 +57,7 @@
  * calls in portal and cursor manipulations.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/tcop/dest.h
@@ -139,6 +139,7 @@ extern void BeginCommand(CommandTag commandTag, CommandDest dest);
 extern DestReceiver *CreateDestReceiver(CommandDest dest);
 extern void EndCommand(const QueryCompletion *qc, CommandDest dest,
 					   bool force_undecorated_output);
+extern void EndReplicationCommand(const char *commandTag);
 
 /* Additional functions that go with destination management, more or less. */
 

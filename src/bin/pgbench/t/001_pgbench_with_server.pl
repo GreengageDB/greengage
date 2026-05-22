@@ -1,9 +1,13 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
 
 use PostgresNode;
 use TestLib;
 use Test::More;
+use Config;
 
 # start a pgbench specific server
 my $node = get_new_node('main');
@@ -41,7 +45,7 @@ sub pgbench
 			# filenames are expected to be unique on a test
 			if (-e $filename)
 			{
-				ok(0, "$filename must not already exists");
+				ok(0, "$filename must not already exist");
 				unlink $filename or die "cannot unlink $filename: $!";
 			}
 			append_to_file($filename, $$files{$fn});
@@ -90,13 +94,13 @@ pgbench(
 	1,
 	[qr{^$}],
 	[
-		qr{connection to database "no-such-database" failed},
+		qr{connection to server .* failed},
 		qr{FATAL:  database "no-such-database" does not exist}
 	],
 	'no such database');
 
 pgbench(
-	'-S -t 1', 1, [qr{^$}],
+	'-S -t 1', 1, [],
 	[qr{Perhaps you need to do initialization}],
 	'run without init');
 
@@ -287,7 +291,7 @@ pgbench(
 	[],
 	[
 		qr{ERROR:  invalid input syntax for type json},
-		qr{(?!extended query with parameters)}
+		qr{(?!unnamed portal with parameters)}
 	],
 	'server parameter logging',
 	{
@@ -314,7 +318,7 @@ pgbench(
 	[],
 	[
 		qr{ERROR:  division by zero},
-		qr{CONTEXT:  extended query with parameters: \$1 = '1', \$2 = NULL}
+		qr{CONTEXT:  unnamed portal with parameters: \$1 = '1', \$2 = NULL}
 	],
 	'server parameter logging',
 	{
@@ -328,7 +332,7 @@ pgbench(
 	[],
 	[
 		qr{ERROR:  invalid input syntax for type json},
-		qr[CONTEXT:  JSON data, line 1: \{ invalid\.\.\.[\r\n]+extended query with parameters: \$1 = '\{ invalid ', \$2 = '''Valame Dios!'' dijo Sancho; ''no le dije yo a vuestra merced que \.\.\.']m
+		qr[CONTEXT:  JSON data, line 1: \{ invalid\.\.\.[\r\n]+unnamed portal with parameters: \$1 = '\{ invalid ', \$2 = '''Valame Dios!'' dijo Sancho; ''no le dije yo a vuestra merced que \.\.\.']m
 	],
 	'server parameter logging',
 	{
@@ -356,7 +360,7 @@ pgbench(
 	[],
 	[
 		qr{ERROR:  division by zero},
-		qr{CONTEXT:  extended query with parameters: \$1 = '1', \$2 = NULL}
+		qr{CONTEXT:  unnamed portal with parameters: \$1 = '1', \$2 = NULL}
 	],
 	'server parameter logging',
 	{
@@ -373,7 +377,7 @@ pgbench(
 	[],
 	[
 		qr{ERROR:  invalid input syntax for type json},
-		qr[CONTEXT:  JSON data, line 1: \{ invalid\.\.\.[\r\n]+extended query with parameters: \$1 = '\{ invalid ', \$2 = '''Valame Dios!'' dijo Sancho; ''no le dije yo a vuestra merced que mirase bien lo que hacia\?']m
+		qr[CONTEXT:  JSON data, line 1: \{ invalid\.\.\.[\r\n]+unnamed portal with parameters: \$1 = '\{ invalid ', \$2 = '''Valame Dios!'' dijo Sancho; ''no le dije yo a vuestra merced que mirase bien lo que hacia\?']m
 	],
 	'server parameter logging',
 	{
@@ -388,6 +392,22 @@ like(
 	qr[DETAIL:  parameters: \$1 = '\{ inval\.\.\.', \$2 = '''Valame\.\.\.'],
 	"parameter report truncates");
 $log = undef;
+
+# Check that bad parameters are reported during typinput phase of BIND
+pgbench(
+	'-n -t1 -c1 -M prepared',
+	2,
+	[],
+	[
+		qr{ERROR:  invalid input syntax for type smallint: "1a"},
+		qr{CONTEXT:  unnamed portal parameter \$2 = '1a'}
+	],
+	'server parameter logging',
+	{
+		'001_param_6' => q{select 42 as value1, '1a' as value2 \gset
+select :value1::smallint, :value2::smallint;
+}
+	});
 
 # Restore default logging config
 $node->append_conf('postgresql.conf',
@@ -467,6 +487,15 @@ pgbench(
 		qr{command=98.: int 5432\b},                    # :random_seed
 		qr{command=99.: int -9223372036854775808\b},    # min int
 		qr{command=100.: int 9223372036854775807\b},    # max int
+		    # pseudorandom permutation tests
+		qr{command=101.: boolean true\b},
+		qr{command=102.: boolean true\b},
+		qr{command=103.: boolean true\b},
+		qr{command=104.: boolean true\b},
+		qr{command=105.: boolean true\b},
+		qr{command=109.: boolean true\b},
+		qr{command=110.: boolean true\b},
+		qr{command=111.: boolean true\b},
 	],
 	'pgbench expressions',
 	{
@@ -594,6 +623,24 @@ SELECT :v0, :v1, :v2, :v3;
 -- minint constant parsing
 \set min debug(-9223372036854775808)
 \set max debug(-(:min + 1))
+-- parametric pseudorandom permutation function
+\set t debug(permute(0, 2) + permute(1, 2) = 1)
+\set t debug(permute(0, 3) + permute(1, 3) + permute(2, 3) = 3)
+\set t debug(permute(0, 4) + permute(1, 4) + permute(2, 4) + permute(3, 4) = 6)
+\set t debug(permute(0, 5) + permute(1, 5) + permute(2, 5) + permute(3, 5) + permute(4, 5) = 10)
+\set t debug(permute(0, 16) + permute(1, 16) + permute(2, 16) + permute(3, 16) + \
+             permute(4, 16) + permute(5, 16) + permute(6, 16) + permute(7, 16) + \
+             permute(8, 16) + permute(9, 16) + permute(10, 16) + permute(11, 16) + \
+             permute(12, 16) + permute(13, 16) + permute(14, 16) + permute(15, 16) = 120)
+-- random sanity checks
+\set size random(2, 1000)
+\set v random(0, :size - 1)
+\set p permute(:v, :size)
+\set t debug(0 <= :p and :p < :size and :p = permute(:v + :size, :size) and :p <> permute(:v + 1, :size))
+-- actual values
+\set t debug(permute(:v, 1) = 0)
+\set t debug(permute(0, 2, 5432) = 0 and permute(1, 2, 5432) = 1 and \
+             permute(0, 2, 5435) = 1 and permute(1, 2, 5435) = 0)
 }
 	});
 
@@ -754,6 +801,83 @@ pgbench(
 \set i debug(:i8)
 }
 	});
+
+# Working \startpipeline
+pgbench(
+	'-t 1 -n -M extended',
+	0,
+	[ qr{type: .*/001_pgbench_pipeline}, qr{actually processed: 1/1} ],
+	[],
+	'working \startpipeline',
+	{
+		'001_pgbench_pipeline' => q{
+-- test startpipeline
+\startpipeline
+} . "select 1;\n" x 10 . q{
+\endpipeline
+}
+	});
+
+# Working \startpipeline in prepared query mode
+pgbench(
+	'-t 1 -n -M prepared',
+	0,
+	[ qr{type: .*/001_pgbench_pipeline_prep}, qr{actually processed: 1/1} ],
+	[],
+	'working \startpipeline',
+	{
+		'001_pgbench_pipeline_prep' => q{
+-- test startpipeline
+\startpipeline
+} . "select 1;\n" x 10 . q{
+\endpipeline
+}
+	});
+
+# Try \startpipeline twice
+pgbench(
+	'-t 1 -n -M extended',
+	2,
+	[],
+	[qr{already in pipeline mode}],
+	'error: call \startpipeline twice',
+	{
+		'001_pgbench_pipeline_2' => q{
+-- startpipeline twice
+\startpipeline
+\startpipeline
+}
+	});
+
+# Try to end a pipeline that hasn't started
+pgbench(
+	'-t 1 -n -M extended',
+	2,
+	[],
+	[qr{not in pipeline mode}],
+	'error: \endpipeline with no start',
+	{
+		'001_pgbench_pipeline_3' => q{
+-- pipeline not started
+\endpipeline
+}
+	});
+
+# Try \gset in pipeline mode
+pgbench(
+	'-t 1 -n -M extended',
+	2,
+	[],
+	[qr{gset is not allowed in pipeline mode}],
+	'error: \gset not allowed in pipeline mode',
+	{
+		'001_pgbench_pipeline_4' => q{
+\startpipeline
+select 1 \gset f
+\endpipeline
+}
+	});
+
 
 # trigger many expression errors
 my @errors = (
@@ -955,16 +1079,22 @@ SELECT LEAST(} . join(', ', (':i') x 256) . q{)}
 		'bad boolean',                     2,
 		[qr{malformed variable.*trueXXX}], q{\set b :badtrue or true}
 	],
+	[
+		'invalid permute size',
+		2,
+		[qr{permute size parameter must be greater than zero}],
+		q{\set i permute(0, 0)}
+	],
 
 	# GSET
 	[
 		'gset no row',                   2,
 		[qr{expected one row, got 0\b}], q{SELECT WHERE FALSE \gset}
 	],
-	[ 'gset alone', 1, [qr{gset must follow a SQL command}], q{\gset} ],
+	[ 'gset alone', 1, [qr{gset must follow an SQL command}], q{\gset} ],
 	[
-		'gset no SQL',                        1,
-		[qr{gset must follow a SQL command}], q{\set i +1
+		'gset no SQL',                         1,
+		[qr{gset must follow an SQL command}], q{\set i +1
 \gset}
 	],
 	[
@@ -972,8 +1102,8 @@ SELECT LEAST(} . join(', ', (':i') x 256) . q{)}
 		[qr{too many arguments}],  q{SELECT 1 \gset a b}
 	],
 	[
-		'gset after gset',                    1,
-		[qr{gset must follow a SQL command}], q{SELECT 1 AS i \gset
+		'gset after gset',                     1,
+		[qr{gset must follow an SQL command}], q{SELECT 1 AS i \gset
 \gset}
 	],
 	[
@@ -1043,7 +1173,12 @@ sub list_files
 	return map { $dir . '/' . $_ } @files;
 }
 
-# check log contents and cleanup
+# Check log contents and clean them up:
+#   $dir: directory holding logs
+#   $prefix: file prefix for per-thread logs
+#   $nb: number of expected files
+#   $min/$max: minimum and maximum number of lines in log files
+#   $re: regular expression each log line has to match
 sub check_pgbench_logs
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
@@ -1058,42 +1193,51 @@ sub check_pgbench_logs
 	my $log_number = 0;
 	for my $log (sort @logs)
 	{
-		eval {
-			open my $fh, '<', $log or die "$@";
-			my @contents = <$fh>;
-			my $clen     = @contents;
-			ok( $min <= $clen && $clen <= $max,
-				"transaction count for $log ($clen)");
-			ok( grep($re, @contents) == $clen,
-				"transaction format for $prefix");
-			close $fh or die "$@";
-		};
+		# Check the contents of each log file.
+		my $contents_raw = slurp_file($log);
+
+		my @contents = split(/\n/, $contents_raw);
+		my $clen = @contents;
+		ok( $min <= $clen && $clen <= $max,
+			"transaction count for $log ($clen)");
+		my $clen_match = grep(/$re/, @contents);
+		ok($clen_match == $clen, "transaction format for $prefix");
+
+		# Show more information if some logs don't match
+		# to help with debugging.
+		if ($clen_match != $clen)
+		{
+			foreach my $log (@contents)
+			{
+				print "# Log entry not matching: $log\n"
+				  unless $log =~ /$re/;
+			}
+		}
 	}
-	ok(unlink(@logs), "remove log files");
 	return;
 }
 
 my $bdir = $node->basedir;
 
-# with sampling rate
+# Run with sampling rate, 2 clients with 50 transactions each.
 pgbench(
 	"-n -S -t 50 -c 2 --log --sampling-rate=0.5", 0,
 	[ qr{select only}, qr{processed: 100/100} ], [qr{^$}],
 	'pgbench logs', undef,
 	"--log-prefix=$bdir/001_pgbench_log_2");
-
+# The IDs of the clients (1st field) in the logs should be either 0 or 1.
 check_pgbench_logs($bdir, '001_pgbench_log_2', 1, 8, 92,
-	qr{^0 \d{1,2} \d+ \d \d+ \d+$});
+	qr{^[01] \d{1,2} \d+ \d \d+ \d+$});
 
-# check log file in some detail
+# Run with different read-only option pattern, 1 client with 10 transactions.
 pgbench(
-	"-n -b se -t 10 -l", 0,
+	"-n -b select-only -t 10 -l", 0,
 	[ qr{select only}, qr{processed: 10/10} ], [qr{^$}],
 	'pgbench logs contents', undef,
 	"--log-prefix=$bdir/001_pgbench_log_3");
-
+# The ID of a single client (1st field) should match 0.
 check_pgbench_logs($bdir, '001_pgbench_log_3', 1, 10, 10,
-	qr{^\d \d{1,2} \d+ \d \d+ \d+$});
+	qr{^0 \d{1,2} \d+ \d \d+ \d+$});
 
 # done
 $node->safe_psql('postgres', 'DROP TABLESPACE regress_pgbench_tap_1_ts');

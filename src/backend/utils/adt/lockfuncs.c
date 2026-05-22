@@ -3,7 +3,7 @@
  * lockfuncs.c
  *		Functions for SQL access to various lock-manager capabilities.
  *
- * Copyright (c) 2002-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2002-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/backend/utils/adt/lockfuncs.c
@@ -75,7 +75,7 @@ typedef struct
 } PG_Lock_Status;
 
 /* Number of columns in pg_locks output */
-#define NUM_LOCK_STATUS_COLUMNS		18
+#define NUM_LOCK_STATUS_COLUMNS		19
 
 /*
  * VXIDGetDatum - Construct a text representation of a VXID
@@ -154,15 +154,18 @@ pg_lock_status(PG_FUNCTION_ARGS)
 						   BOOLOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 15, "fastpath",
 						   BOOLOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 16, "waitstart",
+						   TIMESTAMPTZOID, -1, 0);
 		/*
 		 * These next columns are specific to GPDB
 		 */
-		TupleDescInitEntry(tupdesc, (AttrNumber) 16, "mppSessionId",
+		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "mppSessionId",
 						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 17, "mppIsWriter",
+		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "mppIsWriter",
 						   BOOLOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 18, "gp_segment_id",
+		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "gp_segment_id",
 						   INT4OID, -1, 0);
+
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
@@ -493,9 +496,10 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		values[13] = BoolGetDatum(granted);
 		values[14] = BoolGetDatum(instance->fastpath);
 		
-		values[15] = Int32GetDatum(instance->mppSessionId);
+		values[15] = (Datum) 0;  /* waitstart: filled by caller */
+			values[16] = Int32GetDatum(instance->mppSessionId);
 
-		values[16] = BoolGetDatum(instance->mppIsWriter);
+		values[17] = BoolGetDatum(instance->mppIsWriter);
 
 		values[17] = Int32GetDatum(GpIdentity.segindex);
 
@@ -592,6 +596,10 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		{
 			nulls[i] = PQgetisnull(mystatus->segresults[whichresultset], whichrow, i);
 		}
+		if (!granted && instance->waitStart != 0)
+			values[15] = TimestampTzGetDatum(instance->waitStart);
+		else
+			nulls[15] = true;
 
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
@@ -662,6 +670,7 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		values[12] = CStringGetTextDatum("SIReadLock");
 		values[13] = BoolGetDatum(true);
 		values[14] = BoolGetDatum(false);
+		nulls[15] = true;
 
 		/*
 		 * GPDB_91_MERGE_FIXME: what to set these GPDB-specific fields to?
@@ -908,10 +917,10 @@ pg_isolation_test_session_is_blocked(PG_FUNCTION_ARGS)
 	 * Check if any of these are in the list of interesting PIDs, that being
 	 * the sessions that the isolation tester is running.  We don't use
 	 * "arrayoverlaps" here, because it would lead to cache lookups and one of
-	 * our goals is to run quickly under CLOBBER_CACHE_ALWAYS.  We expect
-	 * blocking_pids to be usually empty and otherwise a very small number in
-	 * isolation tester cases, so make that the outer loop of a naive search
-	 * for a match.
+	 * our goals is to run quickly with debug_invalidate_system_caches_always
+	 * > 0.  We expect blocking_pids to be usually empty and otherwise a very
+	 * small number in isolation tester cases, so make that the outer loop of
+	 * a naive search for a match.
 	 */
 	for (i = 0; i < num_blocking_pids; i++)
 		for (j = 0; j < num_interesting_pids; j++)
@@ -923,7 +932,7 @@ pg_isolation_test_session_is_blocked(PG_FUNCTION_ARGS)
 	/*
 	 * Check if blocked_pid is waiting for a safe snapshot.  We could in
 	 * theory check the resulting array of blocker PIDs against the
-	 * interesting PIDs whitelist, but since there is no danger of autovacuum
+	 * interesting PIDs list, but since there is no danger of autovacuum
 	 * blocking GetSafeSnapshot there seems to be no point in expending cycles
 	 * on allocating a buffer and searching for overlap; so it's presently
 	 * sufficient for the isolation tester's purposes to use a single element

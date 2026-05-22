@@ -3,7 +3,7 @@
  * aclchk.c
  *	  Routines to check access control permissions.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -389,6 +389,22 @@ ExecuteGrantStmt(GrantStmt *stmt)
 	ListCell   *cell;
 	const char *errormsg;
 	AclMode		all_privileges;
+
+	if (stmt->grantor)
+	{
+		Oid			grantor;
+
+		grantor = get_rolespec_oid(stmt->grantor, false);
+
+		/*
+		 * Currently, this clause is only for SQL compatibility, not very
+		 * interesting otherwise.
+		 */
+		if (grantor != GetUserId())
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("grantor must be current user")));
+	}
 
 	/*
 	 * Turn the regular GrantStmt into the InternalGrant form.
@@ -1492,6 +1508,9 @@ SetDefaultACL(InternalDefaultACL *iacls)
 		ReleaseSysCache(tuple);
 
 	table_close(rel, RowExclusiveLock);
+
+	/* prevent error when processing duplicate objects */
+	CommandCounterIncrement();
 }
 
 
@@ -3292,7 +3311,7 @@ ExecGrant_Type(InternalGrant *istmt)
 
 		pg_type_tuple = (Form_pg_type) GETSTRUCT(tuple);
 
-		if (pg_type_tuple->typelem != 0 && pg_type_tuple->typlen == -1)
+		if (IsTrueArrayType(pg_type_tuple))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_GRANT_OPERATION),
 					 errmsg("cannot set privileges of array types"),
@@ -4042,6 +4061,20 @@ AclMode
 pg_attribute_aclmask(Oid table_oid, AttrNumber attnum, Oid roleid,
 					 AclMode mask, AclMaskHow how)
 {
+	return pg_attribute_aclmask_ext(table_oid, attnum, roleid,
+									mask, how, NULL);
+}
+
+/*
+ * Exported routine for examining a user's privileges for a column
+ *
+ * Does the bulk of the work for pg_attribute_aclmask(), and allows other
+ * callers to avoid the missing attribute ERROR when is_missing is non-NULL.
+ */
+AclMode
+pg_attribute_aclmask_ext(Oid table_oid, AttrNumber attnum, Oid roleid,
+						 AclMode mask, AclMaskHow how, bool *is_missing)
+{
 	AclMode		result;
 	HeapTuple	classTuple;
 	HeapTuple	attTuple;
@@ -4059,18 +4092,38 @@ pg_attribute_aclmask(Oid table_oid, AttrNumber attnum, Oid roleid,
 							   ObjectIdGetDatum(table_oid),
 							   Int16GetDatum(attnum));
 	if (!HeapTupleIsValid(attTuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_COLUMN),
-				 errmsg("attribute %d of relation with OID %u does not exist",
-						attnum, table_oid)));
+	{
+		if (is_missing != NULL)
+		{
+			/* return "no privileges" instead of throwing an error */
+			*is_missing = true;
+			return 0;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					 errmsg("attribute %d of relation with OID %u does not exist",
+							attnum, table_oid)));
+	}
+
 	attributeForm = (Form_pg_attribute) GETSTRUCT(attTuple);
 
-	/* Throw error on dropped columns, too */
+	/* Check dropped columns, too */
 	if (attributeForm->attisdropped)
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_COLUMN),
-				 errmsg("attribute %d of relation with OID %u does not exist",
-						attnum, table_oid)));
+	{
+		if (is_missing != NULL)
+		{
+			/* return "no privileges" instead of throwing an error */
+			*is_missing = true;
+			ReleaseSysCache(attTuple);
+			return 0;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					 errmsg("attribute %d of relation with OID %u does not exist",
+							attnum, table_oid)));
+	}
 
 	aclDatum = SysCacheGetAttr(ATTNUM, attTuple, Anum_pg_attribute_attacl,
 							   &isNull);
@@ -4127,6 +4180,19 @@ AclMode
 pg_class_aclmask(Oid table_oid, Oid roleid,
 				 AclMode mask, AclMaskHow how)
 {
+	return pg_class_aclmask_ext(table_oid, roleid, mask, how, NULL);
+}
+
+/*
+ * Exported routine for examining a user's privileges for a table
+ *
+ * Does the bulk of the work for pg_class_aclmask(), and allows other
+ * callers to avoid the missing relation ERROR when is_missing is non-NULL.
+ */
+AclMode
+pg_class_aclmask_ext(Oid table_oid, Oid roleid, AclMode mask,
+					 AclMaskHow how, bool *is_missing)
+{
 	AclMode		result;
 	HeapTuple	tuple;
 	Form_pg_class classForm;
@@ -4140,10 +4206,20 @@ pg_class_aclmask(Oid table_oid, Oid roleid,
 	 */
 	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(table_oid));
 	if (!HeapTupleIsValid(tuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_TABLE),
-				 errmsg("relation with OID %u does not exist",
-						table_oid)));
+	{
+		if (is_missing != NULL)
+		{
+			/* return "no privileges" instead of throwing an error */
+			*is_missing = true;
+			return 0;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_TABLE),
+					 errmsg("relation with OID %u does not exist",
+							table_oid)));
+	}
+
 	classForm = (Form_pg_class) GETSTRUCT(tuple);
 
 	/*
@@ -4203,6 +4279,27 @@ pg_class_aclmask(Oid table_oid, Oid roleid,
 		pfree(acl);
 
 	ReleaseSysCache(tuple);
+
+	/*
+	 * Check if ACL_SELECT is being checked and, if so, and not set already as
+	 * part of the result, then check if the user is a member of the
+	 * pg_read_all_data role, which allows read access to all relations.
+	 */
+	if (mask & ACL_SELECT && !(result & ACL_SELECT) &&
+		has_privs_of_role(roleid, ROLE_PG_READ_ALL_DATA))
+		result |= ACL_SELECT;
+
+	/*
+	 * Check if ACL_INSERT, ACL_UPDATE, or ACL_DELETE is being checked and, if
+	 * so, and not set already as part of the result, then check if the user
+	 * is a member of the pg_write_all_data role, which allows
+	 * INSERT/UPDATE/DELETE access to all relations (except system catalogs,
+	 * which requires superuser, see above).
+	 */
+	if (mask & (ACL_INSERT | ACL_UPDATE | ACL_DELETE) &&
+		!(result & (ACL_INSERT | ACL_UPDATE | ACL_DELETE)) &&
+		has_privs_of_role(roleid, ROLE_PG_WRITE_ALL_DATA))
+		result |= (mask & (ACL_INSERT | ACL_UPDATE | ACL_DELETE));
 
 	return result;
 }
@@ -4530,6 +4627,16 @@ pg_namespace_aclmask(Oid nsp_oid, Oid roleid,
 
 	ReleaseSysCache(tuple);
 
+	/*
+	 * Check if ACL_USAGE is being checked and, if so, and not set already as
+	 * part of the result, then check if the user is a member of the
+	 * pg_read_all_data or pg_write_all_data roles, which allow usage access
+	 * to all schemas.
+	 */
+	if (mask & ACL_USAGE && !(result & ACL_USAGE) &&
+		(has_privs_of_role(roleid, ROLE_PG_READ_ALL_DATA) ||
+		 has_privs_of_role(roleid, ROLE_PG_WRITE_ALL_DATA)))
+		result |= ACL_USAGE;
 	return result;
 }
 
@@ -4747,7 +4854,7 @@ pg_type_aclmask(Oid type_oid, Oid roleid, AclMode mask, AclMaskHow how)
 	 * "True" array types don't manage permissions of their own; consult the
 	 * element type instead.
 	 */
-	if (OidIsValid(typeForm->typelem) && typeForm->typlen == -1)
+	if (IsTrueArrayType(typeForm))
 	{
 		Oid			elttype_oid = typeForm->typelem;
 
@@ -4882,7 +4989,22 @@ AclResult
 pg_attribute_aclcheck(Oid table_oid, AttrNumber attnum,
 					  Oid roleid, AclMode mode)
 {
-	if (pg_attribute_aclmask(table_oid, attnum, roleid, mode, ACLMASK_ANY) != 0)
+	return pg_attribute_aclcheck_ext(table_oid, attnum, roleid, mode, NULL);
+}
+
+
+/*
+ * Exported routine for checking a user's access privileges to a column
+ *
+ * Does the bulk of the work for pg_attribute_aclcheck(), and allows other
+ * callers to avoid the missing attribute ERROR when is_missing is non-NULL.
+ */
+AclResult
+pg_attribute_aclcheck_ext(Oid table_oid, AttrNumber attnum,
+						  Oid roleid, AclMode mode, bool *is_missing)
+{
+	if (pg_attribute_aclmask_ext(table_oid, attnum, roleid, mode,
+								 ACLMASK_ANY, is_missing) != 0)
 		return ACLCHECK_OK;
 	else
 		return ACLCHECK_NO_PRIV;
@@ -4995,7 +5117,21 @@ pg_attribute_aclcheck_all(Oid table_oid, Oid roleid, AclMode mode,
 AclResult
 pg_class_aclcheck(Oid table_oid, Oid roleid, AclMode mode)
 {
-	if (pg_class_aclmask(table_oid, roleid, mode, ACLMASK_ANY) != 0)
+	return pg_class_aclcheck_ext(table_oid, roleid, mode, NULL);
+}
+
+/*
+ * Exported routine for checking a user's access privileges to a table
+ *
+ * Does the bulk of the work for pg_class_aclcheck(), and allows other
+ * callers to avoid the missing relation ERROR when is_missing is non-NULL.
+ */
+AclResult
+pg_class_aclcheck_ext(Oid table_oid, Oid roleid,
+					  AclMode mode, bool *is_missing)
+{
+	if (pg_class_aclmask_ext(table_oid, roleid, mode,
+							 ACLMASK_ANY, is_missing) != 0)
 		return ACLCHECK_OK;
 	else
 		return ACLCHECK_NO_PRIV;

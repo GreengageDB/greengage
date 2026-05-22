@@ -4,7 +4,7 @@
  *	pg_upgrade.h
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.h
  */
 
@@ -444,7 +444,6 @@ void		output_completion_banner(char *analyze_script_file_name,
 void		check_cluster_versions(void);
 void		check_cluster_compatibility(bool live_check);
 void		create_script_for_old_cluster_deletion(char **deletion_script_file_name);
-void		create_script_for_cluster_analyze(char **analyze_script_file_name);
 
 
 /* controldata.c */
@@ -553,6 +552,12 @@ void 		gp_fatal_log(const char *fmt,...) pg_attribute_printf(1, 2);
 
 /* version.c */
 
+bool		check_for_data_types_usage(ClusterInfo *cluster,
+									   const char *base_query,
+									   const char *output_path);
+bool		check_for_data_type_usage(ClusterInfo *cluster,
+									  const char *type_name,
+									  const char *output_path);
 void		new_9_0_populate_pg_largeobject_metadata(ClusterInfo *cluster,
 													 bool check_mode);
 void		old_9_3_check_for_line_data_type_usage(ClusterInfo *cluster);

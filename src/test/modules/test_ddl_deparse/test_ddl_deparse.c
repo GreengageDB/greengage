@@ -2,7 +2,7 @@
  * test_ddl_deparse.c
  *		Support functions for the test_ddl_deparse module
  *
- * Copyright (c) 2014-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2014-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/test/modules/test_ddl_deparse/test_ddl_deparse.c
@@ -110,6 +110,9 @@ get_altertable_subcmdtypes(PG_FUNCTION_ARGS)
 				break;
 			case AT_ColumnDefault:
 				strtype = "ALTER COLUMN SET DEFAULT";
+				break;
+			case AT_CookedColumnDefault:
+				strtype = "ALTER COLUMN SET DEFAULT (precooked)";
 				break;
 			case AT_DropNotNull:
 				strtype = "DROP NOT NULL";

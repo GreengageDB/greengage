@@ -9,7 +9,7 @@
  * contains variables.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -26,6 +26,7 @@
 #include "access/sysattr.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/placeholder.h"
 #include "optimizer/prep.h"
 #include "optimizer/walkers.h"
 #include "parser/parsetree.h"
@@ -36,6 +37,7 @@
 typedef struct
 {
 	Relids		varnos;
+	PlannerInfo *root;
 	int			sublevels_up;
 } pull_varnos_context;
 
@@ -183,9 +185,24 @@ cdb_walk_vars(Node                         *node,
  */
 
 Relids
-pull_varnos(Node *node)
+pull_varnos(PlannerInfo *root, Node *node)
 {
-	return pull_varnos_of_level(node, 0);
+	pull_varnos_context context;
+
+	context.varnos = NULL;
+	context.root = root;
+	context.sublevels_up = 0;
+
+	/*
+	 * Must be prepared to start with a Query or a bare expression tree; if
+	 * it's a Query, we don't want to increment sublevels_up.
+	 */
+	query_or_expression_tree_walker(node,
+									pull_varnos_walker,
+									(void *) &context,
+									0);
+
+	return context.varnos;
 }
 
 /*
@@ -194,11 +211,12 @@ pull_varnos(Node *node)
  *		Only Vars of the specified level are considered.
  */
 Relids
-pull_varnos_of_level(Node *node, int levelsup)
+pull_varnos_of_level(PlannerInfo *root, Node *node, int levelsup)
 {
 	pull_varnos_context context;
 
 	context.varnos = NULL;
+	context.root = root;
 	context.sublevels_up = levelsup;
 
 	/*
@@ -236,33 +254,56 @@ pull_varnos_walker(Node *node, pull_varnos_context *context)
 	}
 	if (IsA(node, PlaceHolderVar))
 	{
-		/*
-		 * A PlaceHolderVar acts as a variable of its syntactic scope, or
-		 * lower than that if it references only a subset of the rels in its
-		 * syntactic scope.  It might also contain lateral references, but we
-		 * should ignore such references when computing the set of varnos in
-		 * an expression tree.  Also, if the PHV contains no variables within
-		 * its syntactic scope, it will be forced to be evaluated exactly at
-		 * the syntactic scope, so take that as the relid set.
-		 */
 		PlaceHolderVar *phv = (PlaceHolderVar *) node;
-		pull_varnos_context subcontext;
 
-		subcontext.varnos = NULL;
-		subcontext.sublevels_up = context->sublevels_up;
-		(void) pull_varnos_walker((Node *) phv->phexpr, &subcontext);
+		/*
+		 * If a PlaceHolderVar is not of the target query level, ignore it,
+		 * instead recursing into its expression to see if it contains any
+		 * vars that are of the target level.
+		 */
 		if (phv->phlevelsup == context->sublevels_up)
 		{
-			subcontext.varnos = bms_int_members(subcontext.varnos,
-												phv->phrels);
-			if (bms_is_empty(subcontext.varnos))
+			/*
+			 * Ideally, the PHV's contribution to context->varnos is its
+			 * ph_eval_at set.  However, this code can be invoked before
+			 * that's been computed.  If we cannot find a PlaceHolderInfo,
+			 * fall back to the conservative assumption that the PHV will be
+			 * evaluated at its syntactic level (phv->phrels).
+			 *
+			 * There is a second hazard: this code is also used to examine
+			 * qual clauses during deconstruct_jointree, when we may have a
+			 * PlaceHolderInfo but its ph_eval_at value is not yet final, so
+			 * that theoretically we could obtain a relid set that's smaller
+			 * than we'd see later on.  That should never happen though,
+			 * because we deconstruct the jointree working upwards.  Any outer
+			 * join that forces delay of evaluation of a given qual clause
+			 * will be processed before we examine that clause here, so the
+			 * ph_eval_at value should have been updated to include it.
+			 */
+			PlaceHolderInfo *phinfo = NULL;
+
+			if (phv->phlevelsup == 0)
+			{
+				ListCell   *lc;
+
+				foreach(lc, context->root->placeholder_list)
+				{
+					phinfo = (PlaceHolderInfo *) lfirst(lc);
+					if (phinfo->phid == phv->phid)
+						break;
+					phinfo = NULL;
+				}
+			}
+			if (phinfo != NULL)
+				context->varnos = bms_add_members(context->varnos,
+												  phinfo->ph_eval_at);
+			else
 				context->varnos = bms_add_members(context->varnos,
 												  phv->phrels);
+			return false;		/* don't recurse into expression */
 		}
-		context->varnos = bms_join(context->varnos, subcontext.varnos);
-		return false;
 	}
-	if (IsA(node, Query))
+	else if (IsA(node, Query))
 	{
 		/* Recurse into RTE subquery or not-yet-planned sublink subquery */
 		bool		result;

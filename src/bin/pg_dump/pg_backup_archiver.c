@@ -30,8 +30,10 @@
 #include <io.h>
 #endif
 
+#include "common/string.h"
 #include "dumputils.h"
 #include "fe_utils/string_utils.h"
+#include "lib/stringinfo.h"
 #include "libpq/libpq-fs.h"
 #include "parallel.h"
 #include "pg_backup_archiver.h"
@@ -84,7 +86,7 @@ static void _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam);
 static void processEncodingEntry(ArchiveHandle *AH, TocEntry *te);
 static void processStdStringsEntry(ArchiveHandle *AH, TocEntry *te);
 static void processSearchPathEntry(ArchiveHandle *AH, TocEntry *te);
-static teReqs _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH);
+static int	_tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH);
 static RestorePass _tocEntryRestorePass(TocEntry *te);
 static bool _tocEntryIsACL(TocEntry *te);
 static void _disableTriggersIfNecessary(ArchiveHandle *AH, TocEntry *te);
@@ -163,6 +165,7 @@ InitDumpOptions(DumpOptions *opts)
 	memset(opts, 0, sizeof(DumpOptions));
 	/* set any fields that shouldn't default to zeroes */
 	opts->include_everything = true;
+	opts->cparams.promptPassword = TRI_DEFAULT;
 	opts->dumpSections = DUMP_UNSECTIONED;
 }
 
@@ -176,6 +179,11 @@ dumpOptionsFromRestoreOptions(RestoreOptions *ropt)
 	DumpOptions *dopt = NewDumpOptions();
 
 	/* this is the inverse of what's at the end of pg_dump.c's main() */
+	dopt->cparams.dbname = ropt->cparams.dbname ? pg_strdup(ropt->cparams.dbname) : NULL;
+	dopt->cparams.pgport = ropt->cparams.pgport ? pg_strdup(ropt->cparams.pgport) : NULL;
+	dopt->cparams.pghost = ropt->cparams.pghost ? pg_strdup(ropt->cparams.pghost) : NULL;
+	dopt->cparams.username = ropt->cparams.username ? pg_strdup(ropt->cparams.username) : NULL;
+	dopt->cparams.promptPassword = ropt->cparams.promptPassword;
 	dopt->outputClean = ropt->dropSchema;
 	dopt->dataOnly = ropt->dataOnly;
 	dopt->schemaOnly = ropt->schemaOnly;
@@ -408,10 +416,7 @@ RestoreArchive(Archive *AHX)
 		AHX->minRemoteVersion = 0;
 		AHX->maxRemoteVersion = 9999999;
 
-		ConnectDatabase(AHX, ropt->dbname,
-						ropt->pghost, ropt->pgport, ropt->username,
-						ropt->promptPassword,
-						false);
+		ConnectDatabase(AHX, &ropt->cparams, false);
 
 		/*
 		 * If we're talking to the DB directly, don't send comments since they
@@ -762,7 +767,7 @@ restore_toc_entry(ArchiveHandle *AH, TocEntry *te, bool is_parallel)
 {
 	RestoreOptions *ropt = AH->public.ropt;
 	int			status = WORKER_OK;
-	teReqs		reqs;
+	int			reqs;
 	bool		defnDumped;
 
 	AH->currentTE = te;
@@ -843,16 +848,8 @@ restore_toc_entry(ArchiveHandle *AH, TocEntry *te, bool is_parallel)
 		if (strcmp(te->desc, "DATABASE") == 0 ||
 			strcmp(te->desc, "DATABASE PROPERTIES") == 0)
 		{
-			PQExpBufferData connstr;
-
-			initPQExpBuffer(&connstr);
-			appendPQExpBufferStr(&connstr, "dbname=");
-			appendConnStrVal(&connstr, te->tag);
-			/* Abandon struct, but keep its buffer until process exit. */
-
 			pg_log_info("connecting to new database \"%s\"", te->tag);
 			_reconnectToDB(AH, te->tag);
-			ropt->dbname = connstr.data;
 		}
 	}
 
@@ -984,7 +981,7 @@ NewRestoreOptions(void)
 
 	/* set any fields that shouldn't default to zeroes */
 	opts->format = archUnknown;
-	opts->promptPassword = TRI_DEFAULT;
+	opts->cparams.promptPassword = TRI_DEFAULT;
 	opts->dumpSections = DUMP_UNSECTIONED;
 
 	/* GPDB_92_MERGE_FIXEME: do we need the following two lines? */
@@ -1417,8 +1414,7 @@ SortTocFromFile(Archive *AHX)
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 	RestoreOptions *ropt = AH->public.ropt;
 	FILE	   *fh;
-	char		buf[100];
-	bool		incomplete_line;
+	StringInfoData linebuf;
 
 	/* Allocate space for the 'wanted' array, and init it */
 	ropt->idWanted = (bool *) pg_malloc0(sizeof(bool) * AH->maxDumpId);
@@ -1428,45 +1424,33 @@ SortTocFromFile(Archive *AHX)
 	if (!fh)
 		fatal("could not open TOC file \"%s\": %m", ropt->tocFile);
 
-	incomplete_line = false;
-	while (fgets(buf, sizeof(buf), fh) != NULL)
+	initStringInfo(&linebuf);
+
+	while (pg_get_line_buf(fh, &linebuf))
 	{
-		bool		prev_incomplete_line = incomplete_line;
-		int			buflen;
 		char	   *cmnt;
 		char	   *endptr;
 		DumpId		id;
 		TocEntry   *te;
 
-		/*
-		 * Some lines in the file might be longer than sizeof(buf).  This is
-		 * no problem, since we only care about the leading numeric ID which
-		 * can be at most a few characters; but we have to skip continuation
-		 * bufferloads when processing a long line.
-		 */
-		buflen = strlen(buf);
-		if (buflen > 0 && buf[buflen - 1] == '\n')
-			incomplete_line = false;
-		else
-			incomplete_line = true;
-		if (prev_incomplete_line)
-			continue;
-
 		/* Truncate line at comment, if any */
-		cmnt = strchr(buf, ';');
+		cmnt = strchr(linebuf.data, ';');
 		if (cmnt != NULL)
+		{
 			cmnt[0] = '\0';
+			linebuf.len = cmnt - linebuf.data;
+		}
 
 		/* Ignore if all blank */
-		if (strspn(buf, " \t\r\n") == strlen(buf))
+		if (strspn(linebuf.data, " \t\r\n") == linebuf.len)
 			continue;
 
 		/* Get an ID, check it's valid and not already seen */
-		id = strtol(buf, &endptr, 10);
-		if (endptr == buf || id <= 0 || id > AH->maxDumpId ||
+		id = strtol(linebuf.data, &endptr, 10);
+		if (endptr == linebuf.data || id <= 0 || id > AH->maxDumpId ||
 			ropt->idWanted[id - 1])
 		{
-			pg_log_warning("line ignored: %s", buf);
+			pg_log_warning("line ignored: %s", linebuf.data);
 			continue;
 		}
 
@@ -1492,6 +1476,8 @@ SortTocFromFile(Archive *AHX)
 		 */
 		_moveBefore(AH->toc, te);
 	}
+
+	pg_free(linebuf.data);
 
 	if (fclose(fh) != 0)
 		fatal("could not close TOC file: %m");
@@ -1700,16 +1686,17 @@ dump_lo_buf(ArchiveHandle *AH)
 {
 	if (AH->connection)
 	{
-		size_t		res;
+		int			res;
 
 		res = lo_write(AH->connection, AH->loFd, AH->lo_buf, AH->lo_buf_used);
-		pg_log_debug(ngettext("wrote %lu byte of large object data (result = %lu)",
-							  "wrote %lu bytes of large object data (result = %lu)",
+		pg_log_debug(ngettext("wrote %zu byte of large object data (result = %d)",
+							  "wrote %zu bytes of large object data (result = %d)",
 							  AH->lo_buf_used),
-					 (unsigned long) AH->lo_buf_used, (unsigned long) res);
+					 AH->lo_buf_used, res);
+		/* We assume there are no short writes, only errors */
 		if (res != AH->lo_buf_used)
-			fatal("could not write to large object (result: %lu, expected: %lu)",
-				  (unsigned long) res, (unsigned long) AH->lo_buf_used);
+			warn_or_exit_horribly(AH, "could not write to large object: %s",
+								  PQerrorMessage(AH->connection));
 	}
 	else
 	{
@@ -1930,7 +1917,7 @@ getTocEntryByDumpId(ArchiveHandle *AH, DumpId id)
 	return NULL;
 }
 
-teReqs
+int
 TocIDRequired(ArchiveHandle *AH, DumpId id)
 {
 	TocEntry   *te = getTocEntryByDumpId(AH, id);
@@ -2132,6 +2119,7 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 	if (AH->lookahead)
 		free(AH->lookahead);
 
+	AH->readHeader = 0;
 	AH->lookaheadSize = 512;
 	AH->lookahead = pg_malloc0(512);
 	AH->lookaheadLen = 0;
@@ -2203,62 +2191,9 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 
 	if (strncmp(sig, "PGDMP", 5) == 0)
 	{
-		int			byteread;
-		char		vmaj,
-					vmin,
-					vrev;
-
-		/*
-		 * Finish reading (most of) a custom-format header.
-		 *
-		 * NB: this code must agree with ReadHead().
-		 */
-		if ((byteread = fgetc(fh)) == EOF)
-			READ_ERROR_EXIT(fh);
-
-		vmaj = byteread;
-
-		if ((byteread = fgetc(fh)) == EOF)
-			READ_ERROR_EXIT(fh);
-
-		vmin = byteread;
-
-		/* Save these too... */
-		AH->lookahead[AH->lookaheadLen++] = vmaj;
-		AH->lookahead[AH->lookaheadLen++] = vmin;
-
-		/* Check header version; varies from V1.0 */
-		if (vmaj > 1 || (vmaj == 1 && vmin > 0))	/* Version > 1.0 */
-		{
-			if ((byteread = fgetc(fh)) == EOF)
-				READ_ERROR_EXIT(fh);
-
-			vrev = byteread;
-			AH->lookahead[AH->lookaheadLen++] = vrev;
-		}
-		else
-			vrev = 0;
-
-		AH->version = MAKE_ARCHIVE_VERSION(vmaj, vmin, vrev);
-
-		if ((AH->intSize = fgetc(fh)) == EOF)
-			READ_ERROR_EXIT(fh);
-		AH->lookahead[AH->lookaheadLen++] = AH->intSize;
-
-		if (AH->version >= K_VERS_1_7)
-		{
-			if ((AH->offSize = fgetc(fh)) == EOF)
-				READ_ERROR_EXIT(fh);
-			AH->lookahead[AH->lookaheadLen++] = AH->offSize;
-		}
-		else
-			AH->offSize = AH->intSize;
-
-		if ((byteread = fgetc(fh)) == EOF)
-			READ_ERROR_EXIT(fh);
-
-		AH->format = byteread;
-		AH->lookahead[AH->lookaheadLen++] = AH->format;
+		/* It's custom format, stop here */
+		AH->format = archCustom;
+		AH->readHeader = 1;
 	}
 	else
 	{
@@ -2295,22 +2230,15 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 		AH->format = archTar;
 	}
 
-	/* If we can't seek, then mark the header as read */
-	if (fseeko(fh, 0, SEEK_SET) != 0)
-	{
-		/*
-		 * NOTE: Formats that use the lookahead buffer can unset this in their
-		 * Init routine.
-		 */
-		AH->readHeader = 1;
-	}
-	else
-		AH->lookaheadLen = 0;	/* Don't bother since we've reset the file */
-
-	/* Close the file */
+	/* Close the file if we opened it */
 	if (wantClose)
+	{
 		if (fclose(fh) != 0)
 			fatal("could not close input file: %m");
+		/* Forget lookahead, since we'll re-read header after re-opening */
+		AH->readHeader = 0;
+		AH->lookaheadLen = 0;
+	}
 
 	return AH->format;
 }
@@ -2326,7 +2254,8 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 {
 	ArchiveHandle *AH;
 
-	pg_log_debug("allocating AH for %s, format %d", FileSpec, fmt);
+	pg_log_debug("allocating AH for %s, format %d",
+				 FileSpec ? FileSpec : "(stdio)", fmt);
 
 	AH = (ArchiveHandle *) pg_malloc0(sizeof(ArchiveHandle));
 
@@ -2402,8 +2331,6 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 		AH->format = _discoverArchiveFormat(AH);
 	else
 		AH->format = fmt;
-
-	AH->promptPassword = TRI_DEFAULT;
 
 	switch (AH->format)
 	{
@@ -2866,10 +2793,10 @@ StrictNamesCheck(RestoreOptions *ropt)
  * REQ_SCHEMA and REQ_DATA bits if we want to restore schema and/or data
  * portions of this TOC entry, or REQ_SPECIAL if it's a special entry.
  */
-static teReqs
+static int
 _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 {
-	teReqs		res = REQ_SCHEMA | REQ_DATA;
+	int			res = REQ_SCHEMA | REQ_DATA;
 	RestoreOptions *ropt = AH->public.ropt;
 
 	/* These items are treated specially */
@@ -3277,27 +3204,20 @@ _doSetSessionAuth(ArchiveHandle *AH, const char *user)
  * If we're currently restoring right into a database, this will
  * actually establish a connection. Otherwise it puts a \connect into
  * the script output.
- *
- * NULL dbname implies reconnecting to the current DB (pretty useless).
  */
 static void
 _reconnectToDB(ArchiveHandle *AH, const char *dbname)
 {
 	if (RestoringToDB(AH))
-		ReconnectToServer(AH, dbname, NULL);
+		ReconnectToServer(AH, dbname);
 	else
 	{
-		if (dbname)
-		{
-			PQExpBufferData connectbuf;
+		PQExpBufferData connectbuf;
 
-			initPQExpBuffer(&connectbuf);
-			appendPsqlMetaConnect(&connectbuf, dbname);
-			ahprintf(AH, "%s\n", connectbuf.data);
-			termPQExpBuffer(&connectbuf);
-		}
-		else
-			ahprintf(AH, "%s\n", "\\connect -\n");
+		initPQExpBuffer(&connectbuf);
+		appendPsqlMetaConnect(&connectbuf, dbname);
+		ahprintf(AH, "%s\n", connectbuf.data);
+		termPQExpBuffer(&connectbuf);
 	}
 
 	/*
@@ -3850,9 +3770,10 @@ WriteHead(ArchiveHandle *AH)
 void
 ReadHead(ArchiveHandle *AH)
 {
-	char		tmpMag[7];
+	char		vmaj,
+				vmin,
+				vrev;
 	int			fmt;
-	struct tm	crtm;
 
 	/*
 	 * If we haven't already read the header, do so.
@@ -3862,48 +3783,46 @@ ReadHead(ArchiveHandle *AH)
 	 */
 	if (!AH->readHeader)
 	{
-		char		vmaj,
-					vmin,
-					vrev;
+		char		tmpMag[7];
 
 		AH->ReadBufPtr(AH, tmpMag, 5);
 
 		if (strncmp(tmpMag, "PGDMP", 5) != 0)
 			fatal("did not find magic string in file header");
-
-		vmaj = AH->ReadBytePtr(AH);
-		vmin = AH->ReadBytePtr(AH);
-
-		if (vmaj > 1 || (vmaj == 1 && vmin > 0))	/* Version > 1.0 */
-			vrev = AH->ReadBytePtr(AH);
-		else
-			vrev = 0;
-
-		AH->version = MAKE_ARCHIVE_VERSION(vmaj, vmin, vrev);
-
-		if (AH->version < K_VERS_1_0 || AH->version > K_VERS_MAX)
-			fatal("unsupported version (%d.%d) in file header",
-				  vmaj, vmin);
-
-		AH->intSize = AH->ReadBytePtr(AH);
-		if (AH->intSize > 32)
-			fatal("sanity check on integer size (%lu) failed",
-				  (unsigned long) AH->intSize);
-
-		if (AH->intSize > sizeof(int))
-			pg_log_warning("archive was made on a machine with larger integers, some operations might fail");
-
-		if (AH->version >= K_VERS_1_7)
-			AH->offSize = AH->ReadBytePtr(AH);
-		else
-			AH->offSize = AH->intSize;
-
-		fmt = AH->ReadBytePtr(AH);
-
-		if (AH->format != fmt)
-			fatal("expected format (%d) differs from format found in file (%d)",
-				  AH->format, fmt);
 	}
+
+	vmaj = AH->ReadBytePtr(AH);
+	vmin = AH->ReadBytePtr(AH);
+
+	if (vmaj > 1 || (vmaj == 1 && vmin > 0))	/* Version > 1.0 */
+		vrev = AH->ReadBytePtr(AH);
+	else
+		vrev = 0;
+
+	AH->version = MAKE_ARCHIVE_VERSION(vmaj, vmin, vrev);
+
+	if (AH->version < K_VERS_1_0 || AH->version > K_VERS_MAX)
+		fatal("unsupported version (%d.%d) in file header",
+			  vmaj, vmin);
+
+	AH->intSize = AH->ReadBytePtr(AH);
+	if (AH->intSize > 32)
+		fatal("sanity check on integer size (%lu) failed",
+			  (unsigned long) AH->intSize);
+
+	if (AH->intSize > sizeof(int))
+		pg_log_warning("archive was made on a machine with larger integers, some operations might fail");
+
+	if (AH->version >= K_VERS_1_7)
+		AH->offSize = AH->ReadBytePtr(AH);
+	else
+		AH->offSize = AH->intSize;
+
+	fmt = AH->ReadBytePtr(AH);
+
+	if (AH->format != fmt)
+		fatal("expected format (%d) differs from format found in file (%d)",
+			  AH->format, fmt);
 
 	if (AH->version >= K_VERS_1_2)
 	{
@@ -3922,6 +3841,8 @@ ReadHead(ArchiveHandle *AH)
 
 	if (AH->version >= K_VERS_1_4)
 	{
+		struct tm	crtm;
+
 		crtm.tm_sec = ReadInt(AH);
 		crtm.tm_min = ReadInt(AH);
 		crtm.tm_hour = ReadInt(AH);
@@ -3930,12 +3851,32 @@ ReadHead(ArchiveHandle *AH)
 		crtm.tm_year = ReadInt(AH);
 		crtm.tm_isdst = ReadInt(AH);
 
-		AH->archdbname = ReadStr(AH);
-
+		/*
+		 * Newer versions of glibc have mktime() report failure if tm_isdst is
+		 * inconsistent with the prevailing timezone, e.g. tm_isdst = 1 when
+		 * TZ=UTC.  This is problematic when restoring an archive under a
+		 * different timezone setting.  If we get a failure, try again with
+		 * tm_isdst set to -1 ("don't know").
+		 *
+		 * XXX with or without this hack, we reconstruct createDate
+		 * incorrectly when the prevailing timezone is different from
+		 * pg_dump's.  Next time we bump the archive version, we should flush
+		 * this representation and store a plain seconds-since-the-Epoch
+		 * timestamp instead.
+		 */
 		AH->createDate = mktime(&crtm);
-
 		if (AH->createDate == (time_t) -1)
-			pg_log_warning("invalid creation date in header");
+		{
+			crtm.tm_isdst = -1;
+			AH->createDate = mktime(&crtm);
+			if (AH->createDate == (time_t) -1)
+				pg_log_warning("invalid creation date in header");
+		}
+	}
+
+	if (AH->version >= K_VERS_1_4)
+	{
+		AH->archdbname = ReadStr(AH);
 	}
 
 	if (AH->version >= K_VERS_1_10)
@@ -4255,10 +4196,7 @@ restore_toc_entries_postfork(ArchiveHandle *AH, TocEntry *pending_list)
 	/*
 	 * Now reconnect the single parent connection.
 	 */
-	ConnectDatabase((Archive *) AH, ropt->dbname,
-					ropt->pghost, ropt->pgport, ropt->username,
-					ropt->promptPassword,
-					false);
+	ConnectDatabase((Archive *) AH, &ropt->cparams, true);
 
 	/* re-establish fixed state */
 	_doSetFixedOutputState(AH);
@@ -4920,12 +4858,15 @@ CloneArchive(ArchiveHandle *AH)
 	clone->public.n_errors = 0;
 
 	/*
-	 * Connect our new clone object to the database: In parallel restore the
-	 * parent is already disconnected, because we can connect the worker
-	 * processes independently to the database (no snapshot sync required). In
-	 * parallel backup we clone the parent's existing connection.
+	 * Connect our new clone object to the database, using the same connection
+	 * parameters used for the original connection.
 	 */
+	ConnectDatabase((Archive *) clone, &clone->public.ropt->cparams, true);
+
+	/* re-establish fixed state */
 	if (AH->mode == archModeRead)
+		_doSetFixedOutputState(clone);
+	/* in write case, setupDumpWorker will fix up connection state */
 	{
 		RestoreOptions *ropt = AH->public.ropt;
 

@@ -3,7 +3,7 @@
  * pg_shdepend.c
  *	  routines to support manipulation of the pg_shdepend relation
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -59,6 +59,7 @@
 #include "commands/schemacmds.h"
 #include "commands/subscriptioncmds.h"
 #include "commands/tablecmds.h"
+#include "commands/tablespace.h"
 #include "commands/typecmds.h"
 #include "miscadmin.h"
 #include "storage/lmgr.h"
@@ -186,11 +187,14 @@ recordDependencyOnOwner(Oid classId, Oid objectId, Oid owner)
  *
  * There must be no more than one existing entry for the given dependent
  * object and dependency type!	So in practice this can only be used for
- * updating SHARED_DEPENDENCY_OWNER entries, which should have that property.
+ * updating SHARED_DEPENDENCY_OWNER and SHARED_DEPENDENCY_TABLESPACE
+ * entries, which should have that property.
  *
  * If there is no previous entry, we assume it was referencing a PINned
  * object, so we create a new entry.  If the new referenced object is
  * PINned, we don't create an entry (and drop the old one, if any).
+ * (For tablespaces, we don't record dependencies in certain cases, so
+ * there are other possible reasons for entries to be missing.)
  *
  * sdepRel must be the pg_shdepend relation, already opened and suitably
  * locked.
@@ -340,6 +344,58 @@ changeDependencyOnOwner(Oid classId, Oid objectId, Oid newOwnerId)
 	shdepDropDependency(sdepRel, classId, objectId, 0, true,
 						AuthIdRelationId, newOwnerId,
 						SHARED_DEPENDENCY_ACL);
+
+	table_close(sdepRel, RowExclusiveLock);
+}
+
+/*
+ * recordDependencyOnTablespace
+ *
+ * A convenient wrapper of recordSharedDependencyOn -- register the specified
+ * tablespace as default for the given object.
+ *
+ * Note: it's the caller's responsibility to ensure that there isn't a
+ * tablespace entry for the object already.
+ */
+void
+recordDependencyOnTablespace(Oid classId, Oid objectId, Oid tablespace)
+{
+	ObjectAddress myself,
+				referenced;
+
+	ObjectAddressSet(myself, classId, objectId);
+	ObjectAddressSet(referenced, TableSpaceRelationId, tablespace);
+
+	recordSharedDependencyOn(&myself, &referenced,
+							 SHARED_DEPENDENCY_TABLESPACE);
+}
+
+/*
+ * changeDependencyOnTablespace
+ *
+ * Update the shared dependencies to account for the new tablespace.
+ *
+ * Note: we don't need an objsubid argument because only whole objects
+ * have tablespaces.
+ */
+void
+changeDependencyOnTablespace(Oid classId, Oid objectId, Oid newTablespaceId)
+{
+	Relation	sdepRel;
+
+	sdepRel = table_open(SharedDependRelationId, RowExclusiveLock);
+
+	if (newTablespaceId != DEFAULTTABLESPACE_OID &&
+		newTablespaceId != InvalidOid)
+		shdepChangeDep(sdepRel,
+					   classId, objectId, 0,
+					   TableSpaceRelationId, newTablespaceId,
+					   SHARED_DEPENDENCY_TABLESPACE);
+	else
+		shdepDropDependency(sdepRel,
+							classId, objectId, 0, true,
+							InvalidOid, InvalidOid,
+							SHARED_DEPENDENCY_INVALID);
 
 	table_close(sdepRel, RowExclusiveLock);
 }
@@ -787,12 +843,6 @@ checkSharedDependencies(Oid classId, Oid objectId,
 
 
 /*
- * Cap the maximum amount of bytes allocated for copyTemplateDependencies()
- * slots.
- */
-#define MAX_PGSHDEPEND_INSERT_BYTES 65535
-
-/*
  * copyTemplateDependencies
  *
  * Routine to create the initial shared dependencies of a new database.
@@ -806,21 +856,20 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	ScanKeyData key[1];
 	SysScanDesc scan;
 	HeapTuple	tup;
-	int			slotCount;
 	CatalogIndexState indstate;
 	TupleTableSlot **slot;
-	int			nslots,
-				max_slots;
-	bool		slot_init = true;
+	int			max_slots,
+				slot_init_count,
+				slot_stored_count;
 
 	sdepRel = table_open(SharedDependRelationId, RowExclusiveLock);
 	sdepDesc = RelationGetDescr(sdepRel);
 
 	/*
-	 * Allocate the slots to use, but delay initialization until we know that
-	 * they will be used.
+	 * Allocate the slots to use, but delay costly initialization until we
+	 * know that they will be used.
 	 */
-	max_slots = MAX_PGSHDEPEND_INSERT_BYTES / sizeof(FormData_pg_shdepend);
+	max_slots = MAX_CATALOG_MULTI_INSERT_BYTES / sizeof(FormData_pg_shdepend);
 	slot = palloc(sizeof(TupleTableSlot *) * max_slots);
 
 	indstate = CatalogOpenIndexes(sdepRel);
@@ -834,6 +883,11 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	scan = systable_beginscan(sdepRel, SharedDependDependerIndexId, true,
 							  NULL, 1, key);
 
+	/* number of slots currently storing tuples */
+	slot_stored_count = 0;
+	/* number of slots currently initialized */
+	slot_init_count = 0;
+
 	/*
 	 * Copy the entries of the original database, changing the database Id to
 	 * that of the new database.  Note that because we are not copying rows
@@ -841,41 +895,42 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	 * copy the ownership dependency of the template database itself; this is
 	 * what we want.
 	 */
-	slotCount = 0;
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_shdepend shdep;
 
-		if (slot_init)
-			slot[slotCount] = MakeSingleTupleTableSlot(sdepDesc, &TTSOpsHeapTuple);
+		if (slot_init_count < max_slots)
+		{
+			slot[slot_stored_count] = MakeSingleTupleTableSlot(sdepDesc, &TTSOpsHeapTuple);
+			slot_init_count++;
+		}
 
-		ExecClearTuple(slot[slotCount]);
+		ExecClearTuple(slot[slot_stored_count]);
 
 		shdep = (Form_pg_shdepend) GETSTRUCT(tup);
 
-		slot[slotCount]->tts_values[Anum_pg_shdepend_dbid] = ObjectIdGetDatum(newDbId);
-		slot[slotCount]->tts_values[Anum_pg_shdepend_classid] = shdep->classid;
-		slot[slotCount]->tts_values[Anum_pg_shdepend_objid] = shdep->objid;
-		slot[slotCount]->tts_values[Anum_pg_shdepend_objsubid] = shdep->objsubid;
-		slot[slotCount]->tts_values[Anum_pg_shdepend_refclassid] = shdep->refclassid;
-		slot[slotCount]->tts_values[Anum_pg_shdepend_refobjid] = shdep->refobjid;
-		slot[slotCount]->tts_values[Anum_pg_shdepend_deptype] = shdep->deptype;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_dbid] = ObjectIdGetDatum(newDbId);
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_classid] = shdep->classid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objid] = shdep->objid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objsubid] = shdep->objsubid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refclassid] = shdep->refclassid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refobjid] = shdep->refobjid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_deptype] = shdep->deptype;
 
-		ExecStoreVirtualTuple(slot[slotCount]);
-		slotCount++;
+		ExecStoreVirtualTuple(slot[slot_stored_count]);
+		slot_stored_count++;
 
 		/* If slots are full, insert a batch of tuples */
-		if (slotCount == max_slots)
+		if (slot_stored_count == max_slots)
 		{
-			CatalogTuplesMultiInsertWithInfo(sdepRel, slot, slotCount, indstate);
-			slotCount = 0;
-			slot_init = false;
+			CatalogTuplesMultiInsertWithInfo(sdepRel, slot, slot_stored_count, indstate);
+			slot_stored_count = 0;
 		}
 	}
 
 	/* Insert any tuples left in the buffer */
-	if (slotCount > 0)
-		CatalogTuplesMultiInsertWithInfo(sdepRel, slot, slotCount, indstate);
+	if (slot_stored_count > 0)
+		CatalogTuplesMultiInsertWithInfo(sdepRel, slot, slot_stored_count, indstate);
 
 	systable_endscan(scan);
 
@@ -883,8 +938,7 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	table_close(sdepRel, RowExclusiveLock);
 
 	/* Drop only the number of slots used */
-	nslots = slot_init ? slotCount : max_slots;
-	for (int i = 0; i < nslots; i++)
+	for (int i = 0; i < slot_init_count; i++)
 		ExecDropSingleTupleTableSlot(slot[i]);
 	pfree(slot);
 }
@@ -1123,13 +1177,6 @@ shdepLockAndCheckObject(Oid classId, Oid objectId)
 								objectId)));
 			break;
 
-			/*
-			 * Currently, this routine need not support any other shared
-			 * object types besides roles.  If we wanted to record explicit
-			 * dependencies on databases or tablespaces, we'd need code along
-			 * these lines:
-			 */
-#ifdef NOT_USED
 		case TableSpaceRelationId:
 			{
 				/* For lack of a syscache on pg_tablespace, do this: */
@@ -1143,7 +1190,6 @@ shdepLockAndCheckObject(Oid classId, Oid objectId)
 				pfree(tablespace);
 				break;
 			}
-#endif
 
 		case DatabaseRelationId:
 			{
@@ -1203,6 +1249,8 @@ storeObjectDescription(StringInfo descs,
 				appendStringInfo(descs, _("privileges for %s"), objdesc);
 			else if (deptype == SHARED_DEPENDENCY_POLICY)
 				appendStringInfo(descs, _("target of %s"), objdesc);
+			else if (deptype == SHARED_DEPENDENCY_TABLESPACE)
+				appendStringInfo(descs, _("tablespace for %s"), objdesc);
 			else
 				elog(ERROR, "unrecognized dependency type: %d",
 					 (int) deptype);

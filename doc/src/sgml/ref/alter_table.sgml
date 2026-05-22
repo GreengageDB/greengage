@@ -36,7 +36,7 @@ ALTER TABLE ALL IN TABLESPACE <replaceable class="parameter">name</replaceable> 
 ALTER TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceable>
     ATTACH PARTITION <replaceable class="parameter">partition_name</replaceable> { FOR VALUES <replaceable class="parameter">partition_bound_spec</replaceable> | DEFAULT }
 ALTER TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceable>
-    DETACH PARTITION <replaceable class="parameter">partition_name</replaceable>
+    DETACH PARTITION <replaceable class="parameter">partition_name</replaceable> [ CONCURRENTLY | FINALIZE ]
 
 ALTER TABLE [ IF EXISTS ] [ONLY] name SET 
      WITH (REORGANIZE=true|false) 
@@ -65,6 +65,7 @@ ALTER TABLE name
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET ( <replaceable class="parameter">attribute_option</replaceable> = <replaceable class="parameter">value</replaceable> [, ... ] )
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> RESET ( <replaceable class="parameter">attribute_option</replaceable> [, ... ] )
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN }
+    ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET COMPRESSION <replaceable class="parameter">compression_method</replaceable>
     ADD <replaceable class="parameter">table_constraint</replaceable> [ NOT VALID ]
     ADD <replaceable class="parameter">table_constraint_using_index</replaceable>
     ALTER CONSTRAINT <replaceable class="parameter">constraint_name</replaceable> [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
@@ -94,7 +95,7 @@ ALTER TABLE name
     NO INHERIT <replaceable class="parameter">parent_table</replaceable>
     OF <replaceable class="parameter">type_name</replaceable>
     NOT OF
-    OWNER TO { <replaceable class="parameter">new_owner</replaceable> | CURRENT_USER | SESSION_USER }
+    OWNER TO { <replaceable class="parameter">new_owner</replaceable> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
     REPLICA IDENTITY { DEFAULT | USING INDEX <replaceable class="parameter">index_name</replaceable> | FULL | NOTHING }
 
 <phrase>and <replaceable class="parameter">partition_bound_spec</replaceable> is:</phrase>
@@ -223,7 +224,7 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       This form adds a new column to the table, using the same syntax as
-      <xref linkend="sql-createtable"/>. If <literal>IF NOT EXISTS</literal>
+      <link linkend="sql-createtable"><command>CREATE TABLE</command></link>. If <literal>IF NOT EXISTS</literal>
       is specified and a column already exists with this name,
       no error is thrown.
      </para>
@@ -339,7 +340,7 @@ Where column_reference_storage_directive is:
      <para>
       These forms change whether a column is an identity column or change the
       generation attribute of an existing identity column.
-      See <xref linkend="sql-createtable"/> for details.
+      See <link linkend="sql-createtable"><command>CREATE TABLE</command></link> for details.
       Like <literal>SET DEFAULT</literal>, these forms only affect the
       behavior of subsequent <command>INSERT</command>
       and <command>UPDATE</command> commands; they do not cause rows
@@ -361,7 +362,7 @@ Where column_reference_storage_directive is:
      <para>
       These forms alter the sequence that underlies an existing identity
       column.  <replaceable>sequence_option</replaceable> is an option
-      supported by <xref linkend="sql-altersequence"/> such
+      supported by <link linkend="sql-altersequence"><command>ALTER SEQUENCE</command></link> such
       as <literal>INCREMENT BY</literal>.
      </para>
     </listitem>
@@ -373,7 +374,7 @@ Where column_reference_storage_directive is:
      <para>
       This form
       sets the per-column statistics-gathering target for subsequent
-      <xref linkend="sql-analyze"/> operations.
+      <link linkend="sql-analyze"><command>ANALYZE</command></link> operations.
       The target can be set in the range 0 to 10000; alternatively, set it
       to -1 to revert to using the system default statistics
       target (<xref linkend="guc-default-statistics-target"/>).
@@ -397,7 +398,7 @@ Where column_reference_storage_directive is:
       defined per-attribute options are <literal>n_distinct</literal> and
       <literal>n_distinct_inherited</literal>, which override the
       number-of-distinct-values estimates made by subsequent
-      <xref linkend="sql-analyze"/>
+      <link linkend="sql-analyze"><command>ANALYZE</command></link>
       operations.  <literal>n_distinct</literal> affects the statistics for the table
       itself, while <literal>n_distinct_inherited</literal> affects the statistics
       gathered for the table plus its inheritance children.  When set to a
@@ -455,11 +456,41 @@ Where column_reference_storage_directive is:
    </varlistentry>
 
    <varlistentry>
+    <term>
+     <literal>SET COMPRESSION <replaceable class="parameter">compression_method</replaceable></literal>
+    </term>
+    <listitem>
+     <para>
+      This form sets the compression method for a column, determining how
+      values inserted in future will be compressed (if the storage mode
+      permits compression at all).
+      This does not cause the table to be rewritten, so existing data may still
+      be compressed with other compression methods.  If the table is restored
+      with <application>pg_restore</application>, then all values are rewritten
+      with the configured compression method.
+      However, when data is inserted from another relation (for example,
+      by <command>INSERT ... SELECT</command>), values from the source table are
+      not necessarily detoasted, so any previously compressed data may retain
+      its existing compression method, rather than being recompressed with the
+      compression method of the target column.
+      The supported compression
+      methods are <literal>pglz</literal> and <literal>lz4</literal>.
+      (<literal>lz4</literal> is available only if <option>--with-lz4</option>
+      was used when building <productname>PostgreSQL</productname>.)  In
+      addition, <replaceable class="parameter">compression_method</replaceable>
+      can be <literal>default</literal>, which selects the default behavior of
+      consulting the <xref linkend="guc-default-toast-compression"/> setting
+      at the time of data insertion to determine the method to use.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
     <term><literal>ADD <replaceable class="parameter">table_constraint</replaceable> [ NOT VALID ]</literal></term>
     <listitem>
      <para>
       This form adds a new constraint to a table using the same constraint
-      syntax as <xref linkend="sql-createtable"/>, plus the option <literal>NOT
+      syntax as <link linkend="sql-createtable"><command>CREATE TABLE</command></link>, plus the option <literal>NOT
       VALID</literal>, which is currently only allowed for foreign key
       and CHECK constraints.
      </para>
@@ -493,7 +524,7 @@ Where column_reference_storage_directive is:
 
      <para>
       Additional restrictions apply when unique or primary key constraints
-      are added to partitioned tables; see <xref linkend="sql-createtable"/>.
+      are added to partitioned tables; see <link linkend="sql-createtable"><command>CREATE TABLE</command></link>.
       Also, foreign key constraints on partitioned
       tables may not be declared <literal>NOT VALID</literal> at present.
      </para>
@@ -576,6 +607,9 @@ Where column_reference_storage_directive is:
       satisfied.  Nothing happens if the constraint is already marked valid.
       (See <xref linkend="sql-altertable-notes"/> below for an explanation
       of the usefulness of this command.)
+     </para>
+     <para>
+      This command acquires a <literal>SHARE UPDATE EXCLUSIVE</literal> lock.
      </para>
     </listitem>
    </varlistentry>
@@ -666,10 +700,10 @@ Where column_reference_storage_directive is:
       These forms control the application of row security policies belonging
       to the table.  If enabled and no policies exist for the table, then a
       default-deny policy is applied.  Note that policies can exist for a table
-      even if row level security is disabled.  In this case, the policies will
+      even if row-level security is disabled.  In this case, the policies will
       <emphasis>not</emphasis> be applied and the policies will be ignored.
       See also
-      <xref linkend="sql-createpolicy"/>.
+      <link linkend="sql-createpolicy"><command>CREATE POLICY</command></link>.
      </para>
     </listitem>
    </varlistentry>
@@ -679,12 +713,12 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       These forms control the application of row security policies belonging
-      to the table when the user is the table owner.  If enabled, row level
+      to the table when the user is the table owner.  If enabled, row-level
       security policies will be applied when the user is the table owner.  If
-      disabled (the default) then row level security will not be applied when
+      disabled (the default) then row-level security will not be applied when
       the user is the table owner.
       See also
-      <xref linkend="sql-createpolicy"/>.
+      <link linkend="sql-createpolicy"><command>CREATE POLICY</command></link>.
      </para>
     </listitem>
    </varlistentry>
@@ -694,7 +728,7 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       This form selects the default index for future
-      <xref linkend="sql-cluster"/>
+      <link linkend="sql-cluster"><command>CLUSTER</command></link>
       operations.  It does not actually re-cluster the table.
      </para>
      <para>
@@ -708,7 +742,7 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       This form removes the most recently used
-      <xref linkend="sql-cluster"/>
+      <link linkend="sql-cluster"><command>CLUSTER</command></link>
       index specification from the table.  This affects
       future cluster operations that don't specify an index.
      </para>
@@ -750,7 +784,7 @@ Where column_reference_storage_directive is:
       When applied to a partitioned table, nothing is moved, but any
       partitions created afterwards with
       <command>CREATE TABLE PARTITION OF</command> will use that tablespace,
-      unless the <literal>TABLESPACE</literal> clause is used to override it.
+      unless overridden by a <literal>TABLESPACE</literal> clause.
      </para>
 
      <para>
@@ -766,7 +800,7 @@ Where column_reference_storage_directive is:
       <literal>information_schema</literal> relations are not considered part
       of the system catalogs and will be moved.
       See also
-      <xref linkend="sql-createtablespace"/>.
+      <link linkend="sql-createtablespace"><command>CREATE TABLESPACE</command></link>.
      </para>
     </listitem>
    </varlistentry>
@@ -788,12 +822,12 @@ Where column_reference_storage_directive is:
      <para>
       This form changes one or more storage parameters for the table.  See
       <xref linkend="sql-createtable-storage-parameters"/> in the
-      <xref linkend="sql-createtable"/> documentation
+      <link linkend="sql-createtable"><command>CREATE TABLE</command></link> documentation
       for details on the available parameters.  Note that the table contents
       will not be modified immediately by this command; depending on the
       parameter you might need to rewrite the table to get the desired effects.
-      That can be done with <link linkend="sql-vacuum">VACUUM
-      FULL</link>, <xref linkend="sql-cluster"/> or one of the forms
+      That can be done with <link linkend="sql-vacuum"><command>VACUUM
+      FULL</command></link>, <link linkend="sql-cluster"><command>CLUSTER</command></link> or one of the forms
       of <command>ALTER TABLE</command> that forces a table rewrite.
       For planner related parameters, changes will take effect from the next
       time the table is locked so currently executing queries will not be
@@ -892,7 +926,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry id="sql-createtable-replica-identity">
+   <varlistentry id="sql-altertable-replica-identity">
     <term><literal>REPLICA IDENTITY</literal></term>
     <listitem>
      <para>
@@ -959,7 +993,7 @@ Where column_reference_storage_directive is:
      <para>
       A partition using <literal>FOR VALUES</literal> uses same syntax for
       <replaceable class="parameter">partition_bound_spec</replaceable> as
-      <xref linkend="sql-createtable"/>.  The partition bound specification
+      <link linkend="sql-createtable"><command>CREATE TABLE</command></link>.  The partition bound specification
       must correspond to the partitioning strategy and partition key of the
       target table.  The table to be attached must have all the same columns
       as the target table and no more; moreover, the column types must also
@@ -970,7 +1004,7 @@ Where column_reference_storage_directive is:
       from the parent table will be created in the partition, if they don't
       already exist.
       If any of the <literal>CHECK</literal> constraints of the table being
-      attached is marked <literal>NO INHERIT</literal>, the command will fail;
+      attached are marked <literal>NO INHERIT</literal>, the command will fail;
       such constraints must be recreated without the
       <literal>NO INHERIT</literal> clause.
      </para>
@@ -1018,8 +1052,9 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
-    <term><literal>DETACH PARTITION</literal> <replaceable class="parameter">partition_name</replaceable></term>
+   <varlistentry id="sql-altertable-detach-partition">
+    <term><literal>DETACH PARTITION <replaceable class="parameter">partition_name</replaceable> [ CONCURRENTLY | FINALIZE ]</literal></term>
+
     <listitem>
      <para>
       This form detaches the specified partition of the target table.  The detached
@@ -1027,6 +1062,31 @@ Where column_reference_storage_directive is:
       ties to the table from which it was detached.  Any indexes that were
       attached to the target table's indexes are detached.  Any triggers that
       were created as clones of those in the target table are removed.
+      <literal>SHARE</literal> lock is obtained on any tables that reference
+      this partitioned table in foreign key constraints.
+     </para>
+     <para>
+      If <literal>CONCURRENTLY</literal> is specified, it runs using a reduced
+      lock level to avoid blocking other sessions that might be accessing the
+      partitioned table.  In this mode, two transactions are used internally.
+      During the first transaction, a <literal>SHARE UPDATE EXCLUSIVE</literal>
+      lock is taken on both parent table and partition, and the partition is
+      marked as undergoing detach; at that point, the transaction is committed
+      and all other transactions using the partitioned table are waited for.
+      Once all those transactions have completed, the second transaction
+      acquires <literal>SHARE UPDATE EXCLUSIVE</literal> on the partitioned
+      table and <literal>ACCESS EXCLUSIVE</literal> on the partition,
+      and the detach process completes.  A <literal>CHECK</literal> constraint
+      that duplicates the partition constraint is added to the partition.
+      <literal>CONCURRENTLY</literal> cannot be run in a transaction block and
+      is not allowed if the partitioned table contains a default partition.
+     </para>
+     <para>
+      If <literal>FINALIZE</literal> is specified, a previous
+      <literal>DETACH CONCURRENTLY</literal> invocation that was cancelled or
+      interrupted is completed.
+      At most one partition in a partitioned table can be pending detach at
+      a time.
      </para>
     </listitem>
    </varlistentry>

@@ -6,7 +6,7 @@
 # runs the regression tests (to put in some data), runs pg_dumpall,
 # runs pg_upgrade, runs pg_dumpall again, compares the dumps.
 #
-# Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 
 set -e
@@ -106,7 +106,6 @@ outputdir="$temp_root/regress"
 EXTRA_REGRESS_OPTS="$EXTRA_REGRESS_OPTS --outputdir=$outputdir"
 export EXTRA_REGRESS_OPTS
 mkdir "$outputdir"
-mkdir "$outputdir"/testtablespace
 
 logdir=`pwd`/log
 rm -rf "$logdir"
@@ -167,17 +166,24 @@ createdb "regression$dbname3" || createdb_status=$?
 if "$MAKE" -C "$oldsrc" installcheck-parallel; then
 	oldpgversion=`psql -X -A -t -d regression -c "SHOW server_version_num"`
 
-	# before dumping, get rid of objects not existing in later versions
+	# before dumping, get rid of objects not feasible in later versions
 	if [ "$newsrc" != "$oldsrc" ]; then
 		fix_sql=""
 		case $oldpgversion in
 			804??)
-				fix_sql="DROP FUNCTION public.myfunc(integer); DROP FUNCTION public.oldstyle_length(integer, text);"
-				;;
-			*)
-				fix_sql="DROP FUNCTION public.oldstyle_length(integer, text);"
+				fix_sql="DROP FUNCTION public.myfunc(integer);"
 				;;
 		esac
+		fix_sql="$fix_sql
+				 DROP FUNCTION IF EXISTS
+					public.oldstyle_length(integer, text);	-- last in 9.6
+				 DROP FUNCTION IF EXISTS
+					public.putenv(text);	-- last in v13
+				 DROP OPERATOR IF EXISTS	-- last in v13
+					public.#@# (pg_catalog.int8, NONE),
+					public.#%# (pg_catalog.int8, NONE),
+					public.!=- (pg_catalog.int8, NONE),
+					public.#@%# (pg_catalog.int8, NONE);"
 		psql -X -d regression -c "$fix_sql;" || psql_fix_sql_status=$?
 	fi
 
@@ -226,7 +232,7 @@ pg_upgrade $PG_UPGRADE_OPTS -d "${PGDATA}.old" -D "$PGDATA" -b "$oldbindir" -p "
 # make sure all directories and files have group permissions, on Unix hosts
 # Windows hosts don't support Unix-y permissions.
 case $testhost in
-	MINGW*) ;;
+	MINGW*|CYGWIN*) ;;
 	*)	if [ `find "$PGDATA" -type f ! -perm 640 | wc -l` -ne 0 ]; then
 			echo "files in PGDATA with permission != 640";
 			exit 1;
@@ -234,7 +240,7 @@ case $testhost in
 esac
 
 case $testhost in
-	MINGW*) ;;
+	MINGW*|CYGWIN*) ;;
 	*)	if [ `find "$PGDATA" -type d ! -perm 750 | wc -l` -ne 0 ]; then
 			echo "directories in PGDATA with permission != 750";
 			exit 1;
@@ -242,14 +248,6 @@ case $testhost in
 esac
 
 pg_ctl start -l "$logdir/postmaster2.log" -o "$POSTMASTER_OPTS" -w
-
-# In the commands below we inhibit msys2 from converting the "/c" switch
-# in "cmd /c" to a file system path.
-
-case $testhost in
-	MINGW*)	MSYS2_ARG_CONV_EXCL=/c cmd /c analyze_new_cluster.bat ;;
-	*)		sh ./analyze_new_cluster.sh ;;
-esac
 
 pg_dumpall --no-sync -f "$temp_root"/dump2.sql || pg_dumpall2_status=$?
 pg_ctl -m fast stop

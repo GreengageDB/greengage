@@ -9,7 +9,7 @@
  * of XLogRecData structs by a call to XLogRecordAssemble(). See
  * access/transam/README for details.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/xloginsert.c
@@ -1057,6 +1057,63 @@ log_newpage(RelFileNode *rnode, ForkNumber forkNum, BlockNumber blkno,
 	}
 
 	return recptr;
+}
+
+/*
+ * Like log_newpage(), but allows logging multiple pages in one operation.
+ * It is more efficient than calling log_newpage() for each page separately,
+ * because we can write multiple pages in a single WAL record.
+ */
+void
+log_newpages(RelFileNode *rnode, ForkNumber forkNum, int num_pages,
+			 BlockNumber *blknos, Page *pages, bool page_std)
+{
+	int			flags;
+	XLogRecPtr	recptr;
+	int			i;
+	int			j;
+
+	flags = REGBUF_FORCE_IMAGE;
+	if (page_std)
+		flags |= REGBUF_STANDARD;
+
+	/*
+	 * Iterate over all the pages. They are collected into batches of
+	 * XLR_MAX_BLOCK_ID pages, and a single WAL-record is written for each
+	 * batch.
+	 */
+	XLogEnsureRecordSpace(XLR_MAX_BLOCK_ID - 1, 0);
+
+	i = 0;
+	while (i < num_pages)
+	{
+		int			batch_start = i;
+		int			nbatch;
+
+		XLogBeginInsert();
+
+		nbatch = 0;
+		while (nbatch < XLR_MAX_BLOCK_ID && i < num_pages)
+		{
+			XLogRegisterBlock(nbatch, rnode, forkNum, blknos[i], pages[i], flags);
+			i++;
+			nbatch++;
+		}
+
+		recptr = XLogInsert(RM_XLOG_ID, XLOG_FPI);
+
+		for (j = batch_start; j < i; j++)
+		{
+			/*
+			 * The page may be uninitialized. If so, we can't set the LSN
+			 * because that would corrupt the page.
+			 */
+			if (!PageIsNew(pages[j]))
+			{
+				PageSetLSN(pages[j], recptr);
+			}
+		}
+	}
 }
 
 /*

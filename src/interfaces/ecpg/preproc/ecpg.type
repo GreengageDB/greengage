@@ -9,6 +9,7 @@
 %type <str> ECPGDeallocateDescr
 %type <str> ECPGDeclaration
 %type <str> ECPGDeclare
+%type <str> ECPGDeclareStmt
 %type <str> ECPGDescribe
 %type <str> ECPGDisconnect
 %type <str> ECPGExecuteImmediateStmt
@@ -122,7 +123,9 @@
 %type <str> CSTRING
 %type <str> CPP_LINE
 %type <str> CVARIABLE
+%type <str> BCONST
 %type <str> SCONST
+%type <str> XCONST
 %type <str> IDENT
 
 %type  <struct_union> s_struct_union_symbol

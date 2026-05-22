@@ -34,7 +34,6 @@ init_procedure_caches(void)
 {
 	HASHCTL		hash_ctl;
 
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(PLyProcedureKey);
 	hash_ctl.entrysize = sizeof(PLyProcedureEntry);
 	PLy_procedure_cache = hash_create("PL/Python procedures", 32, &hash_ctl,
@@ -220,7 +219,7 @@ PLy_procedure_create(HeapTuple procTup, Oid fn_oid, bool is_trigger)
 				if (rettype == VOIDOID ||
 					rettype == RECORDOID)
 					 /* okay */ ;
-				else if (rettype == TRIGGEROID || rettype == EVTTRIGGEROID)
+				else if (rettype == TRIGGEROID || rettype == EVENT_TRIGGEROID)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("trigger functions can only be called as triggers")));

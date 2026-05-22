@@ -4,7 +4,7 @@
  *	  node buffer management functions for GiST buffering build algorithm.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -76,7 +76,6 @@ gistInitBuildBuffers(int pagesPerBuffer, int levelStep, int maxLevel)
 	 * nodeBuffersTab hash is association between index blocks and it's
 	 * buffers.
 	 */
-	memset(&hashCtl, 0, sizeof(hashCtl));
 	hashCtl.keysize = sizeof(BlockNumber);
 	hashCtl.entrysize = sizeof(GISTNodeBuffer);
 	hashCtl.hcxt = CurrentMemoryContext;
@@ -666,7 +665,7 @@ gistRelocateBuildBuffersOnSplit(GISTBuildBuffers *gfbb, GISTSTATE *giststate,
 			zero_penalty = true;
 
 			/* Loop over index attributes. */
-			for (j = 0; j < r->rd_att->natts; j++)
+			for (j = 0; j < IndexRelationGetNumberOfKeyAttributes(r); j++)
 			{
 				float		usize;
 
@@ -692,7 +691,7 @@ gistRelocateBuildBuffersOnSplit(GISTBuildBuffers *gfbb, GISTSTATE *giststate,
 					which = i;
 					best_penalty[j] = usize;
 
-					if (j < r->rd_att->natts - 1)
+					if (j < IndexRelationGetNumberOfKeyAttributes(r) - 1)
 						best_penalty[j + 1] = -1;
 				}
 				else if (best_penalty[j] == usize)

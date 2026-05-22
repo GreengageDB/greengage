@@ -4,7 +4,7 @@
  *	  Definitions for using the POSTGRES copy command.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/copy.h
@@ -133,6 +133,16 @@ typedef struct CopyStateData
 	bool		is_program;		/* is 'filename' a program to popen? */
 	copy_data_source_cb data_source_cb; /* function for reading data */
 	void	   *data_source_cb_extra;
+/*
+ * A struct to hold COPY options, in a parsed form. All of these are related
+ * to formatting, except for 'freeze', which doesn't really belong here, but
+ * it's expedient to parse it along with all the other options.
+ */
+typedef struct CopyFormatOptions
+{
+	/* parameters from the COPY command */
+	int			file_encoding;	/* file or remote side's character encoding,
+								 * -1 if not specified */
 	bool		binary;			/* binary format? */
 	bool		freeze;			/* freeze rows on loading? */
 	bool		csv_mode;		/* Comma Separated Value format? */
@@ -289,6 +299,13 @@ typedef struct
 #ifndef ntohll
 #define ntohll(x) ((1==ntohl(1)) ? (x) : ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
 #endif
+} CopyFormatOptions;
+
+/* These are private in commands/copy[from|to].c */
+typedef struct CopyFromStateData *CopyFromState;
+typedef struct CopyToStateData *CopyToState;
+
+typedef int (*copy_data_source_cb) (void *outbuf, int minread, int maxread);
 
 extern void DoCopy(ParseState *state, const CopyStmt *stmt,
 				   int stmt_location, int stmt_len,
@@ -309,12 +326,18 @@ extern void EndCopyToOnSegment(CopyState cstate);
 extern CopyState BeginCopyToForeignTable(Relation forrel, List *options);
 extern void EndCopyFrom(CopyState cstate);
 extern bool NextCopyFrom(CopyState cstate, ExprContext *econtext,
+extern void ProcessCopyOptions(ParseState *pstate, CopyFormatOptions *ops_out, bool is_from, List *options);
+extern CopyFromState BeginCopyFrom(ParseState *pstate, Relation rel, Node *whereClause,
+								   const char *filename,
+								   bool is_program, copy_data_source_cb data_source_cb, List *attnamelist, List *options);
+extern void EndCopyFrom(CopyFromState cstate);
+extern bool NextCopyFrom(CopyFromState cstate, ExprContext *econtext,
 						 Datum *values, bool *nulls);
-extern bool NextCopyFromRawFields(CopyState cstate,
+extern bool NextCopyFromRawFields(CopyFromState cstate,
 								  char ***fields, int *nfields);
 extern void CopyFromErrorCallback(void *arg);
 
-extern uint64 CopyFrom(CopyState cstate);
+extern uint64 CopyFrom(CopyFromState cstate);
 
 extern DestReceiver *CreateCopyDestReceiver(void);
 
@@ -336,5 +359,15 @@ typedef struct GpDistributionData
 	GpPolicy   *policy;		/* partitioning policy for this table */
 	CdbHash	   *cdbHash;	/* corresponding CdbHash object */
 } GpDistributionData;
+/*
+ * internal prototypes
+ */
+extern CopyToState BeginCopyTo(ParseState *pstate, Relation rel, RawStmt *query,
+							   Oid queryRelId, const char *filename, bool is_program,
+							   List *attnamelist, List *options);
+extern void EndCopyTo(CopyToState cstate);
+extern uint64 DoCopyTo(CopyToState cstate);
+extern List *CopyGetAttnums(TupleDesc tupDesc, Relation rel,
+							List *attnamelist);
 
 #endif							/* COPY_H */

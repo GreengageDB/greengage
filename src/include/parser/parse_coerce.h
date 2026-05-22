@@ -4,7 +4,7 @@
  *	Routines for type coercion.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/parser/parse_coerce.h
@@ -76,8 +76,9 @@ extern Node *coerce_to_common_type(ParseState *pstate, Node *node,
 								   const char *context);
 
 extern void fixup_unknown_vars_in_exprlist(ParseState *pstate, List *exprlist);
-extern void fixup_unknown_vars_in_targetlist(ParseState *pstate, 
+extern void fixup_unknown_vars_in_targetlist(ParseState *pstate,
 											 List *targetlist);
+extern int32 select_common_typmod(ParseState *pstate, List *exprs, Oid common_type);
 
 extern bool check_generic_type_consistency(const Oid *actual_arg_types,
 										   const Oid *declared_arg_types,

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -31,11 +31,6 @@ typedef struct maxSortGroupRef_context
 
 static
 bool maxSortGroupRef_walker(Node *node, maxSortGroupRef_context *cxt);
-
-/* Test if an expression node represents a SRF call.  Beware multiple eval! */
-#define IS_SRF_CALL(node) \
-	((IsA(node, FuncExpr) && ((FuncExpr *) (node))->funcretset) || \
-	 (IsA(node, OpExpr) && ((OpExpr *) (node))->opretset))
 
 /*
  * Data structures for split_pathtarget_at_srfs().  To preserve the identity
@@ -843,6 +838,13 @@ make_pathtarget_from_tlist(List *tlist)
 		i++;
 	}
 
+	/*
+	 * Mark volatility as unknown.  The contain_volatile_functions function
+	 * will determine if there are any volatile functions when called for the
+	 * first time with this PathTarget.
+	 */
+	target->has_volatile_expr = VOLATILITY_UNKNOWN;
+
 	return target;
 }
 
@@ -944,6 +946,16 @@ add_column_to_pathtarget(PathTarget *target, Expr *expr, Index sortgroupref)
 		target->sortgrouprefs = (Index *) palloc0(nexprs * sizeof(Index));
 		target->sortgrouprefs[nexprs - 1] = sortgroupref;
 	}
+
+	/*
+	 * Reset has_volatile_expr to UNKNOWN.  We just leave it up to
+	 * contain_volatile_functions to set this properly again.  Technically we
+	 * could save some effort here and just check the new Expr, but it seems
+	 * better to keep the logic for setting this flag in one location rather
+	 * than duplicating the logic here.
+	 */
+	if (target->has_volatile_expr == VOLATILITY_NOVOLATILE)
+		target->has_volatile_expr = VOLATILITY_UNKNOWN;
 }
 
 /*

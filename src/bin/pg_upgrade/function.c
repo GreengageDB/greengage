@@ -3,7 +3,7 @@
  *
  *	server-side function support
  *
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/function.c
  */
 
@@ -89,7 +89,7 @@ get_loadable_libraries(void)
 		 * http://archives.postgresql.org/pgsql-hackers/2012-03/msg01101.php
 		 * http://archives.postgresql.org/pgsql-bugs/2012-05/msg00206.php
 		 */
-		if (GET_MAJOR_VERSION(old_cluster.major_version) < 901)
+		if (GET_MAJOR_VERSION(old_cluster.major_version) <= 900)
 		{
 			PGresult   *res;
 
@@ -217,7 +217,7 @@ check_loadable_libraries(void)
 			 * library name "plpython" in an old PG <= 9.1 cluster must look
 			 * for "plpython2" in the new cluster.
 			 */
-			if (GET_MAJOR_VERSION(old_cluster.major_version) < 901 &&
+			if (GET_MAJOR_VERSION(old_cluster.major_version) <= 900 &&
 				strcmp(lib, "$libdir/plpython") == 0)
 			{
 				lib = "$libdir/plpython2";

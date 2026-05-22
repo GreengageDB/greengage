@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 # Test for recovery targets: name, timestamp, XID
 use strict;
 use warnings;
@@ -13,7 +16,7 @@ sub test_recovery_standby
 {
 	my $test_name       = shift;
 	my $node_name       = shift;
-	my $node_primary     = shift;
+	my $node_primary    = shift;
 	my $recovery_params = shift;
 	my $num_rows        = shift;
 	my $until_lsn       = shift;
@@ -49,6 +52,10 @@ sub test_recovery_standby
 # Initialize primary node
 my $node_primary = get_new_node('primary');
 $node_primary->init(has_archiving => 1, allows_streaming => 1);
+
+# Bump the transaction ID epoch.  This is useful to stress the portability
+# of recovery_target_xid parsing.
+system_or_bail('pg_resetwal', '--epoch', '1', $node_primary->data_dir);
 
 # Start it
 $node_primary->start;
@@ -173,5 +180,5 @@ foreach my $i (0 .. 1800)
 }
 $logfile = slurp_file($node_standby->logfile());
 ok( $logfile =~
-	  qr/FATAL:  recovery ended before configured recovery target was reached/,
+	  qr/FATAL: .* recovery ended before configured recovery target was reached/,
 	'recovery end before target reached is a fatal error');

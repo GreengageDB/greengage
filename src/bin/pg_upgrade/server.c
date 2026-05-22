@@ -3,7 +3,7 @@
  *
  *	database server functions
  *
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/server.c
  */
 
@@ -31,8 +31,7 @@ connectToServer(ClusterInfo *cluster, const char *db_name)
 
 	if (conn == NULL || PQstatus(conn) != CONNECTION_OK)
 	{
-		pg_log(PG_REPORT, "connection to database failed: %s",
-			   PQerrorMessage(conn));
+		pg_log(PG_REPORT, "%s", PQerrorMessage(conn));
 
 		if (conn)
 			PQfinish(conn);
@@ -51,6 +50,8 @@ connectToServer(ClusterInfo *cluster, const char *db_name)
  * get_db_conn()
  *
  * get database connection, using named database + standard params for cluster
+ *
+ * Caller must check for connection failure!
  */
 static PGconn *
 get_db_conn(ClusterInfo *cluster, const char *db_name)
@@ -228,7 +229,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 		snprintf(socket_string + strlen(socket_string),
 				 sizeof(socket_string) - strlen(socket_string),
 				 " -c %s='%s'",
-				 (GET_MAJOR_VERSION(cluster->major_version) < 903) ?
+				 (GET_MAJOR_VERSION(cluster->major_version) <= 902) ?
 				 "unix_socket_directory" : "unix_socket_directories",
 				 cluster->sockdir);
 #endif
@@ -318,8 +319,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	if ((conn = get_db_conn(cluster, "template1")) == NULL ||
 		PQstatus(conn) != CONNECTION_OK)
 	{
-		pg_log(PG_REPORT, "\nconnection to database failed: %s",
-			   PQerrorMessage(conn));
+		pg_log(PG_REPORT, "\n%s", PQerrorMessage(conn));
 		if (conn)
 			PQfinish(conn);
 		if (cluster == &old_cluster)

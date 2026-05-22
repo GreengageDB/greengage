@@ -3,7 +3,7 @@
  * json.c
  *		JSON data type support.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -990,7 +990,7 @@ catenate_stringinfo_string(StringInfo buffer, const char *addon)
 Datum
 json_build_object(PG_FUNCTION_ARGS)
 {
-	int			nargs = PG_NARGS();
+	int			nargs;
 	int			i;
 	const char *sep = "";
 	StringInfo	result;

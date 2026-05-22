@@ -3,7 +3,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  * src/backend/catalog/system_views.sql
  *
@@ -54,7 +54,7 @@ CREATE VIEW pg_shadow AS
     ON (pg_authid.oid = setrole AND setdatabase = 0)
     WHERE rolcanlogin;
 
-REVOKE ALL on pg_shadow FROM public;
+REVOKE ALL ON pg_shadow FROM public;
 
 CREATE VIEW pg_group AS
     SELECT
@@ -171,7 +171,7 @@ CREATE VIEW pg_indexes AS
          LEFT JOIN pg_tablespace T ON (T.oid = I.reltablespace)
     WHERE C.relkind IN ('r', 'm', 'p') AND I.relkind IN ('i', 'I');
 
-CREATE OR REPLACE VIEW pg_sequences AS
+CREATE VIEW pg_sequences AS
     SELECT
         N.nspname AS schemaname,
         C.relname AS sequencename,
@@ -258,7 +258,7 @@ CREATE VIEW pg_stats WITH (security_barrier) AS
     AND has_column_privilege(c.oid, a.attnum, 'select')
     AND (c.relrowsecurity = false OR NOT row_security_active(c.oid));
 
-REVOKE ALL on pg_statistic FROM public;
+REVOKE ALL ON pg_statistic FROM public;
 
 CREATE VIEW pg_stats_ext WITH (security_barrier) AS
     SELECT cn.nspname AS schemaname,
@@ -271,6 +271,7 @@ CREATE VIEW pg_stats_ext WITH (security_barrier) AS
                   JOIN pg_attribute a
                        ON (a.attrelid = s.stxrelid AND a.attnum = k)
            ) AS attnames,
+           pg_get_statisticsobjdef_expressions(s.oid) as exprs,
            s.stxkind AS kinds,
            sd.stxdndistinct AS n_distinct,
            sd.stxddependencies AS dependencies,
@@ -297,8 +298,76 @@ CREATE VIEW pg_stats_ext WITH (security_barrier) AS
                 WHERE NOT has_column_privilege(c.oid, a.attnum, 'select') )
     AND (c.relrowsecurity = false OR NOT row_security_active(c.oid));
 
+CREATE VIEW pg_stats_ext_exprs WITH (security_barrier) AS
+    SELECT cn.nspname AS schemaname,
+           c.relname AS tablename,
+           sn.nspname AS statistics_schemaname,
+           s.stxname AS statistics_name,
+           pg_get_userbyid(s.stxowner) AS statistics_owner,
+           stat.expr,
+           (stat.a).stanullfrac AS null_frac,
+           (stat.a).stawidth AS avg_width,
+           (stat.a).stadistinct AS n_distinct,
+           (CASE
+               WHEN (stat.a).stakind1 = 1 THEN (stat.a).stavalues1
+               WHEN (stat.a).stakind2 = 1 THEN (stat.a).stavalues2
+               WHEN (stat.a).stakind3 = 1 THEN (stat.a).stavalues3
+               WHEN (stat.a).stakind4 = 1 THEN (stat.a).stavalues4
+               WHEN (stat.a).stakind5 = 1 THEN (stat.a).stavalues5
+           END) AS most_common_vals,
+           (CASE
+               WHEN (stat.a).stakind1 = 1 THEN (stat.a).stanumbers1
+               WHEN (stat.a).stakind2 = 1 THEN (stat.a).stanumbers2
+               WHEN (stat.a).stakind3 = 1 THEN (stat.a).stanumbers3
+               WHEN (stat.a).stakind4 = 1 THEN (stat.a).stanumbers4
+               WHEN (stat.a).stakind5 = 1 THEN (stat.a).stanumbers5
+           END) AS most_common_freqs,
+           (CASE
+               WHEN (stat.a).stakind1 = 2 THEN (stat.a).stavalues1
+               WHEN (stat.a).stakind2 = 2 THEN (stat.a).stavalues2
+               WHEN (stat.a).stakind3 = 2 THEN (stat.a).stavalues3
+               WHEN (stat.a).stakind4 = 2 THEN (stat.a).stavalues4
+               WHEN (stat.a).stakind5 = 2 THEN (stat.a).stavalues5
+           END) AS histogram_bounds,
+           (CASE
+               WHEN (stat.a).stakind1 = 3 THEN (stat.a).stanumbers1[1]
+               WHEN (stat.a).stakind2 = 3 THEN (stat.a).stanumbers2[1]
+               WHEN (stat.a).stakind3 = 3 THEN (stat.a).stanumbers3[1]
+               WHEN (stat.a).stakind4 = 3 THEN (stat.a).stanumbers4[1]
+               WHEN (stat.a).stakind5 = 3 THEN (stat.a).stanumbers5[1]
+           END) correlation,
+           (CASE
+               WHEN (stat.a).stakind1 = 4 THEN (stat.a).stavalues1
+               WHEN (stat.a).stakind2 = 4 THEN (stat.a).stavalues2
+               WHEN (stat.a).stakind3 = 4 THEN (stat.a).stavalues3
+               WHEN (stat.a).stakind4 = 4 THEN (stat.a).stavalues4
+               WHEN (stat.a).stakind5 = 4 THEN (stat.a).stavalues5
+           END) AS most_common_elems,
+           (CASE
+               WHEN (stat.a).stakind1 = 4 THEN (stat.a).stanumbers1
+               WHEN (stat.a).stakind2 = 4 THEN (stat.a).stanumbers2
+               WHEN (stat.a).stakind3 = 4 THEN (stat.a).stanumbers3
+               WHEN (stat.a).stakind4 = 4 THEN (stat.a).stanumbers4
+               WHEN (stat.a).stakind5 = 4 THEN (stat.a).stanumbers5
+           END) AS most_common_elem_freqs,
+           (CASE
+               WHEN (stat.a).stakind1 = 5 THEN (stat.a).stanumbers1
+               WHEN (stat.a).stakind2 = 5 THEN (stat.a).stanumbers2
+               WHEN (stat.a).stakind3 = 5 THEN (stat.a).stanumbers3
+               WHEN (stat.a).stakind4 = 5 THEN (stat.a).stanumbers4
+               WHEN (stat.a).stakind5 = 5 THEN (stat.a).stanumbers5
+           END) AS elem_count_histogram
+    FROM pg_statistic_ext s JOIN pg_class c ON (c.oid = s.stxrelid)
+         LEFT JOIN pg_statistic_ext_data sd ON (s.oid = sd.stxoid)
+         LEFT JOIN pg_namespace cn ON (cn.oid = c.relnamespace)
+         LEFT JOIN pg_namespace sn ON (sn.oid = s.stxnamespace)
+         JOIN LATERAL (
+             SELECT unnest(pg_get_statisticsobjdef_expressions(s.oid)) AS expr,
+                    unnest(sd.stxdexpr)::pg_statistic AS a
+         ) stat ON (stat.expr IS NOT NULL);
+
 -- unprivileged users may read pg_statistic_ext but not pg_statistic_ext_data
-REVOKE ALL on pg_statistic_ext_data FROM public;
+REVOKE ALL ON pg_statistic_ext_data FROM public;
 
 CREATE VIEW pg_publication_tables AS
     SELECT
@@ -534,13 +603,13 @@ GRANT SELECT, UPDATE ON pg_settings TO PUBLIC;
 CREATE VIEW pg_file_settings AS
    SELECT * FROM pg_show_all_file_settings() AS A;
 
-REVOKE ALL on pg_file_settings FROM PUBLIC;
+REVOKE ALL ON pg_file_settings FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_show_all_file_settings() FROM PUBLIC;
 
 CREATE VIEW pg_hba_file_rules AS
    SELECT * FROM pg_hba_file_rules() AS A;
 
-REVOKE ALL on pg_hba_file_rules FROM PUBLIC;
+REVOKE ALL ON pg_hba_file_rules FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_hba_file_rules() FROM PUBLIC;
 
 CREATE VIEW pg_timezone_abbrevs AS
@@ -552,7 +621,7 @@ CREATE VIEW pg_timezone_names AS
 CREATE VIEW pg_config AS
     SELECT * FROM pg_config();
 
-REVOKE ALL on pg_config FROM PUBLIC;
+REVOKE ALL ON pg_config FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_config() FROM PUBLIC;
 
 CREATE VIEW pg_shmem_allocations AS
@@ -563,6 +632,9 @@ REVOKE EXECUTE ON FUNCTION pg_get_shmem_allocations() FROM PUBLIC;
 
 CREATE VIEW pg_backend_memory_contexts AS
     SELECT * FROM pg_get_backend_memory_contexts();
+
+REVOKE ALL ON pg_backend_memory_contexts FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION pg_get_backend_memory_contexts() FROM PUBLIC;
 
 -- Statistics views
 
@@ -595,7 +667,7 @@ CREATE VIEW pg_stat_all_tables_internal AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
@@ -683,7 +755,7 @@ CREATE VIEW pg_stat_xact_all_tables AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
 CREATE VIEW pg_stat_sys_tables AS
@@ -875,6 +947,7 @@ CREATE VIEW pg_stat_activity AS
             S.state,
             S.backend_xid,
             s.backend_xmin,
+            S.query_id,
             S.query,
             S.backend_type,
 
@@ -1022,7 +1095,6 @@ CREATE VIEW pg_stat_ssl AS
             S.sslversion AS version,
             S.sslcipher AS cipher,
             S.sslbits AS bits,
-            S.sslcompression AS compression,
             S.ssl_client_dn AS client_dn,
             S.ssl_client_serial AS client_serial,
             S.ssl_issuer_dn AS issuer_dn
@@ -1053,9 +1125,26 @@ CREATE VIEW pg_replication_slots AS
             L.restart_lsn,
             L.confirmed_flush_lsn,
             L.wal_status,
-            L.safe_wal_size
+            L.safe_wal_size,
+            L.two_phase
     FROM pg_get_replication_slots() AS L
             LEFT JOIN pg_database D ON (L.datoid = D.oid);
+
+CREATE VIEW pg_stat_replication_slots AS
+    SELECT
+            s.slot_name,
+            s.spill_txns,
+            s.spill_count,
+            s.spill_bytes,
+            s.stream_txns,
+            s.stream_count,
+            s.stream_bytes,
+            s.total_txns,
+            s.total_bytes,
+            s.stats_reset
+    FROM pg_replication_slots as r,
+        LATERAL pg_stat_get_replication_slot(slot_name) as s
+    WHERE r.datoid IS NOT NULL; -- excluding physical slots
 
 CREATE VIEW pg_stat_database AS
     SELECT
@@ -1083,6 +1172,13 @@ CREATE VIEW pg_stat_database AS
             pg_stat_get_db_checksum_last_failure(D.oid) AS checksum_last_failure,
             pg_stat_get_db_blk_read_time(D.oid) AS blk_read_time,
             pg_stat_get_db_blk_write_time(D.oid) AS blk_write_time,
+            pg_stat_get_db_session_time(D.oid) AS session_time,
+            pg_stat_get_db_active_time(D.oid) AS active_time,
+            pg_stat_get_db_idle_in_transaction_time(D.oid) AS idle_in_transaction_time,
+            pg_stat_get_db_sessions(D.oid) AS sessions,
+            pg_stat_get_db_sessions_abandoned(D.oid) AS sessions_abandoned,
+            pg_stat_get_db_sessions_fatal(D.oid) AS sessions_fatal,
+            pg_stat_get_db_sessions_killed(D.oid) AS sessions_killed,
             pg_stat_get_db_stat_reset_time(D.oid) AS stats_reset
     FROM (
         SELECT 0 AS oid, NULL::name AS datname
@@ -1363,6 +1459,19 @@ CREATE VIEW pg_stat_bgwriter AS
         pg_stat_get_buf_alloc() AS buffers_alloc,
         pg_stat_get_bgwriter_stat_reset_time() AS stats_reset;
 
+CREATE VIEW pg_stat_wal AS
+    SELECT
+        w.wal_records,
+        w.wal_fpi,
+        w.wal_bytes,
+        w.wal_buffers_full,
+        w.wal_write,
+        w.wal_sync,
+        w.wal_write_time,
+        w.wal_sync_time,
+        w.stats_reset
+    FROM pg_stat_get_wal() w;
+
 CREATE VIEW pg_stat_progress_analyze AS
     SELECT
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
@@ -1480,6 +1589,26 @@ CREATE VIEW pg_stat_progress_basebackup AS
         S.param5 AS tablespaces_streamed
     FROM pg_stat_get_progress_info('BASEBACKUP') AS S;
 
+
+CREATE VIEW pg_stat_progress_copy AS
+    SELECT
+        S.pid AS pid, S.datid AS datid, D.datname AS datname,
+        S.relid AS relid,
+        CASE S.param5 WHEN 1 THEN 'COPY FROM'
+                      WHEN 2 THEN 'COPY TO'
+                      END AS command,
+        CASE S.param6 WHEN 1 THEN 'FILE'
+                      WHEN 2 THEN 'PROGRAM'
+                      WHEN 3 THEN 'PIPE'
+                      WHEN 4 THEN 'CALLBACK'
+                      END AS "type",
+        S.param1 AS bytes_processed,
+        S.param2 AS bytes_total,
+        S.param3 AS tuples_processed,
+        S.param4 AS tuples_excluded
+    FROM pg_stat_get_progress_info('COPY') AS S
+        LEFT JOIN pg_database D ON S.datid = D.oid;
+
 CREATE VIEW pg_user_mappings AS
     SELECT
         U.oid       AS umid,
@@ -1502,7 +1631,7 @@ CREATE VIEW pg_user_mappings AS
         JOIN pg_foreign_server S ON (U.umserver = S.oid)
         LEFT JOIN pg_authid A ON (A.oid = U.umuser);
 
-REVOKE ALL on pg_user_mapping FROM public;
+REVOKE ALL ON pg_user_mapping FROM public;
 
 CREATE VIEW pg_replication_origin_status AS
     SELECT *
@@ -1510,9 +1639,10 @@ CREATE VIEW pg_replication_origin_status AS
 
 REVOKE ALL ON pg_replication_origin_status FROM public;
 
--- All columns of pg_subscription except subconninfo are readable.
+-- All columns of pg_subscription except subconninfo are publicly readable.
 REVOKE ALL ON pg_subscription FROM public;
-GRANT SELECT (subdbid, subname, subowner, subenabled, subbinary, subslotname, subpublications)
+GRANT SELECT (oid, subdbid, subname, subowner, subenabled, subbinary,
+              substream, subslotname, subsynccommit, subpublications)
     ON pg_subscription TO public;
 
 

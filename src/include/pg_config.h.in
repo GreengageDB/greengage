@@ -305,6 +305,12 @@
 /* Define to 1 if you have the `history_truncate_file' function. */
 #undef HAVE_HISTORY_TRUNCATE_FILE
 
+/* Define to 1 if you have the `HMAC_CTX_free' function. */
+#undef HAVE_HMAC_CTX_FREE
+
+/* Define to 1 if you have the `HMAC_CTX_new' function. */
+#undef HAVE_HMAC_CTX_NEW
+
 /* Define to 1 if you have the <ifaddrs.h> header file. */
 #undef HAVE_IFADDRS_H
 
@@ -365,6 +371,9 @@
 /* Define to 1 if you have the `ldap_r' library (-lldap_r). */
 #undef HAVE_LIBLDAP_R
 
+/* Define to 1 if you have the `lz4' library (-llz4). */
+#undef HAVE_LIBLZ4
+
 /* Define to 1 if you have the `m' library (-lm). */
 #undef HAVE_LIBM
 
@@ -418,6 +427,9 @@
 
 /* Define to 1 if `long long int' works and is 64 bits. */
 #undef HAVE_LONG_LONG_INT_64
+
+/* Define to 1 if you have the <lz4.h> header file. */
+#undef HAVE_LZ4_H
 
 /* Define to 1 if you have the <mbarrier.h> header file. */
 #undef HAVE_MBARRIER_H
@@ -476,6 +488,9 @@
 /* Define to 1 if you have the `pread' function. */
 #undef HAVE_PREAD
 
+/* Define to 1 if you have the `preadv' function. */
+#undef HAVE_PREADV
+
 /* Define to 1 if you have the `pstat' function. */
 #undef HAVE_PSTAT
 
@@ -485,6 +500,9 @@
 /* Define if you have POSIX threads libraries and header files. */
 #undef HAVE_PTHREAD
 
+/* Define to 1 if you have the `pthread_barrier_wait' function. */
+#undef HAVE_PTHREAD_BARRIER_WAIT
+
 /* Define to 1 if you have the `pthread_is_threaded_np' function. */
 #undef HAVE_PTHREAD_IS_THREADED_NP
 
@@ -493,6 +511,9 @@
 
 /* Define to 1 if you have the `pwrite' function. */
 #undef HAVE_PWRITE
+
+/* Define to 1 if you have the `pwritev' function. */
+#undef HAVE_PWRITEV
 
 /* Define to 1 if you have the `random' function. */
 #undef HAVE_RANDOM
@@ -508,6 +529,9 @@
 
 /* Define to 1 if you have the `readlink' function. */
 #undef HAVE_READLINK
+
+/* Define to 1 if you have the `readv' function. */
+#undef HAVE_READV
 
 /* Define to 1 if you have the global variable
    'rl_completion_append_character'. */
@@ -536,6 +560,9 @@
 
 /* Define to 1 if you have the <security/pam_appl.h> header file. */
 #undef HAVE_SECURITY_PAM_APPL_H
+
+/* Define to 1 if you have the `setenv' function. */
+#undef HAVE_SETENV
 
 /* Define to 1 if you have the `setproctitle' function. */
 #undef HAVE_SETPROCTITLE
@@ -639,6 +666,9 @@
 /* Define to 1 if you have the `symlink' function. */
 #undef HAVE_SYMLINK
 
+/* Define to 1 if you have the `syncfs' function. */
+#undef HAVE_SYNCFS
+
 /* Define to 1 if you have the `sync_file_range' function. */
 #undef HAVE_SYNC_FILE_RANGE
 
@@ -689,6 +719,9 @@
 
 /* Define to 1 if you have the <sys/ucred.h> header file. */
 #undef HAVE_SYS_UCRED_H
+
+/* Define to 1 if you have the <sys/uio.h> header file. */
+#undef HAVE_SYS_UIO_H
 
 /* Define to 1 if you have the <sys/un.h> header file. */
 #undef HAVE_SYS_UN_H
@@ -749,6 +782,9 @@
 
 /* Define to 1 if you have the <winsock2.h> header file. */
 #undef HAVE_WINSOCK2_H
+
+/* Define to 1 if you have the `writev' function. */
+#undef HAVE_WRITEV
 
 /* Define to 1 if you have the `X509_get_signature_nid' function. */
 #undef HAVE_X509_GET_SIGNATURE_NID
@@ -970,10 +1006,13 @@
 /* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
 #undef USE_MAPREDUCE
 
+/* Define to 1 to build with LZ4 support. (--with-lz4) */
+#undef USE_LZ4
+
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
 
-/* Define to build with OpenSSL support. (--with-openssl) */
+/* Define to 1 to build with OpenSSL support. (--with-ssl=openssl) */
 #undef USE_OPENSSL
 
 /* Define to use OpenSSL for random number generation */
@@ -1005,9 +1044,6 @@
 
 /* Define to select unnamed POSIX semaphores. */
 #undef USE_UNNAMED_POSIX_SEMAPHORES
-
-/* Define to use native Windows API for random number generation */
-#undef USE_WIN32_RANDOM
 
 /* Define to select Win32-style semaphores. */
 #undef USE_WIN32_SEMAPHORES

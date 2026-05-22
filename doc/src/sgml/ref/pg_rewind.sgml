@@ -25,7 +25,7 @@ PostgreSQL documentation
    <arg rep="repeat"><replaceable>option</replaceable></arg>
    <group choice="plain">
     <group choice="req">
-     <arg choice="plain"><option>-D </option></arg>
+     <arg choice="plain"><option>-D</option></arg>
      <arg choice="plain"><option>--target-pgdata</option></arg>
     </group>
     <replaceable> directory</replaceable>
@@ -73,8 +73,8 @@ PostgreSQL documentation
    from the WAL archive to the <filename>pg_wal</filename> directory, or run
    <application>pg_rewind</application> with the <literal>-c</literal> option to
    automatically retrieve them from the WAL archive. The use of
-   <application>pg_rewind</application> is not limited to failover, e.g.  a standby
-   server can be promoted, run some write transactions, and then rewinded
+   <application>pg_rewind</application> is not limited to failover, e.g.,  a standby
+   server can be promoted, run some write transactions, and then rewound
    to become a standby again.
   </para>
 
@@ -173,7 +173,7 @@ PostgreSQL documentation
         with a role having sufficient permissions to execute the functions
         used by <application>pg_rewind</application> on the source server
         (see Notes section for details) or a superuser role.  This option
-        requires the source server to be running and not in recovery mode.
+        requires the source server to be running and accepting connections.
        </para>
       </listitem>
      </varlistentry>
@@ -211,7 +211,7 @@ PostgreSQL documentation
         <command>pg_rewind</command> to return without waiting, which is
         faster, but means that a subsequent operating system crash can leave
         the synchronized data directory corrupt.  Generally, this option is
-        useful for testing but should not be used when creating a production
+        useful for testing but should not be used on a production
         installation.
        </para>
       </listitem>
@@ -322,7 +322,7 @@ GRANT EXECUTE ON function pg_catalog.pg_read_binary_file(text, bigint, bigint, b
   <para>
    When executing <application>pg_rewind</application> using an online
    cluster as source which has been recently promoted, it is necessary
-   to execute a <command>CHECKPOINT</command> after promotion so as its
+   to execute a <command>CHECKPOINT</command> after promotion such that its
    control file reflects up-to-date timeline information, which is used by
    <application>pg_rewind</application> to check if the target cluster
    can be rewound using the designated source cluster.

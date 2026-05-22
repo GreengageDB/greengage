@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 #
 # Tests restarts of postgres due to crashes of a subprocess.
 #
@@ -14,7 +17,6 @@ use PostgresNode;
 use TestLib;
 use Test::More;
 use Config;
-use Time::HiRes qw(usleep);
 
 plan tests => 18;
 
@@ -134,12 +136,8 @@ ok( pump_until(
 $monitor->finish;
 
 # Wait till server restarts
-is( $node->poll_query_until(
-		'postgres',
-		'SELECT $$restarted after sigquit$$;',
-		'restarted after sigquit'),
-	"1",
-	"reconnected after SIGQUIT");
+is($node->poll_query_until('postgres', undef, ''),
+	"1", "reconnected after SIGQUIT");
 
 
 # restart psql processes, now that the crash cycle finished
@@ -214,7 +212,7 @@ ok( pump_until(
 $monitor->finish;
 
 # Wait till server restarts
-is($node->poll_query_until('postgres', 'SELECT 1', '1'),
+is($node->poll_query_until('postgres', undef, ''),
 	"1", "reconnected after SIGKILL");
 
 # Make sure the committed rows survived, in-progress ones not

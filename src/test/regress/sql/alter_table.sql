@@ -2331,6 +2331,20 @@ ALTER TABLE ataddindex
 \d ataddindex
 DROP TABLE ataddindex;
 
+CREATE TABLE ataddindex(id int, ref_id int);
+ALTER TABLE ataddindex
+  ADD PRIMARY KEY (id),
+  ADD FOREIGN KEY (ref_id) REFERENCES ataddindex;
+\d ataddindex
+DROP TABLE ataddindex;
+
+CREATE TABLE ataddindex(id int, ref_id int);
+ALTER TABLE ataddindex
+  ADD UNIQUE (id),
+  ADD FOREIGN KEY (ref_id) REFERENCES ataddindex (id);
+\d ataddindex
+DROP TABLE ataddindex;
+
 -- unsupported constraint types for partitioned tables
 CREATE TABLE partitioned (
 	a int,
@@ -2746,6 +2760,32 @@ ALTER TABLE range_parted2 DETACH PARTITION part_rp;
 DROP TABLE range_parted2;
 SELECT * from part_rp;
 DROP TABLE part_rp;
+
+-- concurrent detach
+CREATE TABLE range_parted2 (
+	a int
+) PARTITION BY RANGE(a);
+CREATE TABLE part_rp PARTITION OF range_parted2 FOR VALUES FROM (0) to (100);
+BEGIN;
+-- doesn't work in a partition block
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+COMMIT;
+CREATE TABLE part_rpd PARTITION OF range_parted2 DEFAULT;
+-- doesn't work if there's a default partition
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+-- doesn't work for the default partition
+ALTER TABLE range_parted2 DETACH PARTITION part_rpd CONCURRENTLY;
+DROP TABLE part_rpd;
+-- works fine
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+\d+ range_parted2
+-- constraint should be created
+\d part_rp
+CREATE TABLE part_rp100 PARTITION OF range_parted2 (CHECK (a>=123 AND a<133 AND a IS NOT NULL)) FOR VALUES FROM (100) to (200);
+ALTER TABLE range_parted2 DETACH PARTITION part_rp100 CONCURRENTLY;
+-- redundant constraint should not be created
+\d part_rp100
+DROP TABLE range_parted2;
 
 -- Check ALTER TABLE commands for partitioned tables and partitions
 

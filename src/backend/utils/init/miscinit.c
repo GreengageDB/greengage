@@ -3,7 +3,7 @@
  * miscinit.c
  *	  miscellaneous initialization support stuff
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -32,11 +32,13 @@
 #include "catalog/pg_authid.h"
 #include "common/file_perm.h"
 #include "libpq/libpq.h"
+#include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
+#include "postmaster/interrupt.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/startup.h"
 #include "replication/walsender.h"
@@ -126,6 +128,11 @@ InitPostmasterChild(void)
 	/* We don't want the postmaster's proc_exit() handlers */
 	on_exit_reset();
 
+	/* In EXEC_BACKEND case we will not have inherited BlockSig etc values */
+#ifdef EXEC_BACKEND
+	pqinitmask();
+#endif
+
 	/* Initialize process-local latch support */
 	InitializeLatchSupport();
 	MyLatch = &LocalLatchData;
@@ -142,6 +149,18 @@ InitPostmasterChild(void)
 	if (setsid() < 0)
 		elog(FATAL, "setsid() failed: %m");
 #endif
+
+	/*
+	 * Every postmaster child process is expected to respond promptly to
+	 * SIGQUIT at all times.  Therefore we centrally remove SIGQUIT from
+	 * BlockSig and install a suitable signal handler.  (Client-facing
+	 * processes may choose to replace this default choice of handler with
+	 * quickdie().)  All other blockable signals remain blocked for now.
+	 */
+	pqsignal(SIGQUIT, SignalHandlerForCrashExit);
+
+	sigdelset(&BlockSig, SIGQUIT);
+	PG_SETMASK(&BlockSig);
 
 	/* Request a signal if the postmaster dies, if possible. */
 	PostmasterDeathSignalInit();
@@ -165,6 +184,13 @@ InitStandaloneProcess(const char *argv0)
 	InitLatch(MyLatch);
 	InitializeLatchWaitSet();
 
+	/*
+	 * For consistency with InitPostmasterChild, initialize signal mask here.
+	 * But we don't unblock SIGQUIT or provide a default handler for it.
+	 */
+	pqinitmask();
+	PG_SETMASK(&BlockSig);
+
 	/* Compute paths, no postmaster to inherit from */
 	if (my_exec_path[0] == '\0')
 	{
@@ -186,7 +212,8 @@ SwitchToSharedLatch(void)
 	MyLatch = &MyProc->procLatch;
 
 	if (FeBeWaitSet)
-		ModifyWaitEvent(FeBeWaitSet, 1, WL_LATCH_SET, MyLatch);
+		ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetLatchPos, WL_LATCH_SET,
+						MyLatch);
 
 	/*
 	 * Set the shared latch as the local one might have been set. This
@@ -205,7 +232,8 @@ SwitchBackToLocalLatch(void)
 	MyLatch = &LocalLatchData;
 
 	if (FeBeWaitSet)
-		ModifyWaitEvent(FeBeWaitSet, 1, WL_LATCH_SET, MyLatch);
+		ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetLatchPos, WL_LATCH_SET,
+						MyLatch);
 
 	SetLatch(MyLatch);
 }
@@ -1711,7 +1739,7 @@ load_libraries(const char *libraries, const char *gucname, bool restricted)
 		}
 		load_file(filename, restricted);
 		ereport(DEBUG1,
-				(errmsg("loaded library \"%s\"", filename)));
+				(errmsg_internal("loaded library \"%s\"", filename)));
 		if (expanded)
 			pfree(expanded);
 	}

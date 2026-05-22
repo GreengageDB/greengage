@@ -10,7 +10,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/xlogutils.c
@@ -107,7 +107,7 @@ log_invalid_page(RelFileNode node, ForkNumber forkno, BlockNumber blkno,
 	 * tracing of the cause (note the elog context mechanism will tell us
 	 * something about the XLOG record that generated the reference).
 	 */
-	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+	if (message_level_is_interesting(DEBUG1))
 		report_invalid_page(DEBUG1, node, forkno, blkno, present);
 
 	if (invalid_page_tab == NULL)
@@ -115,7 +115,6 @@ log_invalid_page(RelFileNode node, ForkNumber forkno, BlockNumber blkno,
 		/* create hash table when first needed */
 		HASHCTL		ctl;
 
-		memset(&ctl, 0, sizeof(ctl));
 		ctl.keysize = sizeof(xl_invalid_page_key);
 		ctl.entrysize = sizeof(xl_invalid_page);
 
@@ -161,7 +160,7 @@ forget_invalid_pages(RelFileNode node, ForkNumber forkno, BlockNumber minblkno)
 			hentry->key.forkno == forkno &&
 			hentry->key.blkno >= minblkno)
 		{
-			if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+			if (message_level_is_interesting(DEBUG2))
 			{
 				char	   *path = relpathperm(hentry->key.node, forkno);
 
@@ -194,7 +193,7 @@ forget_invalid_pages_db(Oid dbid)
 	{
 		if (hentry->key.node.dbNode == dbid)
 		{
-			if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+			if (message_level_is_interesting(DEBUG2))
 			{
 				char	   *path = relpathperm(hentry->key.node, hentry->key.forkno);
 
@@ -436,8 +435,7 @@ XLogReadBufferForRedoExtended(XLogReaderState *record,
  * NB: A redo function should normally not call this directly. To get a page
  * to modify, use XLogReadBufferForRedoExtended instead. It is important that
  * all pages modified by a WAL record are registered in the WAL records, or
- * they will be invisible to tools that that need to know which pages are
- * modified.
+ * they will be invisible to tools that need to know which pages are modified.
  */
 Buffer
 XLogReadBufferExtended(RelFileNode rnode, ForkNumber forknum,
@@ -797,8 +795,7 @@ XLogReadDetermineTimeline(XLogReaderState *state, XLogRecPtr wantPage, uint32 wa
 
 		elog(DEBUG3, "switched to timeline %u valid until %X/%X",
 			 state->currTLI,
-			 (uint32) (state->currTLIValidUntil >> 32),
-			 (uint32) (state->currTLIValidUntil));
+			 LSN_FORMAT_ARGS(state->currTLIValidUntil));
 	}
 }
 

@@ -3,7 +3,7 @@
  * matview.c
  *	  materialized view support
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -407,6 +407,17 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 
 	ObjectAddressSet(address, RelationRelationId, matviewOid);
 
+	/*
+	 * Save the rowcount so that pg_stat_statements can track the total number
+	 * of rows processed by REFRESH MATERIALIZED VIEW command. Note that we
+	 * still don't display the rowcount in the command completion tag output,
+	 * i.e., the display_rowcount flag of CMDTAG_REFRESH_MATERIALIZED_VIEW
+	 * command tag is left false in cmdtaglist.h. Otherwise, the change of
+	 * completion tag output might break applications using it.
+	 */
+	if (qc)
+		SetQueryCompletion(qc, CMDTAG_REFRESH_MATERIALIZED_VIEW, processed);
+
 	return address;
 }
 
@@ -460,7 +471,7 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	CHECK_FOR_INTERRUPTS();
 
 	/* Plan the query which will generate data for the refresh. */
-	plan = pg_plan_query(query, queryString, 0, NULL);
+	plan = pg_plan_query(query, queryString, CURSOR_OPT_PARALLEL_OK, NULL);
 
 	plan->refreshClause = refreshClause;
 
@@ -796,13 +807,12 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "SELECT newdata FROM %s newdata "
-					 "WHERE newdata IS NOT NULL AND EXISTS "
-					 "(SELECT 1 FROM %s newdata2 WHERE newdata2 IS NOT NULL "
-					 "AND newdata2 OPERATOR(pg_catalog.*=) newdata "
-					 "AND newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "newdata.ctid and newdata2.gp_segment_id = "
-					 "newdata.gp_segment_id)",
+					 "SELECT _$newdata FROM %s _$newdata "
+					 "WHERE _$newdata IS NOT NULL AND EXISTS "
+					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
+					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
+					 "AND _$newdata2.ctid OPERATOR(pg_catalog.<>) "
+					 "_$newdata.ctid)",
 					 tempname, tempname);
 	if (SPI_execute(querybuf.data, false, 1) != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -835,8 +845,8 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 	appendStringInfo(&querybuf,
 					 "CREATE TEMP TABLE %s AS "
-					 "SELECT mv.ctid AS tid, mv.gp_segment_id as sid, newdata.* "
-					 "FROM %s mv FULL JOIN %s newdata ON (",
+					 "SELECT _$mv.ctid AS tid, _$newdata "
+					 "FROM %s _$mv FULL JOIN %s _$newdata ON (",
 					 diffname, matviewname, tempname);
 
 	/*
@@ -931,9 +941,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 				if (foundUniqueIndex)
 					appendStringInfoString(&querybuf, " AND ");
 
-				leftop = quote_qualified_identifier("newdata",
-													NameStr(newattr->attname));
-				rightop = quote_qualified_identifier("mv",
+				leftop = quote_qualified_identifier("_$newdata",
+													NameStr(attr->attname));
+				rightop = quote_qualified_identifier("_$mv",
 													 NameStr(attr->attname));
 
 				generate_operator_clause(&querybuf,
@@ -963,10 +973,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 
 	appendStringInfoString(&querybuf,
-						   " AND newdata.* OPERATOR(pg_catalog.*=) mv.*) "
-						   "WHERE newdata.* IS NULL OR mv.* IS NULL "
-						   "ORDER BY tid ");
-	appendStringInfoString(&querybuf, distributed);
+						   " AND _$newdata OPERATOR(pg_catalog.*=) _$mv) "
+						   "WHERE _$newdata IS NULL OR _$mv IS NULL "
+						   "ORDER BY tid");
 
 	/* Create the temporary "diff" table. */
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_UTILITY)
@@ -991,10 +1000,10 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Deletes must come before inserts; do them first. */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "DELETE FROM %s mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
-					 "(SELECT diff.tid FROM %s diff "
-					 "WHERE diff.tid = mv.ctid and diff.sid = mv.gp_segment_id and"
-	 				 " diff.tid IS NOT NULL)",
+					 "DELETE FROM %s _$mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
+					 "(SELECT _$diff.tid FROM %s _$diff "
+					 "WHERE _$diff.tid IS NOT NULL "
+					 "AND _$diff._$newdata IS NULL)",
 					 matviewname, diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_DELETE)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -1011,8 +1020,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 			appendStringInfo(&querybuf, " %s,", NameStr(attr->attname));
 	}
 	appendStringInfo(&querybuf,
-					 " FROM %s diff WHERE tid IS NULL",
-					 diffname);
+					 "INSERT INTO %s SELECT (_$diff._$newdata).* "
+					 "FROM %s _$diff WHERE tid IS NULL",
+					 matviewname, diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 

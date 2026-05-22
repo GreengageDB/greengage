@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 package Solution;
 
 #
@@ -62,7 +65,7 @@ sub DeterminePlatform
 	if ($^O eq "MSWin32")
 	{
 		# Examine CL help output to determine if we are in 32 or 64-bit mode.
-		my $output = `cl /? 2>&1`;
+		my $output = `cl /help 2>&1`;
 		$? >> 8 == 0 or die "cl command not found";
 		$self->{platform} =
 		  ($output =~ /^\/favor:<.+AMD64/m) ? 'x64' : 'Win32';
@@ -188,7 +191,7 @@ sub GenerateFiles
 		elsif (/\bAC_DEFINE\(OPENSSL_API_COMPAT, \[([0-9xL]+)\]/)
 		{
 			$ac_define_openssl_api_compat_found = 1;
-			$openssl_api_compat = $1;
+			$openssl_api_compat                 = $1;
 		}
 	}
 	close($c);
@@ -286,6 +289,8 @@ sub GenerateFiles
 		HAVE_GETTIMEOFDAY                           => undef,
 		HAVE_GSSAPI_GSSAPI_H                        => undef,
 		HAVE_GSSAPI_H                               => undef,
+		HAVE_HMAC_CTX_FREE                          => undef,
+		HAVE_HMAC_CTX_NEW                           => undef,
 		HAVE_HISTORY_H                              => undef,
 		HAVE_HISTORY_TRUNCATE_FILE                  => undef,
 		HAVE_IFADDRS_H                              => undef,
@@ -305,6 +310,7 @@ sub GenerateFiles
 		HAVE_LIBCRYPTO                              => undef,
 		HAVE_LIBLDAP                                => undef,
 		HAVE_LIBLDAP_R                              => undef,
+		HAVE_LIBLZ4                                 => undef,
 		HAVE_LIBM                                   => undef,
 		HAVE_LIBPAM                                 => undef,
 		HAVE_LIBREADLINE                            => undef,
@@ -318,6 +324,7 @@ sub GenerateFiles
 		HAVE_LOCALE_T               => 1,
 		HAVE_LONG_INT_64            => undef,
 		HAVE_LONG_LONG_INT_64       => 1,
+		HAVE_LZ4_H                  => undef,
 		HAVE_MBARRIER_H             => undef,
 		HAVE_MBSTOWCS_L             => 1,
 		HAVE_MEMORY_H               => 1,
@@ -336,17 +343,21 @@ sub GenerateFiles
 		HAVE_PPC_LWARX_MUTEX_HINT   => undef,
 		HAVE_PPOLL                  => undef,
 		HAVE_PREAD                  => undef,
+		HAVE_PREADV                 => undef,
 		HAVE_PSTAT                  => undef,
 		HAVE_PS_STRINGS             => undef,
 		HAVE_PTHREAD                => undef,
+		HAVE_PTHREAD_BARRIER_WAIT   => undef,
 		HAVE_PTHREAD_IS_THREADED_NP => undef,
 		HAVE_PTHREAD_PRIO_INHERIT   => undef,
 		HAVE_PWRITE                 => undef,
+		HAVE_PWRITEV                => undef,
 		HAVE_RANDOM                 => undef,
 		HAVE_READLINE_H             => undef,
 		HAVE_READLINE_HISTORY_H     => undef,
 		HAVE_READLINE_READLINE_H    => undef,
 		HAVE_READLINK               => undef,
+		HAVE_READV                  => undef,
 		HAVE_RL_COMPLETION_APPEND_CHARACTER      => undef,
 		HAVE_RL_COMPLETION_MATCHES               => undef,
 		HAVE_RL_COMPLETION_SUPPRESS_QUOTE        => undef,
@@ -355,6 +366,7 @@ sub GenerateFiles
 		HAVE_RL_FILENAME_QUOTING_FUNCTION        => undef,
 		HAVE_RL_RESET_SCREEN_SIZE                => undef,
 		HAVE_SECURITY_PAM_APPL_H                 => undef,
+		HAVE_SETENV                              => undef,
 		HAVE_SETPROCTITLE                        => undef,
 		HAVE_SETPROCTITLE_FAST                   => undef,
 		HAVE_SETSID                              => undef,
@@ -390,6 +402,7 @@ sub GenerateFiles
 		HAVE_STRUCT_TM_TM_ZONE                   => undef,
 		HAVE_SYNC_FILE_RANGE                     => undef,
 		HAVE_SYMLINK                             => 1,
+		HAVE_SYNCFS                              => undef,
 		HAVE_SYSLOG                              => undef,
 		HAVE_SYS_EPOLL_H                         => undef,
 		HAVE_SYS_EVENT_H                         => undef,
@@ -406,6 +419,7 @@ sub GenerateFiles
 		HAVE_SYS_TAS_H                           => undef,
 		HAVE_SYS_TYPES_H                         => 1,
 		HAVE_SYS_UCRED_H                         => undef,
+		HAVE_SYS_UIO_H                           => undef,
 		HAVE_SYS_UN_H                            => undef,
 		HAVE_TERMIOS_H                           => undef,
 		HAVE_TYPEOF                              => undef,
@@ -424,6 +438,7 @@ sub GenerateFiles
 		HAVE_WINLDAP_H                           => undef,
 		HAVE_WCSTOMBS_L                          => 1,
 		HAVE_WCTYPE_H                            => 1,
+		HAVE_WRITEV                              => undef,
 		HAVE_X509_GET_SIGNATURE_NID              => 1,
 		HAVE_X86_64_POPCNTQ                      => undef,
 		HAVE__BOOL                               => undef,
@@ -484,15 +499,14 @@ sub GenerateFiles
 		USE_ASSERT_CHECKING => $self->{options}->{asserts} ? 1 : undef,
 		USE_BONJOUR         => undef,
 		USE_BSD_AUTH        => undef,
-		USE_DEV_URANDOM     => undef,
 		USE_ICU => $self->{options}->{icu} ? 1 : undef,
 		USE_LIBXML                 => undef,
 		USE_LIBXSLT                => undef,
+		USE_LZ4                    => undef,
 		USE_LDAP                   => $self->{options}->{ldap} ? 1 : undef,
 		USE_LLVM                   => undef,
 		USE_NAMED_POSIX_SEMAPHORES => undef,
 		USE_OPENSSL                => undef,
-		USE_OPENSSL_RANDOM         => undef,
 		USE_PAM                    => undef,
 		USE_SLICING_BY_8_CRC32C    => undef,
 		USE_SSE42_CRC32C           => undef,
@@ -501,7 +515,6 @@ sub GenerateFiles
 		USE_SYSV_SEMAPHORES                 => undef,
 		USE_SYSV_SHARED_MEMORY              => undef,
 		USE_UNNAMED_POSIX_SEMAPHORES        => undef,
-		USE_WIN32_RANDOM                    => 1,
 		USE_WIN32_SEMAPHORES                => 1,
 		USE_WIN32_SHARED_MEMORY             => 1,
 		WCSTOMBS_L_IN_XLOCALE               => undef,
@@ -531,6 +544,12 @@ sub GenerateFiles
 		$define{HAVE_LIBXSLT} = 1;
 		$define{USE_LIBXSLT}  = 1;
 	}
+	if ($self->{options}->{lz4})
+	{
+		$define{HAVE_LIBLZ4} = 1;
+		$define{HAVE_LZ4_H}  = 1;
+		$define{USE_LZ4}     = 1;
+	}
 	if ($self->{options}->{openssl})
 	{
 		$define{USE_OPENSSL} = 1;
@@ -543,6 +562,8 @@ sub GenerateFiles
 			$define{HAVE_ASN1_STRING_GET0_DATA} = 1;
 			$define{HAVE_BIO_GET_DATA}          = 1;
 			$define{HAVE_BIO_METH_NEW}          = 1;
+			$define{HAVE_HMAC_CTX_FREE}         = 1;
+			$define{HAVE_HMAC_CTX_NEW}          = 1;
 			$define{HAVE_OPENSSL_INIT_SSL}      = 1;
 		}
 	}
@@ -671,16 +692,6 @@ sub GenerateFiles
 		);
 	}
 
-	if (IsNewer(
-			'src/backend/utils/sort/qsort_tuple.c',
-			'src/backend/utils/sort/gen_qsort_tuple.pl'))
-	{
-		print "Generating qsort_tuple.c...\n";
-		system(
-			'perl src/backend/utils/sort/gen_qsort_tuple.pl > src/backend/utils/sort/qsort_tuple.c'
-		);
-	}
-
 	if (IsNewer('src/bin/psql/sql_help.h', 'src/bin/psql/create_help.pl'))
 	{
 		print "Generating sql_help.h...\n";
@@ -771,8 +782,6 @@ EOF
 	$mf =~ /^CATALOG_HEADERS\s*:?=(.*)$/gm
 	  || croak "Could not find CATALOG_HEADERS in Makefile\n";
 	my @bki_srcs = split /\s+/, $1;
-	push @bki_srcs, 'toasting.h';
-	push @bki_srcs, 'indexing.h';
 	$mf =~ /^POSTGRES_BKI_DATA\s*:?=[^,]+,(.*)\)$/gm
 	  || croak "Could not find POSTGRES_BKI_DATA in Makefile\n";
 	my @bki_data = split /\s+/, $1;
@@ -826,6 +835,9 @@ EOF
 		copyFile(
 			'src/backend/catalog/schemapg.h',
 			'src/include/catalog/schemapg.h');
+		copyFile(
+			'src/backend/catalog/system_fk_info.h',
+			'src/include/catalog/system_fk_info.h');
 		open(my $chs, '>', 'src/include/catalog/header-stamp')
 		  || confess "Could not touch header-stamp";
 		close($chs);
@@ -1020,19 +1032,25 @@ sub AddProject
 	}
 	if ($self->{options}->{gss})
 	{
+		$proj->AddIncludeDir($self->{options}->{gss} . '\include');
+		$proj->AddIncludeDir($self->{options}->{gss} . '\include\krb5');
 		if ($self->{platform} eq 'Win32')
 		{
-			$proj->AddIncludeDir($self->{options}->{gss} . '\inc\krb5');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\krb5_32.lib');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\comerr32.lib');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\gssapi32.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\i386\krb5_32.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\i386\comerr32.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\i386\gssapi32.lib');
 		}
 		else
 		{
-			$proj->AddIncludeDir($self->{options}->{gss} . '\include');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\krb5_64.lib');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\comerr64.lib');
-			$proj->AddLibrary($self->{options}->{gss} . '\lib\gssapi64.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\amd64\krb5_64.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\amd64\comerr64.lib');
+			$proj->AddLibrary(
+				$self->{options}->{gss} . '\lib\amd64\gssapi64.lib');
 		}
 	}
 	if ($self->{options}->{iconv})
@@ -1066,6 +1084,11 @@ sub AddProject
 	{
 		$proj->AddIncludeDir($self->{options}->{xslt} . '\include');
 		$proj->AddLibrary($self->{options}->{xslt} . '\lib\libxslt.lib');
+	}
+	if ($self->{options}->{lz4})
+	{
+		$proj->AddIncludeDir($self->{options}->{lz4} . '\include');
+		$proj->AddLibrary($self->{options}->{lz4} . '\lib\liblz4.lib');
 	}
 	if ($self->{options}->{uuid})
 	{
@@ -1174,15 +1197,18 @@ sub GetFakeConfigure
 	$cfg .= ' --with-ldap'        if ($self->{options}->{ldap});
 	$cfg .= ' --without-zlib' unless ($self->{options}->{zlib});
 	$cfg .= ' --with-extra-version' if ($self->{options}->{extraver});
-	$cfg .= ' --with-openssl'       if ($self->{options}->{openssl});
+	$cfg .= ' --with-ssl=openssl'   if ($self->{options}->{openssl});
 	$cfg .= ' --with-uuid'          if ($self->{options}->{uuid});
 	$cfg .= ' --with-libxml'        if ($self->{options}->{xml});
 	$cfg .= ' --with-libxslt'       if ($self->{options}->{xslt});
+	$cfg .= ' --with-lz4'           if ($self->{options}->{lz4});
 	$cfg .= ' --with-gssapi'        if ($self->{options}->{gss});
 	$cfg .= ' --with-icu'           if ($self->{options}->{icu});
 	$cfg .= ' --with-tcl'           if ($self->{options}->{tcl});
 	$cfg .= ' --with-perl'          if ($self->{options}->{perl});
 	$cfg .= ' --with-python'        if ($self->{options}->{python});
+	my $port = $self->{options}->{'--with-pgport'};
+	$cfg .= " --with-pgport=$port" if defined($port);
 
 	return $cfg;
 }

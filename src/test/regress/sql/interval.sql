@@ -34,27 +34,27 @@ INSERT INTO INTERVAL_TBL (f1) VALUES ('@ 30 eons ago');
 
 -- test interval operators
 
-SELECT '' AS ten, * FROM INTERVAL_TBL;
+SELECT * FROM INTERVAL_TBL;
 
-SELECT '' AS nine, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 <> interval '@ 10 days';
 
-SELECT '' AS three, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 <= interval '@ 5 hours';
 
-SELECT '' AS three, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 < interval '@ 1 day';
 
-SELECT '' AS one, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 = interval '@ 34 years';
 
-SELECT '' AS five, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 >= interval '@ 1 month';
 
-SELECT '' AS nine, * FROM INTERVAL_TBL
+SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 > interval '@ 3 seconds ago';
 
-SELECT '' AS fortyfive, r1.*, r2.*
+SELECT r1.*, r2.*
    FROM INTERVAL_TBL r1, INTERVAL_TBL r2
    WHERE r1.f1 > r2.f1
    ORDER BY r1.f1, r2.f1;
@@ -127,7 +127,7 @@ DROP TABLE INTERVAL_MULDIV_TBL;
 SET DATESTYLE = 'postgres';
 SET IntervalStyle to postgres_verbose;
 
-SELECT '' AS ten, * FROM INTERVAL_TBL;
+SELECT * FROM INTERVAL_TBL;
 
 -- test avg(interval), which is somewhat fragile since people have been
 -- known to change the allowed input syntax for type interval without
@@ -343,3 +343,15 @@ SELECT EXTRACT(CENTURY FROM INTERVAL '100 y');
 SELECT EXTRACT(CENTURY FROM INTERVAL '99 y');
 SELECT EXTRACT(CENTURY FROM INTERVAL '-99 y');
 SELECT EXTRACT(CENTURY FROM INTERVAL '-100 y');
+
+-- date_part implementation is mostly the same as extract, so only
+-- test a few cases for additional coverage.
+SELECT f1,
+    date_part('microsecond', f1) AS microsecond,
+    date_part('millisecond', f1) AS millisecond,
+    date_part('second', f1) AS second,
+    date_part('epoch', f1) AS epoch
+    FROM INTERVAL_TBL;
+
+-- internal overflow test case
+SELECT extract(epoch from interval '1000000000 days');

@@ -4,7 +4,7 @@
  *
  *	Parallel support for pg_dump and pg_restore
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -130,7 +130,7 @@ typedef struct
 
 /* Windows implementation of pipe access */
 static int	pgpipe(int handles[2]);
-static int	piperead(int s, char *buf, int len);
+#define piperead(a,b,c)		recv(a,b,c,0)
 #define pipewrite(a,b,c)	send(a,b,c,0)
 
 #else							/* !WIN32 */
@@ -230,19 +230,6 @@ static char *readMessageFromPipe(int fd);
 
 
 /*
- * Shutdown callback to clean up socket access
- */
-#ifdef WIN32
-static void
-shutdown_parallel_dump_utils(int code, void *unused)
-{
-	/* Call the cleanup function only from the main thread */
-	if (mainThreadId == GetCurrentThreadId())
-		WSACleanup();
-}
-#endif
-
-/*
  * Initialize parallel dump support --- should be called early in process
  * startup.  (Currently, this is called whether or not we intend parallel
  * activity.)
@@ -264,11 +251,10 @@ init_parallel_dump_utils(void)
 		err = WSAStartup(MAKEWORD(2, 2), &wsaData);
 		if (err != 0)
 		{
-			pg_log_error("WSAStartup failed: %d", err);
+			pg_log_error("%s() failed: error code %d", "WSAStartup", err);
 			exit_nicely(1);
 		}
-		/* ... and arrange to shut it down at exit */
-		on_exit_nicely(shutdown_parallel_dump_utils, NULL);
+
 		parallel_init_done = true;
 	}
 #endif
@@ -1625,7 +1611,7 @@ getMessageFromWorker(ParallelState *pstate, bool do_wait, int *worker)
 	}
 
 	if (i < 0)
-		fatal("select() failed: %m");
+		fatal("%s() failed: %m", "select");
 
 	for (i = 0; i < pstate->numWorkers; i++)
 	{
@@ -1775,7 +1761,7 @@ pgpipe(int handles[2])
 	}
 	if (getsockname(s, (SOCKADDR *) &serv_addr, &len) == SOCKET_ERROR)
 	{
-		pg_log_error("pgpipe: getsockname() failed: error code %d",
+		pg_log_error("pgpipe: %s() failed: error code %d", "getsockname",
 					 WSAGetLastError());
 		closesocket(s);
 		return -1;
@@ -1815,22 +1801,6 @@ pgpipe(int handles[2])
 
 	closesocket(s);
 	return 0;
-}
-
-/*
- * Windows implementation of reading from a pipe.
- */
-static int
-piperead(int s, char *buf, int len)
-{
-	int			ret = recv(s, buf, len, 0);
-
-	if (ret < 0 && WSAGetLastError() == WSAECONNRESET)
-	{
-		/* EOF on the pipe! */
-		ret = 0;
-	}
-	return ret;
 }
 
 #endif							/* WIN32 */

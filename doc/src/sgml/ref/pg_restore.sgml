@@ -156,7 +156,10 @@ PostgreSQL documentation
        <para>
         Connect to database <replaceable
         class="parameter">dbname</replaceable> and restore directly
-        into the database.
+        into the database.  The <replaceable>dbname</replaceable> can
+        be a <link linkend="libpq-connstring">connection string</link>.
+        If so, connection string parameters will override any conflicting
+        command line options.
        </para>
       </listitem>
      </varlistentry>
@@ -483,7 +486,12 @@ PostgreSQL documentation
       <term><option>--verbose</option></term>
       <listitem>
        <para>
-        Specifies verbose mode.
+        Specifies verbose mode.  This will cause
+        <application>pg_restore</application> to output detailed object
+        comments and start/stop times to the output file, and progress
+        messages to standard error.
+        Repeating the option causes additional debug-level messages
+        to appear on standard error.
        </para>
       </listitem>
      </varlistentry>
@@ -572,7 +580,7 @@ PostgreSQL documentation
       <term><option>--if-exists</option></term>
       <listitem>
        <para>
-        Use conditional commands (i.e. add an <literal>IF EXISTS</literal>
+        Use conditional commands (i.e., add an <literal>IF EXISTS</literal>
         clause) to drop database objects.  This option is not valid
         unless <option>--clean</option> is also specified.
        </para>
@@ -914,8 +922,10 @@ CREATE DATABASE foo WITH TEMPLATE template0;
 
   <para>
    Once restored, it is wise to run <command>ANALYZE</command> on each
-   restored table so the optimizer has useful statistics; see
-   <xref linkend="vacuum-for-statistics"/> and
+   restored table so the optimizer has useful statistics.
+   If the table is a partition or an inheritance child, it may also be useful
+   to analyze the parent to update statistics for the table hierarchy.
+   See <xref linkend="vacuum-for-statistics"/> and
    <xref linkend="autovacuum"/> for more information.
   </para>
 

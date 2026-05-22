@@ -3,7 +3,7 @@
  * pruneheap.c
  *	  heap page pruning and HOT-chain management code
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -95,8 +95,8 @@ heap_page_prune_opt(Relation relation, Buffer buffer)
 
 	/*
 	 * We can't write WAL in recovery mode, so there's no point trying to
-	 * clean the page. The primary will likely issue a cleaning WAL record soon
-	 * anyway, so this is no particular loss.
+	 * clean the page. The primary will likely issue a cleaning WAL record
+	 * soon anyway, so this is no particular loss.
 	 */
 	if (RecoveryInProgress())
 		return;
@@ -182,13 +182,10 @@ heap_page_prune_opt(Relation relation, Buffer buffer)
 		 */
 		if (PageIsFull(page) || PageGetHeapFreeSpace(page) < minfree)
 		{
-			TransactionId ignore = InvalidTransactionId;	/* return value not
-															 * needed */
-
 			/* OK to prune */
 			(void) heap_page_prune(relation, buffer, vistest,
 								   limited_xmin, limited_ts,
-								   true, &ignore);
+								   true, NULL);
 		}
 
 		/* And release buffer lock */
@@ -213,15 +210,18 @@ heap_page_prune_opt(Relation relation, Buffer buffer)
  * send its own new total to pgstats, and we don't want this delta applied
  * on top of that.)
  *
- * Returns the number of tuples deleted from the page and sets
- * latestRemovedXid.
+ * off_loc is the offset location required by the caller to use in error
+ * callback.
+ *
+ * Returns the number of tuples deleted from the page during this call.
  */
 int
 heap_page_prune(Relation relation, Buffer buffer,
 				GlobalVisState *vistest,
 				TransactionId old_snap_xmin,
 				TimestampTz old_snap_ts,
-				bool report_stats, TransactionId *latestRemovedXid)
+				bool report_stats,
+				OffsetNumber *off_loc)
 {
 	int			ndeleted = 0;
 	Page		page = BufferGetPage(buffer);
@@ -246,7 +246,7 @@ heap_page_prune(Relation relation, Buffer buffer,
 	prstate.old_snap_xmin = old_snap_xmin;
 	prstate.old_snap_ts = old_snap_ts;
 	prstate.old_snap_used = false;
-	prstate.latestRemovedXid = *latestRemovedXid;
+	prstate.latestRemovedXid = InvalidTransactionId;
 	prstate.nredirected = prstate.ndead = prstate.nunused = 0;
 	memset(prstate.marked, 0, sizeof(prstate.marked));
 
@@ -262,6 +262,13 @@ heap_page_prune(Relation relation, Buffer buffer,
 		if (prstate.marked[offnum])
 			continue;
 
+		/*
+		 * Set the offset number so that we can display it along with any
+		 * error that occurred while processing this tuple.
+		 */
+		if (off_loc)
+			*off_loc = offnum;
+
 		/* Nothing to do if slot is empty or already dead */
 		itemid = PageGetItemId(page, offnum);
 		if (!ItemIdIsUsed(itemid) || ItemIdIsDead(itemid))
@@ -270,6 +277,10 @@ heap_page_prune(Relation relation, Buffer buffer,
 		/* Process this item or chain of items */
 		ndeleted += heap_prune_chain(buffer, offnum, &prstate);
 	}
+
+	/* Clear the offset information once we have processed the given page. */
+	if (off_loc)
+		*off_loc = InvalidOffsetNumber;
 
 	/* Any error while applying the changes is critical */
 	START_CRIT_SECTION();
@@ -302,17 +313,41 @@ heap_page_prune(Relation relation, Buffer buffer,
 		MarkBufferDirty(buffer);
 
 		/*
-		 * Emit a WAL XLOG_HEAP2_CLEAN record showing what we did
+		 * Emit a WAL XLOG_HEAP2_PRUNE record showing what we did
 		 */
 		if (RelationNeedsWAL(relation))
 		{
+			xl_heap_prune xlrec;
 			XLogRecPtr	recptr;
 
-			recptr = log_heap_clean(relation, buffer,
-									prstate.redirected, prstate.nredirected,
-									prstate.nowdead, prstate.ndead,
-									prstate.nowunused, prstate.nunused,
-									prstate.latestRemovedXid);
+			xlrec.latestRemovedXid = prstate.latestRemovedXid;
+			xlrec.nredirected = prstate.nredirected;
+			xlrec.ndead = prstate.ndead;
+
+			XLogBeginInsert();
+			XLogRegisterData((char *) &xlrec, SizeOfHeapPrune);
+
+			XLogRegisterBuffer(0, buffer, REGBUF_STANDARD);
+
+			/*
+			 * The OffsetNumber arrays are not actually in the buffer, but we
+			 * pretend that they are.  When XLogInsert stores the whole
+			 * buffer, the offset arrays need not be stored too.
+			 */
+			if (prstate.nredirected > 0)
+				XLogRegisterBufData(0, (char *) prstate.redirected,
+									prstate.nredirected *
+									sizeof(OffsetNumber) * 2);
+
+			if (prstate.ndead > 0)
+				XLogRegisterBufData(0, (char *) prstate.nowdead,
+									prstate.ndead * sizeof(OffsetNumber));
+
+			if (prstate.nunused > 0)
+				XLogRegisterBufData(0, (char *) prstate.nowunused,
+									prstate.nunused * sizeof(OffsetNumber));
+
+			recptr = XLogInsert(RM_HEAP2_ID, XLOG_HEAP2_PRUNE);
 
 			PageSetLSN(BufferGetPage(buffer), recptr);
 		}
@@ -347,8 +382,6 @@ heap_page_prune(Relation relation, Buffer buffer,
 	if (report_stats && ndeleted > prstate.ndead)
 		pgstat_update_heap_dead_tuples(relation, ndeleted - prstate.ndead);
 
-	*latestRemovedXid = prstate.latestRemovedXid;
-
 	/*
 	 * XXX Should we update the FSM information of this page ?
 	 *
@@ -370,7 +403,7 @@ heap_page_prune(Relation relation, Buffer buffer,
 
 
 /*
- * Perform visiblity checks for heap pruning.
+ * Perform visibility checks for heap pruning.
  *
  * This is more complicated than just using GlobalVisTestIsRemovableXid()
  * because of old_snapshot_threshold. We only want to increase the threshold
@@ -793,12 +826,8 @@ heap_prune_record_unused(PruneState *prstate, OffsetNumber offnum)
 
 /*
  * Perform the actual page changes needed by heap_page_prune.
- * It is expected that the caller has suitable pin and lock on the
- * buffer, and is inside a critical section.
- *
- * This is split out because it is also used by heap_xlog_clean()
- * to replay the WAL record when needed after a crash.  Note that the
- * arguments are identical to those of log_heap_clean().
+ * It is expected that the caller has a super-exclusive lock on the
+ * buffer.
  */
 void
 heap_page_prune_execute(Buffer buffer,
@@ -809,6 +838,9 @@ heap_page_prune_execute(Buffer buffer,
 	Page		page = (Page) BufferGetPage(buffer);
 	OffsetNumber *offnum;
 	int			i;
+
+	/* Shouldn't be called unless there's something to do */
+	Assert(nredirected > 0 || ndead > 0 || nunused > 0);
 
 	/* Update all redirected line pointers */
 	offnum = redirected;
@@ -930,6 +962,10 @@ heap_get_root_tuples(Page page, OffsetNumber *root_offsets)
 		 */
 		for (;;)
 		{
+			/* Sanity check */
+			if (nextoffnum < FirstOffsetNumber || nextoffnum > maxoff)
+				break;
+
 			lp = PageGetItemId(page, nextoffnum);
 
 			/* Check for broken chains */

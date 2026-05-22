@@ -2,7 +2,7 @@
  *
  * vacuumdb
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/scripts/vacuumdb.c
@@ -18,9 +18,11 @@
 #include "common/connect.h"
 #include "common/logging.h"
 #include "fe_utils/cancel.h"
+#include "fe_utils/option_utils.h"
+#include "fe_utils/parallel_slot.h"
+#include "fe_utils/query_utils.h"
 #include "fe_utils/simple_list.h"
 #include "fe_utils/string_utils.h"
-#include "scripts_parallel.h"
 
 
 /* vacuum options controlled by user flags */
@@ -37,24 +39,23 @@ typedef struct vacuumingOptions
 	int			min_mxid_age;
 	int			parallel_workers;	/* >= 0 indicates user specified the
 									 * parallel degree, otherwise -1 */
-	bool		do_index_cleanup;
+	bool		no_index_cleanup;
+	bool		force_index_cleanup;
 	bool		do_truncate;
+	bool		process_toast;
 } vacuumingOptions;
 
 
-static void vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
+static void vacuum_one_database(ConnParams *cparams,
+								vacuumingOptions *vacopts,
 								int stage,
 								SimpleStringList *tables,
-								const char *host, const char *port,
-								const char *username, enum trivalue prompt_password,
 								int concurrentCons,
 								const char *progname, bool echo, bool quiet);
 
-static void vacuum_all_databases(vacuumingOptions *vacopts,
+static void vacuum_all_databases(ConnParams *cparams,
+								 vacuumingOptions *vacopts,
 								 bool analyze_in_stages,
-								 const char *maintenance_db,
-								 const char *host, const char *port,
-								 const char *username, enum trivalue prompt_password,
 								 int concurrentCons,
 								 const char *progname, bool echo, bool quiet);
 
@@ -99,7 +100,9 @@ main(int argc, char *argv[])
 		{"min-xid-age", required_argument, NULL, 6},
 		{"min-mxid-age", required_argument, NULL, 7},
 		{"no-index-cleanup", no_argument, NULL, 8},
-		{"no-truncate", no_argument, NULL, 9},
+		{"force-index-cleanup", no_argument, NULL, 9},
+		{"no-truncate", no_argument, NULL, 10},
+		{"no-process-toast", no_argument, NULL, 11},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -112,6 +115,7 @@ main(int argc, char *argv[])
 	char	   *port = NULL;
 	char	   *username = NULL;
 	enum trivalue prompt_password = TRI_DEFAULT;
+	ConnParams	cparams;
 	bool		echo = false;
 	bool		quiet = false;
 	vacuumingOptions vacopts;
@@ -124,8 +128,10 @@ main(int argc, char *argv[])
 	/* initialize options */
 	memset(&vacopts, 0, sizeof(vacopts));
 	vacopts.parallel_workers = -1;
-	vacopts.do_index_cleanup = true;
+	vacopts.no_index_cleanup = false;
+	vacopts.force_index_cleanup = false;
 	vacopts.do_truncate = true;
+	vacopts.process_toast = true;
 
 	pg_logging_init(argv[0]);
 	progname = get_progname(argv[0]);
@@ -197,7 +203,7 @@ main(int argc, char *argv[])
 				vacopts.parallel_workers = atoi(optarg);
 				if (vacopts.parallel_workers < 0)
 				{
-					pg_log_error("parallel vacuum degree must be a non-negative integer");
+					pg_log_error("parallel workers for vacuum must be greater than or equal to zero");
 					exit(1);
 				}
 				break;
@@ -230,10 +236,16 @@ main(int argc, char *argv[])
 				}
 				break;
 			case 8:
-				vacopts.do_index_cleanup = false;
+				vacopts.no_index_cleanup = true;
 				break;
 			case 9:
+				vacopts.force_index_cleanup = true;
+				break;
+			case 10:
 				vacopts.do_truncate = false;
+				break;
+			case 11:
+				vacopts.process_toast = false;
 				break;
 			default:
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
@@ -279,16 +291,28 @@ main(int argc, char *argv[])
 						 "disable-page-skipping");
 			exit(1);
 		}
-		if (!vacopts.do_index_cleanup)
+		if (vacopts.no_index_cleanup)
 		{
 			pg_log_error("cannot use the \"%s\" option when performing only analyze",
 						 "no-index-cleanup");
+			exit(1);
+		}
+		if (vacopts.force_index_cleanup)
+		{
+			pg_log_error("cannot use the \"%s\" option when performing only analyze",
+						 "force-index-cleanup");
 			exit(1);
 		}
 		if (!vacopts.do_truncate)
 		{
 			pg_log_error("cannot use the \"%s\" option when performing only analyze",
 						 "no-truncate");
+			exit(1);
+		}
+		if (!vacopts.process_toast)
+		{
+			pg_log_error("cannot use the \"%s\" option when performing only analyze",
+						 "no-process-toast");
 			exit(1);
 		}
 		/* allow 'and_analyze' with 'analyze_only' */
@@ -305,11 +329,26 @@ main(int argc, char *argv[])
 		}
 		if (vacopts.full)
 		{
-			pg_log_error("cannot use the \"%s\" option when performing full",
+			pg_log_error("cannot use the \"%s\" option when performing full vacuum",
 						 "parallel");
 			exit(1);
 		}
 	}
+
+	/* Prohibit --no-index-cleanup and --force-index-cleanup together */
+	if (vacopts.no_index_cleanup && vacopts.force_index_cleanup)
+	{
+		pg_log_error("cannot use the \"%s\" option with the \"%s\" option",
+					 "no-index-cleanup", "force-index-cleanup");
+		exit(1);
+	}
+
+	/* fill cparams except for dbname, which is set below */
+	cparams.pghost = host;
+	cparams.pgport = port;
+	cparams.pguser = username;
+	cparams.prompt_password = prompt_password;
+	cparams.override_dbname = NULL;
 
 	setup_cancel_handler(NULL);
 
@@ -330,10 +369,10 @@ main(int argc, char *argv[])
 			exit(1);
 		}
 
-		vacuum_all_databases(&vacopts,
+		cparams.dbname = maintenance_db;
+
+		vacuum_all_databases(&cparams, &vacopts,
 							 analyze_in_stages,
-							 maintenance_db,
-							 host, port, username, prompt_password,
 							 concurrentCons,
 							 progname, echo, quiet);
 	}
@@ -349,25 +388,25 @@ main(int argc, char *argv[])
 				dbname = get_user_name_or_exit(progname);
 		}
 
+		cparams.dbname = dbname;
+
 		if (analyze_in_stages)
 		{
 			int			stage;
 
 			for (stage = 0; stage < ANALYZE_NUM_STAGES; stage++)
 			{
-				vacuum_one_database(dbname, &vacopts,
+				vacuum_one_database(&cparams, &vacopts,
 									stage,
 									&tables,
-									host, port, username, prompt_password,
 									concurrentCons,
 									progname, echo, quiet);
 			}
 		}
 		else
-			vacuum_one_database(dbname, &vacopts,
+			vacuum_one_database(&cparams, &vacopts,
 								ANALYZE_NO_STAGE,
 								&tables,
-								host, port, username, prompt_password,
 								concurrentCons,
 								progname, echo, quiet);
 	}
@@ -389,11 +428,10 @@ main(int argc, char *argv[])
  * a list of tables from the database.
  */
 static void
-vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
+vacuum_one_database(ConnParams *cparams,
+					vacuumingOptions *vacopts,
 					int stage,
 					SimpleStringList *tables,
-					const char *host, const char *port,
-					const char *username, enum trivalue prompt_password,
 					int concurrentCons,
 					const char *progname, bool echo, bool quiet)
 {
@@ -403,14 +441,14 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 	PGresult   *res;
 	PGconn	   *conn;
 	SimpleStringListCell *cell;
-	ParallelSlot *slots;
+	ParallelSlotArray *sa;
 	SimpleStringList dbtables = {NULL, NULL};
 	int			i;
 	int			ntups;
 	bool		failed = false;
-	bool		parallel = concurrentCons > 1;
 	bool		tables_listed = false;
 	bool		has_where = false;
+	const char *initcmd;
 	const char *stage_commands[] = {
 		"SET default_statistics_target=1; SET vacuum_cost_delay=0;",
 		"SET default_statistics_target=10; RESET vacuum_cost_delay;",
@@ -425,8 +463,7 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 	Assert(stage == ANALYZE_NO_STAGE ||
 		   (stage >= 0 && stage < ANALYZE_NUM_STAGES));
 
-	conn = connectDatabase(dbname, host, port, username, prompt_password,
-						   progname, echo, false, true);
+	conn = connectDatabase(cparams, progname, echo, false, true);
 
 	if (vacopts->disable_page_skipping && PQserverVersion(conn) < 90600)
 	{
@@ -436,11 +473,19 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 		exit(1);
 	}
 
-	if (!vacopts->do_index_cleanup && PQserverVersion(conn) < 120000)
+	if (vacopts->no_index_cleanup && PQserverVersion(conn) < 120000)
 	{
 		PQfinish(conn);
 		pg_log_error("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
 					 "no-index-cleanup", "12");
+		exit(1);
+	}
+
+	if (vacopts->force_index_cleanup && PQserverVersion(conn) < 120000)
+	{
+		PQfinish(conn);
+		pg_log_error("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
+					 "force-index-cleanup", "12");
 		exit(1);
 	}
 
@@ -449,6 +494,14 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 		PQfinish(conn);
 		pg_log_error("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
 					 "no-truncate", "12");
+		exit(1);
+	}
+
+	if (!vacopts->process_toast && PQserverVersion(conn) < 140000)
+	{
+		PQfinish(conn);
+		pg_log_error("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
+					 "no-process-toast", "14");
 		exit(1);
 	}
 
@@ -651,15 +704,25 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 	PQclear(res);
 
 	/*
-	 * If there are more connections than vacuumable relations, we don't need
-	 * to use them all.
+	 * Ensure concurrentCons is sane.  If there are more connections than
+	 * vacuumable relations, we don't need to use them all.
 	 */
-	if (parallel)
+	if (concurrentCons > ntups)
+		concurrentCons = ntups;
+	if (concurrentCons <= 0)
+		concurrentCons = 1;
+
+	/*
+	 * All slots need to be prepared to run the appropriate analyze stage, if
+	 * caller requested that mode.  We have to prepare the initial connection
+	 * ourselves before setting up the slots.
+	 */
+	if (stage == ANALYZE_NO_STAGE)
+		initcmd = NULL;
+	else
 	{
-		if (concurrentCons > ntups)
-			concurrentCons = ntups;
-		if (concurrentCons <= 1)
-			parallel = false;
+		initcmd = stage_commands[stage];
+		executeCommand(conn, initcmd, echo);
 	}
 
 	/*
@@ -667,26 +730,8 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 	 * for the first slot.  If not in parallel mode, the first slot in the
 	 * array contains the connection.
 	 */
-	if (concurrentCons <= 0)
-		concurrentCons = 1;
-
-	slots = ParallelSlotsSetup(dbname, host, port, username, prompt_password,
-							   progname, echo, conn, concurrentCons);
-
-	/*
-	 * Prepare all the connections to run the appropriate analyze stage, if
-	 * caller requested that mode.
-	 */
-	if (stage != ANALYZE_NO_STAGE)
-	{
-		int			j;
-
-		/* We already emitted the message above */
-
-		for (j = 0; j < concurrentCons; j++)
-			executeCommand((slots + j)->connection,
-						   stage_commands[stage], echo);
-	}
+	sa = ParallelSlotsSetup(concurrentCons, cparams, progname, echo, initcmd);
+	ParallelSlotsAdoptConn(sa, conn);
 
 	initPQExpBuffer(&sql);
 
@@ -702,7 +747,7 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 			goto finish;
 		}
 
-		free_slot = ParallelSlotsGetIdle(slots, concurrentCons);
+		free_slot = ParallelSlotsGetIdle(sa, NULL);
 		if (!free_slot)
 		{
 			failed = true;
@@ -716,18 +761,19 @@ vacuum_one_database(const char *dbname, vacuumingOptions *vacopts,
 		 * Execute the vacuum.  All errors are handled in processQueryResult
 		 * through ParallelSlotsGetIdle.
 		 */
+		ParallelSlotSetHandler(free_slot, TableCommandResultHandler, NULL);
 		run_vacuum_command(free_slot->connection, sql.data,
 						   echo, tabname);
 
 		cell = cell->next;
 	} while (cell != NULL);
 
-	if (!ParallelSlotsWaitCompletion(slots, concurrentCons))
+	if (!ParallelSlotsWaitCompletion(sa))
 		failed = true;
 
 finish:
-	ParallelSlotsTerminate(slots, concurrentCons);
-	pg_free(slots);
+	ParallelSlotsTerminate(sa);
+	pg_free(sa);
 
 	termPQExpBuffer(&sql);
 
@@ -743,28 +789,23 @@ finish:
  * quickly everywhere before generating more detailed ones.
  */
 static void
-vacuum_all_databases(vacuumingOptions *vacopts,
+vacuum_all_databases(ConnParams *cparams,
+					 vacuumingOptions *vacopts,
 					 bool analyze_in_stages,
-					 const char *maintenance_db, const char *host,
-					 const char *port, const char *username,
-					 enum trivalue prompt_password,
 					 int concurrentCons,
 					 const char *progname, bool echo, bool quiet)
 {
 	PGconn	   *conn;
 	PGresult   *result;
-	PQExpBufferData connstr;
 	int			stage;
 	int			i;
 
-	conn = connectMaintenanceDatabase(maintenance_db, host, port, username,
-									  prompt_password, progname, echo);
+	conn = connectMaintenanceDatabase(cparams, progname, echo);
 	result = executeQuery(conn,
 						  "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;",
 						  echo);
 	PQfinish(conn);
 
-	initPQExpBuffer(&connstr);
 	if (analyze_in_stages)
 	{
 		/*
@@ -779,14 +820,11 @@ vacuum_all_databases(vacuumingOptions *vacopts,
 		{
 			for (i = 0; i < PQntuples(result); i++)
 			{
-				resetPQExpBuffer(&connstr);
-				appendPQExpBufferStr(&connstr, "dbname=");
-				appendConnStrVal(&connstr, PQgetvalue(result, i, 0));
+				cparams->override_dbname = PQgetvalue(result, i, 0);
 
-				vacuum_one_database(connstr.data, vacopts,
+				vacuum_one_database(cparams, vacopts,
 									stage,
 									NULL,
-									host, port, username, prompt_password,
 									concurrentCons,
 									progname, echo, quiet);
 			}
@@ -796,19 +834,15 @@ vacuum_all_databases(vacuumingOptions *vacopts,
 	{
 		for (i = 0; i < PQntuples(result); i++)
 		{
-			resetPQExpBuffer(&connstr);
-			appendPQExpBufferStr(&connstr, "dbname=");
-			appendConnStrVal(&connstr, PQgetvalue(result, i, 0));
+			cparams->override_dbname = PQgetvalue(result, i, 0);
 
-			vacuum_one_database(connstr.data, vacopts,
+			vacuum_one_database(cparams, vacopts,
 								ANALYZE_NO_STAGE,
 								NULL,
-								host, port, username, prompt_password,
 								concurrentCons,
 								progname, echo, quiet);
 		}
 	}
-	termPQExpBuffer(&connstr);
 
 	PQclear(result);
 }
@@ -872,11 +906,27 @@ prepare_vacuum_command(PQExpBuffer sql, int serverVersion,
 				appendPQExpBuffer(sql, "%sDISABLE_PAGE_SKIPPING", sep);
 				sep = comma;
 			}
-			if (!vacopts->do_index_cleanup)
+			if (vacopts->no_index_cleanup)
 			{
-				/* INDEX_CLEANUP is supported since v12 */
+				/* "INDEX_CLEANUP FALSE" has been supported since v12 */
 				Assert(serverVersion >= 120000);
+				Assert(!vacopts->force_index_cleanup);
 				appendPQExpBuffer(sql, "%sINDEX_CLEANUP FALSE", sep);
+				sep = comma;
+			}
+			if (vacopts->force_index_cleanup)
+			{
+				/*
+				 * "INDEX_CLEANUP TRUE" has been supported since v12.
+				 *
+				 * Though --force-index-cleanup was added to vacuumdb in v14,
+				 * the "INDEX_CLEANUP TRUE" server/VACUUM behavior has never
+				 * changed.  No reason not to support --force-index-cleanup on
+				 * v12+.
+				 */
+				Assert(serverVersion >= 120000);
+				Assert(!vacopts->no_index_cleanup);
+				appendPQExpBuffer(sql, "%sINDEX_CLEANUP TRUE", sep);
 				sep = comma;
 			}
 			if (!vacopts->do_truncate)
@@ -884,6 +934,13 @@ prepare_vacuum_command(PQExpBuffer sql, int serverVersion,
 				/* TRUNCATE is supported since v12 */
 				Assert(serverVersion >= 120000);
 				appendPQExpBuffer(sql, "%sTRUNCATE FALSE", sep);
+				sep = comma;
+			}
+			if (!vacopts->process_toast)
+			{
+				/* PROCESS_TOAST is supported since v14 */
+				Assert(serverVersion >= 140000);
+				appendPQExpBuffer(sql, "%sPROCESS_TOAST FALSE", sep);
 				sep = comma;
 			}
 			if (vacopts->skip_locked)
@@ -981,12 +1038,14 @@ help(const char *progname)
 	printf(_("  -e, --echo                      show the commands being sent to the server\n"));
 	printf(_("  -f, --full                      do full vacuuming\n"));
 	printf(_("  -F, --freeze                    freeze row transaction information\n"));
+	printf(_("      --force-index-cleanup       always remove index entries that point to dead tuples\n"));
 	printf(_("  -j, --jobs=NUM                  use this many concurrent connections to vacuum\n"));
 	printf(_("      --min-mxid-age=MXID_AGE     minimum multixact ID age of tables to vacuum\n"));
 	printf(_("      --min-xid-age=XID_AGE       minimum transaction ID age of tables to vacuum\n"));
 	printf(_("      --no-index-cleanup          don't remove index entries that point to dead tuples\n"));
+	printf(_("      --no-process-toast          skip the TOAST table associated with the table to vacuum\n"));
 	printf(_("      --no-truncate               don't truncate empty pages at the end of the table\n"));
-	printf(_("  -P, --parallel=PARALLEL_DEGREE  use this many background workers for vacuum, if available\n"));
+	printf(_("  -P, --parallel=PARALLEL_WORKERS use this many background workers for vacuum, if available\n"));
 	printf(_("  -q, --quiet                     don't write any messages\n"));
 	printf(_("      --skip-locked               skip relations that cannot be immediately locked\n"));
 	printf(_("  -t, --table='TABLE[(COLUMNS)]'  vacuum specific table(s) only\n"));

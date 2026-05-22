@@ -8,7 +8,7 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 {
 	int ret;
 
-	if (!PQsendQueryStart(conn))
+	if (!PQsendQueryStart(conn, true))
 		return 0;
 
 	if (!shared_query)

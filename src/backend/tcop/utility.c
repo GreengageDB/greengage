@@ -5,7 +5,7 @@
  *	  commands.  At one time acted as an interface between the Lisp and C
  *	  systems.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -23,6 +23,7 @@
 #include "access/xlog.h"
 #include "catalog/catalog.h"
 #include "catalog/gp_partition_template.h"
+#include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/partition.h"
 #include "catalog/pg_inherits.h"
@@ -501,6 +502,7 @@ CheckRestrictedOperation(const char *cmdname)
  *
  *	pstmt: PlannedStmt wrapper for the utility statement
  *	queryString: original source text of command
+ *	readOnlyTree: if true, pstmt's node tree must not be modified
  *	context: identifies source of statement (toplevel client command,
  *		non-toplevel client command, subcommand of a larger utility command)
  *	params: parameters to use during execution
@@ -526,6 +528,7 @@ CheckRestrictedOperation(const char *cmdname)
 void
 ProcessUtility(PlannedStmt *pstmt,
 			   const char *queryString,
+			   bool readOnlyTree,
 			   ProcessUtilityContext context,
 			   ParamListInfo params,
 			   QueryEnvironment *queryEnv,
@@ -543,11 +546,11 @@ ProcessUtility(PlannedStmt *pstmt,
 	 * call standard_ProcessUtility().
 	 */
 	if (ProcessUtility_hook)
-		(*ProcessUtility_hook) (pstmt, queryString,
+		(*ProcessUtility_hook) (pstmt, queryString, readOnlyTree,
 								context, params, queryEnv,
 								dest, qc);
 	else
-		standard_ProcessUtility(pstmt, queryString,
+		standard_ProcessUtility(pstmt, queryString, readOnlyTree,
 								context, params, queryEnv,
 								dest, qc);
 }
@@ -566,13 +569,14 @@ ProcessUtility(PlannedStmt *pstmt,
 void
 standard_ProcessUtility(PlannedStmt *pstmt,
 						const char *queryString,
+						bool readOnlyTree,
 						ProcessUtilityContext context,
 						ParamListInfo params,
 						QueryEnvironment *queryEnv,
 						DestReceiver *dest,
 						QueryCompletion *qc)
 {
-	Node	   *parsetree = pstmt->utilityStmt;
+	Node	   *parsetree;
 	bool		isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
 	bool		isAtomicContext = (!(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY_NONATOMIC) || IsTransactionBlock());
 	ParseState *pstate;
@@ -580,6 +584,18 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 	/* This can recurse, so check for excessive recursion */
 	check_stack_depth();
+
+	/*
+	 * If the given node tree is read-only, make a copy to ensure that parse
+	 * transformations don't damage the original tree.  This could be
+	 * refactored to avoid making unnecessary copies in more cases, but it's
+	 * not clear that it's worth a great deal of trouble over.  Statements
+	 * that are complex enough to be expensive to copy are exactly the ones
+	 * we'd need to copy, so that only marginal savings seem possible.
+	 */
+	if (readOnlyTree)
+		pstmt = copyObject(pstmt);
+	parsetree = pstmt->utilityStmt;
 
 	/* Prohibit read/write commands in read-only states. */
 	readonly_flags = ClassifyUtilityCommandAsReadOnly(parsetree);
@@ -928,7 +944,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			break;
 
 		case T_ClusterStmt:
-			cluster((ClusterStmt *) parsetree, isTopLevel);
+			cluster(pstate, (ClusterStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_VacuumStmt:
@@ -1123,6 +1139,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						break;
 				}
 			}
+			ExecReindex(pstate, (ReindexStmt *) parsetree, isTopLevel);
 			break;
 
 			/*
@@ -1312,6 +1329,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					List	   *stmts;
 					ListCell   *l;
 					List	   *more_stmts = NIL;
+					RangeVar   *table_rv = NULL;
 
 					/* Run parse analysis ... */
 					/*
@@ -1332,7 +1350,9 @@ ProcessUtilitySlow(ParseState *pstate,
 			process_more_stmts:
 					foreach(l, stmts)
 					{
-						Node	   *stmt = (Node *) lfirst(l);
+						Node	   *stmt = (Node *) linitial(stmts);
+
+						stmts = list_delete_first(stmts);
 
 						if (IsA(stmt, CreateStmt))
 						{
@@ -1390,6 +1410,17 @@ ProcessUtilitySlow(ParseState *pstate,
 								more_stmts = list_concat(more_stmts, parts);
 							}
 
+							Datum		toast_options;
+							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
+
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->relation;
+
+							/* Create the table itself */
+							address = DefineRelation(cstmt,
+													 RELKIND_RELATION,
+													 InvalidOid, NULL,
+													 queryString);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
@@ -1400,6 +1431,19 @@ ProcessUtilitySlow(ParseState *pstate,
 							 */
 							CommandCounterIncrement();
 
+							/*
+							 * parse and validate reloptions for the toast
+							 * table
+							 */
+							toast_options = transformRelOptions((Datum) 0,
+																cstmt->options,
+																"toast",
+																validnsps,
+																true,
+																false);
+							(void) heap_reloptions(RELKIND_TOASTVALUE,
+												   toast_options,
+												   true);
 							if (relKind != RELKIND_COMPOSITE_TYPE)
 							{
 								/*
@@ -1450,20 +1494,37 @@ ProcessUtilitySlow(ParseState *pstate,
 						}
 						else if (IsA(stmt, CreateForeignTableStmt))
 						{
+							CreateForeignTableStmt *cstmt = (CreateForeignTableStmt *) stmt;
+
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->base.relation;
+
 							/* Create the table itself */
-							address = DefineRelation((CreateStmt *) stmt,
+							address = DefineRelation(&cstmt->base,
 													 RELKIND_FOREIGN_TABLE,
 													 InvalidOid, NULL,
-													 queryString,
-													 true,
-													 true,
-													 NULL);
-							CreateForeignTable((CreateForeignTableStmt *) stmt,
-											   address.objectId,
-											   false /* skip_permission_checks */);
+													 queryString);
+							CreateForeignTable(cstmt,
+											   address.objectId);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
+						}
+						else if (IsA(stmt, TableLikeClause))
+						{
+							/*
+							 * Do delayed processing of LIKE options.  This
+							 * will result in additional sub-statements for us
+							 * to process.  Those should get done before any
+							 * remaining actions, so prepend them to "stmts".
+							 */
+							TableLikeClause *like = (TableLikeClause *) stmt;
+							List	   *morestmts;
+
+							Assert(table_rv != NULL);
+
+							morestmts = expandTableLikeClause(table_rv, like);
+							stmts = list_concat(morestmts, stmts);
 						}
 						else
 						{
@@ -1483,6 +1544,7 @@ ProcessUtilitySlow(ParseState *pstate,
 
 							ProcessUtility(wrapper,
 										   queryString,
+										   false,
 										   PROCESS_UTILITY_SUBCOMMAND,
 										   params,
 										   NULL,
@@ -1491,7 +1553,7 @@ ProcessUtilitySlow(ParseState *pstate,
 						}
 
 						/* Need CCI between commands */
-						if (lnext(stmts, l) != NULL)
+						if (stmts != NIL)
 							CommandCounterIncrement();
 					}
 					if (more_stmts)
@@ -1514,6 +1576,25 @@ ProcessUtilitySlow(ParseState *pstate,
 					AlterTableStmt *atstmt = (AlterTableStmt *) parsetree;
 					Oid			relid;
 					LOCKMODE	lockmode;
+					ListCell   *cell;
+
+					/*
+					 * Disallow ALTER TABLE .. DETACH CONCURRENTLY in a
+					 * transaction block or function.  (Perhaps it could be
+					 * allowed in a procedure, but don't hold your breath.)
+					 */
+					foreach(cell, atstmt->cmds)
+					{
+						AlterTableCmd *cmd = (AlterTableCmd *) lfirst(cell);
+
+						/* Disallow DETACH CONCURRENTLY in a transaction block */
+						if (cmd->subtype == AT_DetachPartition)
+						{
+							if (((PartitionCmd *) cmd->def)->concurrent)
+								PreventInTransactionBlock(isTopLevel,
+														  "ALTER TABLE ... DETACH CONCURRENTLY");
+						}
+					}
 
 					/*
 					 * Figure out lock mode, and acquire lock.  This also does
@@ -1747,6 +1828,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					IndexStmt  *stmt = (IndexStmt *) parsetree;
 					Oid			relid;
 					LOCKMODE	lockmode;
+					bool		is_alter_table;
 
 					if (stmt->concurrent)
 						PreventInTransactionBlock(isTopLevel,
@@ -1816,6 +1898,17 @@ ProcessUtilitySlow(ParseState *pstate,
 						list_free(inheritors);
 					}
 
+					/*
+					 * If the IndexStmt is already transformed, it must have
+					 * come from generateClonedIndexStmt, which in current
+					 * usage means it came from expandTableLikeClause rather
+					 * than from original parse analysis.  And that means we
+					 * must treat it like ALTER TABLE ADD INDEX, not CREATE.
+					 * (This is a bit grotty, but currently it doesn't seem
+					 * worth adding a separate bool field for the purpose.)
+					 */
+					is_alter_table = stmt->transformed;
+
 					/* Run parse analysis ... */
 					stmt = transformIndexStmt(relid, stmt, queryString);
 
@@ -1827,7 +1920,7 @@ ProcessUtilitySlow(ParseState *pstate,
 									InvalidOid, /* no predefined OID */
 									InvalidOid, /* no parent index */
 									InvalidOid, /* no parent constraint */
-									false,	/* is_alter_table */
+									is_alter_table,
 									true,	/* check_rights */
 									true,	/* check_not_in_use */
 									false,	/* skip_build */
@@ -2142,7 +2235,8 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_AlterSubscriptionStmt:
-				address = AlterSubscription((AlterSubscriptionStmt *) parsetree);
+				address = AlterSubscription((AlterSubscriptionStmt *) parsetree,
+											isTopLevel);
 				break;
 
 			case T_DropSubscriptionStmt:
@@ -2152,7 +2246,34 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreateStatsStmt:
-				address = CreateStatistics((CreateStatsStmt *) parsetree);
+				{
+					Oid			relid;
+					CreateStatsStmt *stmt = (CreateStatsStmt *) parsetree;
+					RangeVar   *rel = (RangeVar *) linitial(stmt->relations);
+
+					if (!IsA(rel, RangeVar))
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("only a single relation is allowed in CREATE STATISTICS")));
+
+					/*
+					 * CREATE STATISTICS will influence future execution plans
+					 * but does not interfere with currently executing plans.
+					 * So it should be enough to take ShareUpdateExclusiveLock
+					 * on relation, conflicting with ANALYZE and other DDL
+					 * that sets statistical information, but not with normal
+					 * queries.
+					 *
+					 * XXX RangeVarCallbackOwnsRelation not needed here, to
+					 * keep the same behavior as before.
+					 */
+					relid = RangeVarGetRelid(rel, ShareUpdateExclusiveLock, false);
+
+					/* Run parse analysis ... */
+					stmt = transformStatsStmt(relid, stmt, queryString);
+
+					address = CreateStatistics(stmt);
+				}
 				break;
 
 			case T_AlterStatsStmt:
@@ -2244,6 +2365,14 @@ ProcessUtilityForAlterTable(Node *stmt, AlterTableUtilityContext *context)
 		gp_dispatch_utility_statement = true;
 	}
 	PG_END_TRY();
+	ProcessUtility(wrapper,
+				   context->queryString,
+				   false,
+				   PROCESS_UTILITY_SUBCOMMAND,
+				   context->params,
+				   context->queryEnv,
+				   None_Receiver,
+				   NULL);
 
 	EventTriggerAlterTableStart(context->pstmt->utilityStmt);
 	EventTriggerAlterTableRelid(context->relid);
@@ -2699,6 +2828,10 @@ CreateCommandTag(Node *parsetree)
 			break;
 
 		case T_SelectStmt:
+			tag = CMDTAG_SELECT;
+			break;
+
+		case T_PLAssignStmt:
 			tag = CMDTAG_SELECT;
 			break;
 
@@ -3625,6 +3758,10 @@ GetCommandLogLevel(Node *parsetree)
 				lev = LOGSTMT_DDL;	/* SELECT INTO */
 			else
 				lev = LOGSTMT_ALL;
+			break;
+
+		case T_PLAssignStmt:
+			lev = LOGSTMT_ALL;
 			break;
 
 			/* utility statements --- same whether raw or cooked */

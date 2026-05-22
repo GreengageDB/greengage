@@ -4,7 +4,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * pg_dumpall forces all pg_dump output to be text, since it also outputs
@@ -23,6 +23,7 @@
 #include "common/connect.h"
 #include "common/file_utils.h"
 #include "common/logging.h"
+#include "common/string.h"
 #include "dumputils.h"
 #include "fe_utils/string_utils.h"
 #include "getopt_long.h"
@@ -84,6 +85,7 @@ static int	no_comments = 0;
 static int	no_publications = 0;
 static int	no_security_labels = 0;
 static int	no_subscriptions = 0;
+static int	no_toast_compression = 0;
 static int	no_unlogged_table_data = 0;
 static int	no_role_passwords = 0;
 static int	server_version;
@@ -153,6 +155,7 @@ main(int argc, char *argv[])
 		{"no-security-labels", no_argument, &no_security_labels, 1},
 		{"no-subscriptions", no_argument, &no_subscriptions, 1},
 		{"no-sync", no_argument, NULL, 4},
+		{"no-toast-compression", no_argument, &no_toast_compression, 1},
 		{"no-unlogged-table-data", no_argument, &no_unlogged_table_data, 1},
 		{"on-conflict-do-nothing", no_argument, &on_conflict_do_nothing, 1},
 		{"rows-per-insert", required_argument, NULL, 7},
@@ -309,7 +312,7 @@ main(int argc, char *argv[])
 
 			case 'v':
 				verbose = true;
-				pg_logging_set_level(PG_LOG_INFO);
+				pg_logging_increase_verbosity();
 				appendPQExpBufferStr(pgdumpopts, " -v");
 				break;
 
@@ -478,6 +481,8 @@ main(int argc, char *argv[])
 		appendPQExpBufferStr(pgdumpopts, " --no-security-labels");
 	if (no_subscriptions)
 		appendPQExpBufferStr(pgdumpopts, " --no-subscriptions");
+	if (no_toast_compression)
+		appendPQExpBufferStr(pgdumpopts, " --no-toast-compression");
 	if (no_unlogged_table_data)
 		appendPQExpBufferStr(pgdumpopts, " --no-unlogged-table-data");
 	if (on_conflict_do_nothing)
@@ -724,6 +729,7 @@ help(void)
 	printf(_("  --no-subscriptions           do not dump subscriptions\n"));
 	printf(_("  --no-sync                    do not wait for changes to be written safely to disk\n"));
 	printf(_("  --no-tablespaces             do not dump tablespace assignments\n"));
+	printf(_("  --no-toast-compression       do not dump TOAST compression methods\n"));
 	printf(_("  --no-unlogged-table-data     do not dump unlogged table data\n"));
 	printf(_("  --on-conflict-do-nothing     add ON CONFLICT DO NOTHING to INSERT commands\n"));
 	printf(_("  --quote-all-identifiers      quote all identifiers, even if not key words\n"));
@@ -2031,14 +2037,10 @@ connectDatabase(const char *dbname, const char *connection_string,
 	const char **keywords = NULL;
 	const char **values = NULL;
 	PQconninfoOption *conn_opts = NULL;
-	static bool have_password = false;
-	static char password[100];
+	static char *password = NULL;
 
-	if (prompt_password == TRI_YES && !have_password)
-	{
-		simple_prompt("Password: ", password, sizeof(password), false);
-		have_password = true;
-	}
+	if (prompt_password == TRI_YES && !password)
+		password = simple_prompt("Password: ", false);
 
 	/*
 	 * Start the connection.  Loop until we have a password if requested by
@@ -2118,7 +2120,7 @@ connectDatabase(const char *dbname, const char *connection_string,
 			values[i] = pguser;
 			i++;
 		}
-		if (have_password)
+		if (password)
 		{
 			keywords[i] = "password";
 			values[i] = password;
@@ -2145,12 +2147,11 @@ connectDatabase(const char *dbname, const char *connection_string,
 
 		if (PQstatus(conn) == CONNECTION_BAD &&
 			PQconnectionNeedsPassword(conn) &&
-			!have_password &&
+			!password &&
 			prompt_password != TRI_NO)
 		{
 			PQfinish(conn);
-			simple_prompt("Password: ", password, sizeof(password), false);
-			have_password = true;
+			password = simple_prompt("Password: ", false);
 			new_pass = true;
 		}
 	} while (new_pass);
@@ -2160,8 +2161,7 @@ connectDatabase(const char *dbname, const char *connection_string,
 	{
 		if (fail_on_error)
 		{
-			pg_log_error("could not connect to database \"%s\": %s",
-						 dbname, PQerrorMessage(conn));
+			pg_log_error("%s", PQerrorMessage(conn));
 			exit_nicely(1);
 		}
 		else

@@ -3811,6 +3811,42 @@ Indexes:
 Distributed Replicated
 
 DROP TABLE ataddindex;
+CREATE TABLE ataddindex(id int, ref_id int);
+ALTER TABLE ataddindex
+  ADD PRIMARY KEY (id),
+  ADD FOREIGN KEY (ref_id) REFERENCES ataddindex;
+\d ataddindex
+             Table "public.ataddindex"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ id     | integer |           | not null | 
+ ref_id | integer |           |          | 
+Indexes:
+    "ataddindex_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "ataddindex_ref_id_fkey" FOREIGN KEY (ref_id) REFERENCES ataddindex(id)
+Referenced by:
+    TABLE "ataddindex" CONSTRAINT "ataddindex_ref_id_fkey" FOREIGN KEY (ref_id) REFERENCES ataddindex(id)
+
+DROP TABLE ataddindex;
+CREATE TABLE ataddindex(id int, ref_id int);
+ALTER TABLE ataddindex
+  ADD UNIQUE (id),
+  ADD FOREIGN KEY (ref_id) REFERENCES ataddindex (id);
+\d ataddindex
+             Table "public.ataddindex"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ id     | integer |           |          | 
+ ref_id | integer |           |          | 
+Indexes:
+    "ataddindex_id_key" UNIQUE CONSTRAINT, btree (id)
+Foreign-key constraints:
+    "ataddindex_ref_id_fkey" FOREIGN KEY (ref_id) REFERENCES ataddindex(id)
+Referenced by:
+    TABLE "ataddindex" CONSTRAINT "ataddindex_ref_id_fkey" FOREIGN KEY (ref_id) REFERENCES ataddindex(id)
+
+DROP TABLE ataddindex;
 -- unsupported constraint types for partitioned tables
 CREATE TABLE partitioned (
 	a int,
@@ -3966,6 +4002,8 @@ SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_1'::reg
 CREATE TABLE fail_part (LIKE part_1 INCLUDING CONSTRAINTS);
 ALTER TABLE list_parted ATTACH PARTITION fail_part FOR VALUES IN (1);
 ERROR:  partition "fail_part" would overlap partition "part_1"
+LINE 1: ...LE list_parted ATTACH PARTITION fail_part FOR VALUES IN (1);
+                                                                    ^
 DROP TABLE fail_part;
 -- check that an existing table can be attached as a default partition
 CREATE TABLE def_part (LIKE list_parted INCLUDING CONSTRAINTS);
@@ -3975,6 +4013,8 @@ ALTER TABLE list_parted ATTACH PARTITION def_part DEFAULT;
 CREATE TABLE fail_def_part (LIKE part_1 INCLUDING CONSTRAINTS);
 ALTER TABLE list_parted ATTACH PARTITION fail_def_part DEFAULT;
 ERROR:  partition "fail_def_part" conflicts with existing default partition "def_part"
+LINE 1: ...ER TABLE list_parted ATTACH PARTITION fail_def_part DEFAULT;
+                                                               ^
 -- check validation when attaching list partitions
 CREATE TABLE list_parted2 (
 	a int,
@@ -4044,6 +4084,8 @@ CREATE TABLE partr_def1 PARTITION OF range_parted DEFAULT;
 CREATE TABLE partr_def2 (LIKE part1 INCLUDING CONSTRAINTS);
 ALTER TABLE range_parted ATTACH PARTITION partr_def2 DEFAULT;
 ERROR:  partition "partr_def2" conflicts with existing default partition "partr_def1"
+LINE 1: ...LTER TABLE range_parted ATTACH PARTITION partr_def2 DEFAULT;
+                                                               ^
 -- Overlapping partitions cannot be attached, hence, following should give error
 INSERT INTO partr_def1 VALUES (2, 10);
 CREATE TABLE part3 (LIKE range_parted);
@@ -4166,8 +4208,12 @@ CREATE TABLE hpart_1 PARTITION OF hash_parted FOR VALUES WITH (MODULUS 4, REMAIN
 CREATE TABLE fail_part (LIKE hpart_1);
 ALTER TABLE hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODULUS 8, REMAINDER 4);
 ERROR:  partition "fail_part" would overlap partition "hpart_1"
+LINE 1: ...hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODU...
+                                                             ^
 ALTER TABLE hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODULUS 8, REMAINDER 0);
 ERROR:  partition "fail_part" would overlap partition "hpart_1"
+LINE 1: ...hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODU...
+                                                             ^
 DROP TABLE fail_part;
 -- check validation when attaching hash partitions
 -- check that violating rows are correctly reported
@@ -4199,6 +4245,7 @@ ALTER TABLE hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODULUS 8, R
 ERROR:  remainder for hash partition must be less than modulus
 ALTER TABLE hash_parted ATTACH PARTITION fail_part FOR VALUES WITH (MODULUS 3, REMAINDER 2);
 ERROR:  every hash partition modulus must be a factor of the next larger modulus
+DETAIL:  The new modulus 3 is not a factor of 4, the modulus of existing partition "hpart_1".
 DROP TABLE fail_part;
 --
 -- DETACH PARTITION
@@ -4252,6 +4299,55 @@ SELECT * from part_rp;
 (0 rows)
 
 DROP TABLE part_rp;
+-- concurrent detach
+CREATE TABLE range_parted2 (
+	a int
+) PARTITION BY RANGE(a);
+CREATE TABLE part_rp PARTITION OF range_parted2 FOR VALUES FROM (0) to (100);
+BEGIN;
+-- doesn't work in a partition block
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+ERROR:  ALTER TABLE ... DETACH CONCURRENTLY cannot run inside a transaction block
+COMMIT;
+CREATE TABLE part_rpd PARTITION OF range_parted2 DEFAULT;
+-- doesn't work if there's a default partition
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+ERROR:  cannot detach partitions concurrently when a default partition exists
+-- doesn't work for the default partition
+ALTER TABLE range_parted2 DETACH PARTITION part_rpd CONCURRENTLY;
+ERROR:  cannot detach partitions concurrently when a default partition exists
+DROP TABLE part_rpd;
+-- works fine
+ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
+\d+ range_parted2
+                         Partitioned table "public.range_parted2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+Partition key: RANGE (a)
+Number of partitions: 0
+
+-- constraint should be created
+\d part_rp
+              Table "public.part_rp"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ a      | integer |           |          | 
+Check constraints:
+    "part_rp_a_check" CHECK (a IS NOT NULL AND a >= 0 AND a < 100)
+
+CREATE TABLE part_rp100 PARTITION OF range_parted2 (CHECK (a>=123 AND a<133 AND a IS NOT NULL)) FOR VALUES FROM (100) to (200);
+ALTER TABLE range_parted2 DETACH PARTITION part_rp100 CONCURRENTLY;
+-- redundant constraint should not be created
+\d part_rp100
+             Table "public.part_rp100"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ a      | integer |           |          | 
+Check constraints:
+    "part_rp100_a_check" CHECK (a >= 123 AND a < 133 AND a IS NOT NULL)
+
+DROP TABLE range_parted2;
 -- Check ALTER TABLE commands for partitioned tables and partitions
 -- cannot add/drop column to/from *only* the parent
 ALTER TABLE ONLY list_parted2 ADD COLUMN c int;

@@ -155,7 +155,7 @@ DecodeISO8601Interval(char *str,
 			{
 				case 'Y':
 					tm->tm_year += val;
-					tm->tm_mon += (fval * 12);
+					tm->tm_mon += (fval * MONTHS_PER_YEAR);
 					break;
 				case 'M':
 					tm->tm_mon += val;
@@ -191,7 +191,7 @@ DecodeISO8601Interval(char *str,
 						return DTERR_BAD_FORMAT;
 
 					tm->tm_year += val;
-					tm->tm_mon += (fval * 12);
+					tm->tm_mon += (fval * MONTHS_PER_YEAR);
 					if (unit == '\0')
 						return 0;
 					if (unit == 'T')
@@ -924,6 +924,7 @@ EncodeInterval(struct /* pg_ */ tm *tm, fsec_t fsec, int style, char *str)
 					*cp++ = '-';
 				AppendSeconds(cp, sec, fsec, MAX_INTERVAL_PRECISION, false);
 				cp += strlen(cp);
+				/* We output "ago", not negatives, so use abs(). */
 				sprintf(cp, " sec%s",
 						(abs(sec) != 1 || fsec != 0) ? "s" : "");
 				is_zero = false;

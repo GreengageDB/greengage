@@ -3,7 +3,7 @@
  * partbounds.c
  *		Support routines for manipulating partition bounds
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -223,8 +223,7 @@ static int32 partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
 static int	partition_range_bsearch(int partnatts, FmgrInfo *partsupfunc,
 									Oid *partcollation,
 									PartitionBoundInfo boundinfo,
-									PartitionRangeBound *probe, bool *is_equal);
-static int	get_partition_bound_num_indexes(PartitionBoundInfo b);
+									PartitionRangeBound *probe, int32 *cmpval);
 static Expr *make_partition_op_expr(PartitionKey key, int keynum,
 									uint16 strategy, Expr *arg1, Expr *arg2);
 static Oid	get_partition_operator(PartitionKey key, int col,
@@ -398,6 +397,7 @@ create_hash_bounds(PartitionBoundSpec **boundspecs, int nparts,
 
 	boundinfo->ndatums = ndatums;
 	boundinfo->datums = (Datum **) palloc0(ndatums * sizeof(Datum *));
+	boundinfo->nindexes = greatest_modulus;
 	boundinfo->indexes = (int *) palloc(greatest_modulus * sizeof(int));
 	for (i = 0; i < greatest_modulus; i++)
 		boundinfo->indexes[i] = -1;
@@ -530,6 +530,7 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 
 	boundinfo->ndatums = ndatums;
 	boundinfo->datums = (Datum **) palloc0(ndatums * sizeof(Datum *));
+	boundinfo->nindexes = ndatums;
 	boundinfo->indexes = (int *) palloc(ndatums * sizeof(int));
 
 	/*
@@ -725,8 +726,9 @@ create_range_bounds(PartitionBoundSpec **boundspecs, int nparts,
 
 	/*
 	 * For range partitioning, an additional value of -1 is stored as the last
-	 * element.
+	 * element of the indexes[] array.
 	 */
+	boundinfo->nindexes = ndatums + 1;
 	boundinfo->indexes = (int *) palloc((ndatums + 1) * sizeof(int));
 
 	for (i = 0; i < ndatums; i++)
@@ -807,45 +809,41 @@ partition_bounds_equal(int partnatts, int16 *parttyplen, bool *parttypbyval,
 	if (b1->ndatums != b2->ndatums)
 		return false;
 
+	if (b1->nindexes != b2->nindexes)
+		return false;
+
 	if (b1->null_index != b2->null_index)
 		return false;
 
 	if (b1->default_index != b2->default_index)
 		return false;
 
+	/* For all partition strategies, the indexes[] arrays have to match */
+	for (i = 0; i < b1->nindexes; i++)
+	{
+		if (b1->indexes[i] != b2->indexes[i])
+			return false;
+	}
+
+	/* Finally, compare the datums[] arrays */
 	if (b1->strategy == PARTITION_STRATEGY_HASH)
 	{
-		int			greatest_modulus = get_hash_partition_greatest_modulus(b1);
-
-		/*
-		 * If two hash partitioned tables have different greatest moduli,
-		 * their partition schemes don't match.
-		 */
-		if (greatest_modulus != get_hash_partition_greatest_modulus(b2))
-			return false;
-
 		/*
 		 * We arrange the partitions in the ascending order of their moduli
 		 * and remainders.  Also every modulus is factor of next larger
 		 * modulus.  Therefore we can safely store index of a given partition
 		 * in indexes array at remainder of that partition.  Also entries at
 		 * (remainder + N * modulus) positions in indexes array are all same
-		 * for (modulus, remainder) specification for any partition.  Thus
-		 * datums array from both the given bounds are same, if and only if
-		 * their indexes array will be same.  So, it suffices to compare
-		 * indexes array.
-		 */
-		for (i = 0; i < greatest_modulus; i++)
-			if (b1->indexes[i] != b2->indexes[i])
-				return false;
-
-#ifdef USE_ASSERT_CHECKING
-
-		/*
-		 * Nonetheless make sure that the bounds are indeed same when the
+		 * for (modulus, remainder) specification for any partition.  Thus the
+		 * datums arrays from the given bounds are the same, if and only if
+		 * their indexes arrays are the same.  So, it suffices to compare the
+		 * indexes arrays.
+		 *
+		 * Nonetheless make sure that the bounds are indeed the same when the
 		 * indexes match.  Hash partition bound stores modulus and remainder
 		 * at b1->datums[i][0] and b1->datums[i][1] position respectively.
 		 */
+#ifdef USE_ASSERT_CHECKING
 		for (i = 0; i < b1->ndatums; i++)
 			Assert((b1->datums[i][0] == b2->datums[i][0] &&
 					b1->datums[i][1] == b2->datums[i][1]));
@@ -891,15 +889,7 @@ partition_bounds_equal(int partnatts, int16 *parttyplen, bool *parttypbyval,
 								  parttypbyval[j], parttyplen[j]))
 					return false;
 			}
-
-			if (b1->indexes[i] != b2->indexes[i])
-				return false;
 		}
-
-		/* There are ndatums+1 indexes in case of range partitions */
-		if (b1->strategy == PARTITION_STRATEGY_RANGE &&
-			b1->indexes[i] != b2->indexes[i])
-			return false;
 	}
 	return true;
 }
@@ -920,8 +910,8 @@ partition_bounds_copy(PartitionBoundInfo src,
 	PartitionBoundInfo dest;
 	int			i;
 	int			ndatums;
+	int			nindexes;
 	int			partnatts;
-	int			num_indexes;
 	bool		hash_part;
 	int			natts;
 
@@ -929,9 +919,8 @@ partition_bounds_copy(PartitionBoundInfo src,
 
 	dest->strategy = src->strategy;
 	ndatums = dest->ndatums = src->ndatums;
+	nindexes = dest->nindexes = src->nindexes;
 	partnatts = key->partnatts;
-
-	num_indexes = get_partition_bound_num_indexes(src);
 
 	/* List partitioned tables have only a single partition key. */
 	Assert(key->strategy != PARTITION_STRATEGY_LIST || partnatts == 1);
@@ -990,8 +979,8 @@ partition_bounds_copy(PartitionBoundInfo src,
 		}
 	}
 
-	dest->indexes = (int *) palloc(sizeof(int) * num_indexes);
-	memcpy(dest->indexes, src->indexes, sizeof(int) * num_indexes);
+	dest->indexes = (int *) palloc(sizeof(int) * nindexes);
+	memcpy(dest->indexes, src->indexes, sizeof(int) * nindexes);
 
 	dest->null_index = src->null_index;
 	dest->default_index = src->default_index;
@@ -1020,8 +1009,6 @@ partition_bounds_merge(int partnatts,
 					   JoinType jointype,
 					   List **outer_parts, List **inner_parts)
 {
-	PartitionBoundInfo outer_binfo = outer_rel->boundinfo;
-
 	/*
 	 * Currently, this function is called only from try_partitionwise_join(),
 	 * so the join type should be INNER, LEFT, FULL, SEMI, or ANTI.
@@ -1031,10 +1018,10 @@ partition_bounds_merge(int partnatts,
 		   jointype == JOIN_ANTI);
 
 	/* The partitioning strategies should be the same. */
-	Assert(outer_binfo->strategy == inner_rel->boundinfo->strategy);
+	Assert(outer_rel->boundinfo->strategy == inner_rel->boundinfo->strategy);
 
 	*outer_parts = *inner_parts = NIL;
-	switch (outer_binfo->strategy)
+	switch (outer_rel->boundinfo->strategy)
 	{
 		case PARTITION_STRATEGY_HASH:
 
@@ -1075,7 +1062,7 @@ partition_bounds_merge(int partnatts,
 
 		default:
 			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) outer_binfo->strategy);
+				 (int) outer_rel->boundinfo->strategy);
 			return NULL;		/* keep compiler quiet */
 	}
 }
@@ -1528,7 +1515,7 @@ merge_range_bounds(int partnatts, FmgrInfo *partsupfuncs,
 													 &next_index);
 			Assert(merged_index >= 0);
 
-			/* Get the range of the merged partition. */
+			/* Get the range bounds of the merged partition. */
 			get_merged_range_bounds(partnatts, partsupfuncs,
 									partcollations, jointype,
 									&outer_lb, &outer_ub,
@@ -1785,7 +1772,7 @@ merge_matching_partitions(PartitionMap *outer_map, PartitionMap *inner_map,
 	if (outer_merged_index >= 0 && inner_merged_index >= 0)
 	{
 		/*
-		 * If the mereged partitions are the same, no need to do anything;
+		 * If the merged partitions are the same, no need to do anything;
 		 * return the index of the merged partitions.  Otherwise, if each of
 		 * the given partitions has been merged with a dummy partition on the
 		 * other side, re-map them to either of the two merged partitions.
@@ -1833,7 +1820,7 @@ merge_matching_partitions(PartitionMap *outer_map, PartitionMap *inner_map,
 
 	/*
 	 * If neither of them has been merged, merge them.  Otherwise, if one has
-	 * been merged with a dummy relation on the other side (and the other
+	 * been merged with a dummy partition on the other side (and the other
 	 * hasn't yet been merged with anything), re-merge them.  Otherwise, they
 	 * can't be merged, so return -1.
 	 */
@@ -2458,6 +2445,7 @@ build_merged_partition_bounds(char strategy, List *merged_datums,
 	}
 
 	Assert(list_length(merged_indexes) == ndatums);
+	merged_bounds->nindexes = ndatums;
 	merged_bounds->indexes = (int *) palloc(sizeof(int) * ndatums);
 	pos = 0;
 	foreach(lc, merged_indexes)
@@ -2705,10 +2693,10 @@ add_merged_range_bounds(int partnatts, FmgrInfo *partsupfuncs,
 		prev_ub.lower = false;
 
 		/*
-		 * We pass to partition_rbound_cmp() lower1 as false to prevent it
-		 * from considering the last upper bound to be smaller than the lower
-		 * bound of the merged partition when the values of the two range
-		 * bounds compare equal.
+		 * We pass lower1 = false to partition_rbound_cmp() to prevent it from
+		 * considering the last upper bound to be smaller than the lower bound
+		 * of the merged partition when the values of the two range bounds
+		 * compare equal.
 		 */
 		cmpval = partition_rbound_cmp(partnatts, partsupfuncs, partcollations,
 									  merged_lb->datums, merged_lb->kind,
@@ -2807,14 +2795,14 @@ partitions_are_ordered(PartitionBoundInfo boundinfo, int nparts)
  */
 void
 check_new_partition_bound(char *relname, Relation parent,
-						  PartitionBoundSpec *spec)
+						  PartitionBoundSpec *spec, ParseState *pstate)
 {
 	PartitionKey key = RelationGetPartitionKey(parent);
-	PartitionDesc partdesc = RelationGetPartitionDesc(parent);
+	PartitionDesc partdesc = RelationGetPartitionDesc(parent, false);
 	PartitionBoundInfo boundinfo = partdesc->boundinfo;
-	ParseState *pstate = make_parsestate(NULL);
 	int			with = -1;
 	bool		overlap = false;
+	int			overlap_location = -1;
 
 	if (spec->is_default)
 	{
@@ -2844,14 +2832,9 @@ check_new_partition_bound(char *relname, Relation parent,
 
 				if (partdesc->nparts > 0)
 				{
-					Datum	  **datums = boundinfo->datums;
-					int			ndatums = boundinfo->ndatums;
 					int			greatest_modulus;
 					int			remainder;
 					int			offset;
-					bool		valid_modulus = true;
-					int			prev_modulus,	/* Previous largest modulus */
-								next_modulus;	/* Next largest modulus */
 
 					/*
 					 * Check rule that every modulus must be a factor of the
@@ -2861,7 +2844,9 @@ check_new_partition_bound(char *relname, Relation parent,
 					 * modulus 15, but you cannot add both a partition with
 					 * modulus 10 and a partition with modulus 15, because 10
 					 * is not a factor of 15.
-					 *
+					 */
+
+					/*
 					 * Get the greatest (modulus, remainder) pair contained in
 					 * boundinfo->datums that is less than or equal to the
 					 * (spec->modulus, spec->remainder) pair.
@@ -2871,27 +2856,59 @@ check_new_partition_bound(char *relname, Relation parent,
 													spec->remainder);
 					if (offset < 0)
 					{
-						next_modulus = DatumGetInt32(datums[0][0]);
-						valid_modulus = (next_modulus % spec->modulus) == 0;
+						int			next_modulus;
+
+						/*
+						 * All existing moduli are greater or equal, so the
+						 * new one must be a factor of the smallest one, which
+						 * is first in the boundinfo.
+						 */
+						next_modulus = DatumGetInt32(boundinfo->datums[0][0]);
+						if (next_modulus % spec->modulus != 0)
+							ereport(ERROR,
+									(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+									 errmsg("every hash partition modulus must be a factor of the next larger modulus"),
+									 errdetail("The new modulus %d is not a factor of %d, the modulus of existing partition \"%s\".",
+											   spec->modulus, next_modulus,
+											   get_rel_name(partdesc->oids[boundinfo->indexes[0]]))));
 					}
 					else
 					{
-						prev_modulus = DatumGetInt32(datums[offset][0]);
-						valid_modulus = (spec->modulus % prev_modulus) == 0;
+						int			prev_modulus;
 
-						if (valid_modulus && (offset + 1) < ndatums)
+						/*
+						 * We found the largest modulus less than or equal to
+						 * ours.
+						 */
+						prev_modulus = DatumGetInt32(boundinfo->datums[offset][0]);
+
+						if (spec->modulus % prev_modulus != 0)
+							ereport(ERROR,
+									(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+									 errmsg("every hash partition modulus must be a factor of the next larger modulus"),
+									 errdetail("The new modulus %d is not divisible by %d, the modulus of existing partition \"%s\".",
+											   spec->modulus,
+											   prev_modulus,
+											   get_rel_name(partdesc->oids[boundinfo->indexes[offset]]))));
+
+						if (offset + 1 < boundinfo->ndatums)
 						{
-							next_modulus = DatumGetInt32(datums[offset + 1][0]);
-							valid_modulus = (next_modulus % spec->modulus) == 0;
+							int			next_modulus;
+
+							/* Look at the next higher modulus */
+							next_modulus = DatumGetInt32(boundinfo->datums[offset + 1][0]);
+
+							if (next_modulus % spec->modulus != 0)
+								ereport(ERROR,
+										(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+										 errmsg("every hash partition modulus must be a factor of the next larger modulus"),
+										 errdetail("The new modulus %d is not a factor of %d, the modulus of existing partition \"%s\".",
+												   spec->modulus, next_modulus,
+												   get_rel_name(partdesc->oids[boundinfo->indexes[offset + 1]]))));
 						}
 					}
 
-					if (!valid_modulus)
-						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-								 errmsg("every hash partition modulus must be a factor of the next larger modulus")));
-
-					greatest_modulus = get_hash_partition_greatest_modulus(boundinfo);
+					greatest_modulus = boundinfo->nindexes;
 					remainder = spec->remainder;
 
 					/*
@@ -2909,6 +2926,7 @@ check_new_partition_bound(char *relname, Relation parent,
 						if (boundinfo->indexes[remainder] != -1)
 						{
 							overlap = true;
+							overlap_location = spec->location;
 							with = boundinfo->indexes[remainder];
 							break;
 						}
@@ -2938,6 +2956,7 @@ check_new_partition_bound(char *relname, Relation parent,
 					{
 						Const	   *val = castNode(Const, lfirst(cell));
 
+						overlap_location = val->location;
 						if (!val->constisnull)
 						{
 							int			offset;
@@ -2971,6 +2990,7 @@ check_new_partition_bound(char *relname, Relation parent,
 			{
 				PartitionRangeBound *lower,
 						   *upper;
+				int			cmpval;
 
 				Assert(spec->strategy == PARTITION_STRATEGY_RANGE);
 				lower = make_one_partition_rbound(key, -1, spec->lowerdatums, true);
@@ -2978,12 +2998,22 @@ check_new_partition_bound(char *relname, Relation parent,
 
 				/*
 				 * First check if the resulting range would be empty with
-				 * specified lower and upper bounds
+				 * specified lower and upper bounds.  partition_rbound_cmp
+				 * cannot return zero here, since the lower-bound flags are
+				 * different.
 				 */
-				if (partition_rbound_cmp(key->partnatts, key->partsupfunc,
-										 key->partcollation, lower->datums,
-										 lower->kind, true, upper) >= 0)
+				cmpval = partition_rbound_cmp(key->partnatts,
+											  key->partsupfunc,
+											  key->partcollation,
+											  lower->datums, lower->kind,
+											  true, upper);
+				Assert(cmpval != 0);
+				if (cmpval > 0)
 				{
+					/* Point to problematic key in the lower datums list. */
+					PartitionRangeDatum *datum = list_nth(spec->lowerdatums,
+														  cmpval - 1);
+
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 							 errmsg("empty range bound specified for partition \"%s\"",
@@ -2991,13 +3021,12 @@ check_new_partition_bound(char *relname, Relation parent,
 							 errdetail("Specified lower bound %s is greater than or equal to upper bound %s.",
 									   get_range_partbound_string(spec->lowerdatums),
 									   get_range_partbound_string(spec->upperdatums)),
-							 parser_errposition(pstate, spec->location)));
+							 parser_errposition(pstate, datum->location)));
 				}
 
 				if (partdesc->nparts > 0)
 				{
 					int			offset;
-					bool		equal;
 
 					Assert(boundinfo &&
 						   boundinfo->strategy == PARTITION_STRATEGY_RANGE &&
@@ -3023,7 +3052,7 @@ check_new_partition_bound(char *relname, Relation parent,
 													 key->partsupfunc,
 													 key->partcollation,
 													 boundinfo, lower,
-													 &equal);
+													 &cmpval);
 
 					if (boundinfo->indexes[offset + 1] < 0)
 					{
@@ -3035,7 +3064,6 @@ check_new_partition_bound(char *relname, Relation parent,
 						 */
 						if (offset + 1 < boundinfo->ndatums)
 						{
-							int32		cmpval;
 							Datum	   *datums;
 							PartitionRangeDatumKind *kind;
 							bool		is_lower;
@@ -3052,11 +3080,19 @@ check_new_partition_bound(char *relname, Relation parent,
 							if (cmpval < 0)
 							{
 								/*
+								 * Point to problematic key in the upper
+								 * datums list.
+								 */
+								PartitionRangeDatum *datum =
+								list_nth(spec->upperdatums, Abs(cmpval) - 1);
+
+								/*
 								 * The new partition overlaps with the
 								 * existing partition between offset + 1 and
 								 * offset + 2.
 								 */
 								overlap = true;
+								overlap_location = datum->location;
 								with = boundinfo->indexes[offset + 2];
 							}
 						}
@@ -3067,7 +3103,16 @@ check_new_partition_bound(char *relname, Relation parent,
 						 * The new partition overlaps with the existing
 						 * partition between offset and offset + 1.
 						 */
+						PartitionRangeDatum *datum;
+
+						/*
+						 * Point to problematic key in the lower datums list;
+						 * if we have equality, point to the first one.
+						 */
+						datum = cmpval == 0 ? linitial(spec->lowerdatums) :
+							list_nth(spec->lowerdatums, Abs(cmpval) - 1);
 						overlap = true;
+						overlap_location = datum->location;
 						with = boundinfo->indexes[offset + 1];
 					}
 				}
@@ -3087,7 +3132,7 @@ check_new_partition_bound(char *relname, Relation parent,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("partition \"%s\" would overlap partition \"%s\"",
 						relname, get_rel_name(partdesc->oids[with])),
-				 parser_errposition(pstate, spec->location)));
+				 parser_errposition(pstate, overlap_location)));
 	}
 }
 
@@ -3129,8 +3174,8 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 	if (PartConstraintImpliedByRelConstraint(default_rel, def_part_constraints))
 	{
 		ereport(DEBUG1,
-				(errmsg("updated partition constraint for default partition \"%s\" is implied by existing constraints",
-						RelationGetRelationName(default_rel))));
+				(errmsg_internal("updated partition constraint for default partition \"%s\" is implied by existing constraints",
+								 RelationGetRelationName(default_rel))));
 		return;
 	}
 
@@ -3180,8 +3225,8 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 													 def_part_constraints))
 			{
 				ereport(DEBUG1,
-						(errmsg("updated partition constraint for default partition \"%s\" is implied by existing constraints",
-								RelationGetRelationName(part_rel))));
+						(errmsg_internal("updated partition constraint for default partition \"%s\" is implied by existing constraints",
+										 RelationGetRelationName(part_rel))));
 
 				table_close(part_rel, NoLock);
 				continue;
@@ -3257,18 +3302,15 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 /*
  * get_hash_partition_greatest_modulus
  *
- * Returns the greatest modulus of the hash partition bound. The greatest
- * modulus will be at the end of the datums array because hash partitions are
- * arranged in the ascending order of their moduli and remainders.
+ * Returns the greatest modulus of the hash partition bound.
+ * This is no longer used in the core code, but we keep it around
+ * in case external modules are using it.
  */
 int
 get_hash_partition_greatest_modulus(PartitionBoundInfo bound)
 {
 	Assert(bound && bound->strategy == PARTITION_STRATEGY_HASH);
-	Assert(bound->datums && bound->ndatums > 0);
-	Assert(DatumGetInt32(bound->datums[bound->ndatums - 1][0]) > 0);
-
-	return DatumGetInt32(bound->datums[bound->ndatums - 1][0]);
+	return bound->nindexes;
 }
 
 /*
@@ -3320,8 +3362,12 @@ make_one_partition_rbound(PartitionKey key, int index, List *datums, bool lower)
 /*
  * partition_rbound_cmp
  *
- * Return for two range bounds whether the 1st one (specified in datums1,
- * kind1, and lower1) is <, =, or > the bound specified in *b2.
+ * For two range bounds this decides whether the 1st one (specified by
+ * datums1, kind1, and lower1) is <, =, or > the bound specified in *b2.
+ *
+ * 0 is returned if they are equal, otherwise a non-zero integer whose sign
+ * indicates the ordering, and whose absolute value gives the 1-based
+ * partition key number of the first mismatching column.
  *
  * partnatts, partsupfunc and partcollation give the number of attributes in the
  * bounds to be compared, comparison function to be used and the collations of
@@ -3340,6 +3386,7 @@ partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
 					 Datum *datums1, PartitionRangeDatumKind *kind1,
 					 bool lower1, PartitionRangeBound *b2)
 {
+	int32		colnum = 0;
 	int32		cmpval = 0;		/* placate compiler */
 	int			i;
 	Datum	   *datums2 = b2->datums;
@@ -3348,6 +3395,9 @@ partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
 
 	for (i = 0; i < partnatts; i++)
 	{
+		/* Track column number in case we need it for result */
+		colnum++;
+
 		/*
 		 * First, handle cases where the column is unbounded, which should not
 		 * invoke the comparison procedure, and should not consider any later
@@ -3355,17 +3405,18 @@ partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
 		 * compare the same way as the values they represent.
 		 */
 		if (kind1[i] < kind2[i])
-			return -1;
+			return -colnum;
 		else if (kind1[i] > kind2[i])
-			return 1;
+			return colnum;
 		else if (kind1[i] != PARTITION_RANGE_DATUM_VALUE)
-
+		{
 			/*
 			 * The column bounds are both MINVALUE or both MAXVALUE. No later
 			 * columns should be considered, but we still need to compare
 			 * whether they are upper or lower bounds.
 			 */
 			break;
+		}
 
 		cmpval = DatumGetInt32(FunctionCall2Coll(&partsupfunc[i],
 												 partcollation[i],
@@ -3384,7 +3435,7 @@ partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
 	if (cmpval == 0 && lower1 != lower2)
 		cmpval = lower1 ? 1 : -1;
 
-	return cmpval;
+	return cmpval == 0 ? 0 : (cmpval < 0 ? -colnum : colnum);
 }
 
 /*
@@ -3396,7 +3447,6 @@ partition_rbound_cmp(int partnatts, FmgrInfo *partsupfunc,
  * n_tuple_datums, partsupfunc and partcollation give number of attributes in
  * the bounds to be compared, comparison function to be used and the collations
  * of attributes resp.
- *
  */
 int32
 partition_rbound_datum_cmp(FmgrInfo *partsupfunc, Oid *partcollation,
@@ -3489,14 +3539,17 @@ partition_list_bsearch(FmgrInfo *partsupfunc, Oid *partcollation,
  *		equal to the given range bound or -1 if all of the range bounds are
  *		greater
  *
- * *is_equal is set to true if the range bound at the returned index is equal
- * to the input range bound
+ * Upon return from this function, *cmpval is set to 0 if the bound at the
+ * returned index matches the input range bound exactly, otherwise a
+ * non-zero integer whose sign indicates the ordering, and whose absolute
+ * value gives the 1-based partition key number of the first mismatching
+ * column.
  */
 static int
 partition_range_bsearch(int partnatts, FmgrInfo *partsupfunc,
 						Oid *partcollation,
 						PartitionBoundInfo boundinfo,
-						PartitionRangeBound *probe, bool *is_equal)
+						PartitionRangeBound *probe, int32 *cmpval)
 {
 	int			lo,
 				hi,
@@ -3506,21 +3559,17 @@ partition_range_bsearch(int partnatts, FmgrInfo *partsupfunc,
 	hi = boundinfo->ndatums - 1;
 	while (lo < hi)
 	{
-		int32		cmpval;
-
 		mid = (lo + hi + 1) / 2;
-		cmpval = partition_rbound_cmp(partnatts, partsupfunc,
-									  partcollation,
-									  boundinfo->datums[mid],
-									  boundinfo->kind[mid],
-									  (boundinfo->indexes[mid] == -1),
-									  probe);
-		if (cmpval <= 0)
+		*cmpval = partition_rbound_cmp(partnatts, partsupfunc,
+									   partcollation,
+									   boundinfo->datums[mid],
+									   boundinfo->kind[mid],
+									   (boundinfo->indexes[mid] == -1),
+									   probe);
+		if (*cmpval <= 0)
 		{
 			lo = mid;
-			*is_equal = (cmpval == 0);
-
-			if (*is_equal)
+			if (*cmpval == 0)
 				break;
 		}
 		else
@@ -3531,7 +3580,7 @@ partition_range_bsearch(int partnatts, FmgrInfo *partsupfunc,
 }
 
 /*
- * partition_range_bsearch
+ * partition_range_datum_bsearch
  *		Returns the index of the greatest range bound that is less than or
  *		equal to the given tuple or -1 if all of the range bounds are greater
  *
@@ -3660,49 +3709,9 @@ qsort_partition_rbound_cmp(const void *a, const void *b, void *arg)
 	PartitionRangeBound *b2 = (*(PartitionRangeBound *const *) b);
 	PartitionKey key = (PartitionKey) arg;
 
-	return partition_rbound_cmp(key->partnatts, key->partsupfunc,
-								key->partcollation, b1->datums, b1->kind,
-								b1->lower, b2);
-}
-
-/*
- * get_partition_bound_num_indexes
- *
- * Returns the number of the entries in the partition bound indexes array.
- */
-static int
-get_partition_bound_num_indexes(PartitionBoundInfo bound)
-{
-	int			num_indexes;
-
-	Assert(bound);
-
-	switch (bound->strategy)
-	{
-		case PARTITION_STRATEGY_HASH:
-
-			/*
-			 * The number of the entries in the indexes array is same as the
-			 * greatest modulus.
-			 */
-			num_indexes = get_hash_partition_greatest_modulus(bound);
-			break;
-
-		case PARTITION_STRATEGY_LIST:
-			num_indexes = bound->ndatums;
-			break;
-
-		case PARTITION_STRATEGY_RANGE:
-			/* Range partitioned table has an extra index. */
-			num_indexes = bound->ndatums + 1;
-			break;
-
-		default:
-			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) bound->strategy);
-	}
-
-	return num_indexes;
+	return compare_range_bounds(key->partnatts, key->partsupfunc,
+								key->partcollation,
+								b1, b2);
 }
 
 /*
@@ -3807,6 +3816,7 @@ make_partition_op_expr(PartitionKey key, int keynum,
 					saopexpr = makeNode(ScalarArrayOpExpr);
 					saopexpr->opno = operoid;
 					saopexpr->opfuncid = get_opcode(operoid);
+					saopexpr->hashfuncid = InvalidOid;
 					saopexpr->useOr = true;
 					saopexpr->inputcollid = key->partcollation[keynum];
 					saopexpr->args = list_make2(arg1, arrexpr);
@@ -3985,7 +3995,7 @@ get_qual_for_list(Relation parent, PartitionBoundSpec *spec)
 	{
 		int			i;
 		int			ndatums = 0;
-		PartitionDesc pdesc = RelationGetPartitionDesc(parent);
+		PartitionDesc pdesc = RelationGetPartitionDesc(parent, false);
 		PartitionBoundInfo boundinfo = pdesc->boundinfo;
 
 		if (boundinfo)
@@ -4062,7 +4072,7 @@ get_qual_for_list(Relation parent, PartitionBoundSpec *spec)
 	if (!list_has_null)
 	{
 		/*
-		 * Gin up a "col IS NOT NULL" test that will be AND'd with the main
+		 * Gin up a "col IS NOT NULL" test that will be ANDed with the main
 		 * expression.  This might seem redundant, but the partition routing
 		 * machinery needs it.
 		 */
@@ -4185,7 +4195,7 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 	if (spec->is_default)
 	{
 		List	   *or_expr_args = NIL;
-		PartitionDesc pdesc = RelationGetPartitionDesc(parent);
+		PartitionDesc pdesc = RelationGetPartitionDesc(parent, false);
 		Oid		   *inhoids = pdesc->oids;
 		int			nparts = pdesc->nparts,
 					i;
@@ -4259,10 +4269,6 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 
 		return result;
 	}
-
-	lower_or_start_datum = list_head(spec->lowerdatums);
-	upper_or_start_datum = list_head(spec->upperdatums);
-	num_or_arms = key->partnatts;
 
 	/*
 	 * If it is the recursive call for default, we skip the get_range_nulltest
@@ -4656,6 +4662,8 @@ compute_partition_hash_value(int partnatts, FmgrInfo *partsupfunc, Oid *partcoll
  *
  * Returns true if remainder produced when this computed single hash value is
  * divided by the given modulus is equal to given remainder, otherwise false.
+ * NB: it's important that this never return null, as the constraint machinery
+ * would consider that to be a "pass".
  *
  * See get_qual_for_hash() for usage.
  */
@@ -4680,9 +4688,9 @@ satisfies_hash_partition(PG_FUNCTION_ARGS)
 	ColumnsHashData *my_extra;
 	uint64		rowHash = 0;
 
-	/* Return null if the parent OID, modulus, or remainder is NULL. */
+	/* Return false if the parent OID, modulus, or remainder is NULL. */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
-		PG_RETURN_NULL();
+		PG_RETURN_BOOL(false);
 	parentId = PG_GETARG_OID(0);
 	modulus = PG_GETARG_INT32(1);
 	remainder = PG_GETARG_INT32(2);
@@ -4718,8 +4726,7 @@ satisfies_hash_partition(PG_FUNCTION_ARGS)
 		key = RelationGetPartitionKey(parent);
 
 		/* Reject parent table that is not hash-partitioned. */
-		if (parent->rd_rel->relkind != RELKIND_PARTITIONED_TABLE ||
-			key->strategy != PARTITION_STRATEGY_HASH)
+		if (key == NULL || key->strategy != PARTITION_STRATEGY_HASH)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("\"%s\" is not a hash partitioned table",
@@ -4755,7 +4762,7 @@ satisfies_hash_partition(PG_FUNCTION_ARGS)
 				if (argtype != key->parttypid[j] && !IsBinaryCoercible(argtype, key->parttypid[j]))
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							 errmsg("column %d of the partition key has type \"%s\", but supplied value is of type \"%s\"",
+							 errmsg("column %d of the partition key has type %s, but supplied value is of type %s",
 									j + 1, format_type_be(key->parttypid[j]), format_type_be(argtype))));
 
 				fmgr_info_copy(&my_extra->partsupfunc[j],

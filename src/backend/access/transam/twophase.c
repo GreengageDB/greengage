@@ -3,7 +3,7 @@
  * twophase.c
  *		Two-phase commit support functions.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -480,7 +480,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	proc->xid = xid;
 	Assert(proc->xmin == InvalidTransactionId);
 	proc->delayChkpt = false;
-	proc->vacuumFlags = 0;
+	proc->statusFlags = 0;
 	proc->pid = 0;
 	proc->backendId = InvalidBackendId;
 	proc->databaseId = databaseid;
@@ -495,6 +495,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 
 	proc->localDistribXactData = *localDistribXactRef;
 
+	pg_atomic_init_u64(&proc->waitStart, 0);
 	for (i = 0; i < NUM_LOCK_PARTITIONS; i++)
 		SHMQueueInit(&(proc->myProcLocks[i]));
 	/* subxid data must be filled later by GXactLoadSubxactData */
@@ -1186,9 +1187,9 @@ EndPrepare(GlobalTransaction gxact)
 	gxact->prepare_start_lsn = ProcLastRecPtr;
 
 	/*
-	 * Mark the prepared transaction as valid.  As soon as xact.c marks
-	 * MyProc as not running our XID (which it will do immediately after
-	 * this function returns), others can commit/rollback the xact.
+	 * Mark the prepared transaction as valid.  As soon as xact.c marks MyProc
+	 * as not running our XID (which it will do immediately after this
+	 * function returns), others can commit/rollback the xact.
 	 *
 	 * NB: a side effect of this is to make a dummy ProcArray entry for the
 	 * prepared XID.  This must happen before we clear the XID from MyProc /
@@ -1300,10 +1301,10 @@ ReadTwoPhaseFile(TransactionId xid, bool missing_ok)
 		stat.st_size > MaxAllocSize)
 		ereport(ERROR,
 				(errcode(ERRCODE_DATA_CORRUPTED),
-				 errmsg_plural("incorrect size of file \"%s\": %zu byte",
-							   "incorrect size of file \"%s\": %zu bytes",
-							   (Size) stat.st_size, path,
-							   (Size) stat.st_size)));
+				 errmsg_plural("incorrect size of file \"%s\": %lld byte",
+							   "incorrect size of file \"%s\": %lld bytes",
+							   (long long int) stat.st_size, path,
+							   (long long int) stat.st_size)));
 
 	crc_offset = stat.st_size - sizeof(pg_crc32c);
 	if (crc_offset != MAXALIGN(crc_offset))
@@ -1327,8 +1328,8 @@ ReadTwoPhaseFile(TransactionId xid, bool missing_ok)
 					 errmsg("could not read file \"%s\": %m", path)));
 		else
 			ereport(ERROR,
-					(errmsg("could not read file \"%s\": read %d of %zu",
-							path, r, (Size) stat.st_size)));
+					(errmsg("could not read file \"%s\": read %d of %lld",
+							path, r, (long long int) stat.st_size)));
 	}
 
 	pgstat_report_wait_end();
@@ -1411,16 +1412,14 @@ XlogReadTwoPhaseData(XLogRecPtr lsn, char **buf, int *len)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not read two-phase state from WAL at %X/%X",
-						(uint32) (lsn >> 32),
-						(uint32) lsn)));
+						LSN_FORMAT_ARGS(lsn))));
 
 	if (XLogRecGetRmid(xlogreader) != RM_XACT_ID ||
 		(XLogRecGetInfo(xlogreader) & XLOG_XACT_OPMASK) != XLOG_XACT_PREPARE)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("expected two-phase state data is not present in WAL at %X/%X",
-						(uint32) (lsn >> 32),
-						(uint32) lsn)));
+						LSN_FORMAT_ARGS(lsn))));
 
 	if (len != NULL)
 		*len = XLogRecGetDataLen(xlogreader);
@@ -2407,7 +2406,7 @@ RecordTransactionCommitPrepared(TransactionId xid,
 
 	TransactionTreeSetCommitTsData(xid, nchildren, children,
 								   replorigin_session_origin_timestamp,
-								   replorigin_session_origin, false);
+								   replorigin_session_origin);
 
 	/*
 	 * We don't currently try to sleep before flush here ... nor is there any
@@ -2462,6 +2461,14 @@ RecordTransactionAbortPrepared(TransactionId xid,
 							   const char *gid)
 {
 	XLogRecPtr	recptr;
+	bool		replorigin;
+
+	/*
+	 * Are we using the replication origins feature?  Or, in other words, are
+	 * we replaying remote actions?
+	 */
+	replorigin = (replorigin_session_origin != InvalidRepOriginId &&
+				  replorigin_session_origin != DoNotReplicateId);
 
 	/*
 	 * Catch the scenario where we aborted partway through
@@ -2487,6 +2494,11 @@ RecordTransactionAbortPrepared(TransactionId xid,
 								ndeldbs, deldbs,
 								MyXactFlags | XACT_FLAGS_ACQUIREDACCESSEXCLUSIVELOCK,
 								xid, gid);
+
+	if (replorigin)
+		/* Move LSNs forward for this replication origin */
+		replorigin_session_advance(replorigin_session_origin_lsn,
+								   XactLastRecEnd);
 
 	/* Always flush, since we're about to remove the 2PC state file */
 	XLogFlush(recptr);

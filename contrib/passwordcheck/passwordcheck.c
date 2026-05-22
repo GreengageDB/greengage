@@ -3,7 +3,7 @@
  * passwordcheck.c
  *
  *
- * Copyright (c) 2009-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2009-2021, PostgreSQL Global Development Group
  *
  * Author: Laurenz Albe <laurenz.albe@wien.gv.at>
  *
@@ -91,6 +91,9 @@ check_password(const char *username,
 		int			i;
 		bool		pwd_has_letter,
 					pwd_has_nonletter;
+#ifdef USE_CRACKLIB
+		const char *reason;
+#endif
 
 		/* enforce minimum length */
 		if (pwdlen < MIN_PWD_LENGTH)
@@ -125,10 +128,11 @@ check_password(const char *username,
 
 #ifdef USE_CRACKLIB
 		/* call cracklib to check password */
-		if (FascistCheck(password, CRACKLIB_DICTPATH))
+		if ((reason = FascistCheck(password, CRACKLIB_DICTPATH)))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("password is easily cracked")));
+					 errmsg("password is easily cracked"),
+					 errdetail_log("cracklib diagnostic: %s", reason)));
 #endif
 	}
 

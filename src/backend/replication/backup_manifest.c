@@ -3,7 +3,7 @@
  * backup_manifest.c
  *	  code for generating and sending a backup manifest
  *
- * Portions Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/replication/backup_manifest.c
@@ -13,11 +13,11 @@
 #include "postgres.h"
 
 #include "access/timeline.h"
+#include "common/hex.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "mb/pg_wchar.h"
 #include "replication/backup_manifest.h"
-#include "utils/builtins.h"
 #include "utils/json.h"
 
 static void AppendStringToManifest(backup_manifest_info *manifest, char *s);
@@ -57,12 +57,19 @@ InitializeBackupManifest(backup_manifest_info *manifest,
 						 backup_manifest_option want_manifest,
 						 pg_checksum_type manifest_checksum_type)
 {
+	memset(manifest, 0, sizeof(backup_manifest_info));
+	manifest->checksum_type = manifest_checksum_type;
+
 	if (want_manifest == MANIFEST_OPTION_NO)
 		manifest->buffile = NULL;
 	else
-		manifest->buffile = BufFileCreateTemp("InitializeBackupManifest", false);
-	manifest->checksum_type = manifest_checksum_type;
-	pg_sha256_init(&manifest->manifest_ctx);
+	{
+		manifest->buffile = BufFileCreateTemp(false);
+		manifest->manifest_ctx = pg_cryptohash_create(PG_SHA256);
+		if (pg_cryptohash_init(manifest->manifest_ctx) < 0)
+			elog(ERROR, "failed to initialize checksum of backup manifest");
+	}
+
 	manifest->manifest_size = UINT64CONST(0);
 	manifest->force_encode = (want_manifest == MANIFEST_OPTION_FORCE_ENCODE);
 	manifest->first_file = true;
@@ -72,6 +79,16 @@ InitializeBackupManifest(backup_manifest_info *manifest,
 		AppendToManifest(manifest,
 						 "{ \"PostgreSQL-Backup-Manifest-Version\": 1,\n"
 						 "\"Files\": [");
+}
+
+/*
+ * Free resources assigned to a backup manifest constructed.
+ */
+void
+FreeBackupManifest(backup_manifest_info *manifest)
+{
+	pg_cryptohash_free(manifest->manifest_ctx);
+	manifest->manifest_ctx = NULL;
 }
 
 /*
@@ -112,7 +129,7 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	initStringInfo(&buf);
 	if (manifest->first_file)
 	{
-		appendStringInfoString(&buf, "\n");
+		appendStringInfoChar(&buf, '\n');
 		manifest->first_file = false;
 	}
 	else
@@ -133,10 +150,12 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	}
 	else
 	{
+		uint64		dstlen = pg_hex_enc_len(pathlen);
+
 		appendStringInfoString(&buf, "{ \"Encoded-Path\": \"");
-		enlargeStringInfo(&buf, 2 * pathlen);
-		buf.len += hex_encode(pathname, pathlen,
-							  &buf.data[buf.len]);
+		enlargeStringInfo(&buf, dstlen);
+		buf.len += pg_hex_encode(pathname, pathlen,
+								 &buf.data[buf.len], dstlen);
 		appendStringInfoString(&buf, "\", ");
 	}
 
@@ -152,23 +171,28 @@ AddFileToBackupManifest(backup_manifest_info *manifest, const char *spcoid,
 	enlargeStringInfo(&buf, 128);
 	buf.len += pg_strftime(&buf.data[buf.len], 128, "%Y-%m-%d %H:%M:%S %Z",
 						   pg_gmtime(&mtime));
-	appendStringInfoString(&buf, "\"");
+	appendStringInfoChar(&buf, '"');
 
 	/* Add checksum information. */
 	if (checksum_ctx->type != CHECKSUM_TYPE_NONE)
 	{
 		uint8		checksumbuf[PG_CHECKSUM_MAX_LENGTH];
 		int			checksumlen;
+		uint64		dstlen;
 
 		checksumlen = pg_checksum_final(checksum_ctx, checksumbuf);
+		if (checksumlen < 0)
+			elog(ERROR, "could not finalize checksum of file \"%s\"",
+				 pathname);
 
 		appendStringInfo(&buf,
 						 ", \"Checksum-Algorithm\": \"%s\", \"Checksum\": \"",
 						 pg_checksum_type_name(checksum_ctx->type));
-		enlargeStringInfo(&buf, 2 * checksumlen);
-		buf.len += hex_encode((char *) checksumbuf, checksumlen,
-							  &buf.data[buf.len]);
-		appendStringInfoString(&buf, "\"");
+		dstlen = pg_hex_enc_len(checksumlen);
+		enlargeStringInfo(&buf, dstlen);
+		buf.len += pg_hex_encode((char *) checksumbuf, checksumlen,
+								 &buf.data[buf.len], dstlen);
+		appendStringInfoChar(&buf, '"');
 	}
 
 	/* Close out the object. */
@@ -253,8 +277,8 @@ AddWALInfoToBackupManifest(backup_manifest_info *manifest, XLogRecPtr startptr,
 						 "%s{ \"Timeline\": %u, \"Start-LSN\": \"%X/%X\", \"End-LSN\": \"%X/%X\" }",
 						 first_wal_range ? "" : ",\n",
 						 entry->tli,
-						 (uint32) (tl_beginptr >> 32), (uint32) tl_beginptr,
-						 (uint32) (endptr >> 32), (uint32) endptr);
+						 LSN_FORMAT_ARGS(tl_beginptr),
+						 LSN_FORMAT_ARGS(endptr));
 
 		if (starttli == entry->tli)
 		{
@@ -272,7 +296,7 @@ AddWALInfoToBackupManifest(backup_manifest_info *manifest, XLogRecPtr startptr,
 	 */
 	if (!found_start_timeline)
 		ereport(ERROR,
-				errmsg("start timeline %u not found history of timeline %u",
+				errmsg("start timeline %u not found in history of timeline %u",
 					   starttli, endtli));
 
 	/* Terminate the list of WAL ranges. */
@@ -287,8 +311,9 @@ SendBackupManifest(backup_manifest_info *manifest)
 {
 	StringInfoData protobuf;
 	uint8		checksumbuf[PG_SHA256_DIGEST_LENGTH];
-	char		checksumstringbuf[PG_SHA256_DIGEST_STRING_LENGTH];
+	char	   *checksumstringbuf;
 	size_t		manifest_bytes_done = 0;
+	uint64		dstlen;
 
 	if (!IsManifestEnabled(manifest))
 		return;
@@ -305,10 +330,15 @@ SendBackupManifest(backup_manifest_info *manifest)
 	 * twice.
 	 */
 	manifest->still_checksumming = false;
-	pg_sha256_final(&manifest->manifest_ctx, checksumbuf);
+	if (pg_cryptohash_final(manifest->manifest_ctx, checksumbuf,
+							sizeof(checksumbuf)) < 0)
+		elog(ERROR, "failed to finalize checksum of backup manifest");
 	AppendStringToManifest(manifest, "\"Manifest-Checksum\": \"");
-	hex_encode((char *) checksumbuf, sizeof checksumbuf, checksumstringbuf);
-	checksumstringbuf[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+	dstlen = pg_hex_enc_len(sizeof(checksumbuf));
+	checksumstringbuf = palloc0(dstlen + 1);	/* includes \0 */
+	pg_hex_encode((char *) checksumbuf, sizeof(checksumbuf),
+				  checksumstringbuf, dstlen);
+	checksumstringbuf[dstlen] = '\0';
 	AppendStringToManifest(manifest, checksumstringbuf);
 	AppendStringToManifest(manifest, "\"}\n");
 
@@ -368,7 +398,10 @@ AppendStringToManifest(backup_manifest_info *manifest, char *s)
 
 	Assert(manifest != NULL);
 	if (manifest->still_checksumming)
-		pg_sha256_update(&manifest->manifest_ctx, (uint8 *) s, len);
+	{
+		if (pg_cryptohash_update(manifest->manifest_ctx, (uint8 *) s, len) < 0)
+			elog(ERROR, "failed to update checksum of backup manifest");
+	}
 	BufFileWrite(manifest->buffile, s, len);
 	manifest->manifest_size += len;
 }

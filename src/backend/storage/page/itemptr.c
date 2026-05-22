@@ -3,7 +3,7 @@
  * itemptr.c
  *	  POSTGRES disk item pointer code.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -72,32 +72,61 @@ ItemPointerCompare(ItemPointer arg1, ItemPointer arg2)
 		return 0;
 }
 
-static char *
-ItemPointerToBuffer(char *buffer, ItemPointer tid)
+/*
+ * ItemPointerInc
+ *		Increment 'pointer' by 1 only paying attention to the ItemPointer's
+ *		type's range limits and not MaxOffsetNumber and FirstOffsetNumber.
+ *		This may result in 'pointer' becoming !OffsetNumberIsValid.
+ *
+ * If the pointer is already the maximum possible values permitted by the
+ * range of the ItemPointer's types, then do nothing.
+ */
+void
+ItemPointerInc(ItemPointer pointer)
 {
-	// Do not assert valid ItemPointer -- it is ok if it is (0,0)...
-	BlockNumber blockNumber = BlockIdGetBlockNumber(&tid->ip_blkid);
-	OffsetNumber offsetNumber = tid->ip_posid;
-	
-	sprintf(buffer,
-		    "(%u,%u)",
-		    blockNumber, 
-		    offsetNumber);
+	BlockNumber blk = ItemPointerGetBlockNumberNoCheck(pointer);
+	OffsetNumber off = ItemPointerGetOffsetNumberNoCheck(pointer);
 
-	return buffer;
+	if (off == PG_UINT16_MAX)
+	{
+		if (blk != InvalidBlockNumber)
+		{
+			off = 0;
+			blk++;
+		}
+	}
+	else
+		off++;
+
+	ItemPointerSet(pointer, blk, off);
 }
 
-static char itemPointerBuffer[50];
-static char itemPointerBuffer2[50];
-
-char *
-ItemPointerToString(ItemPointer tid)
+/*
+ * ItemPointerDec
+ *		Decrement 'pointer' by 1 only paying attention to the ItemPointer's
+ *		type's range limits and not MaxOffsetNumber and FirstOffsetNumber.
+ *		This may result in 'pointer' becoming !OffsetNumberIsValid.
+ *
+ * If the pointer is already the minimum possible values permitted by the
+ * range of the ItemPointer's types, then do nothing.  This does rely on
+ * FirstOffsetNumber being 1 rather than 0.
+ */
+void
+ItemPointerDec(ItemPointer pointer)
 {
-	return ItemPointerToBuffer(itemPointerBuffer, tid);
-}
+	BlockNumber blk = ItemPointerGetBlockNumberNoCheck(pointer);
+	OffsetNumber off = ItemPointerGetOffsetNumberNoCheck(pointer);
 
-char *
-ItemPointerToString2(ItemPointer tid)
-{
-	return ItemPointerToBuffer(itemPointerBuffer2, tid);
+	if (off == 0)
+	{
+		if (blk != 0)
+		{
+			off = PG_UINT16_MAX;
+			blk--;
+		}
+	}
+	else
+		off--;
+
+	ItemPointerSet(pointer, blk, off);
 }

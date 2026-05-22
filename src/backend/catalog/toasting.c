@@ -4,7 +4,7 @@
  *	  This file contains routines to support creation of toast tables
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include "access/heapam.h"
+#include "access/toast_compression.h"
 #include "access/xact.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/catalog.h"
@@ -238,6 +239,20 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	TupleDescAttr(tupdesc, 1)->attstorage = TYPSTORAGE_PLAIN;
 	TupleDescAttr(tupdesc, 2)->attstorage = TYPSTORAGE_PLAIN;
 
+	/* Toast field should not be compressed */
+	TupleDescAttr(tupdesc, 0)->attcompression = InvalidCompressionMethod;
+	TupleDescAttr(tupdesc, 1)->attcompression = InvalidCompressionMethod;
+	TupleDescAttr(tupdesc, 2)->attcompression = InvalidCompressionMethod;
+
+	/*
+	 * Toast tables for regular relations go in pg_toast; those for temp
+	 * relations go into the per-backend temp-toast-table namespace.
+	 */
+	if (isTempOrTempToastNamespace(rel->rd_rel->relnamespace))
+		namespaceid = GetTempToastNamespace();
+	else
+		namespaceid = PG_TOAST_NAMESPACE;
+
 	/* Toast table is shared if and only if its parent is. */
 	shared_relation = rel->rd_rel->relisshared;
 
@@ -358,9 +373,8 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	table_close(class_rel, RowExclusiveLock);
 
 	/*
-	 * Register dependency from the toast table to the main, so that the
-	 * toast table will be deleted if the main is.  Skip this in bootstrap
-	 * mode.
+	 * Register dependency from the toast table to the main, so that the toast
+	 * table will be deleted if the main is.  Skip this in bootstrap mode.
 	 */
 	if (!IsBootstrapProcessingMode())
 	{
@@ -403,9 +417,9 @@ needs_toast_table(Relation rel)
 
 	/*
 	 * Ignore attempts to create toast tables on catalog tables after initdb.
-	 * Which catalogs get toast tables is explicitly chosen in
-	 * catalog/toasting.h.  (We could get here via some ALTER TABLE command if
-	 * the catalog doesn't have a toast table.)
+	 * Which catalogs get toast tables is explicitly chosen in catalog/pg_*.h.
+	 * (We could get here via some ALTER TABLE command if the catalog doesn't
+	 * have a toast table.)
 	 */
 	if (IsCatalogRelation(rel) && !IsBootstrapProcessingMode())
 		return false;

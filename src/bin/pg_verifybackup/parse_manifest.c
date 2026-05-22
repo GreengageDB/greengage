@@ -3,7 +3,7 @@
  * parse_manifest.c
  *	  Parse a backup manifest in JSON format.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/pg_verifybackup/parse_manifest.c
@@ -325,7 +325,7 @@ json_manifest_object_field_start(void *state, char *fname, bool isnull)
 
 			/* It's not a field we recognize. */
 			json_manifest_parse_failure(parse->context,
-										"unknown toplevel field");
+										"unrecognized top-level field");
 			break;
 
 		case JM_EXPECT_THIS_FILE_FIELD:
@@ -358,7 +358,7 @@ json_manifest_object_field_start(void *state, char *fname, bool isnull)
 				parse->wal_range_field = JMWRF_END_LSN;
 			else
 				json_manifest_parse_failure(parse->context,
-											"unexpected wal range field");
+											"unexpected WAL range field");
 			parse->state = JM_EXPECT_THIS_WAL_RANGE_VALUE;
 			break;
 
@@ -469,10 +469,10 @@ json_manifest_finalize_file(JsonManifestParseState *parse)
 
 	/* Pathname and size are required. */
 	if (parse->pathname == NULL && parse->encoded_pathname == NULL)
-		json_manifest_parse_failure(parse->context, "missing pathname");
+		json_manifest_parse_failure(parse->context, "missing path name");
 	if (parse->pathname != NULL && parse->encoded_pathname != NULL)
 		json_manifest_parse_failure(parse->context,
-									"both pathname and encoded pathname");
+									"both path name and encoded path name");
 	if (parse->size == NULL)
 		json_manifest_parse_failure(parse->context, "missing size");
 	if (parse->algorithm == NULL && parse->checksum != NULL)
@@ -491,7 +491,7 @@ json_manifest_finalize_file(JsonManifestParseState *parse)
 							  parse->encoded_pathname,
 							  raw_length))
 			json_manifest_parse_failure(parse->context,
-										"unable to decode filename");
+										"could not decode file name");
 		parse->pathname[raw_length] = '\0';
 		pfree(parse->encoded_pathname);
 		parse->encoded_pathname = NULL;
@@ -582,10 +582,10 @@ json_manifest_finalize_wal_range(JsonManifestParseState *parse)
 									"timeline is not an integer");
 	if (!parse_xlogrecptr(&start_lsn, parse->start_lsn))
 		json_manifest_parse_failure(parse->context,
-									"unable to parse start LSN");
+									"could not parse start LSN");
 	if (!parse_xlogrecptr(&end_lsn, parse->end_lsn))
 		json_manifest_parse_failure(parse->context,
-									"unable to parse end LSN");
+									"could not parse end LSN");
 
 	/* Invoke the callback with the details we've gathered. */
 	context->perwalrange_cb(context, tli, start_lsn, end_lsn);
@@ -624,7 +624,7 @@ verify_manifest_checksum(JsonManifestParseState *parse, char *buffer,
 	size_t		number_of_newlines = 0;
 	size_t		ultimate_newline = 0;
 	size_t		penultimate_newline = 0;
-	pg_sha256_ctx manifest_ctx;
+	pg_cryptohash_ctx *manifest_ctx;
 	uint8		manifest_checksum_actual[PG_SHA256_DIGEST_LENGTH];
 	uint8		manifest_checksum_expected[PG_SHA256_DIGEST_LENGTH];
 
@@ -652,9 +652,16 @@ verify_manifest_checksum(JsonManifestParseState *parse, char *buffer,
 									"last line not newline-terminated");
 
 	/* Checksum the rest. */
-	pg_sha256_init(&manifest_ctx);
-	pg_sha256_update(&manifest_ctx, (uint8 *) buffer, penultimate_newline + 1);
-	pg_sha256_final(&manifest_ctx, manifest_checksum_actual);
+	manifest_ctx = pg_cryptohash_create(PG_SHA256);
+	if (manifest_ctx == NULL)
+		context->error_cb(context, "out of memory");
+	if (pg_cryptohash_init(manifest_ctx) < 0)
+		context->error_cb(context, "could not initialize checksum of manifest");
+	if (pg_cryptohash_update(manifest_ctx, (uint8 *) buffer, penultimate_newline + 1) < 0)
+		context->error_cb(context, "could not update checksum of manifest");
+	if (pg_cryptohash_final(manifest_ctx, manifest_checksum_actual,
+							sizeof(manifest_checksum_actual)) < 0)
+		context->error_cb(context, "could not finalize checksum of manifest");
 
 	/* Now verify it. */
 	if (parse->manifest_checksum == NULL)
@@ -667,6 +674,7 @@ verify_manifest_checksum(JsonManifestParseState *parse, char *buffer,
 	if (memcmp(manifest_checksum_actual, manifest_checksum_expected,
 			   PG_SHA256_DIGEST_LENGTH) != 0)
 		context->error_cb(context, "manifest checksum mismatch");
+	pg_cryptohash_free(manifest_ctx);
 }
 
 /*

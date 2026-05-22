@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -105,6 +105,7 @@
 #include "executor/nodeProjectSet.h"
 #include "executor/nodeRecursiveunion.h"
 #include "executor/nodeResult.h"
+#include "executor/nodeResultCache.h"
 #include "executor/nodeSamplescan.h"
 #include "executor/nodeSeqscan.h"
 #include "executor/nodeSetOp.h"
@@ -112,6 +113,7 @@
 #include "executor/nodeSubplan.h"
 #include "executor/nodeSubqueryscan.h"
 #include "executor/nodeTableFuncscan.h"
+#include "executor/nodeTidrangescan.h"
 #include "executor/nodeTidscan.h"
 #include "executor/nodeTupleSplit.h"
 #include "executor/nodeUnique.h"
@@ -328,6 +330,11 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 												   estate, eflags);
 			break;
 
+		case T_TidRangeScan:
+			result = (PlanState *) ExecInitTidRangeScan((TidRangeScan *) node,
+														estate, eflags);
+			break;
+
 		case T_SubqueryScan:
 			result = (PlanState *) ExecInitSubqueryScan((SubqueryScan *) node,
 														estate, eflags);
@@ -427,6 +434,11 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 			break;
 
 #ifdef NOT_USED /* Group nodes are not used in GPDB */
+		case T_ResultCache:
+			result = (PlanState *) ExecInitResultCache((ResultCache *) node,
+													   estate, eflags);
+			break;
+
 		case T_Group:
 			result = (PlanState *) ExecInitGroup((Group *) node,
 												 estate, eflags);
@@ -883,6 +895,10 @@ ExecEndNode(PlanState *node)
 			ExecEndTidScan((TidScanState *) node);
 			break;
 
+		case T_TidRangeScanState:
+			ExecEndTidRangeScan((TidRangeScanState *) node);
+			break;
+
 		case T_SubqueryScanState:
 			ExecEndSubqueryScan((SubqueryScanState *) node);
 			break;
@@ -961,6 +977,10 @@ ExecEndNode(PlanState *node)
 			break;
 
 #ifdef NOT_USED /* GroupState nodes are not used in GPDB */
+		case T_ResultCacheState:
+			ExecEndResultCache((ResultCacheState *) node);
+			break;
+
 		case T_GroupState:
 			ExecEndGroup((GroupState *) node);
 			break;

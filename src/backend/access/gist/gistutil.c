@@ -4,7 +4,7 @@
  *	  utilities routines for the postgres GiST index access method.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -32,7 +32,6 @@
 void
 gistfillbuffer(Page page, IndexTuple *itup, int len, OffsetNumber off)
 {
-	OffsetNumber l = InvalidOffsetNumber;
 	int			i;
 
 	if (off == InvalidOffsetNumber)
@@ -42,6 +41,7 @@ gistfillbuffer(Page page, IndexTuple *itup, int len, OffsetNumber off)
 	for (i = 0; i < len; i++)
 	{
 		Size		sz = IndexTupleSize(itup[i]);
+		OffsetNumber l;
 
 		l = PageAddItem(page, (Item) itup[i], sz, off, false, false);
 		if (l == InvalidOffsetNumber)
@@ -572,11 +572,30 @@ gistdentryinit(GISTSTATE *giststate, int nkey, GISTENTRY *e,
 
 IndexTuple
 gistFormTuple(GISTSTATE *giststate, Relation r,
-			  Datum attdata[], bool isnull[], bool isleaf)
+			  Datum *attdata, bool *isnull, bool isleaf)
 {
 	Datum		compatt[INDEX_MAX_KEYS];
-	int			i;
 	IndexTuple	res;
+
+	gistCompressValues(giststate, r, attdata, isnull, isleaf, compatt);
+
+	res = index_form_tuple(isleaf ? giststate->leafTupdesc :
+						   giststate->nonLeafTupdesc,
+						   compatt, isnull);
+
+	/*
+	 * The offset number on tuples on internal pages is unused. For historical
+	 * reasons, it is set to 0xffff.
+	 */
+	ItemPointerSetOffsetNumber(&(res->t_tid), 0xffff);
+	return res;
+}
+
+void
+gistCompressValues(GISTSTATE *giststate, Relation r,
+				   Datum *attdata, bool *isnull, bool isleaf, Datum *compatt)
+{
+	int			i;
 
 	/*
 	 * Call the compress method on each attribute.
@@ -617,17 +636,6 @@ gistFormTuple(GISTSTATE *giststate, Relation r,
 				compatt[i] = attdata[i];
 		}
 	}
-
-	res = index_form_tuple(isleaf ? giststate->leafTupdesc :
-						   giststate->nonLeafTupdesc,
-						   compatt, isnull);
-
-	/*
-	 * The offset number on tuples on internal pages is unused. For historical
-	 * reasons, it is set to 0xffff.
-	 */
-	ItemPointerSetOffsetNumber(&(res->t_tid), 0xffff);
-	return res;
 }
 
 /*
@@ -745,22 +753,28 @@ gistpenalty(GISTSTATE *giststate, int attno,
  * Initialize a new index page
  */
 void
-GISTInitBuffer(Buffer b, uint32 f)
+gistinitpage(Page page, uint32 f)
 {
 	GISTPageOpaque opaque;
-	Page		page;
-	Size		pageSize;
 
-	pageSize = BufferGetPageSize(b);
-	page = BufferGetPage(b);
-	PageInit(page, pageSize, sizeof(GISTPageOpaqueData));
+	PageInit(page, BLCKSZ, sizeof(GISTPageOpaqueData));
 
 	opaque = GistPageGetOpaque(page);
-	/* page was already zeroed by PageInit, so this is not needed: */
-	/* memset(&(opaque->nsn), 0, sizeof(GistNSN)); */
 	opaque->rightlink = InvalidBlockNumber;
 	opaque->flags = f;
 	opaque->gist_page_id = GIST_PAGE_ID;
+}
+
+/*
+ * Initialize a new index buffer
+ */
+void
+GISTInitBuffer(Buffer b, uint32 f)
+{
+	Page		page;
+
+	page = BufferGetPage(b);
+	gistinitpage(page, f);
 }
 
 /*
@@ -897,7 +911,7 @@ gistPageRecyclable(Page page)
 		 */
 		FullTransactionId deletexid_full = GistPageGetDeleteXid(page);
 
-		return GlobalVisIsRemovableFullXid(NULL, deletexid_full);
+		return GlobalVisCheckRemovableFullXid(NULL, deletexid_full);
 	}
 	return false;
 }
@@ -1019,7 +1033,7 @@ gistGetFakeLSN(Relation rel)
 
 		return counter++;
 	}
-	else if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT)
+	else if (RelationIsPermanent(rel))
 	{
 		/*
 		 * WAL-logging on this relation will start after commit, so its LSNs

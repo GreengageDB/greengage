@@ -3,7 +3,7 @@
  * nodeIncrementalSort.c
  *	  Routines to handle incremental sorting of relations.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -288,9 +288,7 @@ switchToPresortedPrefixMode(PlanState *pstate)
 {
 	IncrementalSortState *node = castNode(IncrementalSortState, pstate);
 	ScanDirection dir;
-	int64		nTuples = 0;
-	bool		lastTuple = false;
-	bool		firstTuple = true;
+	int64		nTuples;
 	TupleDesc	tupDesc;
 	PlanState  *outerNode;
 	IncrementalSort *plannode = castNode(IncrementalSort, node->ss.ps.plan);
@@ -333,7 +331,7 @@ switchToPresortedPrefixMode(PlanState *pstate)
 	 */
 	if (node->bounded)
 	{
-		SO1_printf("Setting bound on presorted prefix tuplesort to: %ld\n",
+		SO1_printf("Setting bound on presorted prefix tuplesort to: " INT64_FORMAT "\n",
 				   node->bound - node->bound_Done);
 		tuplesort_set_bound(node->prefixsort_state,
 							node->bound - node->bound_Done);
@@ -343,20 +341,16 @@ switchToPresortedPrefixMode(PlanState *pstate)
 	 * Copy as many tuples as we can (i.e., in the same prefix key group) from
 	 * the full sort state to the prefix sort state.
 	 */
-	for (;;)
+	for (nTuples = 0; nTuples < node->n_fullsort_remaining; nTuples++)
 	{
-		lastTuple = node->n_fullsort_remaining - nTuples == 1;
-
 		/*
 		 * When we encounter multiple prefix key groups inside the full sort
 		 * tuplesort we have to carry over the last read tuple into the next
 		 * batch.
 		 */
-		if (firstTuple && !TupIsNull(node->transfer_tuple))
+		if (nTuples == 0 && !TupIsNull(node->transfer_tuple))
 		{
 			tuplesort_puttupleslot(node->prefixsort_state, node->transfer_tuple);
-			nTuples++;
-
 			/* The carried over tuple is our new group pivot tuple. */
 			ExecCopySlot(node->group_pivot, node->transfer_tuple);
 		}
@@ -376,7 +370,6 @@ switchToPresortedPrefixMode(PlanState *pstate)
 			if (isCurrentGroup(node, node->group_pivot, node->transfer_tuple))
 			{
 				tuplesort_puttupleslot(node->prefixsort_state, node->transfer_tuple);
-				nTuples++;
 			}
 			else
 			{
@@ -394,21 +387,11 @@ switchToPresortedPrefixMode(PlanState *pstate)
 				 * current prefix key group.
 				 */
 				ExecClearTuple(node->group_pivot);
+
+				/* Break out of for-loop early */
 				break;
 			}
 		}
-
-		firstTuple = false;
-
-		/*
-		 * If we've copied all of the tuples from the full sort state into the
-		 * prefix sort state, then we don't actually know that we've yet found
-		 * the last tuple in that prefix key group until we check the next
-		 * tuple from the outer plan node, so we retain the current group
-		 * pivot tuple prefix key group comparison.
-		 */
-		if (lastTuple)
-			break;
 	}
 
 	/*
@@ -417,18 +400,19 @@ switchToPresortedPrefixMode(PlanState *pstate)
 	 * remaining in the large single prefix key group we think we've
 	 * encountered.
 	 */
-	SO1_printf("Moving %ld tuples to presorted prefix tuplesort\n", nTuples);
+	SO1_printf("Moving " INT64_FORMAT " tuples to presorted prefix tuplesort\n", nTuples);
 	node->n_fullsort_remaining -= nTuples;
-	SO1_printf("Setting n_fullsort_remaining to %ld\n", node->n_fullsort_remaining);
+	SO1_printf("Setting n_fullsort_remaining to " INT64_FORMAT "\n", node->n_fullsort_remaining);
 
-	if (lastTuple)
+	if (node->n_fullsort_remaining == 0)
 	{
 		/*
-		 * We've confirmed that all tuples remaining in the full sort batch is
-		 * in the same prefix key group and moved all of those tuples into the
-		 * presorted prefix tuplesort. Now we can save our pivot comparison
-		 * tuple and continue fetching tuples from the outer execution node to
-		 * load into the presorted prefix tuplesort.
+		 * We've found that all tuples remaining in the full sort batch are in
+		 * the same prefix key group and moved all of those tuples into the
+		 * presorted prefix tuplesort.  We don't know that we've yet found the
+		 * last tuple in the current prefix key group, so save our pivot
+		 * comparison tuple and continue fetching tuples from the outer
+		 * execution node to load into the presorted prefix tuplesort.
 		 */
 		ExecCopySlot(node->group_pivot, node->transfer_tuple);
 		SO_printf("Setting execution_status to INCSORT_LOADPREFIXSORT (switchToPresortedPrefixMode)\n");
@@ -449,7 +433,7 @@ switchToPresortedPrefixMode(PlanState *pstate)
 		 * out all of those tuples, and then come back around to find another
 		 * batch.
 		 */
-		SO1_printf("Sorting presorted prefix tuplesort with %ld tuples\n", nTuples);
+		SO1_printf("Sorting presorted prefix tuplesort with " INT64_FORMAT " tuples\n", nTuples);
 		tuplesort_performsort(node->prefixsort_state);
 
 		INSTRUMENT_SORT_GROUP(node, prefixsort);
@@ -462,7 +446,7 @@ switchToPresortedPrefixMode(PlanState *pstate)
 			 * - n), so store the current number of processed tuples for use
 			 * in configuring sorting bound.
 			 */
-			SO2_printf("Changing bound_Done from %ld to %ld\n",
+			SO2_printf("Changing bound_Done from " INT64_FORMAT " to " INT64_FORMAT "\n",
 					   Min(node->bound, node->bound_Done + nTuples), node->bound_Done);
 			node->bound_Done = Min(node->bound, node->bound_Done + nTuples);
 		}
@@ -574,7 +558,7 @@ ExecIncrementalSort(PlanState *pstate)
 			 * need to re-execute the prefix mode transition function to pull
 			 * out the next prefix key group.
 			 */
-			SO1_printf("Re-calling switchToPresortedPrefixMode() because n_fullsort_remaining is > 0 (%ld)\n",
+			SO1_printf("Re-calling switchToPresortedPrefixMode() because n_fullsort_remaining is > 0 (" INT64_FORMAT ")\n",
 					   node->n_fullsort_remaining);
 			switchToPresortedPrefixMode(pstate);
 		}
@@ -677,9 +661,9 @@ ExecIncrementalSort(PlanState *pstate)
 			/*
 			 * We're in full sort mode accumulating a minimum number of tuples
 			 * and not checking for prefix key equality yet, so we can't
-			 * assume the group pivot tuple will reamin the same -- unless
+			 * assume the group pivot tuple will remain the same -- unless
 			 * we're using a minimum group size of 1, in which case the pivot
-			 * is obviously still the pviot.
+			 * is obviously still the pivot.
 			 */
 			if (nTuples != minGroupSize)
 				ExecClearTuple(node->group_pivot);
@@ -707,7 +691,7 @@ ExecIncrementalSort(PlanState *pstate)
 				 */
 				node->outerNodeDone = true;
 
-				SO1_printf("Sorting fullsort with %ld tuples\n", nTuples);
+				SO1_printf("Sorting fullsort with " INT64_FORMAT " tuples\n", nTuples);
 				tuplesort_performsort(fullsort_state);
 
 				INSTRUMENT_SORT_GROUP(node, fullsort);
@@ -776,7 +760,7 @@ ExecIncrementalSort(PlanState *pstate)
 						 * current number of processed tuples for later use
 						 * configuring the sort state's bound.
 						 */
-						SO2_printf("Changing bound_Done from %ld to %ld\n",
+						SO2_printf("Changing bound_Done from " INT64_FORMAT " to " INT64_FORMAT "\n",
 								   node->bound_Done,
 								   Min(node->bound, node->bound_Done + nTuples));
 						node->bound_Done = Min(node->bound, node->bound_Done + nTuples);
@@ -787,7 +771,7 @@ ExecIncrementalSort(PlanState *pstate)
 					 * sort and transition modes to reading out the sorted
 					 * tuples.
 					 */
-					SO1_printf("Sorting fullsort tuplesort with %ld tuples\n",
+					SO1_printf("Sorting fullsort tuplesort with " INT64_FORMAT " tuples\n",
 							   nTuples);
 					tuplesort_performsort(fullsort_state);
 
@@ -828,7 +812,7 @@ ExecIncrementalSort(PlanState *pstate)
 				 * on FIFO retrieval semantics when transferring them to the
 				 * presorted prefix tuplesort.
 				 */
-				SO1_printf("Sorting fullsort tuplesort with %ld tuples\n", nTuples);
+				SO1_printf("Sorting fullsort tuplesort with " INT64_FORMAT " tuples\n", nTuples);
 				tuplesort_performsort(fullsort_state);
 
 				INSTRUMENT_SORT_GROUP(node, fullsort);
@@ -847,12 +831,12 @@ ExecIncrementalSort(PlanState *pstate)
 				{
 					int64		currentBound = node->bound - node->bound_Done;
 
-					SO2_printf("Read %ld tuples, but setting to %ld because we used bounded sort\n",
+					SO2_printf("Read " INT64_FORMAT " tuples, but setting to " INT64_FORMAT " because we used bounded sort\n",
 							   nTuples, Min(currentBound, nTuples));
 					nTuples = Min(currentBound, nTuples);
 				}
 
-				SO1_printf("Setting n_fullsort_remaining to %ld and calling switchToPresortedPrefixMode()\n",
+				SO1_printf("Setting n_fullsort_remaining to " INT64_FORMAT " and calling switchToPresortedPrefixMode()\n",
 						   nTuples);
 
 				/*
@@ -942,7 +926,7 @@ ExecIncrementalSort(PlanState *pstate)
 		 * Perform the sort and begin returning the tuples to the parent plan
 		 * node.
 		 */
-		SO1_printf("Sorting presorted prefix tuplesort with >= %ld tuples\n", nTuples);
+		SO1_printf("Sorting presorted prefix tuplesort with " INT64_FORMAT " tuples\n", nTuples);
 		tuplesort_performsort(node->prefixsort_state);
 
 		INSTRUMENT_SORT_GROUP(node, prefixsort);
@@ -958,7 +942,7 @@ ExecIncrementalSort(PlanState *pstate)
 			 * - n), so store the current number of processed tuples for use
 			 * in configuring sorting bound.
 			 */
-			SO2_printf("Changing bound_Done from %ld to %ld\n",
+			SO2_printf("Changing bound_Done from " INT64_FORMAT " to " INT64_FORMAT "\n",
 					   node->bound_Done,
 					   Min(node->bound, node->bound_Done + nTuples));
 			node->bound_Done = Min(node->bound, node->bound_Done + nTuples);
@@ -1097,7 +1081,7 @@ ExecEndIncrementalSort(IncrementalSortState *node)
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
 	/* must drop pointer to sort result tuple */
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
-	/* must drop stanalone tuple slots from outer node */
+	/* must drop standalone tuple slots from outer node */
 	ExecDropSingleTupleTableSlot(node->group_pivot);
 	ExecDropSingleTupleTableSlot(node->transfer_tuple);
 
@@ -1178,8 +1162,8 @@ ExecReScanIncrementalSort(IncrementalSortState *node)
 	}
 
 	/*
-	 * If chgParam of subnode is not null, theni the plan will be re-scanned
-	 * by the first ExecProcNode.
+	 * If chgParam of subnode is not null, then the plan will be re-scanned by
+	 * the first ExecProcNode.
 	 */
 	if (outerPlan->chgParam == NULL)
 		ExecReScan(outerPlan);

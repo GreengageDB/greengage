@@ -3,7 +3,7 @@
  * be-gssapi-common.h
  *       Definitions for GSSAPI authentication and encryption handling
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/libpq/be-gssapi-common.h
@@ -20,6 +20,8 @@
 #include <gssapi/gssapi.h>
 #endif
 
+extern void pg_GSS_error(const char *errmsg,
+						 OM_uint32 maj_stat, OM_uint32 min_stat);
 void		pg_GSS_error_be(int severity, const char *errmsg,
 						 OM_uint32 maj_stat, OM_uint32 min_stat);
 

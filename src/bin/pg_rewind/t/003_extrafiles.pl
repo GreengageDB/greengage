@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 # Test how pg_rewind reacts to extra files and directories in the data dirs.
 
 use strict;
@@ -24,10 +27,13 @@ sub run_test
 
 	# Create a subdir and files that will be present in both
 	mkdir "$test_primary_datadir/tst_both_dir";
-	append_to_file "$test_primary_datadir/tst_both_dir/both_file1", "in both1";
-	append_to_file "$test_primary_datadir/tst_both_dir/both_file2", "in both2";
+	append_to_file "$test_primary_datadir/tst_both_dir/both_file1",
+	  "in both1";
+	append_to_file "$test_primary_datadir/tst_both_dir/both_file2",
+	  "in both2";
 	mkdir "$test_primary_datadir/tst_both_dir/both_subdir/";
-	append_to_file "$test_primary_datadir/tst_both_dir/both_subdir/both_file3",
+	append_to_file
+	  "$test_primary_datadir/tst_both_dir/both_subdir/both_file3",
 	  "in both3";
 
 	RewindTest::create_standby($test_mode);
@@ -40,10 +46,13 @@ sub run_test
 	  "in standby1";
 	append_to_file "$test_standby_datadir/tst_standby_dir/standby_file2",
 	  "in standby2";
+	append_to_file
+	  "$test_standby_datadir/tst_standby_dir/standby_file3 with 'quotes'",
+	  "in standby3";
 	mkdir "$test_standby_datadir/tst_standby_dir/standby_subdir/";
 	append_to_file
-	  "$test_standby_datadir/tst_standby_dir/standby_subdir/standby_file3",
-	  "in standby3";
+	  "$test_standby_datadir/tst_standby_dir/standby_subdir/standby_file4",
+	  "in standby4";
 
 	mkdir "$test_primary_datadir/tst_primary_dir";
 	append_to_file "$test_primary_datadir/tst_primary_dir/primary_file1",
@@ -63,7 +72,9 @@ sub run_test
 	RewindTest::promote_standby();
 	RewindTest::run_pg_rewind($test_mode);
 
-	# List files in the data directory after rewind.
+	# List files in the data directory after rewind. All the files that
+	# were present in the standby should be present after rewind, and
+	# all the files that were added on the primary should be removed.
 	my @paths;
 	find(
 		sub {
@@ -85,8 +96,9 @@ sub run_test
 			"$test_primary_datadir/tst_standby_dir",
 			"$test_primary_datadir/tst_standby_dir/standby_file1",
 			"$test_primary_datadir/tst_standby_dir/standby_file2",
+			"$test_primary_datadir/tst_standby_dir/standby_file3 with 'quotes'",
 			"$test_primary_datadir/tst_standby_dir/standby_subdir",
-			"$test_primary_datadir/tst_standby_dir/standby_subdir/standby_file3"
+			"$test_primary_datadir/tst_standby_dir/standby_subdir/standby_file4"
 		],
 		"file lists match");
 

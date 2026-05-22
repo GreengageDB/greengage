@@ -2,7 +2,7 @@
  *
  * pg_ctl --- start/stops/restarts the PostgreSQL server
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  * src/bin/pg_ctl/pg_ctl.c
  *
@@ -932,11 +932,10 @@ do_start(void)
 	 */
 #ifndef WIN32
 	{
-		static char env_var[32];
+		char		env_var[32];
 
-		snprintf(env_var, sizeof(env_var), "PG_GRANDPARENT_PID=%d",
-				 (int) getppid());
-		putenv(env_var);
+		snprintf(env_var, sizeof(env_var), "%d", (int) getppid());
+		setenv("PG_GRANDPARENT_PID", env_var, 1);
 	}
 #endif
 
@@ -1975,7 +1974,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 	Advapi32Handle = LoadLibrary("ADVAPI32.DLL");
 	if (Advapi32Handle != NULL)
 	{
-		_CreateRestrictedToken = (__CreateRestrictedToken) GetProcAddress(Advapi32Handle, "CreateRestrictedToken");
+		_CreateRestrictedToken = (__CreateRestrictedToken) (pg_funcptr_t) GetProcAddress(Advapi32Handle, "CreateRestrictedToken");
 	}
 
 	if (_CreateRestrictedToken == NULL)
@@ -2049,11 +2048,11 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 	Kernel32Handle = LoadLibrary("KERNEL32.DLL");
 	if (Kernel32Handle != NULL)
 	{
-		_IsProcessInJob = (__IsProcessInJob) GetProcAddress(Kernel32Handle, "IsProcessInJob");
-		_CreateJobObject = (__CreateJobObject) GetProcAddress(Kernel32Handle, "CreateJobObjectA");
-		_SetInformationJobObject = (__SetInformationJobObject) GetProcAddress(Kernel32Handle, "SetInformationJobObject");
-		_AssignProcessToJobObject = (__AssignProcessToJobObject) GetProcAddress(Kernel32Handle, "AssignProcessToJobObject");
-		_QueryInformationJobObject = (__QueryInformationJobObject) GetProcAddress(Kernel32Handle, "QueryInformationJobObject");
+		_IsProcessInJob = (__IsProcessInJob) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "IsProcessInJob");
+		_CreateJobObject = (__CreateJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "CreateJobObjectA");
+		_SetInformationJobObject = (__SetInformationJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "SetInformationJobObject");
+		_AssignProcessToJobObject = (__AssignProcessToJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "AssignProcessToJobObject");
+		_QueryInformationJobObject = (__QueryInformationJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "QueryInformationJobObject");
 	}
 
 	/* Verify that we found all functions */
@@ -2547,12 +2546,10 @@ main(int argc, char **argv)
 				case 'D':
 					{
 						char	   *pgdata_D;
-						char	   *env_var;
 
 						pgdata_D = pg_strdup(optarg);
 						canonicalize_path(pgdata_D);
-						env_var = psprintf("PGDATA=%s", pgdata_D);
-						putenv(env_var);
+						setenv("PGDATA", pgdata_D, 1);
 
 						/*
 						 * We could pass PGDATA just in an environment
@@ -2560,6 +2557,7 @@ main(int argc, char **argv)
 						 * 'ps' display
 						 */
 						pgdata_opt = psprintf("-D \"%s\" ", pgdata_D);
+						free(pgdata_D);
 						break;
 					}
 				case 'e':

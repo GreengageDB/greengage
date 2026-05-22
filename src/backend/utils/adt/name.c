@@ -9,7 +9,7 @@
  * always use NAMEDATALEN as the symbolic constant!   - jolly 8/21/95
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -234,7 +234,7 @@ namestrcpy(Name name, const char *str)
 {
 	/* NB: We need to zero-pad the destination. */
 	strncpy(NameStr(*name), str, NAMEDATALEN);
-	NameStr(*name)[NAMEDATALEN-1] = '\0';
+	NameStr(*name)[NAMEDATALEN - 1] = '\0';
 }
 
 /*

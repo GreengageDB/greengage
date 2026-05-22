@@ -16,7 +16,7 @@
  *		relevant database in turn.  The former keeps running after the
  *		initial prewarm is complete to update the dump file periodically.
  *
- *	Copyright (c) 2016-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2016-2021, PostgreSQL Global Development Group
  *
  *	IDENTIFICATION
  *		contrib/pg_prewarm/autoprewarm.c
@@ -35,6 +35,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
+#include "postmaster/interrupt.h"
 #include "storage/buf_internals.h"
 #include "storage/dsm.h"
 #include "storage/ipc.h"
@@ -94,12 +95,6 @@ static void apw_start_database_worker(void);
 static bool apw_init_shmem(void);
 static void apw_detach_shmem(int code, Datum arg);
 static int	apw_compare_blockinfo(const void *p, const void *q);
-static void apw_sigterm_handler(SIGNAL_ARGS);
-static void apw_sighup_handler(SIGNAL_ARGS);
-
-/* Flags set by signal handlers */
-static volatile sig_atomic_t got_sigterm = false;
-static volatile sig_atomic_t got_sighup = false;
 
 /* Pointer to shared-memory state. */
 static AutoPrewarmSharedState *apw_state = NULL;
@@ -158,11 +153,12 @@ void
 autoprewarm_main(Datum main_arg)
 {
 	bool		first_time = true;
+	bool		final_dump_allowed = true;
 	TimestampTz last_dump_time = 0;
 
 	/* Establish signal handlers; once that's done, unblock signals. */
-	pqsignal(SIGTERM, apw_sigterm_handler);
-	pqsignal(SIGHUP, apw_sighup_handler);
+	pqsignal(SIGTERM, SignalHandlerForShutdownRequest);
+	pqsignal(SIGHUP, SignalHandlerForConfigReload);
 	pqsignal(SIGUSR1, procsignal_sigusr1_handler);
 	BackgroundWorkerUnblockSignals();
 
@@ -198,45 +194,48 @@ autoprewarm_main(Datum main_arg)
 	 * There's not much point in performing a dump immediately after we finish
 	 * preloading; so, if we do end up preloading, consider the last dump time
 	 * to be equal to the current time.
+	 *
+	 * If apw_load_buffers() is terminated early by a shutdown request,
+	 * prevent dumping out our state below the loop, because we'd effectively
+	 * just truncate the saved state to however much we'd managed to preload.
 	 */
 	if (first_time)
 	{
 		apw_load_buffers();
+		final_dump_allowed = !ShutdownRequestPending;
 		last_dump_time = GetCurrentTimestamp();
 	}
 
 	/* Periodically dump buffers until terminated. */
-	while (!got_sigterm)
+	while (!ShutdownRequestPending)
 	{
 		/* In case of a SIGHUP, just reload the configuration. */
-		if (got_sighup)
+		if (ConfigReloadPending)
 		{
-			got_sighup = false;
+			ConfigReloadPending = false;
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 
 		if (autoprewarm_interval <= 0)
 		{
 			/* We're only dumping at shutdown, so just wait forever. */
-			(void) WaitLatch(&MyProc->procLatch,
+			(void) WaitLatch(MyLatch,
 							 WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
 							 -1L,
 							 PG_WAIT_EXTENSION);
 		}
 		else
 		{
-			long		delay_in_ms = 0;
-			TimestampTz next_dump_time = 0;
-			long		secs = 0;
-			int			usecs = 0;
+			TimestampTz next_dump_time;
+			long		delay_in_ms;
 
 			/* Compute the next dump time. */
 			next_dump_time =
 				TimestampTzPlusMilliseconds(last_dump_time,
 											autoprewarm_interval * 1000);
-			TimestampDifference(GetCurrentTimestamp(), next_dump_time,
-								&secs, &usecs);
-			delay_in_ms = secs + (usecs / 1000);
+			delay_in_ms =
+				TimestampDifferenceMilliseconds(GetCurrentTimestamp(),
+												next_dump_time);
 
 			/* Perform a dump if it's time. */
 			if (delay_in_ms <= 0)
@@ -247,21 +246,22 @@ autoprewarm_main(Datum main_arg)
 			}
 
 			/* Sleep until the next dump time. */
-			(void) WaitLatch(&MyProc->procLatch,
+			(void) WaitLatch(MyLatch,
 							 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 							 delay_in_ms,
 							 PG_WAIT_EXTENSION);
 		}
 
 		/* Reset the latch, loop. */
-		ResetLatch(&MyProc->procLatch);
+		ResetLatch(MyLatch);
 	}
 
 	/*
 	 * Dump one last time.  We assume this is probably the result of a system
 	 * shutdown, although it's possible that we've merely been terminated.
 	 */
-	apw_dump_now(true, true);
+	if (final_dump_allowed)
+		apw_dump_now(true, true);
 }
 
 /*
@@ -395,6 +395,13 @@ apw_load_buffers(void)
 			break;
 
 		/*
+		 * Likewise, don't launch if we've already been told to shut down.
+		 * (The launch would fail anyway, but we might as well skip it.)
+		 */
+		if (ShutdownRequestPending)
+			break;
+
+		/*
 		 * Start a per-database worker to load blocks for this database; this
 		 * function will return once the per-database worker exits.
 		 */
@@ -411,10 +418,11 @@ apw_load_buffers(void)
 	apw_state->pid_using_dumpfile = InvalidPid;
 	LWLockRelease(&apw_state->lock);
 
-	/* Report our success. */
-	ereport(LOG,
-			(errmsg("autoprewarm successfully prewarmed %d of %d previously-loaded blocks",
-					apw_state->prewarmed_blocks, num_elements)));
+	/* Report our success, if we were able to finish. */
+	if (!ShutdownRequestPending)
+		ereport(LOG,
+				(errmsg("autoprewarm successfully prewarmed %d of %d previously-loaded blocks",
+						apw_state->prewarmed_blocks, num_elements)));
 }
 
 /*
@@ -689,7 +697,7 @@ apw_dump_now(bool is_bgworker, bool dump_unlogged)
 	apw_state->pid_using_dumpfile = InvalidPid;
 
 	ereport(DEBUG1,
-			(errmsg("wrote block details for %d blocks", num_blocks)));
+			(errmsg_internal("wrote block details for %d blocks", num_blocks)));
 	return num_blocks;
 }
 
@@ -894,36 +902,4 @@ apw_compare_blockinfo(const void *p, const void *q)
 	cmp_member_elem(blocknum);
 
 	return 0;
-}
-
-/*
- * Signal handler for SIGTERM
- */
-static void
-apw_sigterm_handler(SIGNAL_ARGS)
-{
-	int			save_errno = errno;
-
-	got_sigterm = true;
-
-	if (MyProc)
-		SetLatch(&MyProc->procLatch);
-
-	errno = save_errno;
-}
-
-/*
- * Signal handler for SIGHUP
- */
-static void
-apw_sighup_handler(SIGNAL_ARGS)
-{
-	int			save_errno = errno;
-
-	got_sighup = true;
-
-	if (MyProc)
-		SetLatch(&MyProc->procLatch);
-
-	errno = save_errno;
 }

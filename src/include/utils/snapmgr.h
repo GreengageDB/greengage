@@ -3,7 +3,7 @@
  * snapmgr.h
  *	  POSTGRES snapshot manager
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/snapmgr.h
@@ -37,8 +37,7 @@
  */
 #define RelationAllowsEarlyPruning(rel) \
 ( \
-	 RelationNeedsWAL(rel) \
-  && !IsCatalogRelation(rel) \
+	 RelationIsPermanent(rel) && !IsCatalogRelation(rel) \
   && !RelationIsAccessibleInLogicalDecoding(rel) \
 )
 
@@ -136,6 +135,7 @@ extern DistributedSnapshotWithLocalMapping *GetCurrentDistributedSnapshotWithLoc
 extern void ImportSnapshot(const char *idstr);
 extern bool XactHasExportedSnapshots(void);
 extern void DeleteAllExportedSnapshotFiles(void);
+extern void WaitForOlderSnapshots(TransactionId limitXmin, bool progress);
 extern bool ThereAreNoPriorRegisteredSnapshots(void);
 extern bool TransactionIdLimitedForOldSnapshots(TransactionId recentXmin,
 												Relation relation,
@@ -158,7 +158,7 @@ extern bool GlobalVisTestIsRemovableFullXid(GlobalVisState *state, FullTransacti
 extern FullTransactionId GlobalVisTestNonRemovableFullHorizon(GlobalVisState *state);
 extern TransactionId GlobalVisTestNonRemovableHorizon(GlobalVisState *state);
 extern bool GlobalVisCheckRemovableXid(Relation rel, TransactionId xid);
-extern bool GlobalVisIsRemovableFullXid(Relation rel, FullTransactionId fxid);
+extern bool GlobalVisCheckRemovableFullXid(Relation rel, FullTransactionId fxid);
 
 /*
  * Utility functions for implementing visibility routines in table AMs.

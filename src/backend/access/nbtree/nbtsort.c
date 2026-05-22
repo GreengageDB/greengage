@@ -34,7 +34,7 @@
  * This code isn't concerned about the FSM at all. The caller is responsible
  * for initializing that.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -49,7 +49,6 @@
 #include "access/parallel.h"
 #include "access/relscan.h"
 #include "access/table.h"
-#include "access/tableam.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
@@ -487,17 +486,17 @@ _bt_spools_heapscan(Relation heap, Relation index, BTBuildState *buildstate,
 	 * values set by table_index_build_scan
 	 */
 	{
-		const int	index[] = {
+		const int	progress_index[] = {
 			PROGRESS_CREATEIDX_TUPLES_TOTAL,
 			PROGRESS_SCAN_BLOCKS_TOTAL,
 			PROGRESS_SCAN_BLOCKS_DONE
 		};
-		const int64 val[] = {
+		const int64 progress_vals[] = {
 			buildstate->indtuples,
 			0, 0
 		};
 
-		pgstat_progress_update_multi_param(3, index, val);
+		pgstat_progress_update_multi_param(3, progress_index, progress_vals);
 	}
 
 	/* okay, all heap tuples are spooled */
@@ -548,6 +547,7 @@ _bt_leafbuild(BTSpool *btspool, BTSpool *btspool2)
 	}
 #endif							/* BTREE_BUILD_STATS */
 
+	/* Execute the sort */
 	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
 								 PROGRESS_BTREE_PHASE_PERFORMSORT_1);
 	tuplesort_performsort(btspool->sortstate);
@@ -621,7 +621,7 @@ _bt_blnewpage(uint32 level)
 	/* Initialize BT opaque state */
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 	opaque->btpo_prev = opaque->btpo_next = P_NONE;
-	opaque->btpo.level = level;
+	opaque->btpo_level = level;
 	opaque->btpo_flags = (level > 0) ? 0 : BTP_LEAF;
 	opaque->btpo_cycleid = 0;
 
@@ -1466,7 +1466,6 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	WalUsage   *walusage;
 	BufferUsage *bufferusage;
 	bool		leaderparticipates = true;
-	char	   *sharedquery;
 	int			querylen;
 
 #ifdef DISABLE_LEADER_PARTICIPATION
@@ -1533,9 +1532,14 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
 	/* Finally, estimate PARALLEL_KEY_QUERY_TEXT space */
-	querylen = strlen(debug_query_string);
-	shm_toc_estimate_chunk(&pcxt->estimator, querylen + 1);
-	shm_toc_estimate_keys(&pcxt->estimator, 1);
+	if (debug_query_string)
+	{
+		querylen = strlen(debug_query_string);
+		shm_toc_estimate_chunk(&pcxt->estimator, querylen + 1);
+		shm_toc_estimate_keys(&pcxt->estimator, 1);
+	}
+	else
+		querylen = 0;			/* keep compiler quiet */
 
 	/* Everyone's had a chance to ask for space, so now create the DSM */
 	InitializeParallelDSM(pcxt);
@@ -1599,9 +1603,14 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	}
 
 	/* Store query string for workers */
-	sharedquery = (char *) shm_toc_allocate(pcxt->toc, querylen + 1);
-	memcpy(sharedquery, debug_query_string, querylen + 1);
-	shm_toc_insert(pcxt->toc, PARALLEL_KEY_QUERY_TEXT, sharedquery);
+	if (debug_query_string)
+	{
+		char	   *sharedquery;
+
+		sharedquery = (char *) shm_toc_allocate(pcxt->toc, querylen + 1);
+		memcpy(sharedquery, debug_query_string, querylen + 1);
+		shm_toc_insert(pcxt->toc, PARALLEL_KEY_QUERY_TEXT, sharedquery);
+	}
 
 	/*
 	 * Allocate space for each worker's WalUsage and BufferUsage; no need to
@@ -1806,7 +1815,7 @@ _bt_parallel_build_main(dsm_segment *seg, shm_toc *toc)
 #endif							/* BTREE_BUILD_STATS */
 
 	/* Set debug_query_string for individual workers first */
-	sharedquery = shm_toc_lookup(toc, PARALLEL_KEY_QUERY_TEXT, false);
+	sharedquery = shm_toc_lookup(toc, PARALLEL_KEY_QUERY_TEXT, true);
 	debug_query_string = sharedquery;
 
 	/* Report the query string from leader */
@@ -1963,16 +1972,18 @@ _bt_parallel_scan_and_sort(BTSpool *btspool, BTSpool *btspool2,
 									   true, progress, _bt_build_callback,
 									   (void *) &buildstate, scan);
 
-	/*
-	 * Execute this worker's part of the sort.
-	 *
-	 * Unlike leader and serial cases, we cannot avoid calling
-	 * tuplesort_performsort() for spool2 if it ends up containing no dead
-	 * tuples (this is disallowed for workers by tuplesort).
-	 */
+	/* Execute this worker's part of the sort */
+	if (progress)
+		pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+									 PROGRESS_BTREE_PHASE_PERFORMSORT_1);
 	tuplesort_performsort(btspool->sortstate);
 	if (btspool2)
+	{
+		if (progress)
+			pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+										 PROGRESS_BTREE_PHASE_PERFORMSORT_2);
 		tuplesort_performsort(btspool2->sortstate);
+	}
 
 	/*
 	 * Done.  Record ambuild statistics, and whether we encountered a broken

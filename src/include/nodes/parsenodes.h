@@ -15,6 +15,7 @@
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+* Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/parsenodes.h
@@ -65,6 +66,14 @@ typedef enum SortByNulls
 	SORTBY_NULLS_FIRST,
 	SORTBY_NULLS_LAST
 } SortByNulls;
+
+/* Options for [ ALL | DISTINCT ] */
+typedef enum SetQuantifier
+{
+	SET_QUANTIFIER_DEFAULT,
+	SET_QUANTIFIER_ALL,
+	SET_QUANTIFIER_DISTINCT
+} SetQuantifier;
 
 /*
  * Grantable rights are encoded so that we can OR them together in a bitmask.
@@ -165,6 +174,8 @@ typedef struct Query
 	bool		hasRowSecurity; /* rewriter has applied some RLS policy */
 	bool        canOptSelectLockingClause; /* Whether can do some optimization on select with locking clause */
 
+	bool		isReturn;		/* is a RETURN statement */
+
 	List	   *cteList;		/* WITH list (of CommonTableExpr's) */
 
 	List	   *rtable;			/* list of range table entries */
@@ -179,6 +190,7 @@ typedef struct Query
 	List	   *returningList;	/* return-values list (of TargetEntry) */
 
 	List	   *groupClause;	/* a list of SortGroupClause's */
+	bool		groupDistinct;	/* is the group by clause distinct? */
 
 	List	   *groupingSets;	/* a list of GroupingSet's if present */
 
@@ -307,7 +319,6 @@ typedef enum A_Expr_Kind
 	AEXPR_DISTINCT,				/* IS DISTINCT FROM - name must be "=" */
 	AEXPR_NOT_DISTINCT,			/* IS NOT DISTINCT FROM - name must be "=" */
 	AEXPR_NULLIF,				/* NULLIF - name must be "=" */
-	AEXPR_OF,					/* IS [NOT] OF - name must be "=" or "<>" */
 	AEXPR_IN,					/* [NOT] IN - name must be "=" or "<>" */
 	AEXPR_LIKE,					/* [NOT] LIKE - name must be "~~" or "!~~" */
 	AEXPR_ILIKE,				/* [NOT] ILIKE - name must be "~~*" or "!~~*" */
@@ -315,8 +326,7 @@ typedef enum A_Expr_Kind
 	AEXPR_BETWEEN,				/* name must be "BETWEEN" */
 	AEXPR_NOT_BETWEEN,			/* name must be "NOT BETWEEN" */
 	AEXPR_BETWEEN_SYM,			/* name must be "BETWEEN SYMMETRIC" */
-	AEXPR_NOT_BETWEEN_SYM,		/* name must be "NOT BETWEEN SYMMETRIC" */
-	AEXPR_PAREN					/* nameless dummy node for parentheses */
+	AEXPR_NOT_BETWEEN_SYM		/* name must be "NOT BETWEEN SYMMETRIC" */
 } A_Expr_Kind;
 
 typedef struct A_Expr
@@ -367,6 +377,7 @@ typedef struct CollateClause
 typedef enum RoleSpecType
 {
 	ROLESPEC_CSTRING,			/* role name is stored as a C string */
+	ROLESPEC_CURRENT_ROLE,		/* role spec is CURRENT_ROLE */
 	ROLESPEC_CURRENT_USER,		/* role spec is CURRENT_USER */
 	ROLESPEC_SESSION_USER,		/* role spec is SESSION_USER */
 	ROLESPEC_PUBLIC				/* role name is "public" */
@@ -401,11 +412,12 @@ typedef struct FuncCall
 	List	   *args;			/* the arguments (list of exprs) */
 	List	   *agg_order;		/* ORDER BY (list of SortBy) */
 	Node	   *agg_filter;		/* FILTER clause, if any */
+	struct WindowDef *over;		/* OVER clause, if any */
 	bool		agg_within_group;	/* ORDER BY appeared in WITHIN GROUP */
 	bool		agg_star;		/* argument was really '*' */
 	bool		agg_distinct;	/* arguments were labeled DISTINCT */
 	bool		func_variadic;	/* last argument was labeled VARIADIC */
-	struct WindowDef *over;		/* OVER clause, if any */
+	CoercionForm funcformat;	/* how to display this node */
 	int			location;		/* token location, or -1 if unknown */
 } FuncCall;
 
@@ -695,6 +707,7 @@ typedef struct ColumnDef
 	NodeTag		type;
 	char	   *colname;		/* name of column */
 	TypeName   *typeName;		/* type of column */
+	char	   *compression;	/* compression method for column */
 	int			inhcount;		/* number of times column is inherited */
 	bool		is_local;		/* column has local (non-inherited) def'n */
 	bool		is_not_null;	/* NOT NULL constraint specified? */
@@ -734,18 +747,20 @@ typedef struct TableLikeClause
 	NodeTag		type;
 	RangeVar   *relation;
 	bits32		options;		/* OR of TableLikeOption flags */
+	Oid			relationOid;	/* If table has been looked up, its OID */
 } TableLikeClause;
 
 typedef enum TableLikeOption
 {
 	CREATE_TABLE_LIKE_COMMENTS = 1 << 0,
-	CREATE_TABLE_LIKE_CONSTRAINTS = 1 << 1,
-	CREATE_TABLE_LIKE_DEFAULTS = 1 << 2,
-	CREATE_TABLE_LIKE_GENERATED = 1 << 3,
-	CREATE_TABLE_LIKE_IDENTITY = 1 << 4,
-	CREATE_TABLE_LIKE_INDEXES = 1 << 5,
-	CREATE_TABLE_LIKE_STATISTICS = 1 << 6,
-	CREATE_TABLE_LIKE_STORAGE = 1 << 7,
+	CREATE_TABLE_LIKE_COMPRESSION = 1 << 1,
+	CREATE_TABLE_LIKE_CONSTRAINTS = 1 << 2,
+	CREATE_TABLE_LIKE_DEFAULTS = 1 << 3,
+	CREATE_TABLE_LIKE_GENERATED = 1 << 4,
+	CREATE_TABLE_LIKE_IDENTITY = 1 << 5,
+	CREATE_TABLE_LIKE_INDEXES = 1 << 6,
+	CREATE_TABLE_LIKE_STATISTICS = 1 << 7,
+	CREATE_TABLE_LIKE_STORAGE = 1 << 8,
 	CREATE_TABLE_LIKE_ALL = PG_INT32_MAX
 } TableLikeOption;
 
@@ -946,6 +961,7 @@ typedef struct PartitionCmd
 	NodeTag		type;
 	RangeVar   *name;			/* name of partition to attach/detach */
 	PartitionBoundSpec *bound;	/* FOR VALUES, if attaching */
+	bool		concurrent;
 } PartitionCmd;
 
 /****************************************************************************
@@ -1026,12 +1042,16 @@ typedef struct PartitionCmd
  *
  *	  updatedCols is also used in some other places, for example, to determine
  *	  which triggers to fire and in FDWs to know which changed columns they
- *	  need to ship off.  Generated columns that are caused to be updated by an
- *	  update to a base column are collected in extraUpdatedCols.  This is not
- *	  considered for permission checking, but it is useful in those places
- *	  that want to know the full set of columns being updated as opposed to
- *	  only the ones the user explicitly mentioned in the query.  (There is
- *	  currently no need for an extraInsertedCols, but it could exist.)
+ *	  need to ship off.
+ *
+ *	  Generated columns that are caused to be updated by an update to a base
+ *	  column are listed in extraUpdatedCols.  This is not considered for
+ *	  permission checking, but it is useful in those places that want to know
+ *	  the full set of columns being updated as opposed to only the ones the
+ *	  user explicitly mentioned in the query.  (There is currently no need for
+ *	  an extraInsertedCols, but it could exist.)  Note that extraUpdatedCols
+ *	  is populated during query rewrite, NOT in the parser, since generated
+ *	  columns could be added after a rule has been parsed and stored.
  *
  *	  securityQuals is a list of security barrier quals (boolean expressions),
  *	  to be tested in the listed order before returning a row from the
@@ -1148,6 +1168,13 @@ typedef struct RangeTblEntry
 	List	   *joinaliasvars;	/* list of alias-var expansions */
 	List	   *joinleftcols;	/* left-side input column numbers */
 	List	   *joinrightcols;	/* right-side input column numbers */
+
+	/*
+	 * join_using_alias is an alias clause attached directly to JOIN/USING. It
+	 * is different from the alias field (below) in that it does not hide the
+	 * range variables of the tables being joined.
+	 */
+	Alias	   *join_using_alias;
 
 	/*
 	 * Fields valid for a function RTE (else NIL/zero):
@@ -1538,15 +1565,39 @@ typedef struct OnConflictClause
 /*
  * CommonTableExpr -
  *	   representation of WITH list element
- *
- * We don't currently support the SEARCH or CYCLE clause.
  */
+
 typedef enum CTEMaterialize
 {
 	CTEMaterializeDefault,		/* no option specified */
 	CTEMaterializeAlways,		/* MATERIALIZED */
 	CTEMaterializeNever			/* NOT MATERIALIZED */
 } CTEMaterialize;
+
+typedef struct CTESearchClause
+{
+	NodeTag		type;
+	List	   *search_col_list;
+	bool		search_breadth_first;
+	char	   *search_seq_column;
+	int			location;
+} CTESearchClause;
+
+typedef struct CTECycleClause
+{
+	NodeTag		type;
+	List	   *cycle_col_list;
+	char	   *cycle_mark_column;
+	Node	   *cycle_mark_value;
+	Node	   *cycle_mark_default;
+	char	   *cycle_path_column;
+	int			location;
+	/* These fields are set during parse analysis: */
+	Oid			cycle_mark_type;	/* common type of _value and _default */
+	int			cycle_mark_typmod;
+	Oid			cycle_mark_collation;
+	Oid			cycle_mark_neop;	/* <> operator for type */
+} CTECycleClause;
 
 typedef struct CommonTableExpr
 {
@@ -1556,6 +1607,8 @@ typedef struct CommonTableExpr
 	CTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, Query afterwards: */
 	Node	   *ctequery;		/* the CTE's subquery */
+	CTESearchClause *search_clause;
+	CTECycleClause *cycle_clause;
 	int			location;		/* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool		cterecursive;	/* is this CTE actually recursive? */
@@ -1719,6 +1772,7 @@ typedef struct SelectStmt
 	List	   *fromClause;		/* the FROM clause */
 	Node	   *whereClause;	/* WHERE qualification */
 	List	   *groupClause;	/* GROUP BY clauses */
+	bool		groupDistinct;	/* Is this GROUP BY DISTINCT? */
 	Node	   *havingClause;	/* HAVING conditional-expression */
 	List	   *windowClause;	/* window specification clauses */
 	List       *scatterClause;	/* GPDB: TableValueExpr data distribution */
@@ -1799,6 +1853,35 @@ typedef struct SetOperationStmt
 	List	   *groupClauses;	/* a list of SortGroupClause's */
 	/* groupClauses is NIL if UNION ALL, but must be set otherwise */
 } SetOperationStmt;
+
+
+/*
+ * RETURN statement (inside SQL function body)
+ */
+typedef struct ReturnStmt
+{
+	NodeTag		type;
+	Node	   *returnval;
+} ReturnStmt;
+
+
+/* ----------------------
+ *		PL/pgSQL Assignment Statement
+ *
+ * Like SelectStmt, this is transformed into a SELECT Query.
+ * However, the targetlist of the result looks more like an UPDATE.
+ * ----------------------
+ */
+typedef struct PLAssignStmt
+{
+	NodeTag		type;
+
+	char	   *name;			/* initial column name */
+	List	   *indirection;	/* subscripts and field names, if any */
+	int			nnames;			/* number of names to use in ColumnRef */
+	SelectStmt *val;			/* the PL/pgSQL expression to assign */
+	int			location;		/* name's token location, or -1 if unknown */
+} PLAssignStmt;
 
 
 /*****************************************************************************
@@ -1953,6 +2036,7 @@ typedef enum AlterTableType
 	AT_AddColumnRecurse,		/* internal to commands/tablecmds.c */
 	AT_AddColumnToView,			/* implicitly via CREATE OR REPLACE VIEW */
 	AT_ColumnDefault,			/* alter column default */
+	AT_CookedColumnDefault,		/* add a pre-cooked column default */
 	AT_DropNotNull,				/* alter column drop not null */
 	AT_SetNotNull,				/* alter column set not null */
 	AT_DropExpression,			/* alter column drop expression */
@@ -1961,6 +2045,7 @@ typedef enum AlterTableType
 	AT_SetOptions,				/* alter column set ( options ) */
 	AT_ResetOptions,			/* alter column reset ( options ) */
 	AT_SetStorage,				/* alter column set storage */
+	AT_SetCompression,			/* alter column set compression */
 	AT_DropColumn,				/* drop column */
 	AT_DropColumnRecurse,		/* internal to commands/tablecmds.c */
 	AT_AddIndex,				/* add index */
@@ -2014,6 +2099,7 @@ typedef enum AlterTableType
 	AT_GenericOptions,			/* OPTIONS (...) */
 	AT_AttachPartition,			/* ATTACH PARTITION */
 	AT_DetachPartition,			/* DETACH PARTITION */
+	AT_DetachPartitionFinalize, /* DETACH PARTITION FINALIZE */
 	AT_AddIdentity,				/* ADD IDENTITY */
 	AT_SetIdentity,				/* SET identity column options */
 	AT_DropIdentity,			/* DROP IDENTITY */
@@ -2031,6 +2117,7 @@ typedef enum AlterTableType
 	AT_PartSetTemplate,			/* Set Subpartition Template */
 	AT_PartSplit,				/* Split */
 	AT_PartTruncate				/* Truncate */
+AT_ReAddStatistics			/* internal to commands/tablecmds.c */
 } AlterTableType;
 
 typedef struct ReplicaIdentityStmt
@@ -2194,22 +2281,34 @@ typedef struct GrantStmt
 	/* privileges == NIL denotes ALL PRIVILEGES */
 	List	   *grantees;		/* list of RoleSpec nodes */
 	bool		grant_option;	/* grant or revoke grant option */
+	RoleSpec   *grantor;
 	DropBehavior behavior;		/* drop behavior (for REVOKE) */
 } GrantStmt;
 
 /*
- * Note: ObjectWithArgs carries only the types of the input parameters of the
- * function.  So it is sufficient to identify an existing function, but it
- * is not enough info to define a function nor to call it.
+ * ObjectWithArgs represents a function/procedure/operator name plus parameter
+ * identification.
+ *
+ * objargs includes only the types of the input parameters of the object.
+ * In some contexts, that will be all we have, and it's enough to look up
+ * objects according to the traditional Postgres rules (i.e., when only input
+ * arguments matter).
+ *
+ * objfuncargs, if not NIL, carries the full specification of the parameter
+ * list, including parameter mode annotations.
+ *
+ * Some grammar productions can set args_unspecified = true instead of
+ * providing parameter info.  In this case, lookup will succeed only if
+ * the object name is unique.  Note that otherwise, NIL parameter lists
+ * mean zero arguments.
  */
 typedef struct ObjectWithArgs
 {
 	NodeTag		type;
 	List	   *objname;		/* qualified name of function/operator */
-	List	   *objargs;		/* list of Typename nodes */
-	bool		args_unspecified;	/* argument list was omitted, so name must
-									 * be unique (note that objargs == NIL
-									 * means zero args) */
+	List	   *objargs;		/* list of Typename nodes (input args only) */
+	List	   *objfuncargs;	/* list of FunctionParameter nodes */
+	bool		args_unspecified;	/* argument list was omitted? */
 } ObjectWithArgs;
 
 /*
@@ -2349,7 +2448,7 @@ typedef struct CreateStmt
 	RangeVar   *relation;		/* relation to create */
 	List	   *tableElts;		/* column definitions (list of ColumnDef) */
 	List	   *inhRelations;	/* relations to inherit from (list of
-								 * inhRelation) */
+								 * RangeVar) */
 	PartitionBoundSpec *partbound;	/* FOR VALUES clause */
 	PartitionSpec *partspec;	/* PARTITION BY clause */
 
@@ -2852,6 +2951,8 @@ typedef struct CreateAmStmt
 typedef struct CreateTrigStmt
 {
 	NodeTag		type;
+	bool		replace;		/* replace trigger if already exists */
+	bool		isconstraint;	/* This is a constraint trigger */
 	char	   *trigname;		/* TRIGGER's name */
 	RangeVar   *relation;		/* relation trigger is on */
 	List	   *funcname;		/* qual. name of function to call */
@@ -2863,7 +2964,6 @@ typedef struct CreateTrigStmt
 	int16		events;			/* "OR" of INSERT/UPDATE/DELETE/TRUNCATE */
 	List	   *columns;		/* column names, or NIL for all columns */
 	Node	   *whenClause;		/* qual expression, or NULL if none */
-	bool		isconstraint;	/* This is a constraint trigger */
 	/* explicitly named transition data */
 	List	   *transitionRels; /* TriggerTransition nodes, or NIL if none */
 	/* The remaining fields are only used for constraint triggers */
@@ -3199,12 +3299,13 @@ typedef struct SecLabelStmt
 #define CURSOR_OPT_SCROLL		0x0002	/* SCROLL explicitly given */
 #define CURSOR_OPT_NO_SCROLL	0x0004	/* NO SCROLL explicitly given */
 #define CURSOR_OPT_INSENSITIVE	0x0008	/* INSENSITIVE */
-#define CURSOR_OPT_HOLD			0x0010	/* WITH HOLD */
+#define CURSOR_OPT_ASENSITIVE	0x0010	/* ASENSITIVE */
+#define CURSOR_OPT_HOLD			0x0020	/* WITH HOLD */
 /* these planner-control flags do not correspond to any SQL grammar: */
-#define CURSOR_OPT_FAST_PLAN	0x0020	/* prefer fast-start plan */
-#define CURSOR_OPT_GENERIC_PLAN 0x0040	/* force use of generic plan */
-#define CURSOR_OPT_CUSTOM_PLAN	0x0080	/* force use of custom plan */
-#define CURSOR_OPT_PARALLEL_OK	0x0100	/* parallel mode OK */
+#define CURSOR_OPT_FAST_PLAN	0x0100	/* prefer fast-start plan */
+#define CURSOR_OPT_GENERIC_PLAN 0x0200	/* force use of generic plan */
+#define CURSOR_OPT_CUSTOM_PLAN	0x0400	/* force use of custom plan */
+#define CURSOR_OPT_PARALLEL_OK	0x0800	/* parallel mode OK */
 
 /*
  * This is used to request the planner to create a plan that's updatable with
@@ -3315,8 +3416,24 @@ typedef struct CreateStatsStmt
 	List	   *exprs;			/* expressions to build statistics on */
 	List	   *relations;		/* rels to build stats on (list of RangeVar) */
 	char	   *stxcomment;		/* comment to apply to stats, or NULL */
+	bool		transformed;	/* true when transformStatsStmt is finished */
 	bool		if_not_exists;	/* do nothing if stats name already exists */
 } CreateStatsStmt;
+
+/*
+ * StatsElem - statistics parameters (used in CREATE STATISTICS)
+ *
+ * For a plain attribute, 'name' is the name of the referenced table column
+ * and 'expr' is NULL.  For an expression, 'name' is NULL and 'expr' is the
+ * expression tree.
+ */
+typedef struct StatsElem
+{
+	NodeTag		type;
+	char	   *name;			/* name of attribute to index, or NULL */
+	Node	   *expr;			/* expression to index, or NULL */
+} StatsElem;
+
 
 /* ----------------------
  *		Alter Statistics Statement
@@ -3343,6 +3460,7 @@ typedef struct CreateFunctionStmt
 	List	   *parameters;		/* a list of FunctionParameter */
 	TypeName   *returnType;		/* the return type */
 	List	   *options;		/* a list of DefElem */
+	Node	   *sql_body;
 } CreateFunctionStmt;
 
 typedef enum FunctionParameterMode
@@ -3352,7 +3470,9 @@ typedef enum FunctionParameterMode
 	FUNC_PARAM_OUT = 'o',		/* output only */
 	FUNC_PARAM_INOUT = 'b',		/* both */
 	FUNC_PARAM_VARIADIC = 'v',	/* variadic (always input) */
-	FUNC_PARAM_TABLE = 't'		/* table function output column */
+	FUNC_PARAM_TABLE = 't',		/* table function output column */
+	/* this is not used in pg_proc: */
+	FUNC_PARAM_DEFAULT = 'd'	/* default; effectively same as IN */
 } FunctionParameterMode;
 
 typedef struct FunctionParameter
@@ -3395,13 +3515,19 @@ typedef struct InlineCodeBlock
 
 /* ----------------------
  *		CALL statement
+ *
+ * OUT-mode arguments are removed from the transformed funcexpr.  The outargs
+ * list contains copies of the expressions for all output arguments, in the
+ * order of the procedure's declared arguments.  (outargs is never evaluated,
+ * but is useful to the caller as a reference for what to assign to.)
  * ----------------------
  */
 typedef struct CallStmt
 {
 	NodeTag		type;
 	FuncCall   *funccall;		/* from the parser */
-	FuncExpr   *funcexpr;		/* transformed */
+	FuncExpr   *funcexpr;		/* transformed call, with only input args */
+	List	   *outargs;		/* transformed output-argument expressions */
 } CallStmt;
 
 typedef struct CallContext
@@ -3714,18 +3840,12 @@ typedef struct AlterSystemStmt
  *		Cluster Statement (support pbrown's cluster index implementation)
  * ----------------------
  */
-typedef enum ClusterOption
-{
-	CLUOPT_RECHECK = 1 << 0,	/* recheck relation state */
-	CLUOPT_VERBOSE = 1 << 1		/* print progress info */
-} ClusterOption;
-
 typedef struct ClusterStmt
 {
 	NodeTag		type;
 	RangeVar   *relation;		/* relation being indexed, or NULL if all */
 	char	   *indexname;		/* original index defined */
-	int			options;		/* OR of ClusterOption flags */
+	List	   *params;			/* list of DefElem nodes */
 } ClusterStmt;
 
 /* ----------------------
@@ -3865,11 +3985,6 @@ typedef struct ConstraintsSetStmt
  *		REINDEX Statement
  * ----------------------
  */
-
-/* Reindex options */
-#define REINDEXOPT_VERBOSE (1 << 0) /* print progress info */
-#define REINDEXOPT_REPORT_PROGRESS (1 << 1) /* report pgstat progress */
-
 typedef enum ReindexObjectType
 {
 	REINDEX_OBJECT_INDEX,		/* index */
@@ -3889,6 +4004,7 @@ typedef struct ReindexStmt
 	int			options;		/* Reindex options flags */
 	bool		concurrent;		/* reindex concurrently? */
 	Oid			relid;			/* oid of table or index, used by QE */
+List	   *params;			/* list of DefElem nodes */
 } ReindexStmt;
 
 /* ----------------------
@@ -4065,7 +4181,9 @@ typedef enum AlterSubscriptionType
 {
 	ALTER_SUBSCRIPTION_OPTIONS,
 	ALTER_SUBSCRIPTION_CONNECTION,
-	ALTER_SUBSCRIPTION_PUBLICATION,
+	ALTER_SUBSCRIPTION_SET_PUBLICATION,
+	ALTER_SUBSCRIPTION_ADD_PUBLICATION,
+	ALTER_SUBSCRIPTION_DROP_PUBLICATION,
 	ALTER_SUBSCRIPTION_REFRESH,
 	ALTER_SUBSCRIPTION_ENABLED
 } AlterSubscriptionType;

@@ -6,6 +6,7 @@
  * Portions Copyright (c) 2006-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_proc.h
@@ -37,10 +38,10 @@ CATALOG(pg_proc,1255,ProcedureRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81,Proce
 	NameData	proname;
 
 	/* OID of namespace containing this proc */
-	Oid			pronamespace BKI_DEFAULT(PGNSP);
+	Oid			pronamespace BKI_DEFAULT(pg_catalog) BKI_LOOKUP(pg_namespace);
 
 	/* procedure owner */
-	Oid			proowner BKI_DEFAULT(PGUID);
+	Oid			proowner BKI_DEFAULT(POSTGRES) BKI_LOOKUP(pg_authid);
 
 	/* OID of pg_language entry */
 	Oid			prolang BKI_DEFAULT(internal) BKI_LOOKUP(pg_language);
@@ -51,11 +52,11 @@ CATALOG(pg_proc,1255,ProcedureRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81,Proce
 	/* estimated # of rows out (if proretset) */
 	float4		prorows BKI_DEFAULT(0);
 
-	/* element type of variadic array, or 0 */
-	Oid			provariadic BKI_DEFAULT(0) BKI_LOOKUP(pg_type);
+	/* element type of variadic array, or 0 if not variadic */
+	Oid			provariadic BKI_DEFAULT(0) BKI_LOOKUP_OPT(pg_type);
 
 	/* planner support function for this function, or 0 if none */
-	regproc		prosupport BKI_DEFAULT(0) BKI_LOOKUP(pg_proc);
+	regproc		prosupport BKI_DEFAULT(0) BKI_LOOKUP_OPT(pg_proc);
 
 	/* see PROKIND_ categories below */
 	char		prokind BKI_DEFAULT(f);
@@ -111,13 +112,16 @@ CATALOG(pg_proc,1255,ProcedureRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81,Proce
 	pg_node_tree proargdefaults BKI_DEFAULT(_null_);
 
 	/* types for which to apply transforms */
-	Oid			protrftypes[1] BKI_DEFAULT(_null_);
+	Oid			protrftypes[1] BKI_DEFAULT(_null_) BKI_LOOKUP(pg_type);
 
 	/* procedure source text */
 	text		prosrc BKI_FORCE_NOT_NULL;
 
 	/* secondary procedure info (can be NULL) */
 	text		probin BKI_DEFAULT(_null_);
+
+	/* pre-parsed SQL function body */
+	pg_node_tree prosqlbody BKI_DEFAULT(_null_);
 
 	/* procedure-local GUC settings */
 	text		proconfig[1] BKI_DEFAULT(_null_);
@@ -154,6 +158,12 @@ typedef FormData_pg_proc *Form_pg_proc;
  * SQL-language functions. But the process_col_defaults.pl script isn't
  * currently smart enough for that.
  */
+DECLARE_TOAST(pg_proc, 2836, 2837);
+
+DECLARE_UNIQUE_INDEX_PKEY(pg_proc_oid_index, 2690, on pg_proc using btree(oid oid_ops));
+#define ProcedureOidIndexId  2690
+DECLARE_UNIQUE_INDEX(pg_proc_proname_args_nsp_index, 2691, on pg_proc using btree(proname name_ops, proargtypes oidvector_ops, pronamespace oid_ops));
+#define ProcedureNameArgsNspIndexId  2691
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 
@@ -225,6 +235,7 @@ extern ObjectAddress ProcedureCreate(const char *procedureName,
 									 Oid describeFuncOid,
 									 const char *prosrc,
 									 const char *probin,
+									 Node *prosqlbody,
 									 char prokind,
 									 bool security_definer,
 									 bool isLeakProof,

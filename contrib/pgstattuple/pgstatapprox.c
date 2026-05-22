@@ -3,7 +3,7 @@
  * pgstatapprox.c
  *		  Bloat estimation functions
  *
- * Copyright (c) 2014-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2014-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		  contrib/pgstattuple/pgstatapprox.c
@@ -194,6 +194,9 @@ statapprox_heap(Relation rel, output_type *stat)
 	 */
 	stat->tuple_count = vac_estimate_reltuples(rel, nblocks, scanned,
 											   stat->tuple_count);
+
+	/* It's not clear if we could get -1 here, but be safe. */
+	stat->tuple_count = Max(stat->tuple_count, 0);
 
 	/*
 	 * Calculate percentages if the relation has one or more pages.

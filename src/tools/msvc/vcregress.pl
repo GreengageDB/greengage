@@ -1,5 +1,7 @@
 # -*-perl-*- hey - emacs - this is a perl file
 
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 # src/tools/msvc/vcregress.pl
 
 use strict;
@@ -69,7 +71,7 @@ else
 }
 
 my $maxconn = "";
-$maxconn = "--max_connections=$ENV{MAX_CONNECTIONS}"
+$maxconn = "--max-connections=$ENV{MAX_CONNECTIONS}"
   if $ENV{MAX_CONNECTIONS};
 
 my $temp_config = "";
@@ -104,12 +106,19 @@ exit 0;
 sub installcheck_internal
 {
 	my ($schedule, @EXTRA_REGRESS_OPTS) = @_;
+	# for backwards compatibility, "serial" runs the tests in
+	# parallel_schedule one by one.
+	my $maxconn = $maxconn;
+	$maxconn  = "--max-connections=1" if $schedule eq 'serial';
+	$schedule = 'parallel'            if $schedule eq 'serial';
+
 	my @args = (
 		"../../../$Config/pg_regress/pg_regress",
 		"--dlpath=.",
 		"--bindir=../../../$Config/psql",
 		"--schedule=${schedule}_schedule",
 		"--max-concurrent-tests=20",
+		"--make-testtablespace-dir",
 		"--encoding=SQL_ASCII",
 		"--no-locale");
 	push(@args, $maxconn) if $maxconn;
@@ -130,6 +139,12 @@ sub installcheck
 sub check
 {
 	my $schedule = shift || 'parallel';
+	# for backwards compatibility, "serial" runs the tests in
+	# parallel_schedule one by one.
+	my $maxconn = $maxconn;
+	$maxconn  = "--max-connections=1" if $schedule eq 'serial';
+	$schedule = 'parallel'            if $schedule eq 'serial';
+
 	InstallTemp();
 	chdir "${topdir}/src/test/regress";
 	my @args = (
@@ -138,6 +153,7 @@ sub check
 		"--bindir=",
 		"--schedule=${schedule}_schedule",
 		"--max-concurrent-tests=20",
+		"--make-testtablespace-dir",
 		"--encoding=SQL_ASCII",
 		"--no-locale",
 		"--temp-instance=./tmp_check");
@@ -209,7 +225,21 @@ sub tap_check
 	my $dir = shift;
 	chdir $dir;
 
-	my @args = ("prove", @flags, glob("t/*.pl"));
+	# Fetch and adjust PROVE_TESTS, applying glob() to each element
+	# defined to build a list of all the tests matching patterns.
+	my $prove_tests_val = $ENV{PROVE_TESTS} || "t/*.pl";
+	my @prove_tests_array = split(/\s+/, $prove_tests_val);
+	my @prove_tests = ();
+	foreach (@prove_tests_array)
+	{
+		push(@prove_tests, glob($_));
+	}
+
+	# Fetch and adjust PROVE_FLAGS, handling multiple arguments.
+	my $prove_flags_val = $ENV{PROVE_FLAGS} || "";
+	my @prove_flags = split(/\s+/, $prove_flags_val);
+
+	my @args = ("prove", @flags, @prove_tests, @prove_flags);
 
 	# adjust the environment for just this test
 	local %ENV = %ENV;
@@ -579,8 +609,7 @@ sub upgradecheck
 	$ENV{PGDATA} = "$data.old";
 	my $outputdir          = "$tmp_root/regress";
 	my @EXTRA_REGRESS_OPTS = ("--outputdir=$outputdir");
-	mkdir "$outputdir"                || die $!;
-	mkdir "$outputdir/testtablespace" || die $!;
+	mkdir "$outputdir" || die $!;
 
 	my $logdir = "$topdir/src/bin/pg_upgrade/log";
 	rmtree($logdir);
@@ -615,8 +644,6 @@ sub upgradecheck
 	print "\nStarting new cluster\n\n";
 	@args = ('pg_ctl', '-l', "$logdir/postmaster2.log", 'start');
 	system(@args) == 0 or exit 1;
-	print "\nSetting up stats on new cluster\n\n";
-	system(".\\analyze_new_cluster.bat") == 0 or exit 1;
 	print "\nDumping new cluster\n\n";
 	@args = ('pg_dumpall', '-f', "$tmp_root/dump2.sql");
 	system(@args) == 0 or exit 1;

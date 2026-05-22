@@ -4,7 +4,7 @@
  *	  POSTGRES define and remove utility definitions.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/defrem.h
@@ -37,6 +37,7 @@ extern ObjectAddress DefineIndex(Oid relationId,
 								 bool skip_build,
 								 bool quiet,
 								 bool is_new_table);
+extern void ExecReindex(ParseState *pstate, ReindexStmt *stmt, bool isTopLevel);
 extern void ReindexIndex(ReindexStmt *stmt, bool isTopLevel);
 extern Oid	ReindexTable(ReindexStmt *stmt, bool isTopLevel);
 extern void ReindexMultipleTables(const char *objectName, ReindexObjectType objectKind,
@@ -79,9 +80,11 @@ extern void interpret_function_parameter_list(ParseState *pstate,
 											  Oid languageOid,
 											  ObjectType objtype,
 											  oidvector **parameterTypes,
+											  List **parameterTypes_list,
 											  ArrayType **allParameterTypes,
 											  ArrayType **parameterModes,
 											  ArrayType **parameterNames,
+											  List **inParameterNames_list,
 											  List **parameterDefaults,
 											  Oid *variadicArgType,
 											  Oid *requiredResultType);
@@ -95,9 +98,7 @@ extern ObjectAddress AlterOperator(AlterOperatorStmt *stmt);
 extern ObjectAddress CreateStatistics(CreateStatsStmt *stmt);
 extern ObjectAddress AlterStatistics(AlterStatsStmt *stmt);
 extern void RemoveStatisticsById(Oid statsOid);
-extern void UpdateStatisticsForTypeChange(Oid statsOid,
-										  Oid relationOid, int attnum,
-										  Oid oldColumnType, Oid newColumnType);
+extern Oid	StatisticsGetRelation(Oid statId, bool missing_ok);
 
 /* commands/aggregatecmds.c */
 extern ObjectAddress DefineAggregate(ParseState *pstate, List *name, List *args, bool oldstyle,

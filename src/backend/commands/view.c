@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -458,6 +458,11 @@ DefineView(ViewStmt *stmt, const char *queryString,
 		rawstmt->stmt = (Node *) copyObject(stmt->query);
 		rawstmt->stmt_location = stmt_location;
 		rawstmt->stmt_len = stmt_len;
+	 */
+	rawstmt = makeNode(RawStmt);
+	rawstmt->stmt = stmt->query;
+	rawstmt->stmt_location = stmt_location;
+	rawstmt->stmt_len = stmt_len;
 
 		viewParse = parse_analyze(rawstmt, queryString, NULL, 0, NULL);
 	}

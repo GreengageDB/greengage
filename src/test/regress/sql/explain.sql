@@ -23,12 +23,15 @@ begin
     for ln in execute $1
     loop
         -- Replace any numeric word with just 'N'
-        ln := regexp_replace(ln, '\m\d+\M', 'N', 'g');
+        ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
         ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
         -- Ignore text-mode buffers output because it varies depending
         -- on the system state
         CONTINUE WHEN (ln ~ ' +Buffers: .*');
+        -- Ignore text-mode "Planning:" line because whether it's output
+        -- varies depending on the system state
+        CONTINUE WHEN (ln = 'Planning:');
         return next ln;
     end loop;
 end;
@@ -61,6 +64,8 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
 select explain_filter('explain (analyze, buffers, format json) select * from int8_tbl i8');
 select explain_filter('explain (analyze, buffers, format xml) select * from int8_tbl i8');
 select explain_filter('explain (analyze, buffers, format yaml) select * from int8_tbl i8');
+select explain_filter('explain (buffers, format text) select * from int8_tbl i8');
+select explain_filter('explain (buffers, format json) select * from int8_tbl i8');
 
 -- SETTINGS option
 -- We have to ignore other settings that might be imposed by the environment,
@@ -82,9 +87,7 @@ rollback;
 -- in any detail.  We can check that it parses correctly as JSON, and then
 -- remove it from the displayed results.
 
--- Serializable isolation would disable parallel query, so explicitly use an
--- arbitrary other level.
-begin isolation level repeatable read;
+begin;
 -- encourage use of parallel plans
 set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
@@ -108,3 +111,6 @@ select jsonb_pretty(
 );
 
 rollback;
+
+set compute_query_id = on;
+select explain_filter('explain (verbose) select * from int8_tbl i8');

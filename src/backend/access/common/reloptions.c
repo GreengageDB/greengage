@@ -3,7 +3,7 @@
  * reloptions.c
  *	  Core support for relation options (pg_class.reloptions)
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -115,7 +115,7 @@ static relopt_bool boolRelOpts[] =
 		{
 			"autovacuum_enabled",
 			"Enables autovacuum in this relation",
-			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST,
+			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST | RELOPT_KIND_PARTITIONED,
 			ShareUpdateExclusiveLock
 		},
 		true
@@ -146,15 +146,6 @@ static relopt_bool boolRelOpts[] =
 			AccessExclusiveLock
 		},
 		false
-	},
-	{
-		{
-			"vacuum_index_cleanup",
-			"Enables index vacuuming and index cleanup",
-			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST,
-			ShareUpdateExclusiveLock
-		},
-		true
 	},
 	{
 		{
@@ -253,7 +244,7 @@ static relopt_int intRelOpts[] =
 		{
 			"autovacuum_analyze_threshold",
 			"Minimum number of tuple inserts, updates or deletes prior to analyze",
-			RELOPT_KIND_HEAP,
+			RELOPT_KIND_HEAP | RELOPT_KIND_PARTITIONED,
 			ShareUpdateExclusiveLock
 		},
 		-1, 0, INT_MAX
@@ -427,7 +418,7 @@ static relopt_real realRelOpts[] =
 		{
 			"autovacuum_analyze_scale_factor",
 			"Number of tuple inserts, updates or deletes prior to analyze as a fraction of reltuples",
-			RELOPT_KIND_HEAP,
+			RELOPT_KIND_HEAP | RELOPT_KIND_PARTITIONED,
 			ShareUpdateExclusiveLock
 		},
 		-1, 0.0, 100.0
@@ -471,7 +462,7 @@ static relopt_real realRelOpts[] =
 	{
 		{
 			"vacuum_cleanup_index_scale_factor",
-			"Number of tuple inserts prior to index cleanup as a fraction of reltuples.",
+			"Deprecated B-Tree parameter.",
 			RELOPT_KIND_BTREE,
 			ShareUpdateExclusiveLock
 		},
@@ -479,6 +470,21 @@ static relopt_real realRelOpts[] =
 	},
 	/* list terminator */
 	{{NULL}}
+};
+
+/* values from StdRdOptIndexCleanup */
+relopt_enum_elt_def StdRdOptIndexCleanupValues[] =
+{
+	{"auto", STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO},
+	{"on", STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON},
+	{"off", STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF},
+	{"true", STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON},
+	{"false", STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF},
+	{"yes", STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON},
+	{"no", STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF},
+	{"1", STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON},
+	{"0", STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF},
+	{(const char *) NULL}		/* list terminator */
 };
 
 /* values from GistOptBufferingMode */
@@ -501,6 +507,17 @@ relopt_enum_elt_def viewCheckOptValues[] =
 
 static relopt_enum enumRelOpts[] =
 {
+	{
+		{
+			"vacuum_index_cleanup",
+			"Controls index vacuuming and index cleanup",
+			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST,
+			ShareUpdateExclusiveLock
+		},
+		StdRdOptIndexCleanupValues,
+		STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO,
+		gettext_noop("Valid values are \"on\", \"off\", and \"auto\".")
+	},
 	{
 		{
 			"buffering",
@@ -1988,10 +2005,11 @@ bytea *
 partitioned_table_reloptions(Datum reloptions, bool validate)
 {
 	/*
-	 * GPDB: we maintain reloptions for partition roots to support reloption
-	 * inheritance and hierarchy wide ALTER TABLE SET().
+	 * autovacuum_enabled, autovacuum_analyze_threshold and
+	 * autovacuum_analyze_scale_factor are supported for partitioned tables.
 	 */
-	return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
+
+	return default_reloptions(reloptions, validate, RELOPT_KIND_PARTITIONED);
 }
 
 /*

@@ -11,7 +11,7 @@
  * is that we have to work harder to clean up after ourselves when we modify
  * the query, since the derived data structures have to be updated too.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -231,7 +231,7 @@ join_is_removable(PlannerInfo *root, SpecialJoinInfo *sjinfo)
 			continue;			/* it definitely doesn't reference innerrel */
 		if (bms_is_subset(phinfo->ph_eval_at, innerrel->relids))
 			return false;		/* there isn't any other place to eval PHV */
-		if (bms_overlap(pull_varnos((Node *) phinfo->ph_var->phexpr),
+		if (bms_overlap(pull_varnos(root, (Node *) phinfo->ph_var->phexpr),
 						innerrel->relids))
 			return false;		/* it does reference innerrel */
 	}
@@ -371,7 +371,7 @@ remove_rel_from_query(PlannerInfo *root, int relid, Relids joinrelids)
 	 * Likewise remove references from PlaceHolderVar data structures,
 	 * removing any no-longer-needed placeholders entirely.
 	 *
-	 * Removal is a bit tricker than it might seem: we can remove PHVs that
+	 * Removal is a bit trickier than it might seem: we can remove PHVs that
 	 * are used at the target rel and/or in the join qual, but not those that
 	 * are used at join partner rels or above the join.  It's not that easy to
 	 * distinguish PHVs used at partner rels from those used in the join qual,

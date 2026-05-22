@@ -16,6 +16,7 @@ override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
 OBJS = \
 	execAmi.o \
+	execAsync.o \
 	execCurrent.o \
 	execExpr.o \
 	execExprInterp.o \
@@ -61,6 +62,7 @@ OBJS = \
 	nodeProjectSet.o \
 	nodeRecursiveunion.o \
 	nodeResult.o \
+	nodeResultCache.o \
 	nodeSamplescan.o \
 	nodeSeqscan.o \
 	nodeSetOp.o \
@@ -68,6 +70,7 @@ OBJS = \
 	nodeSubplan.o \
 	nodeSubqueryscan.o \
 	nodeTableFuncscan.o \
+	nodeTidrangescan.o \
 	nodeTidscan.o \
 	nodeUnique.o \
 	nodeValuesscan.o \

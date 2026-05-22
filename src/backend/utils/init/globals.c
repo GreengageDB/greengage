@@ -3,7 +3,7 @@
  * globals.c
  *	  global variable declarations
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -36,6 +36,7 @@ volatile sig_atomic_t ProcDiePending = false;
 volatile sig_atomic_t CheckClientConnectionPending = false;
 volatile sig_atomic_t ClientConnectionLost = false;
 volatile sig_atomic_t IdleInTransactionSessionTimeoutPending = false;
+volatile sig_atomic_t IdleSessionTimeoutPending = false;
 volatile sig_atomic_t ProcSignalBarrierPending = false;
 volatile sig_atomic_t IdleGangTimeoutPending = false;
 /*
@@ -45,6 +46,10 @@ volatile sig_atomic_t IdleGangTimeoutPending = false;
 volatile int32 InterruptHoldoffCount = 0;
 volatile int32 QueryCancelHoldoffCount = 0;
 volatile int32 CritSectionCount = 0;
+volatile sig_atomic_t LogMemoryContextPending = false;
+volatile uint32 InterruptHoldoffCount = 0;
+volatile uint32 QueryCancelHoldoffCount = 0;
+volatile uint32 CritSectionCount = 0;
 
 int			MyProcPid;
 pg_time_t	MyStartTime;
@@ -160,7 +165,7 @@ int			max_parallel_workers = 8;
 int			MaxBackends = 0;
 
 int			VacuumCostPageHit = 1;	/* GUC parameters for vacuum */
-int			VacuumCostPageMiss = 10;
+int			VacuumCostPageMiss = 2;
 int			VacuumCostPageDirty = 20;
 int			VacuumCostLimit = 200;
 double		VacuumCostDelay = 0;

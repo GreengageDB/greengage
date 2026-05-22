@@ -5,7 +5,7 @@
  *	  strategy.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/buf_internals.h
@@ -18,6 +18,7 @@
 #include "port/atomics.h"
 #include "storage/buf.h"
 #include "storage/bufmgr.h"
+#include "storage/condition_variable.h"
 #include "storage/latch.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
@@ -181,6 +182,10 @@ typedef struct buftag
  * Be careful to avoid increasing the size of the struct when adding or
  * reordering members.  Keeping it below 64 bytes (the most common CPU
  * cache line size) is fairly important for performance.
+ *
+ * Per-buffer I/O condition variables are currently kept outside this struct in
+ * a separate array.  They could be moved in here and still fit within that
+ * limit on common systems, but for now that is not done.
  */
 typedef struct BufferDesc
 {
@@ -192,7 +197,6 @@ typedef struct BufferDesc
 
 	int			wait_backend_pid;	/* backend PID of pin-count waiter */
 	int			freeNext;		/* link in freelist chain */
-
 	LWLock		content_lock;	/* to lock access to buffer contents */
 } BufferDesc;
 
@@ -211,7 +215,7 @@ typedef struct BufferDesc
  * Note that local buffer descriptors aren't forced to be aligned - as there's
  * no concurrent access to those it's unlikely to be beneficial.
  *
- * We use 64bit as the cache line size here, because that's the most common
+ * We use a 64-byte cache line size here, because that's the most common
  * size. Making it bigger would be a waste of memory. Even if running on a
  * platform with either 32 or 128 byte line sizes, it's good to align to
  * boundaries and avoid false sharing.
@@ -229,12 +233,12 @@ typedef union BufferDescPadded
 
 #define BufferDescriptorGetBuffer(bdesc) ((bdesc)->buf_id + 1)
 
-#define BufferDescriptorGetIOLock(bdesc) \
-	(&(BufferIOLWLockArray[(bdesc)->buf_id]).lock)
+#define BufferDescriptorGetIOCV(bdesc) \
+	(&(BufferIOCVArray[(bdesc)->buf_id]).cv)
 #define BufferDescriptorGetContentLock(bdesc) \
 	((LWLock*) (&(bdesc)->content_lock))
 
-extern PGDLLIMPORT LWLockMinimallyPadded *BufferIOLWLockArray;
+extern PGDLLIMPORT ConditionVariableMinimallyPadded *BufferIOCVArray;
 
 /*
  * The freeNext field is either the index of the next freelist entry,

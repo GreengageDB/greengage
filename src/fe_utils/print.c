@@ -8,7 +8,7 @@
  * pager open/close functions, all that stuff came with it.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/fe_utils/print.c
@@ -3331,6 +3331,9 @@ printTable(const printTableContent *cont,
 		is_local_pager = is_pager;
 	}
 
+	/* clear any pre-existing error indication on the output stream */
+	clearerr(fout);
+
 	/* print the stuff */
 
 	if (flog)
@@ -3495,7 +3498,7 @@ column_type_alignment(Oid ftype)
 		case XIDOID:
 		case XID8OID:
 		case CIDOID:
-		case CASHOID:
+		case MONEYOID:
 			align = 'r';
 			break;
 		default:
@@ -3633,6 +3636,9 @@ strlen_max_width(unsigned char *str, int *target_width, int encoding)
 		curr_width += char_width;
 
 		str += PQmblen((char *) str, encoding);
+
+		if (str > end)			/* Don't overrun invalid string */
+			str = end;
 	}
 
 	*target_width = curr_width;

@@ -28,7 +28,7 @@ PostgreSQL documentation
      <arg choice="plain"><option>-D</option></arg>
      <arg choice="plain"><option>--pgdata</option></arg>
     </group>
-    <replaceable class="parameter"> datadir</replaceable>
+    <replaceable class="parameter">datadir</replaceable>
    </group>
   </cmdsynopsis>
  </refsynopsisdiv>
@@ -47,8 +47,8 @@ PostgreSQL documentation
 
   <para>
    When verifying checksums, every file in the cluster is scanned. When
-   enabling checksums, every file in the cluster is rewritten. Disabling
-   checksums only updates the file <filename>pg_control</filename>.
+   enabling checksums, every file in the cluster is rewritten in-place.
+   Disabling checksums only updates the file <filename>pg_control</filename>.
   </para>
  </refsect1>
 

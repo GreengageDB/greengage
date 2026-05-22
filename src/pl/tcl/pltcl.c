@@ -439,7 +439,6 @@ _PG_init(void)
 	/************************************************************
 	 * Create the hash table for working interpreters
 	 ************************************************************/
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(pltcl_interp_desc);
 	pltcl_interp_htab = hash_create("PL/Tcl interpreters",
@@ -450,7 +449,6 @@ _PG_init(void)
 	/************************************************************
 	 * Create the hash table for function lookup
 	 ************************************************************/
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(pltcl_proc_key);
 	hash_ctl.entrysize = sizeof(pltcl_proc_ptr);
 	pltcl_proc_htab = hash_create("PL/Tcl functions",
@@ -1532,7 +1530,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 					rettype == RECORDOID)
 					 /* okay */ ;
 				else if (rettype == TRIGGEROID ||
-						 rettype == EVTTRIGGEROID)
+						 rettype == EVENT_TRIGGEROID)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("trigger functions can only be called as triggers")));

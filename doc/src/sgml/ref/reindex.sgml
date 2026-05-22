@@ -25,7 +25,9 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
 
 <phrase>where <replaceable class="parameter">option</replaceable> can be one of:</phrase>
 
-    VERBOSE
+    CONCURRENTLY [ <replaceable class="parameter">boolean</replaceable> ]
+    TABLESPACE <replaceable class="parameter">new_tablespace</replaceable>
+    VERBOSE [ <replaceable class="parameter">boolean</replaceable> ]
 </synopsis>
  </refsynopsisdiv>
 
@@ -178,10 +180,42 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    </varlistentry>
 
    <varlistentry>
+    <term><literal>TABLESPACE</literal></term>
+    <listitem>
+     <para>
+      Specifies that indexes will be rebuilt on a new tablespace.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
     <term><literal>VERBOSE</literal></term>
     <listitem>
      <para>
       Prints a progress report as each index is reindexed.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">boolean</replaceable></term>
+    <listitem>
+     <para>
+      Specifies whether the selected option should be turned on or off.
+      You can write <literal>TRUE</literal>, <literal>ON</literal>, or
+      <literal>1</literal> to enable the option, and <literal>FALSE</literal>,
+      <literal>OFF</literal>, or <literal>0</literal> to disable it.  The
+      <replaceable class="parameter">boolean</replaceable> value can also
+      be omitted, in which case <literal>TRUE</literal> is assumed.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">new_tablespace</replaceable></term>
+    <listitem>
+     <para>
+      The tablespace where indexes will be rebuilt.
      </para>
     </listitem>
    </varlistentry>
@@ -239,20 +273,21 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    <command>REINDEX</command> is similar to a drop and recreate of the index
    in that the index contents are rebuilt from scratch.  However, the locking
    considerations are rather different.  <command>REINDEX</command> locks out writes
-   but not reads of the index's parent table.  It also takes an exclusive lock
-   on the specific index being processed, which will block reads that attempt
-   to use that index.  In contrast, <command>DROP INDEX</command> momentarily takes
-   an exclusive lock on the parent table, blocking both writes and reads.  The
-   subsequent <command>CREATE INDEX</command> locks out writes but not reads; since
-   the index is not there, no read will attempt to use it, meaning that there
-   will be no blocking but reads might be forced into expensive sequential
-   scans.
+   but not reads of the index's parent table.  It also takes an
+   <literal>ACCESS EXCLUSIVE</literal> lock on the specific index being processed,
+   which will block reads that attempt to use that index.  In contrast,
+   <command>DROP INDEX</command> momentarily takes an
+   <literal>ACCESS EXCLUSIVE</literal> lock on the parent table, blocking both
+   writes and reads.  The subsequent <command>CREATE INDEX</command> locks out
+   writes but not reads; since the index is not there, no read will attempt to
+   use it, meaning that there will be no blocking but reads might be forced
+   into expensive sequential scans.
   </para>
 
   <para>
    Reindexing a single index or table requires being the owner of that
    index or table.  Reindexing a schema or database requires being the
-   owner of that schema or database.  Note that is therefore sometimes
+   owner of that schema or database.  Note specifically that it's thus
    possible for non-superusers to rebuild indexes of tables owned by
    other users.  However, as a special exception, when
    <command>REINDEX DATABASE</command>, <command>REINDEX SCHEMA</command>
@@ -270,6 +305,14 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    a transaction block when working on a partitioned table or index.
   </para>
 
+  <para>
+   If <literal>SCHEMA</literal>, <literal>DATABASE</literal> or
+   <literal>SYSTEM</literal> is used with <literal>TABLESPACE</literal>,
+   system relations are skipped and a single <literal>WARNING</literal>
+   will be generated. Indexes on TOAST tables are rebuilt, but not moved
+   to the new tablespace.
+  </para>
+   
   <refsect2 id="sql-reindex-concurrently" xreflabel="Rebuilding Indexes Concurrently">
    <title>Rebuilding Indexes Concurrently</title>
 
@@ -412,6 +455,14 @@ Indexes:
    </para>
 
    <para>
+    Like any long-running transaction, <command>REINDEX</command> on a table
+    can affect which tuples can be removed by concurrent
+    <command>VACUUM</command> on any other table.
+    Excepted from this are operations with the <literal>CONCURRENTLY</literal>
+    option for indexes that are not partial and do not index any expressions.
+   </para>
+
+   <para>
     <command>REINDEX SYSTEM</command> does not support
     <command>CONCURRENTLY</command> since system catalogs cannot be reindexed
     concurrently.
@@ -424,6 +475,12 @@ Indexes:
     is reindexed concurrently, those indexes will be skipped.  (It is possible
     to reindex such indexes without the <command>CONCURRENTLY</command> option.)
    </para>
+
+  <para>
+    Each backend running <command>REINDEX</command> will report its progress
+    in the <structname>pg_stat_progress_create_index</structname> view. See
+    <xref linkend="create-index-progress-reporting"/> for details.
+  </para>
   </refsect2>
  </refsect1>
 
@@ -482,6 +539,7 @@ REINDEX TABLE CONCURRENTLY my_broken_table;
    <member><xref linkend="sql-createindex"/></member>
    <member><xref linkend="sql-dropindex"/></member>
    <member><xref linkend="app-reindexdb"/></member>
+   <member><xref linkend="create-index-progress-reporting"/></member>
   </simplelist>
  </refsect1>
 </refentry>

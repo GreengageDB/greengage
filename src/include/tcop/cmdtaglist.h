@@ -8,7 +8,7 @@
  * determined by the PG_CMDTAG macro, which is not defined in this file;
  * it can be defined by the caller for special purposes.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/tcop/cmdtaglist.h
@@ -158,7 +158,6 @@ PG_CMDTAG(CMDTAG_DROP_OWNED, "DROP OWNED", true, false, false)
 PG_CMDTAG(CMDTAG_DROP_POLICY, "DROP POLICY", true, false, false)
 PG_CMDTAG(CMDTAG_DROP_PROCEDURE, "DROP PROCEDURE", true, false, false)
 PG_CMDTAG(CMDTAG_DROP_PUBLICATION, "DROP PUBLICATION", true, false, false)
-PG_CMDTAG(CMDTAG_DROP_REPLICATION_SLOT, "DROP REPLICATION SLOT", false, false, false)
 PG_CMDTAG(CMDTAG_DROP_ROLE, "DROP ROLE", false, false, false)
 PG_CMDTAG(CMDTAG_DROP_ROUTINE, "DROP ROUTINE", true, false, false)
 PG_CMDTAG(CMDTAG_DROP_RULE, "DROP RULE", true, false, false)

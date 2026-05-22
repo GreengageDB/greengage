@@ -40,42 +40,42 @@ INSERT INTO SUBSELECT_TBL VALUES (3, 3, 3);
 INSERT INTO SUBSELECT_TBL VALUES (6, 7, 8);
 INSERT INTO SUBSELECT_TBL VALUES (8, 9, NULL);
 
-SELECT '' AS eight, * FROM SUBSELECT_TBL;
+SELECT * FROM SUBSELECT_TBL;
 
 -- Uncorrelated subselects
 
-SELECT '' AS two, f1 AS "Constant Select" FROM SUBSELECT_TBL
+SELECT f1 AS "Constant Select" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT 1);
 
-SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
+SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL);
 
-SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
+SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE
     f2 IN (SELECT f1 FROM SUBSELECT_TBL));
 
-SELECT '' AS three, f1, f2
+SELECT f1, f2
   FROM SUBSELECT_TBL
   WHERE (f1, f2) NOT IN (SELECT f2, CAST(f3 AS int4) FROM SUBSELECT_TBL
                          WHERE f3 IS NOT NULL);
 
 -- Correlated subselects
 
-SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
+SELECT f1 AS "Correlated Field", f2 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE f1 = upper.f1);
 
-SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
+SELECT f1 AS "Correlated Field", f3 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f1 IN
     (SELECT f2 FROM SUBSELECT_TBL WHERE CAST(upper.f2 AS float) = f3);
 
-SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
+SELECT f1 AS "Correlated Field", f3 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f3 IN (SELECT upper.f1 + f2 FROM SUBSELECT_TBL
                WHERE f2 = CAST(f3 AS integer));
 
-SELECT '' AS five, f1 AS "Correlated Field"
+SELECT f1 AS "Correlated Field"
   FROM SUBSELECT_TBL
   WHERE (f1, f2) IN (SELECT f2, CAST(f3 AS int4) FROM SUBSELECT_TBL
                      WHERE f3 IS NOT NULL);
@@ -84,7 +84,7 @@ SELECT '' AS five, f1 AS "Correlated Field"
 -- Use some existing tables in the regression test
 --
 
-SELECT '' AS eight, ss.f1 AS "Correlated Field", ss.f3 AS "Second Field"
+SELECT ss.f1 AS "Correlated Field", ss.f3 AS "Second Field"
   FROM SUBSELECT_TBL ss
   WHERE f1 NOT IN (SELECT f1+1 FROM INT4_TBL
                    WHERE f1 != ss.f1 AND f1 < 2147483647);
@@ -514,6 +514,23 @@ select * from int8_tbl where q1 in (select c1 from inner_text);
 select * from int8_tbl where q1 in (select c1 from inner_text);
 
 rollback;  -- to get rid of the bogus operator
+
+--
+-- Test resolution of hashed vs non-hashed implementation of EXISTS subplan
+--
+explain (costs off)
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0);
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0);
+
+explain (costs off)
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
+  and thousand = 1;
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
+  and thousand = 1;
 
 --
 -- Test case for planner bug with nested EXISTS handling
