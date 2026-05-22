@@ -135,8 +135,8 @@ rhel8_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --
 rocky8_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-pythonsrc-ext --with-uuid=e2fs
 rocky9_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 linux_x86_64_CONFIGFLAGS=${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu18.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu20.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu18.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu20.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 ubuntu22.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 ubuntu24.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 sles12_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
