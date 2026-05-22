@@ -308,6 +308,9 @@ _SPI_commit(bool chain)
 				DispatchSyncPGVariable(gconfig);
 			}
 			CommitTransactionCommand();
+			
+			list_free(gp_guc_restore_list);
+			gp_guc_restore_list = NIL;
 		}
 
 		/* Immediately start a new transaction */
@@ -417,6 +420,9 @@ _SPI_rollback(bool chain)
 				DispatchSyncPGVariable(gconfig);
 			}
 			CommitTransactionCommand();
+
+			list_free(gp_guc_restore_list);
+			gp_guc_restore_list = NIL;
 		}
 
 		/* Immediately start a new transaction */
