@@ -4174,7 +4174,7 @@ with c as (
 join pg_namespace n on n.oid = c.relnamespace
 where c.relname = 'test_table' and c.relkind = 'r' and n.nspname = 's';
 
--- Test recovery of GUC after SET LOCAL and transaction control commands inside DO
+-- test recovery of GUC after SET LOCAL and transaction control commands inside DO
 do $$
 declare
     result_1 text;
