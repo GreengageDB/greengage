@@ -26,6 +26,7 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@CI-5720
     with:
       version: 8
+      ci_path: arenadata
       target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
@@ -44,6 +45,7 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@CI-5720
     with:
       version: 8
+      ci_path: arenadata
       target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
@@ -98,6 +100,7 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@CI-5720
     with:
       version: 8
+      ci_path: arenadata
       target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
