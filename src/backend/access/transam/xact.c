@@ -86,7 +86,6 @@
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbconn.h"
 
-
 /*
  *	User-tweakable parameters
  */
