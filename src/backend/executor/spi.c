@@ -303,7 +303,7 @@ _SPI_commit(bool chain)
 
 			foreach(lc, gp_guc_restore_list)
 			{
-				struct config_generic *gconfig = (struct config_generic *) lfirst(lc);
+				struct config_generic *gconfig = lfirst(lc);
 
 				DispatchSyncPGVariable(gconfig);
 			}
