@@ -15,7 +15,6 @@
  */
 #include "postgres.h"
 
-#include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
