@@ -5337,20 +5337,14 @@ begin
   create table test_table(a int) distributed by (a);
   drop table test_table;
 end $$;
--- check existence on master
-select c.gp_segment_id from pg_class c
+-- check existence on master and segments
+with c as (
+    select gp_segment_id, relname, relkind, relnamespace from pg_class
+    union all
+    select gp_segment_id, relname, relkind, relnamespace from gp_dist_random('pg_class')
+) select gp_segment_id from c
 join pg_namespace n on n.oid = c.relnamespace
-where c.relname = 'test_table'
-  and c.relkind = 'r'
-  and n.nspname = 's'
-union all
---check existence on segments
-select c.gp_segment_id from gp_dist_random('pg_class') c
-join pg_namespace n on n.oid = c.relnamespace
-where c.relname = 'test_table'
-  and c.relkind = 'r'
-  and n.nspname = 's'
-order by gp_segment_id;
+where c.relname = 'test_table' and c.relkind = 'r' and n.nspname = 's';
  gp_segment_id 
 ------------
 (0 rows)
