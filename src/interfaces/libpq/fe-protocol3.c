@@ -292,7 +292,6 @@ pqParseInput3(PGconn *conn)
 					if (pgGetMetadataMessage(conn, msgLength))
 						return;
 					break;
-				break;
 				case 'Z':		/* backend is ready for new query */
 					if (getReadyForQuery(conn))
 						return;

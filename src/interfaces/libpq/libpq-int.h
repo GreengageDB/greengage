@@ -211,7 +211,7 @@ typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *, ggMetadataQueu
 
 typedef struct
 {
-	PQmetadataReceiver metadataRec; /* notice message receiver */
+	PQmetadataReceiver metadataRec; /* metadata message receiver */
 	void	   *metadataRecArg;
 } PGMetadataHooks;
 

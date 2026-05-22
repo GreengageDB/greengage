@@ -700,7 +700,7 @@ pq_metadatasend(const void *data, size_t len, int32 queue_id)
 	 * Safety check: The protocol message length field is a 32-bit signed int.
 	 * We must ensure the payload + header doesn't overflow it.
 	 */
-	if (len > (size_t)(INT_MAX - 4))
+	if (len > (size_t)(INT_MAX - sizeof(int32) - sizeof(int)))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("custom metadata message too large")));
@@ -710,7 +710,7 @@ pq_metadatasend(const void *data, size_t len, int32 queue_id)
 	 */
 	pq_beginmessage(&buf, 'M');
 
-	pq_sendint(&buf, queue_id, 4);
+	pq_sendint(&buf, queue_id, sizeof(queue_id));
 	/* Append the opaque data */
 	pq_sendbytes(&buf, (const char *)data, (int)len);
 
