@@ -198,6 +198,17 @@ typedef struct
 } PGNoticeHooks;
 
 /* Fields needed for metadata handling */
+typedef struct ggMetadataChunk
+{
+	struct ggMetadataChunk *next;
+	int    segindex;      /* source segment */
+	int    metadataLen;    /* Length of metadata buffer */
+	char   payload[];
+} ggMetadataChunk;
+
+typedef unsigned int ggMetadataQueueId;
+typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *, ggMetadataQueueId);
+
 typedef struct
 {
 	PQmetadataReceiver metadataRec; /* notice message receiver */

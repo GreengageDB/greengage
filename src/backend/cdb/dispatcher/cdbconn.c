@@ -285,6 +285,23 @@ cdbconn_doConnectStart(SegmentDatabaseDescriptor *segdbDesc,
 	return;
 }
 
+static PQmetadataReceiver
+PQsetMetadataReceiver(PGconn *conn, PQmetadataReceiver proc, void *arg)
+{
+	PQmetadataReceiver old;
+
+	if (conn == NULL)
+		return NULL;
+
+	old = conn->metadataHooks.metadataRec;
+	if (proc)
+	{
+		conn->metadataHooks.metadataRec = proc;
+		conn->metadataHooks.metadataRecArg = arg;
+	}
+	return old;
+}
+
 void
 cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc)
 {

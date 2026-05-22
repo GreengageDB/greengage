@@ -618,20 +618,6 @@ extern int	pg_char_to_encoding(const char *name);
 extern const char *pg_encoding_to_char(int encoding);
 extern int	pg_valid_server_encoding_id(int encoding);
 
-typedef struct ggMetadataChunk
-{
-	struct ggMetadataChunk *next;
-	int    segindex;      /* source segment */
-	int    metadataLen;    /* Length of metadata buffer */
-	char   payload[];
-} ggMetadataChunk;
-
-typedef unsigned int ggMetadataQueueId;
-typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *, ggMetadataQueueId);
-
-extern PQmetadataReceiver PQsetMetadataReceiver(PGconn *conn,
-					PQmetadataReceiver proc,
-					void *arg);
 
 
 #ifdef __cplusplus
