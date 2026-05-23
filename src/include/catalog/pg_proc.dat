@@ -6651,7 +6651,6 @@
 
 # count has two forms: count(any) and count(*)
 { oid => '2147',
-  oid_symbol => 'COUNT_ANY_OID',
   descr => 'number of input rows for which the input expression is not null',
   proname => 'count', prokind => 'a', proisstrict => 'f', prorettype => 'int8',
   proargtypes => 'any', prosrc => 'aggregate_dummy' },
@@ -11985,7 +11984,7 @@
   prosrc => 'gp_percentile_disc_transition' },
 { oid => 7194, descr => 'unordered percentile discrete aggregate',
    proname => 'gp_percentile_disc', prokind => 'a', proisstrict => 'f', prorettype => 'anyelement', proargtypes => 'anyelement float8 int8 int8', prosrc => 'aggregate_dummy' },
-{ oid => 7050, oid_symbol => 'BITMAP_INDEXAM_HANDLER_OID', descr => 'bitmap(internal)',
+{ oid => 7050, descr => 'bitmap(internal)',
    proname => 'bmhandler', provolatile => 'v', prorettype => 'index_am_handler', proargtypes => 'internal', prosrc => 'bmhandler' },
 
 
@@ -12483,16 +12482,16 @@
 { oid => 6126, descr => 'aggregate final function',
    proname => 'percentile_cont_timestamptz_multi_final', proisstrict => 'f', prorettype => '_timestamptz', proargtypes => 'internal _float8', prosrc => 'percentile_cont_timestamptz_multi_final' },
 
-{ oid => 6127, oid_symbol => 'MEDIAN_FLOAT8_OID', descr => 'median',
+{ oid => 6127, descr => 'median',
    proname => 'median', prokind => 'a', proisstrict => 'f', prorettype => 'float8', proargtypes => 'float8 float8', prosrc => 'aggregate_dummy' },
 
-{ oid => 6128, oid_symbol => 'MEDIAN_INTERVAL_OID', descr => 'median',
+{ oid => 6128, descr => 'median',
    proname => 'median', prokind => 'a', proisstrict => 'f', prorettype => 'interval', proargtypes => 'float8 interval', prosrc => 'aggregate_dummy' },
 
-{ oid => 6129, oid_symbol => 'MEDIAN_TIMESTAMP_OID', descr => 'median',
+{ oid => 6129, descr => 'median',
    proname => 'median', prokind => 'a', proisstrict => 'f', prorettype => 'timestamp', proargtypes => 'float8 timestamp', prosrc => 'aggregate_dummy' },
 
-{ oid => 6130, oid_symbol => 'MEDIAN_TIMESTAMPTZ_OID', descr => 'median',
+{ oid => 6130, descr => 'median',
    proname => 'median', prokind => 'a', proisstrict => 'f', prorettype => 'timestamptz', proargtypes => 'float8 timestamptz', prosrc => 'aggregate_dummy' },
 
 { oid => 8066, descr => 'itemwise add two integer arrays',
