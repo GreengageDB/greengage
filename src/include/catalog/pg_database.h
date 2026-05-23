@@ -84,13 +84,10 @@ FOREIGN_KEY(dattablespace REFERENCES pg_tablespace(oid));
  */
 typedef FormData_pg_database *Form_pg_database;
 
-DECLARE_TOAST(pg_database, 4177, 4178);
 #define PgDatabaseToastTable 4177
 #define PgDatabaseToastIndex 4178
 
-DECLARE_UNIQUE_INDEX(pg_database_datname_index, 2671, on pg_database using btree(datname name_ops));
 #define DatabaseNameIndexId  2671
-DECLARE_UNIQUE_INDEX_PKEY(pg_database_oid_index, 2672, on pg_database using btree(oid oid_ops));
 #define DatabaseOidIndexId	2672
 
 #endif							/* PG_DATABASE_H */

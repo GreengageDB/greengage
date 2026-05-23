@@ -77,9 +77,7 @@ FOREIGN_KEY(refclassid REFERENCES pg_class(oid));
  */
 typedef FormData_pg_shdepend *Form_pg_shdepend;
 
-DECLARE_INDEX(pg_shdepend_depender_index, 1232, on pg_shdepend using btree(dbid oid_ops, classid oid_ops, objid oid_ops, objsubid int4_ops));
 #define SharedDependDependerIndexId		1232
-DECLARE_INDEX(pg_shdepend_reference_index, 1233, on pg_shdepend using btree(refclassid oid_ops, refobjid oid_ops));
 #define SharedDependReferenceIndexId	1233
 
 #endif							/* PG_SHDEPEND_H */
