@@ -19601,6 +19601,7 @@ bare_label_keyword:
 			| OWNER
 			| PARALLEL
 			| PARSER
+			| PARTIAL
 			| PARTITIONS
 			| PASSING
 			| PASSWORD
