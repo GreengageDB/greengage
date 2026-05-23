@@ -220,6 +220,8 @@ typedef struct
  * checking for IS_1B.
  */
 
+#ifdef WORDS_BIGENDIAN
+
 #define VARATT_IS_4B(PTR) \
 	((((varattrib_1b *) (PTR))->va_header & 0x80) == 0x00)
 #define VARATT_IS_4B_U(PTR) \

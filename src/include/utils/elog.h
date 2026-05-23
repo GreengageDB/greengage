@@ -253,7 +253,6 @@ extern int	errprintstack(bool printstack);
 extern int	errbacktrace(void);
 
 extern void errfunction(const char *funcname);
-extern void errposition(int cursorpos);
 extern int	errposition(int cursorpos);
 
 extern void internalerrposition(int cursorpos);
