@@ -1459,7 +1459,7 @@ cost_tidrangescan(Path *path, PlannerInfo *root,
 
 	/* Count how many tuples and pages we expect to scan */
 	selectivity = clauselist_selectivity(root, tidrangequals, baserel->relid,
-										 JOIN_INNER, NULL);
+										 JOIN_INNER, NULL, false);
 	pages = ceil(selectivity * baserel->pages);
 
 	if (pages <= 0.0)
@@ -5963,7 +5963,8 @@ get_foreign_key_join_selectivity(PlannerInfo *root,
 												(Node *) rinfo,
 												0,
 												jointype,
-												sjinfo);
+												sjinfo,
+												false);
 						if (s0 > 0)
 							fkselec /= s0;
 					}

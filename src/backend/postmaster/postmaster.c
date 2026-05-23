@@ -2917,17 +2917,12 @@ canAcceptConnections(int backend_type)
 		else if (!FatalError && pmState == PM_RECOVERY)
 			return CAC_NOTCONSISTENT;	/* not yet at consistent recovery
 										 * state */
-		else
 		/*
 		 * If the wal receiver has been launched at least once, return that
 		 * the mirror is ready.
 		 */
 		else if (GetMirrorReadyFlag())
 			return CAC_MIRROR_READY;
-		else if (!FatalError &&
-				 (pmState == PM_STARTUP ||
-				  pmState == PM_RECOVERY))
-			return CAC_STARTUP; /* normal startup */
 		else if (pmState == PM_STARTUP || pmState == PM_RECOVERY)
 			return CAC_RECOVERY;	/* else must be crash recovery */
 		else

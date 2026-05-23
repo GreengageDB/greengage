@@ -2439,10 +2439,7 @@ auth_peer(hbaPort *port)
 	 * from internal_client_authentication().
 	 */
 	ret = check_usermap(port->hba ? port->hba->usermap : NULL, port->user_name,
-						peer_user, false);
-
-	pfree(peer_user);
-	ret = check_usermap(port->hba->usermap, port->user_name, port->authn_id, false);
+						port->authn_id, false);
 
 	return ret;
 #else

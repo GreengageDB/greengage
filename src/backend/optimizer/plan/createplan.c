@@ -318,7 +318,7 @@ static IncrementalSort *make_incrementalsort_from_pathkeys(Plan *lefttree,
 static Sort *make_sort_from_groupcols(List *groupcls,
 									  AttrNumber *grpColIdx,
 									  Plan *lefttree);
-static Material *make_material(Plan *lefttree);
+/* make_material declared in planmain.h */
 static ResultCache *make_resultcache(Plan *lefttree, Oid *hashoperators,
 									 Oid *collations,
 									 List *param_exprs,
@@ -1453,8 +1453,7 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path, int flags)
 		if (!best_path->path.param_info)
 		{
 			plan->join_prune_paramids = make_partition_join_pruneinfos(root, rel,
-																	   best_path->subpaths,
-																	   best_path->partitioned_rels);
+																	   best_path->subpaths);
 		}
 	}
 
@@ -1630,8 +1629,7 @@ create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path,
 		if (!best_path->path.param_info)
 		{
 			node->join_prune_paramids = make_partition_join_pruneinfos(root, rel,
-																	   best_path->subpaths,
-																	   best_path->partitioned_rels);
+																	   best_path->subpaths);
 		}
 	}
 
@@ -6651,7 +6649,6 @@ make_tidscan(List *qptlist,
 	return node;
 }
 
-SubqueryScan *
 static TidRangeScan *
 make_tidrangescan(List *qptlist,
 				  List *qpqual,
