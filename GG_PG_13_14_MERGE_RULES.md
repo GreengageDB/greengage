@@ -284,7 +284,225 @@ rg "^<<<<<<<" src/ doc/               # must be empty
 
 ---
 
-## 6. Batch-by-batch process for PG14 merge
+## 6. Use `cloudberrydb/cloudberrydb` as a reference branch
+
+Apache Cloudberry already completed a PG14 merge of the Greenplum codebase
+and is the closest public reference for "how should a working GPDB-on-PG14
+look." When resolving a difficult merge conflict, fetch the cloudberry
+remote and diff the file against `cloudberry/main`:
+
+```bash
+git remote add cloudberry https://github.com/cloudberrydb/cloudberrydb.git
+git fetch cloudberry --depth=1
+git show cloudberry/main:src/path/to/file.c | diff -u - src/path/to/file.c
+```
+
+Cloudberry diverges from Greengage in some areas (different optimizer
+hooks, different resource-group implementation, etc.), so the diff is a
+**reference, not a patch** — use it to confirm the *shape* of a PG14
+declaration, the *parameter signature* of a renamed function, the
+*split* of a header that PG14 broke up, and which GPDB-specific
+additions can be deleted because they were superseded upstream.
+
+Cases where cloudberry was decisive in `claude-merge-2`:
+
+| Question | Cloudberry-resolved finding |
+|---|---|
+| Does PG14 still need GPDB's `a_expr ColLabelNoAs` target_el rule? | No — `BareColLabel` covers all cases once GPDB keywords are added to `bare_label_keyword` |
+| Did `create_append_path` keep `List *partitioned_rels`? | No — removed; the new signature has nine args, not ten |
+| Where did `cost_material`, `exprType`, `is_opclause` etc. live? | `optimizer/cost.h` and `nodes/nodeFuncs.h` — no change from PG13 |
+| Should `pgstat.h` still declare `BackendState`/`WaitEvent*`? | No — moved to `utils/backend_status.h` and `utils/wait_event.h`; pgstat.h just `#include`s them |
+
+## 7. Merge-artifact patterns we kept hitting (`claude-merge-2`)
+
+The recursive merge driver leaves three kinds of garbage that the build
+later trips over. Recognize them on sight; the fix is mechanical.
+
+### 7.1 Duplicate-and-truncate in function signatures
+
+When upstream changes a signature and GPDB had local edits in the same
+area, git often keeps **both** signatures and **truncates** one of them.
+Result: a valid PG13 prototype, then an orphan tail of the PG14 one (or
+vice versa). Cascades as "storage class specified for parameter X" on
+every following extern in the same header.
+
+```c
+extern void ExecSimpleRelationInsert(EState *estate, TupleTableSlot *slot);   // ← PG13
+extern void ExecSimpleRelationUpdate(EState *estate, EPQState *epqstate,      // ← truncated
+extern void ExecSimpleRelationInsert(ResultRelInfo *resultRelInfo,            // ← PG14 (correct)
+                                     EState *estate, TupleTableSlot *slot);
+```
+
+Fix: delete the older signature (and the truncated tail) — keep PG14.
+Cross-check against `cloudberry/main` if unsure.
+
+### 7.2 Lost opening `/*` or `#ifdef`
+
+The merge sometimes eats the leading line of a comment block or `#ifdef`
+arm, leaving an orphan `* foo` or `#else /* WIN32 */` with no opener.
+Compile error is "missing terminating ' character", "expected
+specifier-qualifier-list before ..." or "#endif without #if". Symptom on
+include-guarded headers: every consumer sees the file double-included,
+producing redeclaration spam for every top-level decl.
+
+Hit in `claude-merge-2`:
+  - `src/include/postgres.h` — lost `#ifdef WORDS_BIGENDIAN`
+  - `src/include/miscadmin.h` — lost `#ifndef WIN32`
+  - `src/include/nodes/pathnodes.h` — lost `/*` before `VolatileFunctionStatus` comment and before `TidRangePath` comment
+
+### 7.3 PG14 split of `pgstat.h`
+
+PG14 broke `pgstat.h` into three headers and made the old `pgstat.h`
+`#include` them for backward compatibility:
+
+| Type | New home |
+|---|---|
+| `BackendState`, `PgBackendStatus`, `PgBackendSSLStatus`, `PgBackendGSSStatus`, `LocalPgBackendStatus` | `utils/backend_status.h` |
+| `WaitEventActivity`/`Client`/`IPC`/`Timeout`/`IO`, `PG_WAIT_*` macros, `pgstat_report_wait_start`/`end` | `utils/wait_event.h` |
+| `ProgressCommandType`, `PGSTAT_NUM_PROGRESS_PARAM` | `utils/backend_progress.h` |
+
+GPDB extensions to those groups (the `PG_WAIT_RESOURCE_GROUP`,
+`PG_WAIT_RESOURCE_QUEUE`, `PG_WAIT_REPLICATION`,
+`PG_WAIT_PARALLEL_RETRIEVE_CURSOR` macros) must be **moved** into the
+new home, not left in `pgstat.h` — otherwise they'll get dropped the
+next time someone tidies `pgstat.h`.
+
+Resolution: in `pgstat.h`, delete the duplicated blocks (`BackendState`,
+the `PG_WAIT_*` and `WaitEvent*` block, `ProgressCommandType` /
+`PGSTAT_NUM_PROGRESS_PARAM`, the `PgBackend*Status` structs, and the
+inline `pgstat_report_wait_start`/`end` helpers). Add the GPDB
+`PG_WAIT_*` macros to `wait_event.h`.
+
+## 8. Catalog/`genbki.pl` rules tightened in PG14
+
+### 8.1 `oid_symbol` is rejected for `pg_proc` and `pg_type`
+
+`genbki.pl` (line ~651) now *errors out* with "custom OID symbols are
+not allowed for pg_proc entries" / "for pg_type entries". The fmgr
+table (`Gen_fmgrtab.pl`) auto-generates `F_<PRONAME>` for every pg_proc
+row; `form_pg_type_symbol()` auto-generates `<TYPNAME>OID` /
+`<TYPNAME>ARRAYOID` for every pg_type row.
+
+Resolution:
+- Drop the `oid_symbol => '...'` field from every `pg_proc.dat` and
+  `pg_type.dat` entry.
+- For pg_proc symbols that C/C++ code still references by name
+  (`COUNT_ANY_OID`, `MEDIAN_*_OID`, etc.), add explicit `#define`s in
+  `pg_proc.h` near the related `IS_MEDIAN_OID` macro.
+- For pg_type symbols already matching the auto-generated form
+  (`COMPLEXOID` from `typname 'complex'`, `ANYTABLEOID` from
+  `typname 'anytable'`), no `#define` is needed — `form_pg_type_symbol`
+  produces the same name.
+
+### 8.2 `assign_next_oid()` replaced `$GenbkiNextOid`
+
+PG14 replaced the file-global `$GenbkiNextOid` scalar with a per-catalog
+`assign_next_oid($catname)` call. Any GPDB-local `genbki.pl` patch that
+uses `$GenbkiNextOid++` must be updated to call `assign_next_oid()` on
+the appropriate catalog (e.g. `assign_next_oid('pg_opfamily')`).
+
+### 8.3 `DECLARE_TOAST` / `DECLARE_UNIQUE_INDEX` moved into per-catalog headers
+
+PG14 moved index and toast declarations from `catalog/indexing.h` and
+`catalog/toasting.h` into the individual `pg_*.h` headers. The merge
+must **not** keep both copies — any duplicated `DECLARE_*` lines in the
+per-catalog headers (when the central headers still have them too) will
+fail with "found N duplicate OID(s) in catalog data".
+
+Resolution: strip the duplicated `DECLARE_TOAST`, `DECLARE_INDEX`,
+`DECLARE_UNIQUE_INDEX`, `DECLARE_UNIQUE_INDEX_PKEY` lines from the
+**per-catalog headers** (taking PG14's central-header form). Leave the
+central `indexing.h` / `toasting.h` declarations in place.
+
+### 8.4 GPDB-OID conflicts with PG14 multirange/sort-support OIDs
+
+PG14 grabbed OIDs in the 3000s, 4000s and 6150-6171 range for new
+multirange types/operators, GiST sort_support, and `pg_stat_get_-
+replication_slot` / `bit_count` functions. GPDB-specific entries that
+landed there (notably the legacy `cdbhash_*` family and the AO_*
+table/handler OIDs) collide.
+
+Resolution: renumber the GPDB entries to a confirmed-unused range. Run
+`src/include/catalog/unused_oids` for an authoritative gap list — at
+the time of `claude-merge-2` the script's first suggestion was 9446.
+The renumbering used **9446–9469** (24 OIDs):
+
+  - 3435 (AO_COLUMN_TABLE_AM_OID) → 9446
+  - 4161/4162 (pg_collation toast) → 9447/9448
+  - 4198 (AO_ROW_TABLE_AM_HANDLER_OID) → 9449
+  - 4199 (AO_COLUMN_TABLE_AM_HANDLER_OID) → 9450
+  - 6150–6158 (cdbhash) → 9451–9459
+  - 6162–6171 (cdbhash) → 9460–9469
+
+cdbhash 6140–6149 do **not** clash with PG14 and were left alone.
+
+## 9. Parser/grammar rules added in PG14
+
+### 9.1 New `bare_label_keyword` rule + `check_keywords.pl` enforcement
+
+PG14 added a separate `bare_label_keyword` rule in `gram.y` that
+enumerates the keywords usable as a column label *without* `AS`. The
+`check_keywords.pl` script run by `Makefile` now enforces three
+invariants:
+
+  1. Every keyword tagged `BARE_LABEL` in `kwlist.h` must appear in
+     `bare_label_keyword`.
+  2. Conversely, every keyword in `bare_label_keyword` must be tagged
+     `BARE_LABEL` (or `AS_LABEL`) in `kwlist.h`.
+  3. The `bare_label_keyword` rule must be alphabetically sorted
+     (with the `_P` suffix stripped for comparison, matching
+     `check_alphabetical_order` in `check_keywords.pl`).
+
+Resolution: when merging, append every GPDB-specific keyword that
+`kwlist.h` marks as `BARE_LABEL` to `bare_label_keyword` and re-sort
+the whole rule. In `claude-merge-2` this was 62 GPDB keywords.
+
+Exception: clause-introducing keywords (`PARTITION`, `DISTRIBUTED`,
+`SCATTER`) **cannot** be `BARE_LABEL` because they create
+shift/reduce conflicts with their clause syntax (e.g. `SELECT x
+SCATTER` is ambiguous with `SELECT x [AS] alias FROM ... SCATTER`).
+Mark these `AS_LABEL` in `kwlist.h` and omit from
+`bare_label_keyword`. Forgetting this produces ~7000 reduce/reduce
+conflicts and the build fails at the bison stage.
+
+### 9.2 New `BareColLabel` non-terminal supersedes GPDB's `ColLabelNoAs`
+
+PG14's `BareColLabel: IDENT | bare_label_keyword` covers the GPDB
+extension that previously needed a separate `ColLabelNoAs` /
+`keywords_ok_in_alias_no_as` rule. Once GPDB keywords are added to
+`bare_label_keyword`, the `target_el: a_expr ColLabelNoAs { ... }`
+alternative becomes redundant — and in fact **must** be removed
+because keeping both produces hundreds of reduce/reduce conflicts.
+
+The `PartitionIdentKeyword` rule itself stays — it's still referenced
+by `PartitionColId` in the ALTER TABLE partition syntax.
+
+### 9.3 New `opt_routine_body` / `opt_createfunc_opt_list` (commit `e717a9a18b2`)
+
+PG14 collapsed the four `CreateFunctionStmt` alternatives to a single
+shape using `opt_createfunc_opt_list opt_routine_body` for SQL-standard
+function bodies. The merge frequently mis-resolves these, leaving
+truncated action blocks. The correct PG14 form is:
+
+```c
+CreateFunctionStmt:
+        CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
+        RETURNS func_return opt_createfunc_opt_list opt_routine_body { ... }
+      | CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
+        RETURNS TABLE '(' table_func_column_list ')' opt_createfunc_opt_list opt_routine_body { ... }
+      | CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
+        opt_createfunc_opt_list opt_routine_body { ... }
+      | CREATE opt_or_replace PROCEDURE func_name func_args_with_defaults
+        opt_createfunc_opt_list opt_routine_body { ... }
+;
+```
+
+When the merge leaves multiple half-merged variants, just delete
+everything and paste this block back.
+
+---
+
+## 10. Batch-by-batch process for PG14 merge
 
 The adb-8.x history shows PG14 was merged in named batches (b1–b12). For
 each batch:

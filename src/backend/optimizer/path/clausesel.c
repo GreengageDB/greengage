@@ -152,6 +152,7 @@ clauselist_selectivity_ext(PlannerInfo *root,
 						   bool use_extended_stats)
 {
 	Selectivity s1 = 1.0;
+	Selectivity *rgsel = NULL;
 	RelOptInfo *rel;
 	Bitmapset  *estimatedclauses = NULL;
 	RangeQueryClause *rqlist = NULL;
