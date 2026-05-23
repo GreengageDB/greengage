@@ -2394,24 +2394,6 @@ expression_tree_walker(Node *node,
 				return walker(expr->subquery, context);
 			}
 			break;
-		case T_WindowClause:
-			{
-				WindowClause *wc = (WindowClause *) node;
-
-				if (expression_tree_walker((Node *) wc->partitionClause, walker,
-										   context))
-					return true;
-				if (expression_tree_walker((Node *) wc->orderClause, walker,
-										   context))
-					return true;
-				if (walker((Node *) wc->startOffset, context))
-					return true;
-				if (walker((Node *) wc->endOffset, context))
-					return true;
-				return false;
-			}
-			break;
-
 		case T_TableSampleClause:
 			{
 				TableSampleClause *tsc = (TableSampleClause *) node;
@@ -3485,16 +3467,6 @@ expression_tree_mutator(Node *node,
 
 				return (Node *) newnode;
 
-			}
-			break;
-		case T_SortGroupClause:
-			{
-				SortGroupClause *sortcl = (SortGroupClause *) node;
-				SortGroupClause *newnode;
-
-				FLATCOPY(newnode, sortcl, SortGroupClause);
-
-				return (Node *) newnode;
 			}
 			break;
 		case T_DMLActionExpr:
