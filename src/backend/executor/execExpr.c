@@ -4273,6 +4273,8 @@ ExecEvalFunctionArgToConst(FuncExpr *fexpr, int argno, bool *isnull)
 		*isnull = result->constisnull;
 
 	return result->constvalue;
+}
+
 /*
  * Build equality expression that can be evaluated using ExecQual(), returning
  * true if the expression context's inner/outer tuples are equal.  Datums in

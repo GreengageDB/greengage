@@ -1318,11 +1318,6 @@ _readAExpr(void)
 		local_node->kind = AEXPR_NULLIF;
 		READ_NODE_FIELD(name);
 	}
-	else if (strncmp(token,"OF",length)==0)
-	{
-		local_node->kind = AEXPR_OF;
-		READ_NODE_FIELD(name);
-	}
 	else if (strncmp(token,"IN",length)==0)
 	{
 		local_node->kind = AEXPR_IN;
@@ -1361,11 +1356,6 @@ _readAExpr(void)
 	else if (strncmp(token,"NOT_BETWEEN_SYM",length)==0)
 	{
 		local_node->kind = AEXPR_NOT_BETWEEN_SYM;
-		READ_NODE_FIELD(name);
-	}
-	else if (strncmp(token,"PAREN",length)==0)
-	{
-		local_node->kind = AEXPR_PAREN;
 		READ_NODE_FIELD(name);
 	}
 	else

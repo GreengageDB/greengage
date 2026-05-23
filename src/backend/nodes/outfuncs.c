@@ -5838,6 +5838,7 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_ShareInputScan:
 				_outShareInputScan(str, obj);
+				break;
 			case T_ResultCache:
 				_outResultCache(str, obj);
 				break;
@@ -6464,6 +6465,7 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_PLAssignStmt:
 				_outPLAssignStmt(str, obj);
+				break;
 			case T_InsertStmt:
 				_outInsertStmt(str, obj);
 				break;

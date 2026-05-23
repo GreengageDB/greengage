@@ -888,7 +888,7 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 	 * Append the child results together.
 	 */
 	path = (Path *) create_append_path(root, result_rel, pathlist, NIL,
-									   NIL, NULL, 0, false, NIL, -1);
+									   NIL, NULL, 0, false, -1);
 	mark_append_locus(path, optype); /* CDB: Mark the plan result locus. */
 
 	/* Identify the grouping semantics */
