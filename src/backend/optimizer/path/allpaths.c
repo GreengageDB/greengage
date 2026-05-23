@@ -637,7 +637,7 @@ bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel)
 											  false,
 											  target_locus);
 
-			path = (Path *) create_material_path(root, rel, path);
+			path = (Path *) create_material_path(rel, path);
 		}
 
 		add_path(rel, path);
@@ -1143,7 +1143,7 @@ set_tablesample_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *
 		 bms_membership(root->all_baserels) != BMS_SINGLETON) &&
 		!(GetTsmRoutine(rte->tablesample->tsmhandler)->repeatable_across_scans))
 	{
-		path = (Path *) create_material_path(root, rel, path);
+		path = (Path *) create_material_path(rel, path);
 	}
 
 	add_path(rel, path);
