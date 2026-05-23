@@ -88,7 +88,7 @@ static void pull_up_union_leaf_queries(Node *setOp, PlannerInfo *root,
 									   int childRToffset);
 static void make_setop_translation_list(Query *query, Index newvarno,
 										AppendRelInfo *appinfo);
-static bool is_simple_subquery(PlannerInfo *root, Query *subquery,
+bool is_simple_subquery(PlannerInfo *root, Query *subquery,
 							   RangeTblEntry *rte,
 							   JoinExpr *lowest_outer_join);
 static Node *pull_up_simple_values(PlannerInfo *root, Node *jtnode,
@@ -1592,7 +1592,7 @@ make_setop_translation_list(Query *query, Index newvarno,
  * In GPDB, 'rte' can be passed as NULL, if this is a sublink, rather
  * than a subselect in the FROM list, that we are trying to pull up.
  */
-static bool
+bool
 is_simple_subquery(PlannerInfo *root, Query *subquery, RangeTblEntry *rte,
 				   JoinExpr *lowest_outer_join)
 {
