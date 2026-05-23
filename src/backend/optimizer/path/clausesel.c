@@ -56,7 +56,8 @@ static Selectivity clauselist_selectivity_or(PlannerInfo *root,
 											 int varRelid,
 											 JoinType jointype,
 											 SpecialJoinInfo *sjinfo,
-											 bool use_extended_stats);
+											 bool use_extended_stats,
+											 bool use_damping);
 
 /* cmpSelectivity
  * comparison function for using qsort on an array of Selectivity entries
@@ -131,10 +132,11 @@ clauselist_selectivity(PlannerInfo *root,
 					   List *clauses,
 					   int varRelid,
 					   JoinType jointype,
-					   SpecialJoinInfo *sjinfo)
+					   SpecialJoinInfo *sjinfo,
+					   bool use_damping)
 {
 	return clauselist_selectivity_ext(root, clauses, varRelid,
-									  jointype, sjinfo, true);
+									  jointype, sjinfo, true, use_damping);
 }
 
 /*
@@ -149,7 +151,8 @@ clauselist_selectivity_ext(PlannerInfo *root,
 						   int varRelid,
 						   JoinType jointype,
 						   SpecialJoinInfo *sjinfo,
-						   bool use_extended_stats)
+						   bool use_extended_stats,
+						   bool use_damping)
 {
 	Selectivity s1 = 1.0;
 	Selectivity *rgsel = NULL;
@@ -172,7 +175,7 @@ clauselist_selectivity_ext(PlannerInfo *root,
 	if (list_length(clauses) == 1)
 		return clause_selectivity_ext(root, (Node *) linitial(clauses),
 									  varRelid, jointype, sjinfo,
-									  use_extended_stats);
+									  use_extended_stats, use_damping);
 
 	/*
 	 * Determine if these clauses reference a single relation.  If so, and if
@@ -218,7 +221,7 @@ clauselist_selectivity_ext(PlannerInfo *root,
 
 		/* Compute the selectivity of this clause in isolation */
 		s2 = clause_selectivity_ext(root, clause, varRelid, jointype, sjinfo,
-									use_extended_stats);
+									use_extended_stats, use_damping);
 
 		/*
 		 * Check for being passed a RestrictInfo.
@@ -430,7 +433,8 @@ clauselist_selectivity_or(PlannerInfo *root,
 						  int varRelid,
 						  JoinType jointype,
 						  SpecialJoinInfo *sjinfo,
-						  bool use_extended_stats)
+						  bool use_extended_stats,
+						  bool use_damping)
 {
 	Selectivity s1 = 0.0;
 	RelOptInfo *rel;
@@ -479,7 +483,7 @@ clauselist_selectivity_or(PlannerInfo *root,
 			continue;
 
 		s2 = clause_selectivity_ext(root, (Node *) lfirst(lc), varRelid,
-									jointype, sjinfo, use_extended_stats);
+									jointype, sjinfo, use_extended_stats, use_damping);
 
 		s1 = s1 + s2 - s1 * s2;
 	}
@@ -762,7 +766,7 @@ clause_selectivity(PlannerInfo *root,
 				   bool use_damping)
 {
 	return clause_selectivity_ext(root, clause, varRelid,
-								  jointype, sjinfo, true);
+								  jointype, sjinfo, true, use_damping);
 }
 
 /*
@@ -777,7 +781,8 @@ clause_selectivity_ext(PlannerInfo *root,
 					   int varRelid,
 					   JoinType jointype,
 					   SpecialJoinInfo *sjinfo,
-					   bool use_extended_stats)
+					   bool use_extended_stats,
+					   bool use_damping)
 {
 	Selectivity s1 = 0.5;		/* default for any unhandled clause type */
 	RestrictInfo *rinfo = NULL;
@@ -898,7 +903,8 @@ clause_selectivity_ext(PlannerInfo *root,
 										  varRelid,
 										  jointype,
 										  sjinfo,
-										  use_extended_stats);
+										  use_extended_stats,
+										  use_damping);
 	}
 	else if (is_andclause(clause))
 	{
@@ -908,7 +914,8 @@ clause_selectivity_ext(PlannerInfo *root,
 										varRelid,
 										jointype,
 										sjinfo,
-										use_extended_stats);
+										use_extended_stats,
+										use_damping);
 	}
 	else if (is_orclause(clause))
 	{
@@ -921,7 +928,8 @@ clause_selectivity_ext(PlannerInfo *root,
 									   varRelid,
 									   jointype,
 									   sjinfo,
-									   use_extended_stats);
+									   use_extended_stats,
+									   use_damping);
 	}
 	else if (is_opclause(clause) || IsA(clause, DistinctExpr))
 	{
@@ -1027,7 +1035,8 @@ clause_selectivity_ext(PlannerInfo *root,
 									varRelid,
 									jointype,
 									sjinfo,
-									use_extended_stats);
+									use_extended_stats,
+									use_damping);
 	}
 	else if (IsA(clause, CoerceToDomain))
 	{
@@ -1037,7 +1046,8 @@ clause_selectivity_ext(PlannerInfo *root,
 									varRelid,
 									jointype,
 									sjinfo,
-									use_extended_stats);
+									use_extended_stats,
+									use_damping);
 	}
 	else
 	{
