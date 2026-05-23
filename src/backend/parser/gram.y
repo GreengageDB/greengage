@@ -454,7 +454,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 				cdb_string_list
 				opt_column_list columnList opt_name_list
 				exttab_auth_list keyvalue_list
-				sort_clause opt_sort_clause sortby_list index_params
 				sort_clause opt_sort_clause sortby_list index_params stats_params
 				opt_include opt_c_include index_including_params
 				name_list role_list from_clause from_list opt_array_bounds
@@ -611,10 +610,9 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <str>		RoleId opt_boolean_or_string
 %type <str>		QueueId
 %type <list>	var_list
-%type <str>		ColId ColLabel ColLabelNoAs var_name type_function_name param_name
-%type <keyword> PartitionIdentKeyword	
+%type <str>		ColId ColLabel ColLabelNoAs BareColLabel
+%type <keyword> PartitionIdentKeyword
 %type <str>		PartitionColId
-%type <str>		ColId ColLabel BareColLabel
 %type <str>		NonReservedWord NonReservedWord_or_Sconst
 %type <str>		var_name type_function_name param_name
 %type <str>		createdb_opt_name plassign_target
@@ -797,8 +795,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF REFERENCES REFERENCING
 	REFRESH REINDEX RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA
-	RESET RESTART RESTRICT RETRIEVE RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
-	RESET RESTART RESTRICT RETURN RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
+	RESET RESTART RESTRICT RETRIEVE RETURN RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
 	ROUTINE ROUTINES ROW ROWS RULE
 
 	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
@@ -1245,8 +1242,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 			%nonassoc UNKNOWN
 			%nonassoc ZONE
 
-%nonassoc	UNBOUNDED		/* ideally would have same precedence as IDENT */
-%nonassoc	IDENT PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING CUBE ROLLUP
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%'
@@ -10044,8 +10039,6 @@ opt_nulls_order: NULLS_LA FIRST_P			{ $$ = SORTBY_NULLS_FIRST; }
 
 CreateFunctionStmt:
 			CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			RETURNS func_return createfunc_opt_list
-			opt_definition
 			RETURNS func_return opt_createfunc_opt_list opt_routine_body
 				{
 					CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
@@ -10055,12 +10048,6 @@ CreateFunctionStmt:
 					n->parameters = $5;
 					n->returnType = $7;
 					n->options = $8;
-					n->options = list_concat(n->options, $9);
-					$$ = (Node *)n;
-				}
-			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			  RETURNS TABLE '(' table_func_column_list ')' createfunc_opt_list
-			  opt_definition
 					n->sql_body = $9;
 					$$ = (Node *)n;
 				}
@@ -10075,12 +10062,6 @@ CreateFunctionStmt:
 					n->returnType = TableFuncTypeName($9);
 					n->returnType->location = @7;
 					n->options = $11;
-					n->options = list_concat(n->options, $12);
-					$$ = (Node *)n;
-				}
-			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			  createfunc_opt_list
-			  opt_definition
 					n->sql_body = $12;
 					$$ = (Node *)n;
 				}
@@ -10094,7 +10075,6 @@ CreateFunctionStmt:
 					n->parameters = $5;
 					n->returnType = NULL;
 					n->options = $6;
-					n->options = list_concat(n->options, $7);
 					n->sql_body = $7;
 					$$ = (Node *)n;
 				}
