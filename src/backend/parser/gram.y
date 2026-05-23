@@ -4939,8 +4939,7 @@ column_reference_storage_directive:
 				}
 		;
 
-columnDef:	ColId Typename create_generic_options ColQualList opt_storage_encoding
-columnDef:	ColId Typename opt_column_compression create_generic_options ColQualList
+columnDef:	ColId Typename opt_column_compression create_generic_options ColQualList opt_storage_encoding
 				{
 					ColumnDef *n = makeNode(ColumnDef);
 					n->colname = $1;
@@ -4948,7 +4947,7 @@ columnDef:	ColId Typename opt_column_compression create_generic_options ColQualL
 					n->compression = $3;
 					n->inhcount = 0;
 					n->is_local = true;
-					n->encoding = $5;
+					n->encoding = $6;
 					n->is_not_null = false;
 					n->is_from_type = false;
 					n->storage = 0;
