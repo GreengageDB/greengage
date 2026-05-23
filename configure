@@ -20217,7 +20217,7 @@ fi
 
 
 
-if test $ac_cv_func_fseeko = yes; then
+if test "$ac_cv_func_fseeko" = yes; then
 # Check whether --enable-largefile was given.
 if test "${enable_largefile+set}" = set; then :
   enableval=$enable_largefile;
@@ -21549,7 +21549,7 @@ $as_echo "$as_me: WARNING:
 else
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
-#include "$srcdir/src/test/thread/thread_test.c"
+#include "$srcdir/config/thread_test.c"
 _ACEOF
 if ac_fn_c_try_run "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
