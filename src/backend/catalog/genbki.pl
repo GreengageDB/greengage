@@ -279,8 +279,7 @@ foreach my $row (@{ $catalog_data{pg_opfamily} })
 	# other (auto-generated) entries in pg_class, pg_amop and pg_amproc.
 	if (!($row->{oid}))
 	{
-		$row->{oid} = $GenbkiNextOid;
-		$GenbkiNextOid++;
+		$row->{oid} = assign_next_oid('pg_opfamily');
 	}
 
 	$opfoids{$key} = $row->{oid};
