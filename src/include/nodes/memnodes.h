@@ -70,13 +70,12 @@ typedef struct MemoryContextMethods
 	bool		(*is_empty) (MemoryContext context);
 	void		(*stats) (MemoryContext context,
 						  MemoryStatsPrintFunc printfunc, void *passthru,
-						  MemoryContextCounters *totals);
+						  MemoryContextCounters *totals,
+						  bool print_to_stderr);
 	void		(*declare_accounting_root) (MemoryContext context);
 	Size		(*get_current_usage) (MemoryContext context);
 	Size		(*get_peak_usage) (MemoryContext context);
 	Size		(*set_peak_usage) (MemoryContext context, Size nbytes);
-MemoryContextCounters *totals,
-						  bool print_to_stderr);
 #ifdef MEMORY_CONTEXT_CHECKING
 	void		(*check) (MemoryContext context);
 #endif
