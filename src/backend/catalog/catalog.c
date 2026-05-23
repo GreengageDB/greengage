@@ -645,6 +645,8 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	if (Gp_role == GP_ROLE_EXECUTE && RelationNeedsSynchronizedOIDs(relation))
 		elog(PANIC, "allocated OID %u for relation \"%s\" in segment",
 			 newOid, RelationGetRelationName(relation));
+
+	/*
 	 * If at least one log message is emitted, also log the completion of OID
 	 * assignment.
 	 */

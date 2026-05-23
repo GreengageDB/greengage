@@ -1192,8 +1192,6 @@ transformOnConflictClause(ParseState *pstate,
 		 * The pseudo one should follow it to avoid involving another lockmode
 		 * which is not the appropriate.
 		 */
-		RangeTblEntry *exclRte;
-
 		exclNSItem = addRangeTableEntryForRelation(pstate,
 												   targetrel,
 												   rte->rellockmode, /* GPDB */

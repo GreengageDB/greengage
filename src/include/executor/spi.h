@@ -149,7 +149,6 @@ extern int	SPI_execute_with_receiver(const char *src,
 									  ParamListInfo params,
 									  bool read_only, int64 tcount,
 									  DestReceiver *dest);
-bool read_only, long tcount);
 extern SPIPlanPtr SPI_prepare(const char *src, int nargs, Oid *argtypes);
 extern SPIPlanPtr SPI_prepare_cursor(const char *src, int nargs, Oid *argtypes,
 									 int cursorOptions);

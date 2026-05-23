@@ -655,6 +655,7 @@ ExecSupportsBackwardScan(Plan *node)
 
 		case T_SeqScan:
 		case T_TidScan:
+		case T_TidRangeScan:
 		case T_FunctionScan:
 		case T_ValuesScan:
 		case T_CteScan:
@@ -688,12 +689,6 @@ ExecSupportsBackwardScan(Plan *node)
 			}
 			return false;
 
-		case T_SeqScan:
-		case T_TidScan:
-		case T_TidRangeScan:
-		case T_FunctionScan:
-		case T_ValuesScan:
-		case T_CteScan:
 		case T_Material:
 		case T_Sort:
 			/* these don't evaluate tlist */

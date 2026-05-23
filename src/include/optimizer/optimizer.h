@@ -65,13 +65,13 @@ extern Selectivity clause_selectivity(PlannerInfo *root,
 									  JoinType jointype,
 									  SpecialJoinInfo *sjinfo,
 									  bool use_damping);
-SpecialJoinInfo *sjinfo);
 extern Selectivity clause_selectivity_ext(PlannerInfo *root,
 										  Node *clause,
 										  int varRelid,
 										  JoinType jointype,
 										  SpecialJoinInfo *sjinfo,
-										  bool use_extended_stats);
+										  bool use_extended_stats,
+										  bool use_damping);
 extern Selectivity clauselist_selectivity(PlannerInfo *root,
 										  List *clauses,
 										  int varRelid,
@@ -85,13 +85,13 @@ extern Selectivity clauselist_selectivity_simple(PlannerInfo *root,
 												 SpecialJoinInfo *sjinfo,
 												 Bitmapset *estimatedclauses,
 												 bool use_damping);
-SpecialJoinInfo *sjinfo);
 extern Selectivity clauselist_selectivity_ext(PlannerInfo *root,
 											  List *clauses,
 											  int varRelid,
 											  JoinType jointype,
 											  SpecialJoinInfo *sjinfo,
-											  bool use_extended_stats);
+											  bool use_extended_stats,
+											  bool use_damping);
 
 /* in path/costsize.c: */
 

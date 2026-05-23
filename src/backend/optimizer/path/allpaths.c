@@ -2362,6 +2362,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 {
 	Query	   *subquery = rte->subquery;
 	Relids		required_outer;
+	pushdown_safety_info safetyInfo;
 	double		tuple_fraction;
 	bool		forceDistRand;
 	PlannerConfig *config;
@@ -2382,10 +2383,17 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 */
 	required_outer = rel->lateral_relids;
 
-	forceDistRand = rte->forceDistRandom;
+	/*
+	 * Zero out result area for subquery_is_pushdown_safe, so that it can set
+	 * flags as needed while recursing.  In particular, we need a workspace
+	 * for keeping track of unsafe-to-reference columns.  unsafeColumns[i]
+	 * will be set true if we find that output column i of the subquery is
+	 * unsafe to use in a pushed-down qual.
+	 */
+	memset(&safetyInfo, 0, sizeof(safetyInfo));
+	safetyInfo.unsafeColumns = (bool *)
+		palloc0((list_length(subquery->targetList) + 1) * sizeof(bool));
 
-	/* CDB: Could be a preplanned subquery from window_planner. */
-	if (rte->subquery_root == NULL)
 	/*
 	 * If the subquery has the "security_barrier" flag, it means the subquery
 	 * originated from a view that must enforce row-level security.  Then we
@@ -2395,67 +2403,78 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 */
 	safetyInfo.unsafeLeaky = rte->security_barrier;
 
-	/*
-	 * If there are any restriction clauses that have been attached to the
-	 * subquery relation, consider pushing them down to become WHERE or HAVING
-	 * quals of the subquery itself.  This transformation is useful because it
-	 * may allow us to generate a better plan for the subquery than evaluating
-	 * all the subquery output rows and then filtering them.
-	 *
-	 * There are several cases where we cannot push down clauses. Restrictions
-	 * involving the subquery are checked by subquery_is_pushdown_safe().
-	 * Restrictions on individual clauses are checked by
-	 * qual_is_pushdown_safe().  Also, we don't want to push down
-	 * pseudoconstant clauses; better to have the gating node above the
-	 * subquery.
-	 *
-	 * Non-pushed-down clauses will get evaluated as qpquals of the
-	 * SubqueryScan node.
-	 *
-	 * XXX Are there any cases where we want to make a policy decision not to
-	 * push down a pushable qual, because it'd result in a worse plan?
-	 */
-	if (rel->baserestrictinfo != NIL &&
-		subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
+	forceDistRand = rte->forceDistRandom;
+
+	/* CDB: Could be a preplanned subquery from window_planner. */
+	if (rte->subquery_root == NULL)
 	{
 		/*
-		 * push down quals if possible. Note subquery might be
-		 * different pointer from original one.
+		 * If there are any restriction clauses that have been attached to the
+		 * subquery relation, consider pushing them down to become WHERE or
+		 * HAVING quals of the subquery itself.  This transformation is useful
+		 * because it may allow us to generate a better plan for the subquery
+		 * than evaluating all the subquery output rows and then filtering
+		 * them.
+		 *
+		 * There are several cases where we cannot push down clauses.
+		 * Restrictions involving the subquery are checked by
+		 * subquery_is_pushdown_safe().  Restrictions on individual clauses
+		 * are checked by qual_is_pushdown_safe().  Also, we don't want to
+		 * push down pseudoconstant clauses; better to have the gating node
+		 * above the subquery.
+		 *
+		 * Non-pushed-down clauses will get evaluated as qpquals of the
+		 * SubqueryScan node.
+		 *
+		 * XXX Are there any cases where we want to make a policy decision
+		 * not to push down a pushable qual, because it'd result in a worse
+		 * plan?
 		 */
-		subquery = push_down_restrict(root, rel, rte, rti, subquery);
-
-		foreach(l, rel->baserestrictinfo)
+		if (rel->baserestrictinfo != NIL &&
+			subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
 		{
-			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+			List	   *upperrestrictlist = NIL;
+			ListCell   *l;
 
-			if (!rinfo->pseudoconstant &&
-				qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
-			{
-				Node	   *clause = (Node *) rinfo->clause;
+			/*
+			 * push down quals if possible. Note subquery might be a
+			 * different pointer from the original one.
+			 */
+			subquery = push_down_restrict(root, rel, rte, rti, subquery);
 
-				/* Push it down */
-				subquery_push_qual(subquery, rte, rti, clause);
-			}
-			else
+			foreach(l, rel->baserestrictinfo)
 			{
-				/* Keep it in the upper query */
-				upperrestrictlist = lappend(upperrestrictlist, rinfo);
+				RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+
+				if (!rinfo->pseudoconstant &&
+					qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
+				{
+					Node	   *clause = (Node *) rinfo->clause;
+
+					/* Push it down */
+					subquery_push_qual(subquery, rte, rti, clause);
+				}
+				else
+				{
+					/* Keep it in the upper query */
+					upperrestrictlist = lappend(upperrestrictlist, rinfo);
+				}
 			}
+			rel->baserestrictinfo = upperrestrictlist;
+			/* We don't bother recomputing baserestrict_min_security */
 		}
-		rel->baserestrictinfo = upperrestrictlist;
-		/* We don't bother recomputing baserestrict_min_security */
-	}
+
 		/*
-		 * The upper query might not use all the subquery's output columns; if
-		 * not, we can simplify.
+		 * The upper query might not use all the subquery's output columns;
+		 * if not, we can simplify.
 		 */
 		remove_unused_subquery_outputs(subquery, rel);
 
 		/*
-		 * We can safely pass the outer tuple_fraction down to the subquery if the
-		 * outer level has no joining, aggregation, or sorting to do. Otherwise
-		 * we'd better tell the subquery to plan for full retrieval. (XXX This
-		 * could probably be made more intelligent ...)
+		 * We can safely pass the outer tuple_fraction down to the subquery
+		 * if the outer level has no joining, aggregation, or sorting to do.
+		 * Otherwise we'd better tell the subquery to plan for full retrieval.
+		 * (XXX This could probably be made more intelligent ...)
 		 */
 		if (subquery->hasAggs ||
 			subquery->groupClause ||
