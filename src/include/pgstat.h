@@ -1118,59 +1118,6 @@ extern void pgstat_init_localportalhash(void);
 extern PgStat_StatPortalEntry *pgstat_getportalentry(uint32 portalid,
 													 Oid queueid);
 
-/* ----------
- * pgstat_report_wait_start() -
- *
- *	Called from places where server process needs to wait.  This is called
- *	to report wait event information.  The wait information is stored
- *	as 4-bytes where first byte represents the wait event class (type of
- *	wait, for different types of wait, refer WaitClass) and the next
- *	3-bytes represent the actual wait event.  Currently 2-bytes are used
- *	for wait event which is sufficient for current usage, 1-byte is
- *	reserved for future usage.
- *
- * NB: this *must* be able to survive being called before MyProc has been
- * initialized.
- * ----------
- */
-static inline void
-pgstat_report_wait_start(uint32 wait_event_info)
-{
-	volatile PGPROC *proc = MyProc;
-
-	if (!pgstat_track_activities || !proc)
-		return;
-
-	/*
-	 * Since this is a four-byte field which is always read and written as
-	 * four-bytes, updates are atomic.
-	 */
-	proc->wait_event_info = wait_event_info;
-}
-
-/* ----------
- * pgstat_report_wait_end() -
- *
- *	Called to report end of a wait.
- *
- * NB: this *must* be able to survive being called before MyProc has been
- * initialized.
- * ----------
- */
-static inline void
-pgstat_report_wait_end(void)
-{
-	volatile PGPROC *proc = MyProc;
-
-	if (!pgstat_track_activities || !proc)
-		return;
-
-	/*
-	 * Since this is a four-byte field which is always read and written as
-	 * four-bytes, updates are atomic.
-	 */
-	proc->wait_event_info = 0;
-}
 
 /* nontransactional event counts are simple enough to inline */
 
