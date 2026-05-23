@@ -906,12 +906,12 @@
   prorettype => 'table_am_handler', proargtypes => 'internal',
   prosrc => 'heap_tableam_handler' },
 
-{ oid => '4198', oid_symbol => 'AO_ROW_TABLE_AM_HANDLER_OID',
+{ oid => '9449', oid_symbol => 'AO_ROW_TABLE_AM_HANDLER_OID',
   descr => 'row-oriented append-optimized table access method handler',
   proname => 'ao_row_tableam_handler', provolatile => 'v',
   prorettype => 'table_am_handler', proargtypes => 'internal',
   prosrc => 'ao_row_tableam_handler' },
-{ oid => '4199', oid_symbol => 'AO_COLUMN_TABLE_AM_HANDLER_OID',
+{ oid => '9450', oid_symbol => 'AO_COLUMN_TABLE_AM_HANDLER_OID',
   descr => 'column-oriented append-optimized table access method handler',
   proname => 'ao_column_tableam_handler', provolatile => 'v',
   prorettype => 'table_am_handler', proargtypes => 'internal',
@@ -12388,61 +12388,61 @@
 { oid => 6149, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_bytea', prorettype => 'int4', proargtypes => 'bytea', prosrc => 'cdblegacyhash_bytea' },
 
-{ oid => 6150, descr => 'Legacy cdbhash function',
+{ oid => 9451, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_name', prorettype => 'int4', proargtypes => 'name', prosrc => 'cdblegacyhash_name' },
 
-{ oid => 6151, descr => 'Legacy cdbhash function',
+{ oid => 9452, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_oid', prorettype => 'int4', proargtypes => 'oid', prosrc => 'cdblegacyhash_oid' },
 
-{ oid => 6152, descr => 'Legacy cdbhash function',
+{ oid => 9453, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_tid', prorettype => 'int4', proargtypes => 'tid', prosrc => 'cdblegacyhash_tid' },
 
-{ oid => 6153, descr => 'Legacy cdbhash function',
+{ oid => 9454, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_timestamp', prorettype => 'int4', proargtypes => 'timestamp', prosrc => 'cdblegacyhash_timestamp' },
 
-{ oid => 6154, descr => 'Legacy cdbhash function',
+{ oid => 9455, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_timestamptz', prorettype => 'int4', proargtypes => 'timestamptz', prosrc => 'cdblegacyhash_timestamptz' },
 
-{ oid => 6155, descr => 'Legacy cdbhash function',
+{ oid => 9456, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_date', prorettype => 'int4', proargtypes => 'date', prosrc => 'cdblegacyhash_date' },
 
-{ oid => 6156, descr => 'Legacy cdbhash function',
+{ oid => 9457, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_time', prorettype => 'int4', proargtypes => 'time', prosrc => 'cdblegacyhash_time' },
 
-{ oid => 6157, descr => 'Legacy cdbhash function',
+{ oid => 9458, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_timetz', prorettype => 'int4', proargtypes => 'timetz', prosrc => 'cdblegacyhash_timetz' },
 
-{ oid => 6158, descr => 'Legacy cdbhash function',
+{ oid => 9459, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_interval', prorettype => 'int4', proargtypes => 'interval', prosrc => 'cdblegacyhash_interval' },
 
-{ oid => 6162, descr => 'Legacy cdbhash function',
+{ oid => 9460, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_inet', prorettype => 'int4', proargtypes => 'inet', prosrc => 'cdblegacyhash_inet' },
 
-{ oid => 6163, descr => 'Legacy cdbhash function',
+{ oid => 9461, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_macaddr', prorettype => 'int4', proargtypes => 'macaddr', prosrc => 'cdblegacyhash_macaddr' },
 
-{ oid => 6164, descr => 'Legacy cdbhash function',
+{ oid => 9462, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_bit', prorettype => 'int4', proargtypes => 'bit', prosrc => 'cdblegacyhash_bit' },
 
-{ oid => 6165, descr => 'Legacy cdbhash function',
+{ oid => 9463, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_bool', prorettype => 'int4', proargtypes => 'bool', prosrc => 'cdblegacyhash_bool' },
 
-{ oid => 6166, descr => 'Legacy cdbhash function',
+{ oid => 9464, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_array', prorettype => 'int4', proargtypes => 'anyarray', prosrc => 'cdblegacyhash_array' },
 
-{ oid => 6167, descr => 'Legacy cdbhash function',
+{ oid => 9465, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_oidvector', prorettype => 'int4', proargtypes => 'oidvector', prosrc => 'cdblegacyhash_oidvector' },
 
-{ oid => 6168, descr => 'Legacy cdbhash function',
+{ oid => 9466, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_cash', prorettype => 'int4', proargtypes => 'money', prosrc => 'cdblegacyhash_cash' },
 
-{ oid => 6169, descr => 'Legacy cdbhash function',
+{ oid => 9467, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_complex', prorettype => 'int4', proargtypes => 'complex', prosrc => 'cdblegacyhash_complex' },
 
-{ oid => 6170, descr => 'Legacy cdbhash function',
+{ oid => 9468, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_uuid', prorettype => 'int4', proargtypes => 'uuid', prosrc => 'cdblegacyhash_uuid' },
 
-{ oid => 6171, descr => 'Legacy cdbhash function',
+{ oid => 9469, descr => 'Legacy cdbhash function',
    proname => 'cdblegacyhash_anyenum', prorettype => 'int4', proargtypes => 'anyenum', prosrc => 'cdblegacyhash_anyenum' },
 
 { oid => 6998, descr => 'Create a named restore point on all segments',
