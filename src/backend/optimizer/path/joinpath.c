@@ -1708,7 +1708,7 @@ match_unsorted_outer(PlannerInfo *root,
 		if (enable_material && inner_cheapest_total != NULL &&
 			!ExecMaterializesOutput(inner_cheapest_total->pathtype))
 			matpath = (Path *)
-				create_material_path(root, innerrel, inner_cheapest_total);
+				create_material_path(innerrel, inner_cheapest_total);
 	}
 
 	foreach(lc1, outerrel->pathlist)
@@ -1797,6 +1797,7 @@ match_unsorted_outer(PlannerInfo *root,
 									  rcpath,
 									  merge_pathkeys,
 									  jointype,
+									  save_jointype,
 									  extra);
 			}
 
@@ -1977,7 +1978,7 @@ consider_parallel_nestloop(PlannerInfo *root,
 			}
 
 			try_partial_nestloop_path(root, joinrel, outerpath, innerpath,
-									  pathkeys, jointype, extra);
+									  pathkeys, jointype, save_jointype, extra);
 
 			/*
 			 * Try generating a result cache path and see if that makes the
@@ -1988,7 +1989,7 @@ consider_parallel_nestloop(PlannerInfo *root,
 										  extra);
 			if (rcpath != NULL)
 				try_partial_nestloop_path(root, joinrel, outerpath, rcpath,
-										  pathkeys, jointype, extra);
+										  pathkeys, jointype, save_jointype, extra);
 		}
 	}
 }
