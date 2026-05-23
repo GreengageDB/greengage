@@ -2116,8 +2116,8 @@ typedef enum AlterTableType
 	AT_PartRename,				/* Rename */
 	AT_PartSetTemplate,			/* Set Subpartition Template */
 	AT_PartSplit,				/* Split */
-	AT_PartTruncate				/* Truncate */
-AT_ReAddStatistics			/* internal to commands/tablecmds.c */
+	AT_PartTruncate,			/* Truncate */
+	AT_ReAddStatistics			/* internal to commands/tablecmds.c */
 } AlterTableType;
 
 typedef struct ReplicaIdentityStmt

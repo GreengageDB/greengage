@@ -159,6 +159,7 @@ CancelRequested()
 #endif
 
 /* Service interrupt, if one is pending and it's safe to service it now */
+#ifndef WIN32
 #define CHECK_FOR_INTERRUPTS() \
 do { \
 	if (unlikely(InterruptPending)) \
