@@ -19423,7 +19423,6 @@ bare_label_keyword:
 			| DISABLE_P
 			| DISCARD
 			| DISTINCT
-			| DISTRIBUTED
 			| DO
 			| DOCUMENT_P
 			| DOMAIN_P
@@ -19602,8 +19601,6 @@ bare_label_keyword:
 			| OWNER
 			| PARALLEL
 			| PARSER
-			| PARTIAL
-			| PARTITION
 			| PARTITIONS
 			| PASSING
 			| PASSWORD
@@ -19669,7 +19666,6 @@ bare_label_keyword:
 			| ROWS
 			| RULE
 			| SAVEPOINT
-			| SCATTER
 			| SCHEMA
 			| SCHEMAS
 			| SCROLL
