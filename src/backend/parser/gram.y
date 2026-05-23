@@ -17971,7 +17971,6 @@ target_el:	a_expr AS ColLabel
 			 * modifier suffixes (DAY, MONTH, YEAR, etc) and a few other
 			 * obscure cases.
 			 */
-			| a_expr IDENT
 			| a_expr BareColLabel
 				{
 					$$ = makeNode(ResTarget);
