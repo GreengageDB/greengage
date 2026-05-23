@@ -1297,7 +1297,9 @@ typedef struct DistributionKey
  */
 #define CdbEquivClassIsConstant(eclass)						\
 	((eclass)->ec_has_const && !(eclass)->ec_below_outer_join)
-* VolatileFunctionStatus -- allows nodes to cache their
+
+/*
+ * VolatileFunctionStatus -- allows nodes to cache their
  * contain_volatile_functions properties. VOLATILITY_UNKNOWN means not yet
  * determined.
  */
@@ -1684,7 +1686,9 @@ typedef struct CdbMotionPath
 
 	GpPolicy   *policy;
 } CdbMotionPath;
-* TidRangePath represents a scan by a continguous range of TIDs
+
+/*
+ * TidRangePath represents a scan by a contiguous range of TIDs
  *
  * tidrangequals is an implicitly AND'ed list of qual expressions of the form
  * "CTID relop pseudoconstant", where relop is one of >,>=,<,<=.
