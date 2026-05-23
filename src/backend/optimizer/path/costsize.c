@@ -237,18 +237,6 @@ static Selectivity adjust_selectivity_for_nulltest(Selectivity selec,
  */
 typedef struct
 {
-	/*
-	 * Avoid infinite and NaN row estimates.  Costs derived from such values
-	 * are going to be useless.  Also force the estimate to be at least one
-	 * row, to make explain output look better and to avoid possible
-	 * divide-by-zero when interpolating costs.  Make it an integer, too.
-	 */
-	if (nrows > MAXIMUM_ROWCOUNT || isnan(nrows))
-		nrows = MAXIMUM_ROWCOUNT;
-	else if (nrows <= 1.0)
-		nrows = 1.0;
-	else
-		nrows = rint(nrows);
 	/* Values copied from RelOptInfo as is, for convenience */
 	Index		relid;
 	RTEKind		rtekind;		/* RELATION, SUBQUERY, or FUNCTION */
