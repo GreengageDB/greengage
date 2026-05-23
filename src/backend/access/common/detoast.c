@@ -134,7 +134,7 @@ varattrib_untoast_len(Datum d)
 
 		if (VARATT_IS_COMPRESSED(attr))
 		{
-			len = TOAST_COMPRESS_RAWSIZE(attr);
+			len = TOAST_COMPRESS_EXTSIZE(attr);
 		}
 		else if (VARATT_IS_SHORT(attr))
 		{
