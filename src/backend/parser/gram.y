@@ -17979,14 +17979,6 @@ target_el:	a_expr AS ColLabel
 					$$->val = (Node *)$1;
 					$$->location = @1;
 				}
-			| a_expr ColLabelNoAs
-				{
-					$$ = makeNode(ResTarget);
-					$$->name = $2;
-					$$->indirection = NIL;
-					$$->val = (Node *)$1;
-					$$->location = @1;
-				}
 			| a_expr
 				{
 					$$ = makeNode(ResTarget);
