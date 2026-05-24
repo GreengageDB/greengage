@@ -15,18 +15,7 @@
 
 #include <limits.h>
 
-#ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
-#endif
-
-/* If <sys/uio.h> is missing, define our own POSIX-compatible iovec struct. */
-#ifndef HAVE_SYS_UIO_H
-struct iovec
-{
-	void	   *iov_base;
-	size_t		iov_len;
-};
-#endif
 
 /*
  * If <limits.h> didn't define IOV_MAX, define our own.  POSIX requires at

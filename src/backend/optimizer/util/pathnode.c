@@ -5349,7 +5349,7 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	if (Gp_role == GP_ROLE_DISPATCH)
 		pathnode->path.locus =
 			adjust_modifytable_subpaths(root, operation,
-										resultRelations, subpaths,
+										resultRelations, list_make1(subpath),
 										is_split_updates);
 	else
 	{
@@ -5404,8 +5404,8 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->partColsUpdated = partColsUpdated;
 	pathnode->resultRelations = resultRelations;
 	pathnode->is_split_updates = is_split_updates;
-	pathnode->subpaths = subpaths;
-	pathnode->subroots = subroots;
+	pathnode->subpaths = list_make1(subpath);
+	pathnode->subroots = NIL;
 	pathnode->updateColnosLists = updateColnosLists;
 	pathnode->withCheckOptionLists = withCheckOptionLists;
 	pathnode->returningLists = returningLists;

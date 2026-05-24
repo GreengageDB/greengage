@@ -8385,6 +8385,8 @@ StartupXLOG(void)
 	 * timestamps are started below, if necessary.)
 	 */
 	if (standbyState == STANDBY_DISABLED)
+	{
+		StartupCLOG();
 		StartupSUBTRANS(oldestActiveXID);
 		DistributedLog_Startup(oldestActiveXID,
 							   XidFromFullTransactionId(ShmemVariableCache->nextXid));
@@ -9100,10 +9102,6 @@ ShutdownXLOG(int code pg_attribute_unused() , Datum arg pg_attribute_unused() )
 
 		CreateCheckPoint(CHECKPOINT_IS_SHUTDOWN | CHECKPOINT_IMMEDIATE);
 	}
-	ShutdownCLOG();
-	ShutdownCommitTs();
-	ShutdownSUBTRANS();
-	ShutdownMultiXact();
 	DistributedLog_Shutdown();
 }
 

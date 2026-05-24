@@ -3695,6 +3695,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH && RelationIsMapped(heapRelation))
 		PreventInTransactionBlock(true, "REINDEX of a catalog table");
+
+	/*
 	 * System relations cannot be moved even if allow_system_table_mods is
 	 * enabled to keep things consistent with the concurrent case where all
 	 * the indexes of a relation are processed in series, including indexes of
@@ -4089,21 +4091,21 @@ reindex_relation(Oid relid, int flags, ReindexParams *params)
 	 * still hold the lock on the master table.
 	 */
 	if (OidIsValid(aoseg_relid))
-		result |= reindex_relation(aoseg_relid, 0, options);
+		result |= reindex_relation(aoseg_relid, 0, params);
 
 	/*
 	 * If an AO rel has a secondary block directory rel, reindex that too while we
 	 * still hold the lock on the master table.
 	 */
 	if (OidIsValid(aoblkdir_relid))
-		result |= reindex_relation(aoblkdir_relid, 0, options);
+		result |= reindex_relation(aoblkdir_relid, 0, params);
 
 	/*
 	 * If an AO rel has a secondary visibility map rel, reindex that too while we
 	 * still hold the lock on the master table.
 	 */
 	if (OidIsValid(aovisimap_relid))
-		result |= reindex_relation(aovisimap_relid, 0, options);
+		result |= reindex_relation(aovisimap_relid, 0, params);
 
 	return result;
 }
