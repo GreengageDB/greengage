@@ -484,13 +484,13 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 
 			/* Now we can check if it'll fit in hash_mem */
 			/* XXX can we check this at the Path stage? */
-			if (subplan_is_hashable(root, plan))
+			if (subplan_is_hashable(plan))
 			{
 				SubPlan    *hashplan;
 				AlternativeSubPlan *asplan;
 
 				/* OK, finish planning the ANY subquery */
-				plan = create_plan(subroot, best_path);
+				plan = create_plan(subroot, best_path, NULL);
 
 				/* ... and convert to SubPlan format */
 				hashplan = castNode(SubPlan,
@@ -746,7 +746,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		 */
 		if (subLinkType == ANY_SUBLINK &&
 			splan->parParam == NIL &&
-			subplan_is_hashable(root, plan) &&
+			subplan_is_hashable(plan) &&
 			testexpr_is_hashable(splan->testexpr, splan->paramIds))
 			splan->useHashTable = true;
 
@@ -953,7 +953,7 @@ convert_testexpr_mutator(Node *node,
  * is suitable for hashing.  We only look at the subquery itself.
  */
 static bool
-subplan_is_hashable(PlannerInfo *root, Plan *plan)
+subplan_is_hashable(Plan *plan)
 {
 	double		subquery_size;
 
