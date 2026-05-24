@@ -662,7 +662,7 @@ DistributedLog_ShmemInit(void)
 	SimpleLruInit(DistributedLogCtl, "DistributedLogCtl", DistributedLog_ShmemBuffers(), 0,
 				  DistributedLogControlLock, "pg_distributedlog",
 				  LWTRANCHE_DISTRIBUTEDLOG_BUFFERS,
-				  SYNC_HANDLER_DISTRIBUTED_LOG);
+				  SYNC_HANDLER_NONE);
 
 	/* Create or attach to the shared structure */
 	DistributedLogShared =

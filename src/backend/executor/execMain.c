@@ -4069,7 +4069,6 @@ AdjustReplicatedTableCounts(EState *estate)
 	int i;
 	ListCell   *l;
 	ResultRelInfo *resultRelInfo;
-	ResultRelInfo *resultRelInfo;
 	bool containReplicatedTable = false;
 	int			numsegments =  1;
 

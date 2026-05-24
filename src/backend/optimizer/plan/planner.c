@@ -667,7 +667,6 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	Assert(glob->finalrowmarks == NIL);
 	Assert(glob->resultRelations == NIL);
 	Assert(parse == root->parse);
-	Assert(glob->rootResultRelations == NIL);
 	Assert(glob->appendRelations == NIL);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -845,7 +844,6 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->grouping_map = NULL;
 	root->minmax_aggs = NIL;
 	root->qual_security_level = 0;
-	root->inhTargetKind = INHKIND_NONE;
 	root->upd_del_replicated_table = 0;
 
 	Assert(config);
@@ -1647,7 +1645,7 @@ inheritance_planner(PlannerInfo *root)
 		Assert(subroot->placeholder_list == NIL);
 
 		/* Generate Path(s) for accessing this result relation */
-		grouping_planner(subroot, true, 0.0 /* retrieve all tuples */ );
+		grouping_planner(subroot, 0.0 /* retrieve all tuples */ );
 
 		/* Extract the info we need. */
 		select_rtable = subroot->parse->rtable;
@@ -1835,8 +1833,6 @@ inheritance_planner(PlannerInfo *root)
 		 * relation_excluded_by_constraints() to treat the result relation as
 		 * being an appendrel member.
 		 */
-		subroot->inhTargetKind =
-			(rootRelation != 0) ? INHKIND_PARTITIONED : INHKIND_INHERITED;
 
 		/*
 		 * If this child is further partitioned, remember it as a parent.
@@ -1916,7 +1912,7 @@ inheritance_planner(PlannerInfo *root)
 		Assert(subroot->placeholder_list == NIL);
 
 		/* Generate Path(s) for accessing this result relation */
-		grouping_planner(subroot, true, 0.0 /* retrieve all tuples */ );
+		grouping_planner(subroot, 0.0 /* retrieve all tuples */ );
 
 		/*
 		 * Select cheapest path in case there's more than one.  We always run
@@ -2099,9 +2095,9 @@ inheritance_planner(PlannerInfo *root)
 		final_rel->reltarget = create_pathtarget(root, root->processed_tlist);
 
 		/* Make a dummy path, cf set_dummy_rel_pathlist() */
-		dummy_path = (Path *) create_append_path(NULL, final_rel, NIL, NIL,
+		dummy_path = (Path *) create_append_path(root, final_rel, NIL, NIL,
 												 NIL, NULL, 0, false,
-												 NIL, -1);
+												 -1);
 
 		/* These lists must be nonempty to make a valid ModifyTable node */
 		subpaths = list_make1(dummy_path);
@@ -2156,14 +2152,14 @@ inheritance_planner(PlannerInfo *root)
 	/* Create Path representing a ModifyTable to do the UPDATE/DELETE work */
 	add_path(final_rel, (Path *)
 			 create_modifytable_path(root, final_rel,
+									 (Path *) linitial(subpaths),
 									 parse->commandType,
 									 parse->canSetTag,
 									 nominalRelation,
 									 rootRelation,
 									 root->partColsUpdated,
 									 resultRelations,
-									 subpaths,
-									 subroots,
+									 NIL,
 									 withCheckOptionLists,
 									 returningLists,
 									 is_split_updates,
@@ -4600,7 +4596,7 @@ create_grouping_paths(PlannerInfo *root,
 		 * even if there are DISTINCT aggs or grouping sets.
 		 */
 		if (parse->groupClause != NIL &&
-			agg_costs->numPureOrderedAggs == 0 &&
+			agg_costs.numPureOrderedAggs == 0 &&
 			grouping_is_hashable(parse->groupClause))
 			flags |= GROUPING_CAN_USE_MPP_HASH;
 
@@ -5496,7 +5492,7 @@ create_distinct_paths(PlannerInfo *root,
 
 		distinctExprs = get_sortgrouplist_exprs(parse->distinctClause,
 												parse->targetList);
-		numDistinctRows = estimate_num_groups(root, distinctExprs,
+		numDistinctRowsTotal = estimate_num_groups(root, distinctExprs,
 											  cheapest_input_path->rows,
 											  NULL, NULL);
 	}

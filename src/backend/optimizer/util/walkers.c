@@ -502,8 +502,6 @@ plan_tree_walker(Node *node,
 		case T_ModifyTable:
 			if (walk_plan_node_fields((Plan *) node, walker, context))
 				return true;
-			if (walker((Node *) ((ModifyTable *) node)->plans, context))
-				return true;
 			if (walker((Node *) ((ModifyTable *) node)->withCheckOptionLists, context))
 				return true;
 			if (walker((Node *) ((ModifyTable *) node)->onConflictSet, context))
