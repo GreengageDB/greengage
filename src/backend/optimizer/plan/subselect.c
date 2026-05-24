@@ -119,7 +119,7 @@ static Bitmapset *finalize_plan(PlannerInfo *root,
 static bool finalize_primnode(Node *node, finalize_primnode_context *context);
 static bool finalize_agg_primnode(Node *node, finalize_primnode_context *context);
 
-extern	double global_work_mem(PlannerInfo *root);
+extern	double global_work_mem(void);
 static bool contain_outer_selfref_walker(Node *node, Index *depth);
 
 /*
@@ -965,7 +965,7 @@ subplan_is_hashable(PlannerInfo *root, Plan *plan)
 	 */
 	subquery_size = plan->plan_rows *
 		(MAXALIGN(plan->plan_width) + MAXALIGN(SizeofHeapTupleHeader));
-	if (subquery_size > global_work_mem(root))
+	if (subquery_size > global_work_mem())
 		return false;
 
 	return true;

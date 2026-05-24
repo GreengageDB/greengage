@@ -2049,7 +2049,6 @@ create_material_path(RelOptInfo *rel, Path *subpath)
 	pathnode->subpath = subpath;
 
 	cost_material(&pathnode->path,
-				  root,
 				  subpath->startup_cost,
 				  subpath->total_cost,
 				  subpath->rows,

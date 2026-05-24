@@ -1991,7 +1991,7 @@ cost_tuplesort(Cost *startup_cost, Cost *run_cost,
 	double		input_bytes = relation_byte_size(tuples, width);
 	double		output_bytes;
 	double		output_tuples;
-	long		sort_mem_bytes = (long) global_work_mem(NULL);
+	long		sort_mem_bytes = (long) global_work_mem();
 
 	/*
 	 * We want to be sure the cost of a sort is never estimated as zero, even
@@ -2554,7 +2554,7 @@ cost_merge_append(Path *path, PlannerInfo *root,
  * occur only on rescan, which is estimated in cost_rescan.
  */
 void
-cost_material(Path *path, PlannerInfo *root,
+cost_material(Path *path,
 			  Cost input_startup_cost, Cost input_total_cost,
 			  double tuples, int width)
 {
@@ -2584,7 +2584,7 @@ cost_material(Path *path, PlannerInfo *root,
 	 * which isn't exactly accurate but our cost model doesn't allow for
 	 * nonuniform costs within the run phase.
 	 */
-	if (nbytes > global_work_mem(root))
+	if (nbytes > global_work_mem())
 	{
 		double		npages = ceil(nbytes / BLCKSZ);
 
@@ -3127,7 +3127,7 @@ cost_shareinputscan(Path *path, PlannerInfo *root, Cost sharecost,
 	path->total_cost = sharecost;
 	
 	/* I/O cost */
-	if (nbytes > global_work_mem(root))
+	if (nbytes > global_work_mem())
 	{
 		path->total_cost += seq_page_cost * npages;
 	}
@@ -4084,7 +4084,7 @@ initial_cost_hashjoin(PlannerInfo *root, JoinCostWorkspace *workspace,
 	ExecChooseHashTableSize(inner_path_rows_total,
 							inner_path->pathtarget->width,
 							true,	/* useskew */
-							global_work_mem(root) / 1024L,
+							global_work_mem() / 1024L,
 							parallel_hash,	/* try_combined_hash_mem */
 							outer_path->parallel_workers,
 							&space_allowed,
@@ -6620,7 +6620,7 @@ int planner_segment_count(GpPolicy *policy)
  * Output:
  * 	total memory in bytes.
  */
-double global_work_mem(PlannerInfo *root)
+double global_work_mem(void)
 {
 	int			segment_count = planner_segment_count(NULL);
 

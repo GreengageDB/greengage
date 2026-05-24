@@ -160,36 +160,6 @@ table_openrv_extended(const RangeVar *relation, LOCKMODE lockmode,
 }
 
 /* ----------------
- *		try_table_open - open a heap relation by relation OID
- *
- *		As above, but relation return NULL for relation-not-found
- * ----------------
- */
-Relation
-try_table_open(Oid relationId, LOCKMODE lockmode, bool noWait)
-{
-	Relation	r;
-
-	r = try_relation_open(relationId, lockmode, noWait);
-
-	if (!RelationIsValid(r))
-		return NULL;
-
-	if (r->rd_rel->relkind == RELKIND_INDEX)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is an index",
-						RelationGetRelationName(r))));
-	else if (r->rd_rel->relkind == RELKIND_COMPOSITE_TYPE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is a composite type",
-						RelationGetRelationName(r))));
-
-	return r;
-}
-
-/* ----------------
  *		table_close - close a table
  *
  *		If lockmode is not "NoLock", we then release the specified lock.

@@ -141,7 +141,7 @@ extern void cost_merge_append(Path *path, PlannerInfo *root,
 							  List *pathkeys, int n_streams,
 							  Cost input_startup_cost, Cost input_total_cost,
 							  double tuples);
-extern void cost_material(Path *path, PlannerInfo *root,
+extern void cost_material(Path *path,
 						  Cost input_startup_cost, Cost input_total_cost,
 						  double tuples, int width);
 extern void cost_tup_split(Path *path, PlannerInfo *root,
@@ -242,6 +242,6 @@ extern double compute_bitmap_pages(PlannerInfo *root, RelOptInfo *baserel,
 								   Path *bitmapqual, int loop_count, Cost *cost, double *tuple);
 
 extern int planner_segment_count(GpPolicy *policy);
-extern double global_work_mem(PlannerInfo *root);
+extern double global_work_mem(void);
 
 #endif							/* COST_H */
