@@ -16,18 +16,33 @@
  */
 #include "postgres.h"
 
-#include "libpq-int.h"
-
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/heapam.h"
+#include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/xact.h"
+#include "catalog/catalog.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_type.h"
+#include "cdb/cdbappendonlyam.h"
+#include "cdb/cdbaocsam.h"
+#include "cdb/cdbconn.h"
+#include "cdb/cdbcopy.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbdispatchresult.h"
+#include "cdb/cdbpartition.h"
+#include "cdb/cdbsreh.h"
+#include "cdb/cdbvars.h"
 #include "commands/copy.h"
+#include "libpq/libpq.h"
+#include "libpq/pqformat.h"
 #include "commands/defrem.h"
+#include "commands/trigger.h"
 #include "executor/executor.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -47,6 +62,8 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+
+/*
  * The following macros aid in major refactoring of data processing code (in
  * CopyFrom(+Dispatch)). We use macros because in some cases the code must be in
  * line in order to work (for example elog_dismiss() in PG_CATCH) while in
@@ -118,6 +135,36 @@ extern bool Test_copy_qd_qe_split;
  * just collects and forwards them to the client. The QD doesn't need to parse
  * the rows at all.
  */
+#define MAX_BUFFERED_TUPLES		1000
+#define MAX_BUFFERED_BYTES		65535
+
+typedef struct CopyMultiInsertBuffer
+{
+	TupleTableSlot *slots[MAX_BUFFERED_TUPLES];
+	ResultRelInfo *resultRelInfo;
+	BulkInsertState bistate;
+	int			nused;
+	uint64		linenos[MAX_BUFFERED_TUPLES];
+} CopyMultiInsertBuffer;
+
+typedef struct CopyMultiInsertInfo
+{
+	List	   *multiInsertBuffers;
+	int			bufferedTuples;
+	int			bufferedBytes;
+	CopyState	cstate;
+	EState	   *estate;
+	CommandId	mycid;
+	int			ti_options;
+} CopyMultiInsertInfo;
+
+static void close_program_pipes(CopyState cstate, bool ifThrow);
+static void CopySendData(CopyState cstate, const void *databuf, int datasize);
+static void CopySendString(CopyState cstate, const char *str);
+static void CopySendChar(CopyState cstate, char c);
+static void CopySendEndOfRow(CopyState cstate);
+static int CopyReadBinaryData(CopyState cstate, char *dest, int nbytes);
+
 static const char QDtoQESignature[] = "PGCOPY-QD-TO-QE\n\377\r\n";
 
 /* Header contains information that applies to all the rows that follow. */

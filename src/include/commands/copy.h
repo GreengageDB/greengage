@@ -116,13 +116,14 @@ typedef struct CopyStateData
 	StringInfo	fe_msgbuf;		/* used for all dests during COPY TO, only for
 								 * dest == COPY_NEW_FE in COPY FROM */
 	bool		is_copy_from;	/* COPY TO, or COPY FROM? */
-	bool		reached_eof;	/* true if we read to end of copy data (not
-								 * all copy_dest types maintain this) */
+	bool		fe_eof;			/* true if detected end of copy data */
+	bool		reached_eof;	/* true if we read to end of copy data */
 	EolType		eol_type;		/* EOL type of input */
-	char	   *eol_str;		/* optional NEWLINE from command. before eol_type is defined */
+	char	   *eol_str;		/* optional NEWLINE from command */
 	int			file_encoding;	/* file or remote side's character encoding */
 	bool		need_transcoding;	/* file encoding diff from server? */
 	bool		encoding_embeds_ascii;	/* ASCII can be non-first byte? */
+	FmgrInfo   *enc_conversion_proc;
 
 	/* parameters from the COPY command */
 	Relation	rel;			/* relation to copy to or from */
@@ -131,19 +132,98 @@ typedef struct CopyStateData
 	List	   *attnamelist;	/* list of attributes by name */
 	char	   *filename;		/* filename, or NULL for STDIN/STDOUT */
 	bool		is_program;		/* is 'filename' a program to popen? */
-	copy_data_source_cb data_source_cb; /* function for reading data */
+	copy_data_source_cb data_source_cb;
 	void	   *data_source_cb_extra;
-
-	/* GPDB: fields needed by external table URL handlers */
-	bool		header_line;	/* CSV header line? */
+	bool		freeze;			/* freeze rows on loading? */
+	bool		binary;			/* binary format */
 	bool		csv_mode;		/* Comma Separated Value format? */
-	char	   *quote;			/* CSV quote char */
-	char	   *escape;			/* CSV escape char */
-	char	   *null_print;		/* NULL marker string */
-	int			null_print_len;
-	char	   *cur_relname;	/* current relation name for errors */
-	int			cur_lineno;		/* current line number for errors */
+	bool		header_line;	/* CSV header line? */
+	char	   *null_print;		/* NULL marker string (server encoding!) */
+	int			null_print_len;	/* length of same */
+	char	   *null_print_client;	/* same converted to file encoding */
+	char	   *delim;			/* column delimiter (must be 1 byte) */
+	char	   *quote;			/* CSV quote char (must be 1 byte) */
+	char	   *escape;			/* CSV escape char (must be 1 byte) */
+	List	   *force_quote;	/* list of column names */
+	bool		force_quote_all;	/* FORCE QUOTE *? */
+	bool	   *force_quote_flags;	/* per-column CSV FQ flags */
+	List	   *force_notnull;	/* list of column names */
+	bool	   *force_notnull_flags;	/* per-column CSV FNN flags */
+	List	   *force_null;		/* list of column names */
+	bool	   *force_null_flags;	/* per-column CSV FN flags */
+	bool		convert_selectively;	/* do selective binary conversion? */
+	List	   *convert_select;	/* list of column names (can be NIL) */
+	bool	   *convert_select_flags;	/* per-column CSV/TEXT CS flags */
+	bool		fill_missing;	/* missing attrs at end of line are NULL */
+
+	SingleRowErrorDesc *sreh;
+
+	/* these are just for error messages, see CopyFromErrorCallback */
+	const char *cur_relname;	/* table name for error messages */
+	int64		cur_lineno;		/* line number for error messages */
+	const char *cur_attname;	/* current att for error messages */
+	const char *cur_attval;		/* current att value for error messages */
+
+	/* Working state */
+	CopyDispatchMode dispatch_mode;
+	MemoryContext copycontext;	/* per-copy execution context */
+
+	/* Working state for COPY TO */
+	FmgrInfo   *out_functions;	/* lookup info for output functions */
+	MemoryContext rowcontext;	/* per-row evaluation context */
+
+	/* Working state for COPY FROM */
+	AttrNumber	num_defaults;
+	FmgrInfo   *in_functions;	/* array of input functions for each attrs */
+	Oid		   *typioparams;	/* array of element types for in_functions */
+	int		   *defmap;			/* array of default att numbers */
+	ExprState **defexprs;		/* array of default att expressions */
+	bool		volatile_defexprs;	/* is any of defexprs volatile? */
+	List	   *range_table;
+	ExprState  *qualexpr;
+
+	TransitionCaptureState *transition_capture;
+
+	StringInfo	dispatch_msgbuf;
+
+	/* Error handling options */
+	CopyErrMode errMode;
 	struct CdbSreh *cdbsreh;	/* single row error handler */
+	int			lastsegid;
+
+	StringInfoData attribute_buf;
+
+	int			max_fields;
+	char	  **raw_fields;
+
+	StringInfoData line_buf;
+	bool		line_buf_converted;
+	bool		line_buf_valid;
+
+#define RAW_BUF_SIZE 65536
+	char	   *raw_buf;
+	int			raw_buf_index;	/* next byte to process */
+	int			raw_buf_len;	/* total # of bytes stored */
+
+	/* Greenplum specific variables */
+	bool		escape_off;
+	int			first_qe_processed_field;
+	List	   *qd_attnumlist;
+	List	   *qe_attnumlist;
+	bool		stopped_processing_at_delim;
+
+	PartitionNode *partitions;
+	List	   *ao_segnos;
+	bool		skip_ext_partition;
+	bool		skip_foreign_partitions;
+
+	bool		on_segment;
+	bool		ignore_extra_line;
+	ProgramPipes *program_pipes;
+
+	CdbCopy    *cdbCopy;
+
+	bool		delim_off;		/* delimiter is set to OFF? */
 } CopyStateData;
 
 typedef CopyStateData *CopyState;
