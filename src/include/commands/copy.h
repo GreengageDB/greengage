@@ -235,6 +235,21 @@ typedef CopyStateData *CopyState;
 /* CopyFormatOptions: PG14 type alias for compatibility */
 typedef CopyStateData CopyFormatOptions;
 
+/* DestReceiver for COPY (query) TO */
+typedef struct
+{
+	DestReceiver pub;			/* publicly-known function pointers */
+	CopyState	cstate;			/* CopyStateData for the command */
+	QueryDesc  *queryDesc;		/* QueryDesc for the copy */
+	uint64		processed;		/* # of tuples processed */
+} DR_copy;
+
+#ifndef htonll
+#define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#endif
+#ifndef ntohll
+#define ntohll(x) ((1==ntohl(1)) ? (x) : ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
+#endif
 
 /* These are private in commands/copy[from|to].c */
 typedef struct CopyFromStateData *CopyFromState;

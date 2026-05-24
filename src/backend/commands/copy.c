@@ -38,6 +38,7 @@
 #include "cdb/cdbsreh.h"
 #include "cdb/cdbvars.h"
 #include "commands/copy.h"
+#include "commands/copyfrom_internal.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "commands/defrem.h"
@@ -158,11 +159,11 @@ typedef struct CopyMultiInsertInfo
 } CopyMultiInsertInfo;
 
 static void close_program_pipes(CopyState cstate, bool ifThrow);
-static void CopySendData(CopyState cstate, const void *databuf, int datasize);
-static void CopySendString(CopyState cstate, const char *str);
-static void CopySendChar(CopyState cstate, char c);
-static void CopySendEndOfRow(CopyState cstate);
 static int CopyReadBinaryData(CopyState cstate, char *dest, int nbytes);
+
+/* PG14 removed these; provide stubs for GPDB copy code */
+#define pq_startcopyout()	((void) 0)
+#define pq_endcopyout(x)	((void) 0)
 
 static const char QDtoQESignature[] = "PGCOPY-QD-TO-QE\n\377\r\n";
 
@@ -798,8 +799,6 @@ CopyReadBinaryData(CopyState cstate, char *dest, int nbytes)
 
 	return copied_bytes;
 }
-
-=======
 
 /*
  *	 DoCopy executes the SQL COPY statement
