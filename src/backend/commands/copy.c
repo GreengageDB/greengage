@@ -2357,7 +2357,7 @@ BeginCopyToOnSegment(QueryDesc *queryDesc)
 /*
  * Setup CopyState to read tuples from a table or a query for COPY TO.
  */
-static CopyState
+CopyState
 BeginCopyTo(ParseState *pstate,
 			Relation rel,
 			RawStmt *query,
@@ -2562,7 +2562,7 @@ BeginCopyToForeignTable(Relation forrel, List *options)
  * This intermediate routine exists mainly to localize the effects of setjmp
  * so we don't need to plaster a lot of variables with "volatile".
  */
-static uint64
+uint64
 DoCopyTo(CopyState cstate)
 {
 	bool		pipe = (cstate->filename == NULL);
@@ -2641,7 +2641,7 @@ void EndCopyToOnSegment(CopyState cstate)
 /*
  * Clean up storage and release resources for COPY TO.
  */
-static void
+void
 EndCopyTo(CopyState cstate, uint64 *processed)
 {
 	if (cstate->queryDesc != NULL)
@@ -4941,7 +4941,7 @@ NextCopyFrom(CopyState cstate, ExprContext *econtext,
  *
  * changing me? take a look at FILEAM_HANDLE_ERROR in fileam.c as well.
  */
-static void
+void
 HandleCopyError(CopyState cstate)
 {
 	if (cstate->errMode == ALL_OR_NOTHING)
@@ -5548,7 +5548,7 @@ retry:
  * The caller has already read part of the frame; 'p' points to that part,
  * of length 'len'.
  */
-static void
+void
 HandleQDErrorFrame(CopyState cstate, char *p, int len)
 {
 	CdbSreh *cdbsreh = cstate->cdbsreh;
@@ -5637,7 +5637,7 @@ HandleQDErrorFrame(CopyState cstate, char *p, int len)
  * This is the sending counterpart of NextCopyFromExecute. Used in the QD,
  * to send a row to a QE.
  */
-static void
+void
 SendCopyFromForwardedTuple(CopyState cstate,
 						   CdbCopy *cdbCopy,
 						   bool toAll,
@@ -5780,7 +5780,7 @@ SendCopyFromForwardedTuple(CopyState cstate,
 		cdbCopySendData(cdbCopy, target_seg, msgbuf->data, msgbuf->len);
 }
 
-static void
+void
 SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy)
 {
 	copy_from_dispatch_header header_frame;
@@ -5793,7 +5793,7 @@ SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy)
 	cdbCopySendDataToAll(cdbCopy, (char *) &header_frame, sizeof(header_frame));
 }
 
-static void
+void
 SendCopyFromForwardedError(CopyState cstate, CdbCopy *cdbCopy, char *errormsg)
 {
 	copy_from_dispatch_error *errframe;
@@ -6428,7 +6428,7 @@ GetDecimalFromHex(char hex)
  *
  * The return value is the number of fields actually read.
  */
-static int
+int
 CopyReadAttributesText(CopyState cstate, int stop_processing_at_field)
 {
 	char		delimc = cstate->delim[0];
@@ -6676,7 +6676,7 @@ CopyReadAttributesText(CopyState cstate, int stop_processing_at_field)
  * CopyReadAttributesText, except we parse the fields according to
  * "standard" (i.e. common) CSV usage.
  */
-static int
+int
 CopyReadAttributesCSV(CopyState cstate, int stop_processing_at_field)
 {
 	char		delimc = cstate->delim[0];
@@ -6921,7 +6921,7 @@ CopyReadBinaryAttribute(CopyState cstate, FmgrInfo *flinfo,
 			CopySendData(cstate, start, ptr - start); \
 	} while (0)
 
-static void
+void
 CopyAttributeOutText(CopyState cstate, char *string)
 {
 	char	   *ptr;
@@ -7085,7 +7085,7 @@ CopyAttributeOutText(CopyState cstate, char *string)
  * Send text representation of one attribute, with conversion and
  * CSV-style escaping
  */
-static void
+void
 CopyAttributeOutCSV(CopyState cstate, char *string,
 					bool use_quote, bool single_attr)
 {
@@ -7399,7 +7399,7 @@ CreateCopyDestReceiver(void)
  *
  * The code here mimics a part of SetClientEncoding() in mbutils.c
  */
-static void
+void
 setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable)
 {
 	Oid		conversion_proc;
@@ -7447,7 +7447,7 @@ InitDistributionData(CopyState cstate, EState *estate)
 	return distData;
 }
 
-static void
+void
 FreeDistributionData(GpDistributionData *distData)
 {
 	if (distData)
@@ -7464,7 +7464,7 @@ FreeDistributionData(GpDistributionData *distData)
  * Compute which fields need to be processed in the QD, and which ones can
  * be delayed to the QE.
  */
-static void
+void
 InitCopyFromDispatchSplit(CopyState cstate, GpDistributionData *distData,
 						  EState *estate)
 {

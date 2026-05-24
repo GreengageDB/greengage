@@ -174,7 +174,7 @@ typedef struct CopyFromStateData
 	CopyDispatchMode dispatch_mode;
 } CopyFromStateData;
 
-extern void ReceiveCopyBegin(CopyFromState cstate);
+extern void ReceiveCopyBegin(CopyState cstate);
 extern void ReceiveCopyBinaryHeader(CopyFromState cstate);
 
 #endif							/* COPYFROM_INTERNAL_H */
