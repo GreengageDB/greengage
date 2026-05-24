@@ -1209,6 +1209,7 @@ ProcessCopyOptions(ParseState *pstate,
 				   bool is_from,
 				   List *options)
 {
+	CopyState	cstate = opts_out;
 	bool		format_specified = false;
 	bool		freeze_specified = false;
 	bool		header_specified = false;
@@ -1216,7 +1217,10 @@ ProcessCopyOptions(ParseState *pstate,
 
 	/* Support external use for option sanity checking */
 	if (opts_out == NULL)
+	{
 		opts_out = (CopyFormatOptions *) palloc0(sizeof(CopyFormatOptions));
+		cstate = opts_out;
+	}
 
 	cstate->escape_off = false;
 	cstate->skip_foreign_partitions = false;
@@ -1225,7 +1229,6 @@ ProcessCopyOptions(ParseState *pstate,
 
 	cstate->delim_off = false;
 	cstate->file_encoding = -1;
-	opts_out->file_encoding = -1;
 
 	/* Extract options from the statement node tree */
 	foreach(option, options)
@@ -1275,7 +1278,6 @@ ProcessCopyOptions(ParseState *pstate,
 
 			if (cstate->delim && pg_strcasecmp(cstate->delim, "off") == 0)
 				cstate->delim_off = true;
-			opts_out->delim = defGetString(defel);
 		}
 		else if (strcmp(defel->defname, "null") == 0)
 		{
@@ -1294,7 +1296,6 @@ ProcessCopyOptions(ParseState *pstate,
 			 */
 			if(!cstate->null_print)
 				cstate->null_print = "";
-			opts_out->null_print = defGetString(defel);
 		}
 		else if (strcmp(defel->defname, "header") == 0)
 		{
@@ -1345,7 +1346,6 @@ ProcessCopyOptions(ParseState *pstate,
 					cstate->force_quote = parse_joined_option_list(strVal(defel->arg), ",");
 				}
 			}
-				opts_out->force_quote = castNode(List, defel->arg);
 			else
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1367,7 +1367,6 @@ ProcessCopyOptions(ParseState *pstate,
 				/* OPTIONS (force_not_null 'c1,c2') */
 				cstate->force_notnull = parse_joined_option_list(strVal(defel->arg), ",");
 			}
-				opts_out->force_notnull = castNode(List, defel->arg);
 			else
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1520,7 +1519,6 @@ ProcessCopyOptions(ParseState *pstate,
 	/* GPDB: This is checked later */
 #if 0
 	if (strlen(cstate->delim) != 1)
-	if (strlen(opts_out->delim) != 1)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("COPY delimiter must be a single one-byte character")));
@@ -1550,12 +1548,11 @@ ProcessCopyOptions(ParseState *pstate,
 	 * digits are actually dangerous.
 	 */
 	if (!cstate->csv_mode && !cstate->delim_off &&
-	if (!opts_out->csv_mode &&
 		strchr("\\.abcdefghijklmnopqrstuvwxyz0123456789",
-			   opts_out->delim[0]) != NULL)
+			   cstate->delim[0]) != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("COPY delimiter cannot be \"%s\"", opts_out->delim)));
+				 errmsg("COPY delimiter cannot be \"%s\"", cstate->delim)));
 
 	/* Check header */
 	/*
@@ -1563,7 +1560,6 @@ ProcessCopyOptions(ParseState *pstate,
 	 * only forbid it with BINARY.
 	 */
 	if (cstate->binary && cstate->header_line)
-	if (!opts_out->csv_mode && opts_out->header_line)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("COPY cannot specify HEADER in BINARY mode")));
@@ -1580,14 +1576,12 @@ ProcessCopyOptions(ParseState *pstate,
 				 errmsg("COPY quote must be a single one-byte character")));
 
 	if (cstate->csv_mode && cstate->delim[0] == cstate->quote[0] && !cstate->delim_off)
-	if (opts_out->csv_mode && opts_out->delim[0] == opts_out->quote[0])
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("COPY delimiter and quote must be different")));
 
 	/* Check escape */
 	if (cstate->csv_mode && cstate->escape != NULL && strlen(cstate->escape) != 1)
-	if (!opts_out->csv_mode && opts_out->escape != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("COPY escape in CSV format must be a single character")));
@@ -1595,7 +1589,6 @@ ProcessCopyOptions(ParseState *pstate,
 	if (!cstate->csv_mode && cstate->escape != NULL &&
 		(strchr(cstate->escape, '\r') != NULL ||
 		strchr(cstate->escape, '\n') != NULL))
-	if (opts_out->csv_mode && strlen(opts_out->escape) != 1)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("COPY escape representation in text format cannot use newline or carriage return")));
@@ -1641,7 +1634,6 @@ ProcessCopyOptions(ParseState *pstate,
 
 	/* Don't allow the delimiter to appear in the null string. */
 	if (strchr(cstate->null_print, cstate->delim[0]) != NULL && !cstate->delim_off)
-	if (strchr(opts_out->null_print, opts_out->delim[0]) != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("COPY delimiter must not appear in the NULL specification")));
