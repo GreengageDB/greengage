@@ -102,7 +102,7 @@ typedef struct CopyMultiInsertInfo
 
 
 /* non-export function prototypes */
-static char *limit_printout_length(const char *str);
+/* limit_printout_length declared extern in copy.h, defined in copy.c */
 
 static void ClosePipeFromProgram(CopyFromState cstate);
 
@@ -518,6 +518,11 @@ CopyMultiInsertInfoStore(CopyMultiInsertInfo *miinfo, ResultRelInfo *rri,
 	miinfo->bufferedBytes += tuplen;
 }
 
+/*
+ * GPDB: CopyFrom, BeginCopyFrom, EndCopyFrom are in copy.c with
+ * GPDB-specific dispatch logic. Skip PG14 versions here.
+ */
+#if 0
 /*
  * Copy FROM file to relation.
  */
@@ -1617,3 +1622,4 @@ ClosePipeFromProgram(CopyFromState cstate)
 				 errdetail_internal("%s", wait_result_to_str(pclose_rc))));
 	}
 }
+#endif

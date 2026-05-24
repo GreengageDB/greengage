@@ -2157,7 +2157,7 @@ static const TableAmRoutine ao_column_methods = {
 	.tuple_get_latest_tid = aoco_get_latest_tid,
 	.tuple_tid_valid = aoco_tuple_tid_valid,
 	.tuple_satisfies_snapshot = aoco_tuple_satisfies_snapshot,
-	.compute_xid_horizon_for_tuples = aoco_compute_xid_horizon_for_tuples,
+	.index_delete_tuples = NULL,
 
 	.relation_set_new_filenode = aoco_relation_set_new_filenode,
 	.relation_nontransactional_truncate = aoco_relation_nontransactional_truncate,

@@ -2971,7 +2971,7 @@ stream_open_file(Oid subid, TransactionId xid, bool first_segment)
 		SharedFileSetInit(fileset, NULL);
 		MemoryContextSwitchTo(savectx);
 
-		stream_fd = BufFileCreateShared(fileset, path);
+		stream_fd = BufFileCreateShared(fileset, path, NULL);
 
 		/* Remember the fileset for the next stream of the same transaction */
 		ent->xid = xid;
