@@ -217,6 +217,8 @@ typedef struct CopyStateData
 	List	   *qe_attnumlist;
 	bool		stopped_processing_at_delim;
 
+	Node	   *whereClause;	/* WHERE condition (or NULL) */
+
 	PartitionNode *partitions;
 	List	   *ao_segnos;
 	bool		skip_ext_partition;

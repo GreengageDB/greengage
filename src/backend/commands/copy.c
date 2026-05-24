@@ -44,6 +44,7 @@
 #include "commands/defrem.h"
 #include "commands/trigger.h"
 #include "executor/executor.h"
+#include "foreign/fdwapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -162,6 +163,7 @@ static void close_program_pipes(CopyState cstate, bool ifThrow);
 static int CopyReadBinaryData(CopyState cstate, char *dest, int nbytes);
 
 
+static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 static const char QDtoQESignature[] = "PGCOPY-QD-TO-QE\n\377\r\n";
 
 /* Header contains information that applies to all the rows that follow. */

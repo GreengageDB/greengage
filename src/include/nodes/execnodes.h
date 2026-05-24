@@ -608,6 +608,9 @@ typedef struct EState
 											 * es_result_relations in no
 											 * specific order */
 
+	/* GPDB compatibility: current result relation for ModifyTable */
+	ResultRelInfo *es_result_relation_info;
+
 	PartitionDirectory es_partition_directory;	/* for PartitionDesc lookup */
 
 	/*

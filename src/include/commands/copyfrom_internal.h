@@ -164,6 +164,14 @@ typedef struct CopyFromStateData
 #define RAW_BUF_BYTES(cstate) ((cstate)->raw_buf_len - (cstate)->raw_buf_index)
 
 	uint64		bytes_processed;	/* number of bytes processed so far */
+
+	/* GPDB-specific fields */
+	CopyErrMode errMode;
+	struct CdbSreh *cdbsreh;
+	struct CdbCopy *cdbCopy;
+	SingleRowErrorDesc *sreh;
+	bool		on_segment;
+	CopyDispatchMode dispatch_mode;
 } CopyFromStateData;
 
 extern void ReceiveCopyBegin(CopyFromState cstate);
