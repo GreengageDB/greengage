@@ -1994,7 +1994,8 @@ apply_handle_truncate(StringInfo s)
 						relids,
 						relids_logged,
 						DROP_RESTRICT,
-						restart_seqs);
+						restart_seqs,
+						NULL);
 	foreach(lc, remote_rels)
 	{
 		LogicalRepRelMapEntry *rel = lfirst(lc);
@@ -2673,7 +2674,7 @@ subxact_info_write(Oid subid, TransactionId xid)
 		SharedFileSetInit(ent->subxact_fileset, NULL);
 		MemoryContextSwitchTo(oldctx);
 
-		fd = BufFileCreateShared(ent->subxact_fileset, path);
+		fd = BufFileCreateShared(ent->subxact_fileset, path, NULL);
 	}
 	else
 		fd = BufFileOpenShared(ent->subxact_fileset, path, O_RDWR);
