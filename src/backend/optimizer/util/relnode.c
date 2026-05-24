@@ -1040,16 +1040,6 @@ build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 				 (int) nodeTag(var));
 
 		if (var->varno == ROWID_VAR)
-		/* Get the Var's original base rel */
-		baserel = find_base_rel(root, var->varno);
-
-        /* System-defined attribute, whole row, or user-defined attribute */
-        Assert(var->varattno >= baserel->min_attr &&
-               var->varattno <= baserel->max_attr);
-
-		/* Is it still needed above this joinrel? */
-		ndx = var->varattno - baserel->min_attr;
-		if (bms_nonempty_difference(baserel->attr_needed[ndx], relids))
 		{
 			/* UPDATE/DELETE row identity vars are always needed */
 			RowIdentityVarInfo *ridinfo = (RowIdentityVarInfo *)

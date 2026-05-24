@@ -661,7 +661,8 @@ DistributedLog_ShmemInit(void)
 	DistributedLogCtl->PagePrecedes = DistributedLog_PagePrecedes;
 	SimpleLruInit(DistributedLogCtl, "DistributedLogCtl", DistributedLog_ShmemBuffers(), 0,
 				  DistributedLogControlLock, "pg_distributedlog",
-				  LWTRANCHE_DISTRIBUTEDLOG_BUFFERS);
+				  LWTRANCHE_DISTRIBUTEDLOG_BUFFERS,
+				  SYNC_HANDLER_DISTRIBUTED_LOG);
 
 	/* Create or attach to the shared structure */
 	DistributedLogShared =
