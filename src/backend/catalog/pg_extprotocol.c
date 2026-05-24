@@ -215,7 +215,7 @@ ValidateProtocolFunction(List *fnName, ExtPtcFuncType fntype)
 	 * the function.
 	 */
 	fdresult = func_get_detail(fnName, NIL, NIL,
-							   nargs, inputTypes, false, false,
+							   nargs, inputTypes, false, false, false,
 							   &fnOid, &actual_rettype, &retset,
 							   &nvargs, &vatype, &true_oid_array, NULL);
 
