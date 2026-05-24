@@ -161,9 +161,6 @@ typedef struct CopyMultiInsertInfo
 static void close_program_pipes(CopyState cstate, bool ifThrow);
 static int CopyReadBinaryData(CopyState cstate, char *dest, int nbytes);
 
-/* PG14 removed these; provide stubs for GPDB copy code */
-#define pq_startcopyout()	((void) 0)
-#define pq_endcopyout(x)	((void) 0)
 
 static const char QDtoQESignature[] = "PGCOPY-QD-TO-QE\n\377\r\n";
 
@@ -250,68 +247,36 @@ typedef struct
 static void
 SendCopyBegin(CopyState cstate)
 {
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-	{
-		/* new way */
-		StringInfoData buf;
-		int			natts = list_length(cstate->attnumlist);
-		int16		format = (cstate->binary ? 1 : 0);
-		int			i;
+	StringInfoData buf;
+	int			natts = list_length(cstate->attnumlist);
+	int16		format = (cstate->binary ? 1 : 0);
+	int			i;
 
-		pq_beginmessage(&buf, 'H');
-		pq_sendbyte(&buf, format);	/* overall format */
-		pq_sendint16(&buf, natts);
-		for (i = 0; i < natts; i++)
-			pq_sendint16(&buf, format); /* per-column formats */
-		pq_endmessage(&buf);
-		cstate->copy_dest = COPY_NEW_FE;
-	}
-	else
-	{
-		/* old way */
-		if (cstate->binary)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("COPY BINARY is not supported to stdout or from stdin")));
-		pq_putemptymessage('H');
-		/* grottiness needed for old COPY OUT protocol */
-		pq_startcopyout();
-		cstate->copy_dest = COPY_OLD_FE;
-	}
+	pq_beginmessage(&buf, 'H');
+	pq_sendbyte(&buf, format);	/* overall format */
+	pq_sendint16(&buf, natts);
+	for (i = 0; i < natts; i++)
+		pq_sendint16(&buf, format); /* per-column formats */
+	pq_endmessage(&buf);
+	cstate->copy_dest = COPY_FRONTEND;
 }
 
 static void
 ReceiveCopyBegin(CopyState cstate)
 {
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-	{
-		/* new way */
-		StringInfoData buf;
-		int			natts = list_length(cstate->attnumlist);
-		int16		format = (cstate->binary ? 1 : 0);
-		int			i;
+	StringInfoData buf;
+	int			natts = list_length(cstate->attnumlist);
+	int16		format = (cstate->binary ? 1 : 0);
+	int			i;
 
-		pq_beginmessage(&buf, 'G');
-		pq_sendbyte(&buf, format);	/* overall format */
-		pq_sendint16(&buf, natts);
-		for (i = 0; i < natts; i++)
-			pq_sendint16(&buf, format); /* per-column formats */
-		pq_endmessage(&buf);
-		cstate->copy_dest = COPY_NEW_FE;
-		cstate->fe_msgbuf = makeStringInfo();
-	}
-	else
-	{
-		/* old way */
-		if (cstate->binary)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("COPY BINARY is not supported to stdout or from stdin")));
-		pq_putemptymessage('G');
-		/* any error in old protocol will make us lose sync */
-		pq_startmsgread();
-		cstate->copy_dest = COPY_OLD_FE;
-	}
+	pq_beginmessage(&buf, 'G');
+	pq_sendbyte(&buf, format);	/* overall format */
+	pq_sendint16(&buf, natts);
+	for (i = 0; i < natts; i++)
+		pq_sendint16(&buf, format); /* per-column formats */
+	pq_endmessage(&buf);
+	cstate->copy_dest = COPY_FRONTEND;
+	cstate->fe_msgbuf = makeStringInfo();
 	/* We *must* flush here to ensure FE knows it can send. */
 	pq_flush();
 }
@@ -319,20 +284,10 @@ ReceiveCopyBegin(CopyState cstate)
 static void
 SendCopyEnd(CopyState cstate)
 {
-	if (cstate->copy_dest == COPY_NEW_FE)
-	{
-		/* Shouldn't have any unsent data */
-		Assert(cstate->fe_msgbuf->len == 0);
-		/* Send Copy Done message */
-		pq_putemptymessage('c');
-	}
-	else
-	{
-		CopySendData(cstate, "\\.", 2);
-		/* Need to flush out the trailer (this also appends a newline) */
-		CopySendEndOfRow(cstate);
-		pq_endcopyout(false);
-	}
+	/* Shouldn't have any unsent data */
+	Assert(cstate->fe_msgbuf->len == 0);
+	/* Send Copy Done message */
+	pq_putemptymessage('c');
 }
 
 /*----------
@@ -2664,7 +2619,6 @@ DoCopyTo(CopyState cstate)
 		if (Gp_role == GP_ROLE_EXECUTE && cstate->on_segment)
 			cstate->copy_dest = COPY_NEW_FE;
 
-		pq_endcopyout(true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();

@@ -30,10 +30,12 @@
 typedef enum CopyDest
 {
 	COPY_FILE,					/* to/from file (or a piped program) */
-	COPY_OLD_FE,				/* to/from frontend (2.0 protocol) */
-	COPY_NEW_FE,				/* to/from frontend (3.0 protocol) */
+	COPY_FRONTEND,				/* to/from frontend (3.0 protocol) */
 	COPY_CALLBACK				/* to/from callback function (used for external tables) */
 } CopyDest;
+
+#define COPY_OLD_FE		COPY_FRONTEND
+#define COPY_NEW_FE		COPY_FRONTEND
 
 /* CopyStateData is private in commands/copy.c */
 typedef int (*copy_data_source_cb) (void *outbuf, int minread, int maxread, void *extra);
