@@ -219,7 +219,7 @@ typedef struct CopyStateData
 
 	Node	   *whereClause;	/* WHERE condition (or NULL) */
 
-	PartitionNode *partitions;
+	struct PartitionNode *partitions;
 	List	   *ao_segnos;
 	bool		skip_ext_partition;
 	bool		skip_foreign_partitions;
@@ -228,7 +228,7 @@ typedef struct CopyStateData
 	bool		ignore_extra_line;
 	ProgramPipes *program_pipes;
 
-	CdbCopy    *cdbCopy;
+	struct CdbCopy *cdbCopy;
 
 	bool		delim_off;		/* delimiter is set to OFF? */
 } CopyStateData;
