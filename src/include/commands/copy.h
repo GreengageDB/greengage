@@ -133,6 +133,17 @@ typedef struct CopyStateData
 	bool		is_program;		/* is 'filename' a program to popen? */
 	copy_data_source_cb data_source_cb; /* function for reading data */
 	void	   *data_source_cb_extra;
+
+	/* GPDB: fields needed by external table URL handlers */
+	bool		header_line;	/* CSV header line? */
+	bool		csv_mode;		/* Comma Separated Value format? */
+	char	   *quote;			/* CSV quote char */
+	char	   *escape;			/* CSV escape char */
+	char	   *null_print;		/* NULL marker string */
+	int			null_print_len;
+	char	   *cur_relname;	/* current relation name for errors */
+	int			cur_lineno;		/* current line number for errors */
+	struct CdbSreh *cdbsreh;	/* single row error handler */
 } CopyStateData;
 
 typedef CopyStateData *CopyState;

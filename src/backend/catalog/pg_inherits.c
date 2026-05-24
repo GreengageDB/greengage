@@ -150,7 +150,7 @@ find_inheritance_children_extended(Oid parentrelId, bool omit_detached,
 				xmin = HeapTupleHeaderGetXmin(inheritsTuple->t_data);
 				snap = GetActiveSnapshot();
 
-				if (!XidInMVCCSnapshot(xmin, snap))
+				if (XidInMVCCSnapshot(xmin, snap, false, NULL) == XID_NOT_IN_SNAPSHOT)
 				{
 					if (detached_xmin)
 					{

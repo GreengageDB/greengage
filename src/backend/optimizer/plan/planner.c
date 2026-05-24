@@ -2091,7 +2091,7 @@ inheritance_planner(PlannerInfo *root)
 		Path	   *dummy_path;
 
 		/* tlist processing never got done, either */
-		root->processed_tlist = preprocess_targetlist(root);
+		preprocess_targetlist(root);
 		final_rel->reltarget = create_pathtarget(root, root->processed_tlist);
 
 		/* Make a dummy path, cf set_dummy_rel_pathlist() */
