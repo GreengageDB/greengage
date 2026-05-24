@@ -136,6 +136,7 @@ extern void BufferUsageAccumDiff(BufferUsage *dst,
 extern void WalUsageAccumDiff(WalUsage *dst, const WalUsage *add,
 							  const WalUsage *sub);
 
+extern bool gp_enable_query_metrics;
 #define GP_INSTRUMENT_OPTS (gp_enable_query_metrics ? INSTRUMENT_ROWS : INSTRUMENT_NONE)
 
 /* Greenplum query metrics */

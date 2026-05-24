@@ -2133,8 +2133,8 @@ ShutdownMultiXact(void)
 {
 	/* Flush dirty MultiXact pages to disk */
 	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_START(false);
-	SimpleLruFlush(MultiXactOffsetCtl, false);
-	SimpleLruFlush(MultiXactMemberCtl, false);
+	SimpleLruWriteAll(MultiXactOffsetCtl, false);
+	SimpleLruWriteAll(MultiXactMemberCtl, false);
 
 	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_DONE(false);
 }

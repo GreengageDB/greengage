@@ -5140,7 +5140,6 @@ create_nestloop_plan(PlannerInfo *root,
 
 			/* Set cost data */
 			cost_material(&matpath,
-						  root,
 						  inner_plan->startup_cost,
 						  inner_plan->total_cost,
 						  inner_plan->plan_rows,
@@ -7674,7 +7673,6 @@ materialize_finished_plan(PlannerInfo *root, Plan *subplan)
 
 	/* Set cost data */
 	cost_material(&matpath,
-				  root,
 				  subplan->startup_cost,
 				  subplan->total_cost,
 				  subplan->plan_rows,

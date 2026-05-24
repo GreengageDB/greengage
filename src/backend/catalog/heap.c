@@ -1514,7 +1514,7 @@ heap_create_with_catalog(const char *relname,
 	Acl		   *relacl;
 	Oid			existing_relid;
 	Oid			old_type_oid;
-	Oid			new_type_oid;
+	Oid			new_type_oid = InvalidOid;
 	TransactionId relfrozenxid;
 	MultiXactId relminmxid;
 
