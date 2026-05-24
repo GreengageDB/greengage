@@ -1720,6 +1720,7 @@ heap_create_with_catalog(const char *relname,
 					   InvalidOid,	/* typmodin procedure - none */
 					   InvalidOid,	/* typmodout procedure - none */
 					   F_ARRAY_TYPANALYZE,	/* array analyze procedure */
+					   F_ARRAY_SUBSCRIPT_HANDLER,	/* array subscript procedure */
 					   new_type_oid,	/* array element type - the rowtype */
 					   true,		/* yes, this is an array type */
 					   InvalidOid,	/* this has no array type */
@@ -1736,41 +1737,6 @@ heap_create_with_catalog(const char *relname,
 
 			pfree(relarrayname);
 		}
-		TypeCreate(new_array_oid,	/* force the type's OID to this */
-				   relarrayname,	/* Array type name */
-				   relnamespace,	/* Same namespace as parent */
-				   InvalidOid,	/* Not composite, no relationOid */
-				   0,			/* relkind, also N/A here */
-				   ownerid,		/* owner's ID */
-				   -1,			/* Internal size (varlena) */
-				   TYPTYPE_BASE,	/* Not composite - typelem is */
-				   TYPCATEGORY_ARRAY,	/* type-category (array) */
-				   false,		/* array types are never preferred */
-				   DEFAULT_TYPDELIM,	/* default array delimiter */
-				   F_ARRAY_IN,	/* array input proc */
-				   F_ARRAY_OUT, /* array output proc */
-				   F_ARRAY_RECV,	/* array recv (bin) proc */
-				   F_ARRAY_SEND,	/* array send (bin) proc */
-				   InvalidOid,	/* typmodin procedure - none */
-				   InvalidOid,	/* typmodout procedure - none */
-				   F_ARRAY_TYPANALYZE,	/* array analyze procedure */
-				   F_ARRAY_SUBSCRIPT_HANDLER,	/* array subscript procedure */
-				   new_type_oid,	/* array element type - the rowtype */
-				   true,		/* yes, this is an array type */
-				   InvalidOid,	/* this has no array type */
-				   InvalidOid,	/* domain base type - irrelevant */
-				   NULL,		/* default value - none */
-				   NULL,		/* default binary representation */
-				   false,		/* passed by reference */
-				   TYPALIGN_DOUBLE, /* alignment - must be the largest! */
-				   TYPSTORAGE_EXTENDED, /* fully TOASTable */
-				   -1,			/* typmod */
-				   0,			/* array dimensions for typBaseType */
-				   false,		/* Type NOT NULL */
-				   InvalidOid); /* rowtypes never have a collation */
-
-		pfree(relarrayname);
-	}
 	else
 	{
 		/* Caller should not be expecting a type to be created. */
@@ -1778,6 +1744,7 @@ heap_create_with_catalog(const char *relname,
 		Assert(typaddress == NULL);
 
 		new_type_oid = InvalidOid;
+	}
 	}
 
 	/*

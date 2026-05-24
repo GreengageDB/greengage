@@ -149,7 +149,6 @@ static List *make_partitionedrel_pruneinfo(PlannerInfo *root,
 										   Bitmapset *partrelids,
 										   int *relid_subplan_map,
 										   Relids available_relids,
-										   List *partitioned_rels, List *prunequal,
 										   Bitmapset **matchedsubplans);
 static void gen_partprune_steps(RelOptInfo *rel, List *clauses,
 								Relids available_relids,
@@ -232,7 +231,7 @@ make_partition_pruneinfo(PlannerInfo *root, RelOptInfo *parentrel,
 						 List *prunequal)
 {
 	return make_partition_pruneinfo_ext(root, parentrel,
-										subpaths, partitioned_rels,
+										subpaths,
 										prunequal, NULL);
 }
 
@@ -242,7 +241,7 @@ make_partition_pruneinfo(PlannerInfo *root, RelOptInfo *parentrel,
  */
 PartitionPruneInfo *
 make_partition_pruneinfo_ext(PlannerInfo *root, RelOptInfo *parentrel,
-							 List *subpaths, List *partitioned_rels,
+							 List *subpaths,
 							 List *prunequal, Relids available_relids)
 {
 	PartitionPruneInfo *pruneinfo;
@@ -337,7 +336,6 @@ make_partition_pruneinfo_ext(PlannerInfo *root, RelOptInfo *parentrel,
 												  partrelids,
 												  relid_subplan_map,
 												  available_relids,
-												  rels, prunequal,
 												  &matchedsubplans);
 
 		/* When pruning is possible, record the matched subplans */
@@ -466,7 +464,6 @@ make_partitionedrel_pruneinfo(PlannerInfo *root, RelOptInfo *parentrel,
 							  Bitmapset *partrelids,
 							  int *relid_subplan_map,
 							  Relids available_relids,
-							  List *partitioned_rels, List *prunequal,
 							  Bitmapset **matchedsubplans)
 {
 	RelOptInfo *targetpart = NULL;

@@ -520,7 +520,7 @@ _readAExpr(void)
 
 	READ_ENUM_FIELD(kind, A_Expr_Kind);
 
-	Assert(local_node->kind <= AEXPR_PAREN);
+	Assert(local_node->kind <= AEXPR_NOT_BETWEEN_SYM);
 
 	switch (local_node->kind)
 	{
@@ -543,10 +543,6 @@ _readAExpr(void)
 			READ_NODE_FIELD(name);
 			break;
 		case AEXPR_NULLIF:
-
-			READ_NODE_FIELD(name);
-			break;
-		case AEXPR_OF:
 
 			READ_NODE_FIELD(name);
 			break;
@@ -579,10 +575,6 @@ _readAExpr(void)
 			READ_NODE_FIELD(name);
 			break;
 		case AEXPR_NOT_BETWEEN_SYM:
-
-			READ_NODE_FIELD(name);
-			break;
-		case AEXPR_PAREN:
 
 			READ_NODE_FIELD(name);
 			break;

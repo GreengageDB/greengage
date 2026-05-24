@@ -547,15 +547,6 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 								  RelationGetRelid(rel));
 
 	vacuum_set_xid_limits(rel,
-	vac_strategy = bstrategy;
-
-	/*
-	 * MPP-23647.  Update xid limits for heap as well as appendonly
-	 * relations.  This allows setting relfrozenxid to correct value
-	 * for an appendonly (AO/CO) table.
-	 */
-
-	vacuum_set_xid_limits(onerel,
 						  params->freeze_min_age,
 						  params->freeze_table_age,
 						  params->multixact_freeze_min_age,
@@ -1847,7 +1838,7 @@ retry:
 		 * since heap_page_prune() looked.  Handle that here by restarting.
 		 * (See comments at the top of function for a full explanation.)
 		 */
-		res = HeapTupleSatisfiesVacuum(&tuple, vacrel->OldestXmin, buf);
+		res = HeapTupleSatisfiesVacuum(rel, &tuple, vacrel->OldestXmin, buf);
 
 		if (unlikely(res == HEAPTUPLE_DEAD))
 			goto retry;
@@ -3699,7 +3690,7 @@ heap_page_is_all_visible(LVRelState *vacrel, Buffer buf,
 		tuple.t_len = ItemIdGetLength(itemid);
 		tuple.t_tableOid = RelationGetRelid(vacrel->rel);
 
-		switch (HeapTupleSatisfiesVacuum(&tuple, vacrel->OldestXmin, buf))
+		switch (HeapTupleSatisfiesVacuum(vacrel->rel, &tuple, vacrel->OldestXmin, buf))
 		{
 			case HEAPTUPLE_LIVE:
 				{
@@ -3855,7 +3846,8 @@ update_index_statistics(LVRelState *vacrel)
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
-							false);
+							false,
+							true);
 	}
 }
 

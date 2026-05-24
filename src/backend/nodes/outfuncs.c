@@ -4407,6 +4407,7 @@ _outStatsElem(StringInfo str, const StatsElem *node)
 	WRITE_NODE_FIELD(expr);
 }
 
+static void
 _outVariableSetStmt(StringInfo str, const VariableSetStmt *node)
 {
 	WRITE_NODE_TYPE("VARIABLESETSTMT");

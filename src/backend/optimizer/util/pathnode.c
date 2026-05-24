@@ -1902,7 +1902,8 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 				else
 					numsegments = subpath->locus.numsegments;
 
-				restrict_info = make_restrictinfo((Expr *) makeSegmentFilterExpr(
+				restrict_info = make_restrictinfo(root,
+												  (Expr *) makeSegmentFilterExpr(
 													  gp_session_id % numsegments),
 												  true,		/* is_pushed_down */
 												  false,	/* outerjoin_delayed */
@@ -2023,7 +2024,7 @@ create_group_result_path(PlannerInfo *root, RelOptInfo *rel,
  *	  pathnode.
  */
 MaterialPath *
-create_material_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath)
+create_material_path(RelOptInfo *rel, Path *subpath)
 {
 	MaterialPath *pathnode = makeNode(MaterialPath);
 
@@ -3682,7 +3683,7 @@ create_nestloop_path(PlannerInfo *root,
 	 */
 	if (!outer_path->rescannable && !bms_is_empty(required_outer))
 	{
-		MaterialPath *matouter = create_material_path(root, outer_path->parent, outer_path);
+		MaterialPath *matouter = create_material_path(outer_path->parent, outer_path);
 
 		matouter->cdb_shield_child_from_rescans = true;
 
@@ -3699,7 +3700,7 @@ create_nestloop_path(PlannerInfo *root,
 		 * NLs potentially rescan the inner; if our inner path
 		 * isn't rescannable we have to add a materialize node
 		 */
-		MaterialPath *matinner = create_material_path(root, inner_path->parent, inner_path);
+		MaterialPath *matinner = create_material_path(inner_path->parent, inner_path);
 
 		matinner->cdb_shield_child_from_rescans = true;
 

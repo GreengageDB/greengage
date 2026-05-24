@@ -3781,7 +3781,7 @@ ReindexRelationConcurrently(Oid relationOid, ReindexParams *params)
 				if ((params->options & REINDEXOPT_MISSING_OK) != 0)
 				{
 					heapRelation = try_table_open(relationOid,
-												  ShareUpdateExclusiveLock);
+												  ShareUpdateExclusiveLock, false);
 					/* leave if relation does not exist */
 					if (!heapRelation)
 						break;
@@ -3925,7 +3925,7 @@ ReindexRelationConcurrently(Oid relationOid, ReindexParams *params)
 				if ((params->options & REINDEXOPT_MISSING_OK) != 0)
 				{
 					heapRelation = try_table_open(heapId,
-												  ShareUpdateExclusiveLock);
+												  ShareUpdateExclusiveLock, false);
 					/* leave if relation does not exist */
 					if (!heapRelation)
 						break;

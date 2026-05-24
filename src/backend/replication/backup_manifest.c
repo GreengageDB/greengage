@@ -64,7 +64,7 @@ InitializeBackupManifest(backup_manifest_info *manifest,
 		manifest->buffile = NULL;
 	else
 	{
-		manifest->buffile = BufFileCreateTemp(false);
+		manifest->buffile = BufFileCreateTemp("backup_manifest", false);
 		manifest->manifest_ctx = pg_cryptohash_create(PG_SHA256);
 		if (pg_cryptohash_init(manifest->manifest_ctx) < 0)
 			elog(ERROR, "failed to initialize checksum of backup manifest");

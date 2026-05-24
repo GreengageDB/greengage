@@ -189,7 +189,9 @@ FullTransactionIdAdvance(FullTransactionId *dest)
  * ----------
  */
 #define FirstGenbkiObjectId		10000
+#ifndef FirstBootstrapObjectId
 #define FirstBootstrapObjectId	12000
+#endif
 #define FirstNormalObjectId		16384
 
 

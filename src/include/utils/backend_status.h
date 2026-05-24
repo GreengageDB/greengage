@@ -168,6 +168,12 @@ typedef struct PgBackendStatus
 
 	/* query identifier, optionally computed using post_parse_analyze_hook */
 	uint64		st_query_id;
+
+	/* GPDB: session id for gang management */
+	int			st_session_id;
+
+	/* GPDB: resource group OID */
+	Oid			st_rsgid;
 } PgBackendStatus;
 
 

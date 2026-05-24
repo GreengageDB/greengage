@@ -253,8 +253,6 @@ pq_init(void)
 static void
 socket_comm_reset(void)
 {
-	/* We can abort any old-style COPY OUT, too */
-	pq_endcopyout(true);
 	/* Do not throw away pending data, but do reset the busy flag */
 	PqCommBusy = false;
 }
@@ -1592,10 +1590,8 @@ socket_is_send_pending(void)
 static int
 socket_putmessage(char msgtype, const char *s, size_t len)
 {
-	if (DoingCopyOut || PqCommBusy)
-	{
-		return EOF;
-	}
+	if (PqCommBusy)
+		return 0;
 	PqCommBusy = true;
 
 	if (msgtype)
@@ -2105,8 +2101,6 @@ pq_check_connection(void)
 	else if (rc == 1 && (pollfd.revents & (POLLHUP | POLLRDHUP)))
 		return false;
 #endif
-
-	short		poll_ev_aux;
 
 	return true;
 }

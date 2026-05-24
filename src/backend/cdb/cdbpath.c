@@ -579,7 +579,7 @@ cdbpath_create_motion_path(PlannerInfo *root,
 	 */
 	if (CdbPathLocus_IsOuterQuery(locus))
 	{
-		return (Path *) create_material_path(root, subpath->parent,
+		return (Path *) create_material_path(subpath->parent,
 											 &pathnode->path);
 	}
 

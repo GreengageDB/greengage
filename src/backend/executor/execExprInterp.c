@@ -1508,6 +1508,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			/* too complex for an inline implementation */
 			ExecEvalScalarArrayOpFastStr(state, op);
+
+			EEO_NEXT();
+		}
+
 		EEO_CASE(EEOP_HASHED_SCALARARRAYOP)
 		{
 			/* too complex for an inline implementation */
@@ -3649,6 +3653,9 @@ ExecEvalScalarArrayOpFastStr(ExprState *state, ExprEvalStep *op)
 
 	*op->resvalue = BoolGetDatum(result);
 	*op->resnull = false;
+}
+
+/*
  * Hash function for scalar array hash op elements.
  *
  * We use the element type's default hash opclass, and the column collation

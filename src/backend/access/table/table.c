@@ -71,11 +71,11 @@ table_open(Oid relationId, LOCKMODE lockmode)
  * ----------------
  */
 Relation
-try_table_open(Oid relationId, LOCKMODE lockmode)
+try_table_open(Oid relationId, LOCKMODE lockmode, bool noWait)
 {
 	Relation	r;
 
-	r = try_relation_open(relationId, lockmode);
+	r = try_relation_open(relationId, lockmode, noWait);
 
 	/* leave if table does not exist */
 	if (!r)

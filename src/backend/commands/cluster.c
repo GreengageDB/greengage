@@ -209,7 +209,7 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 		table_close(rel, NoLock);
 
 		/* Do the job. */
-		cluster_rel(tableOid, indexOid, stmt->options, true /* printError */);
+		cluster_rel(tableOid, indexOid, &params);
 
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
@@ -220,7 +220,6 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 										GetAssignedOidsForDispatch(),
 										NULL);
 		}
-		cluster_rel(tableOid, indexOid, &params);
 	}
 	else
 	{
@@ -270,11 +269,11 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 			/* functions in indexes may want a snapshot set */
 			PushActiveSnapshot(GetTransactionSnapshot());
 			/* Do the job. */
-			dispatch = cluster_rel(rvtc->tableOid, rvtc->indexOid,
-								   stmt->options | CLUOPT_RECHECK,
-								   false /* printError */);
+			cluster_params.options |= CLUOPT_RECHECK;
+			cluster_rel(rvtc->tableOid, rvtc->indexOid,
+						&cluster_params);
 
-			if (Gp_role == GP_ROLE_DISPATCH && dispatch)
+			if (Gp_role == GP_ROLE_DISPATCH)
 			{
 				stmt->relation = makeNode(RangeVar);
 				stmt->relation->schemaname = get_namespace_name(get_rel_namespace(rvtc->tableOid));
@@ -286,9 +285,6 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 											NULL);
 			}
 
-			cluster_params.options |= CLUOPT_RECHECK;
-			cluster_rel(rvtc->tableOid, rvtc->indexOid,
-						&cluster_params);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
 		}

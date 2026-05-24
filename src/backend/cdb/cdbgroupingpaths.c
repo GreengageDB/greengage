@@ -1551,8 +1551,7 @@ add_multi_dqas_hash_agg_path(PlannerInfo *root,
 										  info->dqa_expr_lst);
 
 	AggClauseCosts DedupCost = {};
-	get_agg_clause_costs(root, (Node *) info->tup_split_target->exprs,
-						 AGGSPLIT_SIMPLE,
+	get_agg_clause_costs(root, AGGSPLIT_SIMPLE,
 						 &DedupCost);
 
 	if (gp_enable_dqa_pruning)

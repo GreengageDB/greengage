@@ -300,7 +300,7 @@ logicalrep_rel_open(LogicalRepRelId remoteid, LOCKMODE lockmode)
 	 */
 	if (entry->localrelvalid)
 	{
-		entry->localrel = try_table_open(entry->localreloid, lockmode);
+		entry->localrel = try_table_open(entry->localreloid, lockmode, false);
 		if (!entry->localrel)
 		{
 			/* Table was renamed or dropped. */

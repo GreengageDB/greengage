@@ -1008,7 +1008,8 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							hasindex,
 							InvalidTransactionId,
 							InvalidMultiXactId,
-							in_outer_xact);
+							in_outer_xact,
+							false);
 
 		/* Same for indexes */
 		for (ind = 0; ind < nindexes; ind++)
@@ -1062,7 +1063,8 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		vac_update_relstats(onerel, -1, totalrows,
 							0, false, InvalidTransactionId,
 							InvalidMultiXactId,
-							in_outer_xact);
+							in_outer_xact,
+							false);
 	}
 
 	/*

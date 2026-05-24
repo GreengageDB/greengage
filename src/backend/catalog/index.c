@@ -3621,7 +3621,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 		return;
 
 	if ((params->options & REINDEXOPT_MISSING_OK) != 0)
-		heapRelation = try_table_open(heapId, ShareLock);
+		heapRelation = try_table_open(heapId, ShareLock, false);
 	else
 		heapRelation = table_open(heapId, ShareLock);
 
@@ -3961,7 +3961,7 @@ reindex_relation(Oid relid, int flags, ReindexParams *params)
 	 * should match ReindexTable().
 	 */
 	if ((params->options & REINDEXOPT_MISSING_OK) != 0)
-		rel = try_table_open(relid, ShareLock);
+		rel = try_table_open(relid, ShareLock, false);
 	else
 		rel = table_open(relid, ShareLock);
 

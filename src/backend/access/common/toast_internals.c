@@ -303,17 +303,17 @@ toast_save_datum(Relation rel, Datum value,
 	{
 		Assert(VARATT_EXTERNAL_IS_COMPRESSED(toast_pointer));
 		elog(DEBUG4,
-			 "saved toast datum, original varsize %ud rawsize %ud new extsize %ud rawsize %uld\n", 
-			 VARSIZE(value), VARRAWSIZE_4B_C(value) + VARHDRSZ,
-			 toast_pointer.va_extsize, toast_pointer.va_rawsize);
+			 "saved toast datum, original varsize %ud new extinfo %u rawsize %ud\n",
+			 VARSIZE(value),
+			 toast_pointer.va_extinfo, toast_pointer.va_rawsize);
 	}
 	else
 	{
 		Assert(!VARATT_EXTERNAL_IS_COMPRESSED(toast_pointer));
 		elog(DEBUG4,
-			 "saved toast datum, original varsize %ud new extsize %ud rawsize %ud\n", 
+			 "saved toast datum, original varsize %ud new extinfo %u rawsize %ud\n",
 			 VARSIZE(value),
-			 toast_pointer.va_extsize, toast_pointer.va_rawsize);
+			 toast_pointer.va_extinfo, toast_pointer.va_rawsize);
 	}
 #endif
 

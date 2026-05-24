@@ -7927,16 +7927,11 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 
 				/* partial phase */
 				partial_target_exprs = partially_grouped_target->exprs;
-				get_agg_clause_costs(root, (Node *) partial_target_exprs,
-									 AGGSPLIT_INITIAL_SERIAL,
+				get_agg_clause_costs(root, AGGSPLIT_INITIAL_SERIAL,
 									 &extra->agg_partial_costs);
 
 				/* final phase */
-				get_agg_clause_costs(root, (Node *) grouped_rel->reltarget->exprs,
-									 AGGSPLIT_FINAL_DESERIAL,
-									 agg_final_costs);
-				get_agg_clause_costs(root, extra->havingQual,
-									 AGGSPLIT_FINAL_DESERIAL,
+				get_agg_clause_costs(root, AGGSPLIT_FINAL_DESERIAL,
 									 agg_final_costs);
 			}
 

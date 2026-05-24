@@ -145,7 +145,7 @@ gen_implied_qual(PlannerInfo *root,
 	if (ctx.numReplacementsDone == 0)
 		return;
 
-	new_qualscope = pull_varnos(new_clause);
+	new_qualscope = pull_varnos(root, new_clause);
 	if (new_qualscope == NULL)
 		return;
 
@@ -171,7 +171,8 @@ gen_implied_qual(PlannerInfo *root,
 	 * equivalence class machinery, because it's derived from a clause that
 	 * wasn't either.
 	 */
-	new_rinfo = make_restrictinfo((Expr *) new_clause,
+	new_rinfo = make_restrictinfo(root,
+								  (Expr *) new_clause,
 								  old_rinfo->is_pushed_down,
 								  old_rinfo->outerjoin_delayed,
 								  old_rinfo->pseudoconstant,

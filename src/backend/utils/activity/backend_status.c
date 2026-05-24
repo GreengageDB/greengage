@@ -25,6 +25,8 @@
 #include "utils/guc.h"			/* for application_name */
 #include "utils/memutils.h"
 
+#include "cdb/cdbvars.h"			/* gp_session_id */
+
 
 /* ----------
  * Total number of backends including auxiliary
@@ -346,6 +348,8 @@ pgstat_bestart(void)
 	else
 		lbeentry.st_userid = InvalidOid;
 
+	lbeentry.st_session_id = gp_session_id;  /* GPDB only */
+
 	/*
 	 * We may not have a MyProcPort (eg, if this is the autovacuum process).
 	 * If so, use all-zeroes client address, which is dealt with specially in
@@ -398,6 +402,7 @@ pgstat_bestart(void)
 	lbeentry.st_state = STATE_UNDEFINED;
 	lbeentry.st_progress_command = PROGRESS_COMMAND_INVALID;
 	lbeentry.st_progress_command_target = InvalidOid;
+	lbeentry.st_rsgid = InvalidOid;			/* GPDB: resource group */
 	lbeentry.st_query_id = UINT64CONST(0);
 
 	/*
@@ -446,6 +451,11 @@ pgstat_bestart(void)
 
 	PGSTAT_END_WRITE_ACTIVITY(vbeentry);
 
+	/*
+	 * GPDB: Initialize per-portal statistics hash for resource queues.
+	 */
+	pgstat_init_localportalhash();
+
 	/* Update app name to current GUC setting */
 	if (application_name)
 		pgstat_report_appname(application_name);
@@ -467,6 +477,7 @@ pgstat_beshutdown_hook(int code, Datum arg)
 	PGSTAT_BEGIN_WRITE_ACTIVITY(beentry);
 
 	beentry->st_procpid = 0;	/* mark invalid */
+	beentry->st_session_id = 0;	/* GPDB: clear session id */
 
 	PGSTAT_END_WRITE_ACTIVITY(beentry);
 }
