@@ -62,6 +62,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
+#include "optimizer/prep.h"
 #include "optimizer/paths.h"
 #include "optimizer/tlist.h"
 #include "parser/parse_clause.h"
@@ -2147,7 +2148,7 @@ fetch_multi_dqas_info(PlannerInfo *root,
 			dNumDistinctGroups += estimate_num_groups(root,
 			                                          this_dqa_group_exprs,
 			                                          num_total_input_rows,
-			                                          NULL);
+			                                          NULL, NULL);
 		}
 
 		/* assign an agg_expr_id value to aggref*/
@@ -2276,7 +2277,7 @@ fetch_single_dqa_info(PlannerInfo *root,
 	info->dNumDistinctGroups = estimate_num_groups(root,
 												   dqa_group_exprs,
 												   num_total_input_rows,
-												   NULL);
+												   NULL, NULL);
 }
 
 /*
