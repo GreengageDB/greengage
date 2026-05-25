@@ -200,13 +200,12 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		else if (strcmp(opt->defname, "process_toast") == 0)
 			process_toast = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "truncate") == 0)
-			params.truncate = get_vacopt_ternary_value(opt);
+			params.truncate = get_vacoptval_from_boolean(opt);
 		else if (Gp_role == GP_ROLE_EXECUTE && strcmp(opt->defname, "ao_phase") == 0)
 		{
 			ao_phase = defGetInt32(opt);
 			Assert((ao_phase & VACUUM_AO_PHASE_MASK) == ao_phase);
 		}
-			params.truncate = get_vacoptval_from_boolean(opt);
 		else if (strcmp(opt->defname, "parallel") == 0)
 		{
 			ereport(ERROR,
@@ -751,9 +750,9 @@ vacuum_open_relation(Oid relid, RangeVar *relation, bits32 options,
 	 * in non-blocking mode, before calling try_relation_open().
 	 */
 	if (!(options & VACOPT_SKIP_LOCKED))
-		onerel = try_relation_open(relid, lmode, false);
+		rel = try_relation_open(relid, lmode, false);
 	else if (ConditionalLockRelationOid(relid, lmode))
-		onerel = try_relation_open(relid, NoLock, false);
+		rel = try_relation_open(relid, NoLock, false);
 	else
 	{
 		rel = NULL;
@@ -1076,7 +1075,7 @@ expand_vacuum_rel(VacuumRelation *vrel, int options)
 				Oid			parent_relid;
 				int			elevel = ((options & VACOPT_VERBOSE) ? LOG : DEBUG2);
 
-				parent_relid = get_partition_parent(child_relid);
+				parent_relid = get_partition_parent(child_relid, false);
 
 				/*
 				 * Only ANALYZE the parent if the stats can be updated by merging
@@ -1778,7 +1777,9 @@ fetch_database_tuple(Relation relation, Oid dbOid)
 void
 vac_update_datfrozenxid(void)
 {
+	HeapTuple	tuple;
 	HeapTuple	cached_tuple;
+	Form_pg_database	dbform;
 	Form_pg_database	cached_dbform;
 	Relation	relation;
 	SysScanDesc scan;
@@ -2403,9 +2404,9 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	else
 		toast_relid = InvalidOid;
 
-	if (RelationIsAppendOptimized(onerel))
+	if (RelationIsAppendOptimized(rel))
 	{
-		GetAppendOnlyEntryAuxOids(RelationGetRelid(onerel), NULL,
+		GetAppendOnlyEntryAuxOids(RelationGetRelid(rel), NULL,
 								  &aoseg_relid,
 								  &aoblkdir_relid, NULL,
 								  &aovisimap_relid, NULL);
@@ -2421,25 +2422,25 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 * Note we choose to treat permissions failure as a WARNING and keep
 	 * trying to vacuum the rest of the DB --- is this appropriate?
 	 */
-	if (!(pg_class_ownercheck(RelationGetRelid(onerel), GetUserId()) ||
-		  (pg_database_ownercheck(MyDatabaseId, GetUserId()) && !onerel->rd_rel->relisshared)))
+	if (!(pg_class_ownercheck(RelationGetRelid(rel), GetUserId()) ||
+		  (pg_database_ownercheck(MyDatabaseId, GetUserId()) && !rel->rd_rel->relisshared)))
 	{
 		if (Gp_role != GP_ROLE_EXECUTE)
 		{
-			if (onerel->rd_rel->relisshared)
+			if (rel->rd_rel->relisshared)
 				ereport(WARNING,
 						(errmsg("skipping \"%s\" --- only superuser can vacuum it",
-								RelationGetRelationName(onerel))));
-			else if (onerel->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
+								RelationGetRelationName(rel))));
+			else if (rel->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
 				ereport(WARNING,
 						(errmsg("skipping \"%s\" --- only superuser or database owner can vacuum it",
-								RelationGetRelationName(onerel))));
+								RelationGetRelationName(rel))));
 			else
 				ereport(WARNING,
 						(errmsg("skipping \"%s\" --- only table or database owner can vacuum it",
-								RelationGetRelationName(onerel))));
+								RelationGetRelationName(rel))));
 		}
-		relation_close(onerel, lmode);
+		relation_close(rel, lmode);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 		return false;
@@ -2450,18 +2451,18 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 * get_rel_oids() but seems safer to check after we've locked the
 	 * relation.
 	 */
-	if ((onerel->rd_rel->relkind != RELKIND_RELATION &&
-		 onerel->rd_rel->relkind != RELKIND_MATVIEW &&
-		 onerel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		 onerel->rd_rel->relkind != RELKIND_AOSEGMENTS &&
-		 onerel->rd_rel->relkind != RELKIND_AOBLOCKDIR &&
-		 onerel->rd_rel->relkind != RELKIND_AOVISIMAP)
-		|| onerel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
+	if ((rel->rd_rel->relkind != RELKIND_RELATION &&
+		 rel->rd_rel->relkind != RELKIND_MATVIEW &&
+		 rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
+		 rel->rd_rel->relkind != RELKIND_AOSEGMENTS &&
+		 rel->rd_rel->relkind != RELKIND_AOBLOCKDIR &&
+		 rel->rd_rel->relkind != RELKIND_AOVISIMAP)
+		|| rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
 	{
 		ereport(WARNING,
 				(errmsg("skipping \"%s\" --- cannot vacuum non-tables, external tables, foreign tables or special system tables",
-						RelationGetRelationName(onerel))));
-		relation_close(onerel, lmode);
+						RelationGetRelationName(rel))));
+		relation_close(rel, lmode);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 		return false;
@@ -2474,7 +2475,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 			"compaction_before_cleanup_phase",
 			DDLNotSpecified,
 			"",	// databaseName
-			RelationGetRelationName(onerel)); // tableName
+			RelationGetRelationName(rel)); // tableName
 	}
 #endif
 
@@ -2485,16 +2486,16 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 * warning here; it would just lead to chatter during a database-wide
 	 * VACUUM.)
 	 */
-	if (RELATION_IS_OTHER_TEMP(onerel))
+	if (RELATION_IS_OTHER_TEMP(rel))
 	{
-		relation_close(onerel, lmode);
+		relation_close(rel, lmode);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 		return false;
 	}
 
-	is_appendoptimized = RelationIsAppendOptimized(onerel);
-	is_toast = (onerel->rd_rel->relkind == RELKIND_TOASTVALUE);
+	is_appendoptimized = RelationIsAppendOptimized(rel);
+	is_toast = (rel->rd_rel->relkind == RELKIND_TOASTVALUE);
 
 	if (ao_vacuum_phase && !(is_appendoptimized || is_toast))
 	{
@@ -2509,8 +2510,8 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 * can dispatch it.
 	 */
 	MemoryContext oldcontext = MemoryContextSwitchTo(vac_context);
-	this_rangevar = makeRangeVar(get_namespace_name(onerel->rd_rel->relnamespace),
-								 pstrdup(RelationGetRelationName(onerel)),
+	this_rangevar = makeRangeVar(get_namespace_name(rel->rd_rel->relnamespace),
+								 pstrdup(RelationGetRelationName(rel)),
 								 -1);
 	MemoryContextSwitchTo(oldcontext);
 
@@ -2535,7 +2536,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		bool 		has_bitmap = false;
 		Relation   *i_rel = NULL;
 
-		vac_open_indexes(onerel, AccessShareLock, &nindexes, &i_rel);
+		vac_open_indexes(rel, AccessShareLock, &nindexes, &i_rel);
 		if (i_rel != NULL)
 		{
 			for (i = 0; i < nindexes; i++)
@@ -2550,7 +2551,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		vac_close_indexes(nindexes, i_rel, AccessShareLock);
 
 		if (has_bitmap)
-			LockRelation(onerel, ShareLock);
+			LockRelation(rel, ShareLock);
 	}
 
 	if (!is_appendoptimized && (params->options & VACOPT_FULL))
@@ -2989,11 +2990,6 @@ vacuum_params_to_options_list(VacuumParams *params)
 		options = lappend(options, makeDefElem("skip_locked", (Node *) makeInteger(1), -1));
 		optmask &= ~VACOPT_SKIP_LOCKED;
 	}
-	if (optmask & VACOPT_SKIPTOAST)
-	{
-		options = lappend(options, makeDefElem("skip_toast", (Node *) makeInteger(1), -1));
-		optmask &= ~VACOPT_SKIPTOAST;
-	}
 	if (optmask & VACOPT_DISABLE_PAGE_SKIPPING)
 	{
 		options = lappend(options, makeDefElem("disable_page_skipping", (Node *) makeInteger(1), -1));
@@ -3032,16 +3028,16 @@ vacuum_params_to_options_list(VacuumParams *params)
 	 * vacuum request to QEs as distributed transaction) for GPDB7.
 	 * See more details in the head comments of autovacuum.c.
 	*/
-	if (params->truncate == VACOPT_TERNARY_DISABLED)
+	if (params->truncate == VACOPTVALUE_DISABLED)
 		options = lappend(options, makeDefElem("truncate", (Node *) makeInteger(0), -1));
-	else if (params->truncate == VACOPT_TERNARY_ENABLED)
+	else if (params->truncate == VACOPTVALUE_ENABLED)
 		options = lappend(options, makeDefElem("truncate", (Node *) makeInteger(1), -1));
 	else
 		elog(ERROR, "unexpected VACUUM 'truncate' option '%d'", (int) params->truncate);
 
-	if (params->index_cleanup == VACOPT_TERNARY_DISABLED)
+	if (params->index_cleanup == VACOPTVALUE_DISABLED)
 		options = lappend(options, makeDefElem("index_cleanup", (Node *) makeInteger(0), -1));
-	else if (params->index_cleanup == VACOPT_TERNARY_ENABLED)
+	else if (params->index_cleanup == VACOPTVALUE_ENABLED)
 		options = lappend(options, makeDefElem("index_cleanup", (Node *) makeInteger(1), -1));
 	else
 		elog(ERROR, "unexpected VACUUM 'index_cleanup' option '%d'", (int) params->index_cleanup);
@@ -3246,11 +3242,11 @@ vac_send_relstats_to_qd(Relation relation,
 }
 
 bool
-vacuumStatement_IsTemporary(Relation onerel)
+vacuumStatement_IsTemporary(Relation rel)
 {
 	bool bTemp = false;
 	/* MPP-7576: don't track internal namespace tables */
-	switch (RelationGetNamespace(onerel))
+	switch (RelationGetNamespace(rel))
 	{
 		case PG_CATALOG_NAMESPACE:
 			/* MPP-7773: don't track objects in system namespace
@@ -3273,7 +3269,7 @@ vacuumStatement_IsTemporary(Relation onerel)
 	 * temporary namespace
 	 */
 	if (!bTemp)
-		bTemp = isAnyTempNamespace(RelationGetNamespace(onerel));
+		bTemp = isAnyTempNamespace(RelationGetNamespace(rel));
 	return bTemp;
 }
 

@@ -454,11 +454,6 @@ DefineView(ViewStmt *stmt, const char *queryString,
 	 */
 	if (Gp_role != GP_ROLE_EXECUTE)
 	{
-		rawstmt = makeNode(RawStmt);
-		rawstmt->stmt = (Node *) copyObject(stmt->query);
-		rawstmt->stmt_location = stmt_location;
-		rawstmt->stmt_len = stmt_len;
-	 */
 	rawstmt = makeNode(RawStmt);
 	rawstmt->stmt = stmt->query;
 	rawstmt->stmt_location = stmt_location;

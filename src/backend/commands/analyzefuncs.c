@@ -131,8 +131,8 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		params.multixact_freeze_table_age = -1;
 		params.is_wraparound = false;
 		params.log_min_duration = -1;
-		params.index_cleanup = VACOPT_TERNARY_DEFAULT;
-		params.truncate = VACOPT_TERNARY_DEFAULT;
+		params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
+		params.truncate = VACOPTVALUE_UNSPECIFIED;
 
 		this_rangevar = makeRangeVar(get_namespace_name(onerel->rd_rel->relnamespace),
 									 pstrdup(RelationGetRelationName(onerel)),
@@ -342,7 +342,7 @@ gp_acquire_sample_rows_col_type(Oid typid)
 			 */
 			return OIDOID;
 
-		case PGNODETREEOID:
+		case PG_NODE_TREEOID:
 			/*
 			 * Input function of pg_node_tree doesn't allow loading
 			 * back values. Treat it as text.
