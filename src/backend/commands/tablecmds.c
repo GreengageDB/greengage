@@ -17754,7 +17754,7 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		initStringInfo(&shrunk_segments_condition);
 		appendStringInfo(&shrunk_segments_condition, "gp_segment_id in (");
 		int shrunk_segment = policy->numsegments;
-		for (;shrunk_segment < getgpsegmentCount() - 1; shrunk_segment++)
+		for (;shrunk_segment < rel->rd_cdbpolicy->numsegments - 1; shrunk_segment++)
 			appendStringInfo(&shrunk_segments_condition, "%d, ", shrunk_segment);
 		appendStringInfo(&shrunk_segments_condition, "%d)", shrunk_segment);
 
