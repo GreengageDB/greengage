@@ -17081,7 +17081,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 							 * only starting from Greengage 7, so specify arbitrary OIDs for
 							 * them.
 							 *
-							 * Also, don't do it for AO tables, we don't create array types
+							 * Also, don't do it for AO tables, array types are not created
 							 * for them.
 							 */
 							force_array_type = true;
