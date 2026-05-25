@@ -130,7 +130,7 @@ typedef struct ggMetadataDescriptor
 
 extern ggMetadataChunkIterator PQMetadataWalk(ggMetadataQueueId queue_id);
 extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
-extern void PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor * out_desc);
+extern void PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc);
 extern int	PQgetMetadataCount(ggMetadataQueueId queue_id);
 extern void PQCleanMetadata(ggMetadataQueueId queue_id);
 

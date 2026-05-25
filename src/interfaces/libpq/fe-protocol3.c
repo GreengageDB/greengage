@@ -70,9 +70,9 @@ static void reportErrorPosition(PQExpBuffer msg, const char *query,
 					int loc, int encoding);
 static int build_startup_packet(const PGconn *conn, char *packet,
 					 const PQEnvironmentOption *options);
+#ifndef FRONTEND
 static int pgGetMetadataMessage(PGconn *conn, int length);
-void pgGetMetaData(PGconn *conn);
-
+#endif
 
 /*
  * parseInput: if appropriate, parse input data from backend
@@ -2374,6 +2374,8 @@ build_startup_packet(const PGconn *conn, char *packet,
 	return packet_len;
 }
 
+#ifndef FRONTEND
+
 /*
  * Read a Metadata response message.
  * Entry: 'M' message type has already been consumed.
@@ -2423,3 +2425,4 @@ pgGetMetadataMessage(PGconn *conn, int length)
 
 	return 0;
 }
+#endif
