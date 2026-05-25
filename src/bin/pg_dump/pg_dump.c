@@ -17087,7 +17087,6 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 							force_array_type = true;
 						}
 
-
 						binary_upgrade_set_pg_class_oids(fout, q, part_oid, false);
 						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo, force_array_type);
 					}
