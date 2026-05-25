@@ -442,7 +442,7 @@ static int
 SocketBackend(StringInfo inBuf)
 {
 	int			qtype;
-	int			maxmsglen;
+	int			maxmsglen = 0;
 
 	/*
 	 * Get message type code from the frontend.
