@@ -16,9 +16,6 @@
  */
 #include "postgres.h"
 
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-
 #include "access/attmap.h"
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -2578,6 +2575,8 @@ ExecuteTruncateGuts(List *explicit_rels,
 							   GetUserId(),
 							   "TRUNCATE", "");
 		}
+	}
+
 	/* Now go through the hash table, and truncate foreign tables */
 	if (ft_htab)
 	{
