@@ -24,6 +24,7 @@
 
 #include "access/xact.h"
 #include "storage/ipc.h"		/* For proc_exit_inprogress  */
+#include "storage/latch.h"
 #include "pgstat.h"
 #include "tcop/tcopprot.h"
 #include "libpq-fe.h"
