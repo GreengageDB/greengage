@@ -18,6 +18,10 @@
  */
 #include "postgres.h"
 
+#ifndef USE_INTERNAL_FTS
+#define USE_INTERNAL_FTS
+#endif
+
 #include <unistd.h>
 
 /* These are always necessary for a bgworker */

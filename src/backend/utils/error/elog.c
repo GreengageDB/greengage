@@ -230,6 +230,8 @@ static void send_message_to_server_log(ErrorData *edata);
 static void write_pipe_chunks(char *data, int len, int dest);
 static void send_message_to_frontend(ErrorData *edata);
 static const char *error_severity(int elevel);
+static void elog_debug_linger(ErrorData *edata);
+static void ignore_returned_result(int result);
 static void append_with_tabs(StringInfo buf, const char *str);
 
 
@@ -554,6 +556,7 @@ errstart(int elevel, const char *domain)
 	if (elevel >= ERROR)
 	{
 		edata->sqlerrcode = ERRCODE_INTERNAL_ERROR;
+	}
 	else if (elevel >= WARNING)
 		edata->sqlerrcode = ERRCODE_WARNING;
 	else
@@ -703,9 +706,6 @@ errfinish(const char *filename, int lineno, const char *funcname)
 	 * what we want for NOTICE messages, but not for fatal exits.) This hack
 	 * is necessary because of poor design of old-style copy protocol.
 	 */
-	if (elevel >= FATAL && whereToSendOutput == DestRemote)
-		pq_endcopyout(true);
-
 	/* CDB: If fatal internal error, linger so user can attach a debugger. */
 	if (elevel == FATAL &&
 		edata->sqlerrcode == ERRCODE_INTERNAL_ERROR &&
@@ -1544,7 +1544,7 @@ errfunction(const char *funcname)
 /*
  * errposition --- add cursor position to the current error
  */
-void
+int
 errposition(int cursorpos)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1553,6 +1553,8 @@ errposition(int cursorpos)
 	CHECK_STACK_DEPTH();
 
 	edata->cursorpos = cursorpos;
+
+	return 0;
 }
 
 /*
