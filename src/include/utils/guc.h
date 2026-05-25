@@ -744,7 +744,7 @@ extern ArrayType *GUCArrayReset(ArrayType *array);
 extern void pg_timezone_abbrev_initialize(void);
 
 extern struct config_generic *find_option(const char *name,
-				bool create_placeholders, int elevel);
+				bool create_placeholders, bool skip_errors, int elevel);
 
 extern void set_gp_replication_config(const char *name, const char *value);
 

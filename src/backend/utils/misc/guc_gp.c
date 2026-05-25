@@ -95,7 +95,7 @@ static void assign_pljava_classpath_insecure(bool newval, void *extra);
 static bool check_gp_resource_group_bypass(bool *newval, void **extra, GucSource source);
 static int guc_array_compare(const void *a, const void *b);
 
-extern struct config_generic *find_option(const char *name, bool create_placeholders, int elevel);
+extern struct config_generic *find_option(const char *name, bool create_placeholders, bool skip_errors, int elevel);
 
 extern int listenerBacklog;
 
@@ -4872,7 +4872,7 @@ check_pljava_classpath_insecure(bool *newval, void **extra, GucSource source)
 {
 	if ( *newval == true )
 	{
-		struct config_generic *pljava_cp = find_option("pljava_classpath", false, ERROR);
+		struct config_generic *pljava_cp = find_option(\"pljava_classpath\", false, false, ERROR);
 		if (pljava_cp != NULL)
 		{
 			pljava_cp->context = PGC_USERSET;
@@ -4891,7 +4891,7 @@ assign_pljava_classpath_insecure(bool newval, void *extra)
 {
 	if ( newval == true )
 	{
-		struct config_generic *pljava_cp = find_option("pljava_classpath", false, ERROR);
+		struct config_generic *pljava_cp = find_option(\"pljava_classpath\", false, false, ERROR);
 		if (pljava_cp != NULL)
 		{
 			pljava_cp->context = PGC_USERSET;

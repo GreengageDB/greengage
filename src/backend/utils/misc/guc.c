@@ -217,7 +217,6 @@ static bool check_effective_io_concurrency(int *newval, void **extra, GucSource 
 static bool check_client_connection_check_interval(int *newval, void **extra, GucSource source);
 static bool check_maintenance_io_concurrency(int *newval, void **extra, GucSource source);
 static bool check_huge_page_size(int *newval, void **extra, GucSource source);
-static bool check_client_connection_check_interval(int *newval, void **extra, GucSource source);
 static void assign_pgstat_temp_directory(const char *newval, void *extra);
 static bool check_application_name(char **newval, void **extra, GucSource source);
 static void assign_application_name(const char *newval, void *extra);
@@ -3607,17 +3606,6 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"client_connection_check_interval", PGC_USERSET, CONN_AUTH_SETTINGS,
-			gettext_noop("Sets the time interval between checks for disconnection while running queries."),
-			NULL,
-			GUC_UNIT_MS
-		},
-		&client_connection_check_interval,
-		0, 0, INT_MAX,
-		check_client_connection_check_interval, NULL, NULL
-	},
-
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, 0, 0, 0, NULL, NULL, NULL
@@ -5370,7 +5358,7 @@ gp_guc_list_init(void)
 
         switch (gconf->group)
         {
-            case QUERY_TUNING:
+            case QUERY_TUNING_METHOD:
             case QUERY_TUNING_COST:
             case QUERY_TUNING_OTHER:
                 explain = true;
@@ -5689,7 +5677,7 @@ add_placeholder_variable(const char *name, int elevel)
  * can only happen when create_placeholders is true, so callers passing
  * false need not think terribly hard about this.)
  */
-static struct config_generic *
+struct config_generic *
 find_option(const char *name, bool create_placeholders, bool skip_errors,
 			int elevel)
 {
@@ -12503,7 +12491,7 @@ check_client_connection_check_interval(int *newval, void **extra, GucSource sour
 	/* Linux and OSX only, for now.  See pq_check_connection(). */
 	if (*newval != 0)
 	{
-		GUC_check_errdetail("client_connection_check_interval must be set to 0 on platforms that lack POLLRDHUP and not OSX.";
+		GUC_check_errdetail("client_connection_check_interval must be set to 0 on platforms that lack POLLRDHUP and not OSX.");
 		return false;
 	}
 #endif
@@ -12524,19 +12512,6 @@ check_huge_page_size(int *newval, void **extra, GucSource source)
 	return true;
 }
 
-static bool
-check_client_connection_check_interval(int *newval, void **extra, GucSource source)
-{
-#ifndef POLLRDHUP
-	/* Linux only, for now.  See pq_check_connection(). */
-	if (*newval != 0)
-	{
-		GUC_check_errdetail("client_connection_check_interval must be set to 0 on platforms that lack POLLRDHUP.");
-		return false;
-	}
-#endif
-	return true;
-}
 
 static void
 assign_pgstat_temp_directory(const char *newval, void *extra)
