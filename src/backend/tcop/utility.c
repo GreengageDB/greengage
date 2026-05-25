@@ -1380,17 +1380,6 @@ ProcessUtilitySlow(ParseState *pstate,
 								more_stmts = list_concat(more_stmts, parts);
 							}
 
-							Datum		toast_options;
-							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
-
-							/* Remember transformed RangeVar for LIKE */
-							table_rv = cstmt->relation;
-
-							/* Create the table itself */
-							address = DefineRelation(cstmt,
-													 RELKIND_RELATION,
-													 InvalidOid, NULL,
-													 queryString);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
@@ -1473,9 +1462,10 @@ ProcessUtilitySlow(ParseState *pstate,
 							address = DefineRelation(&cstmt->base,
 													 RELKIND_FOREIGN_TABLE,
 													 InvalidOid, NULL,
-													 queryString);
+													 queryString, true, true,
+													 NULL);
 							CreateForeignTable(cstmt,
-											   address.objectId);
+											   address.objectId, false);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
@@ -1783,6 +1773,7 @@ ProcessUtilitySlow(ParseState *pstate,
 							/* Recurse for anything else */
 							ProcessUtility(wrapper,
 										   queryString,
+										   false,
 										   PROCESS_UTILITY_SUBCOMMAND,
 										   params,
 										   NULL,
@@ -2324,6 +2315,7 @@ ProcessUtilityForAlterTable(Node *stmt, AlterTableUtilityContext *context)
 	{
 		ProcessUtility(wrapper,
 					   context->queryString,
+					   false,
 					   PROCESS_UTILITY_SUBCOMMAND,
 					   context->params,
 					   context->queryEnv,
@@ -2335,14 +2327,6 @@ ProcessUtilityForAlterTable(Node *stmt, AlterTableUtilityContext *context)
 		gp_dispatch_utility_statement = true;
 	}
 	PG_END_TRY();
-	ProcessUtility(wrapper,
-				   context->queryString,
-				   false,
-				   PROCESS_UTILITY_SUBCOMMAND,
-				   context->params,
-				   context->queryEnv,
-				   None_Receiver,
-				   NULL);
 
 	EventTriggerAlterTableStart(context->pstmt->utilityStmt);
 	EventTriggerAlterTableRelid(context->relid);
