@@ -39,7 +39,8 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 	conn->outCount = query_len;
 
 	/* remember we are using simple query protocol */
-	conn->queryclass = PGQUERY_SIMPLE;
+	if (conn->cmd_queue_head)
+		conn->cmd_queue_head->queryclass = PGQUERY_SIMPLE;
 
 	/*
 	 * Give the data a push.  In nonblock mode, don't complain if we're unable

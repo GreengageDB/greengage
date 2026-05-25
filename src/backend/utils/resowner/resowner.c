@@ -1507,6 +1507,9 @@ PrintHMACLeakWarning(Datum handle)
 {
 	elog(WARNING, "HMAC context reference leak: context %p still referenced",
 		 DatumGetPointer(handle));
+}
+
+/*
  * Cdb: walk through a resource owner and it's childrens
  */
 void

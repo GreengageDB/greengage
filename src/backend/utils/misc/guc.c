@@ -738,6 +738,12 @@ const char *const config_group_names[] =
 	gettext_noop("Connections and Authentication / Authentication"),
 	/* CONN_AUTH_SSL */
 	gettext_noop("Connections and Authentication / SSL"),
+	/* EXTERNAL_TABLES */
+	gettext_noop("External Tables"),
+	/* APPENDONLY_TABLES */
+	gettext_noop("Append-Only Tables"),
+	/* RESOURCES */
+	gettext_noop("Resource Usage"),
 	/* RESOURCES_MEM */
 	gettext_noop("Resource Usage / Memory"),
 	/* RESOURCES_DISK */
@@ -778,6 +784,8 @@ const char *const config_group_names[] =
 	gettext_noop("Query Tuning / Planner Cost Constants"),
 	/* QUERY_TUNING_OTHER */
 	gettext_noop("Query Tuning / Other Planner Options"),
+	/* LOGGING */
+	gettext_noop("Reporting and Logging"),
 	/* LOGGING_WHERE */
 	gettext_noop("Reporting and Logging / Where to Log"),
 	/* LOGGING_WHEN */
@@ -786,12 +794,18 @@ const char *const config_group_names[] =
 	gettext_noop("Reporting and Logging / What to Log"),
 	/* PROCESS_TITLE */
 	gettext_noop("Reporting and Logging / Process Title"),
+	/* STATS */
+	gettext_noop("Statistics"),
+	/* STATS_ANALYZE */
+	gettext_noop("Statistics / Analyze"),
 	/* STATS_MONITORING */
 	gettext_noop("Statistics / Monitoring"),
 	/* STATS_COLLECTOR */
 	gettext_noop("Statistics / Query and Index Statistics Collector"),
 	/* AUTOVACUUM */
 	gettext_noop("Autovacuum"),
+	/* CLIENT_CONN */
+	gettext_noop("Client Connection Defaults"),
 	/* CLIENT_CONN_STATEMENT */
 	gettext_noop("Client Connection Defaults / Statement Behavior"),
 	/* CLIENT_CONN_LOCALE */
@@ -802,13 +816,15 @@ const char *const config_group_names[] =
 	gettext_noop("Client Connection Defaults / Other Defaults"),
 	/* LOCK_MANAGEMENT */
 	gettext_noop("Lock Management"),
+	/* COMPAT_OPTIONS */
+	gettext_noop("Version and Platform Compatibility"),
 	/* COMPAT_OPTIONS_PREVIOUS */
 	gettext_noop("Version and Platform Compatibility / Previous PostgreSQL Versions"),
 	/* COMPAT_OPTIONS_CLIENT */
 	gettext_noop("Version and Platform Compatibility / Other Platforms and Clients"),
     /* COMPAT_OPTIONS_IGNORED */
     gettext_noop("Version and Platform Compatibility / Ignored"),
-	/* ERROR_HANDLING */
+	/* ERROR_HANDLING_OPTIONS */
 	gettext_noop("Error Handling"),
     /* GP_ARRAY_CONFIGURATION */
     gettext_noop(PACKAGE_NAME " / Array Configuration"),
@@ -1183,8 +1199,14 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"geqo", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Unused. Syntax check only for PostgreSQL compatibility."),
-            NULL,
+			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&defunct_bool,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"enable_async_append", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of async append plans."),
 			NULL,
@@ -1192,17 +1214,6 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&enable_async_append,
 		true,
-		NULL, NULL, NULL
-	},
-	{
-		{"geqo", PGC_USERSET, QUERY_TUNING_GEQO,
-			gettext_noop("Enables genetic query optimization."),
-			gettext_noop("This algorithm attempts to do planning without "
-						 "exhaustive searching."),
-			GUC_EXPLAIN
-		},
-		&defunct_bool,
-		false,
 		NULL, NULL, NULL
 	},
 
