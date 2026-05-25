@@ -1326,7 +1326,7 @@ PortalRunUtility(Portal portal, PlannedStmt *pstmt,
 
 	/* check if this utility statement need to be involved into resource queue
 	 * mgmt */
-	ResHandleUtilityStmt(portal, utilityStmt);
+	ResHandleUtilityStmt(portal, pstmt->utilityStmt);
 
 	ProcessUtility(pstmt,
 				   portal->sourceText,
@@ -1933,6 +1933,9 @@ PortalBackoffEntryInit(Portal portal)
 		/* Initialize the SHM backend entry */
 		BackoffBackendEntryInit(gp_session_id, gp_command_count, portal->queueId);
 	}
+}
+
+/*
  * PlannedStmtRequiresSnapshot - what it says on the tin
  */
 bool
