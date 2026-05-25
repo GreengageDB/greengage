@@ -1370,8 +1370,11 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	AttrNumber	natts;
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 
 	Assert(ScanDirectionIsForward(direction));
+
+	elogif(re_debug, WARNING, "[RELOG][%s]", __FUNCTION__);
 
 	/* should not be in ANALYZE/SampleScan - we use a different API */
 	Assert((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) == 0);
@@ -1401,7 +1404,11 @@ ReadNext:
 			 * Placing here in order to have less impact on the hot path. 
 			 */
 			if (scan->columnScanInfo.num_proj_atts == 0)
+			{
+				slotAocs->current_scan = NULL;
+				slotAocs->row_num = InvalidAORowNum;
 				return false;
+			}
 
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -1409,6 +1416,8 @@ ReadNext:
 				/* No more seg, we are at the end */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
+				slotAocs->current_scan = NULL;
+				slotAocs->row_num = InvalidAORowNum;
 				return false;
 			}
 			scan->segrowsprocessed = 0;
@@ -1420,10 +1429,21 @@ ReadNext:
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
 
+
+
+		AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
+		int tts_nvalid = 0;
 		/* Read from cur_seg */
 		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		//for (AttrNumber i = 0; i < 1; i++)
 		{
 			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+			elogif(re_debug, WARNING, "[RELOG][%s] processing attno = %d (achor is %d)", __FUNCTION__, attno, anchor_attr);
+			if (attno > anchor_attr)
+				break;
+
+			tts_nvalid++;
 
 			/*
 			 * Check missing value before reading from data files.
@@ -1478,6 +1498,8 @@ ReadNext:
 			 */
 			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
+			if (re_debug) elog(WARNING, "[RELOG][%s] d[%d] = %lu", __FUNCTION__, attno, d[attno]);
+
 			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 			if (rowNum == InvalidAORowNum &&
 				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
@@ -1517,8 +1539,12 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = natts;
+		slot->tts_nvalid = tts_nvalid;// 1; // natts;
+
 		slot->tts_tid = scan->cdb_fake_ctid;
+
+		slotAocs->current_scan = (void*)scan;
+		slotAocs->row_num = rowNum;
 		return true;
 	}
 
@@ -2424,7 +2450,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	{
 		if (slot != NULL)
 		{
-			slot->tts_nvalid = colno;
+			slot->tts_nvalid = colno+1;
 			slot->tts_tid = *(ItemPointer)(aoTupleId);
 		}
 	}
@@ -3399,7 +3425,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 	 */
 	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
 	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
 
 		/*
 		 * Initialize expression context for evaluating values and
@@ -3493,6 +3519,7 @@ aocs_writecol_rewritesegfiles(
 	/* Loop over each row in the segment. */
 	while (aocs_getnext(scanDesc, ForwardScanDirection, oldslot))
 	{
+		slot_getallattrs(oldslot);
 		if (scanDesc->columnScanInfo.ds[colno]->ao_read.current.hasFirstRowNum)
 		{
 			if (expectedFRN == -1)
@@ -3673,8 +3700,8 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			/* expr already planned */
 			ex->exprstate = ExecInitExpr((Expr *) ex->expr, NULL);
 		}
-		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtual);
-		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
+		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
 
 		/*
 		 * GENERATED expressions might reference the

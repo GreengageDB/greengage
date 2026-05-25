@@ -69,6 +69,9 @@
 #include "utils/typcache.h"
 
 #include "cdb/cdbvars.h"
+#include "cdb/cdbaocsam.h"
+#include "cdb/cdbappendonlyam.h"
+#include "pgstat.h"
 
 static TupleDesc ExecTypeFromTLInternal(List *targetList,
 										bool skipjunk);
@@ -82,6 +85,7 @@ static void tts_heap_store_tuple(TupleTableSlot *slot, HeapTuple tuple, bool sho
 
 
 const TupleTableSlotOps TTSOpsVirtual;
+const TupleTableSlotOps TTSOpsVirtualAOCS;
 const TupleTableSlotOps TTSOpsHeapTuple;
 const TupleTableSlotOps TTSOpsMinimalTuple;
 const TupleTableSlotOps TTSOpsBufferHeapTuple;
@@ -122,6 +126,28 @@ tts_virtual_clear(TupleTableSlot *slot)
 	ItemPointerSetInvalid(&slot->tts_tid);
 }
 
+static void
+tts_virtual_aocs_clear(TupleTableSlot *slot)
+{
+	if (unlikely(TTS_SHOULDFREE(slot)))
+	{
+		VirtualTupleTableSlot *vslot = (VirtualTupleTableSlot *) slot;
+
+		pfree(vslot->data);
+		vslot->data = NULL;
+
+		slot->tts_flags &= ~TTS_FLAG_SHOULDFREE;
+
+		VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
+		vslot_aocs->current_scan = NULL;
+		vslot_aocs->row_num = InvalidAORowNum;
+	}
+
+	slot->tts_nvalid = 0;
+	slot->tts_flags |= TTS_FLAG_EMPTY;
+	ItemPointerSetInvalid(&slot->tts_tid);
+}
+
 /*
  * VirtualTupleTableSlots always have fully populated tts_values and
  * tts_isnull arrays.  So this function should never be called.
@@ -130,6 +156,116 @@ static void
 tts_virtual_getsomeattrs(TupleTableSlot *slot, int natts)
 {
 	elog(ERROR, "getsomeattrs is not required to be called on a virtual tuple table slot");
+}
+
+static void
+tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+	int			err = 0;
+
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	int64		rowNum = slotAocs->row_num;
+	Assert(rowNum != InvalidAORowNum);
+	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
+	if (scan == NULL)
+	{
+		if (re_debug) elog(WARNING, "[RELOG][%s] early bail out (index scan?...)", __FUNCTION__);
+		return;
+	}
+
+	if (re_debug) elog(WARNING, "[RELOG][%s] natts = %u, scan->columnScanInfo.num_proj_atts = %u", __FUNCTION__, natts, scan->columnScanInfo.num_proj_atts);
+
+	int scan_natts = Min(scan->columnScanInfo.num_proj_atts, natts);
+	for (AttrNumber i = slot->tts_nvalid; i < scan_natts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+		Assert(ds);
+
+		elogif(re_debug, WARNING, "[RELOG][%s] processing attno = %d for rowNum %ld", __FUNCTION__, attno, rowNum);
+
+		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+		/*
+		 * Check missing value before reading from data files.
+		 * 
+		 * We don't need to check the missing value for the anchor column.
+		 * In fact, we cannot do that either because we don't have the
+		 * row number until we've scanned the anchor column.
+		 */
+		if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+		{
+			if (AO_ATTR_VAL_IS_MISSING(rowNum,
+									attno,
+									curseginfo->segno,
+									scan->columnScanInfo.attnum_to_rownum))
+			{
+				/*
+				 * XXX: should we temporarily store the missing value to avoid repeatedly calling
+				 * getmissingattr? The performance gain seems not much though. 
+				 */
+				d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+				continue;
+			}
+		}
+
+		bool force_block_read = false;
+		if (((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0 ||
+			(scan->rs_base.rs_flags & SO_TYPE_SAMPLESCAN) != 0 ||
+			scan->partialScan) &&
+			(scan->segrowsprocessed <= 1) &&
+			!force_block_read)
+		{
+			force_block_read = true;
+		}
+
+		while (true)
+		{
+			elogif(re_debug, WARNING, "[RELOG][%s] ds->blockFirstRowNum %ld, ds->blockRowCount = %d, ds = %p", __FUNCTION__, ds->blockFirstRowNum, ds->blockRowCount, ds);
+
+			if (!force_block_read)
+			{
+				Assert(rowNum >= ds->blockFirstRowNum);
+				Assert(ds->blockFirstRowNum != InvalidAORowNum);
+				int64 lastRowNumInBlock = ds->blockFirstRowNum + ds->blockRowCount - 1;
+				if (rowNum <= lastRowNumInBlock)
+					break;
+			}
+			force_block_read = false;
+
+			err = datumstreamread_block(ds, scan->blockDirectory, attno);
+			Assert(err >= 0);
+
+			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+		}
+
+		err = datumstreamread_advance(ds);
+		Assert(err >= 0);
+
+		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
+
+		if (re_debug) elog(WARNING, "[RELOG][%s] rowNum = %lu, rowNumInBlock = %u, ds->blockFirstRowNum = %lu, datumstreamread_nth(ds) = %d", __FUNCTION__,
+			rowNum, rowNumInBlock, ds->blockFirstRowNum, datumstreamread_nth(ds) );
+
+		while (rowNumInBlock > datumstreamread_nth(ds))
+		{
+			err = datumstreamread_advance(ds);
+			if (re_debug) elog(WARNING, "[RELOG][%s] datumstreamread_advance at %u", __FUNCTION__, __LINE__);
+			Assert(err > 0);
+		}
+
+		/*
+		 * Get the column's datum right here since the data structures
+		 * should still be hot in CPU data cache memory.
+		 */
+		datumstreamread_get(ds, &d[attno], &null[attno]);
+
+		if (re_debug) elog(WARNING, "[RELOG][%s] d[%d] = %ld", __FUNCTION__, attno, d[attno]);
+	}
+	slot->tts_nvalid = natts;
 }
 
 /*
@@ -269,6 +405,30 @@ tts_virtual_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	Assert(srcdesc->natts <= dstslot->tts_tupleDescriptor->natts);
 
 	tts_virtual_clear(dstslot);
+
+	slot_getallattrs(srcslot);
+
+	for (int natt = 0; natt < srcdesc->natts; natt++)
+	{
+		dstslot->tts_values[natt] = srcslot->tts_values[natt];
+		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
+	}
+
+	dstslot->tts_nvalid = srcdesc->natts;
+	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
+
+	/* make sure storage doesn't depend on external memory */
+	tts_virtual_materialize(dstslot);
+}
+
+static void
+tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
+{
+	TupleDesc	srcdesc = srcslot->tts_tupleDescriptor;
+
+	Assert(srcdesc->natts <= dstslot->tts_tupleDescriptor->natts);
+
+	tts_virtual_aocs_clear(dstslot);
 
 	slot_getallattrs(srcslot);
 
@@ -1055,6 +1215,26 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple
 };
 
+const TupleTableSlotOps TTSOpsVirtualAOCS = {
+	.base_slot_size = sizeof(VirtualTupleTableSlotAOCS),
+	.init = tts_virtual_init,
+	.release = tts_virtual_release,
+	.clear = tts_virtual_aocs_clear,
+	.getsomeattrs = tts_virtual_aocs_getsomeattrs,
+	.getsysattr = tts_virtual_getsysattr,
+	.materialize = tts_virtual_materialize,
+	.copyslot = tts_virtual_aocs_copyslot,
+
+	/*
+	 * A virtual tuple table slot can not "own" a heap tuple or a minimal
+	 * tuple.
+	 */
+	.get_heap_tuple = NULL,
+	.get_minimal_tuple = NULL,
+	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
+	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple
+};
+
 const TupleTableSlotOps TTSOpsHeapTuple = {
 	.base_slot_size = sizeof(HeapTupleTableSlot),
 	.init = tts_heap_init,
@@ -1572,7 +1752,9 @@ ExecStoreVirtualTuple(TupleTableSlot *slot)
 	Assert(TTS_EMPTY(slot));
 
 	slot->tts_flags &= ~TTS_FLAG_EMPTY;
-	slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
+
+	if (slot->tts_nvalid == 0)
+		slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
 
 	return slot;
 }

@@ -106,6 +106,7 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 
 	int			attnum;
 
+	/* TODO: consider TTSOpsVirtualAOCS here? */
 	/* virtual tuples never need deforming, so don't generate code */
 	if (ops == &TTSOpsVirtual)
 		return NULL;

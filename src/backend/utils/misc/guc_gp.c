@@ -112,6 +112,7 @@ List       *gp_guc_restore_list = NIL;
 bool        gp_guc_need_restore = false;
 
 
+bool		re_debug = false;
 bool		Debug_shareinput_xslice = false;
 bool		Debug_print_full_dtm = false;
 bool		Debug_print_snapshot_dtm = false;
@@ -1462,7 +1463,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		false,
 		NULL, NULL, NULL
 	},
-
+	{
+		{"re_debug", PGC_SUSET, LOGGING_WHAT,
+		 gettext_noop("re_debug."),
+		 NULL,
+		 GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&re_debug,
+		false,
+		NULL, NULL, NULL
+	},
 	{
 		{"gp_disable_tuple_hints", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Specify if hint bits on tuples should be deferred."),

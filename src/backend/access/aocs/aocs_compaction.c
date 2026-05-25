@@ -282,7 +282,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 								   &compact_segno, 1, NULL);
 
 	tupDesc = RelationGetDescr(aorel);
-	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtual);
+	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
 	slot->tts_tableOid = RelationGetRelid(aorel);
 
 	/*
@@ -310,6 +310,8 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	while (aocs_getnext(scanDesc, ForwardScanDirection, slot))
 	{
 		CHECK_FOR_INTERRUPTS();
+
+		slot_getallattrs(slot);
 
 		/*
  		 * AppendOnlyVisimap_IsVisible() has already been called in aocs_getnext().

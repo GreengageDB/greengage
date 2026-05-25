@@ -331,6 +331,7 @@ extern bool gp_enable_statement_trigger;
 extern bool gp_ignore_error_table;
 
 extern bool Debug_shareinput_xslice;
+extern bool re_debug;
 
 extern bool gp_log_optimization_time;
 extern bool log_parser_stats;

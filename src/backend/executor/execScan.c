@@ -186,7 +186,10 @@ ExecScan(ScanState *node,
 	if (!qual && !projInfo)
 	{
 		ResetExprContext(econtext);
-		return ExecScanFetch(node, accessMtd, recheckMtd);
+		TupleTableSlot *slot = ExecScanFetch(node, accessMtd, recheckMtd);
+		if (!TupIsNull(slot))
+			slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
+		return slot;
 	}
 
 	/*
@@ -249,6 +252,9 @@ ExecScan(ScanState *node,
 				/*
 				 * Here, we aren't projecting, so just return scan tuple.
 				 */
+
+				slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
+
 				return slot;
 			}
 		}
