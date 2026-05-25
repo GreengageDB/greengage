@@ -25,6 +25,7 @@
 
 #include "pgstat.h"
 #include "storage/ipc.h"		/* For proc_exit_inprogress  */
+#include "storage/latch.h"
 #include "tcop/tcopprot.h"
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbdisp_async.h"

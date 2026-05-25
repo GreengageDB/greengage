@@ -25,6 +25,7 @@
 #include "miscadmin.h"
 
 #include "access/heapam.h"
+#include "catalog/indexing.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "catalog/pg_aggregate.h"
