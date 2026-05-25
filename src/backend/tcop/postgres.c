@@ -6057,7 +6057,7 @@ PostgresMain(int argc, char *argv[],
  * message was received, and is used to construct the error message.
  */
 static void
-forbidden_in_wal_sender(int firstchar)
+forbidden_in_wal_sender(char firstchar)
 {
 	if (am_walsender)
 	{

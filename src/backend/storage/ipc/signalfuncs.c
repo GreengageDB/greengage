@@ -247,7 +247,7 @@ pg_terminate_backend(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("\"timeout\" must not be negative")));
 
-	r = pg_signal_backend(pid, SIGTERM);
+	r = pg_signal_backend(pid, SIGTERM, NULL);
 
 	if (r == SIGNAL_BACKEND_NOSUPERUSER)
 		ereport(ERROR,
