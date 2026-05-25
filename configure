@@ -652,6 +652,8 @@ MSGFMT
 enable_largefile
 PG_CRC32C_OBJS
 CFLAGS_ARMV8_CRC32C
+CFLAGS_VECTORIZE
+CFLAGS_UNROLL_LOOPS
 CFLAGS_SSE42
 have_win32_dbghelp
 LIBOBJS
@@ -5437,6 +5439,14 @@ if test "$ac_env_CFLAGS_VECTOR_set" = set; then
   CFLAGS_VECTOR=$ac_env_CFLAGS_VECTOR_value
 fi
 
+# set CFLAGS_UNROLL_LOOPS and CFLAGS_VECTORIZE from the environment, if present
+if test "$ac_env_CFLAGS_UNROLL_LOOPS_set" = set; then
+  CFLAGS_UNROLL_LOOPS=$ac_env_CFLAGS_UNROLL_LOOPS_value
+fi
+if test "$ac_env_CFLAGS_VECTORIZE_set" = set; then
+  CFLAGS_VECTORIZE=$ac_env_CFLAGS_VECTORIZE_value
+fi
+
 # Some versions of GCC support some additional useful warning flags.
 # Check whether they are supported, and add them to CFLAGS if so.
 # ICC pretends to be GCC but it's lying; it doesn't support these flags,
@@ -6444,6 +6454,14 @@ $as_echo "$pgac_cv_prog_CC_cflags__ftree_vectorize" >&6; }
 if test x"$pgac_cv_prog_CC_cflags__ftree_vectorize" = x"yes"; then
   CFLAGS_VECTOR="${CFLAGS_VECTOR} -ftree-vectorize"
 fi
+
+  # Set CFLAGS_UNROLL_LOOPS and CFLAGS_VECTORIZE for PG14 compatibility
+  if test x"$pgac_cv_prog_CC_cflags__funroll_loops" = x"yes"; then
+    CFLAGS_UNROLL_LOOPS="-funroll-loops"
+  fi
+  if test x"$pgac_cv_prog_CC_cflags__ftree_vectorize" = x"yes"; then
+    CFLAGS_VECTORIZE="-ftree-vectorize"
+  fi
 
 
   # We want to suppress clang's unhelpful unused-command-line-argument warnings
