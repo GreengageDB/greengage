@@ -86,9 +86,8 @@ test_check_metadata(PG_FUNCTION_ARGS)
 
 	/*
 	 * Metadata records are unordered for the each query, so to make
-	 * predictable
+	 * predictable results, make them in few passes
 	 */
-	/* records, make them in few passes */
 
 	int			numsegments = getgpsegmentCount();
 	int			count = 0;
