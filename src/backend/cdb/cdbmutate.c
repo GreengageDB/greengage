@@ -391,11 +391,10 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 		}
 		else if (IsA(node, ModifyTable))
 		{
-			ListCell   *cell;
 			ModifyTable *mt = (ModifyTable *) node;
 
-			foreach(cell, mt->plans)
-				shareinput_walker(f, (Node *) lfirst(cell), root);
+			if (mt->plan.lefttree)
+				shareinput_walker(f, (Node *) mt->plan.lefttree, root);
 		}
 		else if (IsA(node, SubqueryScan))
 		{
@@ -1133,7 +1132,7 @@ makeSegmentFilterExpr(int segid)
 		make_opclause(Int4EqualOperator,
 					  BOOLOID,
 					  false,	/* opretset */
-					  (Expr *) makeFuncExpr(F_MPP_EXECUTION_SEGMENT,
+					  (Expr *) makeFuncExpr(F_GP_EXECUTION_SEGMENT,
 											INT4OID,
 											NIL,	/* args */
 											InvalidOid,
@@ -1603,8 +1602,8 @@ pre_dispatch_function_evaluation_mutator(Node *node,
 			 * xlog which will also flush any xlog writes that the sequence
 			 * server might do.
 			 */
-			if (funcid == F_NEXTVAL_OID || funcid == F_CURRVAL_OID ||
-				funcid == F_SETVAL_OID)
+			if (funcid == F_NEXTVAL || funcid == F_CURRVAL ||
+				funcid == F_SETVAL_REGCLASS_INT8)
 			{
 				ExecutorMarkTransactionUsesSequences();
 				is_seq_func = true;

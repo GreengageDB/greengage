@@ -5359,14 +5359,13 @@ gp_guc_list_init(void)
         switch (gconf->group)
         {
             case QUERY_TUNING_METHOD:
+                explain = true;
+                no_plan = true;
+                break;
+
             case QUERY_TUNING_COST:
             case QUERY_TUNING_OTHER:
                 explain = true;
-                break;
-
-            case QUERY_TUNING_METHOD:
-                explain = true;
-                no_plan = true;
                 break;
 
             case RESOURCES_MEM:
