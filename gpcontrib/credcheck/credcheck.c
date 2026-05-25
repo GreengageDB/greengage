@@ -92,10 +92,11 @@ static const uint32 PGPH_VERSION = 100;
  * Custom WAL resource manager used to keep the password history file in
  * sync between the primary and its standbys.
  *
- * RM_EXPERIMENTAL_ID is used until a stable id is reserved for credcheck;
- * see access/rmgrlist.h.
+ * RM_CREDCHECK_ID (150) is a stable custom WAL resource manager ID
+ * allocated to credcheck; see the PostgreSQL custom WAL Rmgr registry at
+ * https://wiki.postgresql.org/wiki/CustomWALResourceManagers.
  */
-#define RM_CREDCHECK_ID			RM_EXPERIMENTAL_ID
+#define RM_CREDCHECK_ID			150
 #define CREDCHECK_RMGR_NAME		"credcheck"
 
 #define XLOG_CREDCHECK_PWD_ADD			0x10
