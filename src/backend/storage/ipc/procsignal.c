@@ -29,8 +29,10 @@
 #include "storage/proc.h"
 #include "storage/shmem.h"
 #include "storage/sinval.h"
+#include "cdb/cdbvars.h"
 #include "tcop/tcopprot.h"
 #include "utils/memutils.h"
+#include "utils/resource_manager.h"
 
 /*
  * The SIGUSR1 signal is multiplexed to support signaling multiple event
