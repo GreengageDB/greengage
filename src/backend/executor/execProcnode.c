@@ -1231,7 +1231,7 @@ planstate_walk_kids(PlanState *planstate,
 
 		case T_ModifyTableState:
 			{
-				v = planstate_walk_node(planstate->lefttree, walker, context, flags);
+				v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
 				break;
 			}
 

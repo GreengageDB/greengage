@@ -103,7 +103,7 @@ InstrStartNode(Instrumentation *instr)
 
 /* Exit from a plan node */
 void
-InstrStopNode(Instrumentation *instr, uint64 nTuples)
+InstrStopNode(Instrumentation *instr, double nTuples)
 {
 	double		save_tuplecount = instr->tuplecount;
 	instr_time	endtime;
@@ -393,7 +393,7 @@ GpInstrAlloc(const Plan *node, int instrument_options)
 		instr = pickInstrFromShmem(node, instrument_options);
 
 	if (instr == NULL)
-		instr = InstrAlloc(1, instrument_options);
+		instr = InstrAlloc(1, instrument_options, false);
 
 	return instr;
 }

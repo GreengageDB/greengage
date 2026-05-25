@@ -43,6 +43,7 @@
 #include "libpq/pqformat.h"
 #include "commands/defrem.h"
 #include "commands/trigger.h"
+#include "executor/execPartition.h"
 #include "executor/executor.h"
 #include "foreign/fdwapi.h"
 #include "mb/pg_wchar.h"
@@ -57,12 +58,14 @@
 #include "storage/fd.h"
 #include "storage/execute_pipe.h"
 #include "tcop/tcopprot.h"
+#include "access/url.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+#include "utils/string_utils.h"
 
 /*
  * The following macros aid in major refactoring of data processing code (in
@@ -89,6 +92,52 @@ cstate->attribute_buf.cursor = 0;
 line_buf_with_lineno.len = 0; \
 line_buf_with_lineno.data[0] = '\0'; \
 line_buf_with_lineno.cursor = 0;
+
+#define ISOCTAL(c) (((c) >= '0') && ((c) <= '7'))
+#define OCTVALUE(c) ((c) - '0')
+
+#define IF_NEED_REFILL_AND_NOT_EOF_CONTINUE(extralen) \
+if (1) \
+{ \
+	if (raw_buf_ptr + (extralen) >= copy_buf_len && !hit_eof) \
+	{ \
+		raw_buf_ptr = prev_raw_ptr; /* undo fetch */ \
+		need_data = true; \
+		continue; \
+	} \
+} else ((void) 0)
+
+#define IF_NEED_REFILL_AND_EOF_BREAK(extralen) \
+if (1) \
+{ \
+	if (raw_buf_ptr + (extralen) >= copy_buf_len && hit_eof) \
+	{ \
+		if (extralen) \
+			raw_buf_ptr = copy_buf_len; /* consume the partial character */ \
+		/* backslash just before EOF, treat as data char */ \
+		result = true; \
+		break; \
+	} \
+} else ((void) 0)
+
+#define REFILL_LINEBUF \
+if (1) \
+{ \
+	if (raw_buf_ptr > cstate->raw_buf_index) \
+	{ \
+		appendBinaryStringInfo(&cstate->line_buf, \
+							 cstate->raw_buf + cstate->raw_buf_index, \
+							   raw_buf_ptr - cstate->raw_buf_index); \
+		cstate->raw_buf_index = raw_buf_ptr; \
+	} \
+} else ((void) 0)
+
+#define NO_END_OF_COPY_GOTO \
+if (1) \
+{ \
+	raw_buf_ptr = prev_raw_ptr + 1; \
+	goto not_end_of_copy; \
+} else ((void) 0)
 
 static volatile CopyState glob_cstate = NULL;
 
@@ -161,6 +210,34 @@ typedef struct CopyMultiInsertInfo
 
 static void close_program_pipes(CopyState cstate, bool ifThrow);
 static int CopyReadBinaryData(CopyState cstate, char *dest, int nbytes);
+static bool CopyReadLine(CopyState cstate);
+static bool CopyReadLineText(CopyState cstate);
+static bool NextCopyFromRawFieldsX(CopyState cstate, char ***fields, int *nfields,
+								   int stop_processing_at_field);
+static bool NextCopyFromX(CopyState cstate, ExprContext *econtext,
+						  Datum *values, bool *nulls);
+static bool NextCopyFromDispatch(CopyState cstate, ExprContext *econtext,
+								 Datum *values, bool *nulls);
+static bool NextCopyFromExecute(CopyState cstate, ExprContext *econtext,
+								Datum *values, bool *nulls);
+static void HandleQDErrorFrame(CopyState cstate, char *p, int len);
+static void SendCopyFromForwardedError(CopyState cstate, CdbCopy *cdbCopy, char *errormsg);
+static void SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy);
+static void SendCopyFromForwardedTuple(CopyState cstate,
+									   CdbCopy *cdbCopy,
+									   bool send_to_all,
+									   int target_seg,
+									   Datum *values,
+									   bool *nulls);
+static int CopyReadAttributesText(CopyState cstate, int stop_processing_at_field);
+static int CopyReadAttributesCSV(CopyState cstate, int stop_processing_at_field);
+static void FreeDistributionData(GpDistributionData *distData);
+static Datum CopyReadBinaryAttribute(CopyState cstate, FmgrInfo *flinfo,
+									 Oid typioparam, int32 typmod, bool *isnull);
+static GpDistributionData *InitDistributionData(CopyState cstate, EState *estate);
+static unsigned int GetTargetSeg(GpDistributionData *distData, TupleTableSlot *slot);
+static ProgramPipes *open_program_pipes(char *command, bool forwrite);
+static List *parse_joined_option_list(char *str, char *delimiter);
 
 
 static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
@@ -4371,8 +4448,10 @@ CopyFrom(CopyState cstate)
 										   myslot, mycid, ti_options, bistate);
 
 						if (resultRelInfo->ri_NumIndices > 0)
-							recheckIndexes = ExecInsertIndexTuples(myslot,
+							recheckIndexes = ExecInsertIndexTuples(resultRelInfo,
+																   myslot,
 																   estate,
+																   false,
 																   false,
 																   NULL,
 																   NIL);
@@ -4510,9 +4589,6 @@ CopyFrom(CopyState cstate)
 	/* Close all the partitioned tables, leaf partitions, and their indices */
 	if (proute)
 		ExecCleanupTupleRouting(mtstate, proute);
-
-	/* Close any trigger target relations */
-	ExecCleanUpTriggerState(estate);
 
 	FreeDistributionData(distData);
 
@@ -5037,7 +5113,7 @@ HandleCopyError(CopyState cstate)
  * 'values' and 'nulls' arrays must be the same length as columns of the
  * relation passed to BeginCopyFrom. This function fills the arrays.
  */
-bool
+static bool
 NextCopyFromX(CopyState cstate, ExprContext *econtext,
 			 Datum *values, bool *nulls)
 {
@@ -5548,7 +5624,7 @@ retry:
  * The caller has already read part of the frame; 'p' points to that part,
  * of length 'len'.
  */
-void
+static void
 HandleQDErrorFrame(CopyState cstate, char *p, int len)
 {
 	CdbSreh *cdbsreh = cstate->cdbsreh;
@@ -5637,7 +5713,7 @@ HandleQDErrorFrame(CopyState cstate, char *p, int len)
  * This is the sending counterpart of NextCopyFromExecute. Used in the QD,
  * to send a row to a QE.
  */
-void
+static void
 SendCopyFromForwardedTuple(CopyState cstate,
 						   CdbCopy *cdbCopy,
 						   bool toAll,
@@ -5780,7 +5856,7 @@ SendCopyFromForwardedTuple(CopyState cstate,
 		cdbCopySendData(cdbCopy, target_seg, msgbuf->data, msgbuf->len);
 }
 
-void
+static void
 SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy)
 {
 	copy_from_dispatch_header header_frame;
@@ -5793,7 +5869,7 @@ SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy)
 	cdbCopySendDataToAll(cdbCopy, (char *) &header_frame, sizeof(header_frame));
 }
 
-void
+static void
 SendCopyFromForwardedError(CopyState cstate, CdbCopy *cdbCopy, char *errormsg)
 {
 	copy_from_dispatch_error *errframe;
@@ -6428,7 +6504,7 @@ GetDecimalFromHex(char hex)
  *
  * The return value is the number of fields actually read.
  */
-int
+static int
 CopyReadAttributesText(CopyState cstate, int stop_processing_at_field)
 {
 	char		delimc = cstate->delim[0];
@@ -6676,7 +6752,7 @@ CopyReadAttributesText(CopyState cstate, int stop_processing_at_field)
  * CopyReadAttributesText, except we parse the fields according to
  * "standard" (i.e. common) CSV usage.
  */
-int
+static int
 CopyReadAttributesCSV(CopyState cstate, int stop_processing_at_field)
 {
 	char		delimc = cstate->delim[0];
@@ -7447,7 +7523,7 @@ InitDistributionData(CopyState cstate, EState *estate)
 	return distData;
 }
 
-void
+static void
 FreeDistributionData(GpDistributionData *distData)
 {
 	if (distData)

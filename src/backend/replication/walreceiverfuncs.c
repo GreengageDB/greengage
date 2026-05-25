@@ -111,14 +111,12 @@ WalRcvRunning(void)
 			{
 				state = walrcv->walRcvState = WALRCV_STOPPED;
 				stopped = true;
-			}
 
 				elogif(debug_xlog_record_read, LOG,
 					   "Set walreceiver state to %s as it has taken too"
 					   "long to start up",
 					   WalRcvGetStateString(walrcv->walRcvState));
 			}
-
 			SpinLockRelease(&walrcv->mutex);
 
 			if (stopped)

@@ -1496,6 +1496,8 @@ BufFileLoadCompressedBuffer(BufFile *file, void *buffer, size_t bufsize)
 }
 
 #endif		/* USE_ZSTD */
+
+/*
  * Truncate a BufFile created by BufFileCreateShared up to the given fileno and
  * the offset.
  */

@@ -191,7 +191,7 @@ AOCSMoveTuple(TupleTableSlot *slot,
 	/* insert index' tuples if needed */
 	if (resultRelInfo->ri_NumIndices > 0)
 	{
-		ExecInsertIndexTuples(slot, estate, false, false, NIL);
+		ExecInsertIndexTuples(resultRelInfo, slot, estate, false, false, NULL, NIL);
 		ResetPerTupleExprContext(estate);
 	}
 
@@ -263,8 +263,6 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	resultRelInfo->ri_RelationDesc = aorel;
 	resultRelInfo->ri_TrigDesc = NULL;	/* we don't fire triggers */
 	ExecOpenIndices(resultRelInfo, false);
-	estate->es_result_relations = resultRelInfo;
-	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
 
 	/*

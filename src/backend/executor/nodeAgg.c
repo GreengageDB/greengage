@@ -3900,21 +3900,6 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 		aggtranstype = aggref->aggtranstype;
 		Assert(OidIsValid(aggtranstype));
 
-		/*
-		 * If this aggregation is performing state combines, then instead of
-		 * using the transition function, we'll use the combine function
-		 */
-		if (DO_AGGSPLIT_COMBINE(aggref->aggsplit))
-		{
-			transfn_oid = aggform->aggcombinefn;
-
-			/* If not set then the planner messed up */
-			if (!OidIsValid(transfn_oid))
-				elog(ERROR, "combinefn not set for aggregate function");
-		}
-		else
-			transfn_oid = aggform->aggtransfn;
-
 		/* Final function only required if we're finalizing the aggregates */
 		if (DO_AGGSPLIT_SKIPFINAL(aggref->aggsplit))
 			peragg->finalfn_oid = finalfn_oid = InvalidOid;

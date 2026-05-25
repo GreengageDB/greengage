@@ -595,6 +595,8 @@ choose_next_subplan_locally(AppendState *node)
 			Assert(node->as_valid_subplans);
 		}
 		else if (node->as_valid_subplans == NULL)
+		{
+			Append	   *plan = (Append *) node->ps.plan;
 			node->as_valid_subplans =
 				ExecFindMatchingSubPlans(node->as_prune_state,
 										 node->ps.state,
@@ -900,8 +902,12 @@ ExecAppendAsyncBegin(AppendState *node)
 	/* If we've yet to determine the valid subplans then do so now. */
 	if (node->as_valid_subplans == NULL)
 	{
+		Append	   *plan = (Append *) node->ps.plan;
 		node->as_valid_subplans =
-			ExecFindMatchingSubPlans(node->as_prune_state);
+			ExecFindMatchingSubPlans(node->as_prune_state,
+									 node->ps.state,
+									 list_length(plan->appendplans),
+									 plan->join_prune_paramids);
 
 		classify_matching_subplans(node);
 	}

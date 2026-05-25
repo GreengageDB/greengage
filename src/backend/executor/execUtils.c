@@ -2386,6 +2386,9 @@ change_varattnos_of_a_varno(Node *node, const AttrMap *newattno, Index varno)
 	attrMapCxt.varno = varno;
 
 	(void) change_varattnos_varno_walker(node, &attrMapCxt);
+}
+
+/*
  * Return the map needed to convert given child result relation's tuples to
  * the rowtype of the query's main target ("root") relation.  Note that a
  * NULL result is valid and means that no conversion is needed.
