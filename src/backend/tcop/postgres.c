@@ -129,7 +129,6 @@ int			max_stack_depth = 100;
 int			PostAuthDelay = 0;
 
 /* Time between checks that the client is still connected. */
-int         client_connection_check_interval = 0;
 int			client_connection_check_interval = 0;
 
 /* ----------------
@@ -249,7 +248,6 @@ static int	InteractiveBackend(StringInfo inBuf);
 static int	interactive_getc(void);
 static int	SocketBackend(StringInfo inBuf);
 static int	ReadCommand(StringInfo inBuf);
-static void forbidden_in_wal_sender(int firstchar);
 static void forbidden_in_wal_sender(char firstchar);
 static bool check_log_statement(List *stmt_list);
 static int	errdetail_execute(List *raw_parsetree_list);
@@ -2708,7 +2706,6 @@ exec_bind_message(StringInfo input_message)
 	 * will be generated in MessageContext.  The plan refcount will be
 	 * assigned to the Portal, so it will be released at portal destruction.
 	 */
-	cplan = GetCachedPlan(psrc, params, false, NULL, NULL);
 	cplan = GetCachedPlan(psrc, params, NULL, NULL);
 
 	/*
@@ -4227,6 +4224,8 @@ ProcessInterrupts(const char* filename, int lineno)
 			DisconnectAndDestroyUnusedQEs();
 
 		IdleGangTimeoutPending = false;
+	}
+
 	if (IdleSessionTimeoutPending)
 	{
 		/* As above, ignore the signal if the GUC has been reset to zero. */
