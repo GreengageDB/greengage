@@ -1316,10 +1316,11 @@ validate_describe_callback(List *describeQualName,
 	fdResult = func_get_detail(describeQualName,
 							   NIL,   /* argument expressions */
 							   NIL,	  /* argument names */
-							   nargs, 
+							   nargs,
 							   inputTypeOids,
 							   false,	/* expand_variadic */
 							   false,	/* expand_defaults */
+							   false,	/* include_out_arguments */
 							   &describeFuncOid,
 							   &describeReturnTypeOid, 
 							   &describeReturnsSet,

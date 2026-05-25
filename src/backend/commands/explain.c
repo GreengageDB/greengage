@@ -774,7 +774,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	{
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			es->indent++;
-		show_buffer_usage(es, bufusage);
+		show_buffer_usage(es, bufusage, false);
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			es->indent--;
 	}
@@ -2714,6 +2714,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 		case T_Append:
 			show_join_pruning_info(((Append *) plan)->join_prune_paramids, es);
+			break;
 		case T_ResultCache:
 			show_resultcache_info(castNode(ResultCacheState, planstate),
 								  ancestors, es);

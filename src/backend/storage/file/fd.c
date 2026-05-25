@@ -658,6 +658,7 @@ gp_retry_close(int fd) {
 	return err;
 }
 
+/*
  * Truncate a file to a given length by name.
  */
 int

@@ -54,6 +54,7 @@
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "parser/parse_coerce.h"
+#include "postmaster/autostats.h"
 #include "parser/parse_collate.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_relation.h"
@@ -361,7 +362,7 @@ SendCopyBegin(CopyState cstate)
 	cstate->copy_dest = COPY_FRONTEND;
 }
 
-static void
+void
 ReceiveCopyBegin(CopyState cstate)
 {
 	StringInfoData buf;
@@ -474,20 +475,7 @@ CopySendEndOfRow(CopyState cstate)
 							 errmsg("could not write to COPY file: %m")));
 			}
 			break;
-		case COPY_OLD_FE:
-			/* The FE/BE protocol uses \n as newline for all platforms */
-			if (!cstate->binary)
-				CopySendChar(cstate, '\n');
-
-			if (pq_putbytes(fe_msgbuf->data, fe_msgbuf->len))
-			{
-				/* no hope of recovering connection sync, so FATAL */
-				ereport(FATAL,
-						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection lost during COPY to stdout")));
-			}
-			break;
-		case COPY_NEW_FE:
+		case COPY_FRONTEND:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary)
 				CopySendChar(cstate, '\n');
@@ -556,18 +544,7 @@ CopyToDispatchFlush(CopyState cstate)
 						 errmsg("could not write to COPY file: %m")));
 			}
 			break;
-		case COPY_OLD_FE:
-
-			if (pq_putbytes(fe_msgbuf->data, fe_msgbuf->len))
-			{
-				/* no hope of recovering connection sync, so FATAL */
-				ereport(FATAL,
-						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection lost during COPY to stdout")));
-			}
-			break;
-		case COPY_NEW_FE:
-
+		case COPY_FRONTEND:
 			/* Dump the accumulated row as one CopyData message */
 			(void) pq_putmessage('d', fe_msgbuf->data, fe_msgbuf->len);
 			break;
@@ -627,18 +604,7 @@ CopyGetData(CopyState cstate, void *databuf, int datasize)
 						 errmsg("could not read from COPY file: %m")));
 			}
 			break;
-		case COPY_OLD_FE:
-			if (pq_getbytes((char *) databuf, datasize))
-			{
-				/* Only a \. terminator is legal EOF in old protocol */
-				ereport(ERROR,
-						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("unexpected EOF on client connection with an open transaction")));
-			}
-			bytesread += datasize;		/* update the count of bytes that were
-										 * read so far */
-			break;
-		case COPY_NEW_FE:
+		case COPY_FRONTEND:
 			while (datasize > 0 && !cstate->reached_eof)
 			{
 				int			avail;
@@ -879,6 +845,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	   int stmt_location, int stmt_len,
 	   uint64 *processed)
 {
+	CopyState	cstate;
 	bool		is_from = stmt->is_from;
 	bool		pipe = (stmt->filename == NULL || Gp_role == GP_ROLE_EXECUTE);
 	Relation	rel;
@@ -1219,11 +1186,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
-		cstate = BeginCopyFrom(pstate, rel, whereClause,
-							   stmt->filename, stmt->is_program,
-							   NULL, stmt->attlist, stmt->options);
-		*processed = CopyFrom(cstate);	/* copy from file to database */
-		EndCopyFrom(cstate);
 	}
 	else
 	{
@@ -1270,13 +1232,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		PG_END_TRY();
 
 		EndCopyTo(cstate, processed);
-		CopyToState cstate;
-
-		cstate = BeginCopyTo(pstate, rel, query, relid,
-							 stmt->filename, stmt->is_program,
-							 stmt->attlist, stmt->options);
-		*processed = DoCopyTo(cstate);	/* copy from database to file */
-		EndCopyTo(cstate);
 	}
 
 	if (rel != NULL)

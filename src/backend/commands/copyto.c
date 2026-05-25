@@ -44,6 +44,12 @@
 #include "utils/snapmgr.h"
 
 /*
+ * GPDB: All COPY TO functionality is in copy.c using the monolithic CopyState.
+ * The PG14 CopyToState-based functions here are disabled to avoid type conflicts.
+ */
+#if 0
+
+/*
  * Represents the different dest cases we need to worry about at
  * the bottom level
  */
@@ -1308,3 +1314,5 @@ CreateCopyDestReceiver(void)
 
 	return (DestReceiver *) self;
 }
+
+#endif /* GPDB: disabled copyto.c */

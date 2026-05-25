@@ -165,6 +165,7 @@ static inline bool CopyGetInt16(CopyFromState cstate, int16 *val);
 static void CopyLoadInputBuf(CopyFromState cstate);
 static int	CopyReadBinaryData(CopyFromState cstate, char *dest, int nbytes);
 
+#if 0 /* GPDB: ReceiveCopyBegin is in copy.c using CopyState */
 void
 ReceiveCopyBegin(CopyFromState cstate)
 {
@@ -184,6 +185,7 @@ ReceiveCopyBegin(CopyFromState cstate)
 	/* We *must* flush here to ensure FE knows it can send. */
 	pq_flush();
 }
+#endif
 
 void
 ReceiveCopyBinaryHeader(CopyFromState cstate)
@@ -340,7 +342,8 @@ CopyGetData(CopyFromState cstate, void *databuf, int minread, int maxread)
 			}
 			break;
 		case COPY_CALLBACK:
-			bytesread = cstate->data_source_cb(databuf, minread, maxread);
+			bytesread = cstate->data_source_cb(databuf, minread, maxread,
+											   NULL);
 			break;
 	}
 
@@ -738,6 +741,7 @@ CopyReadBinaryData(CopyFromState cstate, char *dest, int nbytes)
 	return copied_bytes;
 }
 
+#if 0 /* GPDB: NextCopyFromRawFields and NextCopyFrom are in copy.c using CopyState */
 /*
  * Read raw fields in the next line for COPY FROM in text or csv mode.
  * Return false if no more lines.
@@ -976,6 +980,7 @@ NextCopyFrom(CopyFromState cstate, ExprContext *econtext,
 
 	return true;
 }
+#endif /* GPDB: NextCopyFromRawFields/NextCopyFrom */
 
 /*
  * Read the next input line and stash it in line_buf.
