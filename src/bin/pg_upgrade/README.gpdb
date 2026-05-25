@@ -25,8 +25,8 @@ Extensions to upstream pg_upgrade
 Functionality for restoring the append-only catalog relations is in
 aotable.c.
 
-Upgrading from 5.0 to 6.0
--------------------------
+Upgrading from 5.0 to 6.0 (Largely outdated)
+--------------------------------------------
 
 The name_pattern_ops and pattern equality operators were removed in 6.0 and
 text equality is treated like bitwise equality. This will cause internal sort
@@ -50,6 +50,18 @@ intention is for this to be a quick test that all objects are handled by
 pg_upgrade; upgrade testing still requires the full run across all
 segments/mirrors. The smoketest can be invoked by "make check" in the
 contrib/pg_upgrade directory.
+
+Also, it is worth mentioning that most of the pg_upgrade tests are performed
+in the ggupgrade repository. This decision was made initially to reduce
+amount of code duplication between ggupgrade and test scripts.
+
+In spite of this, we have added a 6.x to 7.x migration test to the core
+Greengage repository. The reason being that is it simply more convenient
+to test pg_upgrade from the same repository where it is located.
+
+For a more detailed overview of the existing tests, see README.test.md
+and TESTING files
+
 
 GPDB Merge notice:
 ------------------
