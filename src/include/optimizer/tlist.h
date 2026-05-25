@@ -20,6 +20,7 @@
 
 
 extern TargetEntry *tlist_member(Expr *node, List *targetlist);
+extern TargetEntry *tlist_member_ignore_relabel(Expr *node, List *targetlist);
 
 // return a list a target entries that match the node expression
 extern List *tlist_members(Node *node, List *targetlist);
