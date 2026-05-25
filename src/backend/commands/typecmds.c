@@ -1970,7 +1970,9 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 PointerGetDatum(NULL), /* proconfig */
 							 InvalidOid,	/* prosupport */
 							 1.0,	/* procost */
-							 0.0);	/* prorows */
+							 0.0,	/* prorows */
+							 PRODATAACCESS_NONE,	/* prodataaccess */
+							 PROEXECLOCATION_ANY);	/* proexeclocation */
 
 	/*
 	 * Make the constructor internally-dependent on the multirange type so
@@ -1997,7 +1999,7 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 INTERNALlanguageId,	/* language */
 							 F_FMGR_INTERNAL_VALIDATOR,
 							 InvalidOid,	/* describeFuncOid */
-							 "multirange_constructor1", /* prosrc */
+							 "multirange_constructor1",	/* prosrc */
 							 NULL,	/* probin */
 							 NULL,	/* prosqlbody */
 							 PROKIND_FUNCTION,
@@ -2015,7 +2017,9 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 PointerGetDatum(NULL), /* proconfig */
 							 InvalidOid,	/* prosupport */
 							 1.0,	/* procost */
-							 0.0);	/* prorows */
+							 0.0,	/* prorows */
+							 PRODATAACCESS_NONE,
+							 PROEXECLOCATION_ANY);
 	/* ditto */
 	recordDependencyOn(&myself, &referenced, DEPENDENCY_INTERNAL);
 	pfree(argtypes);
@@ -2057,7 +2061,9 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 PointerGetDatum(NULL), /* proconfig */
 							 InvalidOid,	/* prosupport */
 							 1.0,	/* procost */
-							 0.0);	/* prorows */
+							 0.0,	/* prorows */
+							 PRODATAACCESS_NONE,
+							 PROEXECLOCATION_ANY);
 	/* ditto */
 	recordDependencyOn(&myself, &referenced, DEPENDENCY_INTERNAL);
 	pfree(argtypes);
