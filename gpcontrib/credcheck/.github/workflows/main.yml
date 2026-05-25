@@ -39,10 +39,10 @@ jobs:
     - name: checkout
       uses: actions/checkout@v4
 
-    - name: Install GSSAPI development headers
+    - name: Install GSSAPI development headers and TAP test Perl modules
       run: |
         sudo apt-get -y update
-        sudo apt-get -y install libkrb5-dev
+        sudo apt-get -y install libkrb5-dev libipc-run-perl
 
     - name: install pg
       run: |
