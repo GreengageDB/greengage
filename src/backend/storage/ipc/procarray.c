@@ -611,7 +611,7 @@ ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 	Assert(TransactionIdIsValid(ProcGlobal->xids[proc->pgxactoff] == 0));
 	Assert(TransactionIdIsValid(ProcGlobal->subxidStates[proc->pgxactoff].count == 0));
 	Assert(TransactionIdIsValid(ProcGlobal->subxidStates[proc->pgxactoff].overflowed == false));
-	ProcGlobal->vacuumFlags[proc->pgxactoff] = 0;
+	ProcGlobal->statusFlags[proc->pgxactoff] = 0;
 	Assert(!TransactionIdIsValid(ProcGlobal->xids[myoff]));
 	Assert(ProcGlobal->subxidStates[myoff].count == 0);
 	Assert(ProcGlobal->subxidStates[myoff].overflowed == false);
@@ -757,7 +757,7 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 
 	/* must be cleared with xid/xmin: */
 	/* avoid unnecessarily dirtying shared cachelines */
-	if (proc->vacuumFlags & PROC_VACUUM_STATE_MASK)
+	if (proc->statusFlags & PROC_VACUUM_STATE_MASK)
 	{
 		/*
 		 * If we have no XID, we don't need to lock, since we won't affect
@@ -786,9 +786,9 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 		}
 		Assert(!LWLockHeldByMe(ProcArrayLock));
 		LWLockAcquire(ProcArrayLock, LW_SHARED);
-		Assert(proc->vacuumFlags == ProcGlobal->vacuumFlags[proc->pgxactoff]);
-		proc->vacuumFlags &= ~PROC_VACUUM_STATE_MASK;
-		ProcGlobal->vacuumFlags[proc->pgxactoff] = proc->vacuumFlags;
+		Assert(proc->statusFlags == ProcGlobal->statusFlags[proc->pgxactoff]);
+		proc->statusFlags &= ~PROC_VACUUM_STATE_MASK;
+		ProcGlobal->statusFlags[proc->pgxactoff] = proc->statusFlags;
 		LWLockRelease(ProcArrayLock);
 	}
 
@@ -1010,7 +1010,7 @@ ProcArrayClearTransaction(PGPROC *proc)
 
 	proc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
 
-	Assert(!(proc->vacuumFlags & PROC_VACUUM_STATE_MASK));
+	Assert(!(proc->statusFlags & PROC_VACUUM_STATE_MASK));
 	Assert(!(proc->statusFlags & PROC_VACUUM_STATE_MASK));
 	Assert(!proc->delayChkpt);
 
@@ -5026,7 +5026,6 @@ GlobalVisUpdateApply(ComputeXidHorizonsResult *horizons)
 	GlobalVisDataRels.maybe_needed =
 		FullXidRelativeTo(horizons->latest_completed,
 						  GetDistOldestXmin(horizons->data_oldest_nonremovable));
-						  horizons->data_oldest_nonremovable);
 	GlobalVisTempRels.maybe_needed =
 		FullXidRelativeTo(horizons->latest_completed,
 						  horizons->temp_oldest_nonremovable);
