@@ -61,6 +61,16 @@ typedef struct AlteredTableInfo
 	Oid			relid;			/* Relation to work on */
 	char		relkind;		/* Its relkind */
 	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
+
+	/*
+	 * Transiently set during Phase 2, normally set to NULL.
+	 *
+	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
+	 * returns control.  This can be exploited by ATExecCmd subroutines to
+	 * close/reopen across transaction boundaries.
+	 */
+	Relation	rel;
+
 	/* Information saved by Phase 1 for Phase 2: */
 	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
 	/* Information saved by Phases 1/2 for Phase 3: */
@@ -85,6 +95,8 @@ typedef struct AlteredTableInfo
 	List	   *changedIndexDefs;	/* string definitions of same */
 	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
 	char	   *clusterOnIndex; /* index to use for CLUSTER */
+	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
+	List	   *changedStatisticsDefs;	/* string definitions of same */
 	List       *new_crsds; /* new column reference storage directives */
 } AlteredTableInfo;
 

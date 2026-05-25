@@ -179,75 +179,11 @@ static List *on_commits = NIL;
 #define AT_PASS_MISC			10	/* other stuff */
 #define AT_NUM_PASSES			11
 
-typedef struct AlteredTableInfo
-{
-	/* Information saved before any work commences: */
-	Oid			relid;			/* Relation to work on */
-	char		relkind;		/* Its relkind */
-	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
-
-	/*
-	 * Transiently set during Phase 2, normally set to NULL.
-	 *
-	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
-	 * returns control.  This can be exploited by ATExecCmd subroutines to
-	 * close/reopen across transaction boundaries.
-	 */
-	Relation	rel;
-
-	/* Information saved by Phase 1 for Phase 2: */
-	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
-	/* Information saved by Phases 1/2 for Phase 3: */
-	List	   *constraints;	/* List of NewConstraint */
-	List	   *newvals;		/* List of NewColumnValue */
-	List	   *afterStmts;		/* List of utility command parsetrees */
-	bool		verify_new_notnull; /* T if we should recheck NOT NULL */
-	int			rewrite;		/* Reason for forced rewrite, if any */
-	Oid			newTableSpace;	/* new tablespace; 0 means no change */
-	bool		chgPersistence; /* T if SET LOGGED/UNLOGGED is used */
-	char		newrelpersistence;	/* if above is true */
-	Expr	   *partition_constraint;	/* for attach partition validation */
-	/* true, if validating default due to some other attach/detach */
-	bool		validate_default;
-	/* Objects to rebuild after completing ALTER TYPE operations */
-	List	   *changedConstraintOids;	/* OIDs of constraints to rebuild */
-	List	   *changedConstraintDefs;	/* string definitions of same */
-	List	   *changedIndexOids;	/* OIDs of indexes to rebuild */
-	List	   *changedIndexDefs;	/* string definitions of same */
-	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
-	char	   *clusterOnIndex; /* index to use for CLUSTER */
-	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
-	List	   *changedStatisticsDefs;	/* string definitions of same */
-} AlteredTableInfo;
-
-/* Struct describing one new constraint to check in Phase 3 scan */
-/* Note: new NOT NULL constraints are handled elsewhere */
-typedef struct NewConstraint
-{
-	char	   *name;			/* Constraint name, or NULL if none */
-	ConstrType	contype;		/* CHECK or FOREIGN */
-	Oid			refrelid;		/* PK rel, if FOREIGN */
-	Oid			refindid;		/* OID of PK's index, if FOREIGN */
-	Oid			conid;			/* OID of pg_constraint entry, if FOREIGN */
-	Node	   *qual;			/* Check expr or CONSTR_FOREIGN Constraint */
-	ExprState  *qualstate;		/* Execution state for CHECK expr */
-} NewConstraint;
-
 /*
- * Struct describing one new column value that needs to be computed during
- * Phase 3 copy (this could be either a new column with a non-null default, or
- * a column that we're changing the type of).  Columns without such an entry
- * are just copied from the old table during ATRewriteTable.  Note that the
- * expr is an expression over *old* table values, except when is_generated
- * is true; then it is an expression over columns of the *new* tuple.
+ * In GPDB, AlteredTableInfo, NewConstraint, and NewColumnValue are defined
+ * in nodes/altertablenodes.h (included above) because they need to be
+ * serializable Nodes for dispatch to QE segments.
  */
-typedef struct NewColumnValue
-{
-	AttrNumber	attnum;			/* which column */
-	Expr	   *expr;			/* expression to compute */
-	ExprState  *exprstate;		/* execution state */
-	bool		is_generated;	/* is it a GENERATED expression? */
-} NewColumnValue;
 
 /*
  * Error-reporting support for RemoveRelations
@@ -1908,6 +1844,7 @@ RemoveRelations(DropStmt *drop)
 			(void) find_all_inheritors(state.heapOid,
 									   state.heap_lockmode,
 									   NULL);
+		/*
 		 * Concurrent index drop cannot be used with partitioned indexes,
 		 * either.
 		 */
@@ -2266,7 +2203,8 @@ void
 ExecuteTruncateGuts(List *explicit_rels,
 					List *relids,
 					List *relids_logged,
-					DropBehavior behavior, bool restart_seqs)
+					DropBehavior behavior, bool restart_seqs,
+					TruncateStmt *stmt)
 {
 	List	   *rels;
 	List	   *seq_relids = NIL;
@@ -5554,7 +5492,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 						if (rel->rd_rel->relispartition)
 						{
 							/* We can only set policy of child table to the same with parent table */
-							Oid parent_oid = get_partition_parent(RelationGetRelid(rel));
+							Oid parent_oid = get_partition_parent(RelationGetRelid(rel), false);
 							/* Use AccessShareLock to allow set distributed in parallel */
 							Relation parent_rel = relation_open(parent_oid, AccessShareLock);
 							if (!GpPolicyEqualByName(RelationGetDescr(rel), policy,
@@ -5968,7 +5906,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			if (cur_pass == AT_PASS_ADD_CONSTR)
 				cmd = ATParseTransformCmd(wqueue, tab, rel, cmd,
 										  false, lockmode,
-										  cur_pass, context);
+										  cur_pass, context, NULL);
 			/* Depending on constraint type, might be no more work to do now */
 			if (cmd != NULL)
 				address =
@@ -5984,7 +5922,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			if (cur_pass == AT_PASS_ADD_CONSTR)
 				cmd = ATParseTransformCmd(wqueue, tab, rel, cmd,
 										  true, lockmode,
-										  cur_pass, context);
+										  cur_pass, context, NULL);
 			/* Depending on constraint type, might be no more work to do now */
 			if (cmd != NULL)
 				address =
@@ -9301,7 +9239,7 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	RemoveAttrDefault(RelationGetRelid(rel), attnum, DROP_RESTRICT, false,
 					  true);
 
-	(void) StoreAttrDefault(rel, attnum, newDefault, true, false);
+	(void) StoreAttrDefault(rel, attnum, newDefault, false, NULL, NULL, true, false);
 
 	ObjectAddressSubSet(address, RelationRelationId,
 						RelationGetRelid(rel), attnum);
@@ -16105,9 +16043,11 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 static void
 ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 {
-	Relation    rel;
-	Oid			oldTableSpace;
 	Relation	rel;
+	Relation	pg_class;
+	HeapTuple	tuple;
+	Form_pg_class rd_rel;
+	Oid			oldTableSpace;
 	Oid			reltoastrelid;
 	Oid			relaosegrelid = InvalidOid;
 	Oid			relaoblkdirrelid = InvalidOid;
@@ -18043,6 +17983,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro,
 
 		ProcessUtility(pstmt,
 					   synthetic_sql,
+					   false,
 					   PROCESS_UTILITY_SUBCOMMAND,
 					   NULL,
 					   NULL,
@@ -21964,8 +21905,8 @@ ATExecDetachPartition(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 * Now acquire locks in both relations again.  Note they may have been
 		 * removed in the meantime, so care is required.
 		 */
-		rel = try_relation_open(parentrelid, ShareUpdateExclusiveLock);
-		partRel = try_relation_open(partrelid, AccessExclusiveLock);
+		rel = try_relation_open(parentrelid, ShareUpdateExclusiveLock, false);
+		partRel = try_relation_open(partrelid, AccessExclusiveLock, false);
 
 		/* If the relations aren't there, something bad happened; bail out */
 		if (rel == NULL)
