@@ -701,7 +701,7 @@ safe_to_convert_NOTIN(SubLink *sublink, Relids available_rels)
 	}
 
 	/* Left-hand expressions must contain some Vars of the current */
-	left_varnos = pull_varnos(sublink->testexpr);
+	left_varnos = pull_varnos(NULL, sublink->testexpr);
 	if (bms_is_empty(left_varnos))
 		return false;
 

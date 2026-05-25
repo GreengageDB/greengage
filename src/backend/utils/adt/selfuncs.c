@@ -3946,6 +3946,8 @@ estimate_multivariate_ndistinct(PlannerInfo *root, RelOptInfo *rel,
 								List **varinfos, double *ndistinct)
 {
 	ListCell   *lc;
+	RangeTblEntry *rte;
+	Bitmapset  *attnums = NULL;
 	int			nmatches_vars;
 	int			nmatches_exprs;
 	Oid			statOid = InvalidOid;
