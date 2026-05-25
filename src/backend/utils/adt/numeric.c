@@ -486,6 +486,36 @@ static void dump_var(const char *str, NumericVar *var);
 
 #define init_var(v)		memset(v, 0, sizeof(NumericVar))
 
+#define quick_init_var(v) \
+	do { \
+		(v)->buf = (v)->ndb; \
+		(v)->digits = NULL; \
+	} while (0)
+
+#define digitbuf_alloc(ndigits) \
+	((NumericDigit *) palloc((ndigits) * sizeof(NumericDigit)))
+
+#define digitbuf_free(v) \
+	do { \
+		if ((v)->buf != (v)->ndb) \
+		{ \
+			pfree((v)->buf); \
+			(v)->buf = (v)->ndb; \
+		} \
+	} while (0)
+
+#define free_var(v)		digitbuf_free((v))
+
+#define init_alloc_var(v, n) \
+	do { \
+		(v)->buf = (v)->ndb; \
+		(v)->ndigits = (n); \
+		if ((n) > NUMERIC_LOCAL_NMAX) \
+			(v)->buf = digitbuf_alloc((n) + 1); \
+		(v)->buf[0] = 0; \
+		(v)->digits = (v)->buf + 1; \
+	} while (0)
+
 #define NUMERIC_DIGITS(num) (NUMERIC_HEADER_IS_SHORT(num) ? \
 	(num)->choice.n_short.n_data : (num)->choice.n_long.n_data)
 #define NUMERIC_NDIGITS(num) \

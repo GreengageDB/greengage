@@ -202,7 +202,6 @@ plan_tree_mutator(Node *node,
 
 				FLATCOPY(newmt, mt, ModifyTable);
 				PLANMUTATE(newmt, mt);
-				MUTATE(newmt->plans, mt->plans, List *);
 				MUTATE(newmt->onConflictSet, mt->onConflictSet, List *);
 				MUTATE(newmt->onConflictWhere, mt->onConflictWhere , Node *);
 				MUTATE(newmt->withCheckOptionLists, mt->withCheckOptionLists, List *);
