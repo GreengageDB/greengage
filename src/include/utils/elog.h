@@ -241,9 +241,9 @@ extern int	errhint_plural(const char *fmt_singular, const char *fmt_plural,
  */
 #define errcontext	set_errcontext_domain(TEXTDOMAIN),	errcontext_msg
 
-extern void set_errcontext_domain(const char *domain);
+extern int set_errcontext_domain(const char *domain);
 
-extern void errcontext_msg(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int errcontext_msg(const char *fmt,...) pg_attribute_printf(1, 2);
 
 extern void errhidestmt(bool hide_stmt);
 extern void errhidecontext(bool hide_ctx);
