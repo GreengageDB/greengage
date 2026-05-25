@@ -1511,6 +1511,11 @@ static void
 IdleGangTimeoutHandler(void)
 {
 	IdleGangTimeoutPending = true;
+	InterruptPending = true;
+	SetLatch(MyLatch);
+}
+
+static void
 IdleSessionTimeoutHandler(void)
 {
 	IdleSessionTimeoutPending = true;

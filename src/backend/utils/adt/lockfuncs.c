@@ -596,11 +596,6 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		{
 			nulls[i] = PQgetisnull(mystatus->segresults[whichresultset], whichrow, i);
 		}
-		if (!granted && instance->waitStart != 0)
-			values[15] = TimestampTzGetDatum(instance->waitStart);
-		else
-			nulls[15] = true;
-
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 		SRF_RETURN_NEXT(funcctx, result);
