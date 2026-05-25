@@ -293,26 +293,6 @@ _SPI_commit(bool chain)
 		/* Do the deed */
 		CommitTransactionCommand();
 
-		/* Resync GUCs */
-		if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
-		{
-			StartTransactionCommand();
-			if (chain)
-				RestoreTransactionCharacteristics();
-			ListCell   *lc;
-
-			foreach(lc, gp_guc_restore_list)
-			{
-				struct config_generic *gconfig = lfirst(lc);
-
-				DispatchSyncPGVariable(gconfig);
-			}
-			CommitTransactionCommand();
-			
-			list_free(gp_guc_restore_list);
-			gp_guc_restore_list = NIL;
-		}
-
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
@@ -404,26 +384,6 @@ _SPI_rollback(bool chain)
 
 		/* Do the deed */
 		AbortCurrentTransaction();
-
-		/* Resync GUCs */
-		if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
-		{
-			StartTransactionCommand();
-			if (chain)
-				RestoreTransactionCharacteristics();
-			ListCell   *lc;
-
-			foreach(lc, gp_guc_restore_list)
-			{
-				struct config_generic *gconfig = lfirst(lc);
-
-				DispatchSyncPGVariable(gconfig);
-			}
-			CommitTransactionCommand();
-
-			list_free(gp_guc_restore_list);
-			gp_guc_restore_list = NIL;
-		}
 
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
@@ -536,6 +496,19 @@ AtEOXact_SPI(bool isCommit)
 				(errcode(ERRCODE_WARNING),
 				 errmsg("transaction left non-empty SPI stack"),
 				 errhint("Check for missing \"SPI_finish\" calls.")));
+
+	/* Sync GUCs between the transactions. */
+	if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+	{
+		ListCell   *lc;
+		foreach(lc, gp_guc_restore_list)
+		{
+			struct config_generic *gconfig = lfirst(lc);
+			DispatchSyncPGVariable(gconfig);
+		}
+		list_free(gp_guc_restore_list);
+		gp_guc_restore_list = NIL;
+	}
 }
 
 /*
