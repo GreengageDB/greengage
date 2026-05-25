@@ -16,6 +16,9 @@
  */
 #include "postgres.h"
 
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #include "access/attmap.h"
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -6347,6 +6350,7 @@ ATParseTransformCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			 */
 			if (Gp_role == GP_ROLE_DISPATCH)
 				cmd->def = newcmd->def;
+			break;
 			case AT_SetNotNull:
 				/* Need command-specific recursion decision */
 				ATPrepSetNotNull(wqueue, rel, cmd2,

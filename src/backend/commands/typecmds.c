@@ -1628,7 +1628,8 @@ DefineRange(CreateRangeStmt *stmt)
 	alignment = (subtypalign == TYPALIGN_DOUBLE) ? TYPALIGN_DOUBLE : TYPALIGN_INT;
 
 	/* Allocate OID for array type, its multirange, and its multirange array */
-	rangeArrayOid = AssignTypeArrayOid();
+	rangeArrayName = makeArrayTypeName(typeName, typeNamespace);
+	rangeArrayOid = AssignTypeArrayOid(rangeArrayName, typeNamespace);
 	multirangeOid = AssignTypeMultirangeOid();
 	multirangeArrayOid = AssignTypeMultirangeArrayOid();
 
@@ -1950,6 +1951,7 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 BOOTSTRAP_SUPERUSERID, /* proowner */
 							 INTERNALlanguageId,	/* language */
 							 F_FMGR_INTERNAL_VALIDATOR,
+							 InvalidOid,	/* describeFuncOid */
 							 "multirange_constructor0", /* prosrc */
 							 NULL,	/* probin */
 							 NULL,	/* prosqlbody */
@@ -1994,6 +1996,7 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 BOOTSTRAP_SUPERUSERID, /* proowner */
 							 INTERNALlanguageId,	/* language */
 							 F_FMGR_INTERNAL_VALIDATOR,
+							 InvalidOid,	/* describeFuncOid */
 							 "multirange_constructor1", /* prosrc */
 							 NULL,	/* probin */
 							 NULL,	/* prosqlbody */
@@ -2035,6 +2038,7 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 							 BOOTSTRAP_SUPERUSERID, /* proowner */
 							 INTERNALlanguageId,	/* language */
 							 F_FMGR_INTERNAL_VALIDATOR,
+							 InvalidOid,	/* describeFuncOid */
 							 "multirange_constructor2", /* prosrc */
 							 NULL,	/* probin */
 							 NULL,	/* prosqlbody */
