@@ -43,7 +43,7 @@ jobs:
     steps:
       - name: Determine Greengage Image name
         run: |
-          image="ghcr.io/${{ github.repository }}/ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}:${RUN_HEAD_SHA}"
+          image="ghcr.io/${{ github.repository }}/ggdb${VERSION}_${TARGET_OS}${TARGET_OS_VERSION}:${RUN_HEAD_SHA}"
           echo "IMAGE=${image,,}" >> $GITHUB_ENV
 
       - name: Display trigger information
@@ -98,7 +98,7 @@ jobs:
           ## SQL Dump Creation Report
           | Field         | Value |
           |---------------|-------|
-          | Artifact name | sqldump_ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }} |
+          | Artifact name | sqldump_ggdb${VERSION}_${TARGET_OS}${TARGET_OS_VERSION} |
           | Artifact URL  | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload.outputs.artifact-id }} |
           EOF
 
