@@ -1971,7 +1971,6 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 
 	{
-		{"allow_system_table_mods", PGC_USERSET, CUSTOM_OPTIONS,
 		{"in_hot_standby", PGC_INTERNAL, PRESET_OPTIONS,
 			gettext_noop("Shows whether hot standby is currently active."),
 			NULL,
@@ -6714,6 +6713,7 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 
 	/* Update nesting level */
 	GUCNestLevel = nestLevel - 1;
+	}
 }
 
 
