@@ -66,26 +66,6 @@
 #include "port/atomics.h"
 
 /*
- * UNUSED VARIABLES. WE KEEP TO REDUCE CONFLICTS ON FUTURE POSTGRES UPDASTE.
- *
- * The tuplestore files for all share input scans are held in one SharedFileSet.
- * The SharedFileSet is attached to a single DSM segment that persists until
- * postmaster shutdown. When the reference count of the SharedFileSet reaches
- * zero, the SharedFileSet is automatically destroyed, but it is re-initialized
- * the next time it's needed.
- *
- * The SharedFileSet deletes any remaining files when the reference count
- * reaches zero, but we don't rely on that mechanism. All the files are
- * held in the same SharedFileSet, so it cannot be recycled until all
- * ShareInputScans in the system have finished, which might never happen if
- * new queries are started continuously. The shared tuplestore entries
- * are reference counted separately, and we clean up the files backing each
- * individual ShareInputScan whenever its reference count reaches zero.
- */
-static dsm_handle *shareinput_Xslice_dsm_handle_ptr;
-/* static SharedFileSet *shareinput_Xslice_fileset; */
-
-/*
  * For local (i.e. intra-slice) variants, we use a 'shareinput_local_state'
  * to track the status. It is analogous to 'shareinput_share_state' used for
  * cross-slice scans, but we don't need to keep it in shared memory. These
@@ -607,31 +587,30 @@ shareinput_create_bufname_prefix(char* p, int size, int share_id)
 /*
  * Legacy ABI entry point. Is not supported.
  *
- * Kept to reduce conflicts on future postgres updaste.
+ * Kept for ABI support.
  */
 Size
 ShareInputShmemSize(void)
 {
-	return sizeof(dsm_handle);
+	ereport(ERROR, errmsg("Unsupported sharefileset shared memory initializer."));
 }
 
 /*
  * Legacy ABI entry point. Is not supported.
  *
- * Kept to reduce conflicts on future postgres updaste.
+ * Kept for ABI support.
  */
 void
 ShareInputShmemInit(void)
 {
-	bool		found;
-
-	shareinput_Xslice_dsm_handle_ptr =
-		ShmemInitStruct("ShareInputScan DSM handle", sizeof(dsm_handle), &found);
+	ereport(ERROR, errmsg("Unsupported sharefileset shared memory initializer."));
 }
 
 /*
  * Legacy ABI entry point. Is not supported.
  *
+ * Kept for ABI support.
+ * 
  * Get reference to the SharedFileSet used to hold all the tuplestore files.
  *
  * This is exported so that it can also be used by the INITPLAN function

@@ -636,10 +636,8 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 	 */
 	bool		should_remove_entry = false;
 	bool		should_delete_file = false;
-	bool		should_release_fileset = false;
 	char		delete_tag[NAMEDATALEN];
-	dsm_handle	delete_handle = DSM_HANDLE_INVALID;
-	dsm_handle	local_detach_handle = DSM_HANDLE_INVALID;
+	dsm_handle	detach_handle = DSM_HANDLE_INVALID;
 	pid_t		delete_creator_pid = 0;
 	uint32		delete_sfs_number = 0;
 
@@ -665,7 +663,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		Assert(sstate->session_id == gp_session_id);
 
 		/* Remember handle, so we will detach in any way. */
-		local_detach_handle = sstate->sfs_handle;
+		detach_handle = sstate->sfs_handle;
 		/*
 		 * If we are aborting, set the variable in shared memory.
 		 * This must be done before everything else, since if we can't
@@ -701,14 +699,10 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 						state->shared_filename,
 						sizeof(delete_tag));
 
-				delete_handle = sstate->sfs_handle;
 				delete_creator_pid = sstate->sfs_creator_pid;
 				delete_sfs_number = sstate->sfs_number;
 
 				should_delete_file = sstate->created;
-				should_release_fileset = delete_handle != DSM_HANDLE_INVALID;
-
-				sstate->created = false;
 
 				if (hash_search(shared_tuplestores,
 								state->shared_filename,
@@ -735,9 +729,9 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		{
 			SharedFileSet *fileset = state->fileset;
 
-			if (fileset == NULL && should_release_fileset)
+			if (fileset == NULL && detach_handle != DSM_HANDLE_INVALID)
 			{
-				fileset = attach_shareinput_fileset(delete_handle);
+				fileset = attach_shareinput_fileset(detach_handle);
 			}
 
 			if (should_delete_file)
@@ -754,12 +748,12 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			 * Release the htab-owned lifetime. This must happen exactly once:
 			 * only in the same path that removed shared_tuplestores[tag].
 			 */
-			if (should_release_fileset)
+			if (detach_handle != DSM_HANDLE_INVALID)
 			{
 				if (fileset != NULL)
 					SharedFileSetUnpin(fileset);
 
-				dsm_unpin_segment(delete_handle);
+				dsm_unpin_segment(detach_handle);
 			}
 		}
 	}
@@ -768,11 +762,11 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		BufFileClose(state->myfile);
 
 	/* Detach manually so we don't get warning */
-	if (local_detach_handle != DSM_HANDLE_INVALID)
+	if (detach_handle != DSM_HANDLE_INVALID)
 	{
 		dsm_segment *seg;
 
-		seg = dsm_find_mapping(local_detach_handle);
+		seg = dsm_find_mapping(detach_handle);
 		/* Check if we already detached and destroyed segment */
 		if (seg != NULL)
 			dsm_detach(seg);
@@ -1968,7 +1962,7 @@ SharedTuplestoreShmemInit(void)
 }
 
 static TuplestoreSharingState *
-get_shared_state(SharedFileSet *fileset, const char *filename)
+get_shared_state(const char *filename)
 {
 	TuplestoreSharingState *sstate;
 	bool		found;
@@ -2031,13 +2025,16 @@ get_shared_state(SharedFileSet *fileset, const char *filename)
  *
  * The ntotal parameter sets the number of times the tuplestore can be
  * opened before it is automatically deleted.
+ * 
+ * SharedFileSet parameter kept for ABI reasons only and should not be 
+ * used in current state.
  */
 void
-tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, const char *filename, uint32 ntotal)
+tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_variable, const char *filename, uint32 ntotal)
 {
 	ResourceOwner oldowner;
 	TuplestoreSharingState *sstate;
-    SharedFileSet *real_fileset;
+    SharedFileSet *fileset;
     dsm_handle handle = DSM_HANDLE_INVALID;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
@@ -2056,7 +2053,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-	sstate = get_shared_state(NULL, filename);
+	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
 
 	if (sstate->aborting)
@@ -2071,20 +2068,20 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 
 	if (sstate->sfs_handle == DSM_HANDLE_INVALID)
 	{
-		real_fileset = create_shareinput_fileset(&handle);
+		fileset = create_shareinput_fileset(&handle);
 
 		sstate->sfs_handle = handle;
-		sstate->sfs_creator_pid = real_fileset->creator_pid;
-		sstate->sfs_number = real_fileset->number;
+		sstate->sfs_creator_pid = fileset->creator_pid;
+		sstate->sfs_number = fileset->number;
 	}
 	else
 	{
 		handle = sstate->sfs_handle;
-		real_fileset = attach_shareinput_fileset(handle);
+		fileset = attach_shareinput_fileset(handle);
 	}
 
 	state->share_status = TSHARE_WRITER;
-	state->fileset = real_fileset;
+	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
 	state->shared_state = sstate;
 
@@ -2100,22 +2097,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	oldowner = CurrentResourceOwner;
 	CurrentResourceOwner = state->resowner;
 
-	/* Make sure the file only exists if and only if shared state was successfully created */
-	PG_TRY();
-	{
-		state->myfile = BufFileCreateShared(real_fileset, filename, state->work_set);
-	}
-	PG_CATCH();
-	{
-		CurrentResourceOwner = oldowner;
-
-		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
-		sstate->aborting = true;
-		ConditionVariableBroadcast(&sstate->ready_done_cv);
-		LWLockRelease(ShareInputScanLock);
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
 
 	/*
 	 * For now, be conservative and always use trailing length words for
@@ -2145,11 +2127,14 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
  *
  * The ntotal parameter defaults to 2, so the tuplestore will be deleted
  * after both the writer and a single reader close it.
+ *
+ * SharedFileSet parameter kept for ABI reasons only and should not be 
+ * used in current state.
  */
 void
-tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const char *filename)
+tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *deprecated_variable, const char *filename)
 {
-	tuplestore_make_shared_many(state, fileset, filename, 2);
+	tuplestore_make_shared_many(state, deprecated_variable, filename, 2);
 }
 
 static void
@@ -2238,13 +2223,16 @@ tuplestore_reader_waitready(TuplestoreSharingState *sstate)
  *
  * The caller must make sure to set transaction-level MemoryContext
  * if this might be called on segments.
+ * 
+ * SharedFileSet parameter kept for ABI reasons only and should not be 
+ * used in current state.
  */
 Tuplestorestate *
-tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bool skip_open)
+tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *filename, bool skip_open)
 {
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
-	SharedFileSet *real_fileset = NULL;
+	SharedFileSet *fileset = NULL;
 	dsm_handle 	handle = DSM_HANDLE_INVALID;
 	int			eflags;
 
@@ -2258,7 +2246,7 @@ tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bo
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-	sstate = get_shared_state(NULL, filename);
+	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
 
 	/*
@@ -2315,10 +2303,10 @@ tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bo
 
 		LWLockRelease(ShareInputScanLock);
 
-		real_fileset = attach_shareinput_fileset(handle);
+		fileset = attach_shareinput_fileset(handle);
 
-		state->fileset = real_fileset;
-		state->myfile = BufFileOpenShared(real_fileset, filename);
+		state->fileset = fileset;
+		state->myfile = BufFileOpenShared(fileset, filename);
 		state->readptrs[0].file = 0;
 		state->readptrs[0].offset = 0L;
 		state->status = TSS_READFILE;
@@ -2336,11 +2324,14 @@ tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bo
  *
  * The caller must make sure to set transaction-level MemoryContext
  * if this might be called on segments.
+ * 
+ * SharedFileSet parameter kept for ABI reasons only and should not be 
+ * used in current state.
  */
 Tuplestorestate *
-tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
+tuplestore_open_shared(SharedFileSet *deprecated_variable, const char *filename)
 {
-	return tuplestore_open_shared_extended(fileset, filename, false);
+	return tuplestore_open_shared_extended(deprecated_variable, filename, false);
 }
 
 /*
@@ -2405,7 +2396,6 @@ AtAbort_SharedTuplestores()
 				sstate->sfs_number == fileset->number)
 			{
 				BufFileDeleteShared(fileset, sstate->tag);
-				sstate->created = false;
 				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted on abort",
 					sstate->tag, currentSliceId);
 			}
