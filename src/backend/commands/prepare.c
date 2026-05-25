@@ -246,6 +246,7 @@ ExecuteQuery(ParseState *pstate,
 	PortalDefineQuery(portal,
 					  NULL,
 					  query_string,
+					  entry->plansource->sourceTag,
 					  entry->plansource->commandTag,
 					  plan_list,
 					  cplan);

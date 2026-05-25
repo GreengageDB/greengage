@@ -38,10 +38,6 @@ extern ObjectAddress DefineIndex(Oid relationId,
 								 bool quiet,
 								 bool is_new_table);
 extern void ExecReindex(ParseState *pstate, ReindexStmt *stmt, bool isTopLevel);
-extern void ReindexIndex(ReindexStmt *stmt, bool isTopLevel);
-extern Oid	ReindexTable(ReindexStmt *stmt, bool isTopLevel);
-extern void ReindexMultipleTables(const char *objectName, ReindexObjectType objectKind,
-								  int options, bool concurrent);
 extern char *makeObjectName(const char *name1, const char *name2,
 							const char *label);
 extern char *ChooseRelationName(const char *name1, const char *name2,

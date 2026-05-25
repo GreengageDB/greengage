@@ -2263,8 +2263,6 @@ ExecuteTruncate(TruncateStmt *stmt)
  * this information handy in this form.
  */
 void
-ExecuteTruncateGuts(List *explicit_rels, List *relids, List *relids_logged,
-					DropBehavior behavior, bool restart_seqs, TruncateStmt *stmt)
 ExecuteTruncateGuts(List *explicit_rels,
 					List *relids,
 					List *relids_logged,
