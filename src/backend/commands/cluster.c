@@ -348,7 +348,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 	if (!OldHeap)
 	{
 		pgstat_progress_end_command();
-		return false;
+		return;
 	}
 
 	/*
@@ -366,7 +366,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 		{
 			relation_close(OldHeap, AccessExclusiveLock);
 			pgstat_progress_end_command();
-			return false;
+			return;
 		}
 
 		/*
@@ -381,7 +381,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 		{
 			relation_close(OldHeap, AccessExclusiveLock);
 			pgstat_progress_end_command();
-			return false;
+			return;
 		}
 
 		if (OidIsValid(indexOid))
@@ -393,7 +393,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 			{
 				relation_close(OldHeap, AccessExclusiveLock);
 				pgstat_progress_end_command();
-				return false;
+				return;
 			}
 
 			/*
@@ -403,7 +403,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 			{
 				relation_close(OldHeap, AccessExclusiveLock);
 				pgstat_progress_end_command();
-				return false;
+				return;
 			}
 		}
 	}
@@ -457,7 +457,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 	{
 		relation_close(OldHeap, AccessExclusiveLock);
 		pgstat_progress_end_command();
-		return false;
+		return;
 	}
 
 	/*
@@ -474,7 +474,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 	/* NB: rebuild_relation does table_close() on OldHeap */
 
 	pgstat_progress_end_command();
-	return true;
+	return;
 }
 
 /*
