@@ -1865,7 +1865,7 @@ statext_mcv_clauselist_selectivity(PlannerInfo *root, List *clauses, int varReli
 				 * columns/clauses.
 				 */
 				simple_sel = clause_selectivity_ext(root, clause, varRelid,
-													jointype, sjinfo, false);
+													jointype, sjinfo, false, false);
 
 				overlap_simple_sel = simple_or_sel * simple_sel;
 
@@ -1938,7 +1938,7 @@ statext_mcv_clauselist_selectivity(PlannerInfo *root, List *clauses, int varReli
 			 */
 			simple_sel = clauselist_selectivity_ext(root, stat_clauses,
 													varRelid, jointype,
-													sjinfo, false);
+													sjinfo, false, false);
 
 			/*
 			 * Multi-column estimate using MCV statistics, along with base and

@@ -112,7 +112,7 @@ ExecResult(PlanState *pstate)
 	 * called, OR that we failed the constant qual check. Either way, now we
 	 * are through.
 	 */
-	if (!node->rs_done)
+	while (!node->rs_done)
 	{
 		outerPlan = outerPlanState(node);
 

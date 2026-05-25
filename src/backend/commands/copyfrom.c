@@ -177,37 +177,6 @@ CopyFromErrorCallback(void *arg)
 }
 
 /*
- * Make sure we don't print an unreasonable amount of COPY data in a message.
- *
- * Returns a pstrdup'd copy of the input.
- */
-static char *
-limit_printout_length(const char *str)
-{
-#define MAX_COPY_DATA_DISPLAY 100
-
-	int			slen = strlen(str);
-	int			len;
-	char	   *res;
-
-	/* Fast path if definitely okay */
-	if (slen <= MAX_COPY_DATA_DISPLAY)
-		return pstrdup(str);
-
-	/* Apply encoding-dependent truncation */
-	len = pg_mbcliplen(str, slen, MAX_COPY_DATA_DISPLAY);
-
-	/*
-	 * Truncate, and add "..." to show we truncated the input.
-	 */
-	res = (char *) palloc(len + 4);
-	memcpy(res, str, len);
-	strcpy(res + len, "...");
-
-	return res;
-}
-
-/*
  * Allocate memory and initialize a new CopyMultiInsertBuffer for this
  * ResultRelInfo.
  */

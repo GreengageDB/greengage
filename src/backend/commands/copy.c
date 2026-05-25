@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "libpq-int.h"
+
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -45,6 +47,7 @@
 #include "commands/trigger.h"
 #include "executor/execPartition.h"
 #include "executor/executor.h"
+#include "executor/nodeModifyTable.h"
 #include "foreign/fdwapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -64,6 +67,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/metrics_utils.h"
 #include "utils/rls.h"
 #include "utils/string_utils.h"
 
@@ -187,6 +191,7 @@ extern bool Test_copy_qd_qe_split;
  */
 #define MAX_BUFFERED_TUPLES		1000
 #define MAX_BUFFERED_BYTES		65535
+#define MAX_PARTITION_BUFFERS	32
 
 typedef struct CopyMultiInsertBuffer
 {
@@ -225,13 +230,29 @@ static void SendCopyFromForwardedError(CopyState cstate, CdbCopy *cdbCopy, char 
 static void SendCopyFromForwardedHeader(CopyState cstate, CdbCopy *cdbCopy);
 static void SendCopyFromForwardedTuple(CopyState cstate,
 									   CdbCopy *cdbCopy,
-									   bool send_to_all,
+									   bool toAll,
 									   int target_seg,
+									   Relation rel,
+									   int64 lineno,
+									   char *line,
+									   int line_len,
 									   Datum *values,
 									   bool *nulls);
 static int CopyReadAttributesText(CopyState cstate, int stop_processing_at_field);
 static int CopyReadAttributesCSV(CopyState cstate, int stop_processing_at_field);
 static void FreeDistributionData(GpDistributionData *distData);
+static void InitCopyFromDispatchSplit(CopyState cstate, GpDistributionData *distData,
+									  EState *estate);
+static void HandleCopyError(CopyState cstate);
+static uint64 CopyDispatchOnSegment(CopyState cstate, const CopyStmt *stmt);
+static uint64 CopyToDispatch(CopyState cstate);
+static uint64 CopyToQueryOnSegment(CopyState cstate);
+static uint64 CopyTo(CopyState cstate);
+static void CopyAttributeOutText(CopyState cstate, char *string);
+static void CopyAttributeOutCSV(CopyState cstate, char *string,
+								bool use_quote, bool single_attr);
+static void setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable);
+static CopyIntoClause *MakeCopyIntoClause(CopyStmt *stmt);
 static Datum CopyReadBinaryAttribute(CopyState cstate, FmgrInfo *flinfo,
 									 Oid typioparam, int32 typmod, bool *isnull);
 static GpDistributionData *InitDistributionData(CopyState cstate, EState *estate);
@@ -2265,7 +2286,7 @@ EndCopy(CopyState cstate)
 	pfree(cstate);
 }
 
-CopyIntoClause*
+static CopyIntoClause*
 MakeCopyIntoClause(CopyStmt *stmt)
 {
 	CopyIntoClause *copyIntoClause;
@@ -3458,8 +3479,8 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 
 			cstate->cur_lineno = buffer->linenos[i];
 			recheckIndexes =
-				ExecInsertIndexTuples(buffer->slots[i], estate, false, NULL,
-									  NIL);
+				ExecInsertIndexTuples(resultRelInfo, buffer->slots[i], estate,
+									  false, false, NULL, NIL);
 			ExecARInsertTriggers(estate, resultRelInfo,
 								 slots[i], recheckIndexes,
 								 cstate->transition_capture);
@@ -3781,8 +3802,6 @@ CopyFrom(CopyState cstate)
 
 	ExecOpenIndices(resultRelInfo, false);
 
-	estate->es_result_relations = resultRelInfo;
-	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
 
 	ExecInitRangeTable(estate, cstate->range_table);
@@ -3823,7 +3842,7 @@ CopyFrom(CopyState cstate)
 	 * CopyFrom tuple routing.
 	 */
 	if (cstate->rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-		proute = ExecSetupPartitionTupleRouting(estate, NULL, cstate->rel);
+		proute = ExecSetupPartitionTupleRouting(estate, cstate->rel);
 
 	if (cstate->whereClause)
 		cstate->qualexpr = ExecInitQual(castNode(List, cstate->whereClause),
@@ -4253,23 +4272,11 @@ CopyFrom(CopyState cstate)
 			{
 				if (has_before_insert_row_trig)
 				{
-					/*
-					 * If there are any BEFORE triggers on the partition,
-					 * we'll have to be ready to convert their result back to
-					 * tuplestore format.
-					 */
 					cstate->transition_capture->tcs_original_insert_tuple = NULL;
-					cstate->transition_capture->tcs_map =
-						resultRelInfo->ri_PartitionInfo->pi_PartitionToRootMap;
 				}
 				else
 				{
-					/*
-					 * Otherwise, just remember the original unconverted
-					 * tuple, to avoid a needless round trip conversion.
-					 */
 					cstate->transition_capture->tcs_original_insert_tuple = myslot;
-					cstate->transition_capture->tcs_map = NULL;
 				}
 			}
 
@@ -4277,7 +4284,7 @@ CopyFrom(CopyState cstate)
 			 * We might need to convert from the root rowtype to the partition
 			 * rowtype.
 			 */
-			map = resultRelInfo->ri_PartitionInfo->pi_RootToPartitionMap;
+			map = resultRelInfo->ri_RootToPartitionMap;
 			if (insertMethod == CIM_SINGLE || !leafpart_use_multi_insert)
 			{
 				/* non batch insert */
@@ -4285,7 +4292,7 @@ CopyFrom(CopyState cstate)
 				{
 					TupleTableSlot *new_slot;
 
-					new_slot = resultRelInfo->ri_PartitionInfo->pi_PartitionTupleSlot;
+					new_slot = resultRelInfo->ri_PartitionTupleSlot;
 					myslot = execute_attr_map_slot(map->attrMap, myslot, new_slot);
 				}
 			}
@@ -4377,7 +4384,7 @@ CopyFrom(CopyState cstate)
 				/* Compute stored generated columns */
 				if (resultRelInfo->ri_RelationDesc->rd_att->constr &&
 					resultRelInfo->ri_RelationDesc->rd_att->constr->has_generated_stored)
-					ExecComputeStoredGenerated(estate, myslot, CMD_INSERT);
+					ExecComputeStoredGenerated(resultRelInfo, estate, myslot, CMD_INSERT);
 
 				/*
 				 * If the target is a plain table, check the constraints of
@@ -4393,7 +4400,7 @@ CopyFrom(CopyState cstate)
 				 * we don't need to if there's no BR trigger defined on the
 				 * partition.
 				 */
-				if (resultRelInfo->ri_PartitionCheck &&
+				if (resultRelInfo->ri_RelationDesc->rd_rel->relispartition &&
 					(proute == NULL || has_before_insert_row_trig))
 					ExecPartitionCheck(resultRelInfo, myslot, estate, true);
 
@@ -5017,7 +5024,7 @@ NextCopyFrom(CopyState cstate, ExprContext *econtext,
  *
  * changing me? take a look at FILEAM_HANDLE_ERROR in fileam.c as well.
  */
-void
+static void
 HandleCopyError(CopyState cstate)
 {
 	if (cstate->errMode == ALL_OR_NOTHING)
@@ -6997,7 +7004,7 @@ CopyReadBinaryAttribute(CopyState cstate, FmgrInfo *flinfo,
 			CopySendData(cstate, start, ptr - start); \
 	} while (0)
 
-void
+static void
 CopyAttributeOutText(CopyState cstate, char *string)
 {
 	char	   *ptr;
@@ -7161,7 +7168,7 @@ CopyAttributeOutText(CopyState cstate, char *string)
  * Send text representation of one attribute, with conversion and
  * CSV-style escaping
  */
-void
+static void
 CopyAttributeOutCSV(CopyState cstate, char *string,
 					bool use_quote, bool single_attr)
 {
@@ -7475,7 +7482,7 @@ CreateCopyDestReceiver(void)
  *
  * The code here mimics a part of SetClientEncoding() in mbutils.c
  */
-void
+static void
 setEncodingConversionProc(CopyState cstate, int encoding, bool iswritable)
 {
 	Oid		conversion_proc;
@@ -7540,7 +7547,7 @@ FreeDistributionData(GpDistributionData *distData)
  * Compute which fields need to be processed in the QD, and which ones can
  * be delayed to the QE.
  */
-void
+static void
 InitCopyFromDispatchSplit(CopyState cstate, GpDistributionData *distData,
 						  EState *estate)
 {

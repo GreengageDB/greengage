@@ -159,7 +159,7 @@ beginCurrentIndexScan(DynamicIndexScanState *node, EState *estate,
 	{
 		/* Very first partition */
 		// Just get the direct parent, we don't support multi-level partitioning
-		node->columnLayoutOid = get_partition_parent(tableOid);
+		node->columnLayoutOid = get_partition_parent(tableOid, false);
 	}
 	DynamicIndexScan_ReMapColumns(dynamicIndexScan,
 								  tableOid, node->columnLayoutOid);

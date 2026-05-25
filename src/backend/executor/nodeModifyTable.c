@@ -1536,7 +1536,7 @@ ExecCrossPartitionUpdate(ModifyTableState *mtstate,
 						 ResultRelInfo *resultRelInfo,
 						 ItemPointer tupleid, HeapTuple oldtuple,
 						 TupleTableSlot *slot, TupleTableSlot *planSlot,
-						 EPQState *epqstate, bool canSetTag,
+						 EPQState *epqstate, int32 segid, bool canSetTag,
 						 TupleTableSlot **retry_slot,
 						 TupleTableSlot **inserted_tuple)
 {
@@ -1593,11 +1593,12 @@ ExecCrossPartitionUpdate(ModifyTableState *mtstate,
 	 * Row movement, part 1.  Delete the tuple, but skip RETURNING processing.
 	 * We want to return rows from INSERT.
 	 */
-	ExecDelete(mtstate, resultRelInfo, tupleid, oldtuple, planSlot,
+	ExecDelete(mtstate, resultRelInfo, tupleid, segid, oldtuple, planSlot,
 			   epqstate, estate,
 			   false,			/* processReturning */
 			   false,			/* canSetTag */
 			   true,			/* changingPart */
+			   false,			/* splitUpdate */
 			   &tuple_deleted, &epqslot);
 
 	/*
@@ -1662,7 +1663,8 @@ ExecCrossPartitionUpdate(ModifyTableState *mtstate,
 
 	/* Tuple routing starts from the root table. */
 	*inserted_tuple = ExecInsert(mtstate, mtstate->rootResultRelInfo, slot,
-								 planSlot, estate, canSetTag);
+								 planSlot, estate, canSetTag,
+								 false /* splitUpdate */);
 
 	/*
 	 * Reset the transition state that may possibly have been written by
@@ -1875,7 +1877,7 @@ lreplace:;
 			 */
 			retry = !ExecCrossPartitionUpdate(mtstate, resultRelInfo, tupleid,
 											  oldtuple, slot, planSlot,
-											  epqstate, canSetTag,
+											  epqstate, segid, canSetTag,
 											  &retry_slot, &inserted_tuple);
 			if (retry)
 			{
@@ -1883,52 +1885,6 @@ lreplace:;
 				goto lreplace;
 			}
 
-			/*
-			 * Updates set the transition capture map only when a new subplan
-			 * is chosen.  But for inserts, it is set for each row. So after
-			 * INSERT, we need to revert back to the map created for UPDATE;
-			 * otherwise the next UPDATE will incorrectly use the one created
-			 * for INSERT.  So first save the one created for UPDATE.
-			 */
-			if (mtstate->mt_transition_capture)
-				saved_tcs_map = mtstate->mt_transition_capture->tcs_map;
-
-			/*
-			 * resultRelInfo is one of the per-subplan resultRelInfos.  So we
-			 * should convert the tuple into root's tuple descriptor, since
-			 * ExecInsert() starts the search from root.  The tuple conversion
-			 * map list is in the order of mtstate->resultRelInfo[], so to
-			 * retrieve the one for this resultRel, we need to know the
-			 * position of the resultRel in mtstate->resultRelInfo[].
-			 */
-			map_index = resultRelInfo - mtstate->resultRelInfo;
-			Assert(map_index >= 0 && map_index < mtstate->mt_nplans);
-			tupconv_map = tupconv_map_for_subplan(mtstate, map_index);
-			if (tupconv_map != NULL)
-				slot = execute_attr_map_slot(tupconv_map->attrMap,
-											 slot,
-											 mtstate->mt_root_tuple_slot);
-
-			/*
-			 * Prepare for tuple routing, making it look like we're inserting
-			 * into the root.
-			 */
-			Assert(mtstate->rootResultRelInfo != NULL);
-			slot = ExecPrepareTupleRouting(mtstate, estate, proute,
-										   mtstate->rootResultRelInfo, slot);
-
-			ret_slot = ExecInsert(mtstate, slot, planSlot,
-								  estate, canSetTag, false /* splitUpdate */);
-
-			/* Revert ExecPrepareTupleRouting's node change. */
-			estate->es_result_relation_info = resultRelInfo;
-			if (mtstate->mt_transition_capture)
-			{
-				mtstate->mt_transition_capture->tcs_original_insert_tuple = NULL;
-				mtstate->mt_transition_capture->tcs_map = saved_tcs_map;
-			}
-
-			return ret_slot;
 			return inserted_tuple;
 		}
 
@@ -2159,10 +2115,6 @@ ExecSplitUpdate_Insert(ModifyTableState *mtstate,
 	ResultRelInfo *resultRelInfo;
 	Relation	resultRelationDesc;
 	bool		partition_constraint_failed;
-	TupleConversionMap *saved_tcs_map = NULL;
-	PartitionTupleRouting *proute = mtstate->mt_partition_tuple_routing;
-	int			map_index;
-	TupleConversionMap *tupconv_map;
 
 	/*
 	 * get information on the (current) result relation
@@ -2181,7 +2133,7 @@ ExecSplitUpdate_Insert(ModifyTableState *mtstate,
 	 * row.  So skip the WCO checks if the partition constraint fails.
 	 */
 	partition_constraint_failed =
-		resultRelInfo->ri_PartitionCheck &&
+		resultRelationDesc->rd_rel->relispartition &&
 		!ExecPartitionCheck(resultRelInfo, slot, estate, false);
 
 	if (!partition_constraint_failed &&
@@ -2195,68 +2147,17 @@ ExecSplitUpdate_Insert(ModifyTableState *mtstate,
 							 resultRelInfo, slot, estate);
 	}
 
-	/*
-	 * Updates set the transition capture map only when a new subplan
-	 * is chosen.  But for inserts, it is set for each row. So after
-	 * INSERT, we need to revert back to the map created for UPDATE;
-	 * otherwise the next UPDATE will incorrectly use the one created
-	 * for INSERT.  So first save the one created for UPDATE.
-	 */
-	if (mtstate->mt_transition_capture)
-		saved_tcs_map = mtstate->mt_transition_capture->tcs_map;
-
 	if (partition_constraint_failed)
 	{
-		/*
-		 * When an UPDATE is run on a leaf partition, we will not have
-		 * partition tuple routing set up. In that case, fail with
-		 * partition constraint violation error.
-		 */
+		PartitionTupleRouting *proute = mtstate->mt_partition_tuple_routing;
+
 		if (proute == NULL)
 			ExecPartitionCheckEmitError(resultRelInfo, slot, estate);
-
-		/*
-		 * resultRelInfo is one of the per-subplan resultRelInfos.  So we
-		 * should convert the tuple into root's tuple descriptor, since
-		 * ExecInsert() starts the search from root.  The tuple conversion
-		 * map list is in the order of mtstate->resultRelInfo[], so to
-		 * retrieve the one for this resultRel, we need to know the
-		 * position of the resultRel in mtstate->resultRelInfo[].
-		 */
-		map_index = resultRelInfo - mtstate->resultRelInfo;
-		Assert(map_index >= 0 && map_index < mtstate->mt_nplans);
-		tupconv_map = tupconv_map_for_subplan(mtstate, map_index);
-		if (tupconv_map != NULL)
-			slot = execute_attr_map_slot(tupconv_map->attrMap,
-										 slot,
-										 mtstate->mt_root_tuple_slot);
-
-		/*
-		 * Prepare for tuple routing, making it look like we're inserting
-		 * into the root.
-		 */
-		Assert(mtstate->rootResultRelInfo != NULL);
-		slot = ExecPrepareTupleRouting(mtstate, estate, proute,
-									   mtstate->rootResultRelInfo, slot);
-
-		slot = ExecInsert(mtstate, slot, planSlot,
-						  estate, mtstate->canSetTag,
-						  true /* splitUpdate */);
-
-		/* Revert ExecPrepareTupleRouting's node change. */
-		estate->es_result_relation_info = resultRelInfo;
-		if (mtstate->mt_transition_capture)
-		{
-			mtstate->mt_transition_capture->tcs_original_insert_tuple = NULL;
-			mtstate->mt_transition_capture->tcs_map = saved_tcs_map;
-		}
 	}
-	else
-	{
-		slot = ExecInsert(mtstate, slot, planSlot,
-						  estate, mtstate->canSetTag,
-						  true /* splitUpdate */);
-	}
+
+	slot = ExecInsert(mtstate, resultRelInfo, slot, planSlot,
+					  estate, mtstate->canSetTag,
+					  true /* splitUpdate */);
 
 	return slot;
 }
@@ -2647,8 +2548,8 @@ ExecModifyTable(PlanState *pstate)
 	ResultRelInfo *resultRelInfo;
 	PlanState  *subplanstate;
 	JunkFilter *junkfilter;
-	AttrNumber  action_attno;
-	AttrNumber  segid_attno;
+	AttrNumber  action_attno = InvalidAttrNumber;
+	AttrNumber  segid_attno = InvalidAttrNumber;
 	TupleTableSlot *slot;
 	TupleTableSlot *planSlot;
 	TupleTableSlot *oldSlot;
@@ -2712,6 +2613,9 @@ ExecModifyTable(PlanState *pstate)
 	/* Preload local variables */
 	resultRelInfo = node->resultRelInfo + node->mt_lastResultIndex;
 	subplanstate = outerPlanState(node);
+	junkfilter = resultRelInfo->ri_junkFilter;
+	action_attno = resultRelInfo->ri_action_attno;
+	segid_attno = resultRelInfo->ri_segid_attno;
 
 	/*
 	 * Fetch rows from subplan, and execute the required table modification
@@ -2739,35 +2643,6 @@ ExecModifyTable(PlanState *pstate)
 
 		/* No more tuples to process? */
 		if (TupIsNull(planSlot))
-		{
-			/* advance to next subplan if any */
-			node->mt_whichplan++;
-			if (node->mt_whichplan < node->mt_nplans)
-			{
-				estate->es_result_relation_info = estate->es_result_relations + node->mt_whichplan;
-				resultRelInfo = estate->es_result_relation_info;
-				subplanstate = node->mt_plans[node->mt_whichplan];
-				junkfilter = estate->es_result_relation_info->ri_junkFilter;
-				action_attno = estate->es_result_relation_info->ri_action_attno;
-				segid_attno = estate->es_result_relation_info->ri_segid_attno;
-				EvalPlanQualSetPlan(&node->mt_epqstate, subplanstate->plan,
-									node->mt_arowmarks[node->mt_whichplan]);
-				/* Prepare to convert transition tuples from this child. */
-				if (node->mt_transition_capture != NULL)
-				{
-					node->mt_transition_capture->tcs_map =
-						tupconv_map_for_subplan(node, node->mt_whichplan);
-				}
-				if (node->mt_oc_transition_capture != NULL)
-				{
-					node->mt_oc_transition_capture->tcs_map =
-						tupconv_map_for_subplan(node, node->mt_whichplan);
-				}
-				continue;
-			}
-			else
-				break;
-		}
 			break;
 
 		/*
@@ -2837,7 +2712,8 @@ ExecModifyTable(PlanState *pstate)
 			relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
 			if (relkind == RELKIND_RELATION ||
 				relkind == RELKIND_MATVIEW ||
-				relkind == RELKIND_PARTITIONED_TABLE)
+				relkind == RELKIND_PARTITIONED_TABLE ||
+				IsAppendonlyMetadataRelkind(relkind))
 			{
 				/* ri_RowIdAttNo refers to a ctid attribute */
 				Assert(AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo));
@@ -2848,84 +2724,6 @@ ExecModifyTable(PlanState *pstate)
 				if (isNull)
 					elog(ERROR, "ctid is NULL");
 
-				relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
-				if (relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
-					relkind == RELKIND_PARTITIONED_TABLE ||
-					IsAppendonlyMetadataRelkind(relkind))
-				{
-					datum = ExecGetJunkAttribute(slot,
-												 junkfilter->jf_junkAttNo,
-												 &isNull);
-					/* shouldn't ever get a null result... */
-					if (isNull)
-						elog(ERROR, "ctid is NULL");
-
-					tupleid = (ItemPointer) DatumGetPointer(datum);
-					tuple_ctid = *tupleid;	/* be sure we don't free ctid!! */
-					tupleid = &tuple_ctid;
-				}
-
-				/*
-				 * Use the wholerow attribute, when available, to reconstruct
-				 * the old relation tuple.
-				 *
-				 * Foreign table updates have a wholerow attribute when the
-				 * relation has a row-level trigger.  Note that the wholerow
-				 * attribute does not carry system columns.  Foreign table
-				 * triggers miss seeing those, except that we know enough here
-				 * to set t_tableOid.  Quite separately from this, the FDW may
-				 * fetch its own junk attrs to identify the row.
-				 *
-				 * Other relevant relkinds, currently limited to views, always
-				 * have a wholerow attribute.
-				 */
-				else if (AttributeNumberIsValid(junkfilter->jf_junkAttNo))
-				{
-					datum = ExecGetJunkAttribute(slot,
-												 junkfilter->jf_junkAttNo,
-												 &isNull);
-					/* shouldn't ever get a null result... */
-					if (isNull)
-						elog(ERROR, "wholerow is NULL");
-
-					oldtupdata.t_data = DatumGetHeapTupleHeader(datum);
-					oldtupdata.t_len =
-						HeapTupleHeaderGetDatumLength(oldtupdata.t_data);
-					ItemPointerSetInvalid(&(oldtupdata.t_self));
-					/* Historically, view triggers see invalid t_tableOid. */
-					oldtupdata.t_tableOid =
-						(relkind == RELKIND_VIEW) ? InvalidOid :
-						RelationGetRelid(resultRelInfo->ri_RelationDesc);
-					oldtuple = &oldtupdata;
-				}
-				else
-					Assert(relkind == RELKIND_FOREIGN_TABLE);
-
-				/*
-				 * Extract GPDB-specific junk attributes.
-				 */
-				if (AttributeNumberIsValid(segid_attno))
-				{
-					datum = ExecGetJunkAttribute(slot,
-												 segid_attno,
-												 &isNull);
-					/* shouldn't ever get a null result... */
-					if (isNull)
-						elog(ERROR, "gp_segment_id is NULL");
-
-					segid = DatumGetInt32(datum);
-				}
-				if (AttributeNumberIsValid(action_attno))
-				{
-					datum = ExecGetJunkAttribute(slot,
-												 action_attno,
-												 &isNull);
-					/* shouldn't ever get a null result... */
-					if (isNull)
-						elog(ERROR, "action is NULL");
-
-					action = DatumGetInt32(datum);
-				}
 				tupleid = (ItemPointer) DatumGetPointer(datum);
 				tuple_ctid = *tupleid;	/* be sure we don't free ctid!! */
 				tupleid = &tuple_ctid;
@@ -2933,19 +2731,7 @@ ExecModifyTable(PlanState *pstate)
 
 			/*
 			 * Use the wholerow attribute, when available, to reconstruct the
-			 * old relation tuple.  The old tuple serves one or both of two
-			 * purposes: 1) it serves as the OLD tuple for row triggers, 2) it
-			 * provides values for any unchanged columns for the NEW tuple of
-			 * an UPDATE, because the subplan does not produce all the columns
-			 * of the target table.
-			 *
-			 * Note that the wholerow attribute does not carry system columns,
-			 * so foreign table triggers miss seeing those, except that we
-			 * know enough here to set t_tableOid.  Quite separately from
-			 * this, the FDW may fetch its own junk attrs to identify the row.
-			 *
-			 * Other relevant relkinds, currently limited to views, always
-			 * have a wholerow attribute.
+			 * old relation tuple.
 			 */
 			else if (AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo))
 			{
@@ -2964,13 +2750,38 @@ ExecModifyTable(PlanState *pstate)
 				oldtupdata.t_tableOid =
 					(relkind == RELKIND_VIEW) ? InvalidOid :
 					RelationGetRelid(resultRelInfo->ri_RelationDesc);
-
 				oldtuple = &oldtupdata;
 			}
 			else
 			{
 				/* Only foreign tables are allowed to omit a row-ID attr */
 				Assert(relkind == RELKIND_FOREIGN_TABLE);
+			}
+
+			/*
+			 * Extract GPDB-specific junk attributes.
+			 */
+			if (AttributeNumberIsValid(segid_attno))
+			{
+				datum = ExecGetJunkAttribute(slot,
+											 segid_attno,
+											 &isNull);
+				/* shouldn't ever get a null result... */
+				if (isNull)
+					elog(ERROR, "gp_segment_id is NULL");
+
+				segid = DatumGetInt32(datum);
+			}
+			if (AttributeNumberIsValid(action_attno))
+			{
+				datum = ExecGetJunkAttribute(slot,
+											 action_attno,
+											 &isNull);
+				/* shouldn't ever get a null result... */
+				if (isNull)
+					elog(ERROR, "action is NULL");
+
+				action = DatumGetInt32(datum);
 			}
 		}
 
@@ -2982,7 +2793,8 @@ ExecModifyTable(PlanState *pstate)
 					ExecInitInsertProjection(node, resultRelInfo);
 				slot = ExecGetInsertNewTuple(resultRelInfo, planSlot);
 				slot = ExecInsert(node, resultRelInfo, slot, planSlot,
-								  estate, node->canSetTag);
+								  estate, node->canSetTag,
+								  false /* splitUpdate */);
 				break;
 			case CMD_UPDATE:
 				/* Initialize projection info if first time for this table */
@@ -3015,15 +2827,16 @@ ExecModifyTable(PlanState *pstate)
 
 				/* Now apply the update. */
 				slot = ExecUpdate(node, resultRelInfo, tupleid, oldtuple, slot,
-								  planSlot, &node->mt_epqstate, estate,
+								  planSlot, segid, &node->mt_epqstate, estate,
 								  node->canSetTag);
 				break;
 			case CMD_DELETE:
-				slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
+				slot = ExecDelete(node, resultRelInfo, tupleid, segid, oldtuple,
 								  planSlot, &node->mt_epqstate, estate,
 								  true, /* processReturning */
 								  node->canSetTag,
 								  false,	/* changingPart */
+								  false,	/* splitUpdate */
 								  NULL, NULL);
 				break;
 			default:
@@ -3202,10 +3015,10 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 
 	if (CMD_UPDATE == operation)
 	{
-		mtstate->mt_isSplitUpdates = (bool *) palloc0(nplans * sizeof(bool));
+		mtstate->mt_isSplitUpdates = (bool *) palloc0(nrels * sizeof(bool));
 		if (node->isSplitUpdates)
 		{
-			if (list_length(node->isSplitUpdates) != nplans)
+			if (list_length(node->isSplitUpdates) != nrels)
 				elog(ERROR, "ModifyTable node is missing is-split-update information");
 
 			i = 0;
@@ -3355,9 +3168,6 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	 * causes the tuple to be routed, then we must perform tuple routing a
 	 * second time.
 	 */
-	if (node->forceTupleRouting)
-		update_tuple_routing_needed = true;
-
 	/*
 	 * If it's not a partitioned table after all, UPDATE tuple routing should
 	 * not be attempted.
