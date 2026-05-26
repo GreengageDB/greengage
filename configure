@@ -736,6 +736,7 @@ with_uuid
 with_readline
 with_systemd
 with_selinux
+with_ssl
 with_openssl
 with_ldap
 with_krb_srvnam
