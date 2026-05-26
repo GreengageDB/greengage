@@ -13895,6 +13895,7 @@ fi
 fi
 
 if test "$with_openssl" = yes ; then
+    with_ssl=openssl
     # Minimum required OpenSSL version is 1.0.1
 
 $as_echo "#define OPENSSL_API_COMPAT 0x10001000L" >>confdefs.h
