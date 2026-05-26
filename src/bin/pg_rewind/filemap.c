@@ -831,3 +831,13 @@ hash_string_pointer(const char *s)
 
 	return hash_bytes(ss, strlen(s));
 }
+
+/*
+ * GPDB: Track AO file changes from WAL.
+ * TODO: Adapt for PG14 filemap hash table API.
+ */
+void
+process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
+{
+	/* No-op until adapted for PG14 filemap */
+}

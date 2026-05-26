@@ -260,17 +260,10 @@ issue_warnings_and_set_wal_level(char *sequence_script_file_name)
 void
 output_completion_banner(char *deletion_script_file_name)
 {
-	/* Did we copy the free space files? */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)
-		pg_log(PG_REPORT,
-			   "Optimizer statistics are not transferred by pg_upgrade so,\n"
-			   "once you start the new server, consider running:\n"
-			   "    %s\n\n", "vacuumdb --all --analyze-in-stages");
-	else
-		pg_log(PG_REPORT,
-			   "Optimizer statistics and free space information are not transferred\n"
-			   "by pg_upgrade so, once you start the new server, consider running:\n"
-			   "    %s\n\n", "vacuumdb --all --analyze-in-stages");
+	pg_log(PG_REPORT,
+		   "Optimizer statistics are not transferred by pg_upgrade so,\n"
+		   "once you start the new server, consider running:\n"
+		   "    vacuumdb --all --analyze-in-stages\n\n");
 
 
 	if (deletion_script_file_name)
@@ -513,7 +506,7 @@ check_databases_are_compatible(void)
  *	This incrementally generates better optimizer statistics
  */
 void
-create_script_for_cluster_analyze(char **"vacuumdb --all --analyze-in-stages")
+create_script_for_cluster_analyze(char **analyze_script_file_name)
 {
 	FILE	   *script = NULL;
 	PQExpBufferData user_specification;
@@ -528,12 +521,12 @@ create_script_for_cluster_analyze(char **"vacuumdb --all --analyze-in-stages")
 		appendPQExpBufferChar(&user_specification, ' ');
 	}
 
-	*"vacuumdb --all --analyze-in-stages" = psprintf("%sanalyze_new_cluster.%s",
+	*analyze_script_file_name = psprintf("%sanalyze_new_cluster.%s",
 										 SCRIPT_PREFIX, SCRIPT_EXT);
 
-	if ((script = fopen_priv(*"vacuumdb --all --analyze-in-stages", "w")) == NULL)
+	if ((script = fopen_priv(*analyze_script_file_name, "w")) == NULL)
 		pg_fatal("could not open file \"%s\": %s\n",
-				 *"vacuumdb --all --analyze-in-stages", strerror(errno));
+				 *analyze_script_file_name, strerror(errno));
 
 #ifndef WIN32
 	/* add shebang header */
@@ -586,9 +579,9 @@ create_script_for_cluster_analyze(char **"vacuumdb --all --analyze-in-stages")
 	fclose(script);
 
 #ifndef WIN32
-	if (chmod(*"vacuumdb --all --analyze-in-stages", S_IRWXU) != 0)
+	if (chmod(*analyze_script_file_name, S_IRWXU) != 0)
 		pg_fatal("could not add execute permission to file \"%s\": %s\n",
-				 *"vacuumdb --all --analyze-in-stages", strerror(errno));
+				 *analyze_script_file_name, strerror(errno));
 #endif
 
 	termPQExpBuffer(&user_specification);

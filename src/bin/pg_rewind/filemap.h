@@ -110,4 +110,8 @@ extern filemap_t *decide_file_actions(void);
 extern void calculate_totals(filemap_t *filemap);
 extern void print_filemap(filemap_t *filemap);
 
+/* GPDB: AO file WAL tracking - needs adaptation for PG14 filemap */
+extern void process_target_wal_aofile_change(RelFileNode rnode,
+											 int segno, int64 offset);
+
 #endif							/* FILEMAP_H */
