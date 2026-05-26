@@ -201,7 +201,7 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 						 &input, &conf_state, &output);
 		if (major != GSS_S_COMPLETE)
 		{
-			pg_GSS_error(_("GSSAPI wrap error"), major, minor);
+			pg_GSS_error_be(_("GSSAPI wrap error"), major, minor);
 			errno = ECONNRESET;
 			return -1;
 		}
@@ -386,7 +386,7 @@ be_gssapi_read(Port *port, void *ptr, size_t len)
 		major = gss_unwrap(&minor, gctx, &input, &output, &conf_state, NULL);
 		if (major != GSS_S_COMPLETE)
 		{
-			pg_GSS_error(_("GSSAPI unwrap error"), major, minor);
+			pg_GSS_error_be(_("GSSAPI unwrap error"), major, minor);
 			errno = ECONNRESET;
 			return -1;
 		}
@@ -591,7 +591,7 @@ secure_open_gssapi(Port *port)
 									   NULL, NULL);
 		if (GSS_ERROR(major))
 		{
-			pg_GSS_error(_("could not accept GSSAPI security context"),
+			pg_GSS_error_be(_("could not accept GSSAPI security context"),
 						 major, minor);
 			gss_release_buffer(&minor, &output);
 			return -1;
@@ -686,7 +686,7 @@ secure_open_gssapi(Port *port)
 
 	if (GSS_ERROR(major))
 	{
-		pg_GSS_error(_("GSSAPI size check error"), major, minor);
+		pg_GSS_error_be(_("GSSAPI size check error"), major, minor);
 		return -1;
 	}
 

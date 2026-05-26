@@ -1553,7 +1553,7 @@ pg_GSS_recvauth(Port *port)
 		if (maj_stat != GSS_S_COMPLETE && maj_stat != GSS_S_CONTINUE_NEEDED)
 		{
 			gss_delete_sec_context(&lmin_s, &port->gss->ctx, GSS_C_NO_BUFFER);
-			pg_GSS_error(_("accepting GSS security context failed"),
+			pg_GSS_error_be(_("accepting GSS security context failed"),
 						 maj_stat, min_stat);
 			return STATUS_ERROR;
 		}
@@ -1594,7 +1594,7 @@ pg_GSS_checkauth(Port *port)
 	maj_stat = gss_display_name(&min_stat, port->gss->name, &gbuf, NULL);
 	if (maj_stat != GSS_S_COMPLETE)
 	{
-		pg_GSS_error(_("retrieving GSS user name failed"),
+		pg_GSS_error_be(_("retrieving GSS user name failed"),
 					 maj_stat, min_stat);
 		return STATUS_ERROR;
 	}

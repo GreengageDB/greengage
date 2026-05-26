@@ -106,6 +106,7 @@ typedef struct CopyMultiInsertInfo
 
 static void ClosePipeFromProgram(CopyFromState cstate);
 
+#if 0 /* GPDB: CopyFromErrorCallback is in copy.c using CopyState */
 /*
  * error context callback for COPY FROM
  *
@@ -175,6 +176,7 @@ CopyFromErrorCallback(void *arg)
 		}
 	}
 }
+#endif /* GPDB: CopyFromErrorCallback */
 
 /*
  * Allocate memory and initialize a new CopyMultiInsertBuffer for this
