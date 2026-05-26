@@ -12691,7 +12691,7 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 		funcargs = PQgetvalue(res, 0, PQfnumber(res, "funcargs"));
 		funciargs = PQgetvalue(res, 0, PQfnumber(res, "funciargs"));
 		funcresult = PQgetvalue(res, 0, PQfnumber(res, "funcresult"));
-		proallargtypes = proargmodes = proargnames = NULL;
+		allargtypes = argmodes = argnames = NULL;
 	}
 	else
 	{
@@ -16268,8 +16268,8 @@ findSecLabels(Archive *fout, Oid classoid, Oid objoid, SecLabelItem **items)
  *
  * The table is sorted by classoid/objid/objsubid for speed in lookup.
  */
-static void
-collectSecLabels(Archive *fout)
+static int
+collectSecLabels(Archive *fout, SecLabelItem **items)
 {
 	PGresult   *res;
 	PQExpBuffer query;
