@@ -53,11 +53,11 @@ class TestGreedySolver(GpTestCase):
             primary_to_mirrors[primary].append(mirror)
         
         for primary, mirrors in primary_to_mirrors.items():
-            if solver.strategy == 'grouped':
+            if solver.config.strategy == 'grouped':
                 unique_mirrors = set(mirrors)
                 if len(unique_mirrors) > 1:
                     return False
-            elif solver.strategy == 'spread':
+            elif solver.config.strategy == 'spread':
                 unique_mirrors = set(mirrors)
                 if len(mirrors) != len(unique_mirrors):
                     return False

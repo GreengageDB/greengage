@@ -1230,20 +1230,23 @@ class Planner:
             swap_dbids.add(mir_move.seg.getSegmentDbId())
             try:
                 intermediate_host = self.select_intermediate_host(
-                    prim_move, mir_move,
+                    prim_move,
+                    mir_move,
                     used_intermediate_hosts,
-                    resource_estimator
+                    resource_estimator # Pass the estimator with cached filesystem data
                 )
+                # Decompose into 3 phases
                 p1, p2, p3 = self.decompose_swap(
-                    prim_move, mir_move, intermediate_host, port_allocator
+                    prim_move,
+                    mir_move,
+                    intermediate_host,
+                    port_allocator
                 )
                 phase1.append(p1)
                 phase2.append(p2)
                 phase3.append(p3)
             except Exception as e:
-                raise PlanningError(
-                    f"Failed to plan swap for content "
-                    f"{prim_move.seg.getSegmentContentId()}: {e}")
+                raise PlanningError(f"Failed to plan swap for content {prim_move.seg.getSegmentContentId()}: {e}")
 
         return phase1, phase2, phase3, swap_dbids
 
