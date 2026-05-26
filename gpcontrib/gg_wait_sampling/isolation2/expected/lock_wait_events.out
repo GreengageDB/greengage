@@ -1,0 +1,49 @@
+CREATE EXTENSION gg_wait_sampling;
+CREATE EXTENSION
+CREATE TABLE t_wait_small (id INT, val TEXT) DISTRIBUTED BY (id);
+CREATE TABLE
+INSERT INTO t_wait_small VALUES (1,'a'),(2,'b'),(3,'c');
+INSERT 0 3
+
+!\retcode gpconfig -c gg_wait_sampling.history_period -v 5;
+(exited with code 0)
+!\retcode gpconfig -c gg_wait_sampling.profile_period -v 5;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+SELECT * FROM gg_wait_sampling_reset_profile;
+ gp_segment_id | done 
+---------------+------
+ -1            | t    
+ 0             | t    
+ 1             | t    
+ 2             | t    
+(4 rows)
+-- Test event sampling on segments
+0U:BEGIN; LOCK TABLE t_wait_small IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE
+
+1&: SELECT count(*) FROM t_wait_small;  <waiting ...>
+
+SELECT segid, event_type, event FROM gg_wait_sampling_profile WHERE event_type = 'Lock';
+ segid | event_type | event    
+-------+------------+----------
+ 0     | Lock       | relation 
+(1 row)
+
+0Uq: ... <quitting>
+1<:  <... completed>
+ count 
+-------
+ 3     
+(1 row)
+1q: ... <quitting>
+!\retcode gpconfig -r gg_wait_sampling.history_period;
+(exited with code 0)
+!\retcode gpconfig -r gg_wait_sampling.profile_period;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+DROP EXTENSION gg_wait_sampling;
+DROP EXTENSION

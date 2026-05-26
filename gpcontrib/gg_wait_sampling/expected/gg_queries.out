@@ -1,0 +1,84 @@
+-- start_matchsubs
+-- m/ERROR:  backend with pid=-?\d+ not found( \([[:alnum:]_]+\.[ch]:\d+\))?/
+-- s/ \([[:alnum:]_]+\.[ch]:\d+\)//
+-- end_matchsubs
+CREATE EXTENSION gg_wait_sampling;
+-- Set normal collection periods so the sampler gathers data
+-- BASIC QUERYABILITY
+-- Row counts are timing-dependent; we only assert they are non-negative
+SELECT segid, count(*) > 0 AS cluster_current_queryable
+FROM gg_wait_sampling_current GROUP BY segid;
+ segid | cluster_current_queryable 
+-------+---------------------------
+     2 | t
+     0 | t
+    -1 | t
+     1 | t
+(4 rows)
+
+SELECT segid, count(*) > 0 AS cluster_history_queryable
+FROM gg_wait_sampling_history GROUP BY segid;
+ segid | cluster_history_queryable 
+-------+---------------------------
+     2 | t
+     0 | t
+    -1 | t
+     1 | t
+(4 rows)
+
+SELECT segid, count(*) > 0 AS cluster_profile_queryable
+FROM gg_wait_sampling_profile GROUP BY segid;
+ segid | cluster_profile_queryable 
+-------+---------------------------
+     2 | t
+     0 | t
+    -1 | t
+     1 | t
+(4 rows)
+
+-- Own pid must return exactly one row.
+SELECT count(*) = 1 AS ok
+FROM gg_wait_sampling_get_current_coordinator(pg_backend_pid());
+ ok 
+----
+ t
+(1 row)
+
+-- A non-existent pid must raise an error.
+SELECT gg_wait_sampling_get_current_coordinator(-1);
+ERROR:  backend with pid=-1 not found (pg_wait_sampling.c:469)
+-- Force sleep on every segment
+SELECT * from gg_wait_sampling_reset_profile;
+ gp_segment_id | done 
+---------------+------
+            -1 | t
+             0 | t
+             1 | t
+             2 | t
+(4 rows)
+
+SELECT -1 AS gp_segment_id, pg_sleep(6)
+UNION ALL
+SELECT gp_segment_id, pg_sleep(6) FROM gp_dist_random('gp_id');
+ gp_segment_id | pg_sleep 
+---------------+----------
+             2 | 
+            -1 | 
+             1 | 
+             0 | 
+(4 rows)
+
+-- Validate
+SELECT segid, event_type, event
+FROM gg_wait_sampling_profile
+WHERE event_type = 'Timeout'
+AND event = 'PgSleep';
+ segid | event_type |  event  
+-------+------------+---------
+    -1 | Timeout    | PgSleep
+     1 | Timeout    | PgSleep
+     0 | Timeout    | PgSleep
+     2 | Timeout    | PgSleep
+(4 rows)
+
+DROP EXTENSION gg_wait_sampling;
