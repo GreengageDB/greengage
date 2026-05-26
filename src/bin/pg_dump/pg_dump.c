@@ -9396,10 +9396,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 
 #endif /* PG14 duplicate block */
 
-				tbinfo->attrdefs[adnum - 1] = &attrdefs[j];
-			}
-			PQclear(res);
-
 		/*
 		 * Get info about table CHECK constraints.  This is skipped for a
 		 * data-only dump, as it is only needed for table schemas.
@@ -9414,15 +9410,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 						tbinfo->dobj.name);
 
 			resetPQExpBuffer(q);
-			if (fout->remoteVersion >= 90200)
-			{
-				/* column will be suppressed, print default separately */
-				attrdefs[j].separate = true;
-			}
-			else
-			{
-				attrdefs[j].separate = false;
-			}
 
 			if (!attrdefs[j].separate)
 			{
