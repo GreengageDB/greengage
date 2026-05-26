@@ -9270,6 +9270,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 }
 
 
+bool
 shouldPrintColumn(const DumpOptions *dopt, const TableInfo *tbinfo, int colno)
 {
 	if (dopt->binary_upgrade)
@@ -12169,8 +12170,6 @@ dumpShellType(Archive *fout, const ShellTypeInfo *stinfo)
 
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
-												 stinfo->baseType,
-												 false);
 												 stinfo->baseType->dobj.catId.oid,
 												 false, false);
 
@@ -12364,8 +12363,6 @@ is_returns_table_function(int nallargs, char **argmodes)
  */
 static char *
 format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs,
-format_function_arguments_old(Archive *fout,
-							  const FuncInfo *finfo, int nallargs,
 							  char **allargtypes,
 							  char **argmodes,
 							  char **argnames)
