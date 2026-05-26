@@ -18,7 +18,7 @@
 static void check_data_dir(ClusterInfo *cluster);
 static void check_bin_dir(ClusterInfo *cluster);
 static void get_bin_version(ClusterInfo *cluster);
-static void validate_exec(const char *dir, const char *cmdName);
+static void gpdb_validate_exec(const char *dir, const char *cmdName);
 
 #ifdef WIN32
 static int	win32_check_directory_write_permissions(void);
@@ -379,9 +379,9 @@ check_bin_dir(ClusterInfo *cluster)
 		report_status(PG_FATAL, "\"%s\" is not a directory\n",
 					  cluster->bindir);
 
-	validate_exec(cluster->bindir, "postgres");
-	validate_exec(cluster->bindir, "pg_controldata");
-	validate_exec(cluster->bindir, "pg_ctl");
+	gpdb_validate_exec(cluster->bindir, "postgres");
+	gpdb_validate_exec(cluster->bindir, "pg_controldata");
+	gpdb_validate_exec(cluster->bindir, "pg_ctl");
 
 	/*
 	 * Fetch the binary version after checking for the existence of pg_ctl.
@@ -392,9 +392,9 @@ check_bin_dir(ClusterInfo *cluster)
 
 	/* pg_resetxlog has been renamed to pg_resetwal in version 10 */
 	if (GET_MAJOR_VERSION(cluster->bin_version) < 1000)
-		validate_exec(cluster->bindir, "pg_resetxlog");
+		gpdb_validate_exec(cluster->bindir, "pg_resetxlog");
 	else
-		validate_exec(cluster->bindir, "pg_resetwal");
+		gpdb_validate_exec(cluster->bindir, "pg_resetwal");
 
 	if (cluster == &new_cluster)
 	{
@@ -403,23 +403,23 @@ check_bin_dir(ClusterInfo *cluster)
 		 * pg_dumpall are used to dump the old cluster, but must be of the
 		 * target version.
 		 */
-		validate_exec(cluster->bindir, "initdb");
-		validate_exec(cluster->bindir, "pg_dump");
-		validate_exec(cluster->bindir, "pg_dumpall");
-		validate_exec(cluster->bindir, "pg_restore");
-		validate_exec(cluster->bindir, "psql");
-		validate_exec(cluster->bindir, "vacuumdb");
+		gpdb_validate_exec(cluster->bindir, "initdb");
+		gpdb_validate_exec(cluster->bindir, "pg_dump");
+		gpdb_validate_exec(cluster->bindir, "pg_dumpall");
+		gpdb_validate_exec(cluster->bindir, "pg_restore");
+		gpdb_validate_exec(cluster->bindir, "psql");
+		gpdb_validate_exec(cluster->bindir, "vacuumdb");
 	}
 }
 
 
 /*
- * validate_exec()
+ * gpdb_validate_exec()
  *
  * validate "path" as an executable file
  */
 static void
-validate_exec(const char *dir, const char *cmdName)
+gpdb_validate_exec(const char *dir, const char *cmdName)
 {
 	char		path[MAXPGPATH];
 	struct stat buf;
