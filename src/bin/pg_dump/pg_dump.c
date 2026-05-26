@@ -4846,7 +4846,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 {
 	PQExpBuffer upgrade_query = createPQExpBuffer();
 	PGresult   *res;
-	Oid			pg_type_array_oid;
+	Oid			pg_type_array_oid = InvalidOid;
 	Oid			pg_type_multirange_oid;
 	Oid			pg_type_multirange_array_oid;
 
