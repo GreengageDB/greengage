@@ -38,7 +38,7 @@
  *
  * This code is released under the terms of the PostgreSQL License.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/initdb/initdb.c
@@ -65,17 +65,14 @@
 #include "catalog/pg_collation_d.h"
 #include "common/file_perm.h"
 #include "common/file_utils.h"
-#include "common/kmgr_utils.h"
 #include "common/logging.h"
 #include "common/restricted_token.h"
-#include "common/string.h"
 #include "common/username.h"
 #include "fe_utils/string_utils.h"
 #include "getaddrinfo.h"
 #include "getopt_long.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
-#include "common/mdb_locale.h"
 
 #include "catalog/catalog.h"
 
@@ -143,19 +140,13 @@ static const char *authmethodhost = NULL;
 static const char *authmethodlocal = NULL;
 static bool debug = false;
 static bool noclean = false;
-static bool noinstructions = false;
 static bool do_sync = true;
 static bool sync_only = false;
-static bool pass_terminal_fd = false;
-static char *term_fd_opt = NULL;
-static int file_encryption_method = DISABLED_ENCRYPTION_METHOD;
 static bool show_setting = false;
 static bool data_checksums = false;
 static char *xlog_dir = NULL;
 static char *str_wal_segment_size_mb = NULL;
 static int	wal_segment_size_mb;
-static char *cluster_key_cmd = NULL;
-static char *old_key_datadir = NULL;
 
 
 /* internal vars */
@@ -169,14 +160,7 @@ static char *dictionary_file;
 static char *info_schema_file;
 static char *cdb_init_d_dir;
 static char *features_file;
-static char *system_constraints_file;
-#ifndef USE_INTERNAL_FTS
-static char *external_fts_files;
-#endif
-static char *system_functions_file;
 static char *system_views_file;
-static char *system_views_gp_file;
-static char *system_views_gp_summary_file;
 static bool success = false;
 static bool made_new_pgdata = false;
 static bool found_existing_pgdata = false;
@@ -214,17 +198,13 @@ static bool authwarning = false;
  * but here it is more convenient to pass it as an environment variable
  * (no quoting to worry about).
  */
-static const char *boot_options = "-F -c log_checkpoints=false";
-static const char *backend_options = "--single -F -O -j -c gp_role=utility -c search_path=pg_catalog -c exit_on_error=true -c log_checkpoints=false";
-
-/* Additional switches to pass to backend (either boot or standalone) */
-static char *extra_options = "";
+static const char *boot_options = "-F";
+static const char *backend_options = "--single -F -O -j -c gp_role=utility -c search_path=pg_catalog -c exit_on_error=true";
 
 static const char *const subdirs[] = {
 	"global",
 	"pg_wal/archive_status",
 	"pg_commit_ts",
-	"pg_cryptokeys",
 	"pg_dynshmem",
 	"pg_notify",
 	"pg_serial",
@@ -244,7 +224,7 @@ static const char *const subdirs[] = {
 	"pg_logical",
 	"pg_logical/snapshots",
 	"pg_logical/mappings",
-/* GPDB needs these directories */
+	/* GPDB needs these directories */
 	"pg_distributedlog",
 	"log"
 };
@@ -275,16 +255,16 @@ static void bootstrap_template1(void);
 static void setup_auth(FILE *cmdfd);
 static void get_su_pwd();
 static void setup_depend(FILE *cmdfd);
-static void setup_run_file(FILE *cmdfd, const char *filename);
+static void setup_sysviews(FILE *cmdfd);
 static void setup_description(FILE *cmdfd);
 #if 0
 static void setup_collation(FILE *cmdfd);
 #endif
+static void setup_dictionary(FILE *cmdfd);
 static void setup_privileges(FILE *cmdfd);
 static void set_info_version(void);
 static void setup_schema(FILE *cmdfd);
 static void setup_cdb_schema(FILE *cmdfd);
-static void setup_password_history(FILE *cmdfd);
 static void load_plpgsql(FILE *cmdfd);
 static void vacuum_db(FILE *cmdfd);
 static void make_template0(FILE *cmdfd);
@@ -359,9 +339,12 @@ escape_quotes(const char *src)
 
 /*
  * Escape a field value to be inserted into the BKI data.
- * Run the value through escape_quotes (which will be inverted
- * by the backend's DeescapeQuotedString() function), then wrap
- * the value in single quotes, even if that isn't strictly necessary.
+ * Here, we first run the value through escape_quotes (which
+ * will be inverted by the backend's scanstr() function) and
+ * then overlay special processing of double quotes, which
+ * bootscanner.l will only accept as data if converted to octal
+ * representation ("\042").  We always wrap the value in double
+ * quotes, even if that isn't strictly necessary.
  */
 static char *
 escape_quotes_bki(const char *src)
@@ -370,13 +353,30 @@ escape_quotes_bki(const char *src)
 	char	   *data = escape_quotes(src);
 	char	   *resultp;
 	char	   *datap;
+	int			nquotes = 0;
 
-	result = (char *) pg_malloc(strlen(data) + 3);
+	/* count double quotes in data */
+	datap = data;
+	while ((datap = strchr(datap, '"')) != NULL)
+	{
+		nquotes++;
+		datap++;
+	}
+
+	result = (char *) pg_malloc(strlen(data) + 3 + nquotes * 3);
 	resultp = result;
-	*resultp++ = '\'';
+	*resultp++ = '"';
 	for (datap = data; *datap; datap++)
-		*resultp++ = *datap;
-	*resultp++ = '\'';
+	{
+		if (*datap == '"')
+		{
+			strcpy(resultp, "\\042");
+			resultp += 4;
+		}
+		else
+			*resultp++ = *datap;
+	}
+	*resultp++ = '"';
 	*resultp = '\0';
 
 	free(data);
@@ -476,11 +476,14 @@ filter_lines_with_token(char **lines, const char *token)
 static char **
 readfile(const char *path)
 {
-	char	  **result;
 	FILE	   *infile;
-	StringInfoData line;
-	int			maxlines;
+	int			maxlength = 1,
+				linelen = 0;
+	int			nlines = 0;
 	int			n;
+	char	  **result;
+	char	   *buffer;
+	int			c;
 
 	if ((infile = fopen(path, "r")) == NULL)
 	{
@@ -488,28 +491,39 @@ readfile(const char *path)
 		exit(1);
 	}
 
-	initStringInfo(&line);
+	/* pass over the file twice - the first time to size the result */
 
-	maxlines = 1024;
-	result = (char **) pg_malloc(maxlines * sizeof(char *));
-
-	n = 0;
-	while (pg_get_line_buf(infile, &line))
+	while ((c = fgetc(infile)) != EOF)
 	{
-		/* make sure there will be room for a trailing NULL pointer */
-		if (n >= maxlines - 1)
+		linelen++;
+		if (c == '\n')
 		{
-			maxlines *= 2;
-			result = (char **) pg_realloc(result, maxlines * sizeof(char *));
+			nlines++;
+			if (linelen > maxlength)
+				maxlength = linelen;
+			linelen = 0;
 		}
-
-		result[n++] = pg_strdup(line.data);
 	}
-	result[n] = NULL;
 
-	pfree(line.data);
+	/* handle last line without a terminating newline (yuck) */
+	if (linelen)
+		nlines++;
+	if (linelen > maxlength)
+		maxlength = linelen;
+
+	/* set up the result and the line buffer */
+	result = (char **) pg_malloc((nlines + 1) * sizeof(char *));
+	buffer = (char *) pg_malloc(maxlength + 1);
+
+	/* now reprocess the file and store the lines */
+	rewind(infile);
+	n = 0;
+	while (fgets(buffer, maxlength + 1, infile) != NULL && n < nlines)
+		result[n++] = pg_strdup(buffer);
 
 	fclose(infile);
+	free(buffer);
+	result[n] = NULL;
 
 	return result;
 }
@@ -683,8 +697,6 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 {
 	{"arabic", "ar"},
 	{"arabic", "Arabic"},
-	{"armenian", "hy"},
-	{"armenian", "Armenian"},
 	{"basque", "eu"},
 	{"basque", "Basque"},
 	{"catalan", "ca"},
@@ -726,8 +738,6 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 	{"romanian", "ro"},
 	{"russian", "ru"},
 	{"russian", "Russian"},
-	{"serbian", "sr"},
-	{"serbian", "Serbian"},
 	{"spanish", "es"},
 	{"spanish", "Spanish"},
 	{"swedish", "sv"},
@@ -736,8 +746,6 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 	{"tamil", "Tamil"},
 	{"turkish", "tr"},
 	{"turkish", "Turkish"},
-	{"yiddish", "yi"},
-	{"yiddish", "Yiddish"},
 	{NULL, NULL}				/* end marker */
 };
 
@@ -993,13 +1001,12 @@ test_config_settings(void)
 			test_buffs = n_buffers;
 
 		snprintf(cmd, sizeof(cmd),
-				 "\"%s\" --boot -x0 %s %s %s "
+				 "\"%s\" --boot -x0 %s "
 				 "-c max_connections=%d "
 				 "-c shared_buffers=%d "
 				 "-c dynamic_shared_memory_type=%s "
 				 "< \"%s\" > \"%s\" 2>&1",
-				 backend_exec, boot_options, extra_options,
-				 term_fd_opt ? term_fd_opt : "",
+				 backend_exec, boot_options,
 				 test_conns, test_buffs,
 				 dynamic_shared_memory_type,
 				 DEVNULL, DEVNULL);
@@ -1033,13 +1040,12 @@ test_config_settings(void)
 		}
 
 		snprintf(cmd, sizeof(cmd),
-				 "\"%s\" --boot -x0 %s %s %s "
+				 "\"%s\" --boot -x0 %s "
 				 "-c max_connections=%d "
 				 "-c shared_buffers=%d "
 				 "-c dynamic_shared_memory_type=%s "
 				 "< \"%s\" > \"%s\" 2>&1",
-				 backend_exec, boot_options, extra_options,
-				 term_fd_opt ? term_fd_opt : "",
+				 backend_exec, boot_options,
 				 n_connections, test_buffs,
 				 dynamic_shared_memory_type,
 				 DEVNULL, DEVNULL);
@@ -1197,11 +1203,18 @@ setup_config(void)
 							  repltok);
 #endif
 
+#if 0
+/*
+ * GPDB_12_MERGE_FIXME: the bgwriter section is missing from the sample
+ * configuration used for this, should we keep that off the default config
+ * or was it all an omission?
+ */
 #if DEFAULT_BGWRITER_FLUSH_AFTER > 0
 	snprintf(repltok, sizeof(repltok), "#bgwriter_flush_after = %dkB",
 			 DEFAULT_BGWRITER_FLUSH_AFTER * (BLCKSZ / 1024));
 	conflines = replace_token(conflines, "#bgwriter_flush_after = 0",
 							  repltok);
+#endif
 #endif
 
 #if DEFAULT_CHECKPOINT_FLUSH_AFTER > 0
@@ -1237,13 +1250,6 @@ setup_config(void)
 								  "password_encryption = md5");
 	}
 
-	if (cluster_key_cmd)
-	{
-		snprintf(repltok, sizeof(repltok), "cluster_key_command = '%s'",
-				 escape_quotes(cluster_key_cmd));
-		conflines = replace_token(conflines, "#cluster_key_command = ''", repltok);
-	}
-
 	/*
 	 * If group access has been enabled for the cluster then it makes sense to
 	 * ensure that the log files also allow group access.  Otherwise a backup
@@ -1256,16 +1262,6 @@ setup_config(void)
 								  "#log_file_mode = 0600",
 								  "log_file_mode = 0640");
 	}
-
-#ifdef WIN32
-	conflines = replace_token(conflines,
-							  "#update_process_title = on",
-							  "#update_process_title = off");
-#endif
-
-	snprintf(repltok, sizeof(repltok), "include = '%s'",
-			 GP_INTERNAL_AUTO_CONF_FILE_NAME);
-	conflines = replace_token(conflines, "#include = 'special.conf'", repltok);
 
 	snprintf(path, sizeof(path), "%s/postgresql.conf", pg_data);
 
@@ -1466,17 +1462,11 @@ bootstrap_template1(void)
 	unsetenv("PGCLIENTENCODING");
 
 	snprintf(cmd, sizeof(cmd),
-			 "\"%s\" --boot -x1 -X %u %s %s %s %s %s %s %s %s %s",
+			 "\"%s\" --boot -x1 -X %u %s %s %s",
 			 backend_exec,
 			 wal_segment_size_mb * (1024 * 1024),
 			 data_checksums ? "-k" : "",
-			 cluster_key_cmd ? "-K" : "",
-			 cluster_key_cmd ? encryption_methods[file_encryption_method].name : "",
-			 old_key_datadir ? "-u" : "",
-			 old_key_datadir ? old_key_datadir : "",
 			 boot_options,
-			 extra_options,
-			 term_fd_opt ? term_fd_opt : "",
 			 debug ? "-d 5" : "");
 
 
@@ -1507,7 +1497,7 @@ setup_auth(FILE *cmdfd)
 		 * The authid table shouldn't be readable except through views, to
 		 * ensure passwords are not publicly visible.
 		 */
-		"REVOKE ALL ON pg_authid FROM public;\n\n",
+		"REVOKE ALL on pg_authid FROM public;\n\n",
 		NULL
 	};
 
@@ -1525,25 +1515,23 @@ setup_auth(FILE *cmdfd)
 static void
 get_su_pwd(void)
 {
-	char	   *pwd1;
+	char		pwd1[100];
+	char		pwd2[100];
 
 	if (pwprompt)
 	{
 		/*
 		 * Read password from terminal
 		 */
-		char	   *pwd2;
-
 		printf("\n");
 		fflush(stdout);
-		pwd1 = simple_prompt("Enter new superuser password: ", false);
-		pwd2 = simple_prompt("Enter it again: ", false);
+		simple_prompt("Enter new superuser password: ", pwd1, sizeof(pwd1), false);
+		simple_prompt("Enter it again: ", pwd2, sizeof(pwd2), false);
 		if (strcmp(pwd1, pwd2) != 0)
 		{
 			fprintf(stderr, _("Passwords didn't match.\n"));
 			exit(1);
 		}
-		free(pwd2);
 	}
 	else
 	{
@@ -1556,6 +1544,7 @@ get_su_pwd(void)
 		 * for now.
 		 */
 		FILE	   *pwf = fopen(pwfilename, "r");
+		int			i;
 
 		if (!pwf)
 		{
@@ -1563,8 +1552,7 @@ get_su_pwd(void)
 						 pwfilename);
 			exit(1);
 		}
-		pwd1 = pg_get_line(pwf);
-		if (!pwd1)
+		if (!fgets(pwd1, sizeof(pwd1), pwf))
 		{
 			if (ferror(pwf))
 				pg_log_error("could not read password from file \"%s\": %m",
@@ -1576,10 +1564,12 @@ get_su_pwd(void)
 		}
 		fclose(pwf);
 
-		(void) pg_strip_crlf(pwd1);
+		i = strlen(pwd1);
+		while (i > 0 && (pwd1[i - 1] == '\r' || pwd1[i - 1] == '\n'))
+			pwd1[--i] = '\0';
 	}
 
-	superuser_password = pwd1;
+	superuser_password = pg_strdup(pwd1);
 }
 
 /*
@@ -1675,8 +1665,6 @@ setup_depend(FILE *cmdfd)
 		"INSERT INTO pg_depend SELECT 0,0,0, tableoid,oid,0, 'p' "
 		" FROM pg_foreign_server;\n\n",
 		"INSERT INTO pg_shdepend SELECT 0,0,0,0, tableoid,oid, 'p' "
-		" FROM pg_profile;\n\n",
-		"INSERT INTO pg_shdepend SELECT 0,0,0,0, tableoid,oid, 'p' "
 		" FROM pg_resgroup;\n\n",
 		"INSERT INTO pg_shdepend SELECT 0,0,0,0, tableoid,oid, 'p' "
 		" FROM pg_resourcetype;\n\n",
@@ -1691,22 +1679,25 @@ setup_depend(FILE *cmdfd)
 }
 
 /*
- * Run external file
+ * set up system views
  */
 static void
-setup_run_file(FILE *cmdfd, const char *filename)
+setup_sysviews(FILE *cmdfd)
 {
-	char	  **lines;
+	char	  **line;
+	char	  **sysviews_setup;
 
-	lines = readfile(filename);
+	sysviews_setup = readfile(system_views_file);
 
-	for (char **line = lines; *line != NULL; line++)
+	for (line = sysviews_setup; *line != NULL; line++)
 	{
 		PG_CMD_PUTS(*line);
 		free(*line);
 	}
 
 	PG_CMD_PUTS("\n\n");
+
+	free(sysviews_setup);
 }
 
 /*
@@ -1757,6 +1748,27 @@ setup_collation(FILE *cmdfd)
 #endif
 
 /*
+ * load extra dictionaries (Snowball stemmers)
+ */
+static void
+setup_dictionary(FILE *cmdfd)
+{
+	char	  **line;
+	char	  **conv_lines;
+
+	conv_lines = readfile(dictionary_file);
+	for (line = conv_lines; *line != NULL; line++)
+	{
+		PG_CMD_PUTS(*line);
+		free(*line);
+	}
+
+	PG_CMD_PUTS("\n\n");
+
+	free(conv_lines);
+}
+
+/*
  * Set up privileges
  *
  * We mark most system catalogs as world-readable.  We don't currently have
@@ -1790,7 +1802,7 @@ setup_privileges(FILE *cmdfd)
 		" ) as a) "
 		"  WHERE relkind IN (" CppAsString2(RELKIND_RELATION) ", "
 		CppAsString2(RELKIND_VIEW) ", " CppAsString2(RELKIND_MATVIEW) ", "
-		CppAsString2(RELKIND_SEQUENCE) ", " CppAsString2(RELKIND_DIRECTORY_TABLE) ")"
+		CppAsString2(RELKIND_SEQUENCE) ")"
 		"  AND relacl IS NULL;\n\n",
 		"GRANT USAGE ON SCHEMA pg_catalog TO PUBLIC;\n\n",
 		"GRANT CREATE, USAGE ON SCHEMA public TO PUBLIC;\n\n",
@@ -1809,7 +1821,7 @@ setup_privileges(FILE *cmdfd)
 		"        relacl IS NOT NULL"
 		"        AND relkind IN (" CppAsString2(RELKIND_RELATION) ", "
 		CppAsString2(RELKIND_VIEW) ", " CppAsString2(RELKIND_MATVIEW) ", "
-		CppAsString2(RELKIND_SEQUENCE) ", " CppAsString2(RELKIND_DIRECTORY_TABLE) ");\n\n",
+		CppAsString2(RELKIND_SEQUENCE) ");\n\n",
 		"INSERT INTO pg_init_privs "
 		"  (objoid, classoid, objsubid, initprivs, privtype)"
 		"    SELECT"
@@ -1825,7 +1837,7 @@ setup_privileges(FILE *cmdfd)
 		"        pg_attribute.attacl IS NOT NULL"
 		"        AND pg_class.relkind IN (" CppAsString2(RELKIND_RELATION) ", "
 		CppAsString2(RELKIND_VIEW) ", " CppAsString2(RELKIND_MATVIEW) ", "
-		CppAsString2(RELKIND_SEQUENCE) ", " CppAsString2(RELKIND_DIRECTORY_TABLE) ");\n\n",
+		CppAsString2(RELKIND_SEQUENCE) ");\n\n",
 		"INSERT INTO pg_init_privs "
 		"  (objoid, classoid, objsubid, initprivs, privtype)"
 		"    SELECT"
@@ -1956,7 +1968,20 @@ set_info_version(void)
 static void
 setup_schema(FILE *cmdfd)
 {
-	setup_run_file(cmdfd, info_schema_file);
+	char	  **line;
+	char	  **lines;
+
+	lines = readfile(info_schema_file);
+
+	for (line = lines; *line != NULL; line++)
+	{
+		PG_CMD_PUTS(*line);
+		free(*line);
+	}
+
+	PG_CMD_PUTS("\n\n");
+
+	free(lines);
 
 	PG_CMD_PRINTF("UPDATE information_schema.sql_implementation_info "
 				  "  SET character_value = '%s' "
@@ -1968,26 +1993,6 @@ setup_schema(FILE *cmdfd)
 				  "  sub_feature_name, is_supported, comments) "
 				  " FROM E'%s';\n\n",
 				  escape_quotes(features_file));
-}
-
-/*
- * set up the password history table
- */
-static void
-setup_password_history(FILE *cmdfd)
-{
-	const char *const *line;
-	static const char *const pg_password_history_setup[] = {
-		/*
-		 * The password history table shouldn't be readable except through views, to
-		 * ensure passwords are not publicly visible.
-		 */
-		"REVOKE ALL ON pg_password_history FROM public;\n\n",
-		NULL
-	};
-
-	for (line = pg_password_history_setup; *line != NULL; line++)
-		PG_CMD_PUTS(*line);
 }
 
 static int
@@ -2024,20 +2029,12 @@ setup_cdb_schema(FILE *cmdfd)
 
 	/* Collect all files with .sql suffix in array. */
 	nscripts = 0;
-	while (errno = 0, (file = readdir(dir)) != NULL)
+	while ((file = readdir(dir)) != NULL)
 	{
 		int			namelen = strlen(file->d_name);
 
 		if (namelen > 4 &&
-			strcmp(".sql", file->d_name + namelen - 4) == 0 &&
-			/*
-			 * Since 7X, we do not load gp_toolkit.sql anymore but will run
-			 * CREATE EXTENSION gp_toolkit to do the same thing. But existing
-			 * installation could still have gp_toolkit.sql until e.g. uninstallation
-			 * or a major version upgrade. Ignore that file in any cases.
-			 * XXX: should be no longer needed after 8X.
-			 */
-			(namelen < 14 || strcmp("gp_toolkit.sql", file->d_name) != 0))
+			strcmp(".sql", file->d_name + namelen - 4) == 0)
 		{
 			scriptnames = pg_realloc(scriptnames,
 									 sizeof(char *) * (nscripts + 1));
@@ -2054,16 +2051,12 @@ setup_cdb_schema(FILE *cmdfd)
 		errno = 0;
 #endif
 
+	closedir(dir);
+
 	if (errno != 0)
 	{
+		/* some kind of I/O error? */
 		pg_log_error("error while reading cdb_init.d directory: %m");
-		closedir(dir);
-		exit(1);
-	}
-
-	if (closedir(dir))
-	{
-		pg_log_error("error while closing cdb_init.d directory: %m");
 		exit(1);
 	}
 
@@ -2113,15 +2106,6 @@ static void
 load_plpgsql(FILE *cmdfd)
 {
 	PG_CMD_PUTS("CREATE EXTENSION plpgsql;\n\n");
-}
-
-/*
- * GPDB: load external table support
- */
-static void
-load_exttable(FILE *cmdfd)
-{
-	PG_CMD_PUTS("CREATE EXTENSION gp_exttable_fdw;\n\n");
 }
 
 /*
@@ -2279,13 +2263,12 @@ locale_date_order(const char *locale)
 
 	result = DATEORDER_MDY;		/* default */
 
-	save = SETLOCALE(LC_TIME, NULL);
-
+	save = setlocale(LC_TIME, NULL);
 	if (!save)
 		return result;
 	save = pg_strdup(save);
 
-	SETLOCALE(LC_TIME, locale);
+	setlocale(LC_TIME, locale);
 
 	memset(&testtime, 0, sizeof(testtime));
 	testtime.tm_mday = 22;
@@ -2294,7 +2277,7 @@ locale_date_order(const char *locale)
 
 	res = my_strftime(buf, sizeof(buf), "%x", &testtime);
 
-	SETLOCALE(LC_TIME, save);
+	setlocale(LC_TIME, save);
 	free(save);
 
 	if (res == 0)
@@ -2338,7 +2321,7 @@ check_locale_name(int category, const char *locale, char **canonname)
 	if (canonname)
 		*canonname = NULL;		/* in case of failure */
 
-	save = SETLOCALE(category, NULL);
+	save = setlocale(category, NULL);
 	if (!save)
 	{
 		pg_log_error("setlocale() failed");
@@ -2353,14 +2336,14 @@ check_locale_name(int category, const char *locale, char **canonname)
 		locale = "";
 
 	/* set the locale with setlocale, to see if it accepts it. */
-	res = SETLOCALE(category, locale);
+	res = setlocale(category, locale);
 
 	/* save canonical name if requested. */
 	if (res && canonname)
 		*canonname = pg_strdup(res);
 
 	/* restore old value. */
-	if (!SETLOCALE(category, save))
+	if (!setlocale(category, save))
 	{
 		pg_log_error("failed to restore old locale \"%s\"", save);
 		exit(1);
@@ -2559,7 +2542,6 @@ usage(const char *progname)
 	printf(_(" [-D, --pgdata=]DATADIR     location for this database cluster\n"));
 	printf(_("  -E, --encoding=ENCODING   set default encoding for new databases\n"));
 	printf(_("  -g, --allow-group-access  allow group read/execute on data directory\n"));
-	printf(_("  -k, --data-checksums      use data page checksums\n"));
 	printf(_("      --locale=LOCALE       set default locale for new databases\n"));
 	printf(_("      --lc-collate=, --lc-ctype=, --lc-messages=LOCALE\n"
 			 "      --lc-monetary=, --lc-numeric=, --lc-time=LOCALE\n"
@@ -2570,7 +2552,7 @@ usage(const char *progname)
 	printf(_("  -T, --text-search-config=CFG\n"
 			 "                            default text search configuration\n"));
 	printf(_("  -U, --username=NAME       database superuser name\n"));
-	printf(_("  -W, --pwprompt            prompt for the new superuser password\n"));
+	printf(_("  -W, --pwprompt            prompt for a password for the new superuser\n"));
 	printf(_("  -X, --waldir=WALDIR       location for the write-ahead log directory\n"));
 	printf(_("      --wal-segsize=SIZE    size of WAL segments, in megabytes\n"));
 	printf(_("\nShared memory allocation:\n"));
@@ -2578,25 +2560,16 @@ usage(const char *progname)
 	printf(_("  --shared_buffers=NBUFFERS number of shared buffers; or, amount of memory for\n"
 			 "                            shared buffers if kB/MB/GB suffix is appended\n"));
 	printf(_("\nLess commonly used options:\n"));
-	printf(_("  -c, --cluster-key-command=COMMAND\n"
-			 "                            enable cluster file encryption and set command\n"
-			 "                            to obtain the cluster key\n"));
 	printf(_("  -d, --debug               generate lots of debugging output\n"));
-	printf(_("      --discard-caches      set debug_discard_caches=1\n"));
-	printf(_("  -K, --file-encryption-method=METHOD\n"
-			 "                            cluster file encryption method\n"));
+	printf(_("  -k, --data-checksums      use data page checksums\n"));
 	printf(_("  -L DIRECTORY              where to find the input files\n"));
 	printf(_("  -n, --no-clean            do not clean up after errors\n"));
 	printf(_("  -N, --no-sync             do not wait for changes to be written safely to disk\n"));
-	printf(_("  -R, --authprompt          prompt for a passphrase or PIN\n"));
-	printf(_("      --no-instructions     do not print instructions for next steps\n"));
 	printf(_("  -s, --show                show internal settings\n"));
 	printf(_("  -S, --sync-only           only sync data directory\n"));
-	printf(_("  -u, --copy-encryption-keys=DATADIR\n"
-			 "                            copy the file encryption key from another cluster\n"));
 	printf(_("\nOther options:\n"));
 	printf(_("  -V, --version             output version information, then exit\n"));
-	printf(_("      --gp-version          output Cloudberry version information, then exit\n"));
+	printf(_("      --gp-version          output Greenplum version information, then exit\n"));
 	printf(_("  -?, --help                show this help, then exit\n"));
 	printf(_("\nIf the data directory is not specified, the environment variable PGDATA\n"
 			 "is used.\n"));
@@ -2654,7 +2627,8 @@ check_need_password(const char *authmethodlocal, const char *authmethodhost)
 void
 setup_pgdata(void)
 {
-	char	   *pgdata_get_env;
+	char	   *pgdata_get_env,
+			   *pgdata_set_env;
 
 	if (!pg_data)
 	{
@@ -2684,11 +2658,8 @@ setup_pgdata(void)
 	 * need quotes otherwise on Windows because paths there are most likely to
 	 * have embedded spaces.
 	 */
-	if (setenv("PGDATA", pg_data, 1) != 0)
-	{
-		pg_log_error("could not set environment");
-		exit(1);
-	}
+	pgdata_set_env = psprintf("PGDATA=%s", pg_data);
+	putenv(pgdata_set_env);
 }
 
 
@@ -2831,14 +2802,7 @@ setup_data_file_paths(void)
 	set_input(&dictionary_file, "snowball_create.sql");
 	set_input(&info_schema_file, "information_schema.sql");
 	set_input(&features_file, "sql_features.txt");
-#ifndef USE_INTERNAL_FTS
-	set_input(&external_fts_files, "external_fts.sql");
-#endif
-	set_input(&system_constraints_file, "system_constraints.sql");
-	set_input(&system_functions_file, "system_functions.sql");
 	set_input(&system_views_file, "system_views.sql");
-	set_input(&system_views_gp_file, "system_views_gp.sql");
-	set_input(&system_views_gp_summary_file, "system_views_gp_summary.sql");
 
 	set_input(&cdb_init_d_dir, "cdb_init.d");
 
@@ -2866,14 +2830,7 @@ setup_data_file_paths(void)
 	check_input(dictionary_file);
 	check_input(info_schema_file);
 	check_input(features_file);
-	check_input(system_constraints_file);
-#ifndef USE_INTERNAL_FTS
-	check_input(external_fts_files);
-#endif
-	check_input(system_functions_file);
 	check_input(system_views_file);
-	check_input(system_views_gp_file);
-	check_input(system_views_gp_summary_file);
 }
 
 
@@ -3177,23 +3134,6 @@ initialize_data_directory(void)
 	/* Top level PG_VERSION is checked by bootstrapper, so make it first */
 	write_version_file(NULL);
 
-	if (pass_terminal_fd)
-	{
-#ifndef WIN32
-		int terminal_fd = open("/dev/tty", O_RDWR, 0);
-#else
-		int terminal_fd = open("CONOUT$", O_RDWR, 0);
-#endif
-
-		if (terminal_fd < 0)
-		{
-			pg_log_error(_("%s: could not open terminal: %s"),
-						 progname, strerror(errno));
-			exit(1);
-		}
-		term_fd_opt = psprintf("-R %d", terminal_fd);
-	}
-
 	/* Select suitable configuration settings */
 	set_null_conf("postgresql.conf");
 	set_null_conf(GP_INTERNAL_AUTO_CONF_FILE_NAME);
@@ -3218,20 +3158,13 @@ initialize_data_directory(void)
 	fflush(stdout);
 
 	snprintf(cmd, sizeof(cmd),
-			 "\"%s\" %s %s %s template1 >%s",
-			 backend_exec, backend_options, extra_options,
-			 term_fd_opt ? term_fd_opt : "",
+			 "\"%s\" %s template1 >%s",
+			 backend_exec, backend_options,
 			 DEVNULL);
 
 	PG_CMD_OPEN;
 
 	setup_auth(cmdfd);
-
-	setup_run_file(cmdfd, system_constraints_file);
-#ifndef USE_INTERNAL_FTS
-	setup_run_file(cmdfd, external_fts_files);
-#endif
-	setup_run_file(cmdfd, system_functions_file);
 
 	setup_depend(cmdfd);
 
@@ -3240,9 +3173,7 @@ initialize_data_directory(void)
 	 * They are all droppable at the whim of the DBA.
 	 */
 
-	setup_run_file(cmdfd, system_views_file);
-	setup_run_file(cmdfd, system_views_gp_file);
-	setup_run_file(cmdfd, system_views_gp_summary_file);
+	setup_sysviews(cmdfd);
 
 	setup_description(cmdfd);
 
@@ -3250,9 +3181,7 @@ initialize_data_directory(void)
 	setup_collation(cmdfd);
 #endif
 
-	setup_run_file(cmdfd, dictionary_file);
-
-	setup_password_history(cmdfd);
+	setup_dictionary(cmdfd);
 
 	setup_privileges(cmdfd);
 
@@ -3260,9 +3189,7 @@ initialize_data_directory(void)
 
 	load_plpgsql(cmdfd);
 
-	load_exttable(cmdfd);
-
-	/* sets up the Apache Cloudberry admin schema */
+	/* sets up the Greenplum Database admin schema */
 	setup_cdb_schema(cmdfd);
 
 	vacuum_db(cmdfd);
@@ -3270,12 +3197,6 @@ initialize_data_directory(void)
 	make_template0(cmdfd);
 
 	make_postgres(cmdfd);
-
-	/*
-	 * vacuum template1 to remove the dead tuples. otherwise, some mismatch error 
-	 * will be reported in gp_replica_check.
-	 */
-	vacuum_db(cmdfd);
 
 	PG_CMD_CLOSE;
 
@@ -3312,18 +3233,13 @@ main(int argc, char *argv[])
 		{"no-clean", no_argument, NULL, 'n'},
 		{"nosync", no_argument, NULL, 'N'}, /* for backwards compatibility */
 		{"no-sync", no_argument, NULL, 'N'},
-		{"no-instructions", no_argument, NULL, 13},
 		{"sync-only", no_argument, NULL, 'S'},
 		{"waldir", required_argument, NULL, 'X'},
 		{"wal-segsize", required_argument, NULL, 12},
 		{"data-checksums", no_argument, NULL, 'k'},
-		{"max_connections", required_argument, NULL, 1001},     /*CDB*/
-		{"shared_buffers", required_argument, NULL, 1003},      /*CDB*/
-		{"file-encryption-method", required_argument, NULL, 'K'},
+        {"max_connections", required_argument, NULL, 1001},     /*CDB*/
+        {"shared_buffers", required_argument, NULL, 1003},      /*CDB*/
 		{"allow-group-access", no_argument, NULL, 'g'},
-		{"discard-caches", no_argument, NULL, 14},
-		{"cluster-key-command", required_argument, NULL, 'c'},
-		{"copy-encryption-keys", required_argument, NULL, 'u'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -3332,7 +3248,6 @@ main(int argc, char *argv[])
 	 * their short version value
 	 */
 	int			c;
-	int			option_index;
 	char	   *effective_user;
 	PQExpBuffer start_db_cmd;
 	char		pg_ctl_path[MAXPGPATH];
@@ -3358,19 +3273,19 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("initdb (Apache Cloudberry) " PG_VERSION);
+			puts("initdb (Greenplum Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("initdb (Apache Cloudberry) " GP_VERSION);
+			puts("initdb (Greenplum Database) " GP_VERSION);
 			exit(0);
 		}
 	}
 
 	/* process command-line options */
 
-	while ((c = getopt_long(argc, argv, "A:c:dD:E:gkK:L:nNRsST:u:U:WX:", long_options, &option_index)) != -1)
+	while ((c = getopt_long(argc, argv, "dD:E:kL:nNU:WA:sST:X:g", long_options, NULL)) != -1)
 	{
 		switch (c)
 		{
@@ -3403,11 +3318,6 @@ main(int argc, char *argv[])
 				pwprompt = true;
 				break;
 			case 'U':
-				if (optarg[0] == '\0')
-				{
-					pg_log_error("superuser name must not be empty.");
-					exit(1);
-				}
 				username = pg_strdup(optarg);
 				break;
 			case 'd':
@@ -3420,28 +3330,6 @@ main(int argc, char *argv[])
 				break;
 			case 'N':
 				do_sync = false;
-				break;
-			case 'R':
-				pass_terminal_fd = true;
-				break;
-			case 'K':
-				{
-					int i;
-
-					/* method 0/disabled cannot be specified */
-					for (i = DISABLED_ENCRYPTION_METHOD + 1;
-						 i < NUM_ENCRYPTION_METHODS; i++)
-						if (pg_strcasecmp(optarg, encryption_methods[i].name) == 0)
-						{
-							file_encryption_method = i;
-							break;
-						}
-					if (i == NUM_ENCRYPTION_METHODS)
-					{
-						fprintf(stderr, _("invalid cluster encryption method, method_name:%s, index:%d \n"), optarg, i);
-						exit(1);
-					}
-				}
 				break;
 			case 'S':
 				sync_only = true;
@@ -3479,12 +3367,6 @@ main(int argc, char *argv[])
 			case 9:
 				pwfilename = pg_strdup(optarg);
 				break;
-			case 'c':
-				cluster_key_cmd = pg_strdup(optarg);
-				break;
-			case 'u':
-				old_key_datadir = pg_strdup(optarg);
-				break;
 			case 's':
 				show_setting = true;
 				break;
@@ -3503,16 +3385,8 @@ main(int argc, char *argv[])
 			case 12:
 				str_wal_segment_size_mb = pg_strdup(optarg);
 				break;
-			case 13:
-				noinstructions = true;
-				break;
 			case 'g':
 				SetDataDirectoryCreatePerm(PG_DIR_MODE_GROUP);
-				break;
-			case 14:
-				extra_options = psprintf("%s %s",
-										 extra_options,
-										 "-c debug_discard_caches=1");
 				break;
 			default:
 				/* getopt_long already emitted a complaint */
@@ -3568,35 +3442,6 @@ main(int argc, char *argv[])
 		pg_log_error("password prompt and password file cannot be specified together");
 		exit(1);
 	}
-
-#ifndef USE_OPENSSL
-	if (cluster_key_cmd)
-	{
-		pg_log_error("cluster file encryption is not supported because OpenSSL is not supported by this build");
-		exit(1);
-	}
-#endif
-
-	if (old_key_datadir != NULL && cluster_key_cmd == NULL)
-	{
-		pg_log_error("copying encryption keys requires the cluster key command to be specified");
-		exit(1);
-	}
-
-	if (file_encryption_method != DISABLED_ENCRYPTION_METHOD &&
-		cluster_key_cmd == NULL)
-	{
-		/*
-		 * If we have set the file_encryption_method, but cluster_key_cmd is null,
-		 * we use default cluster key command.
-		 */
-		cluster_key_cmd = DEFAULT_CLUSTER_KEY_COMMAND;
-	}
-
-	/* set the default */
-	if (file_encryption_method == DISABLED_ENCRYPTION_METHOD &&
-		cluster_key_cmd != NULL)
-		file_encryption_method = DEFAULT_ENABLED_ENCRYPTION_METHOD;
 
 	check_authmethod_unspecified(&authmethodlocal);
 	check_authmethod_unspecified(&authmethodhost);
@@ -3665,11 +3510,6 @@ main(int argc, char *argv[])
 	else
 		printf(_("Data page checksums are disabled.\n"));
 
-	if (cluster_key_cmd)
-		printf(_("Cluster file encryption is enabled.\n"));
-	else
-		printf(_("Cluster file encryption is disabled.\n"));
-
 	if (pwprompt || pwfilename)
 		get_su_pwd();
 
@@ -3695,41 +3535,34 @@ main(int argc, char *argv[])
 						  "--auth-local and --auth-host, the next time you run initdb.\n"));
 	}
 
-	if (!noinstructions)
-	{
-		/*
-		 * Build up a shell command to tell the user how to start the server
-		 */
-		start_db_cmd = createPQExpBuffer();
+	/*
+	 * Build up a shell command to tell the user how to start the server
+	 */
+	start_db_cmd = createPQExpBuffer();
 
-		/* Get directory specification used to start initdb ... */
-		strlcpy(pg_ctl_path, argv[0], sizeof(pg_ctl_path));
-		canonicalize_path(pg_ctl_path);
-		get_parent_directory(pg_ctl_path);
-		/* ... and tag on pg_ctl instead */
-		join_path_components(pg_ctl_path, pg_ctl_path, "pg_ctl");
+	/* Get directory specification used to start initdb ... */
+	strlcpy(pg_ctl_path, argv[0], sizeof(pg_ctl_path));
+	canonicalize_path(pg_ctl_path);
+	get_parent_directory(pg_ctl_path);
+	/* ... and tag on pg_ctl instead */
+	join_path_components(pg_ctl_path, pg_ctl_path, "pg_ctl");
 
-		/* Convert the path to use native separators */
-		make_native_path(pg_ctl_path);
+	/* path to pg_ctl, properly quoted */
+	appendShellString(start_db_cmd, pg_ctl_path);
 
-		/* path to pg_ctl, properly quoted */
-		appendShellString(start_db_cmd, pg_ctl_path);
+	/* add -D switch, with properly quoted data directory */
+	appendPQExpBufferStr(start_db_cmd, " -D ");
+	appendShellString(start_db_cmd, pgdata_native);
 
-		/* add -D switch, with properly quoted data directory */
-		appendPQExpBufferStr(start_db_cmd, " -D ");
-		appendShellString(start_db_cmd, pgdata_native);
+	/* add suggested -l switch and "start" command */
+	/* translator: This is a placeholder in a shell command. */
+	appendPQExpBuffer(start_db_cmd, " -l %s start", _("logfile"));
 
-		/* add suggested -l switch and "start" command */
-		/* translator: This is a placeholder in a shell command. */
-		appendPQExpBuffer(start_db_cmd, " -l %s start", _("logfile"));
+	printf(_("\nSuccess. You can now start the database server using:\n\n"
+			 "    %s\n\n"),
+		   start_db_cmd->data);
 
-		printf(_("\nSuccess. You can now start the database server using:\n\n"
-				 "    %s\n\n"),
-			   start_db_cmd->data);
-
-		destroyPQExpBuffer(start_db_cmd);
-	}
-
+	destroyPQExpBuffer(start_db_cmd);
 
 	success = true;
 	return 0;

@@ -2,7 +2,7 @@
  *
  * filemap.h
  *
- * Copyright (c) 2013-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2020, PostgreSQL Global Development Group
  *-------------------------------------------------------------------------
  */
 #ifndef FILEMAP_H
@@ -46,20 +46,9 @@ typedef enum
 	FILE_TYPE_SYMLINK
 } file_type_t;
 
-/*
- * For every file found in the local or remote system, we have a file entry
- * that contains information about the file on both systems.  For relation
- * files, there is also a page map that marks pages in the file that were
- * changed in the target after the last common checkpoint.
- *
- * When gathering information, these are kept in a hash table, private to
- * filemap.c.  decide_file_actions() fills in the 'action' field, sorts all
- * the entries, and returns them in an array, ready for executing the actions.
- */
 typedef struct file_entry_t
 {
-	uint32		status;			/* hash status */
-	const char *path;
+	char	   *path;
 	bool		isrelfile;		/* is it a relation data file? */
 
 	/*
@@ -91,26 +80,43 @@ typedef struct file_entry_t
 	 */
 	file_action_t action;
 
+	struct file_entry_t *next;
 } file_entry_t;
 
-
-/*
- * This contains the final decisions on what to do with each file.
- * 'entries' array contains an entry for each file, sorted in the order
- * that their actions should executed.
- */
 typedef struct filemap_t
 {
-	/* Summary information, filled by calculate_totals() */
+	/*
+	 * New entries are accumulated to a linked list, in process_source_file
+	 * and process_target_file.
+	 */
+	file_entry_t *first;
+	file_entry_t *last;
+	int			nlist;			/* number of entries currently in list */
+
+	/*
+	 * After processing all the remote files, the entries in the linked list
+	 * are moved to this array. After processing local files, too, all the
+	 * local entries are added to the array by decide_file_actions(), and
+	 * sorted in the final order. After decide_file_actions(), all the entries
+	 * are in the array, and the linked list is empty.
+	 */
+	file_entry_t **array;
+	int			narray;			/* current length of array */
+
+	/*
+	 * Summary information.
+	 */
 	uint64		total_size;		/* total size of the source cluster */
 	uint64		fetch_size;		/* number of bytes that needs to be copied */
-
-	int			nentries;		/* size of 'entries' array */
-	file_entry_t *entries[FLEXIBLE_ARRAY_MEMBER];
 } filemap_t;
 
+extern filemap_t *filemap;
+
+extern void filemap_create(void);
+extern void calculate_totals(void);
+extern void print_filemap(void);
+
 /* Functions for populating the filemap */
-extern void filehash_init(void);
 extern void process_source_file(const char *path, file_type_t type,
 								size_t size, const char *link_target);
 extern void process_target_file(const char *path, file_type_t type,
@@ -121,9 +127,6 @@ extern void process_target_wal_aofile_change(RelFileNode rnode,
 extern void process_target_wal_block_change(ForkNumber forknum,
 											RelFileNode rnode,
 											BlockNumber blkno);
-
-extern filemap_t *decide_file_actions(void);
-extern void calculate_totals(filemap_t *filemap);
-extern void print_filemap(filemap_t *filemap);
+extern void decide_file_actions(void);
 
 #endif							/* FILEMAP_H */

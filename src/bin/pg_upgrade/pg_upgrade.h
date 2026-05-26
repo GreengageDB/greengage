@@ -4,7 +4,7 @@
  *	pg_upgrade.h
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.h
  */
 
@@ -16,10 +16,6 @@
 #include "postgres.h"
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
-#include "common/kmgr_utils.h"
-
-/* For now, pg_upgrade does not use common/logging.c; use our own pg_fatal */
-#undef pg_fatal
 
 /* Use port in the private/dynamic port number range */
 #define DEF_PGUPORT			50432
@@ -34,16 +30,6 @@
 /* contains both global db information and CREATE DATABASE commands */
 #define GLOBALS_DUMP_FILE	"pg_upgrade_dump_globals.sql"
 #define DB_DUMP_FILE_MASK	"pg_upgrade_dump_%u.custom"
-
-/*
- * Base directories that include all the files generated internally, from the
- * root path of the new cluster.  The paths are dynamically built as of
- * BASE_OUTPUTDIR/$timestamp/{LOG_OUTPUTDIR,DUMP_OUTPUTDIR} to ensure their
- * uniqueness in each run.
- */
-#define BASE_OUTPUTDIR		"pg_upgrade_output.d"
-#define LOG_OUTPUTDIR		 "log"
-#define DUMP_OUTPUTDIR		 "dump"
 
 #define DB_DUMP_LOG_FILE_MASK	"pg_upgrade_dump_%u.log"
 #define SERVER_LOG_FILE		"pg_upgrade_server.log"
@@ -107,6 +93,23 @@ extern char *output_files[];
 
 
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
+
+/* OID system catalog preservation added during PG 9.0 development */
+#define TABLE_SPACE_SUBDIRS_CAT_VER 201001111
+/* postmaster/postgres -b (binary_upgrade) flag added during PG 9.1 development */
+/* In GPDB, it was introduced during GPDB 5.0 development. */
+#define BINARY_UPGRADE_SERVER_FLAG_CAT_VER 301607301
+
+/*
+ *	Visibility map changed with this 9.2 commit,
+ *	8f9fe6edce358f7904e0db119416b4d1080a83aa; pick later catalog version.
+ */
+#define VISIBILITY_MAP_CRASHSAFE_CAT_VER 201107031
+
+/*
+ * change in JSONB format during 9.4 beta
+ */
+#define JSONB_FORMAT_CHANGE_CAT_VER 201409291
 
 /*
  * The format of visibility map is changed with this 9.6 commit,
@@ -209,7 +212,7 @@ typedef struct
 	char	   *relname;		/* relation name */
 	Oid			reloid;			/* relation OID */
 	char		relstorage;
-	Oid 		relfilenode;	/* relation file node */
+	Oid			relfilenode;	/* relation file node */
 	Oid			indtable;		/* if index, OID of its table, else 0 */
 	Oid			toastheap;		/* if toast table, OID of base table, else 0 */
 	char	   *tablespace;		/* tablespace path; "" for cluster default */
@@ -256,8 +259,8 @@ typedef struct
 	 * old/new relfilenodes might differ for pg_largeobject(_metadata) indexes
 	 * due to VACUUM FULL or REINDEX.  Other relfilenodes are preserved.
 	 */
-	Oid 		old_relfilenode;
-	Oid 		new_relfilenode;
+	Oid			old_relfilenode;
+	Oid			new_relfilenode;
 	/* the rest are used only for logging and error reporting */
 	char	   *nspname;		/* namespaces */
 	char	   *relname;
@@ -323,8 +326,7 @@ typedef struct
 	uint32		large_object;
 	bool		date_is_int;
 	bool		float8_pass_by_value;
-	uint32		data_checksum_version;
-	int			file_encryption_method;
+	bool		data_checksum_version;
 } ControlData;
 
 /*
@@ -351,18 +353,6 @@ typedef enum
 
 typedef long pgpid_t;
 
-typedef enum
-{
-	Greenplum,
-	Cloudberry
-} DatabaseType;
-
-typedef struct
-{
-	DatabaseType type;
-	int version;
-} DatabaseVersion;
-
 
 /*
  * cluster
@@ -385,8 +375,6 @@ typedef struct
 	char		major_version_str[64];	/* string PG_VERSION of cluster */
 	uint32		bin_version;	/* version returned from pg_ctl */
 	const char *tablespace_suffix;	/* directory specification */
-	DatabaseVersion version;
-	int32		dbid;
 } ClusterInfo;
 
 
@@ -398,12 +386,6 @@ typedef struct
 	FILE	   *internal;		/* internal log FILE */
 	bool		verbose;		/* true -> be verbose in messages */
 	bool		retain;			/* retain log files on success */
-	/* Set of internal directories for output files */
-	char	   *rootdir;		/* Root directory, aka pg_upgrade_output.d */
-	char	   *basedir;		/* Base output directory, with timestamp */
-	char	   *dumpdir;		/* Dumps */
-	char	   *logdir;			/* Log files */
-	bool		isatty;			/* is stdout a tty */
 } LogOpts;
 
 
@@ -417,8 +399,6 @@ typedef struct
 	transferMode transfer_mode; /* copy files or link them? */
 	int			jobs;			/* number of processes/threads to use */
 	char	   *socketdir;		/* directory to use for Unix sockets */
-	bool		ind_coll_unknown;	/* mark unknown index collation versions */
-	bool		pass_terminal_fd; /* pass -R to pg_ctl? */
 } UserOpts;
 
 typedef struct
@@ -458,9 +438,9 @@ void		output_check_banner(bool live_check);
 void		check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name);
 void		check_new_cluster(void);
 void		report_clusters_compatible(void);
-
 void		issue_warnings_and_set_wal_level(char *sequence_script_file_name);
-void		output_completion_banner(char *deletion_script_file_name);
+void		output_completion_banner(char *analyze_script_file_name,
+									 char *deletion_script_file_name);
 void		check_cluster_versions(void);
 void		check_cluster_compatibility(bool live_check);
 void		create_script_for_old_cluster_deletion(char **deletion_script_file_name);
@@ -563,9 +543,8 @@ void		report_status(eLogType type, const char *fmt,...) pg_attribute_printf(2, 3
 void		pg_log(eLogType type, const char *fmt,...) pg_attribute_printf(2, 3);
 void		pg_fatal(const char *fmt,...) pg_attribute_printf(1, 2) pg_attribute_noreturn();
 void		end_progress_output(void);
-void		cleanup_output_dirs(void);
 void		prep_status(const char *fmt,...) pg_attribute_printf(1, 2);
-void		prep_status_progress(const char *fmt,...) pg_attribute_printf(1, 2);
+void		check_ok(void);
 unsigned int str2uint(const char *str);
 uint64		str2uint64(const char *str);
 void		pg_putenv(const char *var, const char *val);
@@ -574,29 +553,14 @@ void 		gp_fatal_log(const char *fmt,...) pg_attribute_printf(1, 2);
 
 /* version.c */
 
-bool		check_for_data_types_usage(ClusterInfo *cluster,
-									   const char *base_query,
-									   const char *output_path);
-bool		check_for_data_type_usage(ClusterInfo *cluster,
-									  const char *type_name,
-									  const char *output_path);
+void		new_9_0_populate_pg_largeobject_metadata(ClusterInfo *cluster,
+													 bool check_mode);
 void		old_9_3_check_for_line_data_type_usage(ClusterInfo *cluster);
 void		old_9_6_check_for_unknown_data_type_usage(ClusterInfo *cluster);
 void		old_9_6_invalidate_hash_indexes(ClusterInfo *cluster,
 											bool check_mode);
 
-/* version_old_8_3.c */
-
-void		old_8_3_check_for_name_data_type_usage(ClusterInfo *cluster);
-void		old_8_3_check_for_tsquery_usage(ClusterInfo *cluster);
-void		old_8_3_check_ltree_usage(ClusterInfo *cluster);
-void		old_8_3_rebuild_tsvector_tables(ClusterInfo *cluster, bool check_mode);
-void		old_8_3_invalidate_hash_gin_indexes(ClusterInfo *cluster, bool check_mode);
-void old_8_3_invalidate_bpchar_pattern_ops_indexes(ClusterInfo *cluster,
-											  bool check_mode);
-char	   *old_8_3_create_sequence_script(ClusterInfo *cluster);
 void		old_11_check_for_sql_identifier_data_type_usage(ClusterInfo *cluster);
-void		report_extension_updates(ClusterInfo *cluster);
 
 /* parallel.c */
 void		parallel_exec_prog(const char *log_file, const char *opt_log_file,
