@@ -345,7 +345,7 @@ reindex_one_database(ConnParams *cparams, ReindexType type,
 	bool		failed = false;
 	int			items_count = 0;
 
-	conn = connectDatabase_cparams(&cparams, progname, echo, false, false);
+	conn = connectDatabase_cparams(cparams, progname, echo, false, false);
 
 	/*
 	 * GPDB_12_MERGE_FIXME: do we still report this as PostgreSQL 12 or should
@@ -765,7 +765,7 @@ reindex_all_databases(ConnParams *cparams,
 	PGresult   *result;
 	int			i;
 
-	conn = connectMaintenanceDatabase_cparams(&cparams, progname, echo);
+	conn = connectMaintenanceDatabase_cparams(cparams, progname, echo);
 	result = executeQuery(conn, "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;", echo);
 	PQfinish(conn);
 
