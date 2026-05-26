@@ -35,7 +35,6 @@ static void create_target_dir(const char *path);
 static void remove_target_dir(const char *path);
 static void create_target_symlink(const char *path, const char *link);
 static void remove_target_symlink(const char *path);
-static void create_target_tablespace_layout(const char *path, const char *link);
 
 static void recurse_dir(const char *datadir, const char *parentpath,
 						process_file_callback_t callback);
@@ -143,10 +142,6 @@ remove_target(file_entry_t *entry)
 			remove_target_file(entry->path, false);
 			break;
 
-		case FILE_TYPE_FIFO:
-			remove_target_file(entry->path, false);
-			break;
-
 		case FILE_TYPE_SYMLINK:
 			remove_target_symlink(entry->path);
 			break;
@@ -170,21 +165,12 @@ create_target(file_entry_t *entry)
 			break;
 
 		case FILE_TYPE_SYMLINK:
-			if (entry->is_gp_tablespace)
-				create_target_tablespace_layout(entry->path, entry->source_link_target);
-			else
-				create_target_symlink(entry->path, entry->source_link_target);
 			create_target_symlink(entry->path, entry->source_link_target);
 			break;
 
 		case FILE_TYPE_REGULAR:
 			/* can't happen. Regular files are created with open_target_file. */
 			pg_fatal("invalid action (CREATE) for regular file");
-			break;
-
-		case FILE_TYPE_FIFO:
-			/* Only pgsql_tmp files are FIFO and they are ignored from source target. */
-			pg_fatal("invalid action (CREATE) for fifo file");
 			break;
 
 		case FILE_TYPE_UNDEFINED:
@@ -295,31 +281,6 @@ remove_target_symlink(const char *path)
 				 dstpath);
 }
 
-/* Create symlink for tablespace, create tablespace target dir */
-static void
-create_target_tablespace_layout(const char *path, const char *link)
-{
-	char		dstpath[MAXPGPATH];
-	char		*newlink;
-
-	if (dry_run)
-		return;
-
-	/* Append the target dbid to the symlink target. */
-	newlink = psprintf("%s/%d", link, dbid_target);
-
-	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (symlink(newlink, dstpath) != 0)
-		pg_fatal("could not create symbolic link at \"%s\": %m",
-				 dstpath);
-
-	/* We need to create the directory at the symlink target. */
-	if (mkdir(newlink, S_IRWXU) != 0)
-		pg_fatal("could not create directory \"%s\": %m",
-				 newlink);
-
-	pfree(newlink);
-}
 /*
  * Sync target data directory to ensure that modifications are safely on disk.
  *

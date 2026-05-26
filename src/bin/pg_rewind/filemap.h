@@ -12,15 +12,6 @@
 #include "storage/block.h"
 #include "storage/relfilenode.h"
 
-/*
- * For every file found in the local or remote system, we have a file entry
- * that contains information about the file on both systems.  For relation
- * files, there is also a page map that marks pages in the file that were
- * changed in the target after the last common checkpoint.  Each entry also
- * contains an 'action' field, which says what we are going to do with the
- * file.
- */
-
 /* these enum values are sorted in the order we want actions to be processed */
 typedef enum
 {
@@ -41,7 +32,6 @@ typedef enum
 	FILE_TYPE_UNDEFINED = 0,
 
 	FILE_TYPE_REGULAR,
-	FILE_TYPE_FIFO,
 	FILE_TYPE_DIRECTORY,
 	FILE_TYPE_SYMLINK
 } file_type_t;
@@ -85,8 +75,6 @@ typedef struct file_entry_t
 	size_t		source_size;
 	char	   *source_link_target; /* for a symlink */
 
-	bool 		is_gp_tablespace;
-
 	/*
 	 * What will we do to the file?
 	 */
@@ -114,9 +102,6 @@ extern void process_source_file(const char *path, file_type_t type,
 								size_t size, const char *link_target);
 extern void process_target_file(const char *path, file_type_t type,
 								size_t size, const char *link_target);
-extern void process_target_wal_aofile_change(RelFileNode rnode,
-											 int segno,
-											 int64 offset);
 extern void process_target_wal_block_change(ForkNumber forknum,
 											RelFileNode rnode,
 											BlockNumber blkno);

@@ -258,8 +258,7 @@ issue_warnings_and_set_wal_level(char *sequence_script_file_name)
 
 
 void
-output_completion_banner(char *analyze_script_file_name,
-						 char *deletion_script_file_name)
+output_completion_banner(char *deletion_script_file_name)
 {
 	/* Did we copy the free space files? */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)

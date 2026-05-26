@@ -26,7 +26,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "catalog/catalog.h"
 #include "catalog/pg_tablespace_d.h"
 #include "common/hashfn.h"
 #include "common/string.h"
@@ -59,9 +58,6 @@ static filehash_hash *filehash;
 static bool isRelDataFile(const char *path);
 static char *datasegpath(RelFileNode rnode, ForkNumber forknum,
 						 BlockNumber segno);
-static int	path_cmp(const void *a, const void *b);
-
-static file_entry_t *get_filemap_entry(const char *path, bool create);
 
 static file_entry_t *insert_filehash_entry(const char *path);
 static file_entry_t *lookup_filehash_entry(const char *path);
@@ -123,12 +119,6 @@ static const char *excludeDirContents[] =
 	/* Contents zeroed on startup, see StartupSUBTRANS(). */
 	"pg_subtrans",
 
-	/* GPDB: Contents unique to each segment instance. */
-	"log",
-
-	/* GPDB: Default gpbackup directory (backup contents) */
-	"backups",
-
 	/* end of list */
 	NULL
 };
@@ -167,11 +157,6 @@ static const struct exclude_list_item excludeFiles[] =
 
 	{"postmaster.pid", false},
 	{"postmaster.opts", false},
-
-	{GP_INTERNAL_AUTO_CONF_FILE_NAME, false},
-
-	/* GPDB: Default gpbackup directory (top-level directory) */
-	{"backups", false},
 
 	/* end of list */
 	{NULL, false}
@@ -223,67 +208,6 @@ lookup_filehash_entry(const char *path)
 	return filehash_lookup(filehash, path);
 }
 
-/* Look up or create entry for 'path' */
-static file_entry_t *
-get_filemap_entry(const char *path, bool create)
-{
-	filemap_t  *map = filemap;
-	file_entry_t *entry;
-	file_entry_t **e;
-	file_entry_t key;
-	file_entry_t *key_ptr;
-
-	if (map->array)
-	{
-		key.path = (char *) path;
-		key_ptr = &key;
-		e = bsearch(&key_ptr, map->array, map->narray, sizeof(file_entry_t *),
-					path_cmp);
-	}
-	else
-		e = NULL;
-
-	if (e)
-		entry = *e;
-	else if (!create)
-		entry = NULL;
-	else
-	{
-		/* Create a new entry for this file */
-		entry = pg_malloc(sizeof(file_entry_t));
-		entry->path = pg_strdup(path);
-		entry->isrelfile = isRelDataFile(path);
-		entry->action = FILE_ACTION_UNDECIDED;
-
-		entry->target_exists = false;
-		entry->target_type = FILE_TYPE_UNDEFINED;
-		entry->target_size = 0;
-		entry->target_link_target = NULL;
-		entry->target_pages_to_overwrite.bitmap = NULL;
-		entry->target_pages_to_overwrite.bitmapsize = 0;
-
-		entry->source_exists = false;
-		entry->source_type = FILE_TYPE_UNDEFINED;
-		entry->source_size = 0;
-		entry->source_link_target = NULL;
-
-		entry->is_gp_tablespace = false;
-
-		entry->next = NULL;
-
-		if (map->last)
-		{
-			map->last->next = entry;
-			map->last = entry;
-		}
-		else
-			map->first = map->last = entry;
-		map->nlist++;
-	}
-
-	return entry;
-}
-
 /*
  * Callback for processing source file list.
  *
@@ -296,8 +220,6 @@ process_source_file(const char *path, file_type_t type, size_t size,
 					const char *link_target)
 {
 	file_entry_t *entry;
-
-	Assert(filemap->array == NULL);
 
 	/*
 	 * Pretend that pg_wal is a directory, even if it's really a symlink. We
@@ -333,50 +255,13 @@ void
 process_target_file(const char *path, file_type_t type, size_t size,
 					const char *link_target)
 {
-	filemap_t  *map = filemap;
 	file_entry_t *entry;
 
 	/*
 	 * Do not apply any exclusion filters here.  This has advantage to remove
 	 * from the target data folder all paths which have been filtered out from
 	 * the source data folder when processing the source files.
-	 *
-	 * GPDB: GP_INTERNAL_AUTO_CONF_FILE_NAME, "log", and "backups" are in the
-	 * excluded dir/file list.  These should not be copied but also should not
-	 * be removed. In the future, if there are more files or directories that
-	 * should not be copied but also should not be removed, then a separate
-	 * function for those would be better.
 	 */
-	{
-		const char *filename = last_dir_separator(path);
-		if (filename == NULL)
-			filename = path;
-		else
-			filename++;
-		if (strcmp(filename, GP_INTERNAL_AUTO_CONF_FILE_NAME) == 0)
-			return;
-		if (strstr(path, "log/") == path)
-			return;
-		if (strstr(path, "backups/") == path ||
-			strcmp(path, "backups") == 0)
-			return;
-	}
-
-	if (map->array == NULL)
-	{
-		/* on first call, initialize lookup array */
-		if (map->nlist == 0)
-		{
-			/* should not happen */
-			pg_fatal("source file list is empty");
-		}
-
-		filemap_list_to_array(map);
-
-		Assert(map->array != NULL);
-
-		qsort(map->array, map->narray, sizeof(file_entry_t *), path_cmp);
-	}
 
 	/*
 	 * Like in process_source_file, pretend that pg_wal is always a directory.
@@ -412,8 +297,6 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	BlockNumber blkno_inseg;
 	int			segno;
 
-	Assert(filemap->array);
-
 	segno = blkno / RELSEG_SIZE;
 	blkno_inseg = blkno % RELSEG_SIZE;
 
@@ -439,8 +322,6 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	 */
 	if (entry)
 	{
-		int64		end_offset;
-
 		Assert(entry->isrelfile);
 
 		if (entry->target_exists)
@@ -458,56 +339,6 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 					datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
 			}
 		}
-	}
-}
-
-void
-process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
-{
-	char	   *path;
-	file_entry_t *entry;
-
-	Assert(filemap->array);
-
-	path = datasegpath(rnode, MAIN_FORKNUM, segno);
-	entry = get_filemap_entry(path, false);
-	pfree(path);
-
-	if (entry && entry->target_exists)
-	{
-			if (entry->target_size < entry->source_size)
-			{
-				/*
-				 * if the insertion happened in the area between target_size
-				 * and source_size, no change in action needed. But if insert
-				 * was performed at offset lower than the starting point, which
-				 * is target_size, reset the starting point to lower value from
-				 * xlog record.
-				 */
-				if (offset < entry->target_size)
-					entry->target_size = offset;
-			}
-			else
-			{
-				/*
-				 * if the insertion happened after the point we plan to
-				 * truncate, don't bother copying.
-				 */
-				if (offset < entry->source_size)
-				{
-					/*
-					 * since target_size must be either equal or greater than
-					 * source_size, so we can safely assign offset to
-					 * target_size.
-					 */
-					Assert(offset <= entry->target_size);
-					entry->target_size = offset;
-				}
-			}
-	}
-	else
-	{
-		/* Similar to process_target_wal_block_change(), the absence of the file entry is not an error */
 	}
 }
 
@@ -576,34 +407,6 @@ check_file_excluded(const char *path, bool is_source)
 	}
 
 	return false;
-}
-
-/*
- * Convert the linked list of entries in map->first/last to the array,
- * map->array.
- */
-static void
-filemap_list_to_array(filemap_t *map)
-{
-	int			narray;
-	file_entry_t *entry,
-			   *next;
-
-	map->array = (file_entry_t **)
-		pg_realloc(map->array,
-				   (map->nlist + map->narray) * sizeof(file_entry_t *));
-
-	narray = map->narray;
-	for (entry = map->first; entry != NULL; entry = next)
-	{
-		map->array[narray++] = entry;
-		next = entry->next;
-		entry->next = NULL;
-	}
-	Assert(narray == map->nlist + map->narray);
-	map->narray = narray;
-	map->nlist = 0;
-	map->first = map->last = NULL;
 }
 
 static const char *
@@ -754,7 +557,7 @@ isRelDataFile(const char *path)
 		}
 		else
 		{
-			nmatch = sscanf(path, "pg_tblspc/%u/" GP_TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
+			nmatch = sscanf(path, "pg_tblspc/%u/" TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
 							&rnode.spcNode, &rnode.dbNode, &rnode.relNode,
 							&segNo);
 			if (nmatch == 3 || nmatch == 4)
@@ -870,12 +673,6 @@ decide_file_action(file_entry_t *entry)
 		{
 			case FILE_TYPE_DIRECTORY:
 			case FILE_TYPE_SYMLINK:
-				entry->is_gp_tablespace = strncmp(entry->path, "pg_tblspc/", strlen("pg_tblspc/")) == 0;
-				return FILE_ACTION_CREATE;
-			case FILE_TYPE_REGULAR:
-				return FILE_ACTION_COPY;
-			case FILE_TYPE_FIFO:
-				return FILE_ACTION_NONE;
 				return FILE_ACTION_CREATE;
 			case FILE_TYPE_REGULAR:
 				return FILE_ACTION_COPY;
@@ -972,9 +769,6 @@ decide_file_action(file_entry_t *entry)
 					return FILE_ACTION_NONE;
 			}
 			break;
-
-		case FILE_TYPE_FIFO:
-			return FILE_ACTION_NONE;
 
 		case FILE_TYPE_UNDEFINED:
 			pg_fatal("unknown file type for \"%s\"", path);
