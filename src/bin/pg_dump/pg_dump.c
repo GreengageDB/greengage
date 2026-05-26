@@ -323,9 +323,6 @@ static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
 													const TableInfo *tblinfo);
-													 Oid pg_type_oid,
-													 bool force_array_type,
-													 bool include_multirange_type);
 static void binary_upgrade_set_type_oids_by_rel_oid(Archive *fout,
 													PQExpBuffer upgrade_buffer, Oid pg_rel_oid);
 static void binary_upgrade_set_pg_class_oids(Archive *fout,
@@ -524,7 +521,6 @@ main(int argc, char **argv)
 
 	InitDumpOptions(&dopt);
 
-	while ((c = getopt_long(argc, argv, "abBcCd:E:f:F:h:j:n:N:oOp:RsS:t:T:U:vwWxZ:",
 	while ((c = getopt_long(argc, argv, "abBcCd:e:E:f:F:h:j:n:N:Op:RsS:t:T:U:vwWxZ:",
 							long_options, &optindex)) != -1)
 	{
@@ -4539,7 +4535,6 @@ getSubscriptions(Archive *fout)
 	int			i_oid;
 	int			i_subname;
 	int			i_subowner;
-	int			i_rolname;
 	int			i_substream;
 	int			i_subconninfo;
 	int			i_subslotname;
@@ -4859,12 +4854,10 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 	Oid			pg_type_multirange_array_oid;
 
 
-	simple_oid_list_append(&preassigned_oids, tyinfo->dobj.catId.oid);
 	appendPQExpBufferStr(upgrade_buffer, "\n-- For binary upgrade, must preserve pg_type oid\n");
 	appendPQExpBuffer(upgrade_buffer,
-						"SELECT pg_catalog.binary_upgrade_set_next_pg_type_oid('%u'::pg_catalog.oid, "
-						"'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
-						tyinfo->dobj.catId.oid, tyinfo->dobj.namespace->dobj.catId.oid, tyinfo->dobj.name);
+					  "SELECT pg_catalog.binary_upgrade_set_next_pg_type_oid('%u'::pg_catalog.oid);\n\n",
+					  pg_type_oid);
 
 	if (!OidIsValid(pg_type_array_oid) && force_array_type)
 	{
@@ -4893,21 +4886,17 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 		} while (is_dup);
 
 		pg_type_array_oid = next_possible_free_oid;
-		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
-		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
 	}
+	else
 		pg_type_array_oid = get_next_possible_free_pg_type_oid(fout, upgrade_query);
 
 	if (OidIsValid(pg_type_array_oid))
 	{
-		simple_oid_list_append(&preassigned_oids, pg_type_array_oid);
 		appendPQExpBufferStr(upgrade_buffer,
 							 "\n-- For binary upgrade, must preserve pg_type array oid\n");
 		appendPQExpBuffer(upgrade_buffer,
-						  "SELECT pg_catalog.binary_upgrade_set_next_array_pg_type_oid('%u'::pg_catalog.oid, "
-						  "'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
-						  pg_type_array_oid, pg_type_array_ns_oid,
-						  pg_type_array_name);
+						  "SELECT pg_catalog.binary_upgrade_set_next_array_pg_type_oid('%u'::pg_catalog.oid);\n\n",
+						  pg_type_array_oid);
 	}
 
 	/*
@@ -4966,7 +4955,7 @@ binary_upgrade_set_type_oids_by_rel(Archive *fout,
 					  "SELECT c.reltype AS crel "
 					  "FROM pg_catalog.pg_class c "
 					  "WHERE c.oid = '%u'::pg_catalog.oid;",
-					  pg_rel_oid);
+					  tblinfo->dobj.catId.oid);
 
 	upgrade_res = ExecuteSqlQueryForSingleRow(fout, upgrade_query->data);
 
@@ -5556,11 +5545,7 @@ getTypes(Archive *fout, int *numTypes)
 		tyinfo[i].dacl.initprivs = NULL;
 		tyinfo[i].ftypname = NULL;	/* may get filled later */
 		tyinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_typowner));
-		tyinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		tyinfo[i].typacl = pg_strdup(PQgetvalue(res, i, i_typacl));
-		tyinfo[i].rtypacl = pg_strdup(PQgetvalue(res, i, i_rtypacl));
-		tyinfo[i].inittypacl = pg_strdup(PQgetvalue(res, i, i_inittypacl));
-		tyinfo[i].initrtypacl = pg_strdup(PQgetvalue(res, i, i_initrtypacl));
 		tyinfo[i].typelem = atooid(PQgetvalue(res, i, i_typelem));
 		tyinfo[i].typrelid = atooid(PQgetvalue(res, i, i_typrelid));
 		tyinfo[i].typrelkind = *PQgetvalue(res, i, i_typrelkind);
@@ -5707,7 +5692,6 @@ getOperators(Archive *fout, int *numOprs)
 		oprinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_oprnamespace)));
 		oprinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_oprowner));
-		oprinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		oprinfo[i].oprkind = (PQgetvalue(res, i, i_oprkind))[0];
 		oprinfo[i].oprcode = atooid(PQgetvalue(res, i, i_oprcode));
 
@@ -5785,7 +5769,6 @@ getCollations(Archive *fout, int *numCollations)
 		collinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_collnamespace)));
 		collinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_collowner));
-		collinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 
 		/* Decide whether we want to dump it */
 		selectDumpableObject(&(collinfo[i].dobj), fout);
@@ -5854,7 +5837,6 @@ getConversions(Archive *fout, int *numConversions)
 		convinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_connamespace)));
 		convinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_conowner));
-		convinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 
 		/* Decide whether we want to dump it */
 		selectDumpableObject(&(convinfo[i].dobj), fout);
@@ -5992,7 +5974,6 @@ getOpclasses(Archive *fout, int *numOpclasses)
 		opcinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_opcnamespace)));
 		opcinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_opcowner));
-		opcinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 
 		/* Decide whether we want to dump it */
 		selectDumpableObject(&(opcinfo[i].dobj), fout);
@@ -6061,7 +6042,6 @@ getOpfamilies(Archive *fout, int *numOpfamilies)
 		opfinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_opfnamespace)));
 		opfinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_opfowner));
-		opfinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 
 		/* Decide whether we want to dump it */
 		selectDumpableObject(&(opfinfo[i].dobj), fout);
@@ -6214,7 +6194,6 @@ getAggregates(Archive *fout, int *numAggs)
 		agginfo[i].aggfn.dacl.privtype = 0;
 		agginfo[i].aggfn.dacl.initprivs = NULL;
 		agginfo[i].aggfn.rolname = getRoleName(PQgetvalue(res, i, i_proowner));
-		agginfo[i].aggfn.rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		if (strlen(agginfo[i].aggfn.rolname) == 0)
 			pg_log_warning("owner of aggregate function \"%s\" appears to be invalid",
 						   agginfo[i].aggfn.dobj.name);
@@ -6552,7 +6531,6 @@ getFuncs(Archive *fout, int *numFuncs)
 		finfo[i].dacl.privtype = 0;
 		finfo[i].dacl.initprivs = NULL;
 		finfo[i].rolname = getRoleName(PQgetvalue(res, i, i_proowner));
-		finfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		finfo[i].lang = atooid(PQgetvalue(res, i, i_prolang));
 		finfo[i].prorettype = atooid(PQgetvalue(res, i, i_prorettype));
 		finfo[i].nargs = atoi(PQgetvalue(res, i, i_pronargs));
@@ -7007,11 +6985,6 @@ getTables(Archive *fout, int *numTables)
 		tblinfo[i].dacl.acldefault = pg_strdup(PQgetvalue(res, i, i_acldefault));
 		tblinfo[i].dacl.privtype = 0;
 		tblinfo[i].dacl.initprivs = NULL;
-		tblinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
-		tblinfo[i].relacl = pg_strdup(PQgetvalue(res, i, i_relacl));
-		tblinfo[i].rrelacl = pg_strdup(PQgetvalue(res, i, i_rrelacl));
-		tblinfo[i].initrelacl = pg_strdup(PQgetvalue(res, i, i_initrelacl));
-		tblinfo[i].initrrelacl = pg_strdup(PQgetvalue(res, i, i_initrrelacl));
 		tblinfo[i].relkind = *(PQgetvalue(res, i, i_relkind));
 		tblinfo[i].reltype = atooid(PQgetvalue(res, i, i_reltype));
 		tblinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_relowner));
@@ -7811,7 +7784,6 @@ getExtendedStatistics(Archive *fout)
 		statsextinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_stxnamespace)));
 		statsextinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_stxowner));
-		statsextinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		statsextinfo[i].stattarget = atoi(PQgetvalue(res, i, i_stattarget));
 
 		/* Decide whether we want to dump it */
@@ -9790,7 +9762,6 @@ getTSDictionaries(Archive *fout, int *numTSDicts)
 		dictinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_dictnamespace)));
 		dictinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_dictowner));
-		dictinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		dictinfo[i].dicttemplate = atooid(PQgetvalue(res, i, i_dicttemplate));
 		if (PQgetisnull(res, i, i_dictinitoption))
 			dictinfo[i].dictinitoption = NULL;
@@ -9925,7 +9896,6 @@ getTSConfigurations(Archive *fout, int *numTSConfigs)
 		cfginfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_cfgnamespace)));
 		cfginfo[i].rolname = getRoleName(PQgetvalue(res, i, i_cfgowner));
-		cfginfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		cfginfo[i].cfgparser = atooid(PQgetvalue(res, i, i_cfgparser));
 
 		/* Decide whether we want to dump it */
