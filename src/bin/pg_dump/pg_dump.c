@@ -4847,14 +4847,6 @@ binary_upgrade_set_namespace_oid(Archive *fout, PQExpBuffer upgrade_buffer,
 static void
 binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 										 PQExpBuffer upgrade_buffer,
-										 const TypeInfo *tyinfo,
-										 bool force_array_type)
-{
-	PQExpBuffer upgrade_query = createPQExpBuffer();
-	PGresult   *res;
-	Oid			pg_type_array_oid = tyinfo->typarrayoid;
-	Oid			pg_type_array_ns_oid = tyinfo->typarrayns;
-	char	*pg_type_array_name = tyinfo->typarrayname;
 										 Oid pg_type_oid,
 										 bool force_array_type,
 										 bool include_multirange_type)

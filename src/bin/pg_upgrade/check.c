@@ -115,6 +115,8 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	/* GPDB 7 removed support for SHA-256 hashed passwords */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 905)
 		old_GPDB6_check_for_unsupported_sha256_password_hashes();
+
+	/*
 	 * PG 14 changed the function signature of encoding conversion functions.
 	 * Conversions from older versions cannot be upgraded automatically
 	 * because the user-defined functions used by the encoding conversions
@@ -1190,6 +1192,8 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 {
 	bool		found;
 	char		output_path[MAXPGPATH];
+	int			dbnum;
+	char	   *script = NULL;
 
 	prep_status("Checking for reg* data types in user tables");
 

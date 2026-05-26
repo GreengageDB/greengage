@@ -3211,6 +3211,8 @@ main(int argc, char *argv[])
 	 * unexpected output ordering when, eg, output is redirected to a file.
 	 * POSIX says we must do this before any other usage of these files.
 	 */
+	int			option_index = 0;
+
 	setvbuf(stdout, NULL, PG_IOLBF, 0);
 
 	pg_logging_init(argv[0]);

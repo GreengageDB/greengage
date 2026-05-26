@@ -91,19 +91,6 @@ typedef struct file_entry_t
 	 * What will we do to the file?
 	 */
 	file_action_t action;
-
-	/*
-	 * Status of the file in the source.
-	 */
-	bool		source_exists;
-	file_type_t source_type;
-	size_t		source_size;
-	char	   *source_link_target; /* for a symlink */
-
-	/*
-	 * What will we do to the file?
-	 */
-	file_action_t action;
 } file_entry_t;
 
 /*
