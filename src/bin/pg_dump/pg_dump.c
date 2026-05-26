@@ -9366,12 +9366,15 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				attrdefs[j].separate = true;
 			}
 			else if (!shouldPrintColumn(dopt, tbinfo, adnum - 1))
-				 * Figure out whether the default/generation expression should
-				 * be dumped as part of the main CREATE TABLE (or similar)
-				 * command or as a separate ALTER TABLE (or similar) command.
-				 * The preference is to put it into the CREATE command, but in
-				 * some cases that's not possible.
-				 */
+			{
+				/* column will be suppressed, print default separately */
+				attrdefs[j].separate = true;
+			}
+			else
+			{
+				attrdefs[j].separate = false;
+			}
+#if 0 /* PG14 duplicate block removed - already handled above */
 				if (tbinfo->attgenerated[adnum - 1])
 				{
 					/*
@@ -9424,7 +9427,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				tbinfo->attrdefs[adnum - 1] = &attrdefs[j];
 			}
 			PQclear(res);
-		}
+#endif /* PG14 duplicate block */
 
 		/*
 		 * Get info about table CHECK constraints.  This is skipped for a
