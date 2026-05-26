@@ -72,6 +72,31 @@ ItemPointerCompare(ItemPointer arg1, ItemPointer arg2)
 		return 0;
 }
 
+static char *
+ItemPointerToBuffer(char *buffer, ItemPointer tid)
+{
+	BlockNumber blockNumber = BlockIdGetBlockNumber(&tid->ip_blkid);
+	OffsetNumber offsetNumber = tid->ip_posid;
+
+	sprintf(buffer, "(%u,%u)", blockNumber, offsetNumber);
+	return buffer;
+}
+
+static char itemPointerBuffer[50];
+static char itemPointerBuffer2[50];
+
+char *
+ItemPointerToString(ItemPointer tid)
+{
+	return ItemPointerToBuffer(itemPointerBuffer, tid);
+}
+
+char *
+ItemPointerToString2(ItemPointer tid)
+{
+	return ItemPointerToBuffer(itemPointerBuffer2, tid);
+}
+
 /*
  * ItemPointerInc
  *		Increment 'pointer' by 1 only paying attention to the ItemPointer's

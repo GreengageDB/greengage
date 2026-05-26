@@ -1197,3 +1197,12 @@ classify_matching_subplans(AppendState *node)
 	/* Save valid async subplans. */
 	node->as_valid_asyncplans = valid_asyncplans;
 }
+
+void
+ExecSquelchAppend(AppendState *node)
+{
+	int			i;
+
+	for (i = 0; i < node->as_nplans; i++)
+		ExecSquelchNode(node->appendplans[i]);
+}

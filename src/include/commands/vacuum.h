@@ -386,7 +386,7 @@ extern void analyze_rel(Oid relid, RangeVar *relation,
 						BufferAccessStrategy bstrategy, gp_acquire_sample_rows_context *ctx);
 
 /* in commands/vacuumlazy.c */
-extern void lazy_vacuum_rel_heap(Relation onerel,
+extern void heap_vacuum_rel(Relation rel,
 							VacuumParams *params, BufferAccessStrategy bstrategy);
 extern void scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy bstrategy);
 

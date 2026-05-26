@@ -231,7 +231,11 @@ static void write_pipe_chunks(char *data, int len, int dest);
 static void send_message_to_frontend(ErrorData *edata);
 static const char *error_severity(int elevel);
 static void elog_debug_linger(ErrorData *edata);
-static void ignore_returned_result(int result);
+static inline void
+ignore_returned_result(long long int result)
+{
+	(void) result;
+}
 static void append_with_tabs(StringInfo buf, const char *str);
 
 
