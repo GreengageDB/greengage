@@ -10,6 +10,12 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
+# Skip on PostgreSQL < 15: the Custom WAL Resource Manager API
+# (RegisterCustomRmgr) was introduced in PG 15.
+my ($pg_major) = (`pg_config --version` =~ /(\d+)/);
+plan skip_all => "this test requires PostgreSQL 15 or later"
+	if $pg_major < 15;
+
 # Set up primary
 my $primary = PostgreSQL::Test::Cluster->new('primary');
 $primary->init(allows_streaming => 1);
