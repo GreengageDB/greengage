@@ -31,6 +31,9 @@
 #include "pg_backup_utils.h"
 #include "pg_dump.h"
 
+static DumpableObject **buildIndexArray(void *objArray, int numObjs, Size objSize);
+static int	DOCatalogIdCompare(const void *p1, const void *p2);
+
 /*
  * Variables for mapping DumpId to DumpableObject
  */
@@ -746,26 +749,7 @@ findObjectByCatalogId(CatalogId catalogId)
 	entry = catalogid_lookup(catalogIdHash, catalogId);
 	if (entry == NULL)
 		return NULL;
-	low = catalogIdMap;
-	high = catalogIdMap + (numCatalogIds - 1);
-	while (low <= high)
-	{
-		DumpableObject **middle;
-		int			difference;
-
-		middle = low + (high - low) / 2;
-		/* comparison must match DOCatalogIdCompare, below */
-		difference = oidcmp((*middle)->catId.oid, catalogId.oid);
-		if (difference == 0)
-			difference = oidcmp((*middle)->catId.tableoid, catalogId.tableoid);
-		if (difference == 0)
-			return *middle;
-		else if (difference < 0)
-			low = middle + 1;
-		else
-			high = middle - 1;
-	}
-	return NULL;
+	return entry->dobj;
 }
 
 /*
@@ -1070,19 +1054,6 @@ findExtensionByOid(Oid oid)
  * findPublicationByOid
  *	  finds the entry (in pubinfo) of the publication with the given oid
  *	  returns NULL if not found
- */
-PublicationInfo *
-findPublicationByOid(Oid oid)
-{
-	return (PublicationInfo *) findObjectByOid(oid, pubinfoindex, numPublications);
-}
-
-/*
- * findIndexByOid
- *		find the entry of the index with the given oid
- *
- * This one's signature is different from the previous ones because we lack a
- * global array of all indexes, so caller must pass their array as argument.
  */
 PublicationInfo *
 findPublicationByOid(Oid oid)

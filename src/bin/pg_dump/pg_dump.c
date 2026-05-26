@@ -215,8 +215,6 @@ static void dumpSecLabel(Archive *fout, const char *type, const char *name,
 						 CatalogId catalogId, int subid, DumpId dumpId);
 static int	findSecLabels(Archive *fout, Oid classoid, Oid objoid,
 						  SecLabelItem **items);
-static void collectSecLabels(Archive *fout);
-static void dumpDumpableObject(Archive *fout, DumpableObject *dobj);
 static int	collectSecLabels(Archive *fout, SecLabelItem **items);
 static void dumpDumpableObject(Archive *fout, const DumpableObject *dobj);
 static void dumpNamespace(Archive *fout, const NamespaceInfo *nspinfo);
@@ -1043,8 +1041,7 @@ main(int argc, char **argv)
 		getAdditionalACLs(fout);
 	if (!dopt.no_comments)
 		collectComments(fout);
-	if (!dopt.no_security_labels)
-		collectSecLabels(fout);
+	/* Security labels are collected on-demand in findSecLabels() */
 
 	/* Lastly, create dummy objects to represent the section boundaries */
 	boundaryObjs = createBoundaryObjects();
@@ -9395,6 +9392,17 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				}
 
 #endif /* PG14 duplicate block */
+
+				if (!attrdefs[j].separate)
+				{
+					addObjectDependency(&tbinfo->dobj,
+										attrdefs[j].dobj.dumpId);
+				}
+
+				tbinfo->attrdefs[adnum - 1] = &attrdefs[j];
+			}
+			PQclear(res);
+		}
 
 		/*
 		 * Get info about table CHECK constraints.  This is skipped for a
