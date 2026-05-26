@@ -52,7 +52,6 @@ main(int argc, char *argv[])
 	char	   *port = NULL;
 	char	   *username = NULL;
 	enum trivalue prompt_password = TRI_DEFAULT;
-	ConnParams	cparams;
 	bool		echo = false;
 	char	   *owner = NULL;
 	char	   *tablespace = NULL;

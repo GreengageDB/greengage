@@ -226,7 +226,7 @@ ConnectDatabase(Archive *AHX,
 	 * we connect for the first time, so set the correct GUC and
 	 * reconnect.
 	 */
-	if (binary_upgrade)
+	if (AH->public.ropt && AH->public.ropt->binary_upgrade)
 	{
 		keywords[6] = "options";
 		values[6] = AH->public.remoteVersion < GPDB7_MAJOR_PGVERSION ?
