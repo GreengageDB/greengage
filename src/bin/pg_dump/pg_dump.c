@@ -216,7 +216,7 @@ static void dumpSecLabel(Archive *fout, const char *type, const char *name,
 static int	findSecLabels(Archive *fout, Oid classoid, Oid objoid,
 						  SecLabelItem **items);
 static int	collectSecLabels(Archive *fout, SecLabelItem **items);
-static void dumpDumpableObject(Archive *fout, const DumpableObject *dobj);
+static void dumpDumpableObject(Archive *fout, DumpableObject *dobj);
 static void dumpNamespace(Archive *fout, const NamespaceInfo *nspinfo);
 static void dumpExtension(Archive *fout, const ExtensionInfo *extinfo);
 static void dumpType(Archive *fout, const TypeInfo *tyinfo);
@@ -10484,7 +10484,7 @@ collectComments(Archive *fout)
  * ArchiveEntries (TOC objects) for each object to be dumped.
  */
 static void
-dumpDumpableObject(Archive *fout, const DumpableObject *dobj)
+dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 {
 	/*
 	 * Clear any dump-request bits for components that don't exist for this
@@ -11084,8 +11084,6 @@ dumpRangeType(Archive *fout, const TypeInfo *tyinfo)
 		fout->is_prepared[PREPQUERY_DUMPRANGETYPE] = true;
 	}
 
-	printfPQExpBuffer(query,
-					  "EXECUTE dumpRangeType('%u')",
 	appendPQExpBuffer(query,
 					  "SELECT ");
 
@@ -12575,8 +12573,6 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 
 	}
 
-	printfPQExpBuffer(query,
-					  "EXECUTE dumpFunc('%u')",
 	/* Fetch function-specific details */
 	appendPQExpBufferStr(query,
 						 "SELECT\n"
