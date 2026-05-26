@@ -39,19 +39,6 @@ operating systems:
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
 
-## Release Workflow
-
-A separate workflow `Greengage release` handles the uploading of Debian package
-to GitHub releases. It is triggered when a release is published and uses a
-composite action to manage package deployment.
-
-### Key Features
-
-- **Triggers:** `release: [released]` — runs when a release is published.
-- **Artifacts:** Uploads built Debian packages (`deb`, `ddeb`) from the
-  `deb-packages` artifact to the GitHub release using the
-  `upload-pkgs-to-release` composite action.
-
 ## Usage
 
 To use this pipeline:
