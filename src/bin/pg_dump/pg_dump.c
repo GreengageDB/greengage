@@ -317,8 +317,9 @@ static void binary_upgrade_set_namespace_oid(Archive *fout,
 static void dumpSearchPath(Archive *AH);
 static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 PQExpBuffer upgrade_buffer,
-													 const TypeInfo *tyinfo,
-													 bool force_array_type);
+													 Oid pg_type_oid,
+													 bool force_array_type,
+													 bool include_multirange_type);
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
 													const TableInfo *tblinfo);
@@ -4957,9 +4958,6 @@ binary_upgrade_set_type_oids_by_rel(Archive *fout,
 										PQExpBuffer upgrade_buffer,
 										const TableInfo *tblinfo)
 {
-	TypeInfo *typinfo = findTypeByOid(tblinfo->reltype);
-	binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-											 typinfo, false);
 	PQExpBuffer upgrade_query = createPQExpBuffer();
 	PGresult   *upgrade_res;
 	Oid			pg_type_oid;
@@ -11331,7 +11329,6 @@ dumpEnumType(Archive *fout, const TypeInfo *tyinfo)
 	appendPQExpBuffer(delq, "DROP TYPE %s;\n", qualtypname);
 
 	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_type_oid(fout, q, tyinfo, false);
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo->dobj.catId.oid,
 												 false, false);
@@ -11503,8 +11500,6 @@ dumpRangeType(Archive *fout, const TypeInfo *tyinfo)
 
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
-												 tyinfo,
-												 false);
 												 tyinfo->dobj.catId.oid,
 												 false, true);
 
@@ -11613,9 +11608,6 @@ dumpUndefinedType(Archive *fout, const TypeInfo *tyinfo)
 	appendPQExpBuffer(delq, "DROP TYPE %s;\n", qualtypname);
 
 	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_type_oid(fout,
-												 q, tyinfo,
-												 false);
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo->dobj.catId.oid,
 												 false, false);
@@ -11849,9 +11841,7 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 	 */
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
-												 tyinfo,
-												 false);
-												 tyinfo->dobj.catId.oid,
+													 tyinfo->dobj.catId.oid,
 												 false, false);
 
 	appendPQExpBuffer(q,
@@ -12081,8 +12071,6 @@ dumpDomain(Archive *fout, const TypeInfo *tyinfo)
 
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
-												 tyinfo,
-												 true);	/* force array type */
 												 tyinfo->dobj.catId.oid,
 												 true,	/* force array type */
 												 false);	/* force multirange type */
@@ -12283,9 +12271,7 @@ dumpCompositeType(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 	{
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
-												 tyinfo,
-												 false);
-												 tyinfo->dobj.catId.oid,
+													 tyinfo->dobj.catId.oid,
 												 false, false);
 		binary_upgrade_set_pg_class_oids(fout, q, tyinfo->typrelid, false);
 	}
