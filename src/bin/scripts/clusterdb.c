@@ -200,7 +200,7 @@ cluster_one_database(const ConnParams *cparams, const char *table,
 
 	PGconn	   *conn;
 
-	conn = connectDatabase(cparams, progname, echo, false, false);
+	conn = connectDatabase_cparams(&cparams, progname, echo, false, false);
 
 	initPQExpBuffer(&sql);
 
@@ -238,7 +238,7 @@ cluster_all_databases(ConnParams *cparams, const char *progname,
 	PGresult   *result;
 	int			i;
 
-	conn = connectMaintenanceDatabase(cparams, progname, echo);
+	conn = connectMaintenanceDatabase_cparams(&cparams, progname, echo);
 	result = executeQuery(conn, "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;", echo);
 	PQfinish(conn);
 

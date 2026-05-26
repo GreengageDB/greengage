@@ -463,7 +463,7 @@ vacuum_one_database(ConnParams *cparams,
 	Assert(stage == ANALYZE_NO_STAGE ||
 		   (stage >= 0 && stage < ANALYZE_NUM_STAGES));
 
-	conn = connectDatabase(cparams, progname, echo, false, true);
+	conn = connectDatabase_cparams(&cparams, progname, echo, false, true);
 
 	if (vacopts->disable_page_skipping && PQserverVersion(conn) < 90600)
 	{
@@ -800,7 +800,7 @@ vacuum_all_databases(ConnParams *cparams,
 	int			stage;
 	int			i;
 
-	conn = connectMaintenanceDatabase(cparams, progname, echo);
+	conn = connectMaintenanceDatabase_cparams(&cparams, progname, echo);
 	result = executeQuery(conn,
 						  "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;",
 						  echo);

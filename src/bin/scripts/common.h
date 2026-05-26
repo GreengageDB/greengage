@@ -33,6 +33,11 @@ typedef struct _connParams
 	const char *override_dbname;
 } ConnParams;
 
+#define connectDatabase_cparams(cparams, progname, echo, fail_ok, allow_reuse) \
+	connectDatabase((cparams)->dbname, (cparams)->pghost, (cparams)->pgport, \
+					(cparams)->pguser, (cparams)->prompt_password, \
+					progname, echo, fail_ok, allow_reuse)
+
 extern PGconn *connectDatabase(const char *dbname, const char *pghost,
 							   const char *pgport, const char *pguser,
 							   enum trivalue prompt_password,
