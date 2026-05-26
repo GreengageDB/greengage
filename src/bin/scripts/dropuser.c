@@ -138,7 +138,7 @@ main(int argc, char *argv[])
 	cparams.prompt_password = prompt_password;
 	cparams.override_dbname = NULL;
 
-	conn = connectMaintenanceDatabase_cparams(&cparams, progname, echo);
+	conn = connectMaintenanceDatabase(&cparams, progname, echo);
 
 	initPQExpBuffer(&sql);
 	appendPQExpBuffer(&sql, "DROP ROLE %s%s;",
