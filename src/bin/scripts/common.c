@@ -19,7 +19,6 @@
 
 #include "common.h"
 #include "common/connect.h"
-#include "fe_utils/option_utils.h"
 #include "common/logging.h"
 #include "common/string.h"
 #include "fe_utils/cancel.h"
@@ -79,7 +78,11 @@ connectDatabase(const char *dbname, const char *pghost,
 
 	if (!have_password && prompt_password == TRI_YES)
 	{
-		{ char *p = simple_prompt(\"Password: \", false); strlcpy(password, p, sizeof(password)); free(p); };
+		{
+			char *p = simple_prompt("Password: ", false);
+			strlcpy(password, p, sizeof(password));
+			free(p);
+		}
 		have_password = true;
 	}
 
@@ -125,7 +128,11 @@ connectDatabase(const char *dbname, const char *pghost,
 			prompt_password != TRI_NO)
 		{
 			PQfinish(conn);
-			{ char *p = simple_prompt(\"Password: \", false); strlcpy(password, p, sizeof(password)); free(p); };
+			{
+				char *p = simple_prompt("Password: ", false);
+				strlcpy(password, p, sizeof(password));
+				free(p);
+			}
 			have_password = true;
 			new_pass = true;
 		}
