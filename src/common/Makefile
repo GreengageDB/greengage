@@ -74,6 +74,7 @@ OBJS_COMMON = \
 	rmtree.o \
 	saslprep.o \
 	scram-common.o \
+	sha1.o \
 	string.o \
 	stringinfo.o \
 	unicode_norm.o \
