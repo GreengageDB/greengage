@@ -9394,10 +9394,11 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 										attrdefs[j].dobj.dumpId);
 				}
 
+#endif /* PG14 duplicate block */
+
 				tbinfo->attrdefs[adnum - 1] = &attrdefs[j];
 			}
 			PQclear(res);
-#endif /* PG14 duplicate block */
 
 		/*
 		 * Get info about table CHECK constraints.  This is skipped for a
