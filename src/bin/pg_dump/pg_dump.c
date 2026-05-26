@@ -8837,46 +8837,13 @@ void
 getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 {
 	DumpOptions *dopt = fout->dopt;
+getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
+{
+	DumpOptions *dopt = fout->dopt;
 	PQExpBuffer q = createPQExpBuffer();
-	PQExpBuffer tbloids = createPQExpBuffer();
-	PQExpBuffer checkoids = createPQExpBuffer();
-	PGresult   *res;
-	int			ntups;
-	int			curtblindx;
-	int			i_attrelid;
-	int			i_attnum;
-	int			i_attname;
-	int			i_atttypname;
-	int			i_atttypmod;
-	int			i_attstattarget;
-	int			i_attstorage;
-	int			i_typstorage;
-	int			i_attidentity;
-	int			i_attgenerated;
-	int			i_attisdropped;
-	int			i_attlen;
-	int			i_attalign;
-	int			i_attislocal;
-	int			i_attnotnull;
-	int			i_attoptions;
-	int			i_attcollation;
-	int			i_attfdwoptions;
-	int			i_attmissingval;
-	int			i_atthasdef;
-	int			i_attencoding;
 
-	/*
-	 * We want to perform just one query against pg_attribute, and then just
-	 * one against pg_attrdef (for DEFAULTs) and one against pg_constraint
-	 * (for CHECK constraints).  However, we mustn't try to select every row
-	 * of those catalogs and then sort it out on the client side, because some
-	 * of the server-side functions we need would be unsafe to apply to tables
-	 * we don't have lock on.  Hence, we build an array of the OIDs of tables
-	 * we care about (and now have lock on!), and use a WHERE clause to
-	 * constrain which rows are selected.
-	 */
-	appendPQExpBufferChar(tbloids, '{');
-	appendPQExpBufferChar(checkoids, '{');
+	/* GPDB_14_MERGE_FIXME: GPDB specific column, need to keep this for easy to use*/
+	int			i_attencoding;
 
 	for (int i = 0; i < numTables; i++)
 	{
@@ -8893,202 +8860,65 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		if (!tbinfo->interesting)
 			continue;
 
-		/* OK, we need info for this table */
-		if (tbloids->len > 1)	/* do we have more than the '{'? */
-			appendPQExpBufferChar(tbloids, ',');
-		appendPQExpBuffer(tbloids, "%u", tbinfo->dobj.catId.oid);
-
-		if (tbinfo->ncheck > 0)
-		{
-			/* Also make a list of the ones with check constraints */
-			if (checkoids->len > 1) /* do we have more than the '{'? */
-				appendPQExpBufferChar(checkoids, ',');
-			appendPQExpBuffer(checkoids, "%u", tbinfo->dobj.catId.oid);
-		}
-	}
-	appendPQExpBufferChar(tbloids, '}');
-	appendPQExpBufferChar(checkoids, '}');
-
-	/* find all the user attributes and their types */
-	appendPQExpBufferStr(q,
-						 "SELECT\n"
-						 "a.attrelid,\n"
-						 "a.attnum,\n"
-						 "a.attname,\n"
-						 "a.atttypmod,\n"
-						 "a.attstattarget,\n"
-						 "a.attstorage,\n"
-						 "t.typstorage,\n"
-						 "a.attnotnull,\n"
-						 "a.atthasdef,\n"
-						 "a.attisdropped,\n"
-						 "a.attlen,\n"
-						 "a.attalign,\n"
-						 "a.attislocal,\n"
-						 "pg_catalog.format_type(t.oid, a.atttypmod) AS atttypname,\n"
-						 "pg_catalog.array_to_string(e.attoptions, ',') AS attencoding,\n");
-
-	if (fout->remoteVersion >= 90000)
-		appendPQExpBufferStr(q,
-							 "array_to_string(a.attoptions, ', ') AS attoptions,\n");
-	else
-		appendPQExpBufferStr(q,
-							 "'' AS attoptions,\n");
-
-	if (fout->remoteVersion >= 90100)
-	{
-		/*
-		 * Since we only want to dump COLLATE clauses for attributes whose
-		 * collation is different from their type's default, we use a CASE
-		 * here to suppress uninteresting attcollations cheaply.
-		 */
-		appendPQExpBufferStr(q,
-							 "CASE WHEN a.attcollation <> t.typcollation "
-							 "THEN a.attcollation ELSE 0 END AS attcollation,\n");
-	}
-	else
-		appendPQExpBufferStr(q,
-							 "0 AS attcollation,\n");
-
-	if (fout->remoteVersion >= 90200)
-		appendPQExpBufferStr(q,
-							 "pg_catalog.array_to_string(ARRAY("
-							 "SELECT pg_catalog.quote_ident(option_name) || "
-							 "' ' || pg_catalog.quote_literal(option_value) "
-							 "FROM pg_catalog.pg_options_to_table(attfdwoptions) "
-							 "ORDER BY option_name"
-							 "), E',\n    ') AS attfdwoptions,\n");
-	else
-		appendPQExpBufferStr(q,
-							 "'' AS attfdwoptions,\n");
-
-	if (fout->remoteVersion >= 100000)
-		appendPQExpBufferStr(q,
-							 "a.attidentity,\n");
-	else
-		appendPQExpBufferStr(q,
-							 "'' AS attidentity,\n");
-
-	if (fout->remoteVersion >= 110000)
-		appendPQExpBufferStr(q,
-							 "CASE WHEN a.atthasmissing AND NOT a.attisdropped "
-							 "THEN a.attmissingval ELSE null END AS attmissingval,\n");
-	else
-		appendPQExpBufferStr(q,
-							 "NULL AS attmissingval,\n");
-
-	if (fout->remoteVersion >= 120000)
-		appendPQExpBufferStr(q,
-							 "a.attgenerated\n");
-	else
-		appendPQExpBufferStr(q,
-							 "'' AS attgenerated\n");
-
-	/* need left join to pg_type to not fail on dropped columns ... */
-	appendPQExpBuffer(q,
-					  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
-					  "JOIN pg_catalog.pg_attribute a ON (src.tbloid = a.attrelid) "
-					  "LEFT JOIN pg_catalog.pg_type t "
-					  "ON (a.atttypid = t.oid)\n"
-						"LEFT OUTER JOIN pg_catalog.pg_attribute_encoding e "
-						"ON e.attrelid = a.attrelid AND e.attnum = a.attnum \n"
-					  "WHERE a.attnum > 0::pg_catalog.int2\n"
-					  "ORDER BY a.attrelid, a.attnum",
-					  tbloids->data);
-
-	res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
-
-	ntups = PQntuples(res);
-
-	i_attrelid = PQfnumber(res, "attrelid");
-	i_attnum = PQfnumber(res, "attnum");
-	i_attname = PQfnumber(res, "attname");
-	i_atttypname = PQfnumber(res, "atttypname");
-	i_atttypmod = PQfnumber(res, "atttypmod");
-	i_attstattarget = PQfnumber(res, "attstattarget");
-	i_attstorage = PQfnumber(res, "attstorage");
-	i_typstorage = PQfnumber(res, "typstorage");
-	i_attidentity = PQfnumber(res, "attidentity");
-	i_attgenerated = PQfnumber(res, "attgenerated");
-	i_attisdropped = PQfnumber(res, "attisdropped");
-	i_attlen = PQfnumber(res, "attlen");
-	i_attalign = PQfnumber(res, "attalign");
-	i_attislocal = PQfnumber(res, "attislocal");
-	i_attnotnull = PQfnumber(res, "attnotnull");
-	i_attoptions = PQfnumber(res, "attoptions");
-	i_attcollation = PQfnumber(res, "attcollation");
-	i_attfdwoptions = PQfnumber(res, "attfdwoptions");
-	i_attmissingval = PQfnumber(res, "attmissingval");
-	i_atthasdef = PQfnumber(res, "atthasdef");
-	i_attencoding = PQfnumber(res, "attencoding");
-
-	/* Within the next loop, we'll accumulate OIDs of tables with defaults */
-	resetPQExpBuffer(tbloids);
-	appendPQExpBufferChar(tbloids, '{');
-
-	/*
-	 * Outer loop iterates once per table, not once per row.  Incrementing of
-	 * r is handled by the inner loop.
-	 */
-	curtblindx = -1;
-	for (int r = 0; r < ntups;)
-	{
-		Oid			attrelid = atooid(PQgetvalue(res, r, i_attrelid));
-		TableInfo  *tbinfo = NULL;
-		int			numatts;
-		bool		hasdefaults;
-
-		/* Count rows for this table */
-		for (numatts = 1; numatts < ntups - r; numatts++)
-			if (atooid(PQgetvalue(res, r + numatts, i_attrelid)) != attrelid)
-				break;
+		/* find all the user attributes and their types */
 
 		/*
-		 * Locate the associated TableInfo; we rely on tblinfo[] being in OID
-		 * order.
+		 * we must read the attribute names in attribute number order! because
+		 * we will use the attnum to index into the attnames array later.
 		 */
-		while (++curtblindx < numTables)
-		{
-			tbinfo = &tblinfo[curtblindx];
-			if (tbinfo->dobj.catId.oid == attrelid)
-				break;
-		}
-		if (curtblindx >= numTables)
-			fatal("unrecognized table OID %u", attrelid);
-		/* cross-check that we only got requested tables */
-		if (tbinfo->relkind == RELKIND_SEQUENCE ||
-			!tbinfo->interesting)
-			fatal("unexpected column data for table \"%s\"",
-				  tbinfo->dobj.name);
+		pg_log_info("finding the columns and types of table \"%s.%s\"",
+					tbinfo->dobj.namespace->dobj.name,
+					tbinfo->dobj.name);
 
-		/* Save data for this table */
-		tbinfo->numatts = numatts;
-		tbinfo->attnames = (char **) pg_malloc(numatts * sizeof(char *));
-		tbinfo->atttypnames = (char **) pg_malloc(numatts * sizeof(char *));
-		tbinfo->atttypmod = (int *) pg_malloc(numatts * sizeof(int));
-		tbinfo->attstattarget = (int *) pg_malloc(numatts * sizeof(int));
-		tbinfo->attstorage = (char *) pg_malloc(numatts * sizeof(char));
-		tbinfo->typstorage = (char *) pg_malloc(numatts * sizeof(char));
-		tbinfo->attidentity = (char *) pg_malloc(numatts * sizeof(char));
-		tbinfo->attgenerated = (char *) pg_malloc(numatts * sizeof(char));
-		tbinfo->attisdropped = (bool *) pg_malloc(numatts * sizeof(bool));
-		tbinfo->attlen = (int *) pg_malloc(numatts * sizeof(int));
-		tbinfo->attalign = (char *) pg_malloc(numatts * sizeof(char));
-		tbinfo->attislocal = (bool *) pg_malloc(numatts * sizeof(bool));
-		tbinfo->attoptions = (char **) pg_malloc(numatts * sizeof(char *));
-		tbinfo->attcollation = (Oid *) pg_malloc(numatts * sizeof(Oid));
-		tbinfo->attfdwoptions = (char **) pg_malloc(numatts * sizeof(char *));
-		tbinfo->attmissingval = (char **) pg_malloc(numatts * sizeof(char *));
-		tbinfo->notnull = (bool *) pg_malloc(numatts * sizeof(bool));
-		tbinfo->inhNotNull = (bool *) pg_malloc(numatts * sizeof(bool));
-		tbinfo->attrdefs = (AttrDefInfo **) pg_malloc(numatts * sizeof(AttrDefInfo *));
-		tbinfo->attencoding = (char **) pg_malloc(numatts * sizeof(char*));
+		resetPQExpBuffer(q);
+
+		appendPQExpBufferStr(q,
+							 "SELECT\n"
+							 "a.attnum,\n"
+							 "a.attname,\n"
+							 "a.atttypmod,\n"
+							 "a.attstattarget,\n"
+							 "a.attstorage,\n"
+							 "t.typstorage,\n"
+							 "a.attnotnull,\n"
+							 "a.atthasdef,\n"
+							 "a.attisdropped,\n"
+							 "a.attlen,\n"
+							 "a.attalign,\n"
+							 "a.attislocal,\n"
+							 "pg_catalog.format_type(t.oid, a.atttypmod) AS atttypname,\n");
+
+		if (fout->remoteVersion >= 90000)
+			appendPQExpBufferStr(q,
+								 "array_to_string(a.attoptions, ', ') AS attoptions,\n");
+		else
+			appendPQExpBufferStr(q,
+								 "'' AS attoptions,\n");
+
+		if (fout->remoteVersion >= 90100)
+		{
+			/*
+			 * Since we only want to dump COLLATE clauses for attributes whose
+			 * collation is different from their type's default, we use a CASE
+			 * here to suppress uninteresting attcollations cheaply.
+			 */
+			appendPQExpBufferStr(q,
+								 "CASE WHEN a.attcollation <> t.typcollation "
+								 "THEN a.attcollation ELSE 0 END AS attcollation,\n");
+		}
+		else
+			appendPQExpBufferStr(q,
+								 "0 AS attcollation,\n");
+
 		if (fout->remoteVersion >= 140000)
 			appendPQExpBuffer(q,
 							  "a.attcompression AS attcompression,\n");
 		else
 			appendPQExpBuffer(q,
 							  "'' AS attcompression,\n");
+
+		appendPQExpBuffer(q,
+						  "pg_catalog.array_to_string(e.attoptions, ',') AS attencoding,\n");
 
 		if (fout->remoteVersion >= 90200)
 			appendPQExpBufferStr(q,
@@ -9128,6 +8958,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		appendPQExpBuffer(q,
 						  "FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_type t "
 						  "ON a.atttypid = t.oid\n"
+						  "LEFT OUTER JOIN pg_catalog.pg_attribute_encoding e ON e.attrelid = a.attrelid AND e.attnum = a.attnum \n"
 						  "WHERE a.attrelid = '%u'::pg_catalog.oid "
 						  "AND a.attnum > 0::pg_catalog.int2\n"
 						  "ORDER BY a.attnum",
@@ -9136,6 +8967,8 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
 
 		ntups = PQntuples(res);
+
+		i_attencoding = PQfnumber(res, "attencoding"); 
 
 		tbinfo->numatts = ntups;
 		tbinfo->attnames = (char **) pg_malloc(ntups * sizeof(char *));
@@ -9157,32 +8990,24 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		tbinfo->attmissingval = (char **) pg_malloc(ntups * sizeof(char *));
 		tbinfo->notnull = (bool *) pg_malloc(ntups * sizeof(bool));
 		tbinfo->inhNotNull = (bool *) pg_malloc(ntups * sizeof(bool));
+		tbinfo->attencoding = (char **) pg_malloc(ntups * sizeof(char *));
 		tbinfo->attrdefs = (AttrDefInfo **) pg_malloc(ntups * sizeof(AttrDefInfo *));
 		hasdefaults = false;
 
-		for (int j = 0; j < numatts; j++, r++)
+		for (int j = 0; j < ntups; j++)
 		{
-			if (j + 1 != atoi(PQgetvalue(res, r, i_attnum)))
+			if (j + 1 != atoi(PQgetvalue(res, j, PQfnumber(res, "attnum"))))
 				fatal("invalid column numbering in table \"%s\"",
 					  tbinfo->dobj.name);
-			tbinfo->attnames[j] = pg_strdup(PQgetvalue(res, r, i_attname));
-			tbinfo->atttypnames[j] = pg_strdup(PQgetvalue(res, r, i_atttypname));
-			tbinfo->atttypmod[j] = atoi(PQgetvalue(res, r, i_atttypmod));
-			tbinfo->attstattarget[j] = atoi(PQgetvalue(res, r, i_attstattarget));
-			tbinfo->attstorage[j] = *(PQgetvalue(res, r, i_attstorage));
-			tbinfo->typstorage[j] = *(PQgetvalue(res, r, i_typstorage));
-			tbinfo->attidentity[j] = *(PQgetvalue(res, r, i_attidentity));
-			tbinfo->attgenerated[j] = *(PQgetvalue(res, r, i_attgenerated));
+			tbinfo->attnames[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attname")));
+			tbinfo->atttypnames[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "atttypname")));
+			tbinfo->atttypmod[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "atttypmod")));
+			tbinfo->attstattarget[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "attstattarget")));
+			tbinfo->attstorage[j] = *(PQgetvalue(res, j, PQfnumber(res, "attstorage")));
+			tbinfo->typstorage[j] = *(PQgetvalue(res, j, PQfnumber(res, "typstorage")));
+			tbinfo->attidentity[j] = *(PQgetvalue(res, j, PQfnumber(res, "attidentity")));
+			tbinfo->attgenerated[j] = *(PQgetvalue(res, j, PQfnumber(res, "attgenerated")));
 			tbinfo->needs_override = tbinfo->needs_override || (tbinfo->attidentity[j] == ATTRIBUTE_IDENTITY_ALWAYS);
-			tbinfo->attisdropped[j] = (PQgetvalue(res, r, i_attisdropped)[0] == 't');
-			tbinfo->attlen[j] = atoi(PQgetvalue(res, r, i_attlen));
-			tbinfo->attalign[j] = *(PQgetvalue(res, r, i_attalign));
-			tbinfo->attislocal[j] = (PQgetvalue(res, r, i_attislocal)[0] == 't');
-			tbinfo->notnull[j] = (PQgetvalue(res, r, i_attnotnull)[0] == 't');
-			tbinfo->attoptions[j] = pg_strdup(PQgetvalue(res, r, i_attoptions));
-			tbinfo->attcollation[j] = atooid(PQgetvalue(res, r, i_attcollation));
-			tbinfo->attfdwoptions[j] = pg_strdup(PQgetvalue(res, r, i_attfdwoptions));
-			tbinfo->attmissingval[j] = pg_strdup(PQgetvalue(res, r, i_attmissingval));
 			tbinfo->attisdropped[j] = (PQgetvalue(res, j, PQfnumber(res, "attisdropped"))[0] == 't');
 			tbinfo->attlen[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "attlen")));
 			tbinfo->attalign[j] = *(PQgetvalue(res, j, PQfnumber(res, "attalign")));
@@ -9194,19 +9019,18 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			tbinfo->attfdwoptions[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attfdwoptions")));
 			tbinfo->attmissingval[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attmissingval")));
 			tbinfo->attrdefs[j] = NULL; /* fix below */
-			if (PQgetvalue(res, r, i_atthasdef)[0] == 't')
+			if (PQgetvalue(res, j, PQfnumber(res, "atthasdef"))[0] == 't')
 				hasdefaults = true;
 			/* these flags will be set in flagInhAttrs() */
 			tbinfo->inhNotNull[j] = false;
 
 			/* column storage attributes */
-			if (!PQgetisnull(res, r, PQfnumber(res, "attencoding")))
-				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, PQfnumber(res, "attencoding")));
+			if (!PQgetisnull(res, j, i_attencoding))
+				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, j, i_attencoding));
 			else
 				tbinfo->attencoding[j] = NULL;
 		}
 
-		if (hasdefaults)
 		PQclear(res);
 
 		/*
@@ -9215,134 +9039,106 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		 */
 		if (!dopt->dataOnly && hasdefaults)
 		{
-			/* Collect OIDs of interesting tables that have defaults */
-			if (tbloids->len > 1)	/* do we have more than the '{'? */
-				appendPQExpBufferChar(tbloids, ',');
-			appendPQExpBuffer(tbloids, "%u", tbinfo->dobj.catId.oid);
-		}
-	}
+			AttrDefInfo *attrdefs;
+			int			numDefaults;
 
-	PQclear(res);
+			pg_log_info("finding default expressions of table \"%s.%s\"",
+						tbinfo->dobj.namespace->dobj.name,
+						tbinfo->dobj.name);
 
-	/*
-	 * Now get info about column defaults.  This is skipped for a data-only
-	 * dump, as it is only needed for table schemas.
-	 */
-	if (!dopt->dataOnly && tbloids->len > 1)
-	{
-		AttrDefInfo *attrdefs;
-		int			numDefaults;
-		TableInfo  *tbinfo = NULL;
+			printfPQExpBuffer(q, "SELECT tableoid, oid, adnum, "
+							  "pg_catalog.pg_get_expr(adbin, adrelid) AS adsrc "
+							  "FROM pg_catalog.pg_attrdef "
+							  "WHERE adrelid = '%u'::pg_catalog.oid",
+							  tbinfo->dobj.catId.oid);
 
-		pg_log_info("finding table default expressions");
+			res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
 
-		appendPQExpBufferChar(tbloids, '}');
+			numDefaults = PQntuples(res);
+			attrdefs = (AttrDefInfo *) pg_malloc(numDefaults * sizeof(AttrDefInfo));
 
-		printfPQExpBuffer(q, "SELECT a.tableoid, a.oid, adrelid, adnum, "
-						  "pg_catalog.pg_get_expr(adbin, adrelid) AS adsrc\n"
-						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
-						  "JOIN pg_catalog.pg_attrdef a ON (src.tbloid = a.adrelid)\n"
-						  "ORDER BY a.adrelid, a.adnum",
-						  tbloids->data);
-
-		res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
-
-		numDefaults = PQntuples(res);
-		attrdefs = (AttrDefInfo *) pg_malloc(numDefaults * sizeof(AttrDefInfo));
-
-		curtblindx = -1;
-		for (int j = 0; j < numDefaults; j++)
-		{
-			Oid			adtableoid = atooid(PQgetvalue(res, j, 0));
-			Oid			adoid = atooid(PQgetvalue(res, j, 1));
-			Oid			adrelid = atooid(PQgetvalue(res, j, 2));
-			int			adnum = atoi(PQgetvalue(res, j, 3));
-			char	   *adsrc = PQgetvalue(res, j, 4);
-
-			/*
-			 * Locate the associated TableInfo; we rely on tblinfo[] being in
-			 * OID order.
-			 */
-			if (tbinfo == NULL || tbinfo->dobj.catId.oid != adrelid)
+			for (int j = 0; j < numDefaults; j++)
 			{
-				while (++curtblindx < numTables)
+				int			adnum;
+
+				adnum = atoi(PQgetvalue(res, j, 2));
+
+				if (adnum <= 0 || adnum > ntups)
+					fatal("invalid adnum value %d for table \"%s\"",
+						  adnum, tbinfo->dobj.name);
+
+				/*
+				 * dropped columns shouldn't have defaults, but just in case,
+				 * ignore 'em
+				 */
+				if (tbinfo->attisdropped[adnum - 1])
+					continue;
+
+				attrdefs[j].dobj.objType = DO_ATTRDEF;
+				attrdefs[j].dobj.catId.tableoid = atooid(PQgetvalue(res, j, 0));
+				attrdefs[j].dobj.catId.oid = atooid(PQgetvalue(res, j, 1));
+				AssignDumpId(&attrdefs[j].dobj);
+				attrdefs[j].adtable = tbinfo;
+				attrdefs[j].adnum = adnum;
+				attrdefs[j].adef_expr = pg_strdup(PQgetvalue(res, j, 3));
+
+				attrdefs[j].dobj.name = pg_strdup(tbinfo->dobj.name);
+				attrdefs[j].dobj.namespace = tbinfo->dobj.namespace;
+
+				attrdefs[j].dobj.dump = tbinfo->dobj.dump;
+
+				/*
+				 * Figure out whether the default/generation expression should
+				 * be dumped as part of the main CREATE TABLE (or similar)
+				 * command or as a separate ALTER TABLE (or similar) command.
+				 * The preference is to put it into the CREATE command, but in
+				 * some cases that's not possible.
+				 */
+				if (tbinfo->attgenerated[adnum - 1])
 				{
-					tbinfo = &tblinfo[curtblindx];
-					if (tbinfo->dobj.catId.oid == adrelid)
-						break;
+					/*
+					 * Column generation expressions cannot be dumped
+					 * separately, because there is no syntax for it.  The
+					 * !shouldPrintColumn case below will be tempted to set
+					 * them to separate if they are attached to an inherited
+					 * column without a local definition, but that would be
+					 * wrong and unnecessary, because generation expressions
+					 * are always inherited, so there is no need to set them
+					 * again in child tables, and there is no syntax for it
+					 * either.  By setting separate to false here we prevent
+					 * the "default" from being processed as its own dumpable
+					 * object, and flagInhAttrs() will remove it from the
+					 * table when it detects that it belongs to an inherited
+					 * column.
+					 */
+					attrdefs[j].separate = false;
 				}
-				if (curtblindx >= numTables)
-					fatal("unrecognized table OID %u", adrelid);
-			}
+				else if (tbinfo->relkind == RELKIND_VIEW)
+				{
+					/*
+					 * Defaults on a VIEW must always be dumped as separate
+					 * ALTER TABLE commands.
+					 */
+					attrdefs[j].separate = true;
+				}
+				else if (!shouldPrintColumn(dopt, tbinfo, adnum - 1))
+				{
+					/* column will be suppressed, print default separately */
+					attrdefs[j].separate = true;
+				}
+				else
+				{
+					attrdefs[j].separate = false;
+				}
 
-			if (adnum <= 0 || adnum > tbinfo->numatts)
-				fatal("invalid adnum value %d for table \"%s\"",
-					  adnum, tbinfo->dobj.name);
-
-			/*
-			 * dropped columns shouldn't have defaults, but just in case,
-			 * ignore 'em
-			 */
-			if (tbinfo->attisdropped[adnum - 1])
-				continue;
-
-			attrdefs[j].dobj.objType = DO_ATTRDEF;
-			attrdefs[j].dobj.catId.tableoid = adtableoid;
-			attrdefs[j].dobj.catId.oid = adoid;
-			AssignDumpId(&attrdefs[j].dobj);
-			attrdefs[j].adtable = tbinfo;
-			attrdefs[j].adnum = adnum;
-			attrdefs[j].adef_expr = pg_strdup(adsrc);
-
-			attrdefs[j].dobj.name = pg_strdup(tbinfo->dobj.name);
-			attrdefs[j].dobj.namespace = tbinfo->dobj.namespace;
-
-			attrdefs[j].dobj.dump = tbinfo->dobj.dump;
-
-			/*
-			 * Figure out whether the default/generation expression should be
-			 * dumped as part of the main CREATE TABLE (or similar) command or
-			 * as a separate ALTER TABLE (or similar) command. The preference
-			 * is to put it into the CREATE command, but in some cases that's
-			 * not possible.
-			 */
-			if (tbinfo->attgenerated[adnum - 1])
-			{
-				/*
-				 * Column generation expressions cannot be dumped separately,
-				 * because there is no syntax for it.  The !shouldPrintColumn
-				 * case below will be tempted to set them to separate if they
-				 * are attached to an inherited column without a local
-				 * definition, but that would be wrong and unnecessary,
-				 * because generation expressions are always inherited, so
-				 * there is no need to set them again in child tables, and
-				 * there is no syntax for it either.  By setting separate to
-				 * false here we prevent the "default" from being processed as
-				 * its own dumpable object, and flagInhAttrs() will remove it
-				 * from the table when it detects that it belongs to an
-				 * inherited column.
-				 */
-				attrdefs[j].separate = false;
-			}
-			else if (tbinfo->relkind == RELKIND_VIEW)
-			{
-				/*
-				 * Defaults on a VIEW must always be dumped as separate ALTER
-				 * TABLE commands.
-				 */
-				attrdefs[j].separate = true;
-			}
-			else if (!shouldPrintColumn(dopt, tbinfo, adnum - 1))
-			{
-				/* column will be suppressed, print default separately */
-				attrdefs[j].separate = true;
-			}
-			else
-			{
-				attrdefs[j].separate = false;
-			}
 				if (!attrdefs[j].separate)
 				{
+					/*
+					 * Mark the default as needing to appear before the table,
+					 * so that any dependencies it has must be emitted before
+					 * the CREATE TABLE.  If this is not possible, we'll
+					 * change to "separate" mode while sorting dependencies.
+					 */
 					addObjectDependency(&tbinfo->dobj,
 										attrdefs[j].dobj.dumpId);
 				}
@@ -9366,144 +9162,80 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 						tbinfo->dobj.name);
 
 			resetPQExpBuffer(q);
-
-			if (!attrdefs[j].separate)
+			if (fout->remoteVersion >= 90200)
 			{
 				/*
-				 * Mark the default as needing to appear before the table, so
-				 * that any dependencies it has must be emitted before the
-				 * CREATE TABLE.  If this is not possible, we'll change to
-				 * "separate" mode while sorting dependencies.
+				 * convalidated is new in 9.2 (actually, it is there in 9.1,
+				 * but it wasn't ever false for check constraints until 9.2).
 				 */
-				addObjectDependency(&tbinfo->dobj,
-									attrdefs[j].dobj.dumpId);
+				appendPQExpBuffer(q, "SELECT tableoid, oid, conname, "
+								  "pg_catalog.pg_get_constraintdef(oid) AS consrc, "
+								  "conislocal, convalidated "
+								  "FROM pg_catalog.pg_constraint "
+								  "WHERE conrelid = '%u'::pg_catalog.oid "
+								  "   AND contype = 'c' "
+								  "ORDER BY conname",
+								  tbinfo->dobj.catId.oid);
 			}
-
-			tbinfo->attrdefs[adnum - 1] = &attrdefs[j];
-		}
-
-		PQclear(res);
-	}
-
-	/*
-	 * Get info about table CHECK constraints.  This is skipped for a
-	 * data-only dump, as it is only needed for table schemas.
-	 */
-	if (!dopt->dataOnly && checkoids->len > 2)
-	{
-		ConstraintInfo *constrs;
-		int			numConstrs;
-		int			i_tableoid;
-		int			i_oid;
-		int			i_conrelid;
-		int			i_conname;
-		int			i_consrc;
-		int			i_conislocal;
-		int			i_convalidated;
-
-		pg_log_info("finding table check constraints");
-
-		resetPQExpBuffer(q);
-		appendPQExpBufferStr(q,
-							 "SELECT c.tableoid, c.oid, conrelid, conname, "
-							 "pg_catalog.pg_get_constraintdef(c.oid) AS consrc, ");
-		if (fout->remoteVersion >= 90200)
-		{
-			/*
-			 * convalidated is new in 9.2 (actually, it is there in 9.1, but
-			 * it wasn't ever false for check constraints until 9.2).
-			 */
-			appendPQExpBufferStr(q,
-								 "conislocal, convalidated ");
-		}
-		else if (fout->remoteVersion >= 80400)
-		{
-			/* conislocal is new in 8.4 */
-			appendPQExpBufferStr(q,
-								 "conislocal, true AS convalidated ");
-		}
-		else
-		{
-			appendPQExpBufferStr(q,
-								 "true AS conislocal, true AS convalidated ");
-		}
-		appendPQExpBuffer(q,
-						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
-						  "JOIN pg_catalog.pg_constraint c ON (src.tbloid = c.conrelid)\n"
-						  "WHERE contype = 'c' "
-						  "ORDER BY c.conrelid, c.conname",
-						  checkoids->data);
-
-		res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
-
-		numConstrs = PQntuples(res);
-		constrs = (ConstraintInfo *) pg_malloc(numConstrs * sizeof(ConstraintInfo));
-
-		i_tableoid = PQfnumber(res, "tableoid");
-		i_oid = PQfnumber(res, "oid");
-		i_conrelid = PQfnumber(res, "conrelid");
-		i_conname = PQfnumber(res, "conname");
-		i_consrc = PQfnumber(res, "consrc");
-		i_conislocal = PQfnumber(res, "conislocal");
-		i_convalidated = PQfnumber(res, "convalidated");
-
-		/* As above, this loop iterates once per table, not once per row */
-		curtblindx = -1;
-		for (int j = 0; j < numConstrs;)
-		{
-			Oid			conrelid = atooid(PQgetvalue(res, j, i_conrelid));
-			TableInfo  *tbinfo = NULL;
-			int			numcons;
-
-			/* Count rows for this table */
-			for (numcons = 1; numcons < numConstrs - j; numcons++)
-				if (atooid(PQgetvalue(res, j + numcons, i_conrelid)) != conrelid)
-					break;
-
-			/*
-			 * Locate the associated TableInfo; we rely on tblinfo[] being in
-			 * OID order.
-			 */
-			while (++curtblindx < numTables)
+			else if (fout->remoteVersion >= 80400)
 			{
-				tbinfo = &tblinfo[curtblindx];
-				if (tbinfo->dobj.catId.oid == conrelid)
-					break;
+				/* conislocal is new in 8.4 */
+				appendPQExpBuffer(q, "SELECT tableoid, oid, conname, "
+								  "pg_catalog.pg_get_constraintdef(oid) AS consrc, "
+								  "conislocal, true AS convalidated "
+								  "FROM pg_catalog.pg_constraint "
+								  "WHERE conrelid = '%u'::pg_catalog.oid "
+								  "   AND contype = 'c' "
+								  "ORDER BY conname",
+								  tbinfo->dobj.catId.oid);
 			}
-			if (curtblindx >= numTables)
-				fatal("unrecognized table OID %u", conrelid);
+			else
+			{
+				appendPQExpBuffer(q, "SELECT tableoid, oid, conname, "
+								  "pg_catalog.pg_get_constraintdef(oid) AS consrc, "
+								  "true AS conislocal, true AS convalidated "
+								  "FROM pg_catalog.pg_constraint "
+								  "WHERE conrelid = '%u'::pg_catalog.oid "
+								  "   AND contype = 'c' "
+								  "ORDER BY conname",
+								  tbinfo->dobj.catId.oid);
+			}
 
-			if (numcons != tbinfo->ncheck)
+			res = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
+
+			numConstrs = PQntuples(res);
+			if (numConstrs != tbinfo->ncheck)
 			{
 				pg_log_error(ngettext("expected %d check constraint on table \"%s\" but found %d",
 									  "expected %d check constraints on table \"%s\" but found %d",
 									  tbinfo->ncheck),
-							 tbinfo->ncheck, tbinfo->dobj.name, numcons);
+							 tbinfo->ncheck, tbinfo->dobj.name, numConstrs);
 				pg_log_error("(The system catalogs might be corrupted.)");
 				exit_nicely(1);
 			}
 
-			tbinfo->checkexprs = constrs + j;
+			constrs = (ConstraintInfo *) pg_malloc(numConstrs * sizeof(ConstraintInfo));
+			tbinfo->checkexprs = constrs;
 
-			for (int c = 0; c < numcons; c++, j++)
+			for (int j = 0; j < numConstrs; j++)
 			{
-				bool		validated = PQgetvalue(res, j, i_convalidated)[0] == 't';
+				bool		validated = PQgetvalue(res, j, 5)[0] == 't';
 
 				constrs[j].dobj.objType = DO_CONSTRAINT;
-				constrs[j].dobj.catId.tableoid = atooid(PQgetvalue(res, j, i_tableoid));
-				constrs[j].dobj.catId.oid = atooid(PQgetvalue(res, j, i_oid));
+				constrs[j].dobj.catId.tableoid = atooid(PQgetvalue(res, j, 0));
+				constrs[j].dobj.catId.oid = atooid(PQgetvalue(res, j, 1));
 				AssignDumpId(&constrs[j].dobj);
-				constrs[j].dobj.name = pg_strdup(PQgetvalue(res, j, i_conname));
+				constrs[j].dobj.name = pg_strdup(PQgetvalue(res, j, 2));
 				constrs[j].dobj.namespace = tbinfo->dobj.namespace;
 				constrs[j].contable = tbinfo;
 				constrs[j].condomain = NULL;
 				constrs[j].contype = 'c';
-				constrs[j].condef = pg_strdup(PQgetvalue(res, j, i_consrc));
+				constrs[j].condef = pg_strdup(PQgetvalue(res, j, 3));
 				constrs[j].confrelid = InvalidOid;
 				constrs[j].conindex = 0;
 				constrs[j].condeferrable = false;
 				constrs[j].condeferred = false;
-				constrs[j].conislocal = (PQgetvalue(res, j, i_conislocal)[0] == 't');
+				constrs[j].conislocal = (PQgetvalue(res, j, 4)[0] == 't');
 
 				/*
 				 * An unvalidated constraint needs to be dumped separately, so
@@ -9533,34 +9265,14 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				 * constraint must be split out from the table definition.
 				 */
 			}
+			PQclear(res);
 		}
-
-		PQclear(res);
 	}
 
 	destroyPQExpBuffer(q);
-	destroyPQExpBuffer(tbloids);
-	destroyPQExpBuffer(checkoids);
 }
 
-/*
- * Test whether a column should be printed as part of table's CREATE TABLE.
- * Column number is zero-based.
- *
- * Normally this is always true, but it's false for dropped columns, as well
- * as those that were inherited without any local definition.  (If we print
- * such a column it will mistakenly get pg_attribute.attislocal set to true.)
- * For partitions, it's always true, because we want the partitions to be
- * created independently and ATTACH PARTITION used afterwards.
- *
- * In binary_upgrade mode, we must print all columns and fix the attislocal/
- * attisdropped state later, so as to keep control of the physical column
- * order.
- *
- * This function exists because there are scattered nonobvious places that
- * must be kept in sync with this decision.
- */
-bool
+
 shouldPrintColumn(const DumpOptions *dopt, const TableInfo *tbinfo, int colno)
 {
 	if (dopt->binary_upgrade)
