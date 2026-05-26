@@ -1,4 +1,3 @@
-
 create extension if not exists test_metadata;
 
 begin;
@@ -60,7 +59,7 @@ SELECT test_delete_metadata_queue(:queue2);
 
 commit;
 
-
+-- Test error in transaction handling
 begin;
 SELECT test_create_metadata_queue() as queue1
 \gset
@@ -69,5 +68,13 @@ SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, :queue1)
     FROM gp_dist_random('gp_id');
 
 SELECT 1/0; -- Error
+
+rollback;
+
+-- Test sending to non-existent queue
+begin;
+
+SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, 10000)
+    FROM gp_dist_random('gp_id');
 
 rollback;

@@ -925,19 +925,17 @@ MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueI
 	/* 
 	 * queue is expected to be created by the extension
 	 */
-	Assert(queue != NULL);
+	if (queue == NULL)
+	{
+		elog(WARNING, "Could not recieve chunk. No metadata queue with id %u", queue_id);
+		pqPfree(metadata_chunk);
+		return;
+	}
 
-	if (queue)
-	{
-		metadata_chunk->next = queue->chunks;
-		metadata_chunk->segindex = segdbDesc->segindex;
-		queue->chunks = metadata_chunk;
-		queue->count++;
-	}
-	else
-	{
-		free(metadata_chunk);
-	}
+	metadata_chunk->next = queue->chunks;
+	metadata_chunk->segindex = segdbDesc->segindex;
+	queue->chunks = metadata_chunk;
+	queue->count++;
 }
 
 ggMetadataChunkIterator
@@ -993,7 +991,7 @@ PQCleanMetadataInternal(ggMetadataQueue *queue)
 	{
 		ggMetadataChunkIterator next = chunk->next;
 
-		free(chunk);
+		pqPfree(chunk);
 		chunk = next;
 	}
 	queue->chunks = NULL;

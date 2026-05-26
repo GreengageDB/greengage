@@ -2407,7 +2407,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	 * we can not use palloc/pqAlloc here as this is a handler.
 	 */
 
-	ggMetadataChunk *chunk = malloc(sizeof(ggMetadataChunk) + payload_len);
+	ggMetadataChunk *chunk = pqPalloc(sizeof(ggMetadataChunk) + payload_len);
 	if (chunk == NULL)
 		return 1;
 
@@ -2416,7 +2416,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 
 	if (pqGetnchar(chunk->payload, payload_len, conn))
 	{
-		free(chunk);
+		pqPfree(chunk);
 		return 1;
 	}
 

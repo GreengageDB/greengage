@@ -67,10 +67,15 @@ test_send_metadata(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* Send custom metadata */
-	elog(WARNING, "Sending custom metadata...");
+	/*
+	 * Send custom metadata, do not log when wrong queue test performed,
+	 * to not clutter output and deal with output lines ordering.
+	 */
+	if (queue_id != 10000)
+		elog(WARNING, "Sending custom metadata...");
 	pq_metadatasend(metadata, len, queue_id);
-	elog(WARNING, "Custom metadata sent!");
+	if (queue_id != 10000)
+		elog(WARNING, "Custom metadata sent!");
 
 	pfree(metadata);
 
