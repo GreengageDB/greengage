@@ -59,7 +59,6 @@ typedef enum
 typedef struct file_entry_t
 {
 	uint32		status;			/* hash status */
-
 	const char *path;
 	bool		isrelfile;		/* is it a relation data file? */
 
@@ -91,7 +90,9 @@ typedef struct file_entry_t
 	 * What will we do to the file?
 	 */
 	file_action_t action;
+
 } file_entry_t;
+
 
 /*
  * This contains the final decisions on what to do with each file.
@@ -117,10 +118,6 @@ extern void process_target_file(const char *path, file_type_t type,
 extern void process_target_wal_aofile_change(RelFileNode rnode,
 											 int segno,
 											 int64 offset);
-extern void process_target_wal_block_change(ForkNumber forknum,
-											RelFileNode rnode,
-											BlockNumber blkno);
-extern void decide_file_actions(void);
 extern void process_target_wal_block_change(ForkNumber forknum,
 											RelFileNode rnode,
 											BlockNumber blkno);

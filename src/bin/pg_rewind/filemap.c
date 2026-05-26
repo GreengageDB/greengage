@@ -29,6 +29,7 @@
 #include "catalog/catalog.h"
 #include "catalog/pg_tablespace_d.h"
 #include "common/hashfn.h"
+#include "common/kmgr_utils.h"
 #include "common/string.h"
 #include "datapagemap.h"
 #include "filemap.h"
@@ -59,9 +60,7 @@ static filehash_hash *filehash;
 static bool isRelDataFile(const char *path);
 static char *datasegpath(RelFileNode rnode, ForkNumber forknum,
 						 BlockNumber segno);
-static int	path_cmp(const void *a, const void *b);
 
-static file_entry_t *get_filemap_entry(const char *path, bool create);
 
 static file_entry_t *insert_filehash_entry(const char *path);
 static file_entry_t *lookup_filehash_entry(const char *path);
@@ -110,6 +109,13 @@ static const char *excludeDirContents[] =
 
 	/* Contents removed on startup, see AsyncShmemInit(). */
 	"pg_notify",
+
+	/*
+	 * Skip cryptographic keys. It's generally not a good idea to copy the
+	 * cryptographic keys from source database because these might use
+	 * different cluster key.
+	 */
+	//KMGR_DIR,
 
 	/*
 	 * Old contents are loaded for possible debugging but are not required for
@@ -210,6 +216,7 @@ insert_filehash_entry(const char *path)
 		entry->source_type = FILE_TYPE_UNDEFINED;
 		entry->source_size = 0;
 		entry->source_link_target = NULL;
+		entry->is_gp_tablespace = false;
 
 		entry->action = FILE_ACTION_UNDECIDED;
 	}
@@ -223,66 +230,6 @@ lookup_filehash_entry(const char *path)
 	return filehash_lookup(filehash, path);
 }
 
-/* Look up or create entry for 'path' */
-static file_entry_t *
-get_filemap_entry(const char *path, bool create)
-{
-	filemap_t  *map = filemap;
-	file_entry_t *entry;
-	file_entry_t **e;
-	file_entry_t key;
-	file_entry_t *key_ptr;
-
-	if (map->array)
-	{
-		key.path = (char *) path;
-		key_ptr = &key;
-		e = bsearch(&key_ptr, map->array, map->narray, sizeof(file_entry_t *),
-					path_cmp);
-	}
-	else
-		e = NULL;
-
-	if (e)
-		entry = *e;
-	else if (!create)
-		entry = NULL;
-	else
-	{
-		/* Create a new entry for this file */
-		entry = pg_malloc(sizeof(file_entry_t));
-		entry->path = pg_strdup(path);
-		entry->isrelfile = isRelDataFile(path);
-		entry->action = FILE_ACTION_UNDECIDED;
-
-		entry->target_exists = false;
-		entry->target_type = FILE_TYPE_UNDEFINED;
-		entry->target_size = 0;
-		entry->target_link_target = NULL;
-		entry->target_pages_to_overwrite.bitmap = NULL;
-		entry->target_pages_to_overwrite.bitmapsize = 0;
-
-		entry->source_exists = false;
-		entry->source_type = FILE_TYPE_UNDEFINED;
-		entry->source_size = 0;
-		entry->source_link_target = NULL;
-
-		entry->is_gp_tablespace = false;
-
-		entry->next = NULL;
-
-		if (map->last)
-		{
-			map->last->next = entry;
-			map->last = entry;
-		}
-		else
-			map->first = map->last = entry;
-		map->nlist++;
-	}
-
-	return entry;
-}
 
 /*
  * Callback for processing source file list.
@@ -297,14 +244,12 @@ process_source_file(const char *path, file_type_t type, size_t size,
 {
 	file_entry_t *entry;
 
-	Assert(filemap->array == NULL);
-
 	/*
-	 * Pretend that pg_wal is a directory, even if it's really a symlink. We
+	 * Pretend that pg_wal/log is a directory, even if it's really a symlink. We
 	 * don't want to mess with the symlink itself, nor complain if it's a
 	 * symlink in source but not in target or vice versa.
 	 */
-	if (strcmp(path, "pg_wal") == 0 && type == FILE_TYPE_SYMLINK)
+	if (((strcmp(path, "pg_wal") == 0 || strcmp(path, "log") == 0)) && type == FILE_TYPE_SYMLINK)
 		type = FILE_TYPE_DIRECTORY;
 
 	/*
@@ -318,6 +263,7 @@ process_source_file(const char *path, file_type_t type, size_t size,
 	entry = insert_filehash_entry(path);
 	if (entry->source_exists)
 		pg_fatal("duplicate source file \"%s\"", path);
+
 	entry->source_exists = true;
 	entry->source_type = type;
 	entry->source_size = size;
@@ -333,7 +279,7 @@ void
 process_target_file(const char *path, file_type_t type, size_t size,
 					const char *link_target)
 {
-	filemap_t  *map = filemap;
+
 	file_entry_t *entry;
 
 	/*
@@ -362,32 +308,17 @@ process_target_file(const char *path, file_type_t type, size_t size,
 			return;
 	}
 
-	if (map->array == NULL)
-	{
-		/* on first call, initialize lookup array */
-		if (map->nlist == 0)
-		{
-			/* should not happen */
-			pg_fatal("source file list is empty");
-		}
-
-		filemap_list_to_array(map);
-
-		Assert(map->array != NULL);
-
-		qsort(map->array, map->narray, sizeof(file_entry_t *), path_cmp);
-	}
-
 	/*
-	 * Like in process_source_file, pretend that pg_wal is always a directory.
+	 * Like in process_source_file, pretend that pg_wal/log is always a directory.
 	 */
-	if (strcmp(path, "pg_wal") == 0 && type == FILE_TYPE_SYMLINK)
+	if (((strcmp(path, "pg_wal") == 0 || strcmp(path, "log") == 0)) && type == FILE_TYPE_SYMLINK)
 		type = FILE_TYPE_DIRECTORY;
 
 	/* Remember this target file */
 	entry = insert_filehash_entry(path);
 	if (entry->target_exists)
 		pg_fatal("duplicate source file \"%s\"", path);
+
 	entry->target_exists = true;
 	entry->target_type = type;
 	entry->target_size = size;
@@ -412,12 +343,11 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	BlockNumber blkno_inseg;
 	int			segno;
 
-	Assert(filemap->array);
-
 	segno = blkno / RELSEG_SIZE;
 	blkno_inseg = blkno % RELSEG_SIZE;
 
 	path = datasegpath(rnode, forknum, segno);
+
 	entry = lookup_filehash_entry(path);
 	pfree(path);
 
@@ -439,8 +369,6 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	 */
 	if (entry)
 	{
-		int64		end_offset;
-
 		Assert(entry->isrelfile);
 
 		if (entry->target_exists)
@@ -467,10 +395,8 @@ process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
 	char	   *path;
 	file_entry_t *entry;
 
-	Assert(filemap->array);
-
 	path = datasegpath(rnode, MAIN_FORKNUM, segno);
-	entry = get_filemap_entry(path, false);
+	entry = lookup_filehash_entry(path);
 	pfree(path);
 
 	if (entry && entry->target_exists)
@@ -578,33 +504,6 @@ check_file_excluded(const char *path, bool is_source)
 	return false;
 }
 
-/*
- * Convert the linked list of entries in map->first/last to the array,
- * map->array.
- */
-static void
-filemap_list_to_array(filemap_t *map)
-{
-	int			narray;
-	file_entry_t *entry,
-			   *next;
-
-	map->array = (file_entry_t **)
-		pg_realloc(map->array,
-				   (map->nlist + map->narray) * sizeof(file_entry_t *));
-
-	narray = map->narray;
-	for (entry = map->first; entry != NULL; entry = next)
-	{
-		map->array[narray++] = entry;
-		next = entry->next;
-		entry->next = NULL;
-	}
-	Assert(narray == map->nlist + map->narray);
-	map->narray = narray;
-	map->nlist = 0;
-	map->first = map->last = NULL;
-}
 
 static const char *
 action_to_str(file_action_t action)
@@ -876,9 +775,6 @@ decide_file_action(file_entry_t *entry)
 				return FILE_ACTION_COPY;
 			case FILE_TYPE_FIFO:
 				return FILE_ACTION_NONE;
-				return FILE_ACTION_CREATE;
-			case FILE_TYPE_REGULAR:
-				return FILE_ACTION_COPY;
 			case FILE_TYPE_UNDEFINED:
 				pg_fatal("unknown file type for \"%s\"", entry->path);
 				break;

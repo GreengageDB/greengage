@@ -35,10 +35,11 @@ static void create_target_dir(const char *path);
 static void remove_target_dir(const char *path);
 static void create_target_symlink(const char *path, const char *link);
 static void remove_target_symlink(const char *path);
-static void create_target_tablespace_layout(const char *path, const char *link);
 
+static void create_target_tablespace_layout(const char *path, const char *link);
 static void recurse_dir(const char *datadir, const char *parentpath,
 						process_file_callback_t callback);
+
 
 /*
  * Open a target file for writing. If 'trunc' is true and the file already
@@ -174,7 +175,6 @@ create_target(file_entry_t *entry)
 				create_target_tablespace_layout(entry->path, entry->source_link_target);
 			else
 				create_target_symlink(entry->path, entry->source_link_target);
-			create_target_symlink(entry->path, entry->source_link_target);
 			break;
 
 		case FILE_TYPE_REGULAR:
@@ -320,6 +320,7 @@ create_target_tablespace_layout(const char *path, const char *link)
 
 	pfree(newlink);
 }
+
 /*
  * Sync target data directory to ensure that modifications are safely on disk.
  *
