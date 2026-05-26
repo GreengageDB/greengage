@@ -496,6 +496,19 @@ AtEOXact_SPI(bool isCommit)
 				(errcode(ERRCODE_WARNING),
 				 errmsg("transaction left non-empty SPI stack"),
 				 errhint("Check for missing \"SPI_finish\" calls.")));
+
+	/* Sync GUCs between the transactions. */
+	if (Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+	{
+		ListCell   *lc;
+		foreach(lc, gp_guc_restore_list)
+		{
+			struct config_generic *gconfig = lfirst(lc);
+			DispatchSyncPGVariable(gconfig);
+		}
+		list_free(gp_guc_restore_list);
+		gp_guc_restore_list = NIL;
+	}
 }
 
 /*
