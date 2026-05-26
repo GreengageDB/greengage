@@ -144,21 +144,3 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # # Rebuild prod-ready version without debug extensions and pack it to deb
-  # package:
-  #   needs: build
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       target_os: [ubuntu]
-  #   permissions:
-  #     contents: read  # Explicit for default behavior
-  #     packages: write # Required for GHCR access
-  #     actions: write  # Required for artifact upload
-  #   uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@CI-5720
-  #   with:
-  #     version: 8
-  #     target_os: ${{ matrix.target_os }}
-  #     test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
-  #   secrets:
-  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
