@@ -595,10 +595,23 @@ vacuum(List *relations, VacuumParams *params,
 	if ((params->options & VACOPT_VACUUM) && !IsAutoVacuumWorkerProcess())
 	{
 		/*
-		 * Update pg_database.datfrozenxid, and truncate pg_xact if possible.
-		 * (autovacuum.c does this for itself.)
+		 * GPDB vacuums an Append-Optimized table in multiple sub phases, update
+		 * pg_database.datfrozenxid in the last phase (VACOPT_AO_POST_CLEANUP_PHASE)
+		 * as an ending task of the whole VACUUM operation, intead of doing it in very
+		 * sub phase.
+		 * 
+		 * More important, phase VACOPT_AO_COMPACT_PHASE requires two-phase commit
+		 * which could introduce distributed deadlock if acquiring DatabaseFrozenIds lock
+		 * in the case of multiple VACUUM sessions in the same database.
 		 */
-		vac_update_datfrozenxid();
+		if (!(params->options & (VACOPT_AO_PRE_CLEANUP_PHASE | VACOPT_AO_COMPACT_PHASE)))
+		{
+			/*
+			 * Update pg_database.datfrozenxid, and truncate pg_xact if possible.
+			 * (autovacuum.c does this for itself.)
+			 */
+			vac_update_datfrozenxid();
+		}
 	}
 
 	/*
@@ -1176,14 +1189,31 @@ vacuum_set_xid_limits(Relation rel,
 	/*
 	 * We can always ignore processes running lazy vacuum.  This is because we
 	 * use these values only for deciding which tuples we must keep in the
-	 * tables.  Since lazy vacuum doesn't write its XID anywhere, it's safe to
-	 * ignore it.  In theory it could be problematic to ignore lazy vacuums in
-	 * a full vacuum, but keep in mind that only one vacuum process can be
-	 * working on a particular table at any time, and that each vacuum is
-	 * always an independent transaction.
+	 * tables.  Since lazy vacuum doesn't write its XID anywhere (usually no
+	 * XID assigned), it's safe to ignore it.  In theory it could be
+	 * problematic to ignore lazy vacuums in a full vacuum, but keep in mind
+	 * that only one vacuum process can be working on a particular table at
+	 * any time, and that each vacuum is always an independent transaction.
 	 */
-	*oldestXmin =
-		TransactionIdLimitedForOldSnapshots(GetOldestXmin(rel, PROCARRAY_FLAGS_VACUUM), rel);
+	*oldestXmin = GetOldestNonRemovableTransactionId(rel);
+
+	if (OldSnapshotThresholdActive())
+	{
+		TransactionId limit_xmin;
+		TimestampTz limit_ts;
+
+		if (TransactionIdLimitedForOldSnapshots(*oldestXmin, rel, &limit_xmin, &limit_ts))
+		{
+			/*
+			 * TODO: We should only set the threshold if we are pruning on the
+			 * basis of the increased limits. Not as crucial here as it is for
+			 * opportunistic pruning (which often happens at a much higher
+			 * frequency), but would still be a significant improvement.
+			 */
+			SetOldSnapshotThresholdTimestamp(limit_ts, limit_xmin);
+			*oldestXmin = limit_xmin;
+		}
+	}
 
 	Assert(TransactionIdIsNormal(*oldestXmin));
 
@@ -1677,18 +1707,27 @@ vac_update_datfrozenxid(void)
 	bool		dirty = false;
 
 	/*
-	 * Initialize the "min" calculation with GetOldestXmin, which is a
-	 * reasonable approximation to the minimum relfrozenxid for not-yet-
-	 * committed pg_class entries for new tables; see AddNewRelationTuple().
-	 * So we cannot produce a wrong minimum by starting with this.
+	 * Restrict this task to one backend per database.  This avoids race
+	 * conditions that would move datfrozenxid or datminmxid backward.  It
+	 * avoids calling vac_truncate_clog() with a datfrozenxid preceding a
+	 * datfrozenxid passed to an earlier vac_truncate_clog() call.
 	 *
-	 * GPDB: Use GetLocalOldestXmin here, rather than GetOldestXmin. We don't
+	 * GPDB: Use Local xmin here, rather than distributed one. We don't
 	 * want to include effects of distributed transactions in this. If a
 	 * database's datfrozenxid is past the oldest XID as determined by
 	 * distributed transactions, we will nevertheless never encounter such
 	 * XIDs on disk.
 	 */
-	newFrozenXid = GetLocalOldestXmin(NULL, PROCARRAY_FLAGS_VACUUM);
+	LockDatabaseFrozenIds(ExclusiveLock);
+
+	/*
+	 * Initialize the "min" calculation with
+	 * GetOldestNonRemovableTransactionId(), which is a reasonable
+	 * approximation to the minimum relfrozenxid for not-yet-committed
+	 * pg_class entries for new tables; see AddNewRelationTuple().  So we
+	 * cannot produce a wrong minimum by starting with this.
+	 */
+	newFrozenXid = GetLocalOldestNonRemovableTransactionId(NULL);
 
 	/*
 	 * Similarly, initialize the MultiXact "min" with the value that would be
@@ -1889,6 +1928,9 @@ vac_truncate_clog(TransactionId frozenXID,
 	bool		bogus = false;
 	bool		frozenAlreadyWrapped = false;
 
+	/* Restrict task to one backend per cluster; see SimpleLruTruncate(). */
+	LWLockAcquire(WrapLimitsVacuumLock, LW_EXCLUSIVE);
+
 	/* init oldest datoids to sync with my frozenXID/minMulti values */
 	oldestxid_datoid = MyDatabaseId;
 	minmulti_datoid = MyDatabaseId;
@@ -1998,6 +2040,8 @@ vac_truncate_clog(TransactionId frozenXID,
 	 */
 	SetTransactionIdLimit(frozenXID, oldestxid_datoid);
 	SetMultiXactIdLimit(minMulti, minmulti_datoid, false);
+
+	LWLockRelease(WrapLimitsVacuumLock);
 }
 
 
@@ -2047,8 +2091,9 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	StartTransactionCommand();
 
 	/*
-	 * Functions in indexes may want a snapshot set.  Also, setting a snapshot
-	 * ensures that RecentGlobalXmin is kept truly recent.
+	 * Need to acquire a snapshot to prevent pg_subtrans from being truncated,
+	 * cutoff xids in local memory wrapping around, and to have updated xmin
+	 * horizons.
 	 */
 	PushActiveSnapshot(GetTransactionSnapshot());
 
@@ -2076,15 +2121,16 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		 *
 		 * Note: these flags remain set until CommitTransaction or
 		 * AbortTransaction.  We don't want to clear them until we reset
-		 * MyPgXact->xid/xmin, else OldestXmin might appear to go backwards,
-		 * which is probably Not Good.
+		 * MyProc->xid/xmin, otherwise GetOldestNonRemovableTransactionId()
+		 * might appear to go backwards, which is probably Not Good.
 		 */
 		LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 #if 0 /* Upstream code not applicable to GPDB */
-		MyPgXact->vacuumFlags |= PROC_IN_VACUUM;
+		MyProc->vacuumFlags |= PROC_IN_VACUUM;
 #endif
 		if (params->is_wraparound)
-			MyPgXact->vacuumFlags |= PROC_VACUUM_FOR_WRAPAROUND;
+			MyProc->vacuumFlags |= PROC_VACUUM_FOR_WRAPAROUND;
+		ProcGlobal->vacuumFlags[MyProc->pgxactoff] = MyProc->vacuumFlags;
 		LWLockRelease(ProcArrayLock);
 	}
 
@@ -2464,7 +2510,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 
 	/*
 	 * If the relation has a secondary toast rel, vacuum that too while we
-	 * still hold the session lock on the master table.  Note however that
+	 * still hold the session lock on the main table.  Note however that
 	 * "analyze" will not get done on the toast table.  This is good, because
 	 * the toaster always uses hardcoded index access and statistics are
 	 * totally unimportant for toast relations.
@@ -2539,7 +2585,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	}
 
 	/*
-	 * Now release the session-level lock on the master table.
+	 * Now release the session-level lock on the main table.
 	 */
 	UnlockRelationIdForSession(&onerelid, lmode);
 

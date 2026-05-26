@@ -130,6 +130,7 @@ InitPostmasterChild(void)
 	InitializeLatchSupport();
 	MyLatch = &LocalLatchData;
 	InitLatch(MyLatch);
+	InitializeLatchWaitSet();
 
 	/*
 	 * If possible, make this process a group leader, so that the postmaster
@@ -162,6 +163,7 @@ InitStandaloneProcess(const char *argv0)
 	InitializeLatchSupport();
 	MyLatch = &LocalLatchData;
 	InitLatch(MyLatch);
+	InitializeLatchWaitSet();
 
 	/* Compute paths, no postmaster to inherit from */
 	if (my_exec_path[0] == '\0')

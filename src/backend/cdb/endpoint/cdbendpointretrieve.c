@@ -469,7 +469,7 @@ attach_receiver_mq(dsm_handle dsmHandle)
 	if (entry->retrieveTs != NULL)
 		ExecClearTuple(entry->retrieveTs);
 	else
-		entry->retrieveTs = MakeTupleTableSlot(td, &TTSOpsHeapTuple);
+		entry->retrieveTs = MakeTupleTableSlot(td, &TTSOpsMinimalTuple);
 
 	/* Create the tuple queue reader. */
 	entry->tqReader = CreateTupleQueueReader(entry->mqHandle);
@@ -518,7 +518,7 @@ static TupleTableSlot *
 retrieve_next_tuple()
 {
 	TupleTableSlot *result = NULL;
-	HeapTuple	tup = NULL;
+	MinimalTuple	tup = NULL;
 	bool		readerdone = false;
 	RetrieveExecEntry *entry = RetrieveCtl.current_entry;
 
@@ -581,9 +581,9 @@ retrieve_next_tuple()
 	{
 		ExecClearTuple(entry->retrieveTs);
 		result = entry->retrieveTs;
-		ExecStoreHeapTuple(tup, /* tuple to store */
-						   result,	/* slot in which to store the tuple */
-						   false);	/* slot should not pfree tuple */
+		ExecStoreMinimalTuple(tup,	  /* tuple to store */
+							  result, /* slot in which to store the tuple */
+							  false); /* slot should not pfree tuple */
 	}
 	return result;
 }

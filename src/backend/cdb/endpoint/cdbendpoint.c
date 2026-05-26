@@ -483,7 +483,7 @@ static Endpoint
 						errmsg("failed to allocate endpoint for session id %d", gp_session_id)));
 
 	generate_endpoint_name(sharedEndpoints[i].name, cursorName);
-	StrNCpy(sharedEndpoints[i].cursorName, cursorName, NAMEDATALEN);
+	strlcpy(sharedEndpoints[i].cursorName, cursorName, NAMEDATALEN);
 	sharedEndpoints[i].databaseID = MyDatabaseId;
 	sharedEndpoints[i].sessionID = gp_session_id;
 	sharedEndpoints[i].userID = GetSessionUserId();

@@ -46,6 +46,7 @@
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/timestamp.h"
 
 #include "catalog/gp_configuration_history.h"
 #include "catalog/gp_segment_configuration.h"

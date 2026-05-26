@@ -88,6 +88,7 @@
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
+#include "utils/timestamp.h"
 
 #include "cdb/cdbvars.h"  /* GpIdentity.segindex */
 #include "cdb/cdbtm.h"
@@ -3002,6 +3003,29 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				else
 					appendStringInfo(buf, "%d", MyProcPid);
 				break;
+
+			case 'P':
+				if (MyProc)
+				{
+					PGPROC	   *leader = MyProc->lockGroupLeader;
+
+					/*
+					 * Show the leader only for active parallel workers. This
+					 * leaves out the leader of a parallel group.
+					 */
+					if (leader == NULL || leader->pid == MyProcPid)
+						appendStringInfoSpaces(buf,
+											   padding > 0 ? padding : -padding);
+					else if (padding != 0)
+						appendStringInfo(buf, "%*d", padding, leader->pid);
+					else
+						appendStringInfo(buf, "%d", leader->pid);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+
 			case 'l':
 				if (padding != 0)
 					appendStringInfo(buf, "%*ld", padding, log_line_number);
@@ -3192,12 +3216,6 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				if (j < buf->len &&
 					buf->data[buf->len - 1] == ' ')
 					buf->len--;
-				break;
-			case 'P':
-				if( Gp_role == GP_ROLE_EXECUTE )
-				{
-					appendStringInfoChar(buf, 'P');
-				}
 				break;
 			case 'R':
 				if (!MyProcPort)
@@ -3480,6 +3498,21 @@ write_csvlog(ErrorData *edata)
 		appendCSVLiteral(&buf, MyBgworkerEntry->bgw_type);
 	else
 		appendCSVLiteral(&buf, GetBackendTypeDesc(MyBackendType));
+
+	appendStringInfoChar(&buf, ',');
+
+	/* leader PID */
+	if (MyProc)
+	{
+		PGPROC	   *leader = MyProc->lockGroupLeader;
+
+		/*
+		 * Show the leader only for active parallel workers.  This leaves out
+		 * the leader of a parallel group.
+		 */
+		if (leader && leader->pid != MyProcPid)
+			appendStringInfo(&buf, "%d", leader->pid);
+	}
 
 	appendStringInfoChar(&buf, '\n');
 
@@ -4322,13 +4355,6 @@ send_message_to_server_log(ErrorData *edata)
 			append_with_tabs(&buf, edata->context);
 			appendStringInfoChar(&buf, '\n');
 		}
-		if (edata->backtrace)
-		{
-			log_line_prefix(&buf, edata);
-			appendStringInfoString(&buf, _("BACKTRACE:  "));
-			append_with_tabs(&buf, edata->backtrace);
-			appendStringInfoChar(&buf, '\n');
-		}
 		if (Log_error_verbosity >= PGERROR_VERBOSE)
 		{
 			if (edata->elevel == INFO || edata->omit_location)
@@ -4347,6 +4373,13 @@ send_message_to_server_log(ErrorData *edata)
 				appendStringInfo(&buf, _("LOCATION:  %s:%d\n"),
 								 edata->filename, edata->lineno);
 			}
+		}
+		if (edata->backtrace)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("BACKTRACE:  "));
+			append_with_tabs(&buf, edata->backtrace);
+			appendStringInfoChar(&buf, '\n');
 		}
 	}
 

@@ -60,7 +60,7 @@ test_setup(int pid, WalSndState state, int count)
 	MemSet(FTSRepStatusCtl, 0, FTSReplicationStatusShmemSize());
 
 	FTSRepStatusCtl->replications[0].in_use = true;
-	StrNCpy(NameStr(FTSRepStatusCtl->replications[0].name), GP_WALRECEIVER_APPNAME, NAMEDATALEN);
+	namestrcpy(&FTSRepStatusCtl->replications[0].name, GP_WALRECEIVER_APPNAME);
 	SpinLockInit(&FTSRepStatusCtl->replications[0].mutex);
 
 	expect_lwlock(LW_SHARED, count);

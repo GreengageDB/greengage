@@ -330,7 +330,7 @@ ExecuteRecoveryCommand(const char *command, const char *commandName, bool failOn
 				case 'r':
 					/* %r: filename of last restartpoint */
 					sp++;
-					StrNCpy(dp, lastRestartPointFname, endp - dp);
+					strlcpy(dp, lastRestartPointFname, endp - dp);
 					dp += strlen(dp);
 					break;
 				case 'c':
@@ -338,7 +338,7 @@ ExecuteRecoveryCommand(const char *command, const char *commandName, bool failOn
 					Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
 					sp++;
 					pg_ltoa(GpIdentity.segindex, contentid);
-					StrNCpy(dp, contentid, endp - dp);
+					strlcpy(dp, contentid, endp - dp);
 					dp += strlen(dp);
 					break;
 				case '%':

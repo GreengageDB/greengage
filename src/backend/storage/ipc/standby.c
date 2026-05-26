@@ -61,7 +61,7 @@ typedef struct RecoveryLockListsEntry
 
 /*
  * InitRecoveryTransactionEnvironment
- *		Initialize tracking of in-progress transactions in master
+ *		Initialize tracking of our primary's in-progress transactions.
  *
  * We need to issue shared invalidations and hold locks. Holding locks
  * means others may want to wait on us, so we need to make a lock table
@@ -896,7 +896,7 @@ standby_redo(XLogReaderState *record)
  * up from a checkpoint and are immediately at our starting point, we
  * unconditionally move to STANDBY_INITIALIZED. After this point we
  * must do 4 things:
- *	* move shared nextFullXid forwards as we see new xids
+ *	* move shared nextXid forwards as we see new xids
  *	* extend the clog and subtrans with each new xid
  *	* keep track of uncommitted known assigned xids
  *	* keep track of uncommitted AccessExclusiveLocks

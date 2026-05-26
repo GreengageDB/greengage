@@ -757,6 +757,7 @@ insert into outer_text values ('a', null);
 insert into outer_text values ('b', null);
 create temp table inner_text (c1 text, c2 text);
 insert into inner_text values ('a', null);
+insert into inner_text values ('123', '456');
 select * from outer_text where (f1, f2) not in (select * from inner_text);
  f1 | f2 
 ----+----
@@ -797,6 +798,91 @@ select '1'::text in (select '1'::name union all select '1'::name);
  t
 (1 row)
 
+--
+-- Test that we don't try to use a hashed subplan if the simplified
+-- testexpr isn't of the right shape
+--
+-- this fails by default, of course
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ERROR:  operator does not exist: bigint = text
+LINE 1: select * from int8_tbl where q1 in (select c1 from inner_tex...
+                                        ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+begin;
+-- make an operator to allow it to succeed
+create function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2';
+create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (hashed SubPlan 1)
+         SubPlan 1
+           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Seq Scan on inner_text
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+-- inlining of this function results in unusual number of hash clauses,
+-- which we can still cope with
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2 and $1::text = $2';
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (hashed SubPlan 1)
+         SubPlan 1
+           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Seq Scan on inner_text
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+-- inlining of this function causes LHS and RHS to be switched,
+-- which we can't cope with, so hashing should be abandoned
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $2 = $1::text';
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (SubPlan 1)
+         SubPlan 1
+           ->  Materialize
+                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                       ->  Seq Scan on inner_text
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+rollback;  -- to get rid of the bogus operator
 --
 -- Test case for planner bug with nested EXISTS handling
 --
@@ -1173,6 +1259,65 @@ from int4_tbl;
  (4,5,6.0)
  (1,2,3)
  (4,5,6.0)
+(5 rows)
+
+--
+-- Check for sane handling of a lateral reference in a subquery's quals
+-- (most of the complication here is to prevent the test case from being
+-- flattened too much)
+--
+explain (verbose, costs off)
+select * from
+    int4_tbl i4,
+    lateral (
+        select i4.f1 > 1 as b, 1 as id
+        from (select random() order by 1) as t1
+      union all
+        select true as b, 2 as id
+    ) as t2
+where b and f1 >= 0;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: i4.f1, ((i4.f1 > 1)), (1)
+   ->  Nested Loop
+         Output: i4.f1, ((i4.f1 > 1)), (1)
+         ->  Seq Scan on public.int4_tbl i4
+               Output: i4.f1
+               Filter: (i4.f1 >= 0)
+         ->  Materialize
+               Output: ((i4.f1 > 1)), (1)
+               ->  Append
+                     ->  Subquery Scan on t1
+                           Output: (i4.f1 > 1), 1
+                           Filter: (i4.f1 > 1)
+                           ->  Result
+                                 Output: $0
+                                 InitPlan 1 (returns $0)  (slice2)
+                                   ->  Result
+                                         Output: random()
+                     ->  Result
+                           Output: true, 2
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(22 rows)
+
+select * from
+    int4_tbl i4,
+    lateral (
+        select i4.f1 > 1 as b, 1 as id
+        from (select random() order by 1) as t1
+      union all
+        select true as b, 2 as id
+    ) as t2
+where b and f1 >= 0;
+     f1     | b | id 
+------------+---+----
+          0 | t |  2
+     123456 | t |  1
+     123456 | t |  2
+ 2147483647 | t |  1
+ 2147483647 | t |  2
 (5 rows)
 
 --

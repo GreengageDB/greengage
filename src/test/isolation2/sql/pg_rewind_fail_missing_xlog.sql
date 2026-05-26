@@ -23,7 +23,7 @@ CREATE TABLE tst_missing_tbl (a int);
 INSERT INTO tst_missing_tbl values(2),(1),(5);
 
 -- make the test faster.
-!\retcode gpconfig -c wal_keep_segments -v 2;
+!\retcode gpconfig -c wal_keep_size -v 128;
 !\retcode gpstop -ari;
 
 -- Test 1: primary was marked down by the master but acetually it keeps running
@@ -133,5 +133,5 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 5: DROP FUNCTION connectSeg;
 !\retcode gprecoverseg -ar;
 5: SELECT wait_until_all_segments_synchronized();
-!\retcode gpconfig -r wal_keep_segments;
+!\retcode gpconfig -r wal_keep_size;
 !\retcode gpstop -ari;

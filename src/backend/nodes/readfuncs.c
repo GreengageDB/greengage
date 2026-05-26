@@ -914,7 +914,7 @@ _readAlterTableStmt(void)
 
 	READ_NODE_FIELD(relation);
 	READ_NODE_FIELD(cmds);
-	READ_ENUM_FIELD(relkind, ObjectType);
+	READ_ENUM_FIELD(objtype, ObjectType);
 	READ_INT_FIELD(lockmode);
 	READ_NODE_FIELD(wqueue);
 

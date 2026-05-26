@@ -199,12 +199,15 @@ typedef struct CopyStateData
 	int			lastsegid;
 
 	/*
-	 * These variables are used to reduce overhead in textual COPY FROM.
+	 * These variables are used to reduce overhead in COPY FROM.
 	 *
 	 * attribute_buf holds the separated, de-escaped text for each field of
 	 * the current line.  The CopyReadAttributes functions return arrays of
 	 * pointers into this buffer.  We avoid palloc/pfree overhead by re-using
 	 * the buffer on each cycle.
+	 *
+	 * In binary COPY FROM, attribute_buf holds the binary data for the
+	 * current field, but the usage is otherwise similar.
 	 */
 	StringInfoData attribute_buf;
 
@@ -218,7 +221,8 @@ typedef struct CopyStateData
 	 * input cycle is first to read the whole line into line_buf, convert it
 	 * to server encoding there, and then extract the individual attribute
 	 * fields into attribute_buf.  line_buf is preserved unmodified so that we
-	 * can display it in error messages if appropriate.
+	 * can display it in error messages if appropriate.  (In binary mode,
+	 * line_buf is not used.)
 	 */
 	StringInfoData line_buf;
 	bool		line_buf_converted; /* converted to server encoding? */
@@ -226,15 +230,18 @@ typedef struct CopyStateData
 
 	/*
 	 * Finally, raw_buf holds raw data read from the data source (file or
-	 * client connection).  CopyReadLine parses this data sufficiently to
-	 * locate line boundaries, then transfers the data to line_buf and
-	 * converts it.  Note: we guarantee that there is a \0 at
-	 * raw_buf[raw_buf_len].
+	 * client connection).  In text mode, CopyReadLine parses this data
+	 * sufficiently to locate line boundaries, then transfers the data to
+	 * line_buf and converts it.  In binary mode, CopyReadBinaryData fetches
+	 * appropriate amounts of data from this buffer.  In both modes, we
+	 * guarantee that there is a \0 at raw_buf[raw_buf_len].
 	 */
 #define RAW_BUF_SIZE 65536		/* we palloc RAW_BUF_SIZE+1 bytes */
 	char	   *raw_buf;
 	int			raw_buf_index;	/* next byte to process */
 	int			raw_buf_len;	/* total # of bytes stored */
+/* Shorthand for number of unconsumed bytes available in raw_buf */
+#define RAW_BUF_BYTES(cstate) ((cstate)->raw_buf_len - (cstate)->raw_buf_index)
 
 	/* Greenplum Database specific variables */
 	FmgrInfo   *enc_conversion_proc; /* conv proc from exttbl encoding to

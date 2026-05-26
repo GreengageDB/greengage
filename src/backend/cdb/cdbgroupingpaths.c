@@ -1084,6 +1084,7 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	bool		needs_redistribute;
 	double		dNumGroups;
 	Size		hashentrysize;
+	Path	   *path;
 
 	group_locus = choose_grouping_locus(root,
 										initial_agg_path,
@@ -1104,27 +1105,21 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	/* Would the hash table fit in memory? */
 	hashentrysize = MAXALIGN(initial_agg_path->pathtarget->width) + MAXALIGN(SizeofMinimalTupleHeader);
 
-	if (!hashagg_avoid_disk_plan ||
-		hashentrysize * dNumGroups < work_mem * 1024L)
-	{
-		Path	   *path;
+	path = cdbpath_create_motion_path(root, initial_agg_path, NIL, false,
+									  group_locus);
 
-		path = cdbpath_create_motion_path(root, initial_agg_path, NIL, false,
-										  group_locus);
-
-		path = (Path *) create_agg_path(root,
-										output_rel,
-										path,
-										ctx->target,
-										AGG_HASHED,
-										ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
-										false, /* streaming */
-										ctx->final_groupClause,
-										ctx->havingQual,
-										ctx->agg_final_costs,
-										dNumGroups);
-		add_path(output_rel, path);
-	}
+	path = (Path *) create_agg_path(root,
+									output_rel,
+									path,
+									ctx->target,
+									AGG_HASHED,
+									ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
+									false, /* streaming */
+									ctx->final_groupClause,
+									ctx->havingQual,
+									ctx->agg_final_costs,
+									dNumGroups);
+	add_path(output_rel, path);
 
 	/*
 	 * Like in the Group Agg case, if the final result needs to be brough to
@@ -1143,8 +1138,6 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 		hashentrysize = MAXALIGN(initial_agg_path->pathtarget->width) + MAXALIGN(SizeofMinimalTupleHeader);
 		if (hashentrysize * ctx->dNumGroupsTotal <= work_mem * 1024L)
 		{
-			Path	   *path;
-
 			path = cdbpath_create_motion_path(root, initial_agg_path,
 											  NIL, false,
 											  singleQE_locus);

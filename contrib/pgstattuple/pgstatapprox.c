@@ -71,7 +71,7 @@ statapprox_heap(Relation rel, output_type *stat)
 	BufferAccessStrategy bstrategy;
 	TransactionId OldestXmin;
 
-	OldestXmin = GetOldestXmin(rel, PROCARRAY_FLAGS_VACUUM);
+	OldestXmin = GetOldestNonRemovableTransactionId(rel);
 	bstrategy = GetAccessStrategy(BAS_BULKREAD);
 
 	nblocks = RelationGetNumberOfBlocks(rel);
@@ -278,18 +278,18 @@ pgstattuple_approx_internal(Oid relid, FunctionCallInfo fcinfo)
 				 errmsg("cannot access temporary tables of other sessions")));
 
 	/*
-	 * We support only ordinary relations and materialised views, because we
-	 * depend on the visibility map and free space map for our estimates about
-	 * unscanned pages.
+	 * We support only relation kinds with a visibility map and a free space
+	 * map.
 	 */
 	if (!(rel->rd_rel->relkind == RELKIND_RELATION ||
 		  rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
 		  rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
 		  rel->rd_rel->relkind == RELKIND_AOVISIMAP ||
-		  rel->rd_rel->relkind == RELKIND_MATVIEW))
+		  rel->rd_rel->relkind == RELKIND_MATVIEW ||
+		  rel->rd_rel->relkind == RELKIND_TOASTVALUE))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("\"%s\" is not a table or materialized view",
+				 errmsg("\"%s\" is not a table, materialized view, or TOAST table",
 						RelationGetRelationName(rel))));
 
 	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)

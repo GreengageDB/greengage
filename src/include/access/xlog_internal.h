@@ -31,7 +31,7 @@
 /*
  * Each page of XLOG file has a header like this:
  */
-#define XLOG_PAGE_MAGIC 0xD106	/* can be used as WAL version indicator */
+#define XLOG_PAGE_MAGIC 0xD108	/* can be used as WAL version indicator */
 
 typedef struct XLogPageHeaderData
 {
@@ -43,11 +43,8 @@ typedef struct XLogPageHeaderData
 	/*
 	 * When there is not enough space on current page for whole record, we
 	 * continue on the next page.  xlp_rem_len is the number of bytes
-	 * remaining from a previous page.
-	 *
-	 * Note that xlp_rem_len includes backup-block data; that is, it tracks
-	 * xl_tot_len not xl_len in the initial header.  Also note that the
-	 * continuation data isn't necessarily aligned.
+	 * remaining from a previous page; it tracks xl_tot_len in the initial
+	 * header.  Note that the continuation data isn't necessarily aligned.
 	 */
 	uint32		xlp_rem_len;	/* total len of remaining data for record */
 } XLogPageHeaderData;
@@ -128,6 +125,13 @@ typedef XLogLongPageHeaderData *XLogLongPageHeader;
 
 #define XLByteToPrevSeg(xlrp, logSegNo, wal_segsz_bytes) \
 	logSegNo = ((xlrp) - 1) / (wal_segsz_bytes)
+
+/*
+ * Convert values of GUCs measured in megabytes to equiv. segment count.
+ * Rounds down.
+ */
+#define XLogMBVarToSegs(mbvar, wal_segsz_bytes) \
+	((mbvar) / ((wal_segsz_bytes) / (1024 * 1024)))
 
 /*
  * Is an XLogRecPtr within a particular XLOG segment?

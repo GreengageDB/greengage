@@ -307,7 +307,7 @@ _bt_search_insert(Relation rel, BTInsertState insertstate)
 	{
 		/* Simulate a _bt_getbuf() call with conditional locking */
 		insertstate->buf = ReadBuffer(rel, RelationGetTargetBlock(rel));
-		if (ConditionalLockBuffer(insertstate->buf))
+		if (_bt_conditionallockbuf(rel, insertstate->buf))
 		{
 			Page		page;
 			BTPageOpaque lpageop;
@@ -601,7 +601,8 @@ _bt_check_unique(Relation rel, BTInsertState insertstate, Relation heapRel,
 					 * not part of this chain because it had a different index
 					 * entry.
 					 */
-					if (table_index_fetch_tuple_check(heapRel, &itup->t_tid,
+					htid = itup->t_tid;
+					if (table_index_fetch_tuple_check(heapRel, &htid,
 													  SnapshotSelf, NULL))
 					{
 						/* Normal case --- it's still live */
@@ -1864,11 +1865,9 @@ _bt_split(Relation rel, BTScanInsert itup_key, Buffer buf, Buffer cbuf,
 	}
 
 	/*
-	 * We have to grab the right sibling (if any) and fix the prev pointer
-	 * there. We are guaranteed that this is deadlock-free since no other
-	 * writer will be holding a lock on that page and trying to move left, and
-	 * all readers release locks on a page before trying to fetch its
-	 * neighbors.
+	 * We have to grab the original right sibling (if any) and update its prev
+	 * link.  We are guaranteed that this is deadlock-free, since we couple
+	 * the locks in the standard order: left to right.
 	 */
 	if (!isrightmost)
 	{

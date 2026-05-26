@@ -4082,7 +4082,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"wait_for_replication_threshold", PGC_SIGHUP, REPLICATION_MASTER,
+		{"wait_for_replication_threshold", PGC_SIGHUP, REPLICATION_PRIMARY,
 			gettext_noop("Maximum amount of WAL written by a transaction prior to waiting for replication."),
 			gettext_noop("This is used just to prevent primary from racing too ahead "
 						 "and avoid huge replication lag. A value of 0 disables "

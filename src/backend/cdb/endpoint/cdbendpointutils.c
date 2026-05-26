@@ -255,12 +255,12 @@ gp_get_endpoints(PG_FUNCTION_ARGS)
 
 				for (int j = 0; j < PQntuples(result); j++)
 				{
-					StrNCpy(all_info->infos[idx].name, PQgetvalue(result, j, 0), NAMEDATALEN);
-					StrNCpy(all_info->infos[idx].cursorName, PQgetvalue(result, j, 1), NAMEDATALEN);
+					strlcpy(all_info->infos[idx].name, PQgetvalue(result, j, 0), NAMEDATALEN);
+					strlcpy(all_info->infos[idx].cursorName, PQgetvalue(result, j, 1), NAMEDATALEN);
 					endpoint_token_str2arr(PQgetvalue(result, j, 2), all_info->infos[idx].token);
 					all_info->infos[idx].segmentIndex = atoi(PQgetvalue(result, j, 3));
 					all_info->infos[idx].state = state_string_to_enum(PQgetvalue(result, j, 4));
-					StrNCpy(all_info->infos[idx].userName, PQgetvalue(result, j, 5), NAMEDATALEN);
+					strlcpy(all_info->infos[idx].userName, PQgetvalue(result, j, 5), NAMEDATALEN);
 					all_info->infos[idx].sessionId = atoi(PQgetvalue(result, j, 6));
 					idx++;
 				}
@@ -310,11 +310,11 @@ gp_get_endpoints(PG_FUNCTION_ARGS)
 					info->segmentIndex = MASTER_CONTENT_ID;
 					get_token_from_session_hashtable(entry->sessionID, entry->userID,
 													 info->token);
-					StrNCpy(info->name, entry->name, NAMEDATALEN);
-					StrNCpy(info->cursorName, entry->cursorName, NAMEDATALEN);
+					strlcpy(info->name, entry->name, NAMEDATALEN);
+					strlcpy(info->cursorName, entry->cursorName, NAMEDATALEN);
 					info->state = entry->state;
 					info->sessionId = entry->sessionID;
-					StrNCpy(info->userName, GetUserNameFromId(entry->userID, false), NAMEDATALEN);
+					strlcpy(info->userName, GetUserNameFromId(entry->userID, false), NAMEDATALEN);
 					idx++;
 				}
 			}

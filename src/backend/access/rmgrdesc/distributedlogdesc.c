@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include "access/distributedlog.h"
+#include "access/xact.h"
 
 
 void
@@ -37,6 +38,13 @@ DistributedLog_desc(StringInfo buf, XLogReaderState *record)
 		memcpy(&page, rec, sizeof(int));
 		appendStringInfo(buf, "truncate before: %d", page);
 	}
+	else if (info == DISTRIBUTEDLOG_FORGET)
+	{
+		xl_xact_distributed_forget *xlrec = (xl_xact_distributed_forget *) rec;
+
+		appendStringInfo(buf, "distributed forget ");
+		appendStringInfo(buf, "gxid = "UINT64_FORMAT, xlrec->gxid);
+	}
 	else
 		appendStringInfo(buf, "UNKNOWN");
 }
@@ -53,6 +61,9 @@ DistributedLog_identify(uint8 info)
 			break;
 		case DISTRIBUTEDLOG_TRUNCATE:
 			id = "DISTRIBUTEDLOG_TRUNCATE";
+			break;
+		case DISTRIBUTEDLOG_FORGET:
+			id = "DISTRIBUTED_FORGET";
 			break;
 	}
 

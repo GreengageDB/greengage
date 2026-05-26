@@ -27,6 +27,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/int8.h"
 #include "utils/sharedsnapshot.h"
+#include "utils/timestamp.h"
 #include "tcop/pquery.h"
 
 #include "libpq-fe.h"

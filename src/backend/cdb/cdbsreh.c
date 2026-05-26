@@ -782,7 +782,7 @@ RetrievePersistentErrorLogFromRangeVar(RangeVar *relrv, AclMode mode, char *fnam
 				pg_namespace_tuple = (Form_pg_namespace) GETSTRUCT(tuple);
 				schemaname = pstrdup(NameStr(pg_namespace_tuple->nspname));
 				ReleaseSysCache(tuple);
-				StrNCpy(fname, filename, MAXPGPATH);
+				strlcpy(fname, filename, MAXPGPATH);
 				findfile = true;
 				break;
 			}

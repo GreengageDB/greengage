@@ -9,11 +9,13 @@
  *-------------------------------------------------------------------------
  */
 
+#include "postgres.h"
 #include "postgres_fe.h"
 
 #include <unistd.h>
 
 #include "access/rmgr.h"
+#include "access/xact.h"
 #include "access/xlog_internal.h"
 #include "access/xlogreader.h"
 #include "catalog/pg_control.h"
@@ -208,7 +210,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 		/*
 		 * Check if it is a checkpoint record. This checkpoint record needs to
 		 * be the latest checkpoint before WAL forked and not the checkpoint
-		 * where the master has been stopped to be rewinded.
+		 * where the primary has been stopped to be rewinded.
 		 */
 		info = XLogRecGetInfo(xlogreader) & ~XLR_INFO_MASK;
 		if (searchptr < forkptr &&
@@ -397,6 +399,18 @@ extractPageInfo(XLogReaderState *record)
 		 * We can safely ignore these. When we compare the sizes later on,
 		 * we'll notice that they differ, and copy the missing tail from
 		 * source system.
+		 */
+	}
+	else if (rmid == RM_XACT_ID &&
+			 ((rminfo & XLOG_XACT_OPMASK) == XLOG_XACT_COMMIT ||
+			  (rminfo & XLOG_XACT_OPMASK) == XLOG_XACT_COMMIT_PREPARED ||
+			  (rminfo & XLOG_XACT_OPMASK) == XLOG_XACT_ABORT ||
+			  (rminfo & XLOG_XACT_OPMASK) == XLOG_XACT_ABORT_PREPARED))
+	{
+		/*
+		 * These records can include "dropped rels". We can safely ignore
+		 * them, we will see that they are missing and copy them from the
+		 * source.
 		 */
 	}
 	else if (info & XLR_SPECIAL_REL_UPDATE)

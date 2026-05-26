@@ -64,6 +64,7 @@ extern Numeric numeric_li_value(float8 f, Numeric y0, Numeric y1);
 extern bool numeric_is_nan(Numeric num);
 extern int16 *numeric_digits(Numeric num);
 extern int numeric_len(Numeric num);
+extern bool numeric_is_inf(Numeric num);
 int32		numeric_maximum_size(int32 typmod);
 extern char *numeric_out_sci(Numeric num, int scale);
 extern char *numeric_normalize(Numeric num);
