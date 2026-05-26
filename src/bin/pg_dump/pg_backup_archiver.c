@@ -4867,49 +4867,6 @@ CloneArchive(ArchiveHandle *AH)
 	if (AH->mode == archModeRead)
 		_doSetFixedOutputState(clone);
 	/* in write case, setupDumpWorker will fix up connection state */
-	{
-		RestoreOptions *ropt = AH->public.ropt;
-
-		Assert(AH->connection == NULL);
-
-		/* this also sets clone->connection */
-		ConnectDatabase((Archive *) clone, ropt->dbname,
-						ropt->pghost, ropt->pgport, ropt->username,
-						ropt->promptPassword, false);
-
-		/* re-establish fixed state */
-		_doSetFixedOutputState(clone);
-	}
-	else
-	{
-		PQExpBufferData connstr;
-		char	   *pghost;
-		char	   *pgport;
-		char	   *username;
-
-		Assert(AH->connection != NULL);
-
-		/*
-		 * Even though we are technically accessing the parent's database
-		 * object here, these functions are fine to be called like that
-		 * because all just return a pointer and do not actually send/receive
-		 * any data to/from the database.
-		 */
-		initPQExpBuffer(&connstr);
-		appendPQExpBufferStr(&connstr, "dbname=");
-		appendConnStrVal(&connstr, PQdb(AH->connection));
-		pghost = PQhost(AH->connection);
-		pgport = PQport(AH->connection);
-		username = PQuser(AH->connection);
-
-		/* this also sets clone->connection */
-		ConnectDatabase((Archive *) clone, connstr.data,
-						pghost, pgport, username, TRI_NO, false);
-
-		termPQExpBuffer(&connstr);
-		/* setupDumpWorker will fix up connection state */
-	}
-
 	/* Let the format-specific code have a chance too */
 	clone->ClonePtr(clone);
 
