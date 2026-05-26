@@ -1070,17 +1070,14 @@ static const char *const table_storage_parameters[] = {
 	"autovacuum_vacuum_cost_limit",
 	"autovacuum_vacuum_scale_factor",
 	"autovacuum_vacuum_threshold",
-	"blockdirectory",
 	"blocksize",
 	"checksum",
 	"compresslevel",
 	"compresstype",
 	"fillfactor",
-	"gpdr_exclude",
 	"log_autovacuum_min_duration",
 	"orientation",
 	"parallel_workers",
-	"toast_tuple_target",
 	"toast.autovacuum_enabled",
 	"toast.autovacuum_freeze_max_age",
 	"toast.autovacuum_freeze_min_age",
@@ -1095,6 +1092,7 @@ static const char *const table_storage_parameters[] = {
 	"toast.log_autovacuum_min_duration",
 	"toast.vacuum_index_cleanup",
 	"toast.vacuum_truncate",
+	"toast_tuple_target",
 	"user_catalog_table",
 	"vacuum_index_cleanup",
 	"vacuum_truncate",
@@ -2526,7 +2524,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("RANGE (", "LIST (", "HASH (");
 	/* Complete PARTITION BY RANGE|LIST with classic partitioning syntax */
 	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") ||
-		TailMatches("SUBPARTITION", "TEMPLATE", "(*)"))
+		TailMatches(MatchAnyExcept("SET"), "SUBPARTITION", "TEMPLATE", "(*)"))
 		COMPLETE_WITH("(", "SUBPARTITION BY");
 	else if (TailMatches("SUBPARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (");
