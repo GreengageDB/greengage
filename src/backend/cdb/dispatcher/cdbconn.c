@@ -922,12 +922,21 @@ MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueI
 
 	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
 
+	/* 
+	 * queue is expected to be created by the extension
+	 */
+	Assert(queue != NULL);
+
 	if (queue)
 	{
 		metadata_chunk->next = queue->chunks;
 		metadata_chunk->segindex = segdbDesc->segindex;
 		queue->chunks = metadata_chunk;
 		queue->count++;
+	}
+	else
+	{
+		free(metadata_chunk);
 	}
 }
 
