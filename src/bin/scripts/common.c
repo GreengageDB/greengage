@@ -183,6 +183,19 @@ connectMaintenanceDatabase(const char *maintenance_db,
 }
 
 /*
+ * ConnParams wrapper for connectMaintenanceDatabase
+ */
+PGconn *
+connectMaintenanceDatabase_cparams(const ConnParams *cparams,
+								   const char *progname, bool echo)
+{
+	return connectMaintenanceDatabase(cparams->dbname,
+									  cparams->pghost, cparams->pgport,
+									  cparams->pguser, cparams->prompt_password,
+									  progname, echo);
+}
+
+/*
  * Disconnect the given connection, canceling any statement if one is active.
  */
 void

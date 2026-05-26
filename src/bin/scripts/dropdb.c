@@ -146,7 +146,7 @@ main(int argc, char *argv[])
 	cparams.prompt_password = prompt_password;
 	cparams.override_dbname = NULL;
 
-	conn = connectMaintenanceDatabase(&cparams, progname, echo);
+	conn = connectMaintenanceDatabase_cparams(&cparams, progname, echo);
 
 	if (echo)
 		printf("%s\n", sql.data);

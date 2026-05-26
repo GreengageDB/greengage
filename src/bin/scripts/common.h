@@ -23,6 +23,16 @@ enum trivalue
 	TRI_YES
 };
 
+typedef struct _connParams
+{
+	const char *dbname;
+	const char *pghost;
+	const char *pgport;
+	const char *pguser;
+	enum trivalue prompt_password;
+	const char *override_dbname;
+} ConnParams;
+
 extern PGconn *connectDatabase(const char *dbname, const char *pghost,
 							   const char *pgport, const char *pguser,
 							   enum trivalue prompt_password,
@@ -32,6 +42,8 @@ extern PGconn *connectMaintenanceDatabase(const char *maintenance_db,
 										  const char *pghost, const char *pgport,
 										  const char *pguser, enum trivalue prompt_password,
 										  const char *progname, bool echo);
+extern PGconn *connectMaintenanceDatabase_cparams(const ConnParams *cparams,
+												  const char *progname, bool echo);
 extern void disconnectDatabase(PGconn *conn);
 
 extern void splitTableColumnsSpec(const char *spec, int encoding,
