@@ -28,6 +28,7 @@
 
 #include "catalog/pg_tablespace_d.h"
 #include "common/hashfn.h"
+#include "common/relpath.h"
 #include "common/string.h"
 #include "datapagemap.h"
 #include "filemap.h"
@@ -557,7 +558,7 @@ isRelDataFile(const char *path)
 		}
 		else
 		{
-			nmatch = sscanf(path, "pg_tblspc/%u/" TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
+			nmatch = sscanf(path, "pg_tblspc/%u/" GP_TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
 							&rnode.spcNode, &rnode.dbNode, &rnode.relNode,
 							&segNo);
 			if (nmatch == 3 || nmatch == 4)
