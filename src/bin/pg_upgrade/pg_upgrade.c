@@ -252,8 +252,6 @@ main(int argc, char **argv)
 	report_progress(NULL, DONE, "Upgrade complete");
 	close_progress();
 
-	output_completion_banner(analyze_script_file_name,
-							 deletion_script_file_name);
 	output_completion_banner(deletion_script_file_name);
 
 	pg_free(deletion_script_file_name);

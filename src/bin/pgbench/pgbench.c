@@ -1225,7 +1225,11 @@ doConnect(void)
 			!have_password)
 		{
 			PQfinish(conn);
-			simple_prompt("Password: ", password, sizeof(password), false);
+			{
+				char *p = simple_prompt("Password: ", false);
+				strlcpy(password, p, sizeof(password));
+				free(p);
+			}
 			have_password = true;
 			new_pass = true;
 		}

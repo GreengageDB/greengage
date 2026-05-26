@@ -1526,8 +1526,14 @@ get_su_pwd(void)
 		 */
 		printf("\n");
 		fflush(stdout);
-		simple_prompt("Enter new superuser password: ", pwd1, sizeof(pwd1), false);
-		simple_prompt("Enter it again: ", pwd2, sizeof(pwd2), false);
+		{
+			char *p1 = simple_prompt("Enter new superuser password: ", false);
+			char *p2 = simple_prompt("Enter it again: ", false);
+			strlcpy(pwd1, p1, sizeof(pwd1));
+			strlcpy(pwd2, p2, sizeof(pwd2));
+			free(p1);
+			free(p2);
+		}
 		if (strcmp(pwd1, pwd2) != 0)
 		{
 			fprintf(stderr, _("Passwords didn't match.\n"));

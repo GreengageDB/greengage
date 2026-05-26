@@ -120,10 +120,6 @@ extern void process_target_wal_aofile_change(RelFileNode rnode,
 extern void process_target_wal_block_change(ForkNumber forknum,
 											RelFileNode rnode,
 											BlockNumber blkno);
-extern void decide_file_actions(void);
-extern void process_target_wal_block_change(ForkNumber forknum,
-											RelFileNode rnode,
-											BlockNumber blkno);
 
 extern filemap_t *decide_file_actions(void);
 extern void calculate_totals(filemap_t *filemap);
