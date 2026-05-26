@@ -839,9 +839,14 @@ class Planner:
             swap_pairs = self.detect_swap_pairs(moves)
         if swap_pairs:
             self.logger.info(f"Detected {len(swap_pairs)} primary-mirror pairs which just swap hosts")
-            final_moves = self.handle_swaps(swap_pairs, moves, port_allocator, resource_estimator)
+            phase1, phase2, phase3, swap_dbids = self.decompose_swap_pairs(swap_pairs,
+                                                                           moves,
+                                                                           port_allocator,
+                                                                           resource_estimator)
+            final_moves = self._group_swap_moves(moves, swap_dbids, phase1, phase2, phase3)
         else:
-            final_moves = moves
+            final_moves = self._group_plain_moves(moves)
+
         if resource_estimator:
             self.logger.info(
                 f"Estimated total data to move: "
@@ -926,6 +931,50 @@ class Planner:
                 )
         
         return swap_pairs
+    
+    def _group_plain_moves(self, moves: List[LogicalMove]) -> List[LogicalMove]:
+        """
+        No-swap case: group mirror moves before primary moves.
+        Produces exactly one switchover pair in the executor.
+
+        Order: [ mirrors ... | primaries ... ]
+        """
+        mirrors  = [m for m in moves if m.seg.isSegmentMirror()]
+        primaries = [m for m in moves if not m.seg.isSegmentMirror()]
+        return mirrors + primaries
+
+    def _group_swap_moves(self,
+                          all_moves: List[LogicalMove],
+                          swap_dbids: Set[int],
+                          phase1: List[LogicalMove],
+                          phase2: List[LogicalMove],
+                          phase3: List[LogicalMove],
+                          ) -> List[LogicalMove]:
+        """
+        Swap case: put non-swap moves into the correct phase groups.
+        Produces exactly one switchover pair.
+
+        Order:
+            [ non_swap_mirrors + phase1 ] - all mirror moves, no switchover
+            [ non_swap_primaries + phase2 ] - all primary moves, one switchover pair
+            [ phase3 ] - residual swap mirrors, no switchover
+        """
+        non_swap_mirrors: List[LogicalMove] = []
+        non_swap_primaries: List[LogicalMove] = []
+
+        for move in all_moves:
+            if move.seg.getSegmentDbId() in swap_dbids:
+                continue
+            if move.seg.isSegmentMirror():
+                non_swap_mirrors.append(move)
+            else:
+                non_swap_primaries.append(move)
+
+        return (
+            non_swap_mirrors + phase1 +
+            non_swap_primaries + phase2 +
+            phase3
+        )
     
     def select_intermediate_host(self, 
                                 primary_move: LogicalMove,
@@ -1158,68 +1207,46 @@ class Planner:
         
         return phase1_move, phase2_move, phase3_move
     
-    def handle_swaps(self,
+    def decompose_swap_pairs(self,
                      swap_pairs: List[Tuple[LogicalMove, LogicalMove]],
-                     moves: List[LogicalMove],
                      port_allocator: PortAllocator,
-                     resource_estimator: 'ResourceEstimator'
-                     ) -> List[LogicalMove]:
-        swap_move_ids = set()
-        # Track intermediate host usage for better distribution
-        used_intermediate_hosts = {}
-        # Decompose swaps with intermediate host selection
-        swap_phase1_moves = []
-        swap_phase2_moves = []
-        swap_phase3_moves = []
+                     resource_estimator: Optional['ResourceEstimator']
+                     ) -> Tuple[List[LogicalMove], List[LogicalMove], List[LogicalMove], Set[int]]:
+        """
+        swap pairs - 3 phases.
+
+        Returns:
+            phase1_mirrors - mirror moves to intermediate host
+            phase2_primaries - primary direct moves
+            phase3_mirrors - mirrors from intermediate to final host
+            swap_dbids - dbids used in swaps
+        """
+        swap_dbids: Set[int] = set()
+        phase1, phase2, phase3 = [], [], []
+        used_intermediate_hosts: Dict[str, int] = {}
 
         for prim_move, mir_move in swap_pairs:
-            swap_move_ids.add(prim_move.seg.getSegmentDbId())
-            swap_move_ids.add(mir_move.seg.getSegmentDbId())
+            swap_dbids.add(prim_move.seg.getSegmentDbId())
+            swap_dbids.add(mir_move.seg.getSegmentDbId())
             try:
-                # Select intermediate host
                 intermediate_host = self.select_intermediate_host(
-                    prim_move, 
-                    mir_move,
+                    prim_move, mir_move,
                     used_intermediate_hosts,
-                    resource_estimator  # Pass the estimator with cached filesystem data
+                    resource_estimator
                 )
-                # Decompose into 3 phases
-                phase1, phase2, phase3 = self.decompose_swap(
-                    prim_move, 
-                    mir_move,
-                    intermediate_host,
-                    port_allocator
+                p1, p2, p3 = self.decompose_swap(
+                    prim_move, mir_move, intermediate_host, port_allocator
                 )
-                swap_phase1_moves.append(phase1)
-                swap_phase2_moves.append(phase2)
-                swap_phase3_moves.append(phase3)
+                phase1.append(p1)
+                phase2.append(p2)
+                phase3.append(p3)
             except Exception as e:
-                raise PlanningError(f"Failed to plan swap for content {prim_move.seg.getSegmentContentId()}: {e}")
-        
-        # Collect non-swap moves
-        non_swap_mirror_moves = []
-        non_swap_primary_moves = []
-    
-        for move in moves:
-            if move.seg.getSegmentDbId() not in swap_move_ids:
-                if move.seg.isSegmentPrimary():
-                    non_swap_primary_moves.append(move)
-                else:
-                    non_swap_mirror_moves.append(move)
+                raise PlanningError(
+                    f"Failed to plan swap for content "
+                    f"{prim_move.seg.getSegmentContentId()}: {e}")
 
-        moves_with_swap = []
-        # Batch 1: All initial mirror moves (regular + phase1)
-        moves_with_swap.extend(non_swap_mirror_moves)
-        moves_with_swap.extend(swap_phase1_moves)
+        return phase1, phase2, phase3, swap_dbids
 
-        # Batch 2: All primary moves (regular + phase2)
-        moves_with_swap.extend(non_swap_primary_moves)
-        moves_with_swap.extend(swap_phase2_moves)
-
-        # Batch 3: Phase 3 mirrors (must execute last)
-        moves_with_swap.extend(swap_phase3_moves)
-
-        return moves_with_swap
 
 @dataclass
 class FilesystemRequirement:
