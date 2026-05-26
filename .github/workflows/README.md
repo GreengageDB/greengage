@@ -18,8 +18,8 @@ when checking Pull Requests.
 
 The `Greengage CI` workflow triggers on:
 
-- **Push events** to versioned release branches (`6.x`, `7.x`, `next`) after
-  merged PR, or versioned release tags (`6.*`, `7.*`, `8.*`).
+- **Push events** to the `next` branch after merged PR, or versioned release
+  tags (`8.*`).
 - **Pull requests** to any branch.
 
 It executes the following jobs in a matrix strategy for multiple target
@@ -34,12 +34,10 @@ operating systems:
   - Regression tests
   - Orca tests
   - Resource group tests
-  - JIT tests (versions 7.x, 8.x)
+  - JIT tests
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
-- **Package**: Builds Debian packages and optionally tests deployment.
-  Currently supported for versions `6.x`, `7.x`.
 
 ## Release Workflow
 
@@ -49,116 +47,10 @@ composite action to manage package deployment.
 
 ### Key Features
 
-- **Triggers:** `release: [published]` — runs when a release is published,
-  including re-publishing.
-- **Concurrency:** Uses the same concurrency group as the CI workflow
-  (`Greengage CI-${{ github.ref }}`) to ensure proper sequencing and prevent
-  race conditions.
-- **Cache-based Artifacts:** Restores built packages from cache using the
-  commit SHA as the key, rather than downloading artifacts from previous jobs.
-- **Manual Recovery:** If the cache is missing, the workflow checks the status
-  of the last build for the tag and provides clear instructions for manual
-  intervention. It does not automatically trigger builds to avoid infinite
-  loops.
-- **Safe Uploads:** Uploads packages with fixed naming patterns and optional
-  overwrite (`clobber` flag).
-
-### Behavior
-
-1. **Normal Flow (Cache Available):** Restores packages from cache, renames
-   them to the pattern `${PACKAGE_NAME}${VERSION}.${EXT}`, and uploads to the
-   release.
-2. **Cache Miss Scenarios:**
-   - **No previous build or previous build successful:** Provides instructions
-     to manually trigger the CI build, then restart the release workflow.
-   - **Previous build failed:** Reports the failure with a link to the failed
-     run and requires manual fixing before retrying.
-
-The release workflow is designed to be robust and provide clear feedback when
-issues occur, ensuring that releases are always consistent and reliable.
-
-## SQL Dump Workflow
-
-A separate workflow `Greengage SQL Dump` is responsible for generating SQL dump
-artifacts after the main CI process completes successfully. It is triggered
-automatically upon the completion of the `Greengage CI` workflow.
-
-### Key Features
-
-- **Triggers:** `workflow_run: workflows: ["Greengage CI"],
-  types: [completed]`
-- **Branch Targeting:** Runs only for the `6.x`, `7.x`, and `next` branches.
-- **Version Detection:** Automatically determines the database version (6, 7,
-  or 8) based on the triggering branch. Since `Greengage SQL Dump` is not
-  branch-specific itself, the version is derived at runtime from the branch of
-  the triggering `Greengage CI` run.
-- **Branch-driven OS Configuration:** Instead of a matrix strategy, the target
-  OS and its version are determined at runtime from the triggering branch via
-  workflow-level environment variables `TARGET_OS` and `TARGET_OS_VERSION`:
-  - `6.x` → `ubuntu 24.04`
-  - `7.x` → `ubuntu` (no version suffix — compatible with Ubuntu 22.04
-    artifact naming)
-  - `next` → `ubuntu` (no version suffix)
-- **Image Pull Check:** Before creating a SQL dump, the workflow attempts to
-  pull the Docker image from GHCR. If the pull fails, the dump creation and
-  upload steps are skipped without failing the job.
-- **Conditional Dump Generation:** If the image is pulled successfully, the
-  workflow runs the regression test suite with the `dump_db: "true"` parameter
-  to generate a SQL dump archive.
-- **Artifact Upload:** Uploads the generated SQL dump archive as a named
-  artifact (e.g., `sqldump_ggdb6_ubuntu24.04`, `sqldump_ggdb7_ubuntu`).
-- **Verification Job:** A final job checks if the SQL dump was created by
-  querying the GitHub Actions jobs API. If no dump was uploaded, the workflow
-  fails with an error.
-- **Controlled Execution:** Since the main CI workflow runs on `6.x`, `7.x`,
-  and `next` branches only for push events (which occur after final merge of a
-  PR), SQL dumps are generated exclusively for verified, approved patches after
-  they are merged into the main branches.
-- **Artifact Retention:** The generated SQL dump artifact is retained 90 days
-  after the last download. Each new run of the `behave tests gpexpand` workflow
-  (which consumes this artifact) resets this retention period when it downloads
-  the artifact.
-
-### Behavior
-
-1. **Triggering:** Automatically starts after the `Greengage CI` workflow
-   finishes on the `6.x`, `7.x`, or `next` branch for push events where the
-   conclusion is `success`.
-2. **Version and OS Mapping:** Maps the branch name to a version number and
-   target OS configuration via workflow-level environment variables `VERSION`,
-   `TARGET_OS`, and `TARGET_OS_VERSION`. Constructs the expected Docker image
-   name using the commit SHA.
-3. **Image Pull:** Attempts to pull the Docker image from GHCR. If the pull
-   succeeds, subsequent steps proceed; if it fails, all remaining steps are
-   skipped without failing the job.
-4. **Disk Space:** Maximizes available disk space on the runner before running
-   regression tests.
-5. **Conditional Dump Generation:** If the image was pulled successfully, runs
-   the regression test suite with the `dump_db` option enabled, which creates a
-   `*_postgres_sqldump.tar` file.
-6. **Artifact Upload:** Uploads the generated SQL dump archive as a named
-   artifact reflecting the branch-specific OS configuration.
-7. **Artifact Reporting:** Logs the artifact name and direct URL for the
-   successfully uploaded dump.
-8. **Verification:** A final job queries the GitHub Actions jobs API to confirm
-   the `Upload SQL Dump` step completed successfully. Fails the workflow if it
-   did not.
-
-This workflow ensures that a current database schema dump is available as an
-artifact following successful CI runs on the primary branches `6.x`, `7.x`,
-and `next`.
-
-## Configuration
-
-The workflow is parameterized to support flexibility:
-
-- **Version**: Specifies the Greengage version (e.g., `6` or `7`), derived
-  automatically from the triggering branch in the SQL Dump workflow, and
-  hardcoded per branch in the CI workflow.
-- **Target OS**: Supports multiple operating systems, defined in the matrix
-  strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
-  existing artifact naming; Ubuntu 24.04 support is currently available for
-  version 6.x only.
+- **Triggers:** `release: [released]` — runs when a release is published.
+- **Artifacts:** Uploads built Debian packages (`deb`, `ddeb`) from the
+  `deb-packages` artifact to the GitHub release using the
+  `upload-pkgs-to-release` composite action.
 
 ## Usage
 
@@ -174,7 +66,7 @@ To use this pipeline:
      processes (GHCR upload, etc.) are unaffected.
 3. Configure the version and target OS parameters in the branch-specific
    workflow configuration.
-4. Create a pull request or push to the default branch (`7.x`) to trigger the
+4. Create a pull request or push to the default branch (`next`) to trigger the
    pipeline.
 
 ## Important Notes on `target_os_version`
@@ -231,12 +123,11 @@ of the `greengagedb/greengage-ci` repository:
 ## Notes
 
 - The pipeline uses a `fail-fast: false` strategy to ensure all matrix entries
-  are executed, even if one fails. This allows the SQL Dump workflow to check
-  all OS configurations and skip missing images gracefully.
+  are executed, even if one fails.
 - The full process, including build, tests, and upload, runs only before pull
-  request approval. For push events (branches `6.x`, `7.x`, `next`, tags `6.*`,
-  `7.*`, `8.*`), a build occurs to ensure correct commit references and product
-  version, using the closest tag to HEAD, followed by upload.
+  request approval. For push events (branch `next`, tags `8.*`), a build
+  occurs to ensure correct commit references and product version, using the
+  closest tag to HEAD, followed by upload.
 - For `greengagedb/greengage`, DockerHub credentials (`DOCKERHUB_TOKEN`,
   `DOCKERHUB_USERNAME`) are mandatory — login failure will stop the workflow.
   For other repositories they are optional — if missing or invalid, DockerHub
