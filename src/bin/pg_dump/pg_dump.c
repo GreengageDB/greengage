@@ -8837,9 +8837,6 @@ void
 getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 {
 	DumpOptions *dopt = fout->dopt;
-getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
-{
-	DumpOptions *dopt = fout->dopt;
 	PQExpBuffer q = createPQExpBuffer();
 
 	/* GPDB_14_MERGE_FIXME: GPDB specific column, need to keep this for easy to use*/
