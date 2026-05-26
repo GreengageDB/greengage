@@ -12599,7 +12599,7 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	{
 		/*
 		 * In 8.4 and up we rely on pg_get_function_arguments and
-		 * pg_get_function_result instead of examining proallargtypes etc.
+		 * pg_get_function_result instead of examining allargtypes etc.
 		 */
 		appendPQExpBufferStr(query,
 							 "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs,\n"
@@ -12608,14 +12608,14 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	}
 	else if (fout->remoteVersion >= 80100)
 		appendPQExpBufferStr(query,
-							 "proallargtypes,\n"
-							 "proargmodes,\n"
-							 "proargnames,\n");
+							 "allargtypes,\n"
+							 "argmodes,\n"
+							 "argnames,\n");
 	else
 		appendPQExpBufferStr(query,
-							 "null AS proallargtypes,\n"
-							 "null AS proargmodes,\n"
-							 "proargnames,\n");
+							 "null AS allargtypes,\n"
+							 "null AS argmodes,\n"
+							 "argnames,\n");
 
 	if (fout->remoteVersion >= 90200)
 		appendPQExpBufferStr(query,
@@ -12695,9 +12695,9 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	}
 	else
 	{
-		proallargtypes = PQgetvalue(res, 0, PQfnumber(res, "proallargtypes"));
-		proargmodes = PQgetvalue(res, 0, PQfnumber(res, "proargmodes"));
-		proargnames = PQgetvalue(res, 0, PQfnumber(res, "proargnames"));
+		allargtypes = PQgetvalue(res, 0, PQfnumber(res, "allargtypes"));
+		argmodes = PQgetvalue(res, 0, PQfnumber(res, "argmodes"));
+		argnames = PQgetvalue(res, 0, PQfnumber(res, "argnames"));
 		funcargs = funciargs = funcresult = NULL;
 	}
 	if (PQfnumber(res, "protrftypes") != -1)
