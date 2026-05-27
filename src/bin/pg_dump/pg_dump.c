@@ -17078,7 +17078,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 						{
 							/*
 							 * Array types for children of a partitioned table are created
-							 * only starting from Greengage 7, so specify arbitrary OIDs for
+							 * only starting from Greengage 7, so pick unused OIDs for
 							 * them.
 							 *
 							 * Also, don't do it for AO tables, array types are not created
