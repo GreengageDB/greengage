@@ -24,6 +24,4 @@ endif
 
 installcheck: install
 test: clean all install
-	psql postgres -f sql/test_extensions.sql 2>&1
-
-
+	psql postgres -f sql/test_metadata.sql 2>&1
