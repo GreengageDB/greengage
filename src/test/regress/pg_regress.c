@@ -1324,9 +1324,9 @@ initialize_environment(void)
 			setenv("PGPORT", s, 1);
 		}
 		if (user != NULL)
-			setenv(\1, \2, 1);
+			setenv("PGUSER", user, 1);
 		if (sslmode != NULL)
-			setenv(\1, \2, 1);
+			setenv("PGSSLMODE", sslmode, 1);
 
 		/*
 		 * However, we *don't* honor PGDATABASE, since we certainly don't wish
