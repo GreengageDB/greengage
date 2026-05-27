@@ -2403,8 +2403,6 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	 * Since the metadata might be pretty long, we create an own buffer
 	 * rather than using conn->workBuffer.  workBuffer is intended
 	 * for stuff that is expected to be short.
-	 *
-	 * we can not use palloc/pqAlloc here as this is a handler.
 	 */
 
 	ggMetadataChunk *chunk = pqPalloc(sizeof(ggMetadataChunk) + payload_len);
