@@ -1324,9 +1324,9 @@ initialize_environment(void)
 			setenv("PGPORT", s, 1);
 		}
 		if (user != NULL)
-			doputenv("PGUSER", user);
+			setenv(\1, \2, 1);
 		if (sslmode != NULL)
-			doputenv("PGSSLMODE", sslmode);
+			setenv(\1, \2, 1);
 
 		/*
 		 * However, we *don't* honor PGDATABASE, since we certainly don't wish
@@ -3370,7 +3370,7 @@ regression_main(int argc, char *argv[],
 
 	for (sl = setup_tests; sl != NULL && !halt_work; sl = sl->next)
 	{
-		run_single_test(sl->str, tfunc);
+		run_single_test(sl->str, startfunc, postfunc);
 	}
 
 	for (sl = schedulelist; sl != NULL && !halt_work; sl = sl->next)
