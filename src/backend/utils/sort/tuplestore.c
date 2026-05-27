@@ -182,6 +182,8 @@ typedef struct
 	 */
 	bool aborting;
 
+	/* True if the file was created and should be deleted on abort */
+	bool created;
 	pg_atomic_uint32	ready;	/* is the input fully materialized and ready to be read? */
 
 	/*
@@ -633,7 +635,11 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 	 * Used after releasing the lock.
 	 */
 	bool		should_remove_entry = false;
+	bool		should_delete_file = false;
+	char		delete_tag[NAMEDATALEN];
 	dsm_handle	detach_handle = DSM_HANDLE_INVALID;
+	pid_t		delete_creator_pid = 0;
+	uint32		delete_sfs_number = 0;
 
 	tuplestore_report(state);
 
@@ -689,6 +695,15 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 				 */
 				Assert(strlen(state->shared_filename) < NAMEDATALEN);
 
+				strlcpy(delete_tag,
+						state->shared_filename,
+						sizeof(delete_tag));
+
+				delete_creator_pid = sstate->sfs_creator_pid;
+				delete_sfs_number = sstate->sfs_number;
+
+				should_delete_file = sstate->created;
+
 				if (hash_search(shared_tuplestores,
 								state->shared_filename,
 								HASH_REMOVE, NULL) == NULL)
@@ -717,6 +732,24 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			if (fileset == NULL && detach_handle != DSM_HANDLE_INVALID)
 			{
 				fileset = attach_shareinput_fileset(detach_handle);
+			}
+
+			if (should_delete_file)
+			{
+				if (fileset != NULL &&
+					fileset->creator_pid == delete_creator_pid &&
+					fileset->number == delete_sfs_number)
+				{
+					BufFileDeleteShared(fileset, delete_tag);
+				}
+			}
+
+			/*
+			 * Release the htab-owned lifetime. This must happen exactly once:
+			 * only in the same path that removed shared_tuplestores[tag].
+			 */
+			if (detach_handle != DSM_HANDLE_INVALID)
+			{
 				if (fileset != NULL)
 					SharedFileSetUnpin(fileset);
 
@@ -1954,6 +1987,7 @@ get_shared_state(const char *filename)
 		sstate->num_current = 0;
 		sstate->num_done = 0;
 		sstate->aborting = false;
+		sstate->created = false;
 		/*
 		 * We might not know the total number of shares, the writer will set it.
 		 * It's okay to set it later since no process will cleanup before the
@@ -2077,6 +2111,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 	
 	state->shared_state->num_total = ntotal;
+	state->shared_state->created = true;
 
 	LWLockRelease(ShareInputScanLock);
 
@@ -2349,6 +2384,22 @@ AtAbort_SharedTuplestores()
 			/* Get handler for fileset. */
 			fileset = attach_shareinput_fileset(handle);
 		
+			/*
+			* No one is using it, and we're aborting so no one will use it
+			* in the future either. It's safe to delete the files now.
+			* Also delete the shared memory entry. We do not need to delete
+			* files if the SharedFileSet was already cleaned up.
+			*/
+			if (sstate->created &&
+				fileset != NULL &&
+				sstate->sfs_creator_pid == fileset->creator_pid &&
+				sstate->sfs_number == fileset->number)
+			{
+				BufFileDeleteShared(fileset, sstate->tag);
+				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted on abort",
+					sstate->tag, currentSliceId);
+			}
+
 			/* 
 			 * Unpin fileset from htab if not NULL. 
 			 * Possibly can be NULL if skip_open was true in process of creation. 
