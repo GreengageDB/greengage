@@ -187,16 +187,12 @@ typedef struct
 	/*
 	 * ready_cv is used for signaling when the scan becomes "ready". 
 	 * The producer wakes up everyone waiting on this condition variable when
-	 * it sets ready = true. Also, when the last consumer finishes the scan
-	 * (ndone reaches nconsumers), it wakes up the producer using this same
-	 * condition variable.
+	 * it sets ready = true.
 	 */
 	ConditionVariable ready_cv;
 
 	/* Data to identify the SharedFileSet that was used */
-	pid_t		sfs_creator_pid;
 	dsm_handle	sfs_handle;
-	uint32		sfs_number;
 } TuplestoreSharingState;
 
 /*
@@ -1957,9 +1953,7 @@ get_shared_state(const char *filename)
 		 * writer is ready anyway.
 		 */
 		sstate->num_total = UINT32_MAX;
-		sstate->sfs_creator_pid = 0;
 		sstate->sfs_handle = DSM_HANDLE_INVALID;
-		sstate->sfs_number = 0;
 
 		pg_atomic_init_u32(&sstate->ready, 0);
 		ConditionVariableInit(&sstate->ready_cv);
@@ -2036,8 +2030,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 		fileset = create_shareinput_fileset(&handle);
 
 		sstate->sfs_handle = handle;
-		sstate->sfs_creator_pid = fileset->creator_pid;
-		sstate->sfs_number = fileset->number;
 	}
 	else
 	{
@@ -2065,6 +2057,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	CurrentResourceOwner = state->resowner;
 
 	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
+	CurrentResourceOwner = oldowner;
 
 	/*
 	 * For now, be conservative and always use trailing length words for
@@ -2074,8 +2067,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	 */
 	state->backward = true;
 	state->status = TSS_WRITEFILE;
-
-	CurrentResourceOwner = oldowner;
 }
 
 /*
@@ -2191,8 +2182,6 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 {
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
-	SharedFileSet *fileset = NULL;
-	dsm_handle 	handle = DSM_HANDLE_INVALID;
 	int			eflags;
 
 	/*
@@ -2207,25 +2196,6 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 
 	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
-
-	/*
-	 * Aborting flag can only be set under exclusive lock, so we can be sure
-	 * nobody will abort before we release the lock here. Someone else will
-	 * delete it after we are done here.
-	 */
-	if (sstate->aborting) 
-	{
-		sstate->num_current--;
-		/*
-		 * This couldn't be a freshly created shared state,
-	     * so someone else must be holding it right now.
-		 */
-		Assert(sstate->num_current > 0);
-		LWLockRelease(ShareInputScanLock);
-		ereport(ERROR,
-				(errcode(ERRCODE_GP_OPERATION_CANCELED),
-				 errmsg("tuplestore operation aborted, canceling")));
-	}
 
 	LWLockRelease(ShareInputScanLock);
 
@@ -2248,12 +2218,11 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 
 	/* Only open file if requested */
 	if (!skip_open) {
+		SharedFileSet *fileset = NULL;
 		/* Wait until writer is ready */
 		tuplestore_reader_waitready(sstate);
 
-		handle = sstate->sfs_handle;
-
-		fileset = attach_shareinput_fileset(handle);
+		fileset = attach_shareinput_fileset(sstate->sfs_handle);
 
 		state->fileset = fileset;
 		state->myfile = BufFileOpenShared(fileset, filename);
