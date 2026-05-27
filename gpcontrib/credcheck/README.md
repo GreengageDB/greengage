@@ -485,6 +485,8 @@ test=> ALTER ROLE 'user1' PASSWORD 'My-New-Pass#123';
 ERROR:  you are not allowed to change your password.
 ```
 
+Even superusers can not change password when `credcheck.disallow_change_password` is enabled, to be able to change a password the superuser must execute `SET credcheck.superuser_nocheck = on;` before in the session.
+
 ### [Warning before password expire](#warning-before-password-expire)
 
 To send a warning to the user N days before his password expires you can set the number of days
