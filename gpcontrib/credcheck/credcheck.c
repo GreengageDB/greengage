@@ -668,13 +668,6 @@ static void password_check(const char *username, const char *password)
 	Assert(username != NULL);
 	Assert(password != NULL);
 
-	/*
-	 * no passowrd check at all if the user is superuser
-	 * and superuser_nocheck is enabled
-	 */
-	if (superuser() && superuser_nocheck)
-		return;
-
 	/* checks has to be done by ignoring case */
 	if (password_ignore_case)
 	{
@@ -1868,6 +1861,20 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	{
 		Node *parsetree = pstmt->utilityStmt;
 
+
+		/*
+		 * no check at all if the user is superuser
+		 * and superuser_nocheck is enabled
+		 */
+		if (superuser() && superuser_nocheck)
+		{
+			if (prev_ProcessUtility)
+				prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+			else
+				standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+			return;
+		}
+
 		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
 		{
 			/*
@@ -1877,7 +1884,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			if (nodeTag(parsetree) == T_AlterRoleStmt && disallow_change_password)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("you are not allowed to change your password."))));
+							errmsg(gettext_noop("you are not allowed to change password."))));
 
 			/*
 			 * When first login we don't allow anything else than password change.
