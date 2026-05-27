@@ -16907,9 +16907,8 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 		pg_log_warning("WITH OIDS is not supported anymore (table \"%s\")",
 					   qrelname);
 
-	if (dopt->binary_upgrade) {
+	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo, false);
-	}
 
 	/* Is it a table or a view? */
 	if (tbinfo->relkind == RELKIND_VIEW)
