@@ -187,13 +187,13 @@ typedef struct
 	pg_atomic_uint32	ready;	/* is the input fully materialized and ready to be read? */
 
 	/*
-	 * ready_done_cv is used for signaling when the scan becomes "ready", and
-	 * when it becomes "done". The producer wakes up everyone waiting on this
-	 * condition variable when it sets ready = true. Also, when the last
-	 * consumer finishes the scan (ndone reaches nconsumers), it wakes up the
-	 * producer using this same condition variable.
+	 * ready_cv is used for signaling when the scan becomes "ready". 
+	 * The producer wakes up everyone waiting on this condition variable when
+	 * it sets ready = true. Also, when the last consumer finishes the scan
+	 * (ndone reaches nconsumers), it wakes up the producer using this same
+	 * condition variable.
 	 */
-	ConditionVariable ready_done_cv;
+	ConditionVariable ready_cv;
 
 	/* Data to identify the SharedFileSet that was used */
 	pid_t		sfs_creator_pid;
@@ -671,10 +671,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		 * do so after they're done using it.
 		 */
 		if (should_abort)
-		{
 			sstate->aborting = true;
-			ConditionVariableBroadcast(&sstate->ready_done_cv);
-		}
 			
 		sstate->num_done++;
 		sstate->num_current--;
@@ -1999,7 +1996,7 @@ get_shared_state(const char *filename)
 		sstate->sfs_number = 0;
 
 		pg_atomic_init_u32(&sstate->ready, 0);
-		ConditionVariableInit(&sstate->ready_done_cv);
+		ConditionVariableInit(&sstate->ready_cv);
 
 		elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): initialized shared state",
 			 filename, currentSliceId);
@@ -2056,11 +2053,13 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
 
-	if (sstate->aborting)
-	{
+	if (sstate->aborting) {
 		sstate->num_current--;
-		LWLockRelease(ShareInputScanLock);
-
+		/*
+		 * This couldn't be a freshly created shared state,
+	     * so someone else must be holding it right now.
+		 */
+		Assert(sstate->num_current > 0);
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_OPERATION_CANCELED),
 				errmsg("tuplestore operation aborted, canceling")));
@@ -2085,6 +2084,8 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	state->shared_filename = pstrdup(filename);
 	state->shared_state = sstate;
 
+	state->shared_state->num_total = ntotal;
+
 	/*
 	 * From this point, AtAbort_SharedTuplestores() can find this state
 	 * and tuplestore_cleanup() owns num_current.
@@ -2105,18 +2106,10 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	 * reader processes agree on this, and forcing it to true is the
 	 * simplest way to achieve that.
 	 */
-
-	CurrentResourceOwner = oldowner;
-
-	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
-	
-	state->shared_state->num_total = ntotal;
-	state->shared_state->created = true;
-
-	LWLockRelease(ShareInputScanLock);
-
 	state->backward = true;
 	state->status = TSS_WRITEFILE;
+
+	CurrentResourceOwner = oldowner;
 }
 
 /*
@@ -2167,7 +2160,7 @@ tuplestore_freeze(Tuplestorestate *state)
 	SIMPLE_FAULT_INJECTOR("tuplestore_freeze");
 #endif
 
-	ConditionVariableBroadcast(&sstate->ready_done_cv);
+	ConditionVariableBroadcast(&sstate->ready_cv);
 
 	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (file=%s, slice=%d): wrote notify_ready",
 		 state->shared_filename, currentSliceId);
@@ -2200,7 +2193,7 @@ tuplestore_reader_waitready(TuplestoreSharingState *sstate)
 		if (ready)
 			break;
 
-		ConditionVariableSleep(&sstate->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+		ConditionVariableSleep(&sstate->ready_cv, WAIT_EVENT_SHAREINPUT_SCAN);
 	}
 	ConditionVariableCancelSleep();
 
@@ -2257,6 +2250,11 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 	if (sstate->aborting) 
 	{
 		sstate->num_current--;
+		/*
+		 * This couldn't be a freshly created shared state,
+	     * so someone else must be holding it right now.
+		 */
+		Assert(sstate->num_current > 0);
 		LWLockRelease(ShareInputScanLock);
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_OPERATION_CANCELED),
@@ -2282,26 +2280,12 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 	state->frozen = false;
 	state->shared_filename = pstrdup(filename);
 
-	/* Remember this tuplestore in case we have to close it while aborting */
-	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
-
 	/* Only open file if requested */
 	if (!skip_open) {
 		/* Wait until writer is ready */
 		tuplestore_reader_waitready(sstate);
 
-		LWLockAcquire(ShareInputScanLock, LW_SHARED);
-
-		if (sstate->aborting) 
-		{
-			LWLockRelease(ShareInputScanLock);
-			ereport(ERROR,
-					(errcode(ERRCODE_GP_OPERATION_CANCELED),
-					errmsg("tuplestore operation aborted, canceling")));
-		}
 		handle = sstate->sfs_handle;
-
-		LWLockRelease(ShareInputScanLock);
 
 		fileset = attach_shareinput_fileset(handle);
 
@@ -2311,6 +2295,9 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 		state->readptrs[0].offset = 0L;
 		state->status = TSS_READFILE;
 	}
+
+	/* Remember this tuplestore in case we have to close it while aborting */
+	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
 
 	return state;
 }

@@ -293,7 +293,7 @@ SharedFileSetUnpin(SharedFileSet *fileset)
  * exclusively for shareinput_filesets we need to make extra 
  * pinning - as HTAB should be also considered as holder.
  * Otherwise we might get into situation, when, for instance,
- * writer will complete it's part of the job, detach and destroy
+ * writer will complete its part of the job, detach and destroy
  * set with on_dsm_detach(). 
  * 
  * When all jobs will be done, this fileset will be unpinned from HTAB's
