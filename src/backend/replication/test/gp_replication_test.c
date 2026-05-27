@@ -40,8 +40,15 @@ expect_ereport()
 {
 	expect_any(errstart, elevel);
 	expect_any(errstart, domain);
-
 	will_be_called(errstart);
+}
+
+static void
+expect_ereport_cold()
+{
+	expect_any(errstart_cold, elevel);
+	expect_any(errstart_cold, domain);
+	will_be_called(errstart_cold);
 }
 
 static FTSReplicationStatusCtlData *
