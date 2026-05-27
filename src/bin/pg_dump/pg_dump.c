@@ -16893,7 +16893,6 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 	char	   *ftoptions = NULL;
 	char	   *srvname = NULL;
 	char	   *partkeydef = NULL;
-	bool	   force_array_type = false;
 
 	/* We had better have loaded per-column details about this table */
 	Assert(tbinfo->interesting);
@@ -17071,11 +17070,13 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					{
 						Oid part_oid = atooid(PQgetvalue(partres, i, 0));
 						TableInfo *tbinfo = findTableByOid(part_oid);
+						bool force_array_type = false;
 
 						if (tbinfo->relstorage == 'x')
 							hasExternalPartitions = true;
 
-						if (!tbinfo->aotbl) {
+						if (!tbinfo->aotbl)
+						{
 							/*
 							 * Array types for children of a partitioned table are created
 							 * only starting from Greengage 7, so specify arbitrary OIDs for
