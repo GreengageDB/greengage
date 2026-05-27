@@ -322,6 +322,7 @@
 		"log_lock_waits",
 		"log_parser_stats",
 		"log_planner_stats",
+		"log_recovery_conflict_waits",
 		"log_replication_commands",
 		"log_rotation_age",
 		"log_rotation_size",
