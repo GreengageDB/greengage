@@ -2890,7 +2890,7 @@ exec_stmt_forc(PLpgSQL_execstate *estate, PLpgSQL_stmt_forc *stmt)
 	Assert(query);
 
 	if (query->plan == NULL)
-		exec_prepare_plan(estate, query, curvar->cursor_options | CURSOR_OPT_UPDATABLE, true);
+		exec_prepare_plan(estate, query, curvar->cursor_options | CURSOR_OPT_UPDATABLE);
 
 	/*
 	 * Set up ParamListInfo for this query
@@ -4699,7 +4699,7 @@ exec_stmt_open(PLpgSQL_execstate *estate, PLpgSQL_stmt_open *stmt)
 
 		query = curvar->cursor_explicit_expr;
 		if (query->plan == NULL)
-			exec_prepare_plan(estate, query, curvar->cursor_options | CURSOR_OPT_UPDATABLE, true);
+			exec_prepare_plan(estate, query, curvar->cursor_options | CURSOR_OPT_UPDATABLE);
 	}
 
 	/*

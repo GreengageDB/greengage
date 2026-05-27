@@ -216,9 +216,6 @@ typedef struct PLpgSQL_type
  */
 typedef struct PLpgSQL_expr
 {
-	char	   *query;
-	SPIPlanPtr	plan;
-	bool		cachable;			/* true if plan can be cached */
 	char	   *query;			/* query string, verbatim from function body */
 	RawParseMode parseMode;		/* raw_parser() mode to use */
 	SPIPlanPtr	plan;			/* plan, or NULL if not made yet */
@@ -432,6 +429,30 @@ typedef struct PLpgSQL_recfield
 	ExpandedRecordFieldInfo finfo;	/* field's attnum and type info */
 	/* if rectupledescid == INVALID_TUPLEDESC_IDENTIFIER, finfo isn't valid */
 } PLpgSQL_recfield;
+
+/*
+ * PLpgSQL_arrayelem - array element
+ */
+typedef struct PLpgSQL_arrayelem
+{
+	PLpgSQL_datum_type dtype;
+	int			dno;
+	/* end of PLpgSQL_datum fields */
+
+	PLpgSQL_expr *subscript;
+	int			arrayparentno;	/* dno of parent array variable */
+
+	/* Remaining fields are cached info about the array variable's type */
+	Oid			parenttypoid;	/* type of array variable; 0 if not yet set */
+	int32		parenttypmod;	/* typmod of array variable */
+	Oid			arraytypoid;	/* OID of actual array type */
+	int32		arraytypmod;	/* typmod of array (and its elements too) */
+	int16		arraytyplen;	/* typlen of array type */
+	Oid			elemtypoid;		/* OID of array element type */
+	int16		elemtyplen;		/* typlen of element type */
+	bool		elemtypbyval;	/* element type is pass-by-value? */
+	char		elemtypalign;	/* typalign of element type */
+} PLpgSQL_arrayelem;
 
 /*
  * Item in the compilers namespace tree
