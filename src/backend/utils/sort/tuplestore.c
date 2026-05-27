@@ -2013,29 +2013,9 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_va
 	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
 
-	if (sstate->aborting) {
-		sstate->num_current--;
-		/*
-		 * This couldn't be a freshly created shared state,
-	     * so someone else must be holding it right now.
-		 */
-		Assert(sstate->num_current > 0);
-		ereport(ERROR,
-				(errcode(ERRCODE_GP_OPERATION_CANCELED),
-				errmsg("tuplestore operation aborted, canceling")));
-	}
-
-	if (sstate->sfs_handle == DSM_HANDLE_INVALID)
-	{
-		fileset = create_shareinput_fileset(&handle);
-
-		sstate->sfs_handle = handle;
-	}
-	else
-	{
-		handle = sstate->sfs_handle;
-		fileset = attach_shareinput_fileset(handle);
-	}
+	Assert(sstate->sfs_handle == DSM_HANDLE_INVALID);
+	fileset = create_shareinput_fileset(&handle);
+	sstate->sfs_handle = handle;
 
 	state->share_status = TSHARE_WRITER;
 	state->fileset = fileset;
@@ -2197,6 +2177,25 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 	sstate = get_shared_state(filename);
 	Assert(sstate->session_id == gp_session_id);
 
+	/*
+	 * Aborting flag can only be set under exclusive lock, so we can be sure
+	 * nobody will abort before we release the lock here. Someone else will
+	 * delete it after we are done here.
+	 */
+	if (sstate->aborting) 
+	{
+		sstate->num_current--;
+		/*
+		 * This couldn't be a freshly created shared state,
+	     * so someone else must be holding it right now.
+		 */
+		Assert(sstate->num_current > 0);
+		LWLockRelease(ShareInputScanLock);
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_OPERATION_CANCELED),
+				 errmsg("tuplestore operation aborted, canceling")));
+	}
+
 	LWLockRelease(ShareInputScanLock);
 
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
@@ -2218,14 +2217,11 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 
 	/* Only open file if requested */
 	if (!skip_open) {
-		SharedFileSet *fileset = NULL;
 		/* Wait until writer is ready */
 		tuplestore_reader_waitready(sstate);
 
-		fileset = attach_shareinput_fileset(sstate->sfs_handle);
-
-		state->fileset = fileset;
-		state->myfile = BufFileOpenShared(fileset, filename);
+		state->fileset = attach_shareinput_fileset(sstate->sfs_handle);;
+		state->myfile = BufFileOpenShared(state->fileset, filename);
 		state->readptrs[0].file = 0;
 		state->readptrs[0].offset = 0L;
 		state->status = TSS_READFILE;
