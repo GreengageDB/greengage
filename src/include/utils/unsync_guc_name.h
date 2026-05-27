@@ -243,6 +243,7 @@
 		"gp_resource_group_cpu_limit",
 		"gp_resource_group_cpu_priority",
 		"gp_resource_group_cpu_ceiling_enforcement",
+		"gp_resource_group_enable_alter_in_transaction",
 		"gp_resource_group_memory_limit",
 		"gp_resource_group_bypass_catalog_query",
 		"gp_resource_group_queuing_timeout",

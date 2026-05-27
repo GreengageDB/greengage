@@ -30,9 +30,11 @@
 #include "commands/defrem.h"
 #include "commands/resgroupcmds.h"
 #include "miscadmin.h"
+#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
+#include "utils/memutils.h"
 #include "utils/resgroup.h"
 #include "utils/resgroup-ops.h"
 #include "utils/resource_manager.h"
@@ -94,6 +96,12 @@ static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
 static int getResGroupMemAuditor(char *name);
 static void checkCpusetSyntax(const char *cpuset);
+static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+									const ResGroupCaps *caps);
+static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
+											ResourceGroupCallbackContext *ctx);
+
+static List *resgroup_alter_callbacks = NIL;
 
 /*
  * CREATE RESOURCE GROUP
@@ -360,11 +368,23 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	}
 }
 
+void
+AlterResourceGroup(AlterResourceGroupStmt *stmt)
+{
+	/*
+	 * Legacy ABI entry point has no ProcessUtilityContext.
+	 * Treat it as top-level so IsInTransactionChain() can still detect
+	 * explicit transaction blocks, subtransactions and non-standalone
+	 * transaction states, but does not assume function/multi-command context.
+	 */
+	AlterResourceGroupExtended(stmt, true);
+}
+
 /*
  * ALTER RESOURCE GROUP
  */
 void
-AlterResourceGroup(AlterResourceGroupStmt *stmt)
+AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 {
 	Relation	pg_resgroupcapability_rel;
 	Oid			groupid;
@@ -415,6 +435,19 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("resource group \"%s\" does not exist",
 						stmt->name)));
+
+	/*
+	 * The session alters its own resource group inside a transaction block.
+	 * The change will not be visible to this session before COMMIT.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		IsInTransactionChain(isTopLevel) &&
+		groupid == GetMyResGroupId())
+	{
+		ereport(WARNING,
+				(errmsg("resource group \"%s\" settings will be applied after COMMIT",
+						stmt->name)));
+	}
 
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
 		value == 0 &&
@@ -531,7 +564,27 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
-		RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
+
+		/*
+		 * Collect ALTERs and apply them together at COMMIT after PRE_COMMIT
+		 * validates final catalog state. Outside an explicit transaction this
+		 * list contains only one ALTER.
+		 */
+		static bool alter_tran_callback_registered = false;
+		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+		resgroup_alter_callbacks = lappend(resgroup_alter_callbacks,
+										   callbackCtx);
+		MemoryContextSwitchTo(oldcxt);
+
+		if (!alter_tran_callback_registered)
+		{
+			/*
+			 * Use a regular callback because once callbacks are not fired
+			 * at PRE_COMMIT, where we need to validate final catalog state.
+			 */
+			RegisterXactCallback(alterResgroupCallback, NULL);
+			alter_tran_callback_registered = true;
+		}
 	}
 }
 
@@ -1134,20 +1187,142 @@ dropResgroupCallback(XactEvent event, void *arg)
 }
 
 /*
+ * Check whether the field changed by this callback has the same value in
+ * the given capability snapshot.
+ */
+static bool
+resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+						const ResGroupCaps *caps)
+{
+	switch (ctx->limittype)
+	{
+		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
+			return ctx->caps.concurrency == caps->concurrency;
+
+		case RESGROUP_LIMIT_TYPE_CPU:
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			return ctx->caps.cpuRateLimit == caps->cpuRateLimit &&
+				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY:
+			return ctx->caps.memLimit == caps->memLimit;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
+			return ctx->caps.memSharedQuota == caps->memSharedQuota;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
+			return ctx->caps.memSpillRatio == caps->memSpillRatio;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
+			return ctx->caps.memAuditor == caps->memAuditor;
+
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
+			break;
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 errmsg("invalid resource group limit type: %d", ctx->limittype)));
+
+	return false;
+}
+
+/*
+ * Check whether the same target ALTER callback is already prepared.
+ */
+static bool
+resgroupAlterCallbackAlreadyPrepared(List *prepared,
+									 ResourceGroupCallbackContext *ctx)
+{
+	ListCell   *lc;
+
+	foreach (lc, prepared)
+	{
+		ResourceGroupCallbackContext *prev = lfirst(lc);
+
+		if (prev->groupid != ctx->groupid)
+			continue;
+
+		if (prev->limittype != ctx->limittype)
+			continue;
+
+		if (resGroupCapFieldMatches(ctx, &prev->caps))
+			return true;
+	}
+
+	return false;
+}
+
+/*
  * Resource group call back function
+ *
+ * PRE_COMMIT: keep callbacks matching final pg_resgroupcapability state.
+ * COMMIT: apply kept callbacks, then cleanup.
+ * ABORT: cleanup.
  *
  * When ALTER RESOURCE GROUP SET CONCURRENCY commits, some queuing
  * transaction of this resource group may need to be woke up.
+ *
+ * The callback remains registered for the backend lifetime. The first check
+ * is the fast path for transactions without ALTER RESOURCE GROUP.
  */
 static void
 alterResgroupCallback(XactEvent event, void *arg)
 {
-	ResourceGroupCallbackContext *callbackCtx = arg;
+	ListCell   *lc;
 
-	if (event == XACT_EVENT_COMMIT)
-		ResGroupAlterOnCommit(callbackCtx);
+	if (resgroup_alter_callbacks == NIL)
+		return;
 
-	pfree(callbackCtx);
+	if (event == XACT_EVENT_ABORT)
+	{
+		list_free_deep(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = NIL;
+	}
+	else if (event == XACT_EVENT_COMMIT)
+	{
+		foreach (lc, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			ResGroupAlterOnCommit(ctx);
+		}
+
+		list_free_deep(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = NIL;
+	}
+	else if (event == XACT_EVENT_PRE_COMMIT)
+	{
+		List	   *prepared = NIL;
+		List	   *rejected = NIL;
+		Relation	rel;
+
+		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+
+		/* Keep only final, non-duplicate callbacks. */
+		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+
+		foreach (lc, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			ResGroupCaps finalCaps;
+
+			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+
+			if (resGroupCapFieldMatches(ctx, &finalCaps) &&
+				!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+				prepared = lappend(prepared, ctx);
+			else
+				rejected = lappend(rejected, ctx);
+		}
+		MemoryContextSwitchTo(oldcxt);
+		heap_close(rel, AccessShareLock);
+
+		list_free(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = prepared;
+
+		list_free_deep(rejected);
+	}
 }
 
 /*
