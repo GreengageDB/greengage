@@ -70,7 +70,6 @@ EXCL_OBJS+=\
 	src/backend/utils/adt/tsvector_op.o \
 	src/backend/utils/adt/tsvector_parser.o \
 	src/backend/utils/adt/txid.o \
-	src/backend/utils/adt/uuid.o \
 	src/backend/tsearch/dict.o \
 	src/backend/tsearch/dict_ispell.o \
 	src/backend/tsearch/dict_simple.o \
