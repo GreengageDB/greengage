@@ -714,11 +714,11 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			if (fileset == NULL && detach_handle != DSM_HANDLE_INVALID)
 			{
 				fileset = attach_shareinput_fileset(detach_handle);
-				if (fileset != NULL)
-					SharedFileSetUnpin(fileset);
-
-				dsm_unpin_segment(detach_handle);
 			}
+			if (fileset != NULL)
+				SharedFileSetUnpin(fileset);
+
+			dsm_unpin_segment(detach_handle);
 		}
 	}
 
