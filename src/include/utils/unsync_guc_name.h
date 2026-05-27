@@ -294,6 +294,7 @@
 		"ignore_checksum_failure",
 		"idle_session_timeout",
 		"ignore_system_indexes",
+		"in_hot_standby",
 		"integer_datetimes",
 		"is_superuser",
 		"jit_provider",
