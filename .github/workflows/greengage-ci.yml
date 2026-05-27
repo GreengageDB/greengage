@@ -158,6 +158,7 @@ jobs:
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
       test_docker: ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
