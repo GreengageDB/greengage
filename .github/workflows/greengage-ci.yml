@@ -158,6 +158,6 @@ jobs:
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
-      test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
+      test_docker: ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
