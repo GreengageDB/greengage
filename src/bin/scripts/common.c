@@ -113,9 +113,8 @@ appendQualifiedRelation(PQExpBuffer buf, const char *spec,
 		exit(1);
 	}
 	appendPQExpBufferStr(buf,
-						 fmtQualifiedIdEnc(PQgetvalue(res, 0, 1),
-										   PQgetvalue(res, 0, 0),
-										   PQclientEncoding(conn)));
+						 fmtQualifiedId(PQgetvalue(res, 0, 1),
+										PQgetvalue(res, 0, 0)));
 	appendPQExpBufferStr(buf, columns);
 	PQclear(res);
 	termPQExpBuffer(&sql);
