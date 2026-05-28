@@ -662,7 +662,6 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		 */
 		if (should_abort)
 			sstate->aborting = true;
-			
 		sstate->num_done++;
 		sstate->num_current--;
 		Assert(sstate->num_done <= sstate->num_total);
@@ -681,7 +680,6 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 				 * after us.
 				 */
 				Assert(strlen(state->shared_filename) < NAMEDATALEN);
-
 				if (hash_search(shared_tuplestores,
 								state->shared_filename,
 								HASH_REMOVE, NULL) == NULL)
@@ -1927,7 +1925,6 @@ get_shared_state(const char *filename)
 	TuplestoreSharingState *sstate;
 	bool		found;
 
-	/* We only support one shared fileset currently */
 	Assert(LWLockHeldByMeInMode(ShareInputScanLock, LW_EXCLUSIVE));
 
 	Assert(strlen(filename) < NAMEDATALEN);
@@ -2182,8 +2179,7 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 	 * nobody will abort before we release the lock here. Someone else will
 	 * delete it after we are done here.
 	 */
-	if (sstate->aborting) 
-	{
+	if (sstate->aborting) {
 		sstate->num_current--;
 		/*
 		 * This couldn't be a freshly created shared state,
@@ -2283,7 +2279,6 @@ AtAbort_SharedTuplestores()
 	while ((sstate = hash_seq_search(&seq_status)) != NULL)
 	{
 		dsm_handle handle;
-		SharedFileSet *fileset = NULL;
 
 		/* Check if this is tuplestore belongs to this session */
 		if (sstate->session_id != gp_session_id)
@@ -2299,7 +2294,7 @@ AtAbort_SharedTuplestores()
 		if (handle != DSM_HANDLE_INVALID) 
 		{
 			/* Get handler for fileset. */
-			fileset = attach_shareinput_fileset(handle);
+			SharedFileSet *fileset = attach_shareinput_fileset(handle);
 		
 			/* 
 			 * Unpin fileset from htab if not NULL. 
@@ -2310,7 +2305,7 @@ AtAbort_SharedTuplestores()
 			/* Release the global pin */
 			dsm_unpin_segment(handle);
 		}
-		
+
 		if (hash_search(shared_tuplestores,
 						sstate->tag,
 						HASH_REMOVE, NULL) == NULL)
