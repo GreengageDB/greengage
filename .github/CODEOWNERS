@@ -1,0 +1,5 @@
+# .github/CODEOWNERS
+# DevOps team is auto-requested for review on GitHub Actions changes only.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+/.github/ @GreengageDB/ci
