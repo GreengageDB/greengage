@@ -3218,10 +3218,10 @@ psql_completion(const char *text, int start, int end)
 
 	/* For the following, handle the case of a single table only for now */
 
-	/* Complete LOCK [TABLE] <table> with "IN" */
+	/* Complete LOCK [TABLE] <table> with "IN", "NOWAIT" */
 	else if (Matches("LOCK", MatchAnyExcept("TABLE")) ||
 			 Matches("LOCK", "TABLE", MatchAny))
-		COMPLETE_WITH("IN");
+		COMPLETE_WITH("IN", "NOWAIT");
 
 	/* Complete LOCK [TABLE] <table> IN with a lock mode */
 	else if (Matches("LOCK", MatchAny, "IN") ||
@@ -3242,6 +3242,11 @@ psql_completion(const char *text, int start, int end)
 			 Matches("LOCK", "TABLE", MatchAny, "IN", "SHARE"))
 		COMPLETE_WITH("MODE", "ROW EXCLUSIVE MODE",
 					  "UPDATE EXCLUSIVE MODE");
+	
+	/* Complete LOCK [TABLE] <table> IN ACESS SHARE MODE with "NOWAIT", "MASTER ONLY", "COORDINATOR ONLY" */
+	else if (Matches("LOCK", MatchAny, "IN", "ACCESS", "SHARE", "MODE") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS", "SHARE", "MODE"))
+		COMPLETE_WITH("NOWAIT", "MASTER ONLY", "COORDINATOR ONLY");
 
 /* NOTIFY --- can be inside EXPLAIN, RULE, etc */
 	else if (TailMatches("NOTIFY"))
