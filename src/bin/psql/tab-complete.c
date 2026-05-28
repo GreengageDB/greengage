@@ -2196,6 +2196,7 @@ psql_completion(const char *text, int start, int end)
 					  "DATABASE", "EVENT TRIGGER", "EXTENSION",
 					  "FOREIGN DATA WRAPPER", "FOREIGN TABLE", "SERVER",
 					  "INDEX", "LANGUAGE", "POLICY", "PUBLICATION", "RULE",
+					  "RESOURCE GROUP", "RESOURCE QUEUE",
 					  "SCHEMA", "SEQUENCE", "STATISTICS", "SUBSCRIPTION",
 					  "TABLE", "TYPE", "VIEW", "MATERIALIZED VIEW",
 					  "COLUMN", "AGGREGATE", "FUNCTION",
@@ -2206,6 +2207,8 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_access_methods);
 	else if (Matches("COMMENT", "ON", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
+	else if(Matches("COMMENT", "ON", "RESOURCE"))
+			COMPLETE_WITH("GROUP", "QUEUE");
 	else if (Matches("COMMENT", "ON", "TEXT", "SEARCH"))
 		COMPLETE_WITH("CONFIGURATION", "DICTIONARY", "PARSER", "TEMPLATE");
 	else if (Matches("COMMENT", "ON", "CONSTRAINT"))
