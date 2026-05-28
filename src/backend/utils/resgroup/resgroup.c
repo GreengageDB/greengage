@@ -264,7 +264,7 @@ static bool groupIsDropped(ResGroupInfo *pGroupInfo);
 
 static void resgroupDumpGroup(StringInfo str, ResGroupData *group);
 static void resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue);
-static void resgroupDumpCaps(StringInfo str, ResGroupCap *caps);
+static void resgroupDumpCaps(StringInfo str, ResGroupCaps *caps);
 static void resgroupDumpSlots(StringInfo str);
 static void resgroupDumpFreeSlots(StringInfo str);
 
@@ -779,23 +779,34 @@ resGroupCapFieldApply(ResGroupCaps *dst,
 		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
 			dst->concurrency = src->concurrency;
 			return;
+
 		case RESGROUP_LIMIT_TYPE_CPU:
-		case RESGROUP_LIMIT_TYPE_CPUSET:
-			dst->cpuRateLimit = src->cpuRateLimit;
+			dst->cpuMaxPercent = src->cpuMaxPercent;
 			StrNCpy(dst->cpuset, src->cpuset, sizeof(dst->cpuset));
 			return;
-		case RESGROUP_LIMIT_TYPE_MEMORY:
-			dst->memLimit = src->memLimit;
+
+		case RESGROUP_LIMIT_TYPE_CPU_SHARES:
+			dst->cpuWeight = src->cpuWeight;
 			return;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
-			dst->memSharedQuota = src->memSharedQuota;
+
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			dst->cpuMaxPercent = src->cpuMaxPercent;
+			dst->cpuWeight = src->cpuWeight;
+			StrNCpy(dst->cpuset, src->cpuset, sizeof(dst->cpuset));
 			return;
-		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
-			dst->memSpillRatio = src->memSpillRatio;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_LIMIT:
+			dst->memory_limit = src->memory_limit;
 			return;
-		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
-			dst->memAuditor = src->memAuditor;
+
+		case RESGROUP_LIMIT_TYPE_MIN_COST:
+			dst->min_cost = src->min_cost;
 			return;
+
+		case RESGROUP_LIMIT_TYPE_IO_LIMIT:
+			dst->io_limit = src->io_limit;
+			return;
+
 		case RESGROUP_LIMIT_TYPE_UNKNOWN:
 		case RESGROUP_LIMIT_TYPE_COUNT:
 			break;
@@ -840,7 +851,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
 		{
 			cgroupOpsRoutine->setcpulimit(callbackCtx->groupid,
-										callbackCtx->caps.cpuMaxPercent);
+										newCaps.cpuMaxPercent);
 
 			/* We should set cpuset to the default value */
 			char *cpuset = (char *) palloc(MaxCpuSetLength);
@@ -850,13 +861,13 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU_SHARES)
 		{
 			cgroupOpsRoutine->setcpuweight(callbackCtx->groupid,
-										   callbackCtx->caps.cpuWeight);
+										   newCaps.cpuWeight);
 		}
 		else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPUSET)
 		{
 			if (gp_resource_group_enable_cgroup_cpuset)
 			{
-				char *cpuset = getCpuSetByRole(callbackCtx->caps.cpuset);
+				char *cpuset = getCpuSetByRole(newCaps.cpuset);
 				cgroupOpsRoutine->setcpuset(callbackCtx->groupid,
 									        cpuset);
 			}
@@ -873,7 +884,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 			 * When alter io_limit, caps.io_limit is nil means this resource group's io_limit should be clear.
 			 */
 			cgroupOpsRoutine->cleario(callbackCtx->groupid);
-			cgroupOpsRoutine->setio(callbackCtx->groupid, callbackCtx->caps.io_limit);
+			cgroupOpsRoutine->setio(callbackCtx->groupid, newCaps.io_limit);
 		}
 
 		/* reset default group if cpuset has changed */
@@ -2935,7 +2946,7 @@ resgroupDumpGroup(StringInfo str, ResGroupData *group)
 	appendStringInfo(str, "\"locked_for_drop\":%d,", group->lockedForDrop);
 
 	resgroupDumpWaitQueue(str, &group->waitProcs);
-	resgroupDumpCaps(str, (ResGroupCap*)(&group->caps));
+	resgroupDumpCaps(str, &group->caps);
 
 	appendStringInfo(str, "}");
 }
@@ -2976,17 +2987,40 @@ resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue)
 	appendStringInfo(str, "]},");
 }
 
+/*
+ * Dump resource group capabilities.
+ *
+ * IO_LIMIT is intentionally reported as 0.
+ */
 static void
-resgroupDumpCaps(StringInfo str, ResGroupCap *caps)
+resgroupDumpCaps(StringInfo str, ResGroupCaps *caps)
 {
-	int i;
 	appendStringInfo(str, "\"caps\":[");
-	for (i = 1; i < RESGROUP_LIMIT_TYPE_COUNT; i++)
-	{
-		appendStringInfo(str, "{\"%d\":%d}", i, caps[i]);
-		if (i < RESGROUP_LIMIT_TYPE_COUNT - 1)
-			appendStringInfo(str, ",");
-	}
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CONCURRENCY,
+					 caps->concurrency);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CPU,
+					 caps->cpuMaxPercent);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CPU_SHARES,
+					 caps->cpuWeight);
+	appendStringInfo(str, "{\"%d\":\"%s\"},",
+					 RESGROUP_LIMIT_TYPE_CPUSET,
+					 caps->cpuset);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_MEMORY_LIMIT,
+					 caps->memory_limit);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_MIN_COST,
+					 caps->min_cost);
+	/*
+	 * NOTE: Return a placeholder instead of calling dumpio(), which creates
+	 * palloc'ed temporary state.
+	 */
+	appendStringInfo(str, "{\"%d\":%d}",
+					 RESGROUP_LIMIT_TYPE_IO_LIMIT,
+					 0);
 	appendStringInfo(str, "]");
 }
 
@@ -3007,7 +3041,7 @@ resgroupDumpSlots(StringInfo str)
 		appendStringInfo(str, "\"groupId\":%u,", slot->groupId);
 		appendStringInfo(str, "\"nProcs\":%d,", slot->nProcs);
 		appendStringInfo(str, "\"next\":%d,", slotGetId(slot->next));
-		resgroupDumpCaps(str, (ResGroupCap*)(&slot->caps));
+		resgroupDumpCaps(str, &slot->caps);
 		appendStringInfo(str, "}");
 		if (i < RESGROUP_MAX_SLOTS - 1)
 			appendStringInfo(str, ",");
