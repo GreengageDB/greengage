@@ -20,16 +20,20 @@ CREATE EXTENSION gp_inject_fault;
 -- end_ignore
 
 CREATE RESOURCE GROUP rg_alter_tran
-  WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
+  WITH (CONCURRENCY=2, CPU_MAX_PERCENT=11, CPU_WEIGHT=110, MEMORY_LIMIT=11, MIN_COST=1);
 CREATE RESOURCE GROUP rg_alter_tran_b
-  WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
+  WITH (CONCURRENCY=2, CPU_MAX_PERCENT=11, CPU_WEIGHT=110, MEMORY_LIMIT=11, MIN_COST=1);
 
 CREATE OR REPLACE VIEW rg_alter_tran_heap_status_local AS
 SELECT gp_id.gp_segment_id,
-       c.groupname::text,
-       c.concurrency::int,
-       c.cpu_rate_limit::int,
-       c.memory_limit::int
+       groupname::text,
+       concurrency::int,
+       cpu_max_percent::int,
+       cpu_weight::int,
+       cpuset::text,
+       memory_limit::int,
+       min_cost::int,
+       io_limit::text
 FROM gp_toolkit.gp_resgroup_config c, gp_id
 WHERE c.groupname IN ('rg_alter_tran', 'rg_alter_tran_b');
 
@@ -37,16 +41,24 @@ CREATE OR REPLACE VIEW rg_alter_tran_heap_status AS
 SELECT -1::int AS gp_segment_id,
        groupname::text,
        concurrency::int,
-       cpu_rate_limit::int,
-       memory_limit::int
+       cpu_max_percent::int,
+       cpu_weight::int,
+       cpuset::text,
+       memory_limit::int,
+       min_cost::int,
+       io_limit::text
 FROM gp_toolkit.gp_resgroup_config
 WHERE groupname IN ('rg_alter_tran', 'rg_alter_tran_b')
 UNION ALL
 SELECT gp_segment_id,
        groupname,
        concurrency,
-       cpu_rate_limit,
-       memory_limit
+       cpu_max_percent,
+       cpu_weight::int,
+       cpuset::text,
+       memory_limit::int,
+       min_cost::int,
+       io_limit::text
 FROM gp_dist_random('rg_alter_tran_heap_status_local')
 ORDER BY groupname, gp_segment_id;
 
@@ -64,13 +76,33 @@ SELECT (seg->>'segid')::int AS gp_segment_id,
            FROM json_array_elements(grp->'caps') AS cap_obj,
                 json_each_text(cap_obj) AS cap
            WHERE cap.key::int = 2
-       ) AS cpu_rate_limit,
+       ) AS cpu_max_percent,
        (
            SELECT cap.value::int
            FROM json_array_elements(grp->'caps') AS cap_obj,
                 json_each_text(cap_obj) AS cap
            WHERE cap.key::int = 3
-       ) AS memory_limit
+       ) AS cpu_weight,
+       (
+           SELECT cap.value::text
+           FROM json_array_elements(grp->'caps') AS cap_obj,
+                json_each_text(cap_obj) AS cap
+           WHERE cap.key::int = 4
+       ) AS cpuset,
+       (
+           SELECT cap.value::int
+           FROM json_array_elements(grp->'caps') AS cap_obj,
+                json_each_text(cap_obj) AS cap
+           WHERE cap.key::int = 5
+       ) AS memory_limit,
+       (
+           SELECT cap.value::int
+           FROM json_array_elements(grp->'caps') AS cap_obj,
+                json_each_text(cap_obj) AS cap
+           WHERE cap.key::int = 6
+       ) AS min_cost,
+       -- IO_LIMIT is a placeholder in pg_resgroup_get_status_kv().
+       '-1'::text AS io_limit
 FROM pg_resgroup_get_status_kv('dump') d,
      json_array_elements((d.value::json)->'info') AS seg,
      json_array_elements(seg->'groups') AS grp,
@@ -85,15 +117,18 @@ CREATE OR REPLACE FUNCTION rg_alter_tran_all_status()
 RETURNS TABLE(gp_segment_id int,
               groupname text,
               concurrency int,
-              cpu_rate_limit int,
-              memory_limit int)
+              cpu_max_percent int,
+              cpu_weight int,
+              cpuset text,
+              memory_limit int,
+              min_cost int,
+              io_limit text)
 AS $$
 BEGIN /* inside a function */
   RETURN QUERY EXECUTE /* inside a function */
-    'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_heap_status'; /* inside a function */
-
+    'SELECT gp_segment_id, groupname, concurrency, cpu_max_percent, cpu_weight, cpuset, memory_limit, min_cost, io_limit FROM rg_alter_tran_heap_status'; /* inside a function */
   RETURN QUERY EXECUTE /* inside a function */
-    'SELECT gp_segment_id, groupname, concurrency, cpu_rate_limit, memory_limit FROM rg_alter_tran_runtime_status'; /* inside a function */
+    'SELECT gp_segment_id, groupname, concurrency, cpu_max_percent, cpu_weight, cpuset, memory_limit, min_cost, io_limit FROM rg_alter_tran_runtime_status'; /* inside a function */
 END; /* inside a function */
 $$ LANGUAGE plpgsql EXECUTE ON MASTER;
 
@@ -102,10 +137,14 @@ $$ LANGUAGE plpgsql EXECUTE ON MASTER;
 CREATE OR REPLACE VIEW rg_alter_tran_status AS
 SELECT groupname,
        concurrency,
-       cpu_rate_limit,
-       memory_limit
+       cpu_max_percent,
+       cpu_weight,
+       cpuset,
+       memory_limit,
+       min_cost,
+       io_limit
 FROM rg_alter_tran_all_status()
-GROUP BY groupname, concurrency, cpu_rate_limit, memory_limit
+GROUP BY groupname, concurrency, cpu_max_percent, cpu_weight, cpuset, memory_limit, min_cost, io_limit
 ORDER BY groupname;
 
 SELECT * FROM rg_alter_tran_status;
@@ -211,8 +250,12 @@ SELECT * FROM rg_alter_tran_status;
 BEGIN;
 ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 20;
 ALTER RESOURCE GROUP rg_alter_tran   SET MEMORY_LIMIT 7;
+ALTER RESOURCE GROUP rg_alter_tran   SET CPU_WEIGHT 110;
+ALTER RESOURCE GROUP rg_alter_tran   SET MIN_COST 10;
 ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 21;
 ALTER RESOURCE GROUP rg_alter_tran_b SET MEMORY_LIMIT 8;
+ALTER RESOURCE GROUP rg_alter_tran_b SET CPU_WEIGHT 120;
+ALTER RESOURCE GROUP rg_alter_tran_b SET MIN_COST 20;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
 
@@ -316,8 +359,11 @@ ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
 
--- 18 CPUSET and CPU_RATE_LIMIT are mutually exclusive.
--- Only the final CPU_RATE_LIMIT apply callback should run.
+
+-- CPU param tests
+
+-- 18 CPU_MAX_PERCENT followed by CPUSET.
+-- The first CPU_MAX_PERCENT callback is overwritten by CPUSET.
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
 FROM gp_segment_configuration
 WHERE content = -1 AND role = 'p';
@@ -328,12 +374,134 @@ FROM gp_segment_configuration
 WHERE content = -1 AND role = 'p';
 
 BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 31;
 ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
-ALTER RESOURCE GROUP rg_alter_tran SET CPU_RATE_LIMIT 30;
 COMMIT;
 SELECT * FROM rg_alter_tran_status;
 
--- Should be only one in `num times hit`
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 19 CPUSET followed by CPU_MAX_PERCENT.
+-- CPUSET resets CPU_WEIGHT, then CPU_MAX_PERCENT switches the group back
+-- to CPU_MAX_PERCENT mode. Both callbacks should run.
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 110;
+SELECT * FROM rg_alter_tran_status;
+
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 30;
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be two in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 20 CPUSET followed by CPU_WEIGHT.
+-- CPUSET switches the group to CPUSET mode, then CPU_WEIGHT overrides the
+-- default weight reset. Both callbacks should run.
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 120;
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be two in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 21 CPU_WEIGHT followed by CPUSET.
+-- CPU_WEIGHT is overwritten by CPUSET's default weight reset.
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 130;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 22 Subtransaction rollback: rolled back CPUSET followed by CPU_MAX_PERCENT.
+-- The rolled back CPUSET must not reset CPU_WEIGHT.
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 110;
+SELECT * FROM rg_alter_tran_status;
+
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ROLLBACK TO SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 32;
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 23 Subtransaction rollback: rolled back CPUSET followed by CPU_WEIGHT.
+-- The rolled back CPUSET must not switch the group to CPUSET mode.
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+ROLLBACK TO SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 125;
+COMMIT;
+SELECT * FROM rg_alter_tran_status;
+
+-- Should be one in `num times hit`
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
 FROM gp_segment_configuration
 WHERE content = -1 AND role = 'p';
@@ -345,31 +513,31 @@ WHERE content = -1 AND role = 'p';
 
 -- Concurrent ALTERs
 
--- 19 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 24 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- the same resource group
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
-2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
+2: SELECT pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 20 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
+-- 25 Verify pg_resgroup_move_query error if an uncommitted ALTER affects
 -- different resource group
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 17;
-2: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
+2: SELECT pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 21 Verify pg_resgroup_move_query releases its lock after transaction abort.
+-- 26 Verify pg_resgroup_move_query releases its lock after transaction abort.
 -- After the error aborts transaction 1, parallel ALTER must not wait.
 1: BEGIN;
-1: SELECT gp_toolkit.pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
+1: SELECT pg_resgroup_move_query(999999999, 'rg_alter_tran_b');
 2: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 18;
 1: ROLLBACK;
 SELECT * FROM rg_alter_tran_status;
 
--- 22 DROP RESOURCE GROUP waits while ALTER is uncommitted.
+-- 27 DROP RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 19;
 2&: DROP RESOURCE GROUP rg_alter_tran_b;
@@ -377,10 +545,10 @@ SELECT * FROM rg_alter_tran_status;
 2<:
 SELECT * FROM rg_alter_tran_status;
 
--- 23 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
+-- 28 CREATE RESOURCE GROUP waits while ALTER is uncommitted.
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 20;
-2&: CREATE RESOURCE GROUP rg_alter_tran_b WITH (cpu_rate_limit=10, memory_limit=10, concurrency=2);
+2&: CREATE RESOURCE GROUP rg_alter_tran_b WITH (CONCURRENCY=2, CPU_MAX_PERCENT=10, CPU_WEIGHT=100, MEMORY_LIMIT=10, MIN_COST=0);
 1: ROLLBACK;
 2<:
 SELECT * FROM rg_alter_tran_status;
@@ -391,7 +559,7 @@ SELECT * FROM rg_alter_tran_status;
 
 -- Crash recovery
 
--- 24 Coordinator segfault before COMMIT must not apply ALTERs.
+-- 29 Coordinator segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('exec_simple_query_start', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 1;
@@ -403,7 +571,7 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 1: SELECT * FROM rg_alter_tran_status;
 
--- 25 Segment segfault before COMMIT must not apply ALTERs.
+-- 30 Segment segfault before COMMIT must not apply ALTERs.
 1: SELECT gp_inject_fault('qe_exec_finished', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 2;
@@ -415,7 +583,7 @@ SELECT * FROM rg_alter_tran_status;
 ! while [ `psql -tc "SELECT count(*) FROM gp_dist_random('gp_id');" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
 1: SELECT * FROM rg_alter_tran_status;
 
--- 26 Coordinator segfault after COMMIT must replay ALTERs.
+-- 31 Coordinator segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 3;
@@ -427,7 +595,7 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 1: SELECT * FROM rg_alter_tran_status;
 
--- 27 Segment segfault after COMMIT must replay ALTERs.
+-- 32 Segment segfault after COMMIT must replay ALTERs.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 1: BEGIN;
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 4;

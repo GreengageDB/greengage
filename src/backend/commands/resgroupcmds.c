@@ -86,6 +86,7 @@ static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
 									const ResGroupCaps *caps);
 static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
 											ResourceGroupCallbackContext *ctx);
+static void freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx);
 
 static List *resgroup_alter_callbacks = NIL;
 
@@ -592,18 +593,16 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
 
-		MemoryContextSwitchTo(oldContext);
 		/*
 		 * Collect ALTERs and apply them together at COMMIT after PRE_COMMIT
 		 * validates final catalog state. Outside an explicit transaction this
 		 * list contains only one ALTER.
 		 */
-		static bool alter_tran_callback_registered = false;
-		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		resgroup_alter_callbacks = lappend(resgroup_alter_callbacks,
 										   callbackCtx);
-		MemoryContextSwitchTo(oldcxt);
+		MemoryContextSwitchTo(oldContext);
 
+		static bool alter_tran_callback_registered = false;
 		if (!alter_tran_callback_registered)
 		{
 			/*
@@ -1172,6 +1171,43 @@ dropResgroupCallback(XactEvent event, void *arg)
 	pfree(callbackCtx);
 }
 
+static void
+freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx)
+{
+	if (ctx->caps.io_limit != NIL)
+		cgroupOpsRoutine->freeio(ctx->caps.io_limit);
+
+	if (ctx->oldCaps.io_limit != NIL)
+		cgroupOpsRoutine->freeio(ctx->oldCaps.io_limit);
+
+	pfree(ctx);
+}
+
+/*
+ * Compare two io_limit lists through their canonical catalog representation.
+ *
+ * dumpio() returns a palloc'ed string and also allocates temporary
+ * StringInfo state, so call this only in a short-lived context.
+ */
+static bool
+resGroupIOLimitMatches(List *left, List *right)
+{
+	char   *leftStr;
+	char   *rightStr;
+	bool	result;
+
+	if (left == NIL || right == NIL)
+		return left == NIL && right == NIL;
+
+	leftStr = cgroupOpsRoutine->dumpio(left);
+	rightStr = cgroupOpsRoutine->dumpio(right);
+	result = strcmp(leftStr, rightStr) == 0;
+	pfree(leftStr);
+	pfree(rightStr);
+
+	return result;
+}
+
 /*
  * Check whether the field changed by this callback has the same value in
  * the given capability snapshot.
@@ -1186,21 +1222,25 @@ resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
 			return ctx->caps.concurrency == caps->concurrency;
 
 		case RESGROUP_LIMIT_TYPE_CPU:
-		case RESGROUP_LIMIT_TYPE_CPUSET:
-			return ctx->caps.cpuRateLimit == caps->cpuRateLimit &&
+			return ctx->caps.cpuMaxPercent == caps->cpuMaxPercent &&
 				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
 
-		case RESGROUP_LIMIT_TYPE_MEMORY:
-			return ctx->caps.memLimit == caps->memLimit;
+		case RESGROUP_LIMIT_TYPE_CPU_SHARES:
+			return ctx->caps.cpuWeight == caps->cpuWeight;
 
-		case RESGROUP_LIMIT_TYPE_MEMORY_SHARED_QUOTA:
-			return ctx->caps.memSharedQuota == caps->memSharedQuota;
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			return ctx->caps.cpuMaxPercent == caps->cpuMaxPercent &&
+				   ctx->caps.cpuWeight == caps->cpuWeight &&
+				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
 
-		case RESGROUP_LIMIT_TYPE_MEMORY_SPILL_RATIO:
-			return ctx->caps.memSpillRatio == caps->memSpillRatio;
+		case RESGROUP_LIMIT_TYPE_MEMORY_LIMIT:
+			return ctx->caps.memory_limit == caps->memory_limit;
 
-		case RESGROUP_LIMIT_TYPE_MEMORY_AUDITOR:
-			return ctx->caps.memAuditor == caps->memAuditor;
+		case RESGROUP_LIMIT_TYPE_MIN_COST:
+			return ctx->caps.min_cost == caps->min_cost;
+
+		case RESGROUP_LIMIT_TYPE_IO_LIMIT:
+			return resGroupIOLimitMatches(ctx->caps.io_limit, caps->io_limit);
 
 		case RESGROUP_LIMIT_TYPE_UNKNOWN:
 		case RESGROUP_LIMIT_TYPE_COUNT:
@@ -1210,6 +1250,58 @@ resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
 	ereport(ERROR,
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
 			 errmsg("invalid resource group limit type: %d", ctx->limittype)));
+
+	return false;
+}
+
+/*
+ * CPUSET has side effects: it disables CPU_MAX_PERCENT and resets CPU_WEIGHT.
+ * Keep it when a later SET CPU_MAX_PERCENT or SET CPU_WEIGHT overwrites only
+ * part of these side effects and the remaining part is still final.
+ */
+static bool
+resgroupHasLaterCpuCallbackMatchingFinal(List *callbacks,
+										 ResourceGroupCallbackContext *ctx,
+										 const ResGroupCaps *finalCaps)
+{
+	ListCell   *lc;
+	bool		after = false;
+
+	foreach (lc, callbacks)
+	{
+		ResourceGroupCallbackContext *other = lfirst(lc);
+
+		if (other == ctx)
+		{
+			after = true;
+			continue;
+		}
+
+		if (!after || other->groupid != ctx->groupid)
+			continue;
+
+		/*
+		 * Example:
+		 *   SET CPUSET '0'; SET CPU_MAX_PERCENT 30;
+		 * Keep CPUSET to preserve its CPU_WEIGHT reset.
+		 */
+		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU &&
+			other->caps.cpuMaxPercent == finalCaps->cpuMaxPercent &&
+			strcmp(other->caps.cpuset, finalCaps->cpuset) == 0 &&
+			ctx->caps.cpuWeight == finalCaps->cpuWeight)
+			return true;
+
+		/*
+		 * Example:
+		 *   SET CPUSET '0'; SET CPU_WEIGHT 120;
+		 * Keep CPUSET to preserve CPUSET mode.
+		 */
+		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU_SHARES &&
+			other->caps.cpuWeight == finalCaps->cpuWeight &&
+			ctx->caps.cpuMaxPercent == finalCaps->cpuMaxPercent &&
+			strcmp(ctx->caps.cpuset, finalCaps->cpuset) == 0)
+			return true;
+	}
 
 	return false;
 }
@@ -1263,7 +1355,13 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 	if (event == XACT_EVENT_ABORT)
 	{
-		list_free_deep(resgroup_alter_callbacks);
+		foreach (lc, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			freeResgroupAlterCallback(ctx);
+		}
+
+		list_free(resgroup_alter_callbacks);
 		resgroup_alter_callbacks = NIL;
 	}
 	else if (event == XACT_EVENT_COMMIT)
@@ -1272,9 +1370,9 @@ alterResgroupCallback(XactEvent event, void *arg)
 		{
 			ResourceGroupCallbackContext *ctx = lfirst(lc);
 			ResGroupAlterOnCommit(ctx);
+			freeResgroupAlterCallback(ctx);
 		}
-
-		list_free_deep(resgroup_alter_callbacks);
+		list_free(resgroup_alter_callbacks);
 		resgroup_alter_callbacks = NIL;
 	}
 	else if (event == XACT_EVENT_PRE_COMMIT)
@@ -1283,9 +1381,10 @@ alterResgroupCallback(XactEvent event, void *arg)
 		List	   *rejected = NIL;
 		Relation	rel;
 
-		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-
-		/* Keep only final, non-duplicate callbacks. */
+		/*
+		 * Keep final, non-duplicate callbacks, plus CPUSET callbacks whose
+		 * side effects remain in the final catalog state.
+		 */
 		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 
 		foreach (lc, resgroup_alter_callbacks)
@@ -1295,19 +1394,42 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-			if (resGroupCapFieldMatches(ctx, &finalCaps) &&
+			if ((resGroupCapFieldMatches(ctx, &finalCaps) ||
+				 (ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
+				  resgroupHasLaterCpuCallbackMatchingFinal(
+												resgroup_alter_callbacks,
+												ctx,
+												&finalCaps))) &&
 				!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+			{
+				MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 				prepared = lappend(prepared, ctx);
+				MemoryContextSwitchTo(oldcxt);
+			}
 			else
+			{
+				MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 				rejected = lappend(rejected, ctx);
+				MemoryContextSwitchTo(oldcxt);
+			}
+
+			if (finalCaps.io_limit != NIL)
+			{
+				cgroupOpsRoutine->freeio(finalCaps.io_limit);
+				finalCaps.io_limit = NIL;
+			}
 		}
-		MemoryContextSwitchTo(oldcxt);
 		heap_close(rel, AccessShareLock);
 
 		list_free(resgroup_alter_callbacks);
 		resgroup_alter_callbacks = prepared;
 
-		list_free_deep(rejected);
+		foreach (lc, rejected)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			freeResgroupAlterCallback(ctx);
+		}
+		list_free(rejected);
 	}
 }
 
