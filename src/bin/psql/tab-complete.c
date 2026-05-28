@@ -3520,29 +3520,40 @@ psql_completion(const char *text, int start, int end)
 
 /*
  * VACUUM [ ( option [, ...] ) ] [ table_and_columns [, ...] ]
- * VACUUM [ FULL ] [ FREEZE ] [ VERBOSE ] [ ANALYZE ] [ table_and_columns [, ...] ]
+ * VACUUM [ FULL ] [ FREEZE ] [ VERBOSE ] [ ANALYZE ] [ AO_AUX_ONLY ] [ table_and_columns [, ...] ]
  */
 	else if (Matches("VACUUM"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
 								   " UNION SELECT 'FULL'"
 								   " UNION SELECT 'FREEZE'"
 								   " UNION SELECT 'ANALYZE'"
-								   " UNION SELECT 'VERBOSE'");
+								   " UNION SELECT 'VERBOSE'"
+								   " UNION SELECT 'AO_AUX_ONLY'"
+								   " UNION SELECT '('");
 	else if (Matches("VACUUM", "FULL"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
 								   " UNION SELECT 'FREEZE'"
 								   " UNION SELECT 'ANALYZE'"
-								   " UNION SELECT 'VERBOSE'");
+								   " UNION SELECT 'VERBOSE'"
+								   " UNION SELECT 'AO_AUX_ONLY'");
 	else if (Matches("VACUUM", "FREEZE") ||
 			 Matches("VACUUM", "FULL", "FREEZE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
 								   " UNION SELECT 'VERBOSE'"
-								   " UNION SELECT 'ANALYZE'");
+								   " UNION SELECT 'ANALYZE'"
+								   " UNION SELECT 'AO_AUX_ONLY'");
 	else if (Matches("VACUUM", "VERBOSE") ||
 			 Matches("VACUUM", "FULL|FREEZE", "VERBOSE") ||
 			 Matches("VACUUM", "FULL", "FREEZE", "VERBOSE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
-								   " UNION SELECT 'ANALYZE'");
+								   " UNION SELECT 'ANALYZE'"
+								   " UNION SELECT 'AO_AUX_ONLY'");
+	else if (Matches("VACUUM", "ANALYZE") ||
+			 Matches("VACUUM", "FULL|FREEZE|VERBOSE", "ANALYZE") ||
+			 Matches("VACUUM", "FULL|FREEZE", "FREEZE|VERBOSE", "ANALYZE") ||
+			 Matches("VACUUM", "FULL", "FREEZE", "VERBOSE", "ANALYZE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
+								   " UNION SELECT 'AO_AUX_ONLY'");
 	else if (HeadMatches("VACUUM", "(*") &&
 			 !HeadMatches("VACUUM", "(*)"))
 	{
@@ -3552,11 +3563,11 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("FULL", "FREEZE", "ANALYZE", "VERBOSE",
+			COMPLETE_WITH("FULL", "FREEZE", "ANALYZE", "VERBOSE", "AO_AUX_ONLY",
 						  "DISABLE_PAGE_SKIPPING", "SKIP_LOCKED",
 						  "INDEX_CLEANUP", "TRUNCATE", "PARALLEL", "SKIP_DATABASE_STATS",
 						  "ONLY_DATABASE_STATS");
-		else if (TailMatches("FULL|FREEZE|ANALYZE|VERBOSE|DISABLE_PAGE_SKIPPING|SKIP_LOCKED|TRUNCATE|SKIP_DATABASE_STATS|ONLY_DATABASE_STATS"))
+		else if (TailMatches("FULL|FREEZE|ANALYZE|VERBOSE|AO_AUX_ONLY|DISABLE_PAGE_SKIPPING|SKIP_LOCKED|TRUNCATE|SKIP_DATABASE_STATS|ONLY_DATABASE_STATS"))
 			COMPLETE_WITH("ON", "OFF");
 	}
 	else if (HeadMatches("VACUUM") && TailMatches("("))
