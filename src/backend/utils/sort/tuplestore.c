@@ -2190,7 +2190,6 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 	     * so someone else must be holding it right now.
 		 */
 		Assert(sstate->num_current > 0);
-		LWLockRelease(ShareInputScanLock);
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_OPERATION_CANCELED),
 				 errmsg("tuplestore operation aborted, canceling")));
