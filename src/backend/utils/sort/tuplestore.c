@@ -2215,7 +2215,7 @@ tuplestore_open_shared_extended(SharedFileSet *deprecated_variable, const char *
 		/* Wait until writer is ready */
 		tuplestore_reader_waitready(sstate);
 
-		state->fileset = attach_shareinput_fileset(sstate->sfs_handle);;
+		state->fileset = attach_shareinput_fileset(sstate->sfs_handle);
 		state->myfile = BufFileOpenShared(state->fileset, filename);
 		state->readptrs[0].file = 0;
 		state->readptrs[0].offset = 0L;
