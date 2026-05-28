@@ -2917,7 +2917,7 @@ psql_completion(const char *text, int start, int end)
 
 /*
  * EXPLAIN [ ( option [, ...] ) ] statement
- * EXPLAIN [ ANALYZE ] [ VERBOSE ] statement
+ * EXPLAIN [ ANALYZE ] [ VERBOSE ] [ DXL ] statement
  */
 	else if (Matches("EXPLAIN"))
 		COMPLETE_WITH("SELECT", "INSERT", "DELETE", "UPDATE", "DECLARE",
