@@ -28,7 +28,7 @@ chown -R gpadmin:gpadmin /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 
 sudo -u gpadmin -- bash -c "
   set -ex
-  source \$GPHOME/greengage_path.sh
+  source \$GPHOME/greenplum_path.sh
   source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
   make -C /home/gpadmin/gpdb_src/src/test/regress
   make PGOPTIONS='-c optimizer=$OPTIMIZER -c statement_mem=$STATEMENT_MEM' installcheck-resgroup -C gpdb_src/
