@@ -2276,7 +2276,18 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny) ||
 			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
-					  "ENCODING");
+					  "ENCODING", "FREEZE", "HEADER", "QUOTE", "ESCAPE",
+					  "FORCE QUOTE", "FORCE NULL", "FILL MISSING FILEDS",
+					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS",
+					  "IGNORE FOREIGN PARTITIONS");
+
+	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "IGNORE") ||
+			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "IGNORE"))
+		COMPLETE_WITH("EXTERNAL PARTITIONS", "FOREIGN PARTITIONS");
+
+	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "FORCE") ||
+			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "FORCE"))
+		COMPLETE_WITH("QUOTE", "NULL");
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename CSV */
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV") ||
