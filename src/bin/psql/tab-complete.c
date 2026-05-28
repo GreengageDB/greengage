@@ -2127,7 +2127,23 @@ psql_completion(const char *text, int start, int end)
  */
 	else if (Matches("ANALYZE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
-								   " UNION SELECT 'VERBOSE'");
+								   " UNION SELECT 'VERBOSE'"
+								   " UNION SELECT 'ROOTPARTITION'"
+								   " UNION SELECT 'ROOTPARTITION ALL'"
+								   " UNION SELECT 'FULLSCAN'"
+								   " UNION SELECT '('");
+	else if (Matches("ANALYZE", "VERBOSE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
+								   " UNION SELECT 'ROOTPARTITION'"
+								   " UNION SELECT 'ROOTPARTITION ALL'"
+								   " UNION SELECT 'FULLSCAN'");
+	else if (Matches("ANALYZE", "ROOTPARTITION") ||
+			 Matches("ANALYZE", "VERBOSE", "ROOTPARTITION"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
+								   " UNION SELECT 'ALL'");
+	else if (Matches("ANALYZE", "FULLSCAN") ||
+			Matches("ANALYZE", "VERBOSE", "FULLSCAN"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables, NULL);
 	else if (HeadMatches("ANALYZE", "(*") &&
 			 !HeadMatches("ANALYZE", "(*)"))
 	{
@@ -2137,14 +2153,14 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("VERBOSE", "SKIP_LOCKED");
-		else if (TailMatches("VERBOSE|SKIP_LOCKED"))
+			COMPLETE_WITH("VERBOSE", "SKIP_LOCKED", "FULLSCAN", "ROOTPARTIION");
+		else if (TailMatches("VERBOSE|SKIP_LOCKED|FULLSCAN|ROOTPARTITION"))
 			COMPLETE_WITH("ON", "OFF");
 	}
 	else if (HeadMatches("ANALYZE") && TailMatches("("))
 		/* "ANALYZE (" should be caught above, so assume we want columns */
 		COMPLETE_WITH_ATTR(prev2_wd, "");
-	else if (HeadMatches("ANALYZE"))
+	else if (HeadMatches("ANALYZE") && !TailMatches("ALL"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables, NULL);
 
 /* BEGIN */
