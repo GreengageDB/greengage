@@ -352,8 +352,8 @@ struct Tuplestorestate
 
 /*
  * Hash table of all shared tuplestores. The entry should be
- * created when a shared tuplestore is opened, and deleted
- * when it is deleted.
+ * created when a shared tuplestore is opened, and removed
+ * when tuplestore within it is being deleted.
  */
 static HTAB *shared_tuplestores = NULL;
 /*
