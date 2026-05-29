@@ -2214,6 +2214,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 		bool		tupleIsAlive;
 		AOTupleId 	*aoTupleId;
 
+		// TODO: do we need it here?
 		slot_getallattrs(slot);
 
 		BlockNumber currblockno = ItemPointerGetBlockNumber(&slot->tts_tid);

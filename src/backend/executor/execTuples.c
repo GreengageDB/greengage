@@ -177,10 +177,15 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	if (re_debug) elog(WARNING, "[RELOG][%s] natts = %u, scan->columnScanInfo.num_proj_atts = %u", __FUNCTION__, natts, scan->columnScanInfo.num_proj_atts);
 
-	int scan_natts = Min(scan->columnScanInfo.num_proj_atts, natts);
-	for (AttrNumber i = slot->tts_nvalid; i < scan_natts; i++)
+	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+		if (attno < slot->tts_nvalid)
+			continue;
+		if (attno >= natts)
+			break;
+
 		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
 		Assert(ds);
 
