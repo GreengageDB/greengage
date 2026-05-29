@@ -101,13 +101,13 @@ extern void tuplestore_set_instrument(Tuplestorestate *state,
 extern Size SharedTuplestoreShmemSize(void);
 extern void SharedTuplestoreShmemInit(void);
 
-extern void tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset,
+extern void tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *deprecated_variable,
 								   const char *filename);
-extern void tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset,
+extern void tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *deprecated_variable,
 										const char *filename, uint32 ntotal);
 extern void tuplestore_freeze(Tuplestorestate *state);
-extern Tuplestorestate *tuplestore_open_shared(SharedFileSet *fileset, const char *filename);
-extern Tuplestorestate *tuplestore_open_shared_extended(SharedFileSet *fileset,
+extern Tuplestorestate *tuplestore_open_shared(SharedFileSet *deprecated_variable, const char *filename);
+extern Tuplestorestate *tuplestore_open_shared_extended(SharedFileSet *deprecated_variable,
 														const char *filename,
 														bool skip_wait);
 
