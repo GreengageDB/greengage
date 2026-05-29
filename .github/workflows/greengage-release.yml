@@ -27,9 +27,10 @@ jobs:
       actions: read
     steps:
       - name: Upload packages to release
-        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5752
+        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@v38
         with:
-          version:     ${{ matrix.version }}
-          extensions:  ${{ matrix.extensions }}
-          package_dir: ${{ matrix.package_dir }}
-          cache_key:   ${{ matrix.package_dir }}-${{ matrix.target_os }}${{ matrix.target_os_version }}-${{ github.sha }}
+          version:           ${{ matrix.version }}
+          extensions:        ${{ matrix.extensions }}
+          package_dir:       ${{ matrix.package_dir }}
+          target_os:         ${{ matrix.target_os }}
+          target_os_version: ${{ matrix.target_os_version }}
