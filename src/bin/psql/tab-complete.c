@@ -2753,6 +2753,21 @@ psql_completion(const char *text, int start, int end)
 					  "MEMORY_LIMIT", "MIN_COST", "IO_LIMIT");
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", MatchAny))
 		COMPLETE_WITH("=");
+	/* Complete IO_LIMIT with delimeter, tablespaces and options */
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", "IO_LIMIT", "=") ||
+			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET", "IO_LIMIT"))
+		COMPLETE_WITH("'");
+	else if(TailMatches("IO_LIMIT", "=", "'") ||
+			TailMatches("IO_LIMIT", "'"))
+			COMPLETE_WITH_QUERY(Query_for_list_of_tablespaces
+								"UNION SELECT '*'");
+	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny) ||
+			TailMatches("IO_LIMIT", "'", MatchAny))
+			COMPLETE_WITH(":");
+	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny, ":") ||
+			TailMatches("IO_LIMIT", "'", MatchAny, ":"))
+			COMPLETE_WITH("wpbs", "rbps", "wiops", "riops");
+
 
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
