@@ -123,6 +123,24 @@ preprocess_targetlist(PlannerInfo *root)
 		tlist = supplement_simply_updatable_targetlist(root, range_table, tlist);
 
 	/*
+	 * For non-inherited UPDATE/DELETE, register any junk column(s) needed to
+	 * allow the executor to identify the rows to be updated or deleted.  In
+	 * the inheritance case, we do nothing now, leaving this to be dealt with
+	 * when expand_inherited_rtentry() makes the leaf target relations.  (But
+	 * there might not be any leaf target relations, in which case we must do
+	 * this in distribute_row_identity_vars().)
+	 */
+	if ((command_type == CMD_UPDATE || command_type == CMD_DELETE) &&
+		!target_rte->inh)
+	{
+		/* row-identity logic expects to add stuff to processed_tlist */
+		root->processed_tlist = tlist;
+		add_row_identity_columns(root, result_relation,
+								 target_rte, target_relation);
+		tlist = root->processed_tlist;
+	}
+
+	/*
 	 * Add necessary junk columns for rowmarked rels.  These values are needed
 	 * for locking of rels selected FOR UPDATE/SHARE, and to do EvalPlanQual
 	 * rechecking.  See comments for PlanRowMark in plannodes.h.  If you

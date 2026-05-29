@@ -189,6 +189,9 @@ my %GenbkiNextOids;
 my $C_COLLATION_OID =
   Catalog::FindDefinedSymbolFromData($catalog_data{pg_collation},
 	'C_COLLATION_OID');
+my $BOOTSTRAP_SUPERUSERID =
+  Catalog::FindDefinedSymbolFromData($catalog_data{pg_authid},
+	'BOOTSTRAP_SUPERUSERID');
 
 
 # Fill in pg_class.relnatts by looking at the referenced catalog's schema.
@@ -577,6 +580,11 @@ EOM
 			{
 				$bki_values{$attname} = assign_next_oid($catname);
 			}
+
+			# GPDB: substitute the PGUID token with the bootstrap superuser
+			# OID (used by GPDB-only catalogs such as pg_compression.compowner).
+			$bki_values{$attname} =~ s/\bPGUID\b/$BOOTSTRAP_SUPERUSERID/g
+			  if defined $bki_values{$attname};
 
 			# Replace OID synonyms with OIDs per the appropriate lookup rule.
 			#

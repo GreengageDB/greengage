@@ -417,6 +417,8 @@ DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, on pg_compression usin
 #define CompressionCompnameIndexId	7059
 DECLARE_UNIQUE_INDEX(pg_range_rngtypid_index, 3542, on pg_range using btree(rngtypid oid_ops));
 #define RangeTypidIndexId					3542
+DECLARE_UNIQUE_INDEX(pg_range_rngmultitypid_index, 2228, on pg_range using btree(rngmultitypid oid_ops));
+#define RangeMultirangeTypidIndexId			2228
 
 DECLARE_UNIQUE_INDEX(pg_policy_oid_index, 3257, on pg_policy using btree(oid oid_ops));
 #define PolicyOidIndexId				3257
