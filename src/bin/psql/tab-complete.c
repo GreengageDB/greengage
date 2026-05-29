@@ -714,6 +714,11 @@ static const SchemaQuery Query_for_list_of_statistics = {
 "   FROM pg_catalog.pg_resgroup "\
 "  WHERE substring(pg_catalog.quote_ident(rsgname),1,%d)='%s'"
 
+#define Query_for_list_of_resqueues \
+" SELECT pg_catalog.quote_ident(rsqname) "\
+"   FROM pg_catalog.pg_resqueue "\
+"  WHERE substring(pg_catalog.quote_ident(rsqname),1,%d)='%s'"
+
 #define Query_for_list_of_roles \
 " SELECT pg_catalog.quote_ident(rolname) "\
 "   FROM pg_catalog.pg_roles "\
@@ -2755,6 +2760,18 @@ psql_completion(const char *text, int start, int end)
 
 		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
 	}
+
+	/* ALTER/CREATE/DROP RESOURCE QUEUE */
+	else if(TailMatches("CREATE|ALTER|DROP", "RESOURCE", "QUEUE"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
+	else if(TailMatches("CREATE", "RESOURCE", "QUEUE", MatchAny))
+		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
+			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (");
+	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny))
+		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
+			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (", "WITHOUT (");
+	else if(TailMatches("CREATE|ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "("))
+		COMPLETE_WITH("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
 
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
