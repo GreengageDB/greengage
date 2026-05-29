@@ -2746,6 +2746,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("WITH (");
 	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
 		COMPLETE_WITH("SET");
+	/* RESOURCE GROUP <name> WITH ( / SET */
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(") ||
 			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET"))
 		COMPLETE_WITH("CONCURRENCY", "CPU_MAX_PERCENT", "CPU_WEIGHT", "CPUSET",
