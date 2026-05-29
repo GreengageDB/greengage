@@ -2734,27 +2734,24 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "ROLE|USER|GROUP", MatchAny, "IN"))
 		COMPLETE_WITH("GROUP", "ROLE");
 
-/* CREATE/DROP RESOURCE GROUP/QUEUE */
-	else if (Matches("CREATE|DROP", "RESOURCE"))
-	 {
-		static const char *const list_CREATERESOURCEGROUP[] =
-		{"GROUP", "QUEUE", NULL};
+/* ALTER/CREATE/DROP RESOURCE GROUP/QUEUE */
+	else if (Matches("ALTER|CREATE|DROP", "RESOURCE"))
+		COMPLETE_WITH("GROUP", "QUEUE");
 
-		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
-	 }
-	/* CREATE/DROP RESOURCE GROUP */
-	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP"))
+	/* ALTER/CREATE/DROP RESOURCE GROUP */
+	else if (TailMatches("ALTER|CREATE|DROP", "RESOURCE", "GROUP"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
 	/* CREATE RESOURCE GROUP <name> */
-	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP", MatchAny))
+	else if (TailMatches("CREATE", "RESOURCE", "GROUP", MatchAny))
 		COMPLETE_WITH("WITH (");
-	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "("))
-	{
-		static const char *const list_CREATERESOURCEGROUP[] =
-		{"CONCURRENCY", "cpu_max_percent", "MEMORY_LIMIT", "MEMORY_REDZONE_LIMIT", NULL};
-
-		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
-	}
+	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
+		COMPLETE_WITH("SET");
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(") ||
+			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET"))
+		COMPLETE_WITH("CONCURRENCY", "CPU_MAX_PERCENT", "CPU_WEIGHT", "CPUSET",
+					  "MEMORY_LIMIT", "MIN_COST", "IO_LIMIT");
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", MatchAny))
+		COMPLETE_WITH("=");
 
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
