@@ -40,6 +40,111 @@ drop tablespace some_temp_tablespace;
 drop tablespace some_default_tablespace;
 reset default_tablespace;
 reset temp_tablespaces;
+-- We should be able to switch temp_tablespaces even in case of backends reusage
+create tablespace some_temp_tablespace2 location '/home/gpadmin/gpdb_src/src/test/regress/testtablespace_temp_tablespace2';
+create table tts_temp (i int, j int) distributed by (i);
+insert into tts_temp select i, i from generate_series(1, 1000) i;
+analyze tts_temp;
+set optimizer = off;
+select gp_inject_fault('sisc_xslice_temp_files', 'skip', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+set gp_cached_segworkers_threshold = 20;
+--
+-- First execution: set temp_tablespaces.
+-- SharedInputScan files should use temp tablespace.
+--
+set temp_tablespaces = some_temp_tablespace2;
+with a1 as materialized (select * from tts_temp)
+select count(*) from a1 t1, a1 t2;
+NOTICE:  sisc_xslice: Use temp tablespace  (seg0 slice2 172.17.0.4:7002 pid=205052)
+NOTICE:  sisc_xslice: Use temp tablespace  (seg2 slice2 172.17.0.4:7004 pid=205053)
+NOTICE:  sisc_xslice: Use temp tablespace  (seg1 slice2 172.17.0.4:7003 pid=205051)
+  count  
+---------
+ 1000000
+(1 row)
+
+--
+-- Second execution: set temp_tablespaces to nothing.
+-- Cached QE backends should be reused, but SharedFileSet must be 
+-- recreated, so it honors the new temp_tablespaces value.
+--
+select gp_inject_fault('sisc_xslice_temp_files', 'reset', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+select gp_inject_fault('sisc_xslice_temp_files', 'skip', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+set temp_tablespaces = '';
+with a1 as materialized (select * from tts_temp)
+select count(*) from a1 t1, a1 t2;
+NOTICE:  sisc_xslice: Use default tablespace  (seg0 slice2 172.17.0.4:7002 pid=205052)
+NOTICE:  sisc_xslice: Use default tablespace  (seg1 slice2 172.17.0.4:7003 pid=205051)
+NOTICE:  sisc_xslice: Use default tablespace  (seg2 slice2 172.17.0.4:7004 pid=205053)
+  count  
+---------
+ 1000000
+(1 row)
+
+select count(*) from sisc_set_pids;
+ count 
+-------
+     3
+(1 row)
+
+select count(*) from sisc_unset_pids;
+ count 
+-------
+     3
+(1 row)
+
+select count(*) = 0 as set_minus_unset_empty
+from (
+    select logpid from sisc_set_pids
+    except
+    select logpid from sisc_unset_pids
+) s;
+ set_minus_unset_empty 
+-----------------------
+ t
+(1 row)
+
+reset temp_tablespaces;
+reset gp_cte_sharing;
+reset optimizer;
+reset gp_cached_segworkers_threshold;
+select gp_inject_fault('sisc_xslice_temp_files', 'reset', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+drop table tts_temp;
+drop table sisc_unset_pids;
+drop table sisc_set_pids;
+drop tablespace some_temp_tablespace2;
 -- When the GUC temp_tablespaces is set, one of the temp tablespaces is used instead of the default tablespace.
 -- create several tablespaces and use them as temp tablespaces
 -- all QD/QEs in one session should have the same temp tablespace
