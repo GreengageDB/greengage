@@ -8211,7 +8211,7 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 		 */
 		node->onConflictSet = onconflict->onConflictSet;
 		node->onConflictCols =
-			extract_update_targetlist_colnos(node->onConflictSet);
+			extract_update_targetlist_colnos(node->onConflictSet, true);
 		node->onConflictWhere = onconflict->onConflictWhere;
 
 		/*

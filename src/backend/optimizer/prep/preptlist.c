@@ -60,6 +60,7 @@ static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *range_table,
 													List *tlist);
 static List *expand_insert_targetlist(List *tlist, Relation rel);
+static bool check_splitupdate(List *tlist, Index result_relation, Relation rel);
 
 
 /*
@@ -114,9 +115,36 @@ preprocess_targetlist(PlannerInfo *root)
 	 * renumber the processed_tlist entries to be consecutive.
 	 */
 	tlist = parse->targetList;
-	if (command_type == CMD_INSERT || command_type == CMD_UPDATE)
+	if (command_type == CMD_INSERT)
 		tlist = expand_targetlist(root, tlist, command_type,
 								  result_relation, target_relation);
+	else if (command_type == CMD_UPDATE)
+	{
+		/*
+		 * Decide up front whether this UPDATE modifies a distribution key
+		 * column and therefore needs a Split Update (which can move the tuple
+		 * to a different segment).  We must know this *before* deciding how to
+		 * shape the targetlist:
+		 *
+		 *  - A plain UPDATE keeps only the SET columns; PG14's executor
+		 *    (ExecBuildUpdateProjection) fills the unchanged columns from the
+		 *    old tuple using ModifyTable.updateColnosLists, which planner.c
+		 *    builds from root->update_colnos.  So we just record the SET column
+		 *    numbers (and renumber the tlist to be consecutive, as upstream).
+		 *
+		 *  - A Split Update is executed as delete+insert and needs the full
+		 *    new tuple, so we expand the targetlist to every attribute (GPDB's
+		 *    expand_targetlist), and must therefore *not* renumber the SET
+		 *    resnos beforehand (expand_targetlist matches resno == attno).
+		 */
+		root->is_split_update = check_splitupdate(tlist, result_relation,
+												  target_relation);
+		root->update_colnos = extract_update_targetlist_colnos(tlist,
+															   !root->is_split_update);
+		if (root->is_split_update)
+			tlist = expand_targetlist(root, tlist, command_type,
+									  result_relation, target_relation);
+	}
 
 	/* simply updatable cursors */
 	if (root->glob->simplyUpdatableRel != InvalidOid)
@@ -284,7 +312,7 @@ preprocess_targetlist(PlannerInfo *root)
  * ... UPDATE, although not till much later in planning.
  */
 List *
-extract_update_targetlist_colnos(List *tlist)
+extract_update_targetlist_colnos(List *tlist, bool reorder_resno)
 {
 	List	   *update_colnos = NIL;
 	AttrNumber	nextresno = 1;
@@ -296,9 +324,80 @@ extract_update_targetlist_colnos(List *tlist)
 
 		if (!tle->resjunk)
 			update_colnos = lappend_int(update_colnos, tle->resno);
-		tle->resno = nextresno++;
+		/*
+		 * GPDB: a Split Update expands the tlist afterwards (expand_targetlist
+		 * relies on resno == attno), so only renumber when asked to.
+		 */
+		if (reorder_resno)
+			tle->resno = nextresno++;
 	}
 	return update_colnos;
+}
+
+/*
+ * check_splitupdate
+ *		Decide whether an UPDATE needs a Split Update.
+ *
+ * A Split Update is required when the UPDATE may change a distribution key
+ * column: the modified tuple might then belong on a different segment and has
+ * to be re-routed (executed as a delete + insert).  We inspect the
+ * (not-yet-expanded) UPDATE targetlist -- a SET column whose new value is not
+ * simply a Var referencing the same attribute of the target relation counts as
+ * changed.  Return true if any distribution key column is changed.  The actual
+ * SplitUpdate node is created later in planning; memorizing the decision in
+ * root->is_split_update avoids redoing this work.
+ */
+static bool
+check_splitupdate(List *tlist, Index result_relation, Relation rel)
+{
+	ListCell   *lc;
+	Bitmapset  *changed_cols = NULL;
+	GpPolicy   *targetPolicy;
+	bool		key_col_updated = false;
+
+	foreach(lc, tlist)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		AttrNumber	attrno = tle->resno;
+		bool		col_changed = true;
+
+		if (tle->resjunk)
+			continue;
+
+		/*
+		 * The column is unchanged if its new value is a Var referring directly
+		 * to the same attribute of the target relation.
+		 */
+		if (IsA(tle->expr, Var))
+		{
+			Var		   *var = (Var *) tle->expr;
+
+			if (var->varno == result_relation && var->varattno == attrno)
+				col_changed = false;
+		}
+
+		if (col_changed)
+			changed_cols = bms_add_member(changed_cols, attrno);
+	}
+
+	/* Was any distribution key column among the changed columns? */
+	targetPolicy = GpPolicyFetch(RelationGetRelid(rel));
+	if (targetPolicy->ptype == POLICYTYPE_PARTITIONED)
+	{
+		int			i;
+
+		for (i = 0; i < targetPolicy->nattrs; i++)
+		{
+			if (bms_is_member(targetPolicy->attrs[i], changed_cols))
+			{
+				key_col_updated = true;
+				break;
+			}
+		}
+	}
+
+	bms_free(changed_cols);
+	return key_col_updated;
 }
 
 

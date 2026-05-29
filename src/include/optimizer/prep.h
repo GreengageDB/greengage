@@ -40,7 +40,7 @@ extern List *init_list_cteplaninfo(int numCtes);
  */
 extern void preprocess_targetlist(PlannerInfo *root);
 
-extern List *extract_update_targetlist_colnos(List *tlist);
+extern List *extract_update_targetlist_colnos(List *tlist, bool reorder_resno);
 
 extern PlanRowMark *get_plan_rowmark(List *rowmarks, Index rtindex);
 
