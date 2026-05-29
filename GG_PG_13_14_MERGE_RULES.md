@@ -532,3 +532,188 @@ git commit -m "Merge PG14 commits $PREV_END..$BATCH_END
 Batch: <name>
 Conflicts resolved: <N>"
 ```
+
+---
+
+## 11. Unit-test (mock/cmockery) phase — PG13→14
+
+Once the tree compiles **and links**, a separate class of PG14 breakage
+shows up only when running the backend mock tests:
+
+```bash
+# CI form (serial — see §11.6); recurses src/backend then src/bin and
+# runs every cmockery-based *_test.c program.
+make -s unittest-check
+```
+
+Ground truth: the `claude-merge-2` unit-test fix commits (`185a312bb2a`,
+`55eb9df9af6`, `a38fa247d9e`, `3237b4bff21`, `e1216380a35` …
+`f3d3b9e9f5c`, plus the `mock.mk` and `ftsmessagehandler_test.c` fixes
+made while resolving the test run). At the end of `claude-merge-2` all
+53 mock test suites (backend + `src/bin`) pass.
+
+### 11.1 `errstart` split into `errstart` / `errstart_cold` (the dominant test break)
+
+PG14 split `errstart()` into a warm path and a cold path. The
+`ereport`/`elog` macros now call **`errstart_cold()`** when the elevel is
+a compile-time constant `>= ERROR`, and `errstart()` otherwise. Mock
+tests that drive an ERROR/FATAL path set their `expect_*`/`will_return`
+on the wrong symbol, so cmockery aborts with a "no expectations" error
+on `errstart`.
+
+Fix each affected test's local `EXPECT_EREPORT()` helper to branch on the
+level (note: the exact `will_return*` form differs per file — preserve
+the file's own side-effect callback):
+
+```c
+#define EXPECT_EREPORT(LOG_LEVEL)                              \
+    if (LOG_LEVEL < ERROR) {                                   \
+        expect_value(errstart, elevel, (LOG_LEVEL));           \
+        expect_any(errstart, domain);                          \
+        will_return(errstart, false);                          \
+    } else {                                                   \
+        expect_value(errstart_cold, elevel, (LOG_LEVEL));      \
+        expect_any(errstart_cold, domain);                     \
+        will_return_with_sideeffect(errstart_cold, false, &_errfinish_impl, NULL); \
+    }
+```
+
+Files fixed: `tcop/test/postgres_test.c`, `utils/fmgr/test/dfmgr_test.c`,
+`utils/init/test/postinit_test.c`, `utils/test/session_state_test.c`,
+`utils/mmgr/test/runaway_cleaner_test.c`,
+`replication/test/gp_replication_test.c`.
+**Do not** blindly edit every test that names `errstart`:
+`utils/mmgr/test/redzone_handler_test.c` and `libpq/test/pqcomm_test.c`
+only exercise sub-ERROR levels and must keep plain `errstart`.
+
+### 11.2 GUC coverage test — every new PG14 GUC must be listed
+
+`utils/misc/test/guc_test.c` (and `guc_gp_test.c`) assert that **every**
+GUC in `ConfigureNamesBool/Int/Real/String/Enum` appears in exactly one
+of `src/include/utils/sync_guc_name.h` or `unsync_guc_name.h`. A new PG14
+GUC trips `test_*_guc_coverage`:
+
+```
+GUC: '<name>' does not exist in both list.
+```
+
+Resolution: add each new upstream PG14 GUC to **`unsync_guc_name.h`**,
+**alphabetically** (it is not distributed/synced to segments), and keep
+the two lists mutually exclusive (`test_guc_name_list_mutual_exclusion`).
+The 14 GUCs added in `claude-merge-2`:
+
+```
+compute_query_id, debug_invalidate_system_caches_always,
+default_toast_compression, enable_async_append, enable_resultcache,
+idle_session_timeout, in_hot_standby, log_recovery_conflict_waits,
+recovery_init_sync_method, remove_temp_files_after_crash, ssl_crl_dir,
+track_wal_io_timing, vacuum_failsafe_age, vacuum_multixact_failsafe_age
+```
+
+### 11.3 mock-link breakage: PG14 widened what the test programs pull in
+
+Two `src/backend/mock.mk` changes were needed:
+
+1. **`uuid_le` / `brin_minmax_multi`.** PG14's new `brin_minmax_multi.c`
+   calls `uuid_le()`. Remove `src/backend/utils/adt/uuid.o` from
+   `EXCL_OBJS` and add `$(UUID_LIBS)` to `MOCK_LIBS`, or every test
+   program fails to link with `undefined reference to 'uuid_le'`.
+
+2. **`get_dirent_type` pulls in the FRONTEND `libpgcommon`.** PG14's
+   `fd.c` (`walkdir`) calls the new `get_dirent_type()`, which lives in
+   `src/common/file_utils.c` (outside its `#ifdef FRONTEND`, so it is in
+   *both* `libpgcommon_srv.a` and the frontend `libpgcommon.a`). The one
+   test that mocks `fd` — `cdb/test/cdbappendonlyxlog` — then has
+   `fd_mock.o` referencing `get_dirent_type` **after** the linker has
+   already scanned the server `libpgcommon_srv.a` (it sits in
+   `objfiles.txt`, ahead of the mock objects). The reference is resolved
+   from the FRONTEND `libpgcommon.a` carried in `$(LIBS)`, dragging in
+   frontend `file_utils.o` + `fe_memutils.o` and detonating with:
+
+   ```
+   multiple definition of `fsync_fname'  / `durable_rename'  (vs fd_mock.o)
+   multiple definition of `palloc' / `pfree' / `pstrdup' ...  (vs mcxt.o)
+   ```
+
+   Fix: re-list the **server** archives *after* the mock objects in the
+   `%.t` link rule, so late `src/common` references resolve against the
+   server variant (which omits the FRONTEND-only `fsync_fname` /
+   `durable_rename` / `palloc`):
+
+   ```make
+   MOCK_SRV_LIBS := $(top_builddir)/src/common/libpgcommon_srv.a \
+                    $(top_builddir)/src/port/libpgport_srv.a
+   # ... in the %.t recipe, between the mock objects and $(MOCK_LIBS):
+   ... $(filter-out %/objfiles.txt, $^) $(MOCK_SRV_LIBS) $(MOCK_LIBS) -o $@
+   ```
+
+   This is the correct fix (server `file_utils_srv.o` defines only
+   `get_dirent_type`, references `palloc` which `mcxt.o` already
+   satisfies) — prefer it over `-Wl,--allow-multiple-definition`.
+
+### 11.4 Mock expectations must cover new PG14 function parameters
+
+When PG14 adds a parameter to a function a test mocks, the
+auto-generated mock checks the new parameter and the test fails with:
+
+```
+Could not get value to check parameter <param> of function <fn>
+```
+
+Add the matching `expect_value()`/`expect_any()` with the value from the
+real call site. Concrete case: PG14 added `bool two_phase` to
+`ReplicationSlotCreate()`; `fts/test/ftsmessagehandler_test.c` needed
+`expect_value(ReplicationSlotCreate, two_phase, false);` to match the
+`ReplicationSlotCreate(name, false, RS_PERSISTENT, false)` call in
+`ftsmessagehandler.c`. Post-merge grep: `Could not get value to check parameter`.
+
+### 11.5 Verification
+
+```bash
+# Run the whole suite the way CI does (serial):
+make -s unittest-check 2>&1 | tee /tmp/ut.log
+grep -E "\[ FAILED" /tmp/ut.log        # must be empty
+echo "exit=$?"                          # make must exit 0
+
+# Targeted re-run of one directory while iterating:
+make -C src/backend/<subsys>/test check
+```
+
+### 11.6 Caveat: `make -j unittest-check` races (do not mistake for regressions)
+
+The mock build generates shared objects (`cmockery.o`, the per-file
+`*_mock.o`) on demand; under `-j`, multiple test directories build the
+same shared object concurrently and intermittently fail with
+`cannot find .../cmockery.o`, spurious `undefined reference`, or
+truncated-object link errors. CI runs the target **serially**. When
+triaging a `-j` failure, **re-run the offending directory serially**
+before assuming a real break — in `claude-merge-2`, 3 of the 5 initial
+`-j` failures (`catalog/storage_tablespace`, `utils/datumstream`,
+`utils/hash/dynahash`) were only this race; the two genuine failures were
+§11.3.2 (`cdbappendonlyxlog`) and §11.4 (`ftsmessagehandler`).
+
+---
+
+## 12. Other PG14 API-shape changes hit during `claude-merge-2`
+
+These are mechanical "adopt the new signature, re-graft GPDB args" fixes
+not covered above. Each row is a real commit from the fix history.
+
+| Symbol / area | PG14 change | Resolution |
+|---|---|---|
+| `commands/copy.c` | `copy.c` split into `copyfrom.c`/`copyto.c`; `CopyState`→`CopyFromState`/`CopyToState`; protocol-v2 removed | **GPDB keeps the monolithic `copy.c` + unified `CopyStateData`** (it heavily extends it for external tables / distribution). Map upstream `Copy{From,To}State` back to `CopyState`; re-graft only the protocol change: drop v2 branches, collapse `COPY_OLD_FE`/`COPY_NEW_FE`→`COPY_FRONTEND` (keep old names as compat macros), use direct `pq_beginmessage`/`pq_endmessage`. |
+| `BeginCopyFrom()` | upstream gained a `whereClause` arg | GPDB's signature differs — when fixing callers (`file_fdw`) match **GPDB's** arg list; the merge tends to insert a spurious extra `NULL`. |
+| `src/bin/scripts` connect API | `connectDatabase`/`connectMaintenanceDatabase` now take a `ConnParams *` (`fe_utils/connect_utils.h`) | Take **cloudberry's `scripts/common.c`/`.h` wholesale**; revert any transient `*_cparams` wrapper shims. |
+| `simple_prompt()` | returns the string (no caller buffer); moved `src/port`→`src/common` | Update `initdb.c`, `pgbench.c`, `scripts/common.c`; add `sprompt.o` to link where needed. |
+| `output_completion_banner()` | now 1 arg (was 2) | `pg_upgrade` caller. |
+| `fmtQualifiedId()` | GPDB form takes no encoding arg | Drop cloudberry's `fmtQualifiedIdEnc`; use `fmtQualifiedId`. |
+| `ReindexIndex`/`ReindexTable` | unified into `ExecReindex()` | Replace the GPDB Reindex dispatch in `utility.c` with `ExecReindex`. |
+| `ProcedureCreate()` | upstream arg list changed | Re-add the two **GPDB-specific trailing args** `prodataaccess`, `proexeclocation` (e.g. the four multirange-constructor calls in `typecmds.c`). |
+| `cluster_rel()` | return type `bool`→`void` | Drop the return-value use. |
+| `pg_hex_encode()`/`pg_hex_decode()` | gained a `dstlen` arg | Thread the destination length through callers. |
+| `errcontext_msg()` / `set_errcontext_domain()` | return `int` (was `void`), for the new `ereport` | Fix the return types in GPDB copies. |
+| `pqPutMsgStart()` | dropped the `force` parameter | Update `cdbdisp_async.c`. |
+| `nodeModifyTable` | single subplan: `mt_whichplan`/`mt_nplans`/`mt_plans` gone; `TransitionCaptureState.tcs_map` gone; `jf_junkAttNo`→`ri_RowIdAttNo`; `ri_PartitionCheck`→`rd_rel->relispartition` | Remove the dead multi-subplan logic; fix `ExecInsert`/`ExecUpdate`/`ExecDelete` and `ExecCrossPartitionUpdate` (new `segid`) call sites. |
+| `ReadNewTransactionId()` | renamed `ReadNextTransactionId()` | Mechanical rename (also in `test/regress`). |
+| `doputenv()` | use `setenv()` | `pg_regress.c` / regress driver. |
+| backend `libpq` protocol v2 | `fe-protocol2.c` removed | Drop `fe-protocol2` from the backend libpq `Makefile`. |
