@@ -717,3 +717,164 @@ not covered above. Each row is a real commit from the fix history.
 | `ReadNewTransactionId()` | renamed `ReadNextTransactionId()` | Mechanical rename (also in `test/regress`). |
 | `doputenv()` | use `setenv()` | `pg_regress.c` / regress driver. |
 | backend `libpq` protocol v2 | `fe-protocol2.c` removed | Drop `fe-protocol2` from the backend libpq `Makefile`. |
+
+---
+
+## 13. `initdb` / cluster-bootstrap phase — PG13→14
+
+After the tree compiles **and** the mock unit tests pass, the next gate is
+`initdb` (creating the demo cluster). The merge left a whole class of
+catalog / BKI / planner regressions that **neither the compiler nor the
+cmockery tests can catch** — they only fire when `initdb` actually builds
+and populates `template1`. In `claude-merge-2`, `initdb` was completely
+broken and took **7 distinct fixes** (commit `770bc1f1fb2`) to get through
+bootstrap and most of post-bootstrap; one larger item (the PG14 UPDATE
+rework, §13.5) remained.
+
+### 13.1 How to run and diagnose
+
+Fast dev loop (don't rebuild the Docker image per fix — see
+[[build-test-docker-workflow]]): run a container with the **mounted** source
+plus `--sysctl kernel.sem=...`, build once with
+`--prefix=/usr/local/greenplum-db-devel` (ORCA on), install, create the
+gpadmin user + demo cluster, then iterate:
+
+```bash
+# after editing a source file, reinstall only what changed and re-run initdb
+make -j20 -C src/backend install            # backend (.c) or BKI/genbki/catalog headers
+make -C src/backend/catalog install         # *.sql data files (system_views.sql etc.)
+su gpadmin -c '.../bin/initdb -E UNICODE -D /tmp/idbtest'   # or make_cluster
+```
+
+`initdb` errors arrive as a backend `FATAL`/`PANIC` (the `PANIC: cannot
+abort transaction 1, it was already committed` is just fallout — look at
+the `FATAL` line just above it) followed by
+`initdb: error: ... cdb_init.d directory: Broken pipe`.
+
+**The decisive diagnostic for every one of these:** diff the suspect file
+against the merge's **PG14 parent**, not `gg_upgrade` (which is PG13):
+
+```bash
+git show <merge-commit>^2:src/path/to/file   # authoritative "what PG14 does"
+git show <pre-merge-tip>:src/path/to/file    # what GPDB had before (first parent)
+```
+
+Bootstrap and post-bootstrap are two distinct sub-phases:
+
+### 13.2 Bootstrap (`postgres.bki`) failures
+
+These happen during `running bootstrap script ...` — the backend reads the
+generated `postgres.bki`. All are catalog/genbki resolution errors.
+
+- **Catalog header ordering.** PG14's `pg_statistic_ext_data.stxdexpr` is
+  `pg_statistic[]` (`_pg_statistic`), so `pg_statistic.h` must precede
+  `pg_statistic_ext*.h` in `CATALOG_HEADERS` (`src/backend/catalog/Makefile`)
+  — the BKI creates a catalog's array type only when the catalog itself is
+  created. Symptom: `FATAL: unrecognized type "_pg_statistic"` in
+  `bootstrap.c gettype`. (See also §8; the comment in that Makefile warns of
+  "undocumented ordering dependencies".)
+
+- **BKI string-literal quoting must be self-consistent.** PG14 switched the
+  BKI to **single-quoted** strings, inverted by `DeescapeQuotedString()`.
+  Four files must agree, and the merge is prone to taking some from PG14 and
+  some from GPDB-PG13:
+  - `genbki.pl` — emit `sprintf("'%s'", …)`, escape `''`;
+  - `bootscanner.l` — `sid \'([^']|\'\')*\'`, action `DeescapeQuotedString(yytext)`
+    (PG14 dropped `scanstr()` and `parser/scansup.h`'s use here);
+  - `initdb.c` `escape_quotes_bki()` — wrap in **single** quotes (not the old
+    double-quote / `\042`-octal form);
+  - `guc-file.l` `DeescapeQuotedString()` — single-quote (shared with
+    `postgresql.conf`, so leave it single-quote).
+  Symptom: `FATAL: syntax error at line N: unexpected character """` (a `"`
+  from the old `initdb.c`) or `... "'"` (a `'` reaching a double-quote
+  scanner). Fix all four to the PG14 single-quote convention.
+
+- **GPDB-only genbki substitutions get dropped.** PG14's `genbki.pl` has no
+  `PGUID` handling (it's GPDB-specific, for `pg_compression.compowner`'s
+  `BKI_DEFAULT(PGUID)`). When the merge adopts upstream `genbki.pl` shape it
+  loses GPDB's `s/\bPGUID\b/$BOOTSTRAP_SUPERUSERID/g` (and the
+  `$BOOTSTRAP_SUPERUSERID` definition). Symptom: `FATAL: invalid input
+  syntax for type oid: "PGUID"` in `InsertOneValue`. Re-add the substitution.
+
+- **Missing per-catalog index `DECLARE`s.** PG14 added the `pg_range`
+  multirange index `pg_range_rngmultitypid_index` (oid 2228). GPDB keeps
+  index declarations in central `indexing.h` (§8.3); the merge moved
+  `pg_range`'s `rngtypid` index but dropped the new `rngmultitypid` one.
+  Symptom: `FATAL: could not open relation with OID 2228` in post-bootstrap.
+  Cross-check every `#define <Catalog>IndexId` against a matching
+  `DECLARE_UNIQUE_INDEX(...)`.
+
+### 13.3 Post-bootstrap (SQL) failures
+
+These happen during `performing post-bootstrap initialization ...`, while
+`initdb` feeds `system_views.sql`, `information_schema.sql`, snowball, and
+GPDB's `cdb_init.d/*.sql`. **Note GPDB installs only `system_views.sql`
+(plus information_schema/snowball) — there is no `system_functions.sql` in
+the install**, so functions PG14 placed in `system_functions.sql` must
+instead live in `pg_proc.dat` or `system_views.sql`.
+
+- **Duplicate keys in a `pg_proc.dat` entry (Perl last-wins).** When both the
+  GPDB and the upstream PG14 versions of `proallargtypes` / `proargmodes` /
+  `proargnames` survive in one entry, Perl keeps the **last**, silently
+  dropping the other. Hit on `pg_stat_get_activity`: the GPDB set
+  (`…leader_pid,sess_id,rsgid,rsgname`, with `sslcompression`) and the PG14
+  set (`…leader_pid,query_id`, no `sslcompression`) were both present, so the
+  GPDB columns vanished and `CREATE VIEW pg_stat_activity` failed with
+  `column s.sess_id does not exist`. Fix: collapse to **one** set that
+  matches the C function (`pgstatfuncs.c`, `PG_STAT_GET_ACTIVITY_COLS`)
+  exactly — here PG14's columns *plus* GPDB's `sess_id`/`rsgid`/`rsgname`.
+  `.dat` files can't be opened by some editors as text (binary heuristic on
+  the extension) — edit with a verified `python3`/`perl` script and assert
+  the three token-counts are equal.
+
+- **A function PG14 relocated between `pg_proc.dat` and `system_views.sql`.**
+  PG14 moved `ts_debug` *into* `pg_proc.dat` (as `prolang => 'sql'` entries)
+  and removed it from `system_views.sql`. The merge took the new `pg_proc.dat`
+  entries but kept GPDB's old `system_views.sql` copy → `FATAL: function
+  "ts_debug" already exists`. Remove the stale `system_views.sql` definition.
+
+- **PG14 row-identity wiring missing for UPDATE/DELETE.** The whole PG14
+  lazy row-identity machinery (`add_row_identity_columns`,
+  `add_row_identity_var`, `distribute_row_identity_vars`, `row_identity_vars`)
+  was merged into `appendinfo.c`/`inherit.c`/`planmain.c`, but
+  `preprocess_targetlist()` (`preptlist.c`) was left as GPDB's old version
+  that never calls `add_row_identity_columns()` for the base result relation.
+  So a simple `DELETE` gets no `ctid` junk column → `FATAL: could not find
+  junk ctid column` in `ExecInitModifyTable`. Fix: add the upstream block to
+  `preprocess_targetlist`:
+  ```c
+  if ((command_type == CMD_UPDATE || command_type == CMD_DELETE) &&
+      !target_rte->inh)
+  {
+      root->processed_tlist = tlist;
+      add_row_identity_columns(root, result_relation, target_rte, target_relation);
+      tlist = root->processed_tlist;
+  }
+  ```
+
+### 13.4 Error → cause → fix quick table
+
+| `initdb` FATAL | Phase | Cause | Fix |
+|---|---|---|---|
+| `unrecognized type "_pg_statistic"` | bootstrap | catalog header order | `pg_statistic.h` before `pg_statistic_ext*.h` |
+| `syntax error … unexpected character "…"` | bootstrap | BKI quote convention split across files | single-quote everywhere (§13.2) |
+| `invalid input syntax for type oid: "PGUID"` | bootstrap | genbki lost GPDB `PGUID` sub | restore `s/\bPGUID\b/.../` + `$BOOTSTRAP_SUPERUSERID` |
+| `could not open relation with OID 2228` | post | missing index `DECLARE` | add `pg_range_rngmultitypid_index` to `indexing.h` |
+| `could not find junk ctid column` | post | `preprocess_targetlist` missing row-identity call | add `add_row_identity_columns` block |
+| `column s.sess_id does not exist` | post | duplicate `.dat` keys, last-wins | one merged `pg_stat_get_activity` col set |
+| `function "ts_debug" already exists` | post | function in both `pg_proc.dat` and `system_views.sql` | drop the `system_views.sql` copy |
+| `targetColnos does not match subplan target list` | post | PG14 UPDATE rework not adopted | §13.5 (open) |
+
+### 13.5 Open: PG14 UPDATE planning rework (`update_colnos`)
+
+PG14 commit `86dc90056d` reworked UPDATE/DELETE planning. The **DELETE** half
+is handled by §13.3's row-identity wiring. The **UPDATE** half is larger and
+was *not* adopted: PG14 `preprocess_targetlist` does
+`root->update_colnos = extract_update_targetlist_colnos(tlist)` (it does
+**not** expand the UPDATE tlist), threads `updateColnos` through
+`ModifyTable`, and `ExecBuildUpdateProjection` uses it. GPDB's merged
+`preprocess_targetlist` still calls the old `expand_targetlist()` for
+`CMD_UPDATE`, so the executor trips on `targetColnos does not match subplan
+target list`. Re-grafting this is entangled with GPDB's MPP **split-update**
+(distribution-key updates), so it's a substantial, higher-risk change —
+use Apache Cloudberry (which already did PG14 + GPDB) as the reference (§6).
