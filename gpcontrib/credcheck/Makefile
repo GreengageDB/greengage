@@ -27,10 +27,7 @@ PG_CONFIG = pg_config
 # Extract the major version number
 PG_MAJORVERSION := $(shell $(PG_CONFIG) --version | sed -e 's/^[a-zA-Z ]*//' -e 's/\..*//')
 
-# Check if major version is greater than or equal to 15 to run tap test
-ifeq ($(shell test $(PG_MAJORVERSION) -ge 15; echo $$?),0)
-    TAP_TESTS = 1
-endif
+TAP_TESTS = 1
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
