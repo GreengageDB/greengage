@@ -37,7 +37,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@main
 
     - name: Install GSSAPI development headers and TAP test Perl modules
       run: |
