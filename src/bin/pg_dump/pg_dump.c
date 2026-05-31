@@ -4976,7 +4976,8 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 		 * have TOAST tables.
 		 */
 		gpdb6_partitioned_table = false;
-		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION) {
+		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+		{
 			gpdb6_partition_query = createPQExpBuffer();
 			appendPQExpBuffer(gpdb6_partition_query,
 				"WITH gpdb6_partitioned_tables (oid) AS ("
