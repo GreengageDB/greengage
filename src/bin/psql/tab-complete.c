@@ -1021,6 +1021,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"PARSER", Query_for_list_of_ts_parsers, NULL, NULL, THING_NO_SHOW},
 	{"POLICY", NULL, NULL, NULL},
 	{"PROCEDURE", NULL, NULL, Query_for_list_of_procedures},
+	{"PROTOCOL", NULL},
 	{"PUBLICATION", NULL, Query_for_list_of_publications},
 	{"RESOURCE", NULL},
 	{"ROLE", Query_for_list_of_roles},
