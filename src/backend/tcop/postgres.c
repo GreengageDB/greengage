@@ -491,6 +491,11 @@ SocketBackend(StringInfo inBuf)
 
 		case 'M':				/* Greenplum Database dispatched statement from QD */
 
+			/* The dispatched 'M' message carries the serialized plan/query
+			 * and can be large, like 'Q'.  Without this PG14 added a default
+			 * maxmsglen of 0, so pq_getmessage rejected every dispatch with
+			 * "invalid message length". */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 
 			/* don't support old protocols with this. */
@@ -504,6 +509,7 @@ SocketBackend(StringInfo inBuf)
 
 		case 'T':				/* Greenplum Database dispatched transaction protocol from QD */
 
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 
 			/* don't support old protocols with this. */
