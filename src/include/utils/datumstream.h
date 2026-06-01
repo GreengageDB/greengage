@@ -97,8 +97,6 @@ typedef struct DatumStreamRead
 
 	AppendOnlyStorageRead ao_read;
 
-	bool		noBlocksRead;
-
 	/*
 	 * Values returned by AppendOnlyStorageRead_GetBlockInfo.
 	 */
@@ -169,6 +167,7 @@ typedef struct DatumStreamRead
 	/* AO Storage */
 	bool		need_close_file;
 
+	bool		noBlocksRead;
 }	DatumStreamRead;
 
 /*
