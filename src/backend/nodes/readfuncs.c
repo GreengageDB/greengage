@@ -1205,11 +1205,12 @@ _readFuncCall(void)
 	READ_NODE_FIELD(args);
 	READ_NODE_FIELD(agg_order);
 	READ_NODE_FIELD(agg_filter);
+	READ_NODE_FIELD(over);
 	READ_BOOL_FIELD(agg_within_group);
 	READ_BOOL_FIELD(agg_star);
 	READ_BOOL_FIELD(agg_distinct);
 	READ_BOOL_FIELD(func_variadic);
-	READ_NODE_FIELD(over);
+	READ_ENUM_FIELD(funcformat, CoercionForm);
 	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
@@ -1311,6 +1312,11 @@ _readAExpr(void)
 	else if (strncmp(token,"DISTINCT",length)==0)
 	{
 		local_node->kind = AEXPR_DISTINCT;
+		READ_NODE_FIELD(name);
+	}
+	else if (strncmp(token,"NOT_DISTINCT",length)==0)
+	{
+		local_node->kind = AEXPR_NOT_DISTINCT;
 		READ_NODE_FIELD(name);
 	}
 	else if (strncmp(token,"NULLIF",length)==0)
@@ -2229,6 +2235,7 @@ _readColumnDef(void)
 
 	READ_STRING_FIELD(colname);
 	READ_NODE_FIELD(typeName);
+	READ_STRING_FIELD(compression);
 	READ_INT_FIELD(inhcount);
 	READ_BOOL_FIELD(is_local);
 	READ_BOOL_FIELD(is_not_null);
@@ -3733,6 +3740,9 @@ _readRestrictInfo(void)
 	READ_BOOL_FIELD(outerjoin_delayed);
 	READ_BOOL_FIELD(can_join);
 	READ_BOOL_FIELD(pseudoconstant);
+	READ_BOOL_FIELD(leakproof);
+	READ_ENUM_FIELD(has_volatile, VolatileFunctionStatus);
+	READ_UINT_FIELD(security_level);
 	READ_BOOL_FIELD(contain_outer_query_references);
 	READ_BITMAPSET_FIELD(clause_relids);
 	READ_BITMAPSET_FIELD(required_relids);
@@ -3750,6 +3760,7 @@ _readRestrictInfo(void)
 	READ_NODE_FIELD(right_em);
 	READ_BOOL_FIELD(outer_is_left);
 	READ_OID_FIELD(hashjoinoperator);
+	READ_OID_FIELD(hasheqoperator);
 
 	READ_DONE();
 }
