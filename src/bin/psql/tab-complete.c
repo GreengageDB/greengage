@@ -817,6 +817,11 @@ static const SchemaQuery Query_for_list_of_statistics = {
 "SELECT pg_catalog.quote_ident(tmplname) FROM pg_catalog.pg_ts_template "\
 " WHERE substring(pg_catalog.quote_ident(tmplname),1,%d)='%s'"
 
+#define Query_for_list_of_extprotocols \
+" SELECT pg_catalog.quote_ident(ptcname) "\
+"   FROM pg_catalog.pg_extprotocol"\
+"  WHERE substring(pg_catalog.quote_ident(ptcname),1,%d)='%s'"
+
 #define Query_for_list_of_fdws \
 " SELECT pg_catalog.quote_ident(fdwname) "\
 "   FROM pg_catalog.pg_foreign_data_wrapper "\
@@ -1021,7 +1026,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"PARSER", Query_for_list_of_ts_parsers, NULL, NULL, THING_NO_SHOW},
 	{"POLICY", NULL, NULL, NULL},
 	{"PROCEDURE", NULL, NULL, Query_for_list_of_procedures},
-	{"PROTOCOL", NULL},
+	{"PROTOCOL", Query_for_list_of_extprotocols, NULL},
 	{"PUBLICATION", NULL, Query_for_list_of_publications},
 	{"RESOURCE", NULL},
 	{"ROLE", Query_for_list_of_roles},
@@ -1043,6 +1048,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"TEXT SEARCH", NULL, NULL, NULL},
 	{"TRANSFORM", NULL, NULL, NULL},
 	{"TRIGGER", "SELECT pg_catalog.quote_ident(tgname) FROM pg_catalog.pg_trigger WHERE substring(pg_catalog.quote_ident(tgname),1,%d)='%s' AND NOT tgisinternal"},
+	{"TRUSTED", NULL},
 	{"TYPE", NULL, NULL, &Query_for_list_of_datatypes},
 	{"UNIQUE", NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},	/* for CREATE UNIQUE
 																	 * INDEX ... */
@@ -1543,6 +1549,9 @@ psql_completion(const char *text, int start, int end)
 		else
 			COMPLETE_WITH_FUNCTION_ARG(prev2_wd);
 	}
+	/* ALTER PROTOCOL */
+	else if(Matches("ALTER", "PROTOCOL", MatchAny))
+		COMPLETE_WITH("OWNER TO", "RENAME TO");
 	/* ALTER PUBLICATION <name> */
 	else if (Matches("ALTER", "PUBLICATION", MatchAny))
 		COMPLETE_WITH("ADD TABLE", "DROP TABLE", "OWNER TO", "RENAME TO", "SET");
@@ -2459,6 +2468,15 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "POLICY", MatchAny, "ON", MatchAny, "AS", MatchAny, "USING"))
 		COMPLETE_WITH("(");
 
+/* CREATE PROTOCOL*/
+	else if(Matches("CREATE", "TRUSTED"))
+		COMPLETE_WITH("PROTOCOL");
+	else if(Matches("CREATE", "TRUSTED", "PROTOCOL"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_extprotocols);
+	else if(TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny))
+		COMPLETE_WITH("(");
+	else if(TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "("))
+		COMPLETE_WITH("readfunc='", "writefunc='", "validatorfunc='");
 
 /* CREATE PUBLICATION */
 	else if (Matches("CREATE", "PUBLICATION", MatchAny))
@@ -3086,6 +3104,7 @@ psql_completion(const char *text, int start, int end)
 									   " UNION SELECT 'LANGUAGE'"
 									   " UNION SELECT 'LARGE OBJECT'"
 									   " UNION SELECT 'PROCEDURE'"
+									   " UNION SELECT 'PROTOCOL'"
 									   " UNION SELECT 'ROUTINE'"
 									   " UNION SELECT 'SCHEMA'"
 									   " UNION SELECT 'SEQUENCE'"
@@ -3120,6 +3139,8 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH_QUERY(Query_for_list_of_languages);
 		else if (TailMatches("PROCEDURE"))
 			COMPLETE_WITH_VERSIONED_SCHEMA_QUERY(Query_for_list_of_procedures, NULL);
+		else if(TailMatches("PROTOCOL"))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocols);
 		else if (TailMatches("ROUTINE"))
 			COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_routines, NULL);
 		else if (TailMatches("SCHEMA"))
