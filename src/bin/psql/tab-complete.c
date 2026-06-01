@@ -2761,9 +2761,10 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
 	}
 
-	/* ALTER/CREATE/DROP RESOURCE QUEUE */
+/* ALTER/CREATE/DROP RESOURCE QUEUE */
 	else if(TailMatches("CREATE|ALTER|DROP", "RESOURCE", "QUEUE"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
+
 	else if(TailMatches("CREATE", "RESOURCE", "QUEUE", MatchAny))
 		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
 			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (");
