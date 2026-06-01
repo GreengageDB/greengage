@@ -1841,6 +1841,10 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "POLICY", MatchAny, "ON", MatchAny, "WITH", "CHECK"))
 		COMPLETE_WITH("(");
 
+	/* ALTER RESOURCE GROUP <name> */
+	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
+		COMPLETE_WITH("SET");
+
 	/* ALTER RULE <name>, add ON */
 	else if (Matches("ALTER", "RULE", MatchAny))
 		COMPLETE_WITH("ON");
@@ -2741,11 +2745,10 @@ psql_completion(const char *text, int start, int end)
 	/* ALTER/CREATE/DROP RESOURCE GROUP */
 	else if (TailMatches("ALTER|CREATE|DROP", "RESOURCE", "GROUP"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
+
 	/* CREATE RESOURCE GROUP <name> */
 	else if (TailMatches("CREATE", "RESOURCE", "GROUP", MatchAny))
 		COMPLETE_WITH("WITH (");
-	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
-		COMPLETE_WITH("SET");
 	/* RESOURCE GROUP <name> WITH ( / SET */
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(") ||
 			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET"))
@@ -2753,7 +2756,7 @@ psql_completion(const char *text, int start, int end)
 					  "MEMORY_LIMIT", "MIN_COST", "IO_LIMIT");
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", MatchAny))
 		COMPLETE_WITH("=");
-	/* Complete IO_LIMIT with delimeter, tablespaces and options */
+	/* Complete IO_LIMIT option with delimeter, tablespaces and options */
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", "IO_LIMIT", "=") ||
 			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET", "IO_LIMIT"))
 		COMPLETE_WITH("'");
@@ -2767,8 +2770,6 @@ psql_completion(const char *text, int start, int end)
 	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny, ":") ||
 			TailMatches("IO_LIMIT", "'", MatchAny, ":"))
 			COMPLETE_WITH("wpbs", "rbps", "wiops", "riops");
-
-
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
 	/* Complete CREATE VIEW <name> with AS */
