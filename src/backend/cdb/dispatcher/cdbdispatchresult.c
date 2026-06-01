@@ -505,9 +505,21 @@ cdbdisp_dumpDispatchResult(CdbDispatchResult *dispatchResult)
 	{
 		if (errstart(ERROR, TEXTDOMAIN))
 		{
+			MemoryContext oldcontext;
+
 			errcode(ERRCODE_GP_INTERCONNECTION_ERROR);
 			errmsg("%s", dispatchResult->error_message->data);
+			/*
+			 * errfinish_and_return -> CopyErrorData asserts we are not in
+			 * ErrorContext (it palloc's the returned ErrorData in the current
+			 * context).  Switch to TopTransactionContext like cdbdisp_get_PQerror
+			 * does, so a dispatch/interconnect error can be reported without
+			 * crashing.
+			 */
+			Assert(TopTransactionContext);
+			oldcontext = MemoryContextSwitchTo(TopTransactionContext);
 			errdata = errfinish_and_return(__FILE__, __LINE__, PG_FUNCNAME_MACRO);
+			MemoryContextSwitchTo(oldcontext);
 		}
 		else
 			pg_unreachable();
