@@ -4981,12 +4981,12 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 			gpdb6_partition_query = createPQExpBuffer();
 			appendPQExpBuffer(gpdb6_partition_query,
 				"WITH gpdb6_partitioned_tables (oid) AS ("
-				"	SELECT oid FROM pg_class c WHERE EXISTS ("
-				"		SELECT 1 FROM pg_partition p WHERE c.oid = p.parrelid"
+				"	SELECT oid FROM pg_catalog.pg_class c WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition p WHERE c.oid = p.parrelid"
 				"	)"
 				"	UNION ALL"
-				"	SELECT parchildrelid FROM pg_partition_rule parent WHERE EXISTS ("
-				"		SELECT 1 FROM pg_partition_rule child WHERE child.parparentrule = parent.oid"
+				"	SELECT parchildrelid FROM pg_catalog.pg_partition_rule parent WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition_rule child WHERE child.parparentrule = parent.oid"
 				"	)"
 				")"
 				"SELECT EXISTS ("
