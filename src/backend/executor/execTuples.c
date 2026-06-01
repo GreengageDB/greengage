@@ -154,7 +154,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 {
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
-	int			err = 0;
+	int			err PG_USED_FOR_ASSERTS_ONLY;
 
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 	int64		rowNum = slotAocs->row_num;
