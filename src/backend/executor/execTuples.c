@@ -131,21 +131,12 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 {
 	if (unlikely(TTS_SHOULDFREE(slot)))
 	{
-		VirtualTupleTableSlot *vslot = (VirtualTupleTableSlot *) slot;
-
-		pfree(vslot->data);
-		vslot->data = NULL;
-
-		slot->tts_flags &= ~TTS_FLAG_SHOULDFREE;
-
 		VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
 		vslot_aocs->current_scan = NULL;
 		vslot_aocs->row_num = InvalidAORowNum;
 	}
 
-	slot->tts_nvalid = 0;
-	slot->tts_flags |= TTS_FLAG_EMPTY;
-	ItemPointerSetInvalid(&slot->tts_tid);
+	tts_virtual_clear(slot);
 }
 
 /*

@@ -244,9 +244,7 @@ typedef struct VirtualTupleTableSlot
 
 typedef struct VirtualTupleTableSlotAOCS
 {
-	TupleTableSlot base;
-
-	char	   *data;			/* data for materialized slots */
+	VirtualTupleTableSlot base;
 
 	void * current_scan;
 	int64 row_num;
