@@ -54,7 +54,7 @@
 #define VALID_LONG_MESSAGE_TYPE(id) \
 	((id) == 'T' || (id) == 'D' || (id) == 'd' || (id) == 'V' || \
 	 (id) == 'E' || (id) == 'N' || (id) == 'A' || (id) == 'Y' || \
-	 (id) == 'y' || (id) == 'o')
+	 (id) == 'y' || (id) == 'o' || (id) == 'M')
 
 
 static void handleSyncLoss(PGconn *conn, char id, int msgLength);
@@ -70,7 +70,9 @@ static void reportErrorPosition(PQExpBuffer msg, const char *query,
 					int loc, int encoding);
 static int build_startup_packet(const PGconn *conn, char *packet,
 					 const PQEnvironmentOption *options);
-
+#ifndef FRONTEND
+static int pgGetMetadataMessage(PGconn *conn, int length);
+#endif
 
 /*
  * parseInput: if appropriate, parse input data from backend
@@ -286,6 +288,12 @@ pqParseInput3(PGconn *conn)
 						return;
 					conn->asyncStatus = PGASYNC_READY;
 					break;
+#ifndef FRONTEND
+				case 'M':       /* CDB: backend sends metadata 'M' message */
+					if (pgGetMetadataMessage(conn, msgLength))
+						return;
+					break;
+#endif
 				case 'Z':		/* backend is ready for new query */
 					if (getReadyForQuery(conn))
 						return;
@@ -2365,3 +2373,54 @@ build_startup_packet(const PGconn *conn, char *packet,
 
 	return packet_len;
 }
+
+#ifndef FRONTEND
+
+/*
+ * Read a Metadata response message.
+ * Entry: 'M' message type has already been consumed.
+ * Exit: returns 0 if successfully consumed message.
+ *		 returns 1 otherwise.
+ */
+static int
+pgGetMetadataMessage(PGconn *conn, int length)
+{
+	if (conn->metadataHooks.metadataRec == NULL)
+	{
+		return pqSkipnchar(length, conn);
+	}
+
+	int32 queue_id;
+
+	if (pqGetInt(&queue_id, sizeof(ggMetadataQueueId), conn))
+	{
+		return 1;
+	}
+
+	int payload_len = length - sizeof(ggMetadataQueueId);
+
+	/*
+	 * Since the metadata might be pretty long, we create an own buffer
+	 * rather than using conn->workBuffer.  workBuffer is intended
+	 * for stuff that is expected to be short.
+	 */
+
+	ggMetadataChunk *chunk = pqPalloc(sizeof(ggMetadataChunk) + payload_len);
+	if (chunk == NULL)
+		return 1;
+
+	chunk->next = NULL;
+	chunk->metadataLen = payload_len;
+
+	if (pqGetnchar(chunk->payload, payload_len, conn))
+	{
+		pqPfree(chunk);
+		return 1;
+	}
+
+	/* pass ownership of the link too the handler */
+	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk, queue_id);
+
+	return 0;
+}
+#endif
