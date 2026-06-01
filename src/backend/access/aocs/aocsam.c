@@ -1369,7 +1369,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int64		nthInBlock;
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
-	AttrNumber	natts;
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 
 	Assert(ScanDirectionIsForward(direction));
@@ -1385,9 +1384,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
 		initscan_with_colinfo(scan);
 	}
-
-	natts = slot->tts_tupleDescriptor->natts;
-	Assert(natts <= scan->columnScanInfo.relationTupleDesc->natts);
 
 	while (1)
 	{
@@ -1426,8 +1422,6 @@ ReadNext:
 
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
-
-
 
 		AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 		int tts_nvalid = anchor_attr+1;
@@ -1531,7 +1525,7 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = tts_nvalid;// 1; // natts;
+		slot->tts_nvalid = tts_nvalid;
 
 		slot->tts_tid = scan->cdb_fake_ctid;
 

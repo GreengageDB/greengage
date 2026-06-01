@@ -220,8 +220,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		Assert(err >= 0);
 
 		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
-
-
 		while (rowNumInBlock > datumstreamread_nth(ds))
 		{
 			err = datumstreamread_advance(ds);

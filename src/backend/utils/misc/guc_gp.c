@@ -112,7 +112,6 @@ List       *gp_guc_restore_list = NIL;
 bool        gp_guc_need_restore = false;
 
 
-bool		re_debug = false;
 bool		Debug_shareinput_xslice = false;
 bool		Debug_print_full_dtm = false;
 bool		Debug_print_snapshot_dtm = false;
