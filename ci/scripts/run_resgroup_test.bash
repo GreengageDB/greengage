@@ -24,12 +24,6 @@ ssh-keygen -A
 source gpdb_src/concourse/scripts/common.bash
 install_and_configure_gpdb
 gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-mkdir -p gpdb_src/gpAux/gpdemo/datadirs  
-chmod -R 777 gpdb_src/gpAux/gpdemo/datadirs  
-chown -R gpadmin:gpadmin gpdb_src/gpAux/gpdemo/datadirs
-mkdir -p /home/gpadmin/gpdb_src/src/test/isolation2/testtablespace  
-chmod -R 777 /home/gpadmin/gpdb_src/src/test/isolation2/testtablespace  
-chown -R gpadmin:gpadmin /home/gpadmin/gpdb_src/src/test/isolation2/testtablespace
 make_cluster
 sudo mkdir -p /sys/fs/cgroup/gpdb /sys/fs/cgroup/gpdb.service
 sudo chmod -R 777 /sys/fs/cgroup /sys/fs/cgroup/gpdb /sys/fs/cgroup/gpdb.service
