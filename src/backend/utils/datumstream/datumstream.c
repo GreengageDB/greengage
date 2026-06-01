@@ -707,6 +707,7 @@ create_datumstreamread(
 	acc->title = title;
 
 	acc->blockFirstRowNum = 1;
+	//acc->noBlocksRead = true;
 	Assert(acc->blockFileOffset == 0);
 	Assert(acc->blockRowCount == 0);
 
@@ -849,6 +850,8 @@ datumstreamread_open_file(DatumStreamRead * ds, char *fn, int64 eof, int64 eofUn
 	AppendOnlyStorageRead_OpenFile(&ds->ao_read, fn, version, ds->eof);
 
 	ds->need_close_file = true;
+
+	ds->noBlocksRead = true;
 }
 
 void
@@ -1302,6 +1305,10 @@ datumstreamread_block(DatumStreamRead * acc,
 	bool		readOK = false;
 
 	Assert(acc);
+
+	elogif(re_debug, WARNING, "[RELOG][%s] ds = %p", __FUNCTION__, acc);
+
+	acc->noBlocksRead = false;
 
 	acc->blockFirstRowNum += acc->blockRowCount;
 

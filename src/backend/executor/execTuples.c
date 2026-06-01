@@ -215,7 +215,8 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			}
 		}
 
-		bool force_block_read = false;
+		//bool force_block_read = false;
+#if 0
 		if (((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0 ||
 			(scan->rs_base.rs_flags & SO_TYPE_SAMPLESCAN) != 0 ||
 			scan->partialScan) &&
@@ -224,12 +225,15 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		{
 			force_block_read = true;
 		}
+#endif
+		//force_block_read = ds->noBlocksRead;
+//force_block_read = false;
 
 		while (true)
 		{
 			elogif(re_debug, WARNING, "[RELOG][%s] ds->blockFirstRowNum %ld, ds->blockRowCount = %d, ds = %p", __FUNCTION__, ds->blockFirstRowNum, ds->blockRowCount, ds);
 
-			if (!force_block_read)
+			if (!ds->noBlocksRead)
 			{
 				Assert(rowNum >= ds->blockFirstRowNum);
 				Assert(ds->blockFirstRowNum != InvalidAORowNum);
@@ -237,7 +241,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 				if (rowNum <= lastRowNumInBlock)
 					break;
 			}
-			force_block_read = false;
+			//force_block_read = false;
 
 			err = datumstreamread_block(ds, scan->blockDirectory, attno);
 			Assert(err >= 0);

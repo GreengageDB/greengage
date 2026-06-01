@@ -97,6 +97,8 @@ typedef struct DatumStreamRead
 
 	AppendOnlyStorageRead ao_read;
 
+	bool		noBlocksRead;
+
 	/*
 	 * Values returned by AppendOnlyStorageRead_GetBlockInfo.
 	 */
@@ -213,6 +215,7 @@ extern int	datumstreamread_advancelarge(DatumStreamRead * ds);
 inline static int
 datumstreamread_advance(DatumStreamRead * acc)
 {
+	elogif(re_debug, WARNING, "[RELOG][%s] ds = %p", __FUNCTION__, acc);
 	if (acc->largeObjectState == DatumStreamLargeObjectState_None)
 	{
 		/*
