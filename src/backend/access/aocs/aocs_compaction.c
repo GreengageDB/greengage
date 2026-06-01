@@ -282,7 +282,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 								   &compact_segno, 1, NULL);
 
 	tupDesc = RelationGetDescr(aorel);
-	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
+	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtualAOCS);
 	slot->tts_tableOid = RelationGetRelid(aorel);
 
 	/*

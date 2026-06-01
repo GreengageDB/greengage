@@ -479,7 +479,7 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 static const TupleTableSlotOps *
 aoco_slot_callbacks(Relation relation)
 {
-	return &TTSOpsVirtualAOCS; // &TTSOpsVirtual;
+	return &TTSOpsVirtualAOCS;
 }
 
 struct ExtractcolumnContext
@@ -2214,7 +2214,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 		bool		tupleIsAlive;
 		AOTupleId 	*aoTupleId;
 
-		// TODO: do we need it here?
 		slot_getallattrs(slot);
 
 		BlockNumber currblockno = ItemPointerGetBlockNumber(&slot->tts_tid);

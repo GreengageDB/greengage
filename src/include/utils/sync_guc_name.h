@@ -11,7 +11,6 @@
 		"commit_siblings",
 		"coredump_on_memerror",
 		"DateStyle",
-		"re_debug",
 		"Debug_appendonly_print_append_block",
 		"debug_appendonly_print_blockdirectory",
 		"debug_appendonly_print_compaction",

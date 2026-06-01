@@ -1464,16 +1464,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"re_debug", PGC_SUSET, LOGGING_WHAT,
-		 gettext_noop("re_debug."),
-		 NULL,
-		 GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&re_debug,
-		false,
-		NULL, NULL, NULL
-	},
-	{
 		{"gp_disable_tuple_hints", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Specify if hint bits on tuples should be deferred."),
 			NULL,

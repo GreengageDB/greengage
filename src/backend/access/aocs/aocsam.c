@@ -112,8 +112,6 @@ open_all_datumstreamread_segfiles(AOCSScanDesc scan, AOCSFileSegInfo *segInfo)
 	AppendOnlyBlockDirectory *blockDirectory = scan->blockDirectory;
 	char *basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
 
-	elogif(re_debug, WARNING, "[RELOG][%s] open_all_datumstreamread_segfiles, num_proj_atts %d", __FUNCTION__, num_proj_atts);
-
 	Assert(proj_atts);
 	for (AttrNumber i = 0; i < num_proj_atts; i++)
 	{
@@ -128,7 +126,6 @@ open_all_datumstreamread_segfiles(AOCSScanDesc scan, AOCSFileSegInfo *segInfo)
 			continue;
 
 		datumstreamread_block(ds[attno], blockDirectory, attno);
-		elogif(re_debug, WARNING, "[RELOG][%s] open_all_datumstreamread_segfiles datumstreamread_block for [i=%d] = %p", __FUNCTION__, i, ds[attno]);
 
 		AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
 	}
@@ -1377,8 +1374,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 
 	Assert(ScanDirectionIsForward(direction));
 
-	elogif(re_debug, WARNING, "[RELOG][%s]", __FUNCTION__);
-
 	/* should not be in ANALYZE/SampleScan - we use a different API */
 	Assert((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) == 0);
 	Assert((scan->rs_base.rs_flags & SO_TYPE_SAMPLESCAN) == 0);
@@ -1388,7 +1383,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		scan->columnScanInfo.relationTupleDesc = slot->tts_tupleDescriptor;
 		/* Pin it! ... and of course release it upon destruction / rescan */
 		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
-		elogif(re_debug, WARNING, "[RELOG][%s] initscan_with_colinfo", __FUNCTION__);
 		initscan_with_colinfo(scan);
 	}
 
@@ -1415,7 +1409,6 @@ ReadNext:
 			}
 
 			err = open_next_scan_seg(scan);
-			elogif(re_debug, WARNING, "[RELOG][%s] open_next_scan_seg scan->cur_seg = %d, err %d", __FUNCTION__, scan->cur_seg, err);
 			if (err < 0)
 			{
 				/* No more seg, we are at the end */
@@ -1440,15 +1433,11 @@ ReadNext:
 		int tts_nvalid = anchor_attr+1;
 		/* Read from cur_seg */
 		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
-		//for (AttrNumber i = 0; i < 1; i++)
 		{
 			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
-			elogif(re_debug, WARNING, "[RELOG][%s] processing attno = %d (achor is %d)", __FUNCTION__, attno, anchor_attr);
 			if (attno > anchor_attr)
 				break;
-
-			//tts_nvalid++;
 
 			/*
 			 * Check missing value before reading from data files.
@@ -1485,7 +1474,6 @@ ReadNext:
 					/*
 					 * Ha, cannot read next block, we need to go to next seg
 					 */
-					elogif(re_debug, WARNING, "[RELOG][%s] close_cur_scan_seg", __FUNCTION__);
 					close_cur_scan_seg(scan);
 					goto ReadNext;
 				}
@@ -1504,16 +1492,12 @@ ReadNext:
 			 */
 			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-			elogif(re_debug, WARNING, "[RELOG][%s] d[%d] = %lu", __FUNCTION__, attno, d[attno]);
-
 			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 			if (rowNum == InvalidAORowNum &&
 				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
 			{
 				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
 				rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
-				elogif(re_debug, WARNING, "[RELOG][%s] init rowNum = %ld, blockFirstRowNum = %ld, nthInBlock = %ld, ds %p", __FUNCTION__,
-					rowNum, scan->columnScanInfo.ds[attno]->blockFirstRowNum, nthInBlock, scan->columnScanInfo.ds[attno]);
 			}
 #ifdef USE_ASSERT_CHECKING
 			/*
@@ -1553,7 +1537,6 @@ ReadNext:
 
 		slotAocs->current_scan = (void*)scan;
 		slotAocs->row_num = rowNum;
-		elogif(re_debug, WARNING, "[RELOG][%s] done for rowNum = %ld, TID = [%u:%u:%u]", __FUNCTION__, rowNum, aoTupleId.bytes_0_1, aoTupleId.bytes_2_3, aoTupleId.bytes_4_5);
 		return true;
 	}
 
@@ -2461,7 +2444,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	{
 		if (slot != NULL)
 		{
-			slot->tts_nvalid = tts_nvalid; // colno; // +1;
+			slot->tts_nvalid = tts_nvalid;
 			slot->tts_tid = *(ItemPointer)(aoTupleId);
 		}
 	}
@@ -3436,7 +3419,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 	 */
 	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
 	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
+		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * Initialize expression context for evaluating values and
@@ -3711,8 +3694,8 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			/* expr already planned */
 			ex->exprstate = ExecInitExpr((Expr *) ex->expr, NULL);
 		}
-		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
-		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS); // &TTSOpsVirtual);
+		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtualAOCS);
+		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * GENERATED expressions might reference the

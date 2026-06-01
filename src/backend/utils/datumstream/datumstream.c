@@ -707,7 +707,6 @@ create_datumstreamread(
 	acc->title = title;
 
 	acc->blockFirstRowNum = 1;
-	//acc->noBlocksRead = true;
 	Assert(acc->blockFileOffset == 0);
 	Assert(acc->blockRowCount == 0);
 
@@ -1305,8 +1304,6 @@ datumstreamread_block(DatumStreamRead * acc,
 	bool		readOK = false;
 
 	Assert(acc);
-
-	elogif(re_debug, WARNING, "[RELOG][%s] ds = %p", __FUNCTION__, acc);
 
 	acc->noBlocksRead = false;
 

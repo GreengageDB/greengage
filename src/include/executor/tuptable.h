@@ -20,7 +20,6 @@
 #include "access/tupdesc.h"
 #include "access/htup_details.h"
 #include "storage/buf.h"
-//#include "utils/guc.h"
 
 /*----------
  * The executor stores tuples in a "tuple table" which is a List of
@@ -228,7 +227,6 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual || (slot)->tts_ops == &TTSOpsVirtualAOCS)
-//#define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
@@ -348,8 +346,6 @@ extern void appendonly_free_memtuple(MemTuple tuple);
 #ifndef FRONTEND
 
 
-extern bool re_debug;
-
 /*
  * This function forces the entries of the slot's Datum/isnull arrays to be
  * valid at least up through the attnum'th entry.
@@ -357,7 +353,6 @@ extern bool re_debug;
 static inline void
 slot_getsomeattrs(TupleTableSlot *slot, int attnum)
 {
-	if (re_debug) elog(WARNING, "[RELOG][%s] slot->tts_nvalid = %u, attnum = %u", __FUNCTION__, slot->tts_nvalid, attnum);
 	if (slot->tts_nvalid < attnum)
 		slot_getsomeattrs_int(slot, attnum);
 }

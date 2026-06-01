@@ -170,12 +170,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	Assert(rowNum != InvalidAORowNum);
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
 	if (scan == NULL)
-	{
-		if (re_debug) elog(WARNING, "[RELOG][%s] early bail out (index scan?...)", __FUNCTION__);
 		return;
-	}
-
-	if (re_debug) elog(WARNING, "[RELOG][%s] natts = %u, scan->columnScanInfo.num_proj_atts = %u", __FUNCTION__, natts, scan->columnScanInfo.num_proj_atts);
 
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
@@ -189,16 +184,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
 		Assert(ds);
 
-		elogif(re_debug, WARNING, "[RELOG][%s] processing attno = %d for rowNum %ld", __FUNCTION__, attno, rowNum);
-
 		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-		/*
-		 * Check missing value before reading from data files.
-		 * 
-		 * We don't need to check the missing value for the anchor column.
-		 * In fact, we cannot do that either because we don't have the
-		 * row number until we've scanned the anchor column.
-		 */
 		if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
 		{
 			if (AO_ATTR_VAL_IS_MISSING(rowNum,
@@ -206,33 +192,13 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 									curseginfo->segno,
 									scan->columnScanInfo.attnum_to_rownum))
 			{
-				/*
-				 * XXX: should we temporarily store the missing value to avoid repeatedly calling
-				 * getmissingattr? The performance gain seems not much though. 
-				 */
 				d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
 				continue;
 			}
 		}
 
-		//bool force_block_read = false;
-#if 0
-		if (((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0 ||
-			(scan->rs_base.rs_flags & SO_TYPE_SAMPLESCAN) != 0 ||
-			scan->partialScan) &&
-			(scan->segrowsprocessed <= 1) &&
-			!force_block_read)
-		{
-			force_block_read = true;
-		}
-#endif
-		//force_block_read = ds->noBlocksRead;
-//force_block_read = false;
-
 		while (true)
 		{
-			elogif(re_debug, WARNING, "[RELOG][%s] ds->blockFirstRowNum %ld, ds->blockRowCount = %d, ds = %p", __FUNCTION__, ds->blockFirstRowNum, ds->blockRowCount, ds);
-
 			if (!ds->noBlocksRead)
 			{
 				Assert(rowNum >= ds->blockFirstRowNum);
@@ -241,7 +207,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 				if (rowNum <= lastRowNumInBlock)
 					break;
 			}
-			//force_block_read = false;
 
 			err = datumstreamread_block(ds, scan->blockDirectory, attno);
 			Assert(err >= 0);
@@ -256,23 +221,14 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 
 		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
 
-		if (re_debug) elog(WARNING, "[RELOG][%s] rowNum = %lu, rowNumInBlock = %u, ds->blockFirstRowNum = %lu, datumstreamread_nth(ds) = %d", __FUNCTION__,
-			rowNum, rowNumInBlock, ds->blockFirstRowNum, datumstreamread_nth(ds) );
 
 		while (rowNumInBlock > datumstreamread_nth(ds))
 		{
 			err = datumstreamread_advance(ds);
-			if (re_debug) elog(WARNING, "[RELOG][%s] datumstreamread_advance at %u", __FUNCTION__, __LINE__);
 			Assert(err > 0);
 		}
 
-		/*
-		 * Get the column's datum right here since the data structures
-		 * should still be hot in CPU data cache memory.
-		 */
 		datumstreamread_get(ds, &d[attno], &null[attno]);
-
-		if (re_debug) elog(WARNING, "[RELOG][%s] d[%d] = %ld", __FUNCTION__, attno, d[attno]);
 	}
 	slot->tts_nvalid = natts;
 }
