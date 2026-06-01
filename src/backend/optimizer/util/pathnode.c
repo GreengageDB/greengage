@@ -2080,6 +2080,14 @@ create_resultcache_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		subpath->parallel_safe;
 	pathnode->path.parallel_workers = subpath->parallel_workers;
 	pathnode->path.pathkeys = subpath->pathkeys;
+	pathnode->path.rescannable = subpath->rescannable;
+
+	/*
+	 * GPDB: a Result Cache (Memoize) inherits the distribution (locus) of its
+	 * subpath.  Without this the path reaches join-motion planning with an
+	 * uninitialized CdbPathLocus (FailedAssertion cdbpathlocus_is_valid).
+	 */
+	pathnode->path.locus = subpath->locus;
 
 	pathnode->subpath = subpath;
 	pathnode->hash_operators = hash_operators;

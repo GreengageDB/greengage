@@ -1110,7 +1110,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
 	if (is_from)
 	{
-		CopyFromState cstate;
+		CopyState	cstate;
 
 		Assert(rel);
 

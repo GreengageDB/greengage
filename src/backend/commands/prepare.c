@@ -308,16 +308,10 @@ ExecuteQuery(ParseState *pstate,
 		count = FETCH_ALL;
 	}
 
-	PortalDefineQuery(portal,
-					  NULL,
-					  query_string,
-					  entry->plansource->sourceTag,
-					  entry->plansource->commandTag,
-					  plan_list,
-					  cplan);
-
 	/*
-	 * Run the portal as appropriate.
+	 * Run the portal as appropriate.  (Note: PortalDefineQuery was already
+	 * called above, right after GetCachedPlan; the GPDB into-clause handling
+	 * mutates the plan in place, so it needs no second PortalDefineQuery.)
 	 */
 	PortalStart(portal, paramLI, eflags, GetActiveSnapshot(), NULL);
 

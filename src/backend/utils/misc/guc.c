@@ -6670,7 +6670,10 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 
 			/* Report new value if we changed it */
 			if (changed && (gconf->flags & GUC_REPORT))
-				ReportGUCOption(gconf);
+			{
+				gconf->status |= GUC_NEEDS_REPORT;
+				report_needed = true;
+			}
 
 			/*
 			 * If a guc's value changed on QD,
@@ -6685,9 +6688,6 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 				MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
 				gp_guc_restore_list = lappend(gp_guc_restore_list, gconf);
 				MemoryContextSwitchTo(oldcontext);
-			{
-				gconf->status |= GUC_NEEDS_REPORT;
-				report_needed = true;
 			}
 		}						/* end of stack-popping loop */
 
@@ -6700,7 +6700,6 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 
 	/* Update nesting level */
 	GUCNestLevel = nestLevel - 1;
-	}
 }
 
 

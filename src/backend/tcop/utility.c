@@ -1297,7 +1297,6 @@ ProcessUtilitySlow(ParseState *pstate,
 			case T_CreateForeignTableStmt:
 				{
 					List	   *stmts;
-					ListCell   *l;
 					List	   *more_stmts = NIL;
 					RangeVar   *table_rv = NULL;
 
@@ -1316,9 +1315,14 @@ ProcessUtilitySlow(ParseState *pstate,
 						stmts = transformCreateStmt((CreateStmt *) parsetree,
 													queryString);
 
-					/* ... and do it */
+					/*
+					 * ... and do it.  We can't use foreach() because we may
+					 * modify the list midway through, so pick off the elements
+					 * one at a time, the hard way.  (GPDB: partitions generated
+					 * below are re-fed through "more_stmts" and the label.)
+					 */
 			process_more_stmts:
-					foreach(l, stmts)
+					while (stmts != NIL)
 					{
 						Node	   *stmt = (Node *) linitial(stmts);
 
@@ -1330,6 +1334,9 @@ ProcessUtilitySlow(ParseState *pstate,
 							char		relKind = RELKIND_RELATION;
 							Datum		toast_options;
 							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
+
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->relation;
 
 							/*
 							 * If this T_CreateStmt was dispatched and we're a QE

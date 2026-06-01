@@ -324,7 +324,7 @@ gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 				hctl.keysize = TMGIDSIZE;	/* GID */
 				hctl.entrysize = sizeof(InDoubtDtx);
 
-				htab = hash_create("InDoubtDtxHash", 10, &hctl, HASH_ELEM);
+				htab = hash_create("InDoubtDtxHash", 10, &hctl, HASH_ELEM | HASH_STRINGS);
 
 				if (htab == NULL)
 					ereport(FATAL,

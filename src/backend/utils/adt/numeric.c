@@ -484,12 +484,22 @@ static void dump_var(const char *str, NumericVar *var);
 		(v)->neg_digits = NULL; 	\
 	} while (0)
 
-#define init_var(v)		memset(v, 0, sizeof(NumericVar))
-
 #define quick_init_var(v) \
 	do { \
 		(v)->buf = (v)->ndb; \
 		(v)->digits = NULL; \
+	} while (0)
+
+/*
+ * GPDB: NumericVar carries a local digit buffer (ndb[]); init_var must point
+ * buf at that local buffer (via quick_init_var), not leave it NULL.  Upstream
+ * PG14's "memset(v, 0, sizeof(NumericVar))" leaves buf == NULL, so the GPDB
+ * digitbuf_free() macro ("if (buf != ndb) pfree(buf)") would pfree(NULL).
+ */
+#define init_var(v) \
+	do { \
+		quick_init_var((v)); \
+		(v)->ndigits = (v)->weight = (v)->sign = (v)->dscale = 0; \
 	} while (0)
 
 #define digitbuf_alloc(ndigits) \

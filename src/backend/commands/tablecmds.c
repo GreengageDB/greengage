@@ -5902,11 +5902,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			cmd = ATParseTransformCmd(wqueue, tab, rel, cmd, false, lockmode,
 									  cur_pass, context, &cmd->execStmts);
 			/* Might not have gotten AddConstraint back from parse transform */
-			/* Transform the command only during initial examination */
-			if (cur_pass == AT_PASS_ADD_CONSTR)
-				cmd = ATParseTransformCmd(wqueue, tab, rel, cmd,
-										  false, lockmode,
-										  cur_pass, context, NULL);
 			/* Depending on constraint type, might be no more work to do now */
 			if (cmd != NULL)
 				address =
@@ -5918,11 +5913,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			cmd = ATParseTransformCmd(wqueue, tab, rel, cmd, true, lockmode,
 									  cur_pass, context, &cmd->execStmts);
 			/* Might not have gotten AddConstraint back from parse transform */
-			/* Transform the command only during initial examination */
-			if (cur_pass == AT_PASS_ADD_CONSTR)
-				cmd = ATParseTransformCmd(wqueue, tab, rel, cmd,
-										  true, lockmode,
-										  cur_pass, context, NULL);
 			/* Depending on constraint type, might be no more work to do now */
 			if (cmd != NULL)
 				address =

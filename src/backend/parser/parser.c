@@ -75,6 +75,16 @@ raw_parser(const char *str, RawParseMode mode)
 	}
 	PG_END_TRY();
 
+	/*
+	 * GPDB: initialize the lexical tie-in used to recognize a trailing
+	 * PARTITION BY in CREATE TABLE as the PARTITION_TAIL token (see
+	 * base_yylex()).  Without this the stack-garbage value can spuriously
+	 * turn a legitimate PARTITION keyword (e.g. a window "OVER (PARTITION
+	 * BY ...)") into PARTITION_TAIL, yielding "syntax error at or near
+	 * PARTITION".
+	 */
+	yyextra.tail_partition_magic = false;
+
 	/* base_yylex() only needs us to initialize the lookahead token, if any */
 	if (mode == RAW_PARSE_DEFAULT)
 		yyextra.have_lookahead = false;

@@ -1590,25 +1590,6 @@ socket_is_send_pending(void)
 static int
 socket_putmessage(char msgtype, const char *s, size_t len)
 {
-	if (PqCommBusy)
-		return 0;
-	PqCommBusy = true;
-
-	if (msgtype)
-	{
-		if (internal_putbytes(&msgtype, 1))
-			goto fail;
-	}
-
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-	{
-		uint32		n32;
-
-		n32 = pg_hton32((uint32) (len + 4));
-		if (internal_putbytes((char *) &n32, 4))
-			goto fail;
-	}
-
 	uint32		n32;
 
 	Assert(msgtype != 0);
