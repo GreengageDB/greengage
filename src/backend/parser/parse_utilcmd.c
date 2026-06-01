@@ -290,6 +290,7 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString)
 	cxt.ckconstraints = NIL;
 	cxt.fkconstraints = NIL;
 	cxt.ixconstraints = NIL;
+	cxt.inh_indexes = NIL;
 	cxt.likeclauses = NIL;
 	cxt.extstats = NIL;
 	cxt.attr_encodings = stmt->attr_encodings;
