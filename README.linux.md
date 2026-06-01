@@ -1,15 +1,12 @@
 # Platforms
 
-## For CentOS 7
+## For CentOS 7:
 
-- Install dependencies using `README.CentOS.bash`:
-
+- Install dependencies using README.CentOS.bash script:
   ```bash
   ./README.CentOS.bash
   ```
-
-  > **Note:** CentOS 7 is EOL — configure `yum` to use a valid repo
-  > (e.g., `vault.centos.org`) before installing dependencies.
+  Note: CentOS 7 is EOL — configure `yum` to use a valid repo (e.g., `vault.centos.org`) before installing dependencies.
 
 ## For Rocky Linux (8 or 9)
 
