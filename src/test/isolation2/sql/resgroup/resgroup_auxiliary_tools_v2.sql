@@ -280,6 +280,7 @@ $$ LANGUAGE plpython3u;
     postgres = ctypes.CDLL(None)
     get_bdi_of_path = postgres['get_bdi_of_path']
     get_tablespace_path = postgres['get_tablespace_path']
+    get_tablespace_path.restype = ctypes.c_char_p
     get_tablespace_oid = postgres['get_tablespace_oid']
 
     # get group oid
