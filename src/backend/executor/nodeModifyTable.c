@@ -3498,6 +3498,16 @@ ExecEndModifyTable(ModifyTableState *node)
 		int			j;
 		ResultRelInfo *resultRelInfo = node->resultRelInfo + i;
 
+		/*
+		 * Let the table AM tear down any per-DML backend-local state set up by
+		 * table_dml_init() in ExecInitModifyTable().  For append-optimized
+		 * tables this finishes the insert descriptor, which flushes the segment
+		 * file, updates pg_aoseg row counts and releases the metadata snapshot;
+		 * skipping it loses all inserted rows and leaks the snapshot.
+		 */
+		if (resultRelInfo->ri_RelationDesc->rd_tableam)
+			table_dml_finish(resultRelInfo->ri_RelationDesc);
+
 		if (!resultRelInfo->ri_usesFdwDirectModify &&
 			resultRelInfo->ri_FdwRoutine != NULL &&
 			resultRelInfo->ri_FdwRoutine->EndForeignModify != NULL)
