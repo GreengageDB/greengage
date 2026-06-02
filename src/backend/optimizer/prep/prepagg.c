@@ -548,6 +548,24 @@ get_agg_clause_costs(PlannerInfo *root, AggSplit aggsplit, AggClauseCosts *costs
 		AggTransInfo *transinfo = (AggTransInfo *) lfirst(lc);
 
 		/*
+		 * GPDB: Record whether any aggregate cannot be combined, or (for an
+		 * INTERNAL transition state) cannot be serialized.  The MPP planner
+		 * consults these flags (AggClauseCosts.hasNonCombine / hasNonSerial)
+		 * to decide whether it may split aggregation into multiple stages with
+		 * a Motion in between.  Splitting an aggregate that lacks a combine or
+		 * serialization function would reference function OID 0 and fail with
+		 * "cache lookup failed for function 0" (e.g. string_agg).  This mirrors
+		 * the root->hasNonPartialAggs / root->hasNonSerialAggs bookkeeping done
+		 * when the transinfos are first built.
+		 */
+		if (!OidIsValid(transinfo->combinefn_oid))
+			costs->hasNonCombine = true;
+		else if (transinfo->aggtranstype == INTERNALOID &&
+				 (!OidIsValid(transinfo->serialfn_oid) ||
+				  !OidIsValid(transinfo->deserialfn_oid)))
+			costs->hasNonSerial = true;
+
+		/*
 		 * Add the appropriate component function execution costs to
 		 * appropriate totals.
 		 */
