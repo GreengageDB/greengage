@@ -1172,7 +1172,6 @@ transformOnConflictClause(ParseState *pstate,
 	{
 		Relation	targetrel = pstate->p_target_relation;
 		RangeTblEntry    *rte = pstate->p_target_nsitem->p_rte; /* GPDB */
-		ParseNamespaceItem *exclNSItem;
 		RangeTblEntry *exclRte;
 
 		/*
