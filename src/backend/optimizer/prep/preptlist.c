@@ -282,15 +282,13 @@ preprocess_targetlist(PlannerInfo *root)
 	}
 
 	/*
-	 * If there's an ON CONFLICT UPDATE clause, preprocess its targetlist too
-	 * while we have the relation open.
+	 * NB: unlike PG13, an ON CONFLICT UPDATE clause's targetlist must NOT be
+	 * expanded to full relation width here.  PG14's ExecBuildUpdateProjection()
+	 * (called with the SET column numbers in ModifyTable.onConflictCols) copies
+	 * the unchanged columns from the existing tuple itself; expanding the list
+	 * would mark every column as "assigned" and the unchanged columns would be
+	 * projected as NULL instead.
 	 */
-	if (parse->onConflict)
-		parse->onConflict->onConflictSet =
-			expand_targetlist(root, parse->onConflict->onConflictSet,
-							  CMD_UPDATE,
-							  result_relation,
-							  target_relation);
 	root->processed_tlist = tlist;
 
 	if (target_relation)
