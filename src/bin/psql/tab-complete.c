@@ -1007,6 +1007,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
 	{"EXTERNAL TABLE", NULL, NULL, NULL},
+	{"EXTERNAL WEB TABLE", NULL, NULL, NULL},
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL, NULL},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
@@ -2304,6 +2305,9 @@ psql_completion(const char *text, int start, int end)
 		completion_info_charp = prev2_wd;
 		COMPLETE_WITH_QUERY(Query_for_list_of_available_extension_versions);
 	}
+
+	else if(HeadMatches("ALTER|CREATE|DROP", "EXTERNAL"))
+		COMPLETE_WITH("WEB TABLE", "TABLE");
 
 	/* Distribution rules for CREATE WRITABLE EXTERNAL tables, 
 	beacause they interfere with CREATE TABLE distribution rules 
