@@ -2996,6 +2996,18 @@ vacuum_params_to_options_list(VacuumParams *params)
 		optmask &= ~VACOPT_DISABLE_PAGE_SKIPPING;
 	}
 
+	/*
+	 * VACOPT_PROCESS_TOAST (new in PG14) is set by default, unlike the boolean
+	 * options above.  Always dispatch its value -- not just when set -- so the
+	 * segments process or skip TOAST tables exactly as the coordinator decided;
+	 * omitting it would let a segment fall back to its own default (on) and
+	 * disagree with a "VACUUM (PROCESS_TOAST off)".
+	 */
+	options = lappend(options, makeDefElem("process_toast",
+										   (Node *) makeInteger((optmask & VACOPT_PROCESS_TOAST) ? 1 : 0),
+										   -1));
+	optmask &= ~VACOPT_PROCESS_TOAST;
+
 	if (optmask & VACUUM_AO_PHASE_MASK)
 	{
 		options = lappend(options, makeDefElem("ao_phase",
@@ -3028,19 +3040,22 @@ vacuum_params_to_options_list(VacuumParams *params)
 	 * vacuum request to QEs as distributed transaction) for GPDB7.
 	 * See more details in the head comments of autovacuum.c.
 	*/
+	/*
+	 * truncate and index_cleanup are tri-state in PG14 (VACOPTVALUE_UNSPECIFIED
+	 * / AUTO / DISABLED / ENABLED).  Only dispatch an explicit DISABLED/ENABLED
+	 * choice; for UNSPECIFIED or AUTO (the default for a plain VACUUM) emit
+	 * nothing and let each segment apply its own default, which resolves to the
+	 * same behaviour.  (Previously this errored out for the AUTO default.)
+	 */
 	if (params->truncate == VACOPTVALUE_DISABLED)
 		options = lappend(options, makeDefElem("truncate", (Node *) makeInteger(0), -1));
 	else if (params->truncate == VACOPTVALUE_ENABLED)
 		options = lappend(options, makeDefElem("truncate", (Node *) makeInteger(1), -1));
-	else
-		elog(ERROR, "unexpected VACUUM 'truncate' option '%d'", (int) params->truncate);
 
 	if (params->index_cleanup == VACOPTVALUE_DISABLED)
 		options = lappend(options, makeDefElem("index_cleanup", (Node *) makeInteger(0), -1));
 	else if (params->index_cleanup == VACOPTVALUE_ENABLED)
 		options = lappend(options, makeDefElem("index_cleanup", (Node *) makeInteger(1), -1));
-	else
-		elog(ERROR, "unexpected VACUUM 'index_cleanup' option '%d'", (int) params->index_cleanup);
 
 	return options;
 }
