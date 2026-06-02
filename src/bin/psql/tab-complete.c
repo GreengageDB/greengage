@@ -2766,10 +2766,14 @@ psql_completion(const char *text, int start, int end)
 								"UNION SELECT '*'");
 	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny) ||
 			TailMatches("IO_LIMIT", "'", MatchAny))
-			COMPLETE_WITH(":");
+		COMPLETE_WITH(":");
 	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny, ":") ||
 			TailMatches("IO_LIMIT", "'", MatchAny, ":"))
-			COMPLETE_WITH("wpbs", "rbps", "wiops", "riops");
+		COMPLETE_WITH("wbps", "rbps", "wiops", "riops");
+	else if(TailMatches("wbps|rbps|wiops|riops"))
+		COMPLETE_WITH("=");
+	else if(TailMatches("wbps|rbps|wiops|riops", "="))
+		COMPLETE_WITH("max");
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
 	/* Complete CREATE VIEW <name> with AS */
