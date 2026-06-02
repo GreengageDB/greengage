@@ -66,24 +66,6 @@
 #include "port/atomics.h"
 
 /*
- * The tuplestore files for all share input scans are held in one SharedFileSet.
- * The SharedFileSet is attached to a single DSM segment that persists until
- * postmaster shutdown. When the reference count of the SharedFileSet reaches
- * zero, the SharedFileSet is automatically destroyed, but it is re-initialized
- * the next time it's needed.
- *
- * The SharedFileSet deletes any remaining files when the reference count
- * reaches zero, but we don't rely on that mechanism. All the files are
- * held in the same SharedFileSet, so it cannot be recycled until all
- * ShareInputScans in the system have finished, which might never happen if
- * new queries are started continuously. The shared tuplestore entries
- * are reference counted separately, and we clean up the files backing each
- * individual ShareInputScan whenever its reference count reaches zero.
- */
-static dsm_handle *shareinput_Xslice_dsm_handle_ptr;
-static SharedFileSet *shareinput_Xslice_fileset;
-
-/*
  * For local (i.e. intra-slice) variants, we use a 'shareinput_local_state'
  * to track the status. It is analogous to 'shareinput_share_state' used for
  * cross-slice scans, but we don't need to keep it in shared memory. These
@@ -150,7 +132,7 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 
 				shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 				tuplestore_make_shared_many(ts,
-											get_shareinput_fileset(),
+											NULL,
 											rwfile_prefix,
 											sisc->nconsumers + 1);
 
@@ -231,7 +213,7 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 			Assert(sisc->cross_slice);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
-			ts = tuplestore_open_shared_extended(get_shareinput_fileset(), rwfile_prefix, skip_waiting);
+			ts = tuplestore_open_shared_extended(NULL, rwfile_prefix, skip_waiting);
 
 			MemoryContextSwitchTo(old_context);
 		}
@@ -602,22 +584,33 @@ shareinput_create_bufname_prefix(char* p, int size, int share_id)
 			 gp_session_id, MyProc->queryCommandId, share_id);
 }
 
+/*
+ * Legacy ABI entry point. Is not supported.
+ *
+ * Kept for ABI support.
+ */
 Size
 ShareInputShmemSize(void)
 {
-	return sizeof(dsm_handle);
-}
-
-void
-ShareInputShmemInit(void)
-{
-	bool		found;
-
-	shareinput_Xslice_dsm_handle_ptr =
-		ShmemInitStruct("ShareInputScan DSM handle", sizeof(dsm_handle), &found);
+	ereport(ERROR, errmsg("Unsupported sharefileset shared memory initializer."));
 }
 
 /*
+ * Legacy ABI entry point. Is not supported.
+ *
+ * Kept for ABI support.
+ */
+void
+ShareInputShmemInit(void)
+{
+	ereport(ERROR, errmsg("Unsupported sharefileset shared memory initializer."));
+}
+
+/*
+ * Legacy ABI entry point. Is not supported.
+ *
+ * Kept for ABI support.
+ * 
  * Get reference to the SharedFileSet used to hold all the tuplestore files.
  *
  * This is exported so that it can also be used by the INITPLAN function
@@ -626,44 +619,7 @@ ShareInputShmemInit(void)
 SharedFileSet *
 get_shareinput_fileset(void)
 {
-	dsm_handle		handle;
-
-	if (shareinput_Xslice_fileset == NULL)
-	{
-		dsm_segment *seg;
-
-		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
-
-		handle = *shareinput_Xslice_dsm_handle_ptr;
-
-		if (handle)
-		{
-			seg = dsm_attach(handle);
-			if (seg == NULL)
-				elog(ERROR, "could not attach to ShareInputScan DSM segment");
-			dsm_pin_mapping(seg);
-
-			shareinput_Xslice_fileset = dsm_segment_address(seg);
-		}
-		else
-		{
-			seg = dsm_create(sizeof(SharedFileSet), 0);
-			dsm_pin_segment(seg);
-			*shareinput_Xslice_dsm_handle_ptr = dsm_segment_handle(seg);
-			dsm_pin_mapping(seg);
-
-			shareinput_Xslice_fileset = dsm_segment_address(seg);
-		}
-
-		if (shareinput_Xslice_fileset->refcnt == 0)
-			SharedFileSetInit(shareinput_Xslice_fileset, seg);
-		else
-			SharedFileSetAttach(shareinput_Xslice_fileset, seg);
-
-		LWLockRelease(ShareInputScanLock);
-	}
-
-	return shareinput_Xslice_fileset;
+	ereport(ERROR, errmsg("Unsupported sharefileset getter."));
 }
 
 void
