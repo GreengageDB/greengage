@@ -2955,6 +2955,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			List	   *updateColnosLists = NIL;
 			List	   *withCheckOptionLists = NIL;
 			List	   *returningLists = NIL;
+			List	   *is_split_updates = NIL;
 			List	   *rowMarks;
 
 			if (bms_membership(root->all_result_relids) == BMS_MULTIPLE)
@@ -2982,6 +2983,17 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 					/* Build per-target-rel lists needed by ModifyTable */
 					resultRelations = lappend_int(resultRelations,
 												  resultRelation);
+
+					/*
+					 * GPDB: one is-split-update flag per result relation.  All
+					 * leaf partitions share the parent's distribution policy,
+					 * so the split-update decision (root->is_split_update) is
+					 * uniform across them.  This list must stay the same length
+					 * as resultRelations (see make_modifytable() and
+					 * ExecInitModifyTable()).
+					 */
+					is_split_updates = lappend_int(is_split_updates,
+												   root->is_split_update);
 					if (parse->commandType == CMD_UPDATE)
 					{
 						List	   *update_colnos = root->update_colnos;
@@ -3037,6 +3049,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 					 * net win.)
 					 */
 					resultRelations = list_make1_int(parse->resultRelation);
+					is_split_updates = list_make1_int(root->is_split_update);
 					if (parse->commandType == CMD_UPDATE)
 						updateColnosLists = list_make1(root->update_colnos);
 					if (parse->withCheckOptions)
@@ -3049,6 +3062,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			{
 				/* Single-relation INSERT/UPDATE/DELETE. */
 				resultRelations = list_make1_int(parse->resultRelation);
+				is_split_updates = list_make1_int(root->is_split_update);
 				if (parse->commandType == CMD_UPDATE)
 					updateColnosLists = list_make1(root->update_colnos);
 				if (parse->withCheckOptions)
@@ -3089,7 +3103,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 										updateColnosLists,
 										withCheckOptionLists,
 										returningLists,
-										list_make1_int(root->is_split_update),
+										is_split_updates,
 										rowMarks,
 										parse->onConflict,
 										assign_special_exec_param(root));
