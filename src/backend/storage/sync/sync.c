@@ -105,6 +105,16 @@ static const SyncOps syncsw[] = {
 		.sync_unlinkfiletag = mdunlinkfiletag,
 		.sync_filetagmatches = mdfiletagmatches
 	},
+	/*
+	 * Append-optimized (AO/AOCS) segment files.  aosyncfiletag() lives in
+	 * md.c; the deferred unlink only targets the base segfile and the filter
+	 * matches by database, so md's handlers are correct for AO too.
+	 */
+	[SYNC_HANDLER_AO] = {
+		.sync_syncfiletag = aosyncfiletag,
+		.sync_unlinkfiletag = mdunlinkfiletag,
+		.sync_filetagmatches = mdfiletagmatches
+	},
 	/* pg_xact */
 	[SYNC_HANDLER_CLOG] = {
 		.sync_syncfiletag = clogsyncfiletag
