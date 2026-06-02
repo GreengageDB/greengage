@@ -1166,11 +1166,19 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				 * Fix frame edges. PostgreSQL uses fix_scan_expr here, but
 				 * in GPDB, we allow the ROWS/RANGE expressions to contain
 				 * references to the subplan, so we have to use fix_upper_expr.
+				 * (Using fix_scan_expr leaves a column-valued offset's Vars
+				 * with base-relation varnos instead of OUTER_VAR, so
+				 * compute_start_end_offsets() then evaluates them against the
+				 * wrong slot and the WindowAgg crashes.)
 				 */
+				subplan_itlist = build_tlist_index(plan->lefttree->targetlist);
 				wplan->startOffset =
-					fix_scan_expr(root, wplan->startOffset, rtoffset, 1);
+					fix_upper_expr(root, wplan->startOffset, subplan_itlist,
+								   OUTER_VAR, rtoffset, 1);
 				wplan->endOffset =
-					fix_scan_expr(root, wplan->endOffset, rtoffset, 1);
+					fix_upper_expr(root, wplan->endOffset, subplan_itlist,
+								   OUTER_VAR, rtoffset, 1);
+				pfree(subplan_itlist);
 			}
 			break;
 		case T_Result:
