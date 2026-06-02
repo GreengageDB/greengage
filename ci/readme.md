@@ -1,138 +1,110 @@
+# How to run tests
 
-# Running Tests
+## Build docker gpdb image with developer options
 
-## Building the Image
+Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
 
-> **Important: Before building the image, make sure to initialize and update**
-> **Git submodules from the repository root:**
->
-> ```bash
-> git submodule update --init --recursive
-> ```
->
-> This ensures that all dependencies are properly fetched before `docker build`
-> Missing submodules will cause build failures.
-
-Set the target environment:
-
-```bash
-# Ubuntu 22.04 (default)
-export TARGET_OS=ubuntu
-export OS_VERSION=22.04
-
-# Ubuntu 24.04
-export TARGET_OS=ubuntu
-export OS_VERSION=24.04
-
-# Rocky Linux 8
-export TARGET_OS=rockylinux
-export OS_VERSION=8
-
-# Rocky Linux 9
-export TARGET_OS=rockylinux
-export OS_VERSION=9
+```bash 
+docker build -t gpdb6_regress:latest -f ci/Dockerfile.ubuntu .
 ```
 
-Build the image from the repository root:
+To build an image based on Ubuntu 24.04, specify the version in build args:
 
 ```bash
-docker build -t ggdb6_${TARGET_OS}${OS_VERSION} \
-  --build-arg OS_VERSION \
-  -f ci/Dockerfile.${TARGET_OS} .
+docker build -t gpdb6_regress:latest --build-arg OS_VERSION=24.04 -f ci/Dockerfile.ubuntu .
 ```
 
-All test commands below use `ggdb6_${TARGET_OS}${OS_VERSION}` as the
-image name. Make sure the variables are exported before running them.
 
-## Regression Tests
+## Full regression tests suite run
 
-Runs the full suite via a demo cluster inside the container:
+We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:
 
 ```bash
-docker run --name gpdb6_regress --rm -it \
-  -e TEST_OS=${TARGET_OS} \
+docker run --name gpdb6_opt_on --rm -it -e TEST_OS=centos \
   -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on' installcheck-world" \
-  --sysctl 'kernel.sem=500 1024000 200 4096' \
-  ggdb6_${TARGET_OS}${OS_VERSION} \
-  bash -c "ssh-keygen -A && /usr/sbin/sshd && \
-    bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash"
+  --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+  bash -c "ssh-keygen -A && /usr/sbin/sshd && bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash"
 ```
 
-To switch from ORCA to the PostgreSQL planner, set:
+* we need to modify `MAKE_TEST_COMMAND` environment variable to run different suite. e.g. we may run test againt Postgres optimizer or ORCA with altering `PGOPTIONS` environment variable;
+* we need to run container as `--privileged` to run debugger inside it
+* we need to increase semaphore amount to be able to run demo cluster
+* we need running ssh server to be able to run demo cluster
+
+## ORCA linter
 
 ```bash
-PGOPTIONS='-c optimizer=off'
+docker build -t orca-linter:test -f ci/Dockerfile.linter .
+docker run --rm -it orca-linter:test
 ```
 
-Add `--privileged` to enable debugger support inside the container.
+The work directory must be clean to pass this test. Please, stage or even commit your changes.
 
-## ORCA Unit Tests
+## ORCA unit test run
 
 ```bash
-docker run --rm -it ggdb6_${TARGET_OS}${OS_VERSION} \
-  bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
+docker run --rm -it gpdb6_regress:latest bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
 ```
 
-## ORCA Linter
+## How to run demo cluster inside docker container manually
 
-The working tree must be clean — stage or commit changes first:
+1. Build or pull from internal registry (see above) needed image
+1. Start container with
+   ```bash
+   docker run --name gpdb6_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+     bash -c "ssh-keygen -A && /usr/sbin/sshd && bash"
+   ```
+1. Run the next commands in container
+   ```bash
+   source gpdb_src/concourse/scripts/common.bash
+   # this command unpack binaries to `/usr/local/greengage-db-devel/`
+   install_and_configure_gpdb
+   gpdb_src/concourse/scripts/setup_gpadmin_user.bash
+   make_cluster
+   su - gpadmin -c '
+   source /usr/local/greengage-db-devel/greengage_path.sh;
+   source gpdb_src/gpAux/gpdemo/gpdemo-env.sh; 
+   psql postgres'
+   ```
 
+## Behave test run
+
+Behave tests now can run locally with docker-compose.
+
+Feature files are located in `gpMgmt/test/behave/mgmt_utils`
+Before run tests you need to build a docker-image
 ```bash
-docker build -t ggdb6_linter -f ci/Dockerfile.linter .
-docker run --rm -it ggdb6_linter
+docker build -t "greengage6_regress:${BRANCH_NAME}" -f ci/Dockerfile.ubuntu .
 ```
 
-## Behave Tests
-
-Feature files are in `gpMgmt/test/behave/mgmt_utils`.
-
+Command to run features:
 ```bash
-export IMAGE=ggdb6_${TARGET_OS}${OS_VERSION}
-
-# Run all features
+# Run all tests
+export IMAGE="greengage6_regress:${BRANCH_NAME}"
 bash ci/scripts/run_behave_tests.bash
 
 # Run specific features
 bash ci/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
-Allure output is written to `allure-results`. Reports include GPDB logs
-for failed tests. `gpMgmt/tests` must be on `PYTHONPATH`.
 
-> **Note:** `allure-behave` is pinned to an older version for Python 2
-> compatibility.
+Tests use `allure-behave` package and store allure output files in `allure-results` folder
+**NOTE** that `allure-behave` has too old a version because it is compatible with `python2`.
+Also, the allure report for each failed test has gpdb logs attached files. See `gpMgmt/test/behave_utils/ci/formatter.py`
+It required to add `gpMgmt/tests` directory to `PYTHONPATH`. 
 
-## Resource Group Tests
+Greengage cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
+All tests are run in one way or another on the demo cluster, wherever possible. 
+For example, cross_subnet tests currently not worked because of too complex cluster preconditions.
+Behave tests run either on the concourse cluster (cluster on several hosts) or on the demo (cluster on single host),
+while tests with both tags (concourse and demo) run only on the concourse cluster to avoid running the same test twice.
+
+Tests in a `docker compose` cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
+
+Docker containers have installed `sigar` libraries. It is required only for `gpperfmon` tests.
+
+## Resource group test
 
 ```bash
 bash ci/scripts/run_resgroup_test.bash
 ```
-
-## Running a Demo Cluster Manually
-
-1. Start a container:
-
-   ```bash
-   docker run --name gpdb6_demo --rm -it \
-     --sysctl 'kernel.sem=500 1024000 200 4096' \
-     ggdb6_${TARGET_OS}${OS_VERSION} \
-     bash -c "ssh-keygen -A && /usr/sbin/sshd && bash"
-   ```
-
-2. Set up and start the cluster inside the container:
-
-   ```bash
-   source gpdb_src/concourse/scripts/common.bash
-   install_and_configure_gpdb
-   gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-   make_cluster
-   ```
-
-3. Connect to the database:
-
-   ```bash
-   su - gpadmin -c '
-     source /usr/local/greengage-db-devel/greengage_path.sh
-     source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
-     psql postgres'
-   ```
