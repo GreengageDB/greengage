@@ -915,6 +915,23 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 					  InvalidOid,
 					  0);
 		add_row_identity_var(root, var, rtindex, "ctid");
+
+		/*
+		 * GPDB: Also emit gp_segment_id.  In an MPP cluster the executor must
+		 * know which segment the target row lives on so that the Explicit
+		 * Motion can route the modified/deleted row back to its home segment
+		 * (see cdbpathtoplan_create_motion_plan()).  This mirrors the ctid
+		 * junk column and rides the same ROWID_VAR machinery, so it is shared
+		 * correctly across the leaf relations of an inherited/partitioned
+		 * UPDATE/DELETE.
+		 */
+		var = makeVar(rtindex,
+					  GpSegmentIdAttributeNumber,
+					  INT4OID,
+					  -1,
+					  InvalidOid,
+					  0);
+		add_row_identity_var(root, var, rtindex, "gp_segment_id");
 	}
 	else if (relkind == RELKIND_FOREIGN_TABLE)
 	{
