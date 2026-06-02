@@ -461,15 +461,21 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		sliceTable = InitSliceTable(estate, queryDesc->plannedstmt);
 		estate->es_sliceTable = sliceTable;
 
+		/*
+		 * Always set up a QueryDispatchDesc on the QD, even for a QD-only plan
+		 * (no gang, no Motion).  CREATE TABLE AS / SELECT INTO stash the
+		 * CreateStmt in ddesc (create_ctas_internal) regardless of whether the
+		 * SELECT itself dispatches, so a missing ddesc would crash there.
+		 */
+		if (queryDesc->ddesc == NULL)
+		{
+			queryDesc->ddesc = makeNode(QueryDispatchDesc);
+			queryDesc->ddesc->useChangedAOOpts = true;
+		}
+
 		if (sliceTable->slices[0].gangType != GANGTYPE_UNALLOCATED ||
 			sliceTable->hasMotions)
 		{
-			if (queryDesc->ddesc == NULL)
-			{
-				queryDesc->ddesc = makeNode(QueryDispatchDesc);;
-				queryDesc->ddesc->useChangedAOOpts = true;
-			}
-
 			/* Pass EXPLAIN ANALYZE flag to qExecs. */
 			estate->es_sliceTable->instrument_options = queryDesc->instrument_options;
 
