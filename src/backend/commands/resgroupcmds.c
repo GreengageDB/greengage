@@ -1190,9 +1190,6 @@ freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx)
 
 /*
  * Compare two io_limit lists through their canonical catalog representation.
- *
- * dumpio() returns a palloc'ed string and also allocates temporary
- * StringInfo state, so call this only in a short-lived context.
  */
 static bool
 resGroupIOLimitMatches(List *left, List *right)

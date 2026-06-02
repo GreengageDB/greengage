@@ -100,8 +100,12 @@ SELECT (seg->>'segid')::int AS gp_segment_id,
                 json_each_text(cap_obj) AS cap
            WHERE cap.key::int = 6
        ) AS min_cost,
-       -- IO_LIMIT is a placeholder in pg_resgroup_get_status_kv().
-       '-1'::text AS io_limit
+       (
+           SELECT cap.value::text
+           FROM json_array_elements(grp->'caps') AS cap_obj,
+                json_each_text(cap_obj) AS cap
+           WHERE cap.key::int = 7
+       ) AS io_limit
 FROM pg_resgroup_get_status_kv('dump') d,
      json_array_elements((d.value::json)->'info') AS seg,
      json_array_elements(seg->'groups') AS grp,

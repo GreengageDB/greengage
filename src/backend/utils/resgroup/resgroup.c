@@ -2987,11 +2987,6 @@ resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue)
 	appendStringInfo(str, "]},");
 }
 
-/*
- * Dump resource group capabilities.
- *
- * IO_LIMIT is intentionally reported as 0.
- */
 static void
 resgroupDumpCaps(StringInfo str, ResGroupCaps *caps)
 {
@@ -3014,13 +3009,21 @@ resgroupDumpCaps(StringInfo str, ResGroupCaps *caps)
 	appendStringInfo(str, "{\"%d\":%d},",
 					 RESGROUP_LIMIT_TYPE_MIN_COST,
 					 caps->min_cost);
-	/*
-	 * NOTE: Return a placeholder instead of calling dumpio(), which creates
-	 * palloc'ed temporary state.
-	 */
-	appendStringInfo(str, "{\"%d\":%d}",
-					 RESGROUP_LIMIT_TYPE_IO_LIMIT,
-					 0);
+	if (caps->io_limit != NIL)
+	{
+		char *io_limit_str = NULL;
+		io_limit_str = cgroupOpsRoutine->dumpio(caps->io_limit);
+		appendStringInfo(str, "{\"%d\":\"%s\"}",
+						 RESGROUP_LIMIT_TYPE_IO_LIMIT,
+						 io_limit_str);
+		pfree(io_limit_str);
+	}
+	else
+	{
+		appendStringInfo(str, "{\"%d\":\"%s\"}",
+						 RESGROUP_LIMIT_TYPE_IO_LIMIT,
+						 DefaultIOLimit);
+	}
 	appendStringInfo(str, "]");
 }
 

@@ -524,8 +524,9 @@ char *
 io_limit_dump(List *limit_list)
 {
 	ListCell *cell;
+	StringInfoData result;
 
-	StringInfo result = makeStringInfo();
+	initStringInfo(&result);
 
 	foreach(cell, limit_list)
 	{
@@ -535,26 +536,26 @@ io_limit_dump(List *limit_list)
 		uint64 *value = (uint64 *) limit->ioconfig;
 
 		if (limit->tablespace_oid != InvalidOid)
-			appendStringInfo(result, "%u:", limit->tablespace_oid);
+			appendStringInfo(&result, "%u:", limit->tablespace_oid);
 		else
-			appendStringInfo(result, "*:");
+			appendStringInfo(&result, "*:");
 
 		for(i = 0; i < fields_length; i++)
 		{
 			if ((*(value + i) != IO_LIMIT_MAX) && (*(value + i) != IO_LIMIT_EMPTY))
-				appendStringInfo(result, "%s=%lu", IOconfigFields[i], *(value + i));
+				appendStringInfo(&result, "%s=%lu", IOconfigFields[i], *(value + i));
 			else
-				appendStringInfo(result, "%s=max", IOconfigFields[i]);
+				appendStringInfo(&result, "%s=max", IOconfigFields[i]);
 
 			if (i + 1 != fields_length)
-				appendStringInfo(result, ",");
+				appendStringInfo(&result, ",");
 		}
 
 		if (cell != limit_list->tail)
-			appendStringInfo(result, ";");
+			appendStringInfo(&result, ";");
 	}
 
-	return result->data;
+	return result.data;
 }
 
 void
