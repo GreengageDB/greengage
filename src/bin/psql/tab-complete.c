@@ -2493,15 +2493,22 @@ psql_completion(const char *text, int start, int end)
 	else if(TailMatches("CREATE", "PROTOCOL", MatchAny) ||
 			TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny))
 		COMPLETE_WITH("(");
-	else if(TailMatches("CREATE", "PROTOCOL", MatchAny, "(") ||
-			TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "("))
-		COMPLETE_WITH("readfunc =", "writefunc =", "validatorfunc =");
-	else if(TailMatches("readfunc", "="))
-		COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
-	else if(TailMatches("writefunc", "="))
-		COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_writefuncs);
-	else if(TailMatches("validatorfunc", "="))
-		COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_validatorfuncs);
+	else if((HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*") ||
+			 HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*")) &&
+			(!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*)") ||
+			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
+	{
+		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+			COMPLETE_WITH("readfunc =", "writefunc =", "validatorfunc =");
+		else if(TailMatches("readfunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
+		else if(TailMatches("writefunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_writefuncs);
+		else if(TailMatches("validatorfunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_validatorfuncs);
+		else if(TailMatches("readfunc|writefunc|validatorfunc", "=", MatchAny))
+			COMPLETE_WITH(",", ")");
+	}
 
 /* CREATE PUBLICATION */
 	else if (Matches("CREATE", "PUBLICATION", MatchAny))
