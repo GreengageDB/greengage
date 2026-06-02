@@ -124,7 +124,7 @@ static ResultCache *create_resultcache_plan(PlannerInfo *root,
 											int flags);
 static Plan *create_unique_plan(PlannerInfo *root, UniquePath *best_path,
 								int flags);
-static Plan *create_motion_plan(PlannerInfo *root, CdbMotionPath *path);
+static Plan *create_motion_plan(PlannerInfo *root, CdbMotionPath *path, int flags);
 static Plan *create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path);
 static Gather *create_gather_plan(PlannerInfo *root, GatherPath *best_path);
 static Plan *create_projection_plan(PlannerInfo *root,
@@ -610,7 +610,7 @@ create_plan_recurse(PlannerInfo *root, Path *best_path, int flags)
 													 (GatherMergePath *) best_path);
 			break;
 		case T_Motion:
-			plan = create_motion_plan(root, (CdbMotionPath *) best_path);
+			plan = create_motion_plan(root, (CdbMotionPath *) best_path, flags);
 			break;
 		case T_PartitionSelector:
 			plan = create_partition_selector_plan(root, (PartitionSelectorPath *) best_path);
@@ -3204,7 +3204,7 @@ create_limit_plan(PlannerInfo *root, LimitPath *best_path, int flags)
  * create_motion_plan
  */
 Plan *
-create_motion_plan(PlannerInfo *root, CdbMotionPath *path)
+create_motion_plan(PlannerInfo *root, CdbMotionPath *path, int flags)
 {
 	Motion	   *motion;
 	Path	   *subpath = path->subpath;
@@ -3226,7 +3226,8 @@ create_motion_plan(PlannerInfo *root, CdbMotionPath *path)
 		/* Push the MotionPath's locus down onto subpath. */
 		subpath->locus = path->path.locus;
 
-		subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
+		subplan = create_plan_recurse(root, subpath,
+									  CP_EXACT_TLIST | (flags & CP_LABEL_TLIST));
 
 		return subplan;
 	}
@@ -3250,7 +3251,8 @@ create_motion_plan(PlannerInfo *root, CdbMotionPath *path)
 
 	root->curSlice = sendSlice;
 
-	subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
+	subplan = create_plan_recurse(root, subpath,
+								  CP_EXACT_TLIST | (flags & CP_LABEL_TLIST));
 
 	root->curSlice = save_curSlice;
 

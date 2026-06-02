@@ -671,6 +671,24 @@ get_agg_clause_costs(PlannerInfo *root, AggSplit aggsplit, AggClauseCosts *costs
 		Aggref	   *aggref = agginfo->representative_aggref;
 
 		/*
+		 * GPDB: Count aggregates that require ordered input.  numPureOrderedAggs
+		 * counts those with an explicit ORDER BY / WITHIN GROUP: their result
+		 * depends on the global input order, so they cannot be split into
+		 * multiple aggregation stages with a Motion in between.  numOrderedAggs
+		 * additionally includes DISTINCT aggregates (which the MPP planner can
+		 * still multi-stage via the DQA path).  The MPP grouping planner relies
+		 * on these counts (cdb_create_multistage_grouping_paths' has_ordered_aggs
+		 * gate, GROUPING_CAN_USE_MPP_HASH); without them an ORDER BY aggregate
+		 * such as array_agg(x ORDER BY x) was wrongly routed into a multi-stage
+		 * plan and failed with "ORDER/GROUP BY expression not found in
+		 * targetlist".
+		 */
+		if (aggref->aggorder != NIL || aggref->aggdistinct != NIL)
+			costs->numOrderedAggs++;
+		if (aggref->aggorder != NIL)
+			costs->numPureOrderedAggs++;
+
+		/*
 		 * Add the appropriate component function execution costs to
 		 * appropriate totals.
 		 */
