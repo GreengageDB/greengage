@@ -682,6 +682,13 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 	if (queryDesc->dest->mydest != DestIntoRel)
 		queryDesc->dest = CreateIntoRelDestReceiver(into);
 	myState = (DR_intorel *) queryDesc->dest;
+	/*
+	 * Ensure myState->into is set: callers such as ALTER TABLE ... SET
+	 * DISTRIBUTED BY build the receiver with the generic
+	 * CreateDestReceiver(DestIntoRel), which leaves into NULL; intorel_receive
+	 * and intorel_shutdown dereference it.
+	 */
+	myState->into = into;
 	myState->rel = intoRelationDesc;
 	myState->reladdr = intoRelationAddr;
 	myState->output_cid = GetCurrentCommandId(true);

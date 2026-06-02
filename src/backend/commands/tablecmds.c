@@ -18424,7 +18424,7 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 	CommandCounterIncrement();
 
 	/* now, reindex */
-	reindex_relation(relid, 0, 0);
+	reindex_relation(relid, 0, &(ReindexParams) {0});
 
 	/* Step (h) Drop the table */
 	{
@@ -18978,7 +18978,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		CommandCounterIncrement();
 
 		/* now, reindex */
-		reindex_relation(tarrelid, 0, 0);
+		reindex_relation(tarrelid, 0, &(ReindexParams) {0});
 	}
 
 	/* Step (g) */
