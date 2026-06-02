@@ -38,9 +38,45 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 	conn->outMsgEnd = query_len;
 	conn->outCount = query_len;
 
-	/* remember we are using simple query protocol */
-	if (conn->cmd_queue_head)
-		conn->cmd_queue_head->queryclass = PGQUERY_SIMPLE;
+	/*
+	 * Register this command in libpq's command queue (added in PG14), marking
+	 * it as a row-returning simple query.  Without a queue entry,
+	 * getRowDescriptions() in fe-protocol3.c builds a PGRES_COMMAND_OK result
+	 * instead of PGRES_TUPLES_OK, and every DataRow that a dispatched query
+	 * returns (e.g. pg_highest_oid() OID sync, indcheckxmin sync, ANALYZE
+	 * sampling) is rejected with "server sent data (D message) without prior
+	 * row description (T message)", surfacing on the QD as "no primary message
+	 * received".  This inlines pqAllocCmdQueueEntry()/pqAppendCmdQueueEntry(),
+	 * which are static in fe-exec.c.
+	 */
+	{
+		PGcmdQueueEntry *entry;
+
+		if (conn->cmd_queue_recycle == NULL)
+		{
+			entry = (PGcmdQueueEntry *) malloc(sizeof(PGcmdQueueEntry));
+			if (entry == NULL)
+			{
+				printfPQExpBuffer(&conn->errorMessage,
+								  libpq_gettext("out of memory\n"));
+				return 0;
+			}
+		}
+		else
+		{
+			entry = conn->cmd_queue_recycle;
+			conn->cmd_queue_recycle = entry->next;
+		}
+		entry->next = NULL;
+		entry->query = NULL;
+		entry->queryclass = PGQUERY_SIMPLE;
+
+		if (conn->cmd_queue_head == NULL)
+			conn->cmd_queue_head = entry;
+		else
+			conn->cmd_queue_tail->next = entry;
+		conn->cmd_queue_tail = entry;
+	}
 
 	/*
 	 * Give the data a push.  In nonblock mode, don't complain if we're unable
