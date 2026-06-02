@@ -5329,6 +5329,7 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 						int epqParam)
 {
 	ModifyTablePath *pathnode = makeNode(ModifyTablePath);
+	List	   *subpaths;
 
 	Assert(operation == CMD_UPDATE ?
 		   list_length(resultRelations) == list_length(updateColnosLists) :
@@ -5353,12 +5354,23 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	/*
 	 * Put Motions on top of the subpaths as needed, and set the locus of the
 	 * ModifyTable path itself.
+	 *
+	 * adjust_modifytable_subpaths() wraps each subpath in the Motion required
+	 * to distribute its output according to the target table's policy, writing
+	 * the wrapped paths back into the list.  We must keep that list and use the
+	 * wrapped subpath below; otherwise the Motion is discarded and e.g. a
+	 * General-locus source (VALUES, generate_series) is executed on every
+	 * segment, inserting duplicate rows.
 	 */
+	subpaths = list_make1(subpath);
 	if (Gp_role == GP_ROLE_DISPATCH)
+	{
 		pathnode->path.locus =
 			adjust_modifytable_subpaths(root, operation,
-										resultRelations, list_make1(subpath),
+										resultRelations, subpaths,
 										is_split_updates);
+		subpath = (Path *) linitial(subpaths);
+	}
 	else
 	{
 		/* don't allow split updates in utility mode. */
@@ -5412,7 +5424,7 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->partColsUpdated = partColsUpdated;
 	pathnode->resultRelations = resultRelations;
 	pathnode->is_split_updates = is_split_updates;
-	pathnode->subpaths = list_make1(subpath);
+	pathnode->subpaths = subpaths;
 	pathnode->subroots = NIL;
 	pathnode->updateColnosLists = updateColnosLists;
 	pathnode->withCheckOptionLists = withCheckOptionLists;
