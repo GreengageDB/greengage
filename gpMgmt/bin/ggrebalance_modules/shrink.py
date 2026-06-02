@@ -6,6 +6,7 @@
 from transitions import Machine
 from contextlib import closing
 from typing import Any
+from queue import Queue
 
 try:
     from gppylib.commands.unix import *
@@ -195,6 +196,7 @@ class GGShrink:
         self.options = options
         self.gpEnv = gpEnv
         self.conn = conn
+        self.cancel_conn = None
         self.shutdown_requested = False
         self.workers_for_tables_rebalance = None
         self.tables_rebalance_failed = False
@@ -280,10 +282,12 @@ class GGShrink:
 
             # get default num segments
             dbconn.execSQL(self.conn, 'BEGIN')
-            dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
+            self.logger.info('Locking catalog...')
+            self.execSqlInThread(self.conn, 'SELECT gp_expand_lock_catalog()')
             row = dbconn.queryRow(self.conn, 'SELECT gp_toolkit.gp_rebalance_numsegments_is_set()')
             numsegments_is_set = bool(row[0])
             dbconn.execSQL(self.conn, 'END')
+            self.logger.info('Unlocked catalog')
 
             if numsegments_is_set:
                 self.logger.warning('Current numsegments is not equal to default value.')
@@ -296,15 +300,36 @@ class GGShrink:
             if (numsegments_is_set and
                 interactive_check_yesno(self.options.interactive, None, '\nReset numsegments to default?', default = 'Y')):
                 dbconn.execSQL(self.conn, 'BEGIN')
-                dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
+                self.logger.info('Locking catalog...')
+                self.execSqlInThread(self.conn, 'SELECT gp_expand_lock_catalog()')
                 dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')
                 dbconn.execSQL(self.conn, 'COMMIT')
+                self.logger.info('Unlocked catalog')
                 self.logger.info('Reset numsegments to default is done.')
 
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
 
         return True
+
+    def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> None:
+        # TODO: comments why we need it
+        self.cancel_conn = conn
+        result_queue = Queue()
+        def exec_sql():
+            try:
+                dbconn.execSQL(conn, sql_cmd)
+                result_queue.put((0, None))
+            except Exception as e:
+                self.logger.error(f"Error when performing query '{sql_cmd}': {str(e)}")
+                result_queue.put((1, e))
+        thread = threading.Thread(target=exec_sql)
+        thread.start()
+        thread.join()
+        return_value, return_exception = result_queue.get()
+        if return_value != 0:
+            raise return_exception
+        self.cancel_conn = None
 
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]
@@ -362,8 +387,9 @@ class GGShrink:
     @wrap_func_with_faults
     def on_enter_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_STARTED(self) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
-        dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
-        dbconn.execSQL(self.conn, 'CHECKPOINT')
+        self.logger.info('Locking catalog...')
+        self.execSqlInThread(self.conn, 'SELECT gp_expand_lock_catalog()')
+        self.execSqlInThread(self.conn, 'CHECKPOINT')
         dbconn.execSQL(self.conn, f'SELECT gp_toolkit.gp_set_rebalance_numsegments({self.shrink_plan.getTargetSegmentCount()})')
 
         self.gparray.dumpToFile(self.gparray_dump_file)
@@ -372,6 +398,7 @@ class GGShrink:
         self.rebalance_schema.rebalanceSchema(self.shrink_plan.getTargetSegmentCount())
 
         dbconn.execSQL(self.conn, 'COMMIT')
+        self.logger.info('Unlocked catalog')
 
         self.trigger('move_to_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_DONE')
 
@@ -408,12 +435,14 @@ class GGShrink:
 
         ## Shrink catalog
         dbconn.execSQL(self.conn, 'BEGIN')
-        dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
+        self.logger.info('Locking catalog...')
+        self.execSqlInThread(self.conn, 'SELECT gp_expand_lock_catalog()')
         dbconn.execSQL(self.conn, f'DELETE FROM gp_segment_configuration WHERE content >= {self.shrink_plan.getTargetSegmentCount()}')
-        dbconn.execSQL(self.conn, 'CHECKPOINT')
+        self.execSqlInThread(self.conn, 'CHECKPOINT')
         dbconn.execSQL(self.conn, 'SELECT gp_expand_bump_version()')
         dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')
         dbconn.execSQL(self.conn, 'COMMIT')
+        self.logger.info('Unlocked catalog')
 
         self.trigger('move_to_STATE_SHRINK_CATALOG_DONE')
 
@@ -490,12 +519,14 @@ class GGShrink:
     def on_enter_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_START(self) -> None:
         self.rebalance_schema.backupShrinkProgress()
         dbconn.execSQL(self.conn, 'BEGIN')
-        dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
+        self.logger.info('Locking catalog...')
+        self.execSqlInThread(self.conn, 'SELECT gp_expand_lock_catalog()')
         dbconn.execSQL(self.conn, 'SELECT gp_toolkit.gp_reset_rebalance_numsegments()')
         # Store state here in case we fail before we enter 'on_every_state()'
         # because after COMMIT we are on a one-way road of rollback.
         self.rebalance_schema.storeShrinkState(self.state)
         dbconn.execSQL(self.conn, 'COMMIT')
+        self.logger.info('Unlocked catalog')
 
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE')
 
@@ -860,6 +891,9 @@ class GGShrink:
         return self.dumped_gparray.get_segment_count() != self.gparray.get_segment_count()
 
     def shutdown(self) -> None:
+        if self.cancel_conn != None:
+            self.cancel_conn.cancel()
+
         if self.workers_for_tables_rebalance != None:
             self.workers_for_tables_rebalance.haltWork()
             self.workers_for_tables_rebalance.joinWorkers()
