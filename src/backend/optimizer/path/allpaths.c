@@ -2436,12 +2436,6 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 			List	   *upperrestrictlist = NIL;
 			ListCell   *l;
 
-			/*
-			 * push down quals if possible. Note subquery might be a
-			 * different pointer from the original one.
-			 */
-			subquery = push_down_restrict(root, rel, rte, rti, subquery);
-
 			foreach(l, rel->baserestrictinfo)
 			{
 				RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
@@ -3769,7 +3763,7 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
 			Node	   *clause = (Node *) rinfo->clause;
 
 			if (!rinfo->pseudoconstant &&
-				qual_is_pushdown_safe(subquery, rti, clause, &safetyInfo))
+				qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
 			{
 				/* Push it down */
 				subquery_push_qual(subquery, rte, rti, clause);
