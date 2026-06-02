@@ -1197,9 +1197,9 @@ freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx)
 static bool
 resGroupIOLimitMatches(List *left, List *right)
 {
-	char   *leftStr;
-	char   *rightStr;
-	bool	result;
+	char       *leftStr;
+	char       *rightStr;
+	bool        result;
 
 	if (left == NIL || right == NIL)
 		return left == NIL && right == NIL;

@@ -491,7 +491,7 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_IN_USE),
-							(errmsg("cannot move query while a resource group is being edited"))));
+					(errmsg("cannot move query while a resource group is being edited"))));
 		}
 
 		groupId = get_resgroup_oid(groupName, false);
