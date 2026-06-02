@@ -144,7 +144,7 @@ GetCompressionImplementation(char *comptype)
 	scan = systable_beginscan(comprel, CompressionCompnameIndexId, true,
 							  NULL, 1, &scankey);
 	tuple = systable_getnext(scan);
-	if (!HeapTupleIsValid(tuple))
+	if (!HeapTupleIsValid(tuple) || !compresstype_is_valid(NameStr(compname)))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("unknown compress type \"%s\"",

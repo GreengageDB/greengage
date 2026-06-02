@@ -234,6 +234,7 @@ double		gp_resource_group_memory_limit;
 bool		gp_resource_group_bypass;
 bool		gp_resource_group_enable_recalculate_query_mem;
 bool		gp_resource_group_retrieve;
+bool		gp_resource_group_enable_alter_in_transaction;
 
 /* Perfmon segment GUCs */
 int			gp_perfmon_segment_interval;
@@ -3166,6 +3167,15 @@ struct config_bool ConfigureNamesBool_gp[] =
 			NULL
 		},
 		&gp_resource_group_cpu_ceiling_enforcement,
+		false, NULL, NULL
+	},
+
+	{
+		{"gp_resource_group_enable_alter_in_transaction", PGC_POSTMASTER, RESOURCES,
+			gettext_noop("Allow ALTER RESOURCE GROUP inside a transaction block."),
+			NULL
+		},
+		&gp_resource_group_enable_alter_in_transaction,
 		false, NULL, NULL
 	},
 
