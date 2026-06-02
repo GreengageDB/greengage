@@ -696,6 +696,11 @@ class SQLIsolationExecutor(object):
         if not flag:
             if sql.startswith('!'):
                 sql = sql[1:]
+                # Support run command in background
+                bg_mode = False
+                if sql.startswith('&'):
+                    bg_mode = True
+                    sql = sql[1:]
 
                 # Check for execution mode. E.g.
                 #     !\retcode path/to/executable --option1 --option2 ...
@@ -709,15 +714,16 @@ class SQLIsolationExecutor(object):
                     if mode != '\\retcode':
                         raise Exception('Invalid execution mode: {}'.format(mode))
 
-                cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
-                stdout, _ = cmd_output.communicate()
-                print(file=output_file)
-                if mode == '\\retcode':
-                    print('-- start_ignore', file=output_file)
-                print(stdout.decode(), file=output_file)
-                if mode == '\\retcode':
-                    print('-- end_ignore', file=output_file)
-                    print('(exited with code {})'.format(cmd_output.returncode), file=output_file)
+                cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True, text=True, encoding='utf-8')
+                if not bg_mode:
+                    stdout, _ = cmd_output.communicate()
+                    print(file=output_file)
+                    if mode == '\\retcode':
+                        print('-- start_ignore', file=output_file)
+                    print(stdout, file=output_file)
+                    if mode == '\\retcode':
+                        print('-- end_ignore', file=output_file)
+                        print('(exited with code {})'.format(cmd_output.returncode), file=output_file)
             else:
                 sql_new = self.__preprocess_sql(process_name, pre_run_cmd, sql.strip(), global_sh_executor)
                 self.get_process(output_file, process_name, con_mode, dbname=dbname).query(sql_new, post_run_cmd, global_sh_executor)

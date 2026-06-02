@@ -27,6 +27,103 @@ drop tablespace some_default_tablespace;
 reset default_tablespace;
 reset temp_tablespaces;
 
+-- We should be able to switch temp_tablespaces even in case of backends reusage
+
+create tablespace some_temp_tablespace2 location '@testtablespace@_temp_tablespace2';
+create table tts_temp (i int, j int) distributed by (i);
+insert into tts_temp select i, i from generate_series(1, 1000) i;
+analyze tts_temp;
+set optimizer = off;
+
+select gp_inject_fault('sisc_xslice_temp_files', 'skip', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+
+set gp_cached_segworkers_threshold = 20;
+
+--
+-- First execution: set temp_tablespaces.
+-- SharedInputScan files should use temp tablespace.
+--
+
+set temp_tablespaces = some_temp_tablespace2;
+
+-- start_ignore
+select quote_literal(now()) query_start_set;
+\gset
+-- end_ignore
+
+with a1 as materialized (select * from tts_temp)
+select count(*) from a1 t1, a1 t2;
+
+-- start_ignore
+SELECT quote_literal(now()) query_end_set;
+\gset
+-- end_ignore
+
+--
+-- Second execution: set temp_tablespaces to nothing.
+-- Cached QE backends should be reused, but SharedFileSet must be 
+-- recreated, so it honors the new temp_tablespaces value.
+--
+
+select gp_inject_fault('sisc_xslice_temp_files', 'reset', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+select gp_inject_fault('sisc_xslice_temp_files', 'skip', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+
+set temp_tablespaces = '';
+
+-- start_ignore
+select quote_literal(now()) query_start_unset;
+\gset
+-- end_ignore
+
+with a1 as materialized (select * from tts_temp)
+select count(*) from a1 t1, a1 t2;
+
+-- start_ignore
+SELECT quote_literal(now()) query_end_unset;
+\gset
+-- end_ignore
+
+-- start_ignore
+create temp table sisc_set_pids as
+select logpid
+from gp_toolkit.gp_log_system
+where logseverity = 'LOG'
+  and logtime between :query_start_set and :query_end_set
+  and logmessage like $$%fault triggered, fault name:'sisc_xslice_temp_files' fault type:'skip'%$$;
+
+create temp table sisc_unset_pids as
+select logpid
+from gp_toolkit.gp_log_system
+where logseverity = 'LOG'
+  and logtime between :query_start_unset and :query_end_unset
+  and logmessage like $$%fault triggered, fault name:'sisc_xslice_temp_files' fault type:'skip'%$$;
+-- end_ignore
+
+select count(*) from sisc_set_pids;
+select count(*) from sisc_unset_pids;
+
+select count(*) = 0 as set_minus_unset_empty
+from (
+    select logpid from sisc_set_pids
+    except
+    select logpid from sisc_unset_pids
+) s;
+
+reset temp_tablespaces;
+reset gp_cte_sharing;
+reset optimizer;
+reset gp_cached_segworkers_threshold;
+
+select gp_inject_fault('sisc_xslice_temp_files', 'reset', dbid)
+  from gp_segment_configuration where role='p' and content>=0;
+
+drop table tts_temp;
+drop table sisc_unset_pids;
+drop table sisc_set_pids;
+drop tablespace some_temp_tablespace2;
 
 -- When the GUC temp_tablespaces is set, one of the temp tablespaces is used instead of the default tablespace.
 -- create several tablespaces and use them as temp tablespaces
