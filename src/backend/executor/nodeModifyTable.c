@@ -2855,6 +2855,18 @@ ExecModifyTable(PlanState *pstate)
 					/* Use the wholerow junk attr as the old tuple. */
 					ExecForceStoreHeapTuple(oldtuple, oldSlot, false);
 				}
+				else if (RelationIsAppendOptimized(resultRelInfo->ri_RelationDesc))
+				{
+					/*
+					 * GPDB: append-optimized tables cannot fetch the old tuple
+					 * by TID (appendonly_fetch_row_version is unsupported).
+					 * Their UPDATE plan supplies the full new tuple --
+					 * preprocess_targetlist() expanded the targetlist to every
+					 * column -- so no old-tuple merge is required.  Leave the
+					 * old slot empty; the update projection won't read it.
+					 */
+					ExecClearTuple(oldSlot);
+				}
 				else
 				{
 					/* Fetch the most recent version of old tuple. */

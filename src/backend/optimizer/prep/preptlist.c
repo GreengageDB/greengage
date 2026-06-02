@@ -139,14 +139,20 @@ preprocess_targetlist(PlannerInfo *root)
 		 */
 		root->is_split_update = check_splitupdate(tlist, result_relation,
 												  target_relation);
-		if (root->is_split_update)
+		if (root->is_split_update ||
+			RelationIsAppendOptimized(target_relation))
 		{
 			/*
-			 * A Split Update is executed as delete+insert and needs the full
-			 * new tuple, so expand the targetlist to every attribute first.
+			 * Both a Split Update and an append-optimized UPDATE need the full
+			 * new tuple, so expand the targetlist to every attribute first.  A
+			 * Split Update runs as delete+insert; an AO/AOCS UPDATE likewise
+			 * re-inserts the row and cannot fetch the old tuple by TID to fill
+			 * in the unmodified columns (appendonly_fetch_row_version is
+			 * unsupported).
+			 *
 			 * We must take the assign-column list from the *expanded* tlist:
-			 * the SplitUpdate emits one non-junk column per table attribute,
-			 * so root->update_colnos has to have one entry per column too,
+			 * the plan emits one non-junk column per table attribute, so
+			 * root->update_colnos has to have one entry per column too,
 			 * otherwise ExecBuildUpdateProjection() rejects the plan with
 			 * "targetColnos does not match subplan target list".  We must not
 			 * renumber the SET resnos beforehand, because expand_targetlist()
