@@ -1157,10 +1157,12 @@ ExecDelete(ModifyTableState *mtstate,
 			 segid);
 
 	/*
-	 * get information on the (current) result relation
+	 * In PG14 the executor passes the target ResultRelInfo down as a
+	 * parameter; es_result_relation_info is no longer set up before the
+	 * ModifyTable per-tuple switch dispatches here, so reading it would yield
+	 * NULL on the first tuple.  Use the parameter (already captured into
+	 * resultRelInfo/resultRelationDesc above), matching ExecInsert/ExecUpdate.
 	 */
-	resultRelInfo = estate->es_result_relation_info;
-	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	/* BEFORE ROW DELETE Triggers */
 	/*
