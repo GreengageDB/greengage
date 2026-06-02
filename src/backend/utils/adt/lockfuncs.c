@@ -159,9 +159,9 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		/*
 		 * These next columns are specific to GPDB
 		 */
-		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "mppSessionId",
+		TupleDescInitEntry(tupdesc, (AttrNumber) 17, "mppSessionId",
 						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "mppIsWriter",
+		TupleDescInitEntry(tupdesc, (AttrNumber) 18, "mppIsWriter",
 						   BOOLOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 19, "gp_segment_id",
 						   INT4OID, -1, 0);
@@ -497,11 +497,9 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		values[14] = BoolGetDatum(instance->fastpath);
 		
 		values[15] = (Datum) 0;  /* waitstart: filled by caller */
-			values[16] = Int32GetDatum(instance->mppSessionId);
-
+		values[16] = Int32GetDatum(instance->mppSessionId);
 		values[17] = BoolGetDatum(instance->mppIsWriter);
-
-		values[17] = Int32GetDatum(GpIdentity.segindex);
+		values[18] = Int32GetDatum(GpIdentity.segindex);
 
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
@@ -585,9 +583,10 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		values[12] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 12));
 		values[13] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,13),"t",1)==0);
 		values[14] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,14),"t",1)==0);
-		values[15] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,15)));
-		values[16] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,16),"t",1)==0);
-		values[17] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,17)));
+		values[15] = (Datum) 0;	/* waitstart */
+		values[16] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,16)));
+		values[17] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,17),"t",1)==0);
+		values[18] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,18)));
 
 		/*
 		 * Copy the null info over.  It should all match properly.
@@ -665,16 +664,17 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		values[12] = CStringGetTextDatum("SIReadLock");
 		values[13] = BoolGetDatum(true);
 		values[14] = BoolGetDatum(false);
-		nulls[15] = true;
+		nulls[15] = true;		/* waitstart */
 
 		/*
-		 * GPDB_91_MERGE_FIXME: what to set these GPDB-specific fields to?
-		 * These commented-out values are copy-pasted from the code above
-		 * for normal locks.
+		 * The GPDB-specific columns (mppSessionId, mppIsWriter,
+		 * gp_segment_id) are not meaningful for predicate locks; leave them
+		 * NULL rather than reading uninitialized values[] (which would be a
+		 * garbage read in heap_form_tuple).
 		 */
-		//values[14] = Int32GetDatum(proc->mppSessionId);
-		//values[15] = BoolGetDatum(proc->mppIsWriter);
-		//values[16] = Int32GetDatum(Gp_segment);
+		nulls[16] = true;
+		nulls[17] = true;
+		nulls[18] = true;
 
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
