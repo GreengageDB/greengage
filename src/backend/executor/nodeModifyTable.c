@@ -2799,6 +2799,48 @@ ExecModifyTable(PlanState *pstate)
 								  false /* splitUpdate */);
 				break;
 			case CMD_UPDATE:
+				/*
+				 * GPDB: A Split Update is delivered as a stream of separate
+				 * DELETE and INSERT action rows, tagged by the DMLActionExpr
+				 * junk column (action_attno).  It is used when an UPDATE may
+				 * change a distribution key column, so the modified tuple can
+				 * belong on a different segment: an Explicit Motion re-routes
+				 * each row, and here we replay it as a delete of the old tuple
+				 * plus an insert of the new one rather than an in-place update.
+				 */
+				if (AttributeNumberIsValid(action_attno))
+				{
+					if (action == DML_INSERT)
+					{
+						/* Insert the new tuple version. */
+						if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
+							ExecInitInsertProjection(node, resultRelInfo);
+						slot = ExecGetInsertNewTuple(resultRelInfo, planSlot);
+						estate->es_result_relation_info = resultRelInfo;
+						slot = ExecSplitUpdate_Insert(node, slot, planSlot,
+													  estate, node->canSetTag);
+					}
+					else
+					{
+						/*
+						 * Delete the old tuple version.  Don't count it in the
+						 * command tag: the matching INSERT action row is what
+						 * represents this logical UPDATE, so only that side sets
+						 * the tag (otherwise each updated row is counted twice).
+						 */
+						Assert(action == DML_DELETE);
+						slot = ExecDelete(node, resultRelInfo, tupleid, segid,
+										  oldtuple, planSlot, &node->mt_epqstate,
+										  estate,
+										  false,	/* processReturning */
+										  false,	/* canSetTag */
+										  false,	/* changingPart */
+										  true,		/* splitUpdate */
+										  NULL, NULL);
+					}
+					break;
+				}
+
 				/* Initialize projection info if first time for this table */
 				if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
 					ExecInitUpdateProjection(node, resultRelInfo);
@@ -3151,6 +3193,22 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 				if (!AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo))
 					elog(ERROR, "could not find junk wholerow column");
 			}
+
+			/*
+			 * GPDB: locate the junk columns added for MPP UPDATE/DELETE.
+			 * "gp_segment_id" identifies the segment a row lives on (added by
+			 * the row-identity machinery and routed by the Explicit Motion);
+			 * "DMLAction" is present only when the plan contains a SplitUpdate
+			 * and tags each row as a DELETE or INSERT action.  When
+			 * ri_action_attno is valid, ExecModifyTable replays the UPDATE as
+			 * delete+insert instead of an in-place update.
+			 */
+			resultRelInfo->ri_segid_attno =
+				ExecFindJunkAttributeInTlist(subplan->targetlist,
+											 "gp_segment_id");
+			resultRelInfo->ri_action_attno =
+				ExecFindJunkAttributeInTlist(subplan->targetlist,
+											 "DMLAction");
 		}
 	}
 

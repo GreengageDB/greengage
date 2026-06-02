@@ -139,11 +139,25 @@ preprocess_targetlist(PlannerInfo *root)
 		 */
 		root->is_split_update = check_splitupdate(tlist, result_relation,
 												  target_relation);
-		root->update_colnos = extract_update_targetlist_colnos(tlist,
-															   !root->is_split_update);
 		if (root->is_split_update)
+		{
+			/*
+			 * A Split Update is executed as delete+insert and needs the full
+			 * new tuple, so expand the targetlist to every attribute first.
+			 * We must take the assign-column list from the *expanded* tlist:
+			 * the SplitUpdate emits one non-junk column per table attribute,
+			 * so root->update_colnos has to have one entry per column too,
+			 * otherwise ExecBuildUpdateProjection() rejects the plan with
+			 * "targetColnos does not match subplan target list".  We must not
+			 * renumber the SET resnos beforehand, because expand_targetlist()
+			 * relies on resno == attno.
+			 */
 			tlist = expand_targetlist(root, tlist, command_type,
 									  result_relation, target_relation);
+			root->update_colnos = extract_update_targetlist_colnos(tlist, false);
+		}
+		else
+			root->update_colnos = extract_update_targetlist_colnos(tlist, true);
 	}
 
 	/* simply updatable cursors */
@@ -498,10 +512,39 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 * relation, however.
 			 */
 			Oid			atttype = att_tup->atttypid;
+			int32		atttypmod = att_tup->atttypmod;
 			Oid			attcollation = att_tup->attcollation;
 			Node	   *new_expr;
 
-			if (!att_tup->attisdropped)
+			if (att_tup->attisdropped)
+			{
+				/* Insert NULL for dropped column */
+				new_expr = (Node *) makeConst(INT4OID,
+											  -1,
+											  InvalidOid,
+											  sizeof(int32),
+											  (Datum) 0,
+											  true, /* isnull */
+											  true /* byval */ );
+			}
+			else if (command_type == CMD_UPDATE)
+			{
+				/*
+				 * GPDB: For a Split Update we expand the UPDATE targetlist to
+				 * cover every column of the relation.  A column that the query
+				 * does not SET must keep its old value, so reference the
+				 * corresponding attribute of the target relation.  (Substituting
+				 * NULL, as we do for INSERT below, would wrongly blank out the
+				 * unmodified columns of the re-inserted tuple.)
+				 */
+				new_expr = (Node *) makeVar(result_relation,
+											attrno,
+											atttype,
+											atttypmod,
+											attcollation,
+											0);
+			}
+			else
 			{
 				new_expr = (Node *) makeConst(atttype,
 											  -1,
@@ -517,17 +560,6 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 											COERCE_IMPLICIT_CAST,
 											-1,
 											false);
-			}
-			else
-			{
-				/* Insert NULL for dropped column */
-				new_expr = (Node *) makeConst(INT4OID,
-											  -1,
-											  InvalidOid,
-											  sizeof(int32),
-											  (Datum) 0,
-											  true, /* isnull */
-											  true /* byval */ );
 			}
 
 			new_tle = makeTargetEntry((Expr *) new_expr,
