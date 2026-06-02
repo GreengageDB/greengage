@@ -30,8 +30,8 @@ extern ObjectAddress DefineRange(CreateRangeStmt *stmt);
 extern ObjectAddress AlterEnum(AlterEnumStmt *stmt);
 extern ObjectAddress DefineCompositeType(RangeVar *typevar, List *coldeflist);
 extern Oid AssignTypeArrayOid(char *arrayTypeName, Oid typeNamespace);
-extern Oid	AssignTypeMultirangeOid(void);
-extern Oid	AssignTypeMultirangeArrayOid(void);
+extern Oid	AssignTypeMultirangeOid(char *multirangeTypeName, Oid typeNamespace);
+extern Oid	AssignTypeMultirangeArrayOid(char *multirangeArrayName, Oid typeNamespace);
 
 extern ObjectAddress AlterDomainDefault(List *names, Node *defaultRaw);
 extern ObjectAddress AlterDomainNotNull(List *names, bool notNull);
