@@ -78,6 +78,7 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "mb/pg_wchar.h"
+#include "cdb/cdbconn.h"
 
 
 /* --------------------------------
@@ -680,4 +681,45 @@ pq_getmsgend(StringInfo msg)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROTOCOL_VIOLATION),
 				 errmsg("invalid message format")));
+}
+
+/*
+ * pq_metadatasend - Send a custom metadata message to the frontend.
+ *
+ * data: pointer to the opaque buffer
+ * len: length of the buffer in bytes
+ *
+ * NOTE: You must choose a message type char (below 'm') that does not
+ * conflict with the official Frontend/Backend protocol.
+ */
+void
+pq_metadatasend(const void *data, size_t len, int32 queue_id)
+{
+	StringInfoData buf;
+
+	/*
+	 * Safety check: The protocol message length field is a 32-bit signed int.
+	 * We must ensure the payload + header doesn't overflow it.
+	 */
+	if (len > (size_t)(INT_MAX - sizeof(int32) - sizeof(int)))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("custom metadata message too large")));
+
+	/*
+	 * Initialize the message buffer. 'M' is the message type tag.
+	 */
+	pq_beginmessage(&buf, 'M');
+
+	pq_sendint(&buf, queue_id, sizeof(queue_id));
+	/* Append the opaque data */
+	pq_sendbytes(&buf, (const char *)data, (int)len);
+
+	/*
+	 * Finalize and queue the message. This does NOT necessarily flush to the
+	 * socket immediately.
+	 */
+	pq_endmessage(&buf);
+
+	pq_flush();
 }

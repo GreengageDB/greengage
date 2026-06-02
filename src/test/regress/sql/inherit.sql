@@ -631,3 +631,58 @@ CREATE TABLE child2(t text) DISTRIBUTED BY (t);
 ALTER TABLE child2 INHERIT parent;
 
 DROP TABLE child, child2, parent;
+
+-- Test that partitioned table can't inherit a parent table
+-- start_ignore
+DROP TABLE IF EXISTS test_table, test_table_partitioned;
+-- end_ignore
+
+CREATE TABLE test_table(a int) DISTRIBUTED BY (a);
+CREATE TABLE test_table_partitioned (
+	b int
+) INHERITS (test_table)
+PARTITION BY LIST (b)
+(
+    PARTITION p1 VALUES (1, 2, 3),
+    DEFAULT PARTITION p_default
+);
+DROP TABLE test_table;
+
+-- Check that partitioned table can't be inherited by a child table.
+CREATE TABLE test_table_partitioned (
+    a int,
+    b int
+)
+DISTRIBUTED BY (a)
+PARTITION BY LIST (b)
+(
+    PARTITION p1 VALUES (1, 2, 3),
+    DEFAULT PARTITION p_default
+);
+CREATE TABLE test_table() INHERITS (test_table_partitioned);
+DROP TABLE test_table_partitioned;
+
+-- Check that the same can't be done via 'ALTER TABLE ... INHERIT'
+CREATE TABLE test_table_partitioned (
+    a int,
+    b int
+)
+DISTRIBUTED BY (a)
+PARTITION BY LIST (b)
+(
+    PARTITION p1 VALUES (1, 2, 3),
+    DEFAULT PARTITION p_default
+);
+CREATE TABLE test_table (LIKE test_table_partitioned);
+ALTER TABLE test_table_partitioned INHERIT test_table;
+ALTER TABLE test_table INHERIT test_table_partitioned;
+DROP TABLE test_table;
+
+-- Check that the same can't be done with non-root table
+CREATE TABLE test_table() INHERITS (test_table_partitioned_1_prt_p1);
+
+CREATE TABLE test_table (LIKE test_table_partitioned_1_prt_p1);
+ALTER TABLE test_table INHERIT test_table_partitioned_1_prt_p1;
+ALTER TABLE test_table_partitioned_1_prt_p1 INHERIT test_table;
+DROP TABLE test_table;
+DROP TABLE test_table_partitioned;
