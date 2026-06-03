@@ -1697,16 +1697,19 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 					DtxContextToString(distributedTransactionContext))));
 
 	/*
-	 * If there's virtual catalog state, serialize it to a DSM segment
-	 * so reader QEs on this segment can pick it up.
+	 * If the virtual catalog state has changed since the last serialization,
+	 * write a new DSM segment so reader QEs on this segment can pick it up.
+	 * A monotonically increasing version counter lets readers skip redundant
+	 * deserialization when the tempcat hasn't changed.
 	 */
 	{
 		extern bool enable_temp_memory_catalog;
-		int    tempcat_len;
-		char  *tempcat_data;
 
-		if (enable_temp_memory_catalog)
+		if (enable_temp_memory_catalog && tempcat_is_dirty())
 		{
+			int    tempcat_len;
+			char  *tempcat_data;
+
 			tempcat_serialize(&tempcat_len, &tempcat_data);
 
 			if (tempcat_len > sizeof(int32) * 2)  /* more than just header */
@@ -1730,12 +1733,16 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 				/* Pin so segment survives detach, then release local mapping. */
 				dsm_pin_mapping(seg);
 
+				SharedLocalSnapshotSlot->tempcat_version++;
+
 				ereport((Debug_print_full_dtm ? LOG : DEBUG5),
-						(errmsg("updateSharedLocalSnapshot: serialized tempcat to DSM, len=%d",
-								tempcat_len)));
+						(errmsg("updateSharedLocalSnapshot: serialized tempcat to DSM, len=%d, version=%lu",
+								tempcat_len,
+								(unsigned long) SharedLocalSnapshotSlot->tempcat_version)));
 			}
 
 			pfree(tempcat_data);
+			tempcat_clear_dirty();
 		}
 	}
 
@@ -1794,6 +1801,13 @@ copyLocalSnapshot(Snapshot snapshot)
 			(errmsg("GetSnapshotData(): READER currentcommandid %d curcid %d segmatesync %d",
 					GetCurrentCommandId(false), snapshot->curcid, SharedLocalSnapshotSlot->segmateSync)));
 }
+
+/* Process-local version counter for tempcat; compared against the shared
+ * tempcat_version in SharedLocalSnapshotSlot to skip redundant deserialization.
+ * The shared tempcat_version is monotonically increasing and never reset
+ * between transactions, so this local copy stays valid across transaction
+ * boundaries. */
+static uint64 ReaderLastTempcatVersion = 0;
 
 static void
 readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionContext)
@@ -1858,10 +1872,12 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 			SetSharedTransactionId_reader(SharedLocalSnapshotSlot->fullXid, snapshot->curcid, distributedTransactionContext);
 
 			/*
-			 * Deserialize tempcat state if the writer has shared it.
+			 * Deserialize tempcat state if the writer has shared it and
+			 * the version has advanced since we last deserialized.
 			 */
 			if (enable_temp_memory_catalog &&
-				SharedLocalSnapshotSlot->tempcat_dsm != DSM_HANDLE_INVALID)
+				SharedLocalSnapshotSlot->tempcat_dsm != DSM_HANDLE_INVALID &&
+				SharedLocalSnapshotSlot->tempcat_version != ReaderLastTempcatVersion)
 			{
 				dsm_segment *seg;
 				char	    *ptr;
@@ -1875,8 +1891,11 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 						dsm_segment_map_length(seg), ptr);
 					dsm_detach(seg);
 
+					ReaderLastTempcatVersion = SharedLocalSnapshotSlot->tempcat_version;
+
 					ereport((Debug_print_full_dtm ? LOG : DEBUG5),
-						(errmsg("readerFillLocalSnapshot: deserialized tempcat from DSM")));
+						(errmsg("readerFillLocalSnapshot: deserialized tempcat from DSM, version=%lu",
+							(unsigned long) ReaderLastTempcatVersion)));
 				}
 			}
 

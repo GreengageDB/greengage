@@ -144,6 +144,9 @@ static uint16 CurrentTempcatOffset = 1; /* NB: 0 is considered invalid */
 /* Current snapshot */
 static TempcatSnapshot CurrentTempcatSnapshotPrivate = NULL;
 
+/* Dirty flag: set when tempcat content changes, cleared after serialization */
+static bool TempcatDirtyFlag = false;
+
 /*****************************************************************************
 							UTILITY PROCEDURES
  *****************************************************************************/
@@ -435,6 +438,7 @@ tempcat_abort_transaction(void)
 	}
 
 	Assert(!TempcatTransactionInProgress());
+	TempcatDirtyFlag = true;
 }
 
 /*
@@ -499,6 +503,7 @@ tempcat_rollback_to_savepoint(const char *name)
 
 	/* Create a new current snapshot to store changes. */
 	TempcatSnapshotCreate(NULL);
+	TempcatDirtyFlag = true;
 }
 
 static TempcatSnapshotRelationData* find_relation_entry(TempcatSnapshot snapshot, Relation rel) {
@@ -568,6 +573,7 @@ tempcat_insert(Relation relation, HeapTuple htup)
 
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 	pgstat_count_heap_insert(relation, 1);
+	TempcatDirtyFlag = true;
 }
 
 /*
@@ -608,6 +614,7 @@ tempcat_delete(Relation relation, ItemPointer tid)
 				);
 #endif
 
+			TempcatDirtyFlag = true;
 			return;
 		}
 	}
@@ -668,6 +675,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 				 HeapTupleGetOid(dlist_tup->tup),
 				 relation_entry->tuples_num);
 #endif
+			TempcatDirtyFlag = true;
 			return;
 		}
 	}
@@ -967,6 +975,18 @@ tempcat_getnext(TempCatScanData *scan, BufferHeapTupleTableSlot *slot)
 #endif
 
 	return tup;
+}
+
+bool
+tempcat_is_dirty(void)
+{
+	return TempcatDirtyFlag;
+}
+
+void
+tempcat_clear_dirty(void)
+{
+	TempcatDirtyFlag = false;
 }
 
 /*
