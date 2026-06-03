@@ -28,6 +28,7 @@ except ImportError as e:
 
 class GGShrink:
     timeout = SEGMENT_STOP_TIMEOUT_DEFAULT
+    MSG_SHRINK_INTERRUPTED = 'Shrink was interrupted'
 
     states = [
         'STATE_START',
@@ -267,8 +268,8 @@ class GGShrink:
 
     def on_every_state(self) -> None:
         if self.shutdown_requested:
-            self.logger.info('Shrink was interrupted')
-            raise Exception('Shrink was interrupted')
+            self.logger.info(self.MSG_SHRINK_INTERRUPTED)
+            raise Exception(self.MSG_SHRINK_INTERRUPTED)
 
         assert self.state in self.states + self.states_main_shrink_flow + self.states_rollback_flow
 
@@ -313,7 +314,11 @@ class GGShrink:
         return True
 
     def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> None:
-        # TODO: comments why we need it
+        # During the long operation of a C-function (like the DB driver),
+        # if it is executed from the main thread, the signal handler will be executed only when
+        # the low-level function is complete. Therefore, we execute queries that can be blocked,
+        # or just potentially long-running queries, in a separate thread in order to allow
+        # immediate invocation of the signal handler and cancelation of the query.
         self.cancel_conn = conn
         result_queue = Queue()
         def exec_sql():
@@ -328,6 +333,12 @@ class GGShrink:
         thread.join()
         return_value, return_exception = result_queue.get()
         if return_value != 0:
+            # If the query failed due to the user request, log and raise the same
+            # exception as done because of the 'shutdown_requested' flag for the behavior consistency reasons.
+            if str(return_exception).find('canceling statement due to user request') != -1:
+                self.logger.info(self.MSG_SHRINK_INTERRUPTED)
+                raise Exception(self.MSG_SHRINK_INTERRUPTED)
+            # Otherwise, pass the original exception.
             raise return_exception
         self.cancel_conn = None
 
