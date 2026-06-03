@@ -3389,7 +3389,17 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Oid		   *hashFuncs;
 	int			i;
 
-	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
+	/*
+	 * GPDB: the subplan's targetlist is labeled with root->processed_tlist
+	 * (below), i.e. it is in the column layout of the *nominal* target
+	 * relation, not of path->resultRelation.  For an UPDATE of a partitioned
+	 * table the latter is a leaf partition whose physical column order can
+	 * differ from the parent's, so its descriptor and distribution policy do
+	 * not match the tuples flowing through the SplitUpdate.  Use the nominal
+	 * target relation (parse->resultRelation) so that resultDesc/cdbpolicy --
+	 * and hence insertColIdx and hashAttnos -- line up with the subplan tuples.
+	 */
+	resultRel = relation_open(planner_rt_fetch(root->parse->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
 	cdbpolicy = resultRel->rd_cdbpolicy;
 
