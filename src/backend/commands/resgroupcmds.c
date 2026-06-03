@@ -1368,7 +1368,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 	if (resgroup_alter_callbacks == NIL)
 		return;
 
-	if (event == XACT_EVENT_ABORT)
+	if (event == XACT_EVENT_ABORT || event == XACT_EVENT_PARALLEL_ABORT)
 	{
 		foreach (lc, resgroup_alter_callbacks)
 		{
@@ -1379,7 +1379,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 		list_free(resgroup_alter_callbacks);
 		resgroup_alter_callbacks = NIL;
 	}
-	else if (event == XACT_EVENT_COMMIT)
+	else if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_PARALLEL_COMMIT)
 	{
 		foreach (lc, resgroup_alter_callbacks)
 		{
