@@ -833,17 +833,34 @@ class Planner:
                     raise PlanningError(f"Resource validation failed: {e}")
         else:
             self.logger.warning("Skipping resource estimation")
-        # Detect swaps
-        swap_pairs = None
+        # Detect swaps and mirror-primary conflicts
+        swap_pairs: List[Tuple[LogicalMove, LogicalMove]] = []
+        conflict_pairs: List[Tuple[LogicalMove, LogicalMove]] = []
+        swap_dbids: Set[int] = set()
+
         if not self.options.inplace_swap_roles:
             swap_pairs = self.detect_swap_pairs(moves)
-        if swap_pairs:
+            if swap_pairs:
+                self.logger.info(f"Detected {len(swap_pairs)} primary-mirror pairs that swap hosts")
+                swap_dbids = {dbid for p, m in swap_pairs for dbid in (p.seg.getSegmentDbId(), m.seg.getSegmentDbId())}
+            conflict_pairs = self.detect_conflict_pairs(moves, swap_dbids)
+            if conflict_pairs:
+                self.logger.info(f"Detected {len(conflict_pairs)} mirror-primary ordering conflicts")
+
+        if swap_pairs and conflict_pairs:
             self.logger.info(f"Detected {len(swap_pairs)} primary-mirror pairs which just swap hosts")
-            phase1, phase2, phase3, swap_dbids = self.decompose_swap_pairs(swap_pairs,
-                                                                           moves,
-                                                                           port_allocator,
-                                                                           resource_estimator)
-            final_moves = self._group_swap_moves(moves, swap_dbids, phase1, phase2, phase3)
+            phase1, phase2, phase3, handled_dbids = self.decompose_swap_pairs(swap_pairs + conflict_pairs,
+                                                                              port_allocator,
+                                                                              resource_estimator)
+            final_moves = self._group_swap_moves(moves, handled_dbids, phase1, phase2, phase3)
+        elif swap_pairs:
+            phase1, phase2, phase3, handled_dbids = self.decompose_swap_pairs(swap_pairs,
+                                                                              port_allocator,
+                                                                              resource_estimator)
+            final_moves = self._group_swap_moves(moves, handled_dbids, phase1, phase2, phase3)
+        elif conflict_pairs:
+            # no intermediate host needed
+            final_moves = self._group_conflict_moves(moves, conflict_pairs)
         else:
             final_moves = self._group_plain_moves(moves)
 
@@ -975,7 +992,45 @@ class Planner:
             non_swap_primaries + phase2 +
             phase3
         )
-    
+
+    def _group_conflict_moves(self,
+                              moves: List[LogicalMove],
+                              conflict_pairs: List[Tuple[LogicalMove, LogicalMove]]
+                              ) -> List[LogicalMove]:
+        """
+        One-way conflict: delay conflicting mirrors until after all primaries
+        have vacated their current hosts.
+
+        The conflicting mirror wants to land on a host that currently holds
+        a primary (mir_dst == prim_src).  We hold the mirror back
+        until the primary has moved away.
+
+        Executor pattern: identical to the phase-3 tail in _group_swap_moves.
+
+        Order:
+            [ non-conflict mirrors ] pre-switchover, no co-location risk
+            [ all primaries        ] post-switchover; vacate conflict hosts
+            [ conflict mirrors     ] conflict hosts now free, safe to land
+        """
+        conflict_mirror_dbids: Set[int] = {
+            m.seg.getSegmentDbId() for _, m in conflict_pairs
+        }
+
+        non_conflict_mirrors: List[LogicalMove] = []
+        conflict_mirrors:     List[LogicalMove] = []
+        primaries:            List[LogicalMove] = []
+
+        for move in moves:
+            if move.seg.isSegmentMirror():
+                if move.seg.getSegmentDbId() in conflict_mirror_dbids:
+                    conflict_mirrors.append(move)
+                else:
+                    non_conflict_mirrors.append(move)
+            else:
+                primaries.append(move)
+
+        return non_conflict_mirrors + primaries + conflict_mirrors
+
     def select_intermediate_host(self, 
                                 primary_move: LogicalMove,
                                 mirror_move: LogicalMove,
@@ -1249,6 +1304,51 @@ class Planner:
                 raise PlanningError(f"Failed to plan swap for content {prim_move.seg.getSegmentContentId()}: {e}")
 
         return phase1, phase2, phase3, swap_dbids
+    
+    def detect_conflict_pairs(self,
+                              moves: List[LogicalMove],
+                              swap_dbids: Set[int]
+                              ) -> List[Tuple[LogicalMove, LogicalMove]]:
+        """
+        Detect one-way host conflicts: mirror's destination == primary's current host,
+        but the primary is not going back to mirror's host (that would be a true swap,
+        already caught by detect_swap_pairs).
+
+        Args:
+            moves: all planned logical moves
+            swap_dbids: dbids already claimed by swap detection
+
+        Returns:
+            List of (primary_move, mirror_move) conflict pairs
+        """
+        moves_by_content: Dict[int, Dict[str, LogicalMove]] = defaultdict(dict)
+        for move in moves:
+            if move.seg.getSegmentDbId() in swap_dbids:
+                continue
+            content_id = move.seg.getSegmentContentId()
+            key = 'primary' if move.seg.isSegmentPrimary() else 'mirror'
+            moves_by_content[content_id][key] = move
+
+        conflict_pairs = []
+        for content_id, seg_moves in moves_by_content.items():
+            if 'primary' not in seg_moves or 'mirror' not in seg_moves:
+                continue
+
+            prim_move = seg_moves['primary']
+            mir_move  = seg_moves['mirror']
+
+            prim_src = prim_move.seg.getSegmentHostName()
+            mir_dst  = mir_move.dstHost.hostname
+
+            if mir_dst == prim_src:
+                conflict_pairs.append((prim_move, mir_move))
+                self.logger.debug(
+                    f"Detected one-way conflict for content {content_id}: "
+                    f"mirror -> {mir_dst} conflicts with primary currently on {prim_src}"
+                )
+            # prim_dst == mir_src is safe by default
+
+        return conflict_pairs
 
 
 @dataclass
