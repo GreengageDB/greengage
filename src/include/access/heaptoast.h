@@ -19,9 +19,23 @@
 #include "utils/relcache.h"
 
 #ifndef VARSIZE_TO_SHORT
-#define VARSIZE_TO_SHORT(PTR)   ((char)(VARSIZE(PTR)-VARHDRSZ+VARHDRSZ_SHORT) | 0x80)
+/*
+ * Build the 1-byte ("short") varlena header for a value currently stored with
+ * a 4-byte header.  This MUST match SET_VARSIZE_1B()/VARATT_IS_SHORT() for the
+ * target endianness; otherwise the short varlena produced here is unreadable by
+ * the standard varlena macros.  The legacy definition hardcoded the big-endian
+ * form (| 0x80), which on a little-endian build (where VARATT_IS_SHORT tests
+ * the 0x01 bit) produced headers like 0x88 that VARSIZE_ANY() misreads as a
+ * 4-byte header -- corrupting e.g. AOCS column data written via the 4-byte ->
+ * short conversion path (datumstreamblock.c) and memtuples (memtuple.c).
+ */
+#ifdef WORDS_BIGENDIAN
+#define VARSIZE_TO_SHORT(PTR)   ((char)((VARSIZE(PTR)-VARHDRSZ+VARHDRSZ_SHORT) | 0x80))
+#else
+#define VARSIZE_TO_SHORT(PTR)   ((char)(((VARSIZE(PTR)-VARHDRSZ+VARHDRSZ_SHORT) << 1) | 0x01))
+#endif
 #define VARSIZE_TO_SHORT_D(D)   VARSIZE_TO_SHORT(DatumGetPointer(D))
-#endif 
+#endif
 
 /*
  * Find the maximum size of a tuple if there are to be N tuples per page.
