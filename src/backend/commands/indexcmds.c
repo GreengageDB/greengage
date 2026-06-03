@@ -2973,6 +2973,24 @@ ReindexIndex(ReindexStmt *stmt, ReindexParams *params, bool isTopLevel)
 									NULL);
 	}
 
+	/*
+	 * GPDB: REINDEX CONCURRENTLY is not supported on the coordinator -- the
+	 * rebuilt index gets a new OID on the QD while the segments keep the
+	 * original OID, corrupting the catalog (and the transient OIDs aren't
+	 * dispatched).  Fall back to a normal reindex with a NOTICE; a partitioned
+	 * index then reindexes each child non-concurrently via ReindexPartitions.
+	 * Single-node utility mode keeps the working concurrent path.
+	 */
+	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+		Gp_role == GP_ROLE_DISPATCH &&
+		persistence != RELPERSISTENCE_TEMP)
+	{
+		ereport(NOTICE,
+				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
+						get_rel_name(indOid))));
+		params->options &= ~REINDEXOPT_CONCURRENTLY;
+	}
+
 	if (relkind == RELKIND_PARTITIONED_INDEX)
 		ReindexPartitions(indOid, params, isTopLevel);
 	else if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
@@ -3097,6 +3115,25 @@ ReindexTable(ReindexStmt *stmt, ReindexParams *params, bool isTopLevel)
 									   ShareUpdateExclusiveLock : ShareLock,
 									   0,
 									   RangeVarCallbackOwnsTable, NULL);
+
+	/*
+	 * GPDB: REINDEX CONCURRENTLY is not supported on the coordinator --
+	 * ReindexRelationConcurrently() rebuilds each index under a new OID on the
+	 * QD while the segments keep the original OID, corrupting the catalog (and
+	 * the transient OIDs aren't dispatched).  Fall back to a normal reindex with
+	 * a NOTICE; a partitioned table then reindexes each child non-concurrently
+	 * via ReindexPartitions.  Single-node utility mode keeps the working
+	 * concurrent path.
+	 */
+	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+		Gp_role == GP_ROLE_DISPATCH &&
+		get_rel_persistence(heapOid) != RELPERSISTENCE_TEMP)
+	{
+		ereport(NOTICE,
+				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
+						relation->relname)));
+		params->options &= ~REINDEXOPT_CONCURRENTLY;
+	}
 
 	if (get_rel_relkind(heapOid) == RELKIND_PARTITIONED_TABLE)
 		ReindexPartitions(heapOid, params, isTopLevel);
@@ -3487,6 +3524,17 @@ static void
 ReindexMultipleInternal(List *relids, ReindexParams *params)
 {
 	ListCell   *l;
+
+	/*
+	 * GPDB: REINDEX CONCURRENTLY is not supported on the coordinator (see
+	 * ReindexTable); fall back to a normal reindex.  REINDEX TABLE/INDEX already
+	 * cleared this (and emitted the NOTICE) before reaching here via
+	 * ReindexPartitions; this also covers REINDEX DATABASE/SCHEMA, which reaches
+	 * ReindexMultipleInternal() directly.
+	 */
+	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+		Gp_role == GP_ROLE_DISPATCH)
+		params->options &= ~REINDEXOPT_CONCURRENTLY;
 
 	PopActiveSnapshot();
 	CommitTransactionCommand();
