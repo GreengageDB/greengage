@@ -4951,7 +4951,7 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 								 PQExpBuffer upgrade_buffer, Oid pg_class_oid,
 								 bool is_index)
 {
-	PGresult * res;
+	PGresult *res;
 	PQExpBuffer gpdb6_partition_query;
 	bool gpdb6_partitioned_table;
 	bool aoco;
