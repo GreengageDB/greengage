@@ -2668,6 +2668,16 @@ _bt_delete_or_dedup_one_page(Relation rel, Relation heapRel,
 	BTScanInsert itup_key = insertstate->itup_key;
 	Page		page = BufferGetPage(buffer);
 	BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+	/*
+	 * GPDB: append-optimized table AMs (AO/AOCS) do not implement
+	 * index_delete_tuples.  Both table-AM-assisted index deletion strategies --
+	 * the simple LP_DEAD pass and the bottom-up pass -- call
+	 * table_index_delete_tuples(), so neither is possible for an index on such
+	 * a table; without this guard the NULL callback is jumped to and the
+	 * backend SIGSEGVs.  Fall back to deduplication / a page split instead.
+	 */
+	bool		tableam_can_delete =
+		(heapRel->rd_tableam->index_delete_tuples != NULL);
 
 	Assert(P_ISLEAF(opaque));
 	Assert(simpleonly || itup_key->heapkeyspace);
@@ -2692,7 +2702,7 @@ _bt_delete_or_dedup_one_page(Relation rel, Relation heapRel,
 			deletable[ndeletable++] = offnum;
 	}
 
-	if (ndeletable > 0)
+	if (ndeletable > 0 && tableam_can_delete)
 	{
 		_bt_simpledel_pass(rel, buffer, heapRel, deletable, ndeletable,
 						   insertstate->itup, minoff, maxoff);
@@ -2745,7 +2755,7 @@ _bt_delete_or_dedup_one_page(Relation rel, Relation heapRel,
 	 * together index tuples, so the same correctness considerations do not
 	 * apply.  We deliberately omit an index-is-allequalimage test here.
 	 */
-	if ((indexUnchanged || uniquedup) &&
+	if ((indexUnchanged || uniquedup) && tableam_can_delete &&
 		_bt_bottomupdel_pass(rel, buffer, heapRel, insertstate->itemsz))
 		return;
 
