@@ -1056,6 +1056,7 @@ static const pgsql_thing_t words_after_create[] = {
 /* Storage parameters for CREATE TABLE and ALTER TABLE */
 static const char *const table_storage_parameters[] = {
 	"analyze_hll_non_part_table",
+	"appendoptimized",
 	"autovacuum_analyze_scale_factor",
 	"autovacuum_analyze_threshold",
 	"autovacuum_enabled",
@@ -1069,9 +1070,13 @@ static const char *const table_storage_parameters[] = {
 	"autovacuum_vacuum_cost_limit",
 	"autovacuum_vacuum_scale_factor",
 	"autovacuum_vacuum_threshold",
+	"blocksize",
+	"checksum",
+	"compresslevel",
+	"compresstype",
 	"fillfactor",
-	"gp_autovacuum_scope",
 	"log_autovacuum_min_duration",
+	"orientation",
 	"parallel_workers",
 	"toast.autovacuum_enabled",
 	"toast.autovacuum_freeze_max_age",
@@ -1836,6 +1841,10 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "POLICY", MatchAny, "ON", MatchAny, "WITH", "CHECK"))
 		COMPLETE_WITH("(");
 
+	/* ALTER RESOURCE GROUP <name> */
+	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
+		COMPLETE_WITH("SET");
+
 	/* ALTER RULE <name>, add ON */
 	else if (Matches("ALTER", "RULE", MatchAny))
 		COMPLETE_WITH("ON");
@@ -2300,6 +2309,13 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_available_extension_versions);
 	}
 
+	/* Distribution rules for CREATE WRITABLE EXTERNAL tables, 
+	beacause they interfere with CREATE TABLE distribution rules 
+	(REPLICATED is not allowed) */
+	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL") &&
+		TailMatches("DISTRIBUTED"))
+		COMPLETE_WITH("BY (", "RANDOMLY");
+
 	/* CREATE FOREIGN */
 	else if (Matches("CREATE", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
@@ -2510,12 +2526,28 @@ psql_completion(const char *text, int start, int end)
 	/* Complete PARTITION BY with RANGE ( or LIST ( or ... */
 	else if (TailMatches("PARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (", "HASH (");
+	/* Complete PARTITION BY RANGE|LIST with classic partitioning syntax */
+	else if (TailMatches("PARTITION", "BY", "RANGE|LIST", "(*)") ||
+		TailMatches(MatchAnyExcept("SET"), "SUBPARTITION", "TEMPLATE", "(*)"))
+		COMPLETE_WITH("(", "SUBPARTITION BY");
+	else if (TailMatches("SUBPARTITION", "BY"))
+		COMPLETE_WITH("RANGE (", "LIST (");
+	else if (TailMatches("SUBPARTITION", "BY", "RANGE|LIST", "(*)"))
+		COMPLETE_WITH("(", "SUBPARTITION");
+	else if (TailMatches("SUBPARTITION", "BY", "RANGE|LIST", "(*)", "SUBPARTITION"))
+		COMPLETE_WITH("BY", "TEMPLATE (");
 	/* If we have xxx PARTITION OF, provide a list of partitioned tables */
 	else if (TailMatches("PARTITION", "OF"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_partitioned_tables, "");
 	/* Limited completion support for partition bound specification */
 	else if (TailMatches("PARTITION", "OF", MatchAny))
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
+	/* Complete DISTRIBUTED with BY, RANDOMLY or REPLICATED */
+	else if (TailMatches("DISTRIBUTED"))
+			COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
+	/* Complete INHERITS ( with table list */
+	else if (TailMatches("INHERITS", "("))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
 	/* Complete CREATE TABLE <name> with '(', OF or PARTITION OF */
 	else if (TailMatches("CREATE", "TABLE", MatchAny) ||
 			 TailMatches("CREATE", "TEMP|TEMPORARY|UNLOGGED", "TABLE", MatchAny))
@@ -2527,9 +2559,9 @@ psql_completion(const char *text, int start, int end)
 	/* Complete CREATE TABLE name (...) with supported options */
 	else if (TailMatches("CREATE", "TABLE", MatchAny, "(*)") ||
 			 TailMatches("CREATE", "UNLOGGED", "TABLE", MatchAny, "(*)"))
-		COMPLETE_WITH("INHERITS (", "PARTITION BY", "USING", "TABLESPACE", "WITH (");
+		COMPLETE_WITH("DISTRIBUTED", "INHERITS (", "PARTITION BY", "USING", "TABLESPACE", "WITH (");
 	else if (TailMatches("CREATE", "TEMP|TEMPORARY", "TABLE", MatchAny, "(*)"))
-		COMPLETE_WITH("INHERITS (", "ON COMMIT", "PARTITION BY",
+		COMPLETE_WITH("DISTRIBUTED", "INHERITS (", "ON COMMIT", "PARTITION BY",
 					  "TABLESPACE", "WITH (");
 	/* Complete CREATE TABLE (...) USING with table access methods */
 	else if (TailMatches("CREATE", "TABLE", MatchAny, "(*)", "USING") ||
@@ -2706,28 +2738,42 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "ROLE|USER|GROUP", MatchAny, "IN"))
 		COMPLETE_WITH("GROUP", "ROLE");
 
-/* CREATE/DROP RESOURCE GROUP/QUEUE */
-	else if (Matches("CREATE|DROP", "RESOURCE"))
-	 {
-		static const char *const list_CREATERESOURCEGROUP[] =
-		{"GROUP", "QUEUE", NULL};
+/* ALTER/CREATE/DROP RESOURCE GROUP/QUEUE */
+	else if (Matches("ALTER|CREATE|DROP", "RESOURCE"))
+		COMPLETE_WITH("GROUP", "QUEUE");
 
-		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
-	 }
-	/* CREATE/DROP RESOURCE GROUP */
-	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP"))
+	/* ALTER/CREATE/DROP RESOURCE GROUP */
+	else if (TailMatches("ALTER|CREATE|DROP", "RESOURCE", "GROUP"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
+
 	/* CREATE RESOURCE GROUP <name> */
-	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP", MatchAny))
+	else if (TailMatches("CREATE", "RESOURCE", "GROUP", MatchAny))
 		COMPLETE_WITH("WITH (");
-	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "("))
-	{
-		static const char *const list_CREATERESOURCEGROUP[] =
-		{"CONCURRENCY", "cpu_max_percent", "MEMORY_LIMIT", "MEMORY_REDZONE_LIMIT", NULL};
-
-		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
-	}
-
+	/* RESOURCE GROUP <name> WITH ( / SET */
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(") ||
+			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET"))
+		COMPLETE_WITH("CONCURRENCY", "CPU_MAX_PERCENT", "CPU_WEIGHT", "CPUSET",
+					  "MEMORY_LIMIT", "MIN_COST", "IO_LIMIT");
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", MatchAny))
+		COMPLETE_WITH("=");
+	/* Complete IO_LIMIT option with delimeter, tablespaces and options */
+	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "(", "IO_LIMIT", "=") ||
+			 TailMatches("RESOURCE", "GROUP", MatchAny, "SET", "IO_LIMIT"))
+		COMPLETE_WITH("'");
+	else if(TailMatches("IO_LIMIT", "=", "'") ||
+			TailMatches("IO_LIMIT", "'"))
+			COMPLETE_WITH_QUERY(Query_for_list_of_tablespaces
+								"UNION SELECT '*'");
+	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny) ||
+			TailMatches("IO_LIMIT", "'", MatchAny))
+		COMPLETE_WITH(":");
+	else if(TailMatches("IO_LIMIT", "=", "'", MatchAny, ":") ||
+			TailMatches("IO_LIMIT", "'", MatchAny, ":"))
+		COMPLETE_WITH("wbps", "rbps", "wiops", "riops");
+	else if(TailMatches("wbps|rbps|wiops|riops"))
+		COMPLETE_WITH("=");
+	else if(TailMatches("wbps|rbps|wiops|riops", "="))
+		COMPLETE_WITH("max");
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
 	/* Complete CREATE VIEW <name> with AS */
