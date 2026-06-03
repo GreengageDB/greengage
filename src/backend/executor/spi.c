@@ -1588,7 +1588,7 @@ SPI_cursor_open_internal(const char *name, SPIPlanPtr plan,
 	 */
 
 	/* Replan if needed, and increment plan refcount for portal */
-	cplan = GetCachedPlan(plansource, paramLI, NULL, _SPI_current->queryEnv);
+	cplan = GetCachedPlan(plansource, paramLI, NULL, _SPI_current->queryEnv, NULL);
 	stmt_list = cplan->stmt_list;
 
 	/* GPDB: Mark all queries as SPI inner queries for extension usage */
@@ -2047,7 +2047,7 @@ SPI_plan_get_cached_plan(SPIPlanPtr plan)
 	/* Get the generic plan for the query */
 	cplan = GetCachedPlan(plansource, NULL,
 						  plan->saved ? CurrentResourceOwner : NULL,
-						  _SPI_current->queryEnv);
+						  _SPI_current->queryEnv, NULL);
 	Assert(cplan == plansource->gplan);
 
 	/* Pop the error context stack */
@@ -2504,7 +2504,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 		 * plan, the refcount must be backed by the plan_owner.
 		 */
 		cplan = GetCachedPlan(plansource, paramLI,
-							  plan_owner, _SPI_current->queryEnv);
+							  plan_owner, _SPI_current->queryEnv, NULL);
 
 		stmt_list = cplan->stmt_list;
 

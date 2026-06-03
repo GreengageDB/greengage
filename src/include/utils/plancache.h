@@ -223,8 +223,9 @@ extern List *CachedPlanGetTargetList(CachedPlanSource *plansource,
 
 extern CachedPlan *GetCachedPlan(CachedPlanSource *plansource,
 								 ParamListInfo boundParams,
-ResourceOwner owner,
-								 QueryEnvironment *queryEnv);
+								 ResourceOwner owner,
+								 QueryEnvironment *queryEnv,
+								 IntoClause *intoClause);
 extern void ReleaseCachedPlan(CachedPlan *plan, ResourceOwner owner);
 
 extern bool CachedPlanAllowsSimpleValidityCheck(CachedPlanSource *plansource,
