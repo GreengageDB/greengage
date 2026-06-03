@@ -1297,7 +1297,7 @@ resgroupHasLaterCpuCallbackMatchingFinal(List *callbacks,
 
 		/*
 		 * Example:
-		 *   SET CPUSET '0'; SET CPU_MAX_PERCENT 30;
+		 *   SET CPUSET '1'; SET CPU_MAX_PERCENT 30;
 		 * Keep CPUSET to preserve its CPU_WEIGHT reset.
 		 */
 		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU &&
@@ -1308,7 +1308,7 @@ resgroupHasLaterCpuCallbackMatchingFinal(List *callbacks,
 
 		/*
 		 * Example:
-		 *   SET CPUSET '0'; SET CPU_WEIGHT 120;
+		 *   SET CPUSET '1'; SET CPU_WEIGHT 120;
 		 * Keep CPUSET to preserve CPUSET mode.
 		 */
 		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU_SHARES &&
