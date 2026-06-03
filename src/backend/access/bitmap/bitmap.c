@@ -540,13 +540,21 @@ bmbulkdelete(IndexVacuumInfo *info,
 			 void *callback_state)
 {
 	Relation	rel = info->index;
+	ReindexParams reindex_params = {0};
 
 	/* allocate stats if first time through, else re-use existing struct */
 	if (stats == NULL)
 		stats = (IndexBulkDeleteResult *)
-			palloc0(sizeof(IndexBulkDeleteResult));	
+			palloc0(sizeof(IndexBulkDeleteResult));
 
-	reindex_index(RelationGetRelid(rel), true, rel->rd_rel->relpersistence, 0);
+	/*
+	 * PG14 changed reindex_index()'s last argument from an int options bitmask
+	 * to a ReindexParams pointer, which it dereferences.  Pass an empty params
+	 * struct instead of a literal 0 (which became a NULL deref -> SIGSEGV when
+	 * VACUUM reindexed a bitmap index, e.g. "vacuum bm_test").
+	 */
+	reindex_index(RelationGetRelid(rel), true, rel->rd_rel->relpersistence,
+				  &reindex_params);
 
 	CommandCounterIncrement();
 
