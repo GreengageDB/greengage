@@ -2812,11 +2812,26 @@ ExecModifyTable(PlanState *pstate)
 				{
 					if (action == DML_INSERT)
 					{
-						/* Insert the new tuple version. */
-						if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
-							ExecInitInsertProjection(node, resultRelInfo);
-						slot = ExecGetInsertNewTuple(resultRelInfo, planSlot);
-						estate->es_result_relation_info = resultRelInfo;
+						/*
+						 * Insert the new tuple version.
+						 *
+						 * GPDB: the SplitUpdate produces the new tuple in the
+						 * root (nominal) target relation's column layout, which
+						 * can differ from the source leaf partition's physical
+						 * column order.  Project and insert via the root result
+						 * relation so the projection matches the subplan output;
+						 * ExecInsert() then routes the row to the correct leaf
+						 * (converting the layout as needed) and enforces the
+						 * partition constraint.  For a non-partitioned target
+						 * rootResultRelInfo is the result relation itself, so
+						 * this is unchanged there.
+						 */
+						ResultRelInfo *insertRelInfo = node->rootResultRelInfo;
+
+						if (unlikely(!insertRelInfo->ri_projectNewInfoValid))
+							ExecInitInsertProjection(node, insertRelInfo);
+						slot = ExecGetInsertNewTuple(insertRelInfo, planSlot);
+						estate->es_result_relation_info = insertRelInfo;
 						slot = ExecSplitUpdate_Insert(node, slot, planSlot,
 													  estate, node->canSetTag);
 					}
@@ -3260,10 +3275,20 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	/*
 	 * Build state for tuple routing if it's a partitioned INSERT.  An UPDATE
 	 * might need this too, but only if it actually moves tuples between
-	 * partitions; in that case setup is done by ExecCrossPartitionUpdate.
+	 * partitions; in that case setup is normally done by
+	 * ExecCrossPartitionUpdate.
+	 *
+	 * GPDB: a SplitUpdate replays the UPDATE as a DELETE of the old tuple plus
+	 * an INSERT of the new one (used when an UPDATE may change a distribution
+	 * key).  The new tuple is produced in the root/nominal layout, so it must
+	 * be routed to -- and converted for -- the correct leaf partition just like
+	 * a partitioned INSERT.  Set up routing up front when any target is a split
+	 * update.
 	 */
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE &&
-		operation == CMD_INSERT)
+		(operation == CMD_INSERT ||
+		 (operation == CMD_UPDATE &&
+		  list_member_int(node->isSplitUpdates, true))))
 		mtstate->mt_partition_tuple_routing =
 			ExecSetupPartitionTupleRouting(estate, rel);
 
