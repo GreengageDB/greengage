@@ -94,6 +94,10 @@ extern bool temp_table_scope;
 
 #define IsTempTableScope()  (temp_table_scope)
 
+/* Dirty tracking for tempcat versioning */
+extern bool tempcat_is_dirty(void);
+extern void tempcat_clear_dirty(void);
+
 /*
  * Serialize the current tempcat snapshot state into a byte buffer for
  * transmission via shared memory (DSM segment).

@@ -54,6 +54,13 @@ typedef struct SharedSnapshotSlot
 	 */
 	volatile dsm_handle	tempcat_dsm;
 
+	/*
+	 * Monotonically increasing version of the tempcat state.  Bumped by the
+	 * writer whenever tempcat content changes.  Readers compare against a
+	 * process-local counter to skip redundant deserialization.
+	 */
+	volatile uint64		tempcat_version;
+
 	/* for debugging only */
 	FullTransactionId	fullXid;
 	TimestampTz		startTimestamp;
