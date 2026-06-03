@@ -4352,9 +4352,18 @@ ResetTempNamespace(void)
 	/*
 	 * MPP-19973: The shmem exit callback to remove a temp
 	 * namespace is registered. We need to remove it here as the
-	 * namespace has already been reseted. 
+	 * namespace has already been reseted.
+	 *
+	 * Use the non-throwing variant: this is reached during gang-loss
+	 * recovery, where the callback may not be the latest before_shmem_exit
+	 * entry, or may never have been registered (temp namespace created but
+	 * not yet committed).  In PG14 the plain cancel_before_shmem_exit() would
+	 * raise an error in those cases, which -- thrown from AbortTransaction()
+	 * via ResetAllGangs() -- escalates to a coordinator PANIC.  Leaving the
+	 * callback registered is harmless: RemoveTempRelationsCallback() no-ops
+	 * once myTempNamespace is reset just below.
 	 */
-	cancel_before_shmem_exit(RemoveTempRelationsCallback, 0);
+	cancel_before_shmem_exit_if_latest(RemoveTempRelationsCallback, 0);
 
 	myTempNamespace = InvalidOid;
 	myTempToastNamespace = InvalidOid;

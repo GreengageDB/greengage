@@ -427,6 +427,38 @@ cancel_before_shmem_exit(pg_on_exit_callback function, Datum arg)
 }
 
 /* ----------------------------------------------------------------
+ *		cancel_before_shmem_exit_if_latest
+ *
+ *		Like cancel_before_shmem_exit(), but instead of raising an error when
+ *		the requested callback is not the latest entry (or is not registered
+ *		at all), it leaves the list unchanged and returns false.  Returns true
+ *		if the callback was the latest entry and was removed.
+ *
+ *		GPDB: this restores the pre-PG14 lenient behavior for callers that may
+ *		legitimately try to cancel a callback out of strict LIFO order or that
+ *		may not have been registered.  ResetTempNamespace() uses it during
+ *		gang-loss recovery: the temp-namespace cleanup callback may be absent
+ *		(temp namespace not yet committed) or no longer the latest entry, and
+ *		it is harmless to leave registered (RemoveTempRelationsCallback() is a
+ *		no-op once myTempNamespace is reset).  Throwing here would turn a
+ *		recoverable gang loss into a PANIC during transaction abort.
+ * ----------------------------------------------------------------
+ */
+bool
+cancel_before_shmem_exit_if_latest(pg_on_exit_callback function, Datum arg)
+{
+	if (before_shmem_exit_index > 0 &&
+		before_shmem_exit_list[before_shmem_exit_index - 1].function
+		== function &&
+		before_shmem_exit_list[before_shmem_exit_index - 1].arg == arg)
+	{
+		--before_shmem_exit_index;
+		return true;
+	}
+	return false;
+}
+
+/* ----------------------------------------------------------------
  *		on_exit_reset
  *
  *		this function clears all on_proc_exit() and on_shmem_exit()
