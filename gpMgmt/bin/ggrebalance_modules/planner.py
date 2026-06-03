@@ -1284,6 +1284,7 @@ class Planner:
             swap_dbids.add(prim_move.seg.getSegmentDbId())
             swap_dbids.add(mir_move.seg.getSegmentDbId())
             try:
+		# Select intermediate host
                 intermediate_host = self.select_intermediate_host(
                     prim_move,
                     mir_move,
@@ -1842,3 +1843,4 @@ class ResourceEstimator:
                 return False, min(fs_available.values()), ', '.join(fs_requirements)
 
         return True, min(fs_available.values()), ', '.join(fs_requirements)
+
