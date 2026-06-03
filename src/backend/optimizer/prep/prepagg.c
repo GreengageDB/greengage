@@ -689,6 +689,19 @@ get_agg_clause_costs(PlannerInfo *root, AggSplit aggsplit, AggClauseCosts *costs
 			costs->numPureOrderedAggs++;
 
 		/*
+		 * GPDB: Remember the DISTINCT-qualified aggregates.  The MPP grouping
+		 * planner uses this list (cdb_create_multistage_grouping_paths ->
+		 * recognize_dqa_type) to build the specialized DQA multi-stage paths,
+		 * which dedup the DISTINCT argument by adding it to the first-stage
+		 * group key.  Without this list the DQA paths are never generated and a
+		 * DISTINCT aggregate falls through to the generic two-stage partial
+		 * aggregation, which cannot partialize a DISTINCT aggregate and crashes
+		 * in finalize_aggregates()/tuplesort_performsort() on the segments.
+		 */
+		if (aggref->aggdistinct != NIL)
+			costs->distinctAggrefs = lappend(costs->distinctAggrefs, aggref);
+
+		/*
 		 * Add the appropriate component function execution costs to
 		 * appropriate totals.
 		 */
