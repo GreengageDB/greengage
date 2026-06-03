@@ -1325,6 +1325,12 @@ pq_is_reading_msg(void)
  *		message we are willing to accept.  We abort the connection (by
  *		returning EOF) if client tries to send more than that.
  *
+ *		GPDB: a maxlen of 0 means "no upper limit" -- used by callers that
+ *		multiplex non-query messages over a libpq connection and read them
+ *		with pq_getmessage(), namely COPY data forwarded QD->QE (copy.c) and
+ *		the nextval-over-NOTIFY response from the QD (sequence.c).  Without
+ *		this, every such message is rejected as "invalid message length".
+ *
  *		returns 0 if OK, EOF if trouble
  * --------------------------------
  */
@@ -1348,7 +1354,8 @@ pq_getmessage(StringInfo s, int maxlen)
 
 	len = pg_ntoh32(len);
 
-	if (len < 4 || len > maxlen)
+	if (len < 4 ||
+		(maxlen > 0 && len > maxlen))
 	{
 		ereport(COMMERROR,
 				(errcode(ERRCODE_PROTOCOL_VIOLATION),
