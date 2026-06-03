@@ -520,6 +520,26 @@ compare_iostat(const void *x, const void *y)
 	return 0;
 }
 
+/*
+ * Order a list of TblSpcIOLimit by tablespace so two lists that hold the same
+ * entries in a different order dump to the same string.
+ */
+int
+compare_tablespace_oid(const void *x, const void *y)
+{
+	TblSpcIOLimit *a = (TblSpcIOLimit *) lfirst(*(ListCell **) x);
+	TblSpcIOLimit *b = (TblSpcIOLimit *) lfirst(*(ListCell **) y);
+
+	if (a->tablespace_oid != b->tablespace_oid)
+	{
+		if (a->tablespace_oid < b->tablespace_oid)
+			return -1;
+		return 1;
+	}
+
+	return 0;
+}
+
 char *
 io_limit_dump(List *limit_list)
 {

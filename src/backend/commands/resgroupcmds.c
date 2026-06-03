@@ -41,6 +41,7 @@
 #include "utils/memutils.h"
 #include "utils/resgroup.h"
 #include "utils/cgroup.h"
+#include "utils/cgroup_io_limit.h"
 #include "utils/resource_manager.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
@@ -1190,10 +1191,16 @@ freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx)
 
 /*
  * Compare two io_limit lists through their canonical catalog representation.
+ *
+ * dumpio walks each list in stored order, so the same entries listed in a
+ * different order would dump to different strings. Sort shallow copies by
+ * tablespace first so only the values decide the match.
  */
 static bool
 resGroupIOLimitMatches(List *left, List *right)
 {
+	List       *sortedLeft;
+	List       *sortedRight;
 	char       *leftStr;
 	char       *rightStr;
 	bool        result;
@@ -1201,11 +1208,17 @@ resGroupIOLimitMatches(List *left, List *right)
 	if (left == NIL || right == NIL)
 		return left == NIL && right == NIL;
 
-	leftStr = cgroupOpsRoutine->dumpio(left);
-	rightStr = cgroupOpsRoutine->dumpio(right);
+	sortedLeft = list_qsort(left, compare_tablespace_oid);
+	sortedRight = list_qsort(right, compare_tablespace_oid);
+
+	leftStr = cgroupOpsRoutine->dumpio(sortedLeft);
+	rightStr = cgroupOpsRoutine->dumpio(sortedRight);
 	result = strcmp(leftStr, rightStr) == 0;
+
 	pfree(leftStr);
 	pfree(rightStr);
+	list_free(sortedLeft);
+	list_free(sortedRight);
 
 	return result;
 }
