@@ -3769,7 +3769,18 @@ CopyFrom(CopyState cstate)
 	mtstate->ps.plan = NULL;
 	mtstate->ps.state = estate;
 	mtstate->operation = CMD_INSERT;
-	mtstate->resultRelInfo = estate->es_result_relations;
+	mtstate->mt_nrels = 1;
+	/*
+	 * GPDB: point resultRelInfo at our single target relation (treated as a
+	 * one-element array), and set rootResultRelInfo too.  ExecFindPartition()
+	 * -> ExecInitPartitionInfo() dereferences mtstate->resultRelInfo[0] and
+	 * mtstate->rootResultRelInfo for COPY into a partitioned table.  This path
+	 * uses InitResultRelInfo() directly rather than ExecInitResultRelation(),
+	 * so estate->es_result_relations is never populated (NULL); using it here
+	 * crashed partition routing.  Mirrors the setup in copyfrom.c's CopyFrom().
+	 */
+	mtstate->resultRelInfo = resultRelInfo;
+	mtstate->rootResultRelInfo = resultRelInfo;
 
 	if (resultRelInfo->ri_FdwRoutine != NULL &&
 		resultRelInfo->ri_FdwRoutine->BeginForeignInsert != NULL)
