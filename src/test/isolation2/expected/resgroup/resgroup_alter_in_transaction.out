@@ -843,6 +843,65 @@ ALTER RESOURCE GROUP
  rg_alter_tran_b | 2           | 10              | 100        | -1     | 10           | 0        | -1       
 (2 rows)
 
+-- 33 Error inside the PRE_COMMIT callback aborts the commit and leaves no
+-- pending state. The fault fires on the second queued callback, so the catch
+-- path has to release a populated prepared list. A later ALTER must still
+-- apply, which proves the callback list kept no stale entries.
+-- The earlier crash recovery tests killed the default session, so run on 1.
+1: ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 5;
+ALTER RESOURCE GROUP
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 6;
+ALTER RESOURCE GROUP
+1: SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit 
+-----------------+-------------+-----------------+------------+--------+--------------+----------+----------
+ rg_alter_tran   | 5           | 32              | 125        | -1     | 10           | 10       | -1       
+ rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1       
+(2 rows)
+
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'error', '', '', '', 2, 2, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+1: BEGIN;
+BEGIN
+1: ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 7;
+ALTER RESOURCE GROUP
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 8;
+ALTER RESOURCE GROUP
+1: COMMIT;
+ERROR:  fault triggered, fault name:'resgroup_alter_pre_commit' fault type:'error'
+
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Aborted commit must leave the catalog at its previous values.
+1: SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit 
+-----------------+-------------+-----------------+------------+--------+--------------+----------+----------
+ rg_alter_tran   | 5           | 32              | 125        | -1     | 10           | 10       | -1       
+ rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1       
+(2 rows)
+
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 9;
+ALTER RESOURCE GROUP
+1: SELECT * FROM rg_alter_tran_status;
+ groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit 
+-----------------+-------------+-----------------+------------+--------+--------------+----------+----------
+ rg_alter_tran   | 9           | 32              | 125        | -1     | 10           | 10       | -1       
+ rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1       
+(2 rows)
+
 -- cleanup
 1: DROP VIEW rg_alter_tran_status;
 DROP VIEW

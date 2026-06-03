@@ -610,6 +610,31 @@ SELECT * FROM rg_alter_tran_status;
 1q:
 1: SELECT * FROM rg_alter_tran_status;
 
+-- 33 Error inside the PRE_COMMIT callback aborts the commit and leaves no
+-- pending state. The fault fires on the second queued callback, so the catch
+-- path has to release a populated prepared list. A later ALTER must still
+-- apply, which proves the callback list kept no stale entries.
+-- The earlier crash recovery tests killed the default session, so run on 1.
+1: ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 5;
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 6;
+1: SELECT * FROM rg_alter_tran_status;
+
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'error', '', '', '', 2, 2, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran   SET CONCURRENCY 7;
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 8;
+1: COMMIT;
+
+1: SELECT gp_inject_fault('resgroup_alter_pre_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+-- Aborted commit must leave the catalog at its previous values.
+1: SELECT * FROM rg_alter_tran_status;
+
+1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 9;
+1: SELECT * FROM rg_alter_tran_status;
+
 -- cleanup
 1: DROP VIEW rg_alter_tran_status;
 1: DROP VIEW rg_alter_tran_runtime_status;

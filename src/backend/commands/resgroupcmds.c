@@ -1395,6 +1395,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 		List	   *prepared = NIL;
 		List	   *rejected = NIL;
 		Relation	rel;
+		ResGroupCaps finalCaps;
 
 		/*
 		 * Keep final, non-duplicate callbacks, plus CPUSET callbacks whose
@@ -1402,38 +1403,63 @@ alterResgroupCallback(XactEvent event, void *arg)
 		 */
 		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
 
-		foreach (lc, resgroup_alter_callbacks)
+		/*
+		 * GetResGroupCapabilities can raise on a malformed stored value, which
+		 * would turn this commit into an abort. Release the relation and the
+		 * TopMemoryContext lists on that path so they do not leak, then let the
+		 * abort proceed. The contexts themselves stay owned by
+		 * resgroup_alter_callbacks, which the abort callback frees.
+		 */
+		finalCaps.io_limit = NIL;
+
+		PG_TRY();
 		{
-			ResourceGroupCallbackContext *ctx = lfirst(lc);
-			ResGroupCaps finalCaps;
-
-			GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
-
-			if ((resGroupCapFieldMatches(ctx, &finalCaps) ||
-				 (ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
-				  resgroupHasLaterCpuCallbackMatchingFinal(
-												resgroup_alter_callbacks,
-												ctx,
-												&finalCaps))) &&
-				!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+			foreach (lc, resgroup_alter_callbacks)
 			{
-				MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-				prepared = lappend(prepared, ctx);
-				MemoryContextSwitchTo(oldcxt);
-			}
-			else
-			{
-				MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-				rejected = lappend(rejected, ctx);
-				MemoryContextSwitchTo(oldcxt);
-			}
+				ResourceGroupCallbackContext *ctx = lfirst(lc);
 
-			if (finalCaps.io_limit != NIL)
-			{
-				cgroupOpsRoutine->freeio(finalCaps.io_limit);
-				finalCaps.io_limit = NIL;
+				SIMPLE_FAULT_INJECTOR("resgroup_alter_pre_commit");
+
+				GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+
+				if ((resGroupCapFieldMatches(ctx, &finalCaps) ||
+					 (ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
+					  resgroupHasLaterCpuCallbackMatchingFinal(
+													resgroup_alter_callbacks,
+													ctx,
+													&finalCaps))) &&
+					!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+				{
+					MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+					prepared = lappend(prepared, ctx);
+					MemoryContextSwitchTo(oldcxt);
+				}
+				else
+				{
+					MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+					rejected = lappend(rejected, ctx);
+					MemoryContextSwitchTo(oldcxt);
+				}
+
+				if (finalCaps.io_limit != NIL)
+				{
+					cgroupOpsRoutine->freeio(finalCaps.io_limit);
+					finalCaps.io_limit = NIL;
+				}
 			}
 		}
+		PG_CATCH();
+		{
+			if (finalCaps.io_limit != NIL)
+				cgroupOpsRoutine->freeio(finalCaps.io_limit);
+
+			heap_close(rel, AccessShareLock);
+			list_free(prepared);
+			list_free(rejected);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
 		heap_close(rel, AccessShareLock);
 
 		list_free(resgroup_alter_callbacks);
