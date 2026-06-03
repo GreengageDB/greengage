@@ -3375,12 +3375,14 @@ DropRelFileNodesAllBuffers(SMgrRelation *smgr_reln, int nnodes)
 	/* If it's a local relation, it's localbuf.c's problem. */
 	for (i = 0; i < nnodes; i++)
 	{
+#if 0
 		if (RelFileNodeBackendIsTemp(smgr_reln[i]->smgr_rnode))
 		{
 			if (smgr_reln[i]->smgr_rnode.backend == MyBackendId)
 				DropRelFileNodeAllLocalBuffers(smgr_reln[i]->smgr_rnode.node);
 		}
 		else
+#endif
 			rels[n++] = smgr_reln[i];
 	}
 
