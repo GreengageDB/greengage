@@ -683,7 +683,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
 
     Examples:
-        | fault_name                                                                    |<p_sdw1>|<m_sdw1>|<p_sdw2>|<m_sdw2>|<p_sdw3>|<m_sdw3>|
+        | fault_name                                                                    |p_sdw1|m_sdw1|p_sdw2|m_sdw2|p_sdw3|m_sdw3|
         | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |2|3|2|3|2|0|
         | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |3|2|3|2|0|0|
 
