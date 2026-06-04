@@ -7,6 +7,10 @@
 
 # required setup steps
 test: test_setup
+# GPDB: create_function_0 defines the C helper functions (binary_coercible,
+# test_enc_conversion, test_opclass_options_func) used by later tests such as
+# type_sanity/opr_sanity/conversion; it must run before them.
+test: create_function_0
 
 # run tablespace by itself, and first, because it forces a checkpoint;
 # we'd prefer not to have checkpoints later in the tests because that
