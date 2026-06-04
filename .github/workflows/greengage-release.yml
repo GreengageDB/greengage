@@ -1,4 +1,4 @@
-# Release creation workflow
+# .github/workflows/greengage-release.yml
 name: Greengage release
 
 on:
@@ -11,9 +11,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target_os: ubuntu
-            package_dir: deb-packages
-            extensions: deb ddeb
+        - version: 7
+          target_os: ubuntu
+          target_os_version: '22.04'
+          extensions:  deb ddeb
+          package_dir: deb-packages
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -22,6 +24,8 @@ jobs:
       - name: Upload packages to release
         uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5791
         with:
-          extensions:   ${{ matrix.extensions }}
-          package_dir:  ${{ matrix.package_dir }}
-          target_os:    ${{ matrix.target_os }}
+          version:           ${{ matrix.version }}
+          extensions:        ${{ matrix.extensions }}
+          package_dir:       ${{ matrix.package_dir }}
+          target_os:         ${{ matrix.target_os }}
+          target_os_version: ${{ matrix.target_os_version }}
