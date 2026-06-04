@@ -530,14 +530,13 @@ compare_tablespace_oid(const void *x, const void *y)
 	TblSpcIOLimit *a = (TblSpcIOLimit *) lfirst(*(ListCell **) x);
 	TblSpcIOLimit *b = (TblSpcIOLimit *) lfirst(*(ListCell **) y);
 
-	if (a->tablespace_oid != b->tablespace_oid)
-	{
-		if (a->tablespace_oid < b->tablespace_oid)
-			return -1;
-		return 1;
-	}
+	if (a->tablespace_oid == b->tablespace_oid)
+		return 0;
 
-	return 0;
+	if (a->tablespace_oid < b->tablespace_oid)
+		return -1;
+
+	return 1;
 }
 
 char *
