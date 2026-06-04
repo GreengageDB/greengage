@@ -393,6 +393,7 @@ _outJoinExpr(StringInfo str, JoinExpr *node)
 	WRITE_NODE_FIELD(larg);
 	WRITE_NODE_FIELD(rarg);
 	WRITE_NODE_FIELD(usingClause);
+	WRITE_NODE_FIELD(join_using_alias);
 	WRITE_NODE_FIELD(quals);
 	WRITE_NODE_FIELD(alias);
 	WRITE_INT_FIELD(rtindex);
