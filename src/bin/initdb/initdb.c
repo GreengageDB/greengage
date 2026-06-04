@@ -162,6 +162,7 @@ static char *info_schema_file;
 static char *cdb_init_d_dir;
 static char *features_file;
 static char *system_views_file;
+static char *system_functions_file;
 static bool success = false;
 static bool made_new_pgdata = false;
 static bool found_existing_pgdata = false;
@@ -256,6 +257,7 @@ static void bootstrap_template1(void);
 static void setup_auth(FILE *cmdfd);
 static void get_su_pwd();
 static void setup_depend(FILE *cmdfd);
+static void setup_run_file(FILE *cmdfd, const char *filename);
 static void setup_sysviews(FILE *cmdfd);
 static void setup_description(FILE *cmdfd);
 #if 0
@@ -1666,6 +1668,35 @@ setup_depend(FILE *cmdfd)
 }
 
 /*
+ * Run a SQL file of system-object definitions (e.g. system_functions.sql)
+ * through the bootstrap backend, one logical line at a time.
+ *
+ * GPDB: system_functions.sql installs the real bodies of the ~46 internal SQL
+ * functions whose pg_proc.dat entry carries the placeholder prosrc
+ * 'see system_functions.sql'.  This step was lost in the PG merge; without it
+ * those functions (col_description, obj_description, ...) try to execute the
+ * literal placeholder text and fail with 'syntax error at or near "see"'.
+ */
+static void
+setup_run_file(FILE *cmdfd, const char *filename)
+{
+	char	  **line;
+	char	  **lines;
+
+	lines = readfile(filename);
+
+	for (line = lines; *line != NULL; line++)
+	{
+		PG_CMD_PUTS(*line);
+		free(*line);
+	}
+
+	PG_CMD_PUTS("\n\n");
+
+	free(lines);
+}
+
+/*
  * set up system views
  */
 static void
@@ -2789,6 +2820,7 @@ setup_data_file_paths(void)
 	set_input(&dictionary_file, "snowball_create.sql");
 	set_input(&info_schema_file, "information_schema.sql");
 	set_input(&features_file, "sql_features.txt");
+	set_input(&system_functions_file, "system_functions.sql");
 	set_input(&system_views_file, "system_views.sql");
 
 	set_input(&cdb_init_d_dir, "cdb_init.d");
@@ -2817,6 +2849,7 @@ setup_data_file_paths(void)
 	check_input(dictionary_file);
 	check_input(info_schema_file);
 	check_input(features_file);
+	check_input(system_functions_file);
 	check_input(system_views_file);
 }
 
@@ -3152,6 +3185,12 @@ initialize_data_directory(void)
 	PG_CMD_OPEN;
 
 	setup_auth(cmdfd);
+
+	/*
+	 * Install the real bodies of internal SQL functions defined in
+	 * system_functions.sql (must run before setup_depend so they are pinned).
+	 */
+	setup_run_file(cmdfd, system_functions_file);
 
 	setup_depend(cmdfd);
 
