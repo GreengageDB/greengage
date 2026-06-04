@@ -228,10 +228,7 @@ static TempcatSnapshot
 TempcatSnapshotCreateEmpty(void)
 {
 	TempcatSnapshot result;
-	MemoryContext oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
-
-	result = palloc0(sizeof(TempcatSnapshotData));
-	MemoryContextSwitchTo(oldctx);
+	result = MemoryContextAllocZero(GetLocalMemoryContext(), sizeof(TempcatSnapshotData));
 	return result;
 }
 
