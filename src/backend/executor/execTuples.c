@@ -160,7 +160,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	int64		rowNum = slotAocs->row_num;
 	Assert(rowNum != InvalidAORowNum);
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
-	if (scan == NULL)
+	if (unlikely(scan == NULL))
 		return;
 
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
@@ -176,17 +176,17 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		Assert(ds);
 
 		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-		if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
-		{
-			if (AO_ATTR_VAL_IS_MISSING(rowNum,
+		//if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+		//{
+			if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 									attno,
 									curseginfo->segno,
-									scan->columnScanInfo.attnum_to_rownum))
+									scan->columnScanInfo.attnum_to_rownum)))
 			{
 				d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
 				continue;
 			}
-		}
+		//}
 
 		while (true)
 		{
@@ -211,11 +211,18 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		Assert(err >= 0);
 
 		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
+		//int32 rowsToSkip = rowNumInBlock - datumstreamread_nth(ds);
+		//int32 cnt = 0;
+		//while (rowsToSkip > 0)
 		while (rowNumInBlock > datumstreamread_nth(ds))
 		{
+			//rowsToSkip--;
+			//cnt++;
 			err = datumstreamread_advance(ds);
 			Assert(err > 0);
 		}
+		//if (rowsToSkip != cnt)
+		//	elog(FATAL, "[RELOG] rowsToSkip %d, cnt %d", rowsToSkip, cnt);
 
 		datumstreamread_get(ds, &d[attno], &null[attno]);
 	}
