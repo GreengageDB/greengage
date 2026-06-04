@@ -294,7 +294,7 @@ $$ LANGUAGE plpython3u;
     spcoid = get_tablespace_oid(tablespace_name.encode('utf-8'), False)
     location = get_tablespace_path(spcoid)
 
-    if location == "":
+    if not location:
         return False
 
     bdi = get_bdi_of_path(location)
