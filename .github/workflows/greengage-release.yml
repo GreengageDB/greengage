@@ -19,7 +19,7 @@ jobs:
       actions: read
     steps:
       - name: Upload packages to release
-        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@v27
+        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5791
         with:
           extensions: ${{ matrix.extensions }}
           artifact_name: ${{ matrix.artifact_name }}
