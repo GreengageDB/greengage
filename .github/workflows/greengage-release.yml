@@ -11,8 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - artifact_name: deb-packages
-          extensions:    deb ddeb
+          - target_os: ubuntu
+            package_dir: deb-packages
+            extensions: deb ddeb
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -21,5 +22,6 @@ jobs:
       - name: Upload packages to release
         uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5791
         with:
-          extensions: ${{ matrix.extensions }}
-          artifact_name: ${{ matrix.artifact_name }}
+          extensions:   ${{ matrix.extensions }}
+          package_dir:  ${{ matrix.package_dir }}
+          target_os:    ${{ matrix.target_os }}
