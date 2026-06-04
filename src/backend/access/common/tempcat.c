@@ -458,7 +458,12 @@ tempcat_define_savepoint(const char *name)
 	elog(NOTICE, "TEMPCAT: tempcat_define_safepoint, name = '%s'", name);
 #endif
 
-	TempcatSnapshotCreate(name);	/* savepoint to rollback to */
+	/* Rename current anonymous snapshot to serve as the savepoint rollback target. */
+	{
+		MemoryContext oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
+		TempcatSnapshotGetCurrent()->name = pstrdup(name);
+		MemoryContextSwitchTo(oldctx);
+	}
 	TempcatSnapshotCreate(NULL);	/* current snapshot to store changes */
 
 	Assert(TempcatTransactionInProgress());
