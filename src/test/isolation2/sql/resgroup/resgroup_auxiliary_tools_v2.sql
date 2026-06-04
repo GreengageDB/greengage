@@ -292,7 +292,7 @@ $$ LANGUAGE plpython3u;
 
     # get path of tablespace
     spcoid = get_tablespace_oid(tablespace_name.encode('utf-8'), False)
-    location = ctypes.cast(get_tablespace_path(spcoid), ctypes.c_char_p).value
+    location = get_tablespace_path(spcoid)
 
     if location == "":
         return False
