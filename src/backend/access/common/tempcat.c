@@ -388,8 +388,6 @@ tempcat_begin_transaction(void)
 
 /*
  * Perform actions related to virtual catalog on transaction commit.
- *
- * NB: There could be actually no transaction in progress.
  */
 void
 tempcat_end_transaction(void)
