@@ -847,14 +847,8 @@ class Planner:
             if conflict_pairs:
                 self.logger.info(f"Detected {len(conflict_pairs)} mirror-primary ordering conflicts")
 
-        if swap_pairs and conflict_pairs:
-            self.logger.info(f"Detected {len(swap_pairs)} primary-mirror pairs which just swap hosts")
+        if swap_pairs:
             phase1, phase2, phase3, handled_dbids = self.decompose_swap_pairs(swap_pairs + conflict_pairs,
-                                                                              port_allocator,
-                                                                              resource_estimator)
-            final_moves = self._group_swap_moves(moves, handled_dbids, phase1, phase2, phase3)
-        elif swap_pairs:
-            phase1, phase2, phase3, handled_dbids = self.decompose_swap_pairs(swap_pairs,
                                                                               port_allocator,
                                                                               resource_estimator)
             final_moves = self._group_swap_moves(moves, handled_dbids, phase1, phase2, phase3)

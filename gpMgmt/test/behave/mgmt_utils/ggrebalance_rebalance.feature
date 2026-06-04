@@ -669,12 +669,12 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
          And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
-         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has <p_sdw1> segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has <m_sdw1> segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has <p_sdw2> segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has <m_sdw2> segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has <p_sdw3> segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has <m_sdw3> segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 6, row count = 100
@@ -683,9 +683,9 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
 
     Examples:
-        | fault_name                                                                    |
-        | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |
-        | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |
+        | fault_name                                                                    |<p_sdw1>|<m_sdw1>|<p_sdw2>|<m_sdw2>|<p_sdw3>|<m_sdw3>|
+        | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |2|3|2|3|2|0|
+        | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |3|2|3|2|0|0|
 
     Scenario Outline: 8.2.3. rebalance - interrupt during switchover M->P step (before invocation of 'gprecoverseg'), continue and rollback failed step.
         Given the database is not running
@@ -1455,7 +1455,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
 
-    Scenario: test 11. rebalance - planner should detect primary-mirror conflicts when mirror's dst host= primrary's src host.
+    Scenario: test 11. rebalance - planner should detect primary-mirror conflicts when mirror's dst host= primary's src host.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'mkdir -p /data/gpdata/ggrebalance/primary'"
@@ -1501,14 +1501,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
 """
  move_order |      status      
 ------------+------------------
-          0 | APPROVE_REQUIRED
-          1 | PLANNED
+          0 | PLANNED
+          1 | APPROVE_REQUIRED
           2 | APPROVE_REQUIRED
           3 | PLANNED
           4 | PLANNED
           5 | APPROVE_REQUIRED
-          6 | PLANNED
-          7 | APPROVE_REQUIRED
+          6 | APPROVE_REQUIRED
+          7 | PLANNED
 (8 rows)
 
 
