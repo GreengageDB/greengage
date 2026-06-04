@@ -1100,7 +1100,14 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_resultcache,
-		true,
+		/*
+		 * GPDB: off by default.  Result Cache (Memoize) is not integrated with
+		 * the MPP planner/executor -- a generated ResultCache plan node trips
+		 * "unrecognized node type" in expression_tree_mutator() and is also
+		 * absent from the binary plan-dispatch (outfast.c/readfast.c).  Until
+		 * it is properly supported, leave it disabled so it is never generated.
+		 */
+		false,
 		NULL, NULL, NULL
 	},
 	{
