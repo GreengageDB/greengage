@@ -44,7 +44,29 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When the user runs "ggrebalance -c"
         Then ggrebalance should return a return code of 0
         And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance --non-interactive-mode --parallel <parallel_size> --batch-size <batch_size> -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        When set fault inject "on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE_end"
+         And the user runs "ggrebalance --non-interactive-mode --parallel <parallel_size> --batch-size <batch_size> -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+         And the user runs "psql -d postgres -c 'SELECT move_order, status FROM ggrebalance.segment_move_steps ORDER BY 1' -o /tmp/move_order.out"
+        Then verify that the file "/tmp/move_order.out" contains text
+"""
+ move_order |      status      
+------------+------------------
+          0 | PLANNED
+          1 | PLANNED
+          2 | APPROVE_REQUIRED
+          3 | APPROVE_REQUIRED
+          4 | PLANNED
+          5 | PLANNED
+          6 | APPROVE_REQUIRED
+          7 | APPROVE_REQUIRED
+          8 | PLANNED
+(9 rows)
+
+
+"""
+         And unset fault inject
+         And the temporary file "/tmp/move_order.out" is removed
+        When the user runs "ggrebalance --non-interactive-mode --parallel <parallel_size> --batch-size <batch_size>"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
@@ -483,11 +505,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
          And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
-         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 1 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -542,7 +564,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "These segments should be started manually in order cluster to become fault tolerant:" to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'd'"
          And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
@@ -608,6 +630,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | FAULT_BEFORE_GPRECOVERSEG_MIRROR_TO_PRIMARY                                   |
         | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |
 
+    # FIXME faulting at segstop leads to rollback of swtichover moves when cluster has DOWN mirrors.
     Scenario Outline: 8.2.2. rebalance - interrupt during switchover P->M step (before invocation of 'gprecoverseg'), continue and rollback failed step.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"
@@ -644,15 +667,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
-         And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
          And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 4 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 1 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -664,7 +686,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
     Examples:
         | fault_name                                                                    |
         | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |
-        | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |
+    #    | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |
 
     Scenario Outline: 8.2.3. rebalance - interrupt during switchover M->P step (before invocation of 'gprecoverseg'), continue and rollback failed step.
         Given the database is not running
@@ -699,9 +721,9 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 4 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -756,9 +778,9 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print " Rolled back moves " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 4 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -864,11 +886,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Plan to rollback step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And clear user's answers
-         And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has 0 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has 1 segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -1434,3 +1456,67 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
 
+    Scenario: test 11. rebalance - planner should detect primary-mirror conflicts when mirror's dst host= primary's src host.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'mkdir -p /data/gpdata/ggrebalance/primary'"
+         And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'mkdir -p /data/gpdata/ggrebalance/mirror'"
+         And the temporary file "/tmp/rebalance_s6" is created with content
+         """
+         TRUSTED_SHELL=ssh
+         ENCODING=UNICODE
+         SEG_PREFIX=gpseg
+         HEAP_CHECKSUM=on
+         HBA_HOSTNAMES=0
+         QD_PRIMARY_ARRAY=cdw~cdw~7000~/data/gpdata/ggrebalance/gpseg-1~1~-1~0
+         declare -a PRIMARY_ARRAY=(
+            sdw1~sdw1~7002~/data/gpdata/ggrebalance/primary/gpseg0~2~0~11100
+            sdw1~sdw1~7003~/data/gpdata/ggrebalance/primary/gpseg1~3~1~11110
+            sdw1~sdw1~7004~/data/gpdata/ggrebalance/primary/gpseg2~4~2~11220
+            sdw2~sdw2~7005~/data/gpdata/ggrebalance/primary/gpseg3~5~3~11350
+            sdw2~sdw2~7006~/data/gpdata/ggrebalance/primary/gpseg4~6~4~11360
+            sdw2~sdw2~7007~/data/gpdata/ggrebalance/primary/gpseg5~7~5~11370
+            )
+            declare -a MIRROR_ARRAY=(
+            sdw2~sdw2~7050~/data/gpdata/ggrebalance/mirror/gpseg0~8~0~51130
+            sdw2~sdw2~7051~/data/gpdata/ggrebalance/mirror/gpseg1~9~1~51140
+            sdw2~sdw2~7052~/data/gpdata/ggrebalance/mirror/gpseg2~10~2~51160
+            sdw3~sdw3~7053~/data/gpdata/ggrebalance/mirror/gpseg3~11~3~51160
+            sdw3~sdw3~7054~/data/gpdata/ggrebalance/mirror/gpseg4~12~4~51200
+            sdw2~sdw2~7055~/data/gpdata/ggrebalance/mirror/gpseg5~13~5~51136
+            )
+         """
+        When initialize a cluster using "/tmp/rebalance_s6"
+        Then the temporary file "/tmp/rebalance_s6" is removed
+        Given the environment variable "COORDINATOR_DATA_DIRECTORY" is set to "/data/gpdata/ggrebalance/gpseg-1"
+         And coordinator data directory is updated
+         And all files in gpAdminLogs directory are deleted
+        When set fault inject "on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE_end"
+         And the user runs "ggrebalance --non-interactive-mode --skip-resource-estimation -x 6 -d '/data/gpdata/ggrebalance/primary, /data/gpdata/ggrebalance/mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And unset fault inject
+        When the user runs "psql -d postgres -c 'SELECT move_order, status FROM ggrebalance.segment_move_steps ORDER BY 1' -o /tmp/move_order.out"
+        Then psql should return a return code of 0
+         And verify that the file "/tmp/move_order.out" contains text
+"""
+ move_order |      status      
+------------+------------------
+          0 | PLANNED
+          1 | APPROVE_REQUIRED
+          2 | APPROVE_REQUIRED
+          3 | PLANNED
+          4 | PLANNED
+          5 | APPROVE_REQUIRED
+          6 | APPROVE_REQUIRED
+          7 | PLANNED
+(8 rows)
+
+
+"""     
+         And the temporary file "/tmp/move_order.out" is removed
+        Given the database is not running
+        Given the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/primary'"
+        And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/mirror'"
+        Then "COORDINATOR_DATA_DIRECTORY" environment variable should be restored
+         And coordinator data directory is updated

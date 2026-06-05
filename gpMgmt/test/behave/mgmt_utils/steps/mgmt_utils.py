@@ -4675,3 +4675,11 @@ def impl(context, var, command):
 def impl(context):
     global coordinator_data_dir 
     coordinator_data_dir = os.environ.get('COORDINATOR_DATA_DIRECTORY')
+
+@given('verify that the file "{filepath}" contains text')
+@then('verify that the file "{filepath}" contains text')
+def impl(context, filepath):
+    filepath = glob.glob(filepath)[0]
+    with open(filepath, 'r') as f:
+        if context.text != f.read():
+            raise Exception("The file '%s' does not contain '%s'" % (filepath, context.text))
