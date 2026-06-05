@@ -506,6 +506,54 @@ tempcat_rollback_to_savepoint(const char *name)
 	TempcatDirtyFlag = true;
 }
 
+/*
+ * Perform actions related to virtual catalog on `release savepoint`.
+ *
+ * Pop the current anonymous working snapshot, then pop and free all snapshots
+ * down to and including the named savepoint, and finally restore the working
+ * snapshot on top.  This mirrors what RELEASE SAVEPOINT does: the savepoint
+ * is no longer a rollback target, but its effects are kept.
+ */
+void
+tempcat_release_savepoint(const char *name)
+{
+	TempcatSnapshot working;
+
+	Assert(PointerIsValid(name));
+	Assert(TempcatTransactionInProgress());
+	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
+
+#ifdef TEMPCAT_DEBUG
+	elog(NOTICE, "TEMPCAT: tempcat_release_savepoint, name = '%s'", name);
+#endif
+
+	/* Detach the current working snapshot from the stack. */
+	working = TempcatSnapshotPopBack();
+	Assert(PointerIsValid(working));
+
+	/*
+	 * Pop and free snapshots until the named savepoint is found and freed.
+	 */
+	for (;;)
+	{
+		TempcatSnapshot tempcat_snapshot = TempcatSnapshotGetCurrent();
+		bool		is_target;
+
+		Assert(!TempcatSnapshotIsRoot(tempcat_snapshot));
+
+		is_target = (!TempcatSnapshotIsAnonymous(tempcat_snapshot)) &&
+			(strcmp(tempcat_snapshot->name, name) == 0);
+
+		TempcatSnapshotFree(TempcatSnapshotPopBack());
+
+		if (is_target)
+			break;
+	}
+
+	/* Restore the working snapshot on top of the stack. */
+	TempcatSnapshotPushBack(working);
+}
+
 static TempcatSnapshotRelationData* find_relation_entry(TempcatSnapshot snapshot, Relation rel) {
 	dlist_iter iter;
 	dlist_foreach(iter, &snapshot->relationData)

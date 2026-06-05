@@ -5426,6 +5426,9 @@ ReleaseSavepoint(const char *name)
 		xact = xact->parent;
 		Assert(PointerIsValid(xact));
 	}
+
+	/* Release virtual catalog savepoint */
+	tempcat_release_savepoint(name);
 }
 
 /*

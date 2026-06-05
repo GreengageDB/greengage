@@ -35,9 +35,6 @@
  * Flag stored in ItemPointerData.ip_posid to mark tuple as virtual. We can
  * safely store a flag in higher bits of ip_posid since it's maximum value is
  * very limited. See MaxHeapTuplesPerPage.
- *
- * This constant better be not too large since MAX_TUPLES_PER_PAGE depends on
- * its value.
  */
 #define TEMPCAT_ITEM_POINTER_BIT 0x0800
 
@@ -65,6 +62,7 @@ extern void      tempcat_begin_transaction(void);
 extern void      tempcat_end_transaction(void);
 extern void      tempcat_abort_transaction(void);
 extern void      tempcat_define_savepoint(const char *name);
+extern void      tempcat_release_savepoint(const char *name);
 extern void      tempcat_rollback_to_savepoint(const char *name);
 
 /*
