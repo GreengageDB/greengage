@@ -11,11 +11,11 @@ WORKDIR /home/gpadmin
 ARG OS_VERSION
 ENV OS_VERSION=${OS_VERSION}
 
-COPY README.rockylinux.bash ./
+COPY README.Rhel-Rocky.bash ./
 COPY gpMgmt/bin/gpload_test/pytest_requirement.txt ./
 RUN set -eux; \
-    ./README.rockylinux.bash; \
-    rm README.rockylinux.bash; \
+    ./README.Rhel-Rocky.bash; \
+    rm README.Rhel-Rocky.bash; \
 # Set Python as default based on OS version
     case "$OS_VERSION" in \
         8) \

@@ -6,7 +6,7 @@
   ```
   Note: CentOS 7 is EOL — configure `yum` to use a valid repo (e.g., `vault.centos.org`) before installing dependencies.
 
-## For RHEL 8:
+## For RHEL/Rocky (versions 8 or 9):
 
 - Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
@@ -27,20 +27,6 @@
 
   ```bash
   sudo ln -s python2 /usr/bin/python
-  ```
-
-## For Rocky Linux (versions 8 or 9):
-
-- Install dependencies using `README.rockylinux.bash`:
-
-  ```bash
-  sudo ./README.rockylinux.bash
-  ```
-
-- For Rocky Linux 8, create a symbolic link to Python 2 in `/usr/bin`:
-
-  ```bash
-  sudo ln -sf /usr/bin/python2 /usr/bin/python
   ```
 
 ## For Ubuntu (versions 22.04 or 24.04):
