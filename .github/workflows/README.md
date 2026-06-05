@@ -60,7 +60,7 @@ uses a composite action to manage package deployment.
   commit SHA as the key, rather than downloading artifacts from previous jobs.
 - **OS-specific Filenames:** Inserts `~{target_os}{target_os_version}` into
   each package filename before the architecture suffix prior to upload
-  (e.g. `greengage6_6.30.1_amd64.deb` → `greengage6_6.30.1~ubuntu24.04_amd64.deb`).
+  (e.g. `greengage7_7.4.1_amd64.deb` → `greengage7_7.4.1~ubuntu24.04_amd64.deb`).
 - **Manual Recovery:** If the cache is missing, the workflow checks the status
   of the last build for the tag and provides clear instructions for manual
   intervention. It does not automatically trigger builds to avoid infinite
