@@ -2502,8 +2502,53 @@ psql_completion(const char *text, int start, int end)
 			(!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*)") ||
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
 	{
-		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("readfunc =", "writefunc =", "validatorfunc =");
+		/* Find options that were used and complete with ones that hadn't */
+			if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+		{
+			/* Mask for used options: */
+			/* (1 << 0) for readfunc */
+			/* (1 << 1) for writefunc */
+			/* (1 << 2) for validatorfunc */
+			int used_functions_mask = 0;
+
+			int i = 0;
+
+			while(i < previous_words_count &&
+				  !ends_with(previous_words[i], '('))
+			{
+				int cur_prev_wd_len = strlen(previous_words[i]);
+				if(pg_strncasecmp(previous_words[i], "readfunc",
+								  cur_prev_wd_len) == 0)
+				{
+					used_functions_mask |= (1 << 0);
+				}
+				else if(pg_strncasecmp(previous_words[i], "writefunc",
+									   cur_prev_wd_len) == 0)
+				{
+					used_functions_mask |= (1 << 1);
+				}
+				else if(pg_strncasecmp(previous_words[i], "validatorfunc",
+									   cur_prev_wd_len) == 0)
+				{
+					used_functions_mask |= (1 << 2);
+				}
+
+				i += 1;
+			}
+
+			const char* create_protocol_options_list[] = {"readfunc =",
+								"writefunc =", "validatorfunc =", NULL};
+
+			i = 0;
+
+			for(; i <= 2; i++)
+			{
+				if(used_functions_mask & (1 << i))
+					create_protocol_options_list[i] = "";
+			}
+
+			COMPLETE_WITH_LIST(create_protocol_options_list);
+		}
 		else if(TailMatches("readfunc", "="))
 			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
 		else if(TailMatches("writefunc", "="))
