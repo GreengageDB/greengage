@@ -1006,8 +1006,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"DOMAIN", NULL, NULL, &Query_for_list_of_domains},
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
-	{"EXTERNAL TABLE", NULL, NULL, NULL},
-	{"EXTERNAL WEB TABLE", NULL, NULL, NULL},
+	{"EXTERNAL", NULL, NULL, NULL}, /* for ALTER|CREATE|DROP EXTERNAL ... TABLE */
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL, NULL},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
@@ -1023,6 +1022,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"POLICY", NULL, NULL, NULL},
 	{"PROCEDURE", NULL, NULL, Query_for_list_of_procedures},
 	{"PUBLICATION", NULL, Query_for_list_of_publications},
+	{"READABLE", NULL, NULL, NULL, THING_NO_ALTER}, /* for CREATE READABLE EXTERNAL .. TABLE */
 	{"RESOURCE", NULL},
 	{"ROLE", Query_for_list_of_roles},
 	{"ROUTINE", NULL, NULL, &Query_for_list_of_routines, THING_NO_CREATE},
@@ -1051,6 +1051,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"USER", Query_for_list_of_roles " UNION SELECT 'MAPPING FOR'"},
 	{"USER MAPPING FOR", NULL, NULL, NULL},
 	{"VIEW", NULL, NULL, &Query_for_list_of_views},
+	{"WRITABLE", NULL, NULL, NULL, THING_NO_ALTER}, /* for CREATE WRITABLE EXTERNAL .. TABLE */
 	{NULL}						/* end of list */
 };
 
@@ -2306,8 +2307,21 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_available_extension_versions);
 	}
 
-	else if(HeadMatches("ALTER|CREATE|DROP", "EXTERNAL"))
-		COMPLETE_WITH("WEB TABLE", "TABLE");
+	/* CREATE ... EXTERNAL ... TABLE */
+	else if(TailMatches("CREATE", "READABLE|WRITABLE"))
+		COMPLETE_WITH("EXTERNAL");
+	else if(TailMatches("CREATE", "EXTERNAL") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL"))
+		COMPLETE_WITH("WEB", "TEMP", "TABLE");
+	else if(TailMatches("CREATE", "EXTERNAL", "WEB") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB"))
+		COMPLETE_WITH("TEMP", "TABLE");
+	else if(TailMatches("CREATE", "EXTERNAL", "TEMP") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "TEMP") ||
+			TailMatches("CREATE", "EXTERNAL", "WEB", "TEMP") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB", "TEMP"))
+		COMPLETE_WITH("TABLE");
+
 
 	/* Distribution rules for CREATE WRITABLE EXTERNAL tables, 
 	beacause they interfere with CREATE TABLE distribution rules 
