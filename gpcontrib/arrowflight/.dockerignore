@@ -1,0 +1,6 @@
+*
+!tools/
+!tools/duckdb_flight/
+!tools/duckdb_flight/Dockerfile
+!tools/duckdb_flight/requirements.txt
+!tools/duckdb_flight/duckdb_arrowflightd.py
