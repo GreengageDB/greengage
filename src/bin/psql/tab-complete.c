@@ -1022,7 +1022,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"POLICY", NULL, NULL, NULL},
 	{"PROCEDURE", NULL, NULL, Query_for_list_of_procedures},
 	{"PUBLICATION", NULL, Query_for_list_of_publications},
-	{"READABLE", NULL, NULL, NULL, THING_NO_ALTER}, /* for CREATE READABLE EXTERNAL .. TABLE */
+	{"READABLE", NULL, NULL, NULL, THING_NO_ALTER | THING_NO_DROP}, /* for CREATE READABLE EXTERNAL .. TABLE */
 	{"RESOURCE", NULL},
 	{"ROLE", Query_for_list_of_roles},
 	{"ROUTINE", NULL, NULL, &Query_for_list_of_routines, THING_NO_CREATE},
@@ -1051,7 +1051,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"USER", Query_for_list_of_roles " UNION SELECT 'MAPPING FOR'"},
 	{"USER MAPPING FOR", NULL, NULL, NULL},
 	{"VIEW", NULL, NULL, &Query_for_list_of_views},
-	{"WRITABLE", NULL, NULL, NULL, THING_NO_ALTER}, /* for CREATE WRITABLE EXTERNAL .. TABLE */
+	{"WRITABLE", NULL, NULL, NULL, THING_NO_ALTER | THING_NO_DROP}, /* for CREATE WRITABLE EXTERNAL .. TABLE */
 	{NULL}						/* end of list */
 };
 
