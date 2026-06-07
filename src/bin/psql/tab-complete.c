@@ -2868,9 +2868,16 @@ psql_completion(const char *text, int start, int end)
 			  ends_with(prev_wd, ')')) ||
 			 Matches("DROP", "EVENT", "TRIGGER", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "DATA", "WRAPPER", MatchAny) ||
+			 Matches("DROP", "EXTERNAL", "TABLE", MatchAny) ||
+			 Matches("DROP", "EXTERNAL", "WEB", "TABLE", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "TABLE", MatchAny) ||
 			 Matches("DROP", "TEXT", "SEARCH", "CONFIGURATION|DICTIONARY|PARSER|TEMPLATE", MatchAny))
 		COMPLETE_WITH("CASCADE", "RESTRICT");
+
+	else if(Matches("DROP", "EXTERNAL"))
+		COMPLETE_WITH("WEB", "TABLE");
+	else if(Matches("DROP", "EXTERNAL", "WEB"))
+		COMPLETE_WITH("TABLE");
 
 	/* help completing some of the variants */
 	else if (Matches("DROP", "AGGREGATE|FUNCTION|PROCEDURE|ROUTINE", MatchAny))
