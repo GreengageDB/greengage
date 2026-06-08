@@ -102,6 +102,52 @@ SELECT * FROM tempcat_test_sp ORDER BY x;
 SELECT * FROM tempcat_test_sp_2;
 
 -- ============================================================
+-- Release savepoint
+-- ============================================================
+BEGIN;
+    SAVEPOINT sp_rel;
+        CREATE TEMP TABLE tempcat_test_released (x int);
+    RELEASE SAVEPOINT sp_rel;
+
+    -- Table should be visible after release
+    SELECT * FROM tempcat_test_released;
+COMMIT;
+
+-- Table should still exist after commit
+SELECT * FROM tempcat_test_released;
+DROP TABLE tempcat_test_released;
+
+-- ============================================================
+-- Implicit subtransaction rollback (PL/pgSQL EXCEPTION)
+-- ============================================================
+DO $$
+BEGIN
+    CREATE TEMP TABLE tempcat_test_exc_fail (x int);
+    RAISE EXCEPTION 'test error';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'caught: %', SQLERRM;
+END;
+$$;
+
+-- Table should not exist (rolled back with the implicit subtransaction)
+SELECT * FROM tempcat_test_exc_fail;
+
+-- ============================================================
+-- Implicit subtransaction commit (PL/pgSQL EXCEPTION, no error)
+-- ============================================================
+DO $$
+BEGIN
+    CREATE TEMP TABLE tempcat_test_exc_ok (x int);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'should not reach here';
+END;
+$$;
+
+-- Table should exist (implicit subtransaction committed)
+SELECT * FROM tempcat_test_exc_ok;
+DROP TABLE tempcat_test_exc_ok;
+
+-- ============================================================
 -- DROP TEMP TABLE
 -- ============================================================
 DROP TABLE tempcat_test1;
