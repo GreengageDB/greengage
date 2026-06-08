@@ -4208,6 +4208,16 @@ create_projection_path_with_quals(PlannerInfo *root,
 		ProjectionPath *subpp = (ProjectionPath *) subpath;
 
 		Assert(subpp->path.parent == rel);
+		/*
+		 * GPDB: The stripped ProjectionPath may carry restrict clauses (e.g. a
+		 * correlated subquery's param filter applied above a Motion by
+		 * bring_to_outer_query()). Those can only be evaluated by a real Result
+		 * node, so we must not lose them when collapsing the two projections
+		 * into one. Carry them up into the surviving ProjectionPath.
+		 */
+		if (subpp->cdb_restrict_clauses)
+			restrict_clauses = list_concat(list_copy(subpp->cdb_restrict_clauses),
+										   restrict_clauses);
 		subpath = subpp->subpath;
 		Assert(!IsA(subpath, ProjectionPath));
 	}
@@ -4237,13 +4247,19 @@ create_projection_path_with_quals(PlannerInfo *root,
 	 * Note: in the latter case, create_projection_plan has to recheck our
 	 * conclusion; see comments therein.
 	 *
-	 * GPDB: The 'restrict_clauses' is a GPDB addition. If the subpath supports
-	 * Filters, we could push them down too. But currently this is only used on
-	 * top of Material paths, which don't support it, so it doesn't matter.
+	 * GPDB: The 'restrict_clauses' is a GPDB addition, used by
+	 * bring_to_outer_query() to apply a correlated subquery's param filter
+	 * above a Motion. We do not push those Filters down into the subpath here,
+	 * so when restrict_clauses is non-empty we always need a real Result node
+	 * to carry them (create_projection_plan puts them in plan->qual). Eliding
+	 * the Result in that case would silently drop the filter and run the
+	 * subquery uncorrelated, so only take the no-Result shortcut when there are
+	 * no restrict clauses.
 	 */
 	oldtarget = subpath->pathtarget;
-	if (is_projection_capable_path(subpath) ||
-		equal(oldtarget->exprs, target->exprs))
+	if (restrict_clauses == NIL &&
+		(is_projection_capable_path(subpath) ||
+		 equal(oldtarget->exprs, target->exprs)))
 	{
 		/* No separate Result node needed */
 		pathnode->dummypp = true;
