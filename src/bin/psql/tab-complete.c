@@ -428,6 +428,14 @@ static const SchemaQuery Query_for_list_of_foreign_tables = {
 	.result = "pg_catalog.quote_ident(c.relname)",
 };
 
+static const SchemaQuery Query_for_list_of_external_tables = {
+	.catname = "pg_catalog.pg_class c, pg_catalog.pg_exttable e",
+	.selcondition = "c.oid = e.reloid",
+	.viscondition = "pg_catalog.pg_table_is_visible(c.oid)",
+	.namespace = "c.relnamespace",
+	.result = "pg_catalog.quote_ident(c.relname)",
+};
+
 static const SchemaQuery Query_for_list_of_tables = {
 	.catname = "pg_catalog.pg_class c",
 	.selcondition =
@@ -2326,7 +2334,7 @@ psql_completion(const char *text, int start, int end)
 	else if((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
 			TailMatches("TABLE"))
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
 	/* CREATE ... EXTERNAL ... TABLE ... */
 	else if((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
