@@ -227,13 +227,13 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 				//AppendOnlyStorageRead_SetTemporaryRange(
 				AppendOnlyStorageRead_SetTemporaryStart(
 													&ds->ao_read,
-													beginFileOffset,
+													afterFileOffset, // beginFileOffset,
 													afterFileOffset);
 
-				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
-				gp_appendonly_verify_block_checksums = false;
-				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
-				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+				//bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+				//gp_appendonly_verify_block_checksums = false;
+				//AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+				//gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
 			}
 
 			//AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
