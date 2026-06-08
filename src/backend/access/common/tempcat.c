@@ -930,7 +930,7 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 	 * Guard against recursion.  lookup_type_cache() below performs catalog
 	 * lookups that may re-enter systable_beginscan → tempcat_beginscan.
 	 * When that happens, return NULL so the recursive scan falls through
-	 * to the normal on-disk path.  This follows the 1C patch approach.
+	 * to the normal on-disk path.
 	 */
 	static bool nested = false;
 
@@ -945,35 +945,42 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 		return NULL;
 
 	nested = true;
+	PG_TRY();
+	{
+		oldCtx = MemoryContextSwitchTo(GetLocalMemoryContext());
+		scan = palloc_object(TempCatScanData);
+		MemoryContextSwitchTo(oldCtx);
 
-	oldCtx = MemoryContextSwitchTo(GetLocalMemoryContext());
-	scan = palloc_object(TempCatScanData);
-	MemoryContextSwitchTo(oldCtx);
+		scan->rel = relation_entry;
+		scan->tupdesc = RelationGetDescr(relation);
+		scan->key = key;
+		scan->nkeys = nkeys;
+		for (int i = 0; i < nkeys; i++) {
+			TypeCacheEntry *typeEntry;
 
-	scan->rel = relation_entry;
-	scan->tupdesc = RelationGetDescr(relation);
-	scan->key = key;
-	scan->nkeys = nkeys;
-	for (int i = 0; i < nkeys; i++) {
-		TypeCacheEntry *typeEntry;
+			scan->attrNumbers[i] = key[i].sk_attno;
+			scan->attrCollations[i] = key[i].sk_collation;
 
-		scan->attrNumbers[i] = key[i].sk_attno;
-		scan->attrCollations[i] = key[i].sk_collation;
+			/* Operator function from ScanKey (e.g. oideq, int4lt): returns bool.
+			 * Used by tempcat_index_tuple_matches_where_condition. */
+			scan->attrOpFuncs[i] = key[i].sk_func;
 
-		/* Operator function from ScanKey (e.g. oideq, int4lt): returns bool.
-		 * Used by tempcat_index_tuple_matches_where_condition. */
-		scan->attrOpFuncs[i] = key[i].sk_func;
-
-		/* Btree comparison function from type cache (e.g. btoidcmp):
-		 * returns int32 three-way (<0, 0, >0).
-		 * Used by tempcat_index_compare_tuples for sort ordering. */
-		typeEntry = lookup_type_cache(
-			scan->tupdesc->attrs[key[i].sk_attno - 1].atttypid,
-			TYPECACHE_CMP_PROC_FINFO);
-		Assert(OidIsValid(typeEntry->cmp_proc_finfo.fn_oid));
-		scan->attrCmpFuncs[i] = typeEntry->cmp_proc_finfo;
+			/* Btree comparison function from type cache (e.g. btoidcmp):
+			 * returns int32 three-way (<0, 0, >0).
+			 * Used by tempcat_index_compare_tuples for sort ordering. */
+			typeEntry = lookup_type_cache(
+				scan->tupdesc->attrs[key[i].sk_attno - 1].atttypid,
+				TYPECACHE_CMP_PROC_FINFO);
+			Assert(OidIsValid(typeEntry->cmp_proc_finfo.fn_oid));
+			scan->attrCmpFuncs[i] = typeEntry->cmp_proc_finfo;
+		}
 	}
-
+	PG_CATCH();
+	{
+		nested = false;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 	nested = false;
 
 	/*

@@ -77,20 +77,50 @@ extern void      tempcat_abort_subtransaction(void);
  * in-memory virtual catalog (tempcat) instead of writing to pg_catalog.
  *
  * BEGIN_TEMP_TABLE_SCOPE(isTemp) / END_TEMP_TABLE_SCOPE() save and
- * restore the scope flag, so nesting is safe. On transaction abort,
- * AbortTransaction() in xact.c resets it to false as a safety net.
+ * restore the scope flag, so nesting is safe.  The macros also install
+ * a sigsetjmp catch block so that temp_table_scope is restored on
+ * error (e.g. when an exception is caught by a PL/pgSQL EXCEPTION
+ * handler inside an implicit subtransaction).  When isTemp is false
+ * (or the GUC is off), no try/catch overhead is incurred.
+ * On transaction abort, AbortTransaction() in xact.c resets it to
+ * false as an additional safety net.
  */
 extern bool enable_temp_memory_catalog;
 extern bool temp_table_scope;
 
 #define BEGIN_TEMP_TABLE_SCOPE(isTemp) \
 	do { \
+		const bool _temp_scope_do = (enable_temp_memory_catalog && (isTemp) && \
+									 !temp_table_scope); \
+		bool _temp_scope_throw = false; \
 		const bool _temp_scope_save = temp_table_scope; \
-		if (enable_temp_memory_catalog && Gp_role == GP_ROLE_DISPATCH && (isTemp)) \
-			temp_table_scope = true;
+		sigjmp_buf *_temp_scope_save_exception_stack = PG_exception_stack; \
+		ErrorContextCallback *_temp_scope_save_error_stack; \
+		sigjmp_buf _temp_scope_sigjmp_buf; \
+		if (_temp_scope_do) \
+		{ \
+			_temp_scope_save_error_stack = error_context_stack; \
+			if (sigsetjmp(_temp_scope_sigjmp_buf, 0) == 0) \
+			{ \
+				PG_exception_stack = &_temp_scope_sigjmp_buf; \
+				temp_table_scope = true; \
+			} \
+			else \
+				_temp_scope_throw = true; \
+		} \
+		if (!_temp_scope_throw) \
+		{
 
 #define END_TEMP_TABLE_SCOPE() \
-		temp_table_scope = _temp_scope_save; \
+		} \
+		PG_exception_stack = _temp_scope_save_exception_stack; \
+		if (_temp_scope_do) \
+		{ \
+			error_context_stack = _temp_scope_save_error_stack; \
+			temp_table_scope = _temp_scope_save; \
+			if (_temp_scope_throw) \
+				PG_RE_THROW(); \
+		} \
 	} while (0)
 
 #define IsTempTableScope()  (temp_table_scope)
