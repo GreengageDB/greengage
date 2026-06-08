@@ -219,6 +219,17 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			}
 			else
 			{
+				int64		beginFileOffset = AppendOnlyStorageRead_CurrentHeaderOffsetInFile(
+													  &ds->ao_read);
+				int64		afterFileOffset = beginFileOffset +
+					AppendOnlyStorageRead_OverallBlockLen(&ds->ao_read);
+
+				//AppendOnlyStorageRead_SetTemporaryRange(
+				AppendOnlyStorageRead_SetTemporaryStart(
+													&ds->ao_read,
+													beginFileOffset,
+													afterFileOffset);
+
 				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
 				gp_appendonly_verify_block_checksums = false;
 				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
