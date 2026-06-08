@@ -2790,8 +2790,10 @@ psql_completion(const char *text, int start, int end)
 	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny))
 		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
 			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (", "WITHOUT (");
-	else if(HeadMatches("CREATE|ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*") &&
-		   !HeadMatches("CREATE|ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*)"))
+	else if((HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*") &&
+			!HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*)")) || 
+			(HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*") &&
+			!HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*)")))
 	{
 		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
 			COMPLETE_WITH("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
