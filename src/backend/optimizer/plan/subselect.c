@@ -444,8 +444,17 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	 * the EXISTS qual, and we are much too early in planning the outer query
 	 * to be able to guess that).  So we generate both plans, if possible, and
 	 * leave it to setrefs.c to decide which to use.
+	 *
+	 * GPDB: In MPP dispatch mode we don't build the hashed alternative. The
+	 * resulting AlternativeSubPlan is not handled by the slice machinery:
+	 * the hashed plan ends up without Flow/slice info ("subplan is missing
+	 * Flow information"), and cdbllize cannot reason about an
+	 * AlternativeSubPlan when pruning unused subplans. The correlated SubPlan
+	 * we already built is correct on its own (its correlation filter is
+	 * applied above the Motion), so we just keep it. The hashed alternative
+	 * is still considered for non-MPP (e.g. utility-mode) planning.
 	 */
-	if (simple_exists && IsA(result, SubPlan))
+	if (simple_exists && IsA(result, SubPlan) && Gp_role != GP_ROLE_DISPATCH)
 	{
 		Node	   *newtestexpr;
 		List	   *paramIds;
