@@ -199,12 +199,30 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 					break;
 			}
 
-			err = datumstreamread_block(ds, scan->blockDirectory, attno);
-			Assert(err >= 0);
+			//err = datumstreamread_block(ds, scan->blockDirectory, attno);
+			//Assert(err >= 0);
+			bool read_ok PG_USED_FOR_ASSERTS_ONLY;
+			read_ok = datumstreamread_block_info(ds);
+			Assert(read_ok);
 
-			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+			if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
+			{
+				int64 blocksRead;
+				/* read a new buffer to consume */
+				datumstreamread_block_content(ds);
+
+				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+				blocksRead =
+					RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
+				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+											blocksRead);
+			}
+			else
+				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+
+			//AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			//pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+			//							RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
 		}
 
 		err = datumstreamread_advance(ds);
