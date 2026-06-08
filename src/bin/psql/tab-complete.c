@@ -1644,6 +1644,32 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_available_extension_versions);
 	}
 
+	/* ALTER EXTERNAL TABLE */
+	else if(Matches("ALTER", "EXTERNAL"))
+		COMPLETE_WITH("TABLE");
+	else if(Matches("ALTER", "EXTERNAL", "TABLE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny))
+		COMPLETE_WITH("ADD", "DROP", "ALTER", "OWNER TO");
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ADD"))
+		COMPLETE_WITH("COLUMN");
+
+	/* ALTER EXTERNAL TABLE <name> ALTER|DROP */
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP"))
+		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN'");
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP", "COLUMN"))
+		COMPLETE_WITH_ATTR(prev3_wd, "");
+
+	/* ALTER EXTERNAL TABLE <name> ALTER <colname> TYPE */
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER", MatchAny) ||
+			Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny))
+		COMPLETE_WITH("TYPE");
+
+	/* ALTER EXTERNAL TABLE <name> DROP <colname> */
+	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "DROP", MatchAny) ||
+			Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "DROP", "COLUMN", MatchAny))
+		COMPLETE_WITH("RESTRICT", "CASCADE");
+
 	/* ALTER FOREIGN */
 	else if (Matches("ALTER", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
