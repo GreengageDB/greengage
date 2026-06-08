@@ -2322,13 +2322,106 @@ psql_completion(const char *text, int start, int end)
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB", "TEMP"))
 		COMPLETE_WITH("TABLE");
 
+	/* CREATE ... EXTERNAL ... TABLE */
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
+			TailMatches("TABLE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
+	/* CREATE ... EXTERNAL ... TABLE ... */
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
+			TailMatches("TABLE", MatchAny))
+		COMPLETE_WITH("(");
+	/* CREATE ... EXTERNAL ... FORMAT */
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
+			TailMatches("FORMAT"))
+		COMPLETE_WITH("'TEXT'", "'CSV'", "'CUSTOM'");
 
-	/* Distribution rules for CREATE WRITABLE EXTERNAL tables, 
-	beacause they interfere with CREATE TABLE distribution rules 
-	(REPLICATED is not allowed) */
+	/* CREATE [READABLE] EXTERNAL ... LOG ERRORS */
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
+			TailMatches("LOG", "ERRORS"))
+		COMPLETE_WITH("PERSISTENTLY", "SEGMENT REJECT LIMIT");
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
+			TailMatches("PERSISTENTLY"))
+		COMPLETE_WITH("SEGMENT REJECT LIMIT");
+	else if((HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
+			TailMatches("SEGMENT", "REJECT", "LIMIT", MatchAny))
+		COMPLETE_WITH("ROWS", "PERCENT");
+
+	/* CREATE [READABLE] EXTERNAL WEB ... */
+	else if(HeadMatches("CREATE", "EXTERNAL", "WEB") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB"))
+	{
+		if(TailMatches("TABLE", MatchAny, "(*)"))
+			COMPLETE_WITH("LOCATION ('", "EXECUTE");
+		else if(TailMatches("LOCATION", "(*)") || TailMatches("EXECUTE", "'*'"))
+			COMPLETE_WITH("FORMAT");
+		else if(TailMatches("FORMAT", MatchAny) ||
+				TailMatches("FORMAT", MatchAny, "(*)"))
+			COMPLETE_WITH("OPTIONS (", "ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
+		else if(TailMatches("OPTIONS", "(*)"))
+			COMPLETE_WITH("ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
+		else if(TailMatches("ENCODING", "'*'"))
+			COMPLETE_WITH("LOG ERRORS", "SEGMENT REJECT LIMIT");
+	}
+
+	/* CREATE [READABLE] EXTERNAL ... */
+	else if(HeadMatches("CREATE", "EXTERNAL") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL"))
+	{
+		if(TailMatches("TABLE", MatchAny, "(*)"))
+			COMPLETE_WITH("LOCATION ('");
+		else if(TailMatches("LOCATION", "(*)"))
+			COMPLETE_WITH("FORMAT");
+		else if(TailMatches("FORMAT", MatchAny) ||
+				TailMatches("FORMAT", MatchAny, "(*)"))
+			COMPLETE_WITH("OPTIONS (", "ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
+		else if(TailMatches("OPTIONS", "(*)"))
+			COMPLETE_WITH("ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
+		else if(TailMatches("ENCODING", "'*'"))
+			COMPLETE_WITH("LOG ERRORS", "SEGMENT REJECT LIMIT");
+	}
+
+	/* CREATE WRITABLE EXTERNAL ... DISTRIBUTED */
 	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL") &&
 		TailMatches("DISTRIBUTED"))
 		COMPLETE_WITH("BY (", "RANDOMLY");
+
+	/* CREATE WRITABLE EXTERNAL WEB ... */
+	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB"))
+	{
+		if(TailMatches("TABLE", MatchAny, "(*)"))
+			COMPLETE_WITH("EXECUTE");
+		else if(TailMatches("EXECUTE", "'*'"))
+			COMPLETE_WITH("FORMAT");
+		else if(TailMatches("FORMAT", MatchAny) ||
+				TailMatches("FORMAT", MatchAny, "(*)"))
+			COMPLETE_WITH("OPTIONS (", "ENCODING '", "DISTRIBUTED");
+		else if(TailMatches("OPTIONS", "(*)"))
+			COMPLETE_WITH("ENCODING '", "DISTRIBUTED");
+		else if(TailMatches("ENCODING", "'*'"))
+			COMPLETE_WITH("DISTRIBUTED");
+	}
+
+	/* CREATE WRITABLE EXTERNAL ... */
+	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL"))
+	{
+		if(TailMatches("TABLE", MatchAny, "(*)"))
+			COMPLETE_WITH("LOCATION ('");
+		else if(TailMatches("LOCATION", "(*)"))
+			COMPLETE_WITH("FORMAT");
+		else if(TailMatches("FORMAT", MatchAny) ||
+				TailMatches("FORMAT", MatchAny, "(*)"))
+			COMPLETE_WITH("OPTIONS (", "ENCODING '", "DISTRIBUTED");
+		else if(TailMatches("OPTIONS", "(*)"))
+			COMPLETE_WITH("ENCODING '", "DISTRIBUTED");
+		else if(TailMatches("ENCODING", "'*'"))
+			COMPLETE_WITH("DISTRIBUTED");
+	}
 
 	/* CREATE FOREIGN */
 	else if (Matches("CREATE", "FOREIGN"))
