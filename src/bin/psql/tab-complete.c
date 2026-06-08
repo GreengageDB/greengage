@@ -2979,6 +2979,9 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("WEB", "TABLE");
 	else if(Matches("DROP", "EXTERNAL", "WEB"))
 		COMPLETE_WITH("TABLE");
+	else if(Matches("DROP", "EXTERNAL", "TABLE") ||
+			Matches("DROP", "EXTERNAL", "WEB", "TABLE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
 
 	/* help completing some of the variants */
 	else if (Matches("DROP", "AGGREGATE|FUNCTION|PROCEDURE|ROUTINE", MatchAny))
