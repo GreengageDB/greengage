@@ -218,7 +218,12 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 											blocksRead);
 			}
 			else
+			{
+				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+				gp_appendonly_verify_block_checksums = false;
 				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+			}
 
 			//AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
 			//pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
