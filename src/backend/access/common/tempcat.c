@@ -554,6 +554,72 @@ tempcat_release_savepoint(const char *name)
 	TempcatSnapshotPushBack(working);
 }
 
+/*
+ * Perform actions related to virtual catalog on implicit subtransaction begin
+ * (BeginInternalSubTransaction).  Push a snapshot copy so that we have a
+ * rollback boundary for the subtransaction.
+ */
+void
+tempcat_begin_subtransaction(void)
+{
+	if (!TempcatTransactionInProgress())
+		return;
+
+#ifdef TEMPCAT_DEBUG
+	elog(NOTICE, "TEMPCAT: tempcat_begin_subtransaction");
+#endif
+
+	TempcatSnapshotCreate(NULL);
+}
+
+/*
+ * Perform actions related to virtual catalog on implicit subtransaction commit
+ * (ReleaseCurrentSubTransaction).  Keep the current (committed) changes and
+ * remove the rollback boundary snapshot underneath.
+ */
+void
+tempcat_commit_subtransaction(void)
+{
+	TempcatSnapshot working;
+
+	if (!TempcatTransactionInProgress())
+		return;
+
+#ifdef TEMPCAT_DEBUG
+	elog(NOTICE, "TEMPCAT: tempcat_commit_subtransaction");
+#endif
+
+	/* Detach the current working snapshot. */
+	working = TempcatSnapshotPopBack();
+	Assert(PointerIsValid(working));
+
+	/* Free the rollback boundary snapshot. */
+	TempcatSnapshotFree(TempcatSnapshotPopBack());
+
+	/* Restore the working snapshot on top. */
+	TempcatSnapshotPushBack(working);
+}
+
+/*
+ * Perform actions related to virtual catalog on implicit subtransaction abort
+ * (RollbackAndReleaseCurrentSubTransaction).  Discard changes made in the
+ * subtransaction by freeing the current snapshot; the previous snapshot
+ * becomes current again.
+ */
+void
+tempcat_abort_subtransaction(void)
+{
+	if (!TempcatTransactionInProgress())
+		return;
+
+#ifdef TEMPCAT_DEBUG
+	elog(NOTICE, "TEMPCAT: tempcat_abort_subtransaction");
+#endif
+
+	TempcatSnapshotFree(TempcatSnapshotPopBack());
+	TempcatDirtyFlag = true;
+}
+
 static TempcatSnapshotRelationData* find_relation_entry(TempcatSnapshot snapshot, Relation rel) {
 	dlist_iter iter;
 	dlist_foreach(iter, &snapshot->relationData)
