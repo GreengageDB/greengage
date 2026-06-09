@@ -818,23 +818,25 @@ static const SchemaQuery Query_for_list_of_statistics = {
 " WHERE substring(pg_catalog.quote_ident(tmplname),1,%d)='%s'"
 
 #define Query_for_list_of_extprotocols \
-" SELECT pg_catalog.quote_ident(ptcname) "\
-"   FROM pg_catalog.pg_extprotocol"\
+" SELECT pg_catalog.quote_ident(ptcname) " \
+"   FROM pg_catalog.pg_extprotocol" \
 "  WHERE substring(pg_catalog.quote_ident(ptcname),1,%d)='%s'"
 
 #define Query_for_list_of_extprotocol_readfuncs \
-" SELECT pg_catalog.quote_ident(proname)"\
+" SELECT pg_catalog.quote_ident(proname)" \
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'integer'::regtype" \
-"  AND p.pronargs = 0"\
+"  AND p.provolatile IN ('s', 'v')" \
+"  AND p.pronargs = 0" \
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
 #define Query_for_list_of_extprotocol_writefuncs Query_for_list_of_extprotocol_readfuncs
 
 #define Query_for_list_of_extprotocol_validatorfuncs \
-" SELECT pg_catalog.quote_ident(proname)"\
+" SELECT pg_catalog.quote_ident(proname)" \
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'void'::regtype" \
+"  AND p.provolatile IN ('s', 'v')" \
 "  AND p.pronargs = 0"\
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
