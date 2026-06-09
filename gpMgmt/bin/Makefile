@@ -86,6 +86,7 @@ pygresql:
 	else \
 	    cd $(PYLIB_SRC)/$(PYGRESQL_DIR) && DESTDIR="$(DESTDIR)" CC="$(CC)" LDFLAGS='$(LDFLAGS) $(PYGRESQL_LDFLAGS)' python setup.py build; \
 	fi
+	cd $(PYLIB_SRC)/PyGreSQL-compat && python setup.py build;
 	mkdir -p $(PYLIB_DIR)/pygresql
 	if [ `uname -s` = 'Darwin' ]; then \
 	  cp -r $(PYLIB_SRC)/$(PYGRESQL_DIR)/build/lib.macosx*/* $(PYLIB_DIR)/pygresql; \
@@ -94,6 +95,7 @@ pygresql:
 	else \
 	  cp -r $(PYLIB_SRC)/$(PYGRESQL_DIR)/build/lib.linux*/* $(PYLIB_DIR)/pygresql; \
 	fi
+	cp -r $(PYLIB_SRC)/PyGreSQL-compat/build/lib*/* $(PYLIB_DIR)/pygresql;
 	touch $(PYLIB_DIR)/__init__.py
 
 #
@@ -225,6 +227,7 @@ clean distclean:
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_ASTNG_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
 	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC)/PyGreSQL-compat/build
 	rm -rf $(PYLIB_SRC)/subprocess32/build
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
