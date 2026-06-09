@@ -133,7 +133,6 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	{
 		VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
 		vslot_aocs->current_scan = NULL;
-		vslot_aocs->row_num = InvalidAORowNum;
 	}
 
 	tts_virtual_clear(slot);
@@ -156,39 +155,14 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	bool	   *null = slot->tts_isnull;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
 
-	AppendOnlyBlockDirectory existingBlkdir;
-
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	//int64		rowNum = slotAocs->row_num;
-	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
-	int64		rowNum = AOTupleIdGet_rowNum(tid);
-	Assert(rowNum != InvalidAORowNum);
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
 	if (unlikely(scan == NULL))
 		return;
 
-	int		relnatts = RelationGetNumberOfAttributes(scan->rs_base.rs_rd);
-
-	bool	* proj = palloc0(relnatts * sizeof(bool));
-	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
-	{
-		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-		if (attno < slot->tts_nvalid)
-			continue;
-		if (attno >= natts)
-			break;
-		proj[attno] = true;
-	}
-
-	AppendOnlyBlockDirectory_Init_forSearch(&existingBlkdir,
-											SnapshotAny,
-											(FileSegInfo **) scan->seginfo,
-											scan->total_seg,
-											scan->rs_base.rs_rd,
-											relnatts,
-											true,
-											proj);
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
 
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
@@ -203,55 +177,55 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		Assert(ds);
 
 		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-		//if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
-		//{
-			if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
-									attno,
-									curseginfo->segno,
-									scan->columnScanInfo.attnum_to_rownum)))
-			{
-				d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-				continue;
-			}
-		//}
+		if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
+								attno,
+								curseginfo->segno,
+								scan->columnScanInfo.attnum_to_rownum)))
+		{
+			d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+			continue;
+		}
 
 
-			//int		fsInfoIdx;
-			AppendOnlyBlockDirectoryEntry *dirEntries = NULL;
-			dirEntries = palloc0(sizeof(AppendOnlyBlockDirectoryEntry) * scan->columnScanInfo.num_proj_atts);
-
-			bool res PG_USED_FOR_ASSERTS_ONLY;
-			res = AppendOnlyBlockDirectory_GetEntry(
-								  &existingBlkdir,
-								  tid,
-								  attno,
-								  &dirEntries[i],
-								  scan->columnScanInfo.attnum_to_rownum);
-			Assert(res);
-
-			aocs_positionscan(scan, &dirEntries[i], i, 0 /* should be Ok as we do not pass anchor column here */);
-			Assert(res);
 
 
 		while (true)
 		{
-#if 0
 			if (!ds->noBlocksRead)
 			{
+				/*
+				 * We've read some valid block. Check if we need to
+				 * stay within this block.
+				*/
+
 				Assert(rowNum >= ds->blockFirstRowNum);
 				Assert(ds->blockFirstRowNum != InvalidAORowNum);
 				int64 lastRowNumInBlock = ds->blockFirstRowNum + ds->blockRowCount - 1;
 				if (rowNum <= lastRowNumInBlock)
 					break;
 			}
-#endif
 
-			//err = datumstreamread_block(ds, scan->blockDirectory, attno);
-			//Assert(err >= 0);
+			if (scan->aocsfetch)
+			{
+				AppendOnlyBlockDirectoryEntry dirEntry;
+				bool res PG_USED_FOR_ASSERTS_ONLY;
+				res = AppendOnlyBlockDirectory_GetEntry(
+									  &scan->aocsfetch->blockDirectory,
+									  tid,
+									  attno,
+									  &dirEntry, // &dirEntries[i],
+									  scan->columnScanInfo.attnum_to_rownum);
+				Assert(res);
+
+				Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
+				AppendOnlyStorageRead_SetTemporaryStart(&ds->ao_read,
+														dirEntry.range.fileOffset,
+														dirEntry.range.afterFileOffset);
+			}
+
 			bool read_ok PG_USED_FOR_ASSERTS_ONLY;
 			read_ok = datumstreamread_block_info(ds);
 			Assert(read_ok);
-			ds->noBlocksRead = false;
 
 			if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
 			{
@@ -269,50 +243,29 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			}
 			else
 			{
+				// TODO: remove once we get back to a situation without block directory
 				Assert(false);
-				int64		beginFileOffset = AppendOnlyStorageRead_CurrentHeaderOffsetInFile(
-													  &ds->ao_read);
-				int64		afterFileOffset = beginFileOffset +
-					AppendOnlyStorageRead_OverallBlockLen(&ds->ao_read);
 
-				//AppendOnlyStorageRead_SetTemporaryRange(
-				AppendOnlyStorageRead_SetTemporaryStart(
-													&ds->ao_read,
-													afterFileOffset, // beginFileOffset,
-													afterFileOffset);
-
-				//bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
-				//gp_appendonly_verify_block_checksums = false;
-				//AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
-				//gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+				gp_appendonly_verify_block_checksums = false;
+				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
 			}
-
-			//AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-			//pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-			//							RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
 		}
 
 		err = datumstreamread_advance(ds);
 		Assert(err >= 0);
 
 		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
-		//int32 rowsToSkip = rowNumInBlock - datumstreamread_nth(ds);
-		//int32 cnt = 0;
-		//while (rowsToSkip > 0)
 		while (rowNumInBlock > datumstreamread_nth(ds))
 		{
-			//rowsToSkip--;
-			//cnt++;
 			err = datumstreamread_advance(ds);
 			Assert(err > 0);
 		}
-		//if (rowsToSkip != cnt)
-		//	elog(FATAL, "[RELOG] rowsToSkip %d, cnt %d", rowsToSkip, cnt);
 
 		datumstreamread_get(ds, &d[attno], &null[attno]);
 	}
 
-	AppendOnlyBlockDirectory_End_forSearch(&existingBlkdir);
 	slot->tts_nvalid = natts;
 }
 

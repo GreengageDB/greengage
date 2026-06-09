@@ -742,11 +742,11 @@ aocs_beginscan_internal(Relation relation,
 		 * Initialize a AOBlkdirScan only if we are doing sampling and if we
 		 * have a blkdir relation.
 		 */
-		if ((flags & SO_TYPE_ANALYZE) != 0 || (flags & SO_TYPE_SAMPLESCAN) != 0)
-		{
+		//if ((flags & SO_TYPE_ANALYZE) != 0 || (flags & SO_TYPE_SAMPLESCAN) != 0)
+		//{
 			if (OidIsValid(blkdirrelid) && gp_enable_blkdir_sampling)
 				aocs_blkdirscan_init(scan);
-		}
+		//}
 	}
 
 	scan->sampleTargetBlk = -1;
@@ -1400,7 +1400,6 @@ ReadNext:
 			if (scan->columnScanInfo.num_proj_atts == 0)
 			{
 				slotAocs->current_scan = NULL;
-				slotAocs->row_num = InvalidAORowNum;
 				return false;
 			}
 
@@ -1411,7 +1410,6 @@ ReadNext:
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
 				slotAocs->current_scan = NULL;
-				slotAocs->row_num = InvalidAORowNum;
 				return false;
 			}
 			scan->segrowsprocessed = 0;
@@ -1530,7 +1528,6 @@ ReadNext:
 		slot->tts_tid = scan->cdb_fake_ctid;
 
 		slotAocs->current_scan = (void*)scan;
-		slotAocs->row_num = rowNum;
 		return true;
 	}
 

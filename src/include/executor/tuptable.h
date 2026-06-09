@@ -247,7 +247,6 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;
-	int64 row_num;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
