@@ -2392,7 +2392,13 @@ psql_completion(const char *text, int start, int end)
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH("LOCATION ('", "EXECUTE");
-		else if(TailMatches("LOCATION", "(*)") || TailMatches("EXECUTE", "'*'"))
+		else if(TailMatches("EXECUTE", "'*'"))
+			COMPLETE_WITH("FORMAT", "ON");
+		else if(TailMatches("EXECUTE", "'*'", "ON"))
+			COMPLETE_WITH("ALL", "COORDINATOR", "HOST", "SEGMENT");
+		else if(TailMatches("LOCATION", "(*)") ||
+				TailMatches("EXECUTE", "'*'", "ON", MatchAnyExcept("HOST|SEGMENT")) ||
+				TailMatches("EXECUTE", "'*'", "ON", MatchAny, MatchAnyExcept("FORMAT")))
 			COMPLETE_WITH("FORMAT");
 		else if(TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
@@ -2431,6 +2437,8 @@ psql_completion(const char *text, int start, int end)
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH("EXECUTE");
 		else if(TailMatches("EXECUTE", "'*'"))
+			COMPLETE_WITH("FORMAT", "ON ALL");
+		else if(TailMatches("EXECUTE", "'*'", "ON", "ALL"))
 			COMPLETE_WITH("FORMAT");
 		else if(TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
