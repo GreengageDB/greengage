@@ -41,6 +41,7 @@ apt-get install -y \
   libyaml-dev \
   libzstd-dev \
   locales \
+  lsof \
   net-tools \
   openssh-client \
   openssh-server \
