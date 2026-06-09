@@ -45,6 +45,8 @@
 
 #include "catalog/pg_am_d.h"
 #include "catalog/pg_class_d.h"
+#include "catalog/pg_language_d.h"
+#include "catalog/pg_proc_d.h"
 
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
@@ -826,8 +828,8 @@ static const SchemaQuery Query_for_list_of_statistics = {
 " SELECT pg_catalog.quote_ident(proname)" \
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'integer'::regtype" \
-"  AND p.provolatile IN ('s', 'v')" \
-"  AND p.prolang = 13" \
+"  AND p.provolatile IN (" CppAsString2(PROVOLATILE_STABLE) ", " CppAsString2(PROVOLATILE_VOLATILE) ")" \
+"  AND p.prolang = " CppAsString2(ClanguageId) \
 "  AND p.pronargs = 0" \
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
@@ -837,8 +839,8 @@ static const SchemaQuery Query_for_list_of_statistics = {
 " SELECT pg_catalog.quote_ident(proname)" \
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'void'::regtype" \
-"  AND p.provolatile IN ('s', 'v')" \
-"  AND p.prolang = 13" \
+"  AND p.provolatile IN (" CppAsString2(PROVOLATILE_STABLE) ", " CppAsString2(PROVOLATILE_VOLATILE) ")" \
+"  AND p.prolang = " CppAsString2(ClanguageId) \
 "  AND p.pronargs = 0"\
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
