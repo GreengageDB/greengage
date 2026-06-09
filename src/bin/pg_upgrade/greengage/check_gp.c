@@ -33,6 +33,7 @@ static void check_views_with_removed_functions(void);
 static void check_views_with_removed_types(void);
 static void check_for_disallowed_pg_operator(void);
 static void check_views_with_changed_function_signatures(void);
+static void check_execute_on_master_functions(void);
 
 /*
  *	check_greengage
@@ -58,6 +59,7 @@ check_greengage(void)
 	check_views_with_removed_types();
 	check_for_disallowed_pg_operator();
 	check_views_with_changed_function_signatures();
+	check_execute_on_master_functions();
 }
 
 /*
@@ -1246,4 +1248,99 @@ check_views_with_changed_function_signatures()
 	}
 	else
 		check_ok();
+}
+
+static void
+check_execute_on_master_functions()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_proname;
+	int   i_args;
+	int   i_nspname;
+
+	prep_status("Checking EXECUTE ON MASTER functions");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "execute_on_master_functions_not_returning_setof_rows.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* track_counts is disables for the same reason as above */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+		res = executeQueryOrDie(conn,
+								"SELECT pg_catalog.quote_ident(p.proname) proname,"
+								"       pg_catalog.pg_get_function_arguments(p.oid) args,"
+								"       pg_catalog.quote_ident(n.nspname) nspname "
+								"FROM pg_catalog.pg_proc p "
+								"JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid "
+								"WHERE proretset = false AND proexeclocation = 'm' and p.oid >= %d",
+								FirstNormalObjectId);
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		if (ntups == 0)
+		{
+			PQclear(res);
+			PQfinish(conn);
+			continue;
+		}
+		found = true;
+
+		if (!script)
+		{
+			/*
+			 * This is the first database that has affected functions,
+			 * try to open the output file
+			 */
+			script = fopen(output_path, "w");
+			if (!script)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+		}
+
+		fprintf(script, "Database: %s\n", active_db->db_name);
+
+		i_proname = PQfnumber(res, "proname");
+		i_args = PQfnumber(res, "args");
+		i_nspname = PQfnumber(res, "nspname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			fprintf(script, "%s.%s(%s)\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_proname),
+					PQgetvalue(res, rowno, i_args));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains functions marked as\n"
+			"| EXECUTE ON MASTER that return a single row.\n"
+			"| Starting from Greengage 7, such functions should always\n"
+			"| return SETOF rows.\n"
+			"| A list of the problem functions is in the file:\n\t%s\n\n", output_path);
+	}
+
+	check_ok();
 }
