@@ -48,6 +48,8 @@ apt-get install -y \
   pkg-config \
   protobuf-compiler \
   python3-dev \
+  python3-installer \
+  python3-psutil \
   rsync \
   sudo \
   zlib1g-dev
