@@ -562,35 +562,32 @@ AS total_duration FROM cte_total""")
                                 f"SELECT stat_name, stat_value FROM {self.schema_name}.{self.rebalance_progress_view}")
             if not result.is_rollback:
                 for stat_name, stat_value in cursor:
-                    match stat_name:
-                        case self.STAT_NAME_1_1_TABLES_SHRUNK:
-                            result.tables_shrunk = stat_value
-                        case self.STAT_NAME_2_1_BYTES_PROCESSED:
-                            result.bytes_processed = stat_value
-                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
-                            result.shrink_rate = stat_value
+                    if stat_name == self.STAT_NAME_1_1_TABLES_SHRUNK:
+                        result.tables_shrunk = stat_value
+                    elif stat_name == self.STAT_NAME_2_1_BYTES_PROCESSED:
+                        result.bytes_processed = stat_value
+                    elif stat_name == self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
+                        result.shrink_rate = stat_value
 
                 result.shrink_total_time = self.getShrinkTotalTime()
             else:
                 for stat_name, stat_value in cursor:
-                    match stat_name:
-                        case self.STAT_NAME_1_1_TABLES_ROLLED_BACK:
-                            result.tables_rolled_back = stat_value
-                        case self.STAT_NAME_2_1_BYTES_PROCESSED:
-                            result.bytes_processed = stat_value
-                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
-                            result.rollback_rate = stat_value
+                    if stat_name == self.STAT_NAME_1_1_TABLES_ROLLED_BACK:
+                        result.tables_rolled_back = stat_value
+                    elif stat_name == self.STAT_NAME_2_1_BYTES_PROCESSED:
+                        result.bytes_processed = stat_value
+                    elif stat_name == self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
+                        result.rollback_rate = stat_value
 
                 cursor = dbconn.query(self.conn,
                                 f"SELECT stat_name, stat_value FROM {self.schema_name}.{self.rebalance_progress_view_history}")
                 for stat_name, stat_value in cursor:
-                    match stat_name:
-                        case self.STAT_NAME_1_1_TABLES_SHRUNK:
-                            result.tables_shrunk = stat_value
-                        case self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
-                            result.shrink_rate = stat_value
-                        case self.STAT_NAME_SHRINK_TOTAL_TIME:
-                            result.shrink_total_time = stat_value
+                    if stat_name == self.STAT_NAME_1_1_TABLES_SHRUNK:
+                        result.tables_shrunk = stat_value
+                    elif stat_name == self.STAT_NAME_3_1_ESTIMATED_SHRINK_RATE:
+                        result.shrink_rate = stat_value
+                    elif stat_name == self.STAT_NAME_SHRINK_TOTAL_TIME:
+                        result.shrink_total_time = stat_value
 
                 result.rollback_total_time = self.getShrinkTotalTime(is_rollback = True)
 
