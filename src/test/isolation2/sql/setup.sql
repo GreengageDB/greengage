@@ -1,7 +1,3 @@
--- start_ignore
-! gpconfig -c plpython3.python_path -v "'$GPHOME/lib/python'" --skipvalidation;
-! gpstop -u;
--- end_ignore
 CREATE OR REPLACE LANGUAGE plpython3u;
 
 -- Helper function, to call either __gp_aoseg, or gp_aocsseg, depending
