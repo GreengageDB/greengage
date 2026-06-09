@@ -827,6 +827,7 @@ static const SchemaQuery Query_for_list_of_statistics = {
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'integer'::regtype" \
 "  AND p.provolatile IN ('s', 'v')" \
+"  AND p.prolang = 13" \
 "  AND p.pronargs = 0" \
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
@@ -837,6 +838,7 @@ static const SchemaQuery Query_for_list_of_statistics = {
 "   FROM pg_catalog.pg_proc as p" \
 "  WHERE p.prorettype = 'void'::regtype" \
 "  AND p.provolatile IN ('s', 'v')" \
+"  AND p.prolang = 13" \
 "  AND p.pronargs = 0"\
 "  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
 
