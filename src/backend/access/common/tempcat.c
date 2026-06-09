@@ -292,6 +292,23 @@ TempcatSnapshotFree(TempcatSnapshot tempcat_snapshot)
 }
 
 /*
+ * Clear all relation data from a snapshot without freeing the snapshot itself.
+ */
+static void
+TempcatSnapshotClear(TempcatSnapshot tempcat_snapshot)
+{
+	dlist_iter iter;
+
+	dlist_foreach(iter, &tempcat_snapshot->relationData)
+	{
+		TempcatSnapshotRelationData *rel_entry =
+			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+		TempcatDListFree(&rel_entry->tuples);
+	}
+	dlist_init(&tempcat_snapshot->relationData);
+}
+
+/*
  * Get current snapshot. Create one if necessary.
  */
 static TempcatSnapshot
@@ -1175,9 +1192,13 @@ tempcat_deserialize(int len, const char *data)
 	int32	ntuples;
 	int32	i;
 
-	/* Clear any existing state */
-	while (TempcatSnapshotPopBack() != NULL)
-		/* pop all non-root snapshots */;
+	/* Clear any existing state: pop non-root snapshots and clear the root */
+	{
+		TempcatSnapshot sn;
+		while ((sn = TempcatSnapshotPopBack()) != NULL)
+			TempcatSnapshotFree(sn);
+		TempcatSnapshotClear(TempcatSnapshotGetCurrent());
+	}
 
 	if (len < (int) sizeof(int32))
 		return;
