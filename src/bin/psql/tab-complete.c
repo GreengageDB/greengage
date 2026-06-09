@@ -2501,9 +2501,9 @@ psql_completion(const char *text, int start, int end)
 	else if(TailMatches("CREATE", "PROTOCOL", MatchAny) ||
 			TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny))
 		COMPLETE_WITH("(");
-	else if((HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*") ||
-			 HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*")) &&
-			(!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*)") ||
+	else if((HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*") &&
+			!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*)")) ||
+			(HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*") &&
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
 	{
 		/* Find options that were used and complete with ones that hadn't */
