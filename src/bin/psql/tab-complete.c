@@ -2312,6 +2312,38 @@ psql_completion(const char *text, int start, int end)
 		TailMatches("DISTRIBUTED"))
 		COMPLETE_WITH("BY (", "RANDOMLY");
 
+	else if(Matches("CREATE", "FUNCTION", MatchAny))
+		COMPLETE_WITH("(");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)"))
+		COMPLETE_WITH("RETURNS", "RETURNS TABLE (");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes,
+								   " UNION SELECT 'TABLE ('");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
+		COMPLETE_WITH("AS", "LANGUAGE", "TRANSFORM", "WINDOW", "IMMUTABLE",
+					  "STABLE", "VOLATILE", "NOT LEAKPROOF", "LEAKPROOF",
+					  "CALLED ON NULL INPUT", "RETURNS NULL ON NULL INPUT",
+					  "STRICT", "EXTERNAL", "SECURITY INVOKER",
+					  "SECURITY DEFINER", "EXECUTE ON", "PARALLEL",
+					  "COST", "ROWS", "SUPPORT", "SET", "WITH");
+
+	else if(HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
+			HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
+	{
+		if(TailMatches("EXTERNAL"))
+			COMPLETE_WITH("SECURITY INVOKER", "SECURITY DEFINER");
+		else if(TailMatches("SECURITY"))
+			COMPLETE_WITH("INVOKER", "DEFINER");
+		else if(TailMatches("EXECUTE", "ON"))
+			COMPLETE_WITH("ANY", "COORDINATOR", "ALL SEGMENTS", "INITPLAN");
+		else if(TailMatches("PARALLEL"))
+			COMPLETE_WITH("UNSAFE", "RESTRICTED", "SAFE");
+		else if(TailMatches("LANGUAGE"))
+			COMPLETE_WITH("C", "SQL", "INTERNAL");
+	}
+
+
 	/* CREATE FOREIGN */
 	else if (Matches("CREATE", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
