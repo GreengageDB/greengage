@@ -2325,7 +2325,7 @@ psql_completion(const char *text, int start, int end)
 					  "STABLE", "VOLATILE", "NOT LEAKPROOF", "LEAKPROOF",
 					  "CALLED ON NULL INPUT", "RETURNS NULL ON NULL INPUT",
 					  "STRICT", "EXTERNAL", "SECURITY", "EXECUTE ON",
-					  "PARALLEL", "COST", "ROWS", "SUPPORT", "SET", "WITH");
+					  "PARALLEL", "COST", "ROWS", "SUPPORT", "SET", "WITH (");
 
 	else if(HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
 			HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
