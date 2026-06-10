@@ -95,6 +95,8 @@ usage(const char *progname)
 	printf(_("  -P, --progress                 write progress messages\n"));
 	printf(_("  -R, --write-recovery-conf      write configuration for replication\n"
 			 "                                 (requires --source-server)\n"));
+	printf(_("  -S, --slot=SLOTNAME            set primary_slot_name when writing the\n"
+			 "                                 replication configuration\n"));
 	printf(_("      --debug                    write a lot of debug messages\n"));
 	printf(_("      --no-ensure-shutdown       do not automatically fix unclean shutdown\n"));
 	printf(_("  -V, --version                  output version information, then exit\n"));
@@ -111,6 +113,7 @@ main(int argc, char **argv)
 		{"help", no_argument, NULL, '?'},
 		{"target-pgdata", required_argument, NULL, 'D'},
 		{"write-recovery-conf", no_argument, NULL, 'R'},
+		{"slot", required_argument, NULL, 'S'},
 		{"source-pgdata", required_argument, NULL, 1},
 		{"source-server", required_argument, NULL, 2},
 		{"no-ensure-shutdown", no_argument, NULL, 4},
@@ -135,6 +138,7 @@ main(int argc, char **argv)
 	bool		no_ensure_shutdown = false;
 	bool		rewind_needed;
 	bool		writerecoveryconf = false;
+	char	   *replication_slot = NULL;
 	filemap_t  *filemap;
 
 	pg_logging_init(argv[0]);
@@ -156,7 +160,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	while ((c = getopt_long(argc, argv, "cD:nNPR", long_options, &option_index)) != -1)
+	while ((c = getopt_long(argc, argv, "cD:nNPRS:", long_options, &option_index)) != -1)
 	{
 		switch (c)
 		{
@@ -182,6 +186,10 @@ main(int argc, char **argv)
 
 			case 'R':
 				writerecoveryconf = true;
+				break;
+
+			case 'S':			/* GPDB: slot for primary_slot_name in -R output */
+				replication_slot = pg_strdup(optarg);
 				break;
 
 			case 3:
@@ -231,6 +239,13 @@ main(int argc, char **argv)
 	if (writerecoveryconf && connstr_source == NULL)
 	{
 		pg_log_error("no source server information (--source-server) specified for --write-recovery-conf");
+		fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+		exit(1);
+	}
+
+	if (replication_slot != NULL && !writerecoveryconf)
+	{
+		pg_log_error("--slot can be specified only with --write-recovery-conf");
 		fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
 		exit(1);
 	}
@@ -394,7 +409,7 @@ main(int argc, char **argv)
 		pg_log_info("no rewind required");
 		if (writerecoveryconf && !dry_run)
 			WriteRecoveryConfig(conn, datadir_target,
-								GenerateRecoveryConfig(conn, NULL));
+								GenerateRecoveryConfig(conn, replication_slot));
 		exit(0);
 	}
 
@@ -468,7 +483,7 @@ main(int argc, char **argv)
 	/* Also update the standby configuration, if requested. */
 	if (writerecoveryconf && !dry_run)
 		WriteRecoveryConfig(conn, datadir_target,
-							GenerateRecoveryConfig(conn, NULL));
+							GenerateRecoveryConfig(conn, replication_slot));
 
 	/* don't need the source connection anymore */
 	source->destroy(source);
