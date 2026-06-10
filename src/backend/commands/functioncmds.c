@@ -1374,6 +1374,16 @@ validate_describe_callback(List *describeQualName,
 ObjectAddress
 CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 {
+	/*
+	 * GPDB: parse analysis of a SQL-standard body (BEGIN ATOMIC / RETURN)
+	 * below scribbles on stmt->sql_body (transformStmt is destructive on
+	 * raw trees: e.g. a SubLink's subselect is replaced by the transformed
+	 * Query, which a QE's own parse analysis then rejects with "unexpected
+	 * non-SELECT command in SubLink").  Snapshot the statement now and
+	 * dispatch the pristine copy.
+	 */
+	CreateFunctionStmt *dispatchStmt = (Gp_role == GP_ROLE_DISPATCH) ?
+		copyObject(stmt) : NULL;
 	char	   *probin_str;
 	char	   *prosrc_str;
 	Node	   *prosqlbody;
@@ -1680,7 +1690,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		CdbDispatchUtilityStatement((Node *) stmt,
+		CdbDispatchUtilityStatement((Node *) dispatchStmt,
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,

@@ -1561,6 +1561,64 @@ _readLockingClause(void)
 
 	READ_NODE_FIELD(lockedRels);
 	READ_ENUM_FIELD(strength, LockClauseStrength);
+	READ_ENUM_FIELD(waitPolicy, LockWaitPolicy);
+
+	READ_DONE();
+}
+
+static WindowDef *
+_readWindowDef(void)
+{
+	READ_LOCALS(WindowDef);
+
+	READ_STRING_FIELD(name);
+	READ_STRING_FIELD(refname);
+	READ_NODE_FIELD(partitionClause);
+	READ_NODE_FIELD(orderClause);
+	READ_INT_FIELD(frameOptions);
+	READ_NODE_FIELD(startOffset);
+	READ_NODE_FIELD(endOffset);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RangeFunction *
+_readRangeFunction(void)
+{
+	READ_LOCALS(RangeFunction);
+
+	READ_BOOL_FIELD(lateral);
+	READ_BOOL_FIELD(ordinality);
+	READ_BOOL_FIELD(is_rowsfrom);
+	READ_NODE_FIELD(functions);
+	READ_NODE_FIELD(alias);
+	READ_NODE_FIELD(coldeflist);
+
+	READ_DONE();
+}
+
+static XmlSerialize *
+_readXmlSerialize(void)
+{
+	READ_LOCALS(XmlSerialize);
+
+	READ_ENUM_FIELD(xmloption, XmlOptionType);
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(typeName);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static TableLikeClause *
+_readTableLikeClause(void)
+{
+	READ_LOCALS(TableLikeClause);
+
+	READ_NODE_FIELD(relation);
+	READ_UINT_FIELD(options);
+	READ_OID_FIELD(relationOid);
 
 	READ_DONE();
 }
@@ -2591,6 +2649,18 @@ readNodeBinary(void)
 				break;
 			case T_CreateAmStmt:
 				return_value = _readCreateAmStmt();
+				break;
+			case T_WindowDef:
+				return_value = _readWindowDef();
+				break;
+			case T_RangeFunction:
+				return_value = _readRangeFunction();
+				break;
+			case T_XmlSerialize:
+				return_value = _readXmlSerialize();
+				break;
+			case T_TableLikeClause:
+				return_value = _readTableLikeClause();
 				break;
 			case T_LockingClause:
 				return_value = _readLockingClause();
