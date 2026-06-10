@@ -98,6 +98,17 @@ m/^DEBUG:  time to inline:/
 m/\s+\(entry db(.*)+\spid=\d+\)/
 s/\s+\(entry db(.*)+\spid=\d+\)//
 
+# Mask oids in append-optimized auxiliary relation names; they vary
+# from run to run (e.g. VACUUM warnings naming pg_aoseg_<oid>).
+m/pg_ao(cs)?seg_\d+/
+s/pg_ao(cs)?seg_\d+/pg_ao$1seg_OID/
+
+m/pg_aovisimap_\d+/
+s/pg_aovisimap_\d+/pg_aovisimap_OID/
+
+m/pg_aoblkdir_\d+/
+s/pg_aoblkdir_\d+/pg_aoblkdir_OID/
+
 # Mask out some numbers (parts of partition names) that vary from run to run.
 m/overlaps existing partition "r\d+"/
 s/overlaps existing partition "r\d+"/partition "r##########"/
