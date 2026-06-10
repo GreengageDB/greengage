@@ -16,9 +16,18 @@
 #include "gpos/types.h"
 
 // trace flag macro definitions
-#define GPOS_FTRACE(x) ITask::Self()->IsTraceSet(x)
-#define GPOS_SET_TRACE(x) (void) ITask::Self()->SetTrace(x, true /*value*/)
-#define GPOS_UNSET_TRACE(x) (void) ITask::Self()->SetTrace(x, false /*value*/)
+// GPDB: tolerate execution outside a task (e.g. metadata objects
+// constructed from a relcache invalidation callback): no task means no
+// trace flags are set.  An unguarded Self()->IsTraceSet() here was a hard
+// coordinator SIGSEGV (see CMDTypeInt4GPDB's GPOS_FTRACE uses).
+#define GPOS_FTRACE(x) \
+	(NULL != gpos::ITask::Self() && gpos::ITask::Self()->IsTraceSet(x))
+#define GPOS_SET_TRACE(x) \
+	((void) (NULL != gpos::ITask::Self() && \
+			 (gpos::ITask::Self()->SetTrace(x, true /*value*/), true)))
+#define GPOS_UNSET_TRACE(x) \
+	((void) (NULL != gpos::ITask::Self() && \
+			 (gpos::ITask::Self()->SetTrace(x, false /*value*/), true)))
 
 namespace gpos
 {

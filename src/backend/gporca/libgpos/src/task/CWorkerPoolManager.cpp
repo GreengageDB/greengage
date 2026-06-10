@@ -139,7 +139,17 @@ void
 CWorkerPoolManager::RegisterWorker(CWorker *worker)
 {
 	GPOS_ASSERT(nullptr != worker);
-	GPOS_ASSERT(nullptr == m_single_worker);
+
+	/*
+	 * GPDB: gpos_exec can re-enter (e.g. retrieving metadata of a SQL
+	 * function used by a partition opclass plans the function body, which
+	 * may invoke the optimizer again).  The pool has a single slot, so an
+	 * inner worker used to clobber it, and the inner worker's removal left
+	 * the OUTER task without a worker: ITask::Self() returned NULL
+	 * mid-task and the coordinator crashed on the next trace-flag or
+	 * error-context access.  Keep a save/restore chain instead.
+	 */
+	worker->m_previous_worker = m_single_worker;
 	m_single_worker = worker;
 }
 
@@ -155,7 +165,11 @@ CWorkerPoolManager::RegisterWorker(CWorker *worker)
 void
 CWorkerPoolManager::RemoveWorker()
 {
-	m_single_worker = nullptr;
+	/* restore the worker of an enclosing gpos_exec, if any */
+	if (nullptr != m_single_worker)
+		m_single_worker = m_single_worker->m_previous_worker;
+	else
+		m_single_worker = nullptr;
 }
 
 

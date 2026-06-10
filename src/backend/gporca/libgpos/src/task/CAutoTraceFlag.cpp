@@ -28,8 +28,12 @@ using namespace gpos;
 CAutoTraceFlag::CAutoTraceFlag(ULONG trace, BOOL orig)
 	: m_trace(trace), m_orig(false)
 {
-	GPOS_ASSERT(nullptr != ITask::Self());
-	m_orig = ITask::Self()->SetTrace(m_trace, orig);
+	// GPDB: tolerate running without a task; this happens while an
+	// optimizer-fallback exception unwinds, after the worker has been
+	// removed from the pool.  Dereferencing the NULL task here crashed
+	// the coordinator (custom partition opclass INSERT path).
+	if (nullptr != ITask::Self())
+		m_orig = ITask::Self()->SetTrace(m_trace, orig);
 }
 
 
@@ -43,10 +47,9 @@ CAutoTraceFlag::CAutoTraceFlag(ULONG trace, BOOL orig)
 //---------------------------------------------------------------------------
 CAutoTraceFlag::~CAutoTraceFlag()
 {
-	GPOS_ASSERT(nullptr != ITask::Self());
-
-	// reset original value
-	ITask::Self()->SetTrace(m_trace, m_orig);
+	// reset original value; see ctor for the no-task case
+	if (nullptr != ITask::Self())
+		ITask::Self()->SetTrace(m_trace, m_orig);
 }
 
 

@@ -35,10 +35,15 @@ class CTask;
 class CWorker : public IWorker
 {
 	friend class CAutoTaskProxy;
+	friend class CWorkerPoolManager;
 
 private:
 	// current task
 	CTask *m_task;
+
+	// GPDB: worker registered before this one (nested gpos_exec); the
+	// single-slot pool restores it when this worker unregisters
+	CWorker *m_previous_worker{nullptr};
 
 	// available stack
 	ULONG m_stack_size;

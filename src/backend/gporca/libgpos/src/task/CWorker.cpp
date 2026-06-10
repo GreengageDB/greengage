@@ -36,9 +36,8 @@ CWorker::CWorker(ULONG stack_size, ULONG_PTR stack_start)
 	GPOS_ASSERT(stack_size >= 2 * 1024 &&
 				"Worker has to have at least 2KB stack");
 
-	// register worker
-	GPOS_ASSERT(nullptr == Self() && "Found registered worker!");
-
+	// register worker; one may already be registered when gpos_exec
+	// re-enters (see CWorkerPoolManager::RegisterWorker)
 	CWorkerPoolManager::WorkerPoolManager()->RegisterWorker(this);
 	GPOS_ASSERT(this == CWorkerPoolManager::WorkerPoolManager()->Self());
 }
