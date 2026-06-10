@@ -1162,7 +1162,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * If this is an append-only relation, create the auxliary tables necessary
 	 */
 	if (RelationStorageIsAO(rel))
-		NewRelationCreateAOAuxTables(RelationGetRelid(rel), true /* stmt->buildAoBlkdir */ );
+		NewRelationCreateAOAuxTables(RelationGetRelid(rel), stmt->buildAoBlkdir);
 
 	/*
 	 * Now add any newly specified column default and generation expressions

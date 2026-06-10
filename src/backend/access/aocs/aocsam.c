@@ -742,11 +742,13 @@ aocs_beginscan_internal(Relation relation,
 		 * Initialize a AOBlkdirScan only if we are doing sampling and if we
 		 * have a blkdir relation.
 		 */
-		//if ((flags & SO_TYPE_ANALYZE) != 0 || (flags & SO_TYPE_SAMPLESCAN) != 0)
-		//{
+		if ((flags & SO_TYPE_ANALYZE) != 0 ||
+			(flags & SO_TYPE_SAMPLESCAN) != 0 ||
+			(flags & SO_TYPE_SEQSCAN) != 0)
+		{
 			if (OidIsValid(blkdirrelid) && gp_enable_blkdir_sampling)
 				aocs_blkdirscan_init(scan);
-		//}
+		}
 	}
 
 	scan->sampleTargetBlk = -1;

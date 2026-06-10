@@ -205,7 +205,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 					break;
 			}
 
-			if (scan->aocsfetch)
+			if (!scan->blockDirectory && scan->aocsfetch)
 			{
 				AppendOnlyBlockDirectoryEntry dirEntry;
 				bool res PG_USED_FOR_ASSERTS_ONLY;
@@ -233,6 +233,15 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 				/* read a new buffer to consume */
 				datumstreamread_block_content(ds);
 
+				if (scan->blockDirectory)
+				{
+					AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
+														 attno,
+														 ds->blockFirstRowNum,
+														 ds->blockFileOffset,
+														 ds->blockRowCount);
+				}
+
 				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
 				blocksRead =
 					RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
@@ -243,9 +252,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			}
 			else
 			{
-				// TODO: remove once we get back to a situation without block directory
-				Assert(false);
-
 				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
 				gp_appendonly_verify_block_checksums = false;
 				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
