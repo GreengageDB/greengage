@@ -2084,11 +2084,13 @@ psql_completion(const char *text, int start, int end)
 	/* complete ALTER TYPE <foo> with actions */
 	else if (Matches("ALTER", "TYPE", MatchAny))
 		COMPLETE_WITH("ADD ATTRIBUTE", "ADD VALUE", "ALTER ATTRIBUTE",
-					  "DROP ATTRIBUTE",
-					  "OWNER TO", "RENAME", "SET SCHEMA");
+					  "DROP ATTRIBUTE", "OWNER TO", "RENAME", "SET SCHEMA",
+					  "SET DEFAULT ENCODING (");
 	/* complete ALTER TYPE <foo> ADD with actions */
 	else if (Matches("ALTER", "TYPE", MatchAny, "ADD"))
 		COMPLETE_WITH("ATTRIBUTE", "VALUE");
+	else if(Matches("ALTER", "TYPE", MatchAny, "SET"))
+		COMPLETE_WITH("SCHEMA", "DEFAULT ENCODING (");
 	/* ALTER TYPE <foo> RENAME	*/
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME"))
 		COMPLETE_WITH("ATTRIBUTE", "TO", "VALUE");
@@ -2120,6 +2122,11 @@ psql_completion(const char *text, int start, int end)
 	 */
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME", "VALUE"))
 		COMPLETE_WITH_ENUM_VALUE(prev3_wd);
+
+	else if(Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "("))
+		COMPLETE_WITH("COMPRESSTYPE =", "COMPRESSLEVEL =", "BLOCKSIZE =");
+	else if(Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "(", "COMPRESSTYPE", "="))
+		COMPLETE_WITH("ZLIB", "ZSTD", "RLE_TYPE", "NONE");
 
 /*
  * ANALYZE [ ( option [, ...] ) ] [ table_and_columns [, ...] ]
