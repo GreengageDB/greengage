@@ -8,10 +8,14 @@ CREATE TABLE hobbies_r (
 	name		text,
 	person 		text
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE equipment_r (
 	name 		text,
 	hobby		text
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE onek (
 	unique1		int4,
 	unique2		int4,
@@ -30,6 +34,8 @@ CREATE TABLE onek (
 	stringu2	name,
 	string4		name
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tenk1 (
 	unique1		int4,
 	unique2		int4,
@@ -48,6 +54,8 @@ CREATE TABLE tenk1 (
 	stringu2	name,
 	string4		name
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tenk2 (
 	unique1 	int4,
 	unique2 	int4,
@@ -66,21 +74,28 @@ CREATE TABLE tenk2 (
 	stringu2	name,
 	string4		name
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE person (
 	name 		text,
 	age			int4,
 	location 	point
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE emp (
 	salary 		int4,
 	manager 	name
 ) INHERITS (person);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE student (
 	gpa 		float8
 ) INHERITS (person);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE stud_emp (
 	percent 	int4
 ) INHERITS (emp, student);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "name"
 NOTICE:  merging multiple inherited definitions of column "age"
 NOTICE:  merging multiple inherited definitions of column "location"
@@ -89,29 +104,41 @@ CREATE TABLE city (
 	location 	box,
 	budget 		city_budget
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dept (
 	dname		name,
 	mgrname 	text
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dname' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE slow_emp4000 (
 	home_base	 box
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE fast_emp4000 (
 	home_base	 box
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE road (
 	name		text,
 	thepath 	path
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ihighway () INHERITS (road);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE shighway (
 	surface		text
 ) INHERITS (road);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE real_city (
 	pop			int4,
 	cname		text,
 	outline 	path
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'pop' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --
 -- test the "star" operators a bit more thoroughly -- this time,
 -- throw in lots of NULL fields...
@@ -126,27 +153,36 @@ CREATE TABLE a_star (
 	class		char,
 	a 			int4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'class' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE b_star (
 	b 			text
 ) INHERITS (a_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE c_star (
 	c 			name
 ) INHERITS (a_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE d_star (
 	d 			float8
 ) INHERITS (b_star, c_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "class"
 NOTICE:  merging multiple inherited definitions of column "a"
 CREATE TABLE e_star (
 	e 			int2
 ) INHERITS (c_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE f_star (
 	f 			polygon
 ) INHERITS (e_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE aggtest (
 	a 			int2,
 	b			float4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE hash_i4_heap (
 	seqno 		int4,
 	random 		int4
@@ -174,34 +210,49 @@ CREATE TABLE bt_i4_heap (
 	seqno 		int4,
 	random 		int4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_name_heap (
 	seqno 		name,
 	random 		int4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_txt_heap (
 	seqno 		text,
 	random 		int4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_f8_heap (
 	seqno 		float8,
 	random 		int4
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE array_op_test (
 	seqno		int4,
 	i			int4[],
 	t			text[]
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE array_index_op_test (
 	seqno		int4,
 	i			int4[],
 	t			text[]
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testjsonb (
        j jsonb
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE unknowntab (
 	u unknown    -- fail
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  column "u" has pseudo-type unknown
 CREATE TYPE unknown_comptype AS (
 	u unknown    -- fail
@@ -211,12 +262,15 @@ CREATE TABLE IF NOT EXISTS test_tsvector(
 	t text,
 	a tsvector
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE IF NOT EXISTS test_tsvector(
 	t text
 );
 NOTICE:  relation "test_tsvector" already exists, skipping
 -- invalid: non-lowercase quoted reloptions identifiers
 CREATE TABLE tas_case WITH ("Fillfactor" = 10) AS SELECT 1 a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ERROR:  unrecognized parameter "Fillfactor"
 CREATE UNLOGGED TABLE unlogged1 (a int primary key);			-- OK
 CREATE TEMPORARY TABLE unlogged2 (a int primary key);			-- OK
@@ -256,6 +310,8 @@ LINE 1: CREATE TEMP TABLE public.temp_to_perm (a int primary key);
                           ^
 DROP TABLE unlogged1, public.unlogged2;
 CREATE TABLE as_select1 AS SELECT * FROM pg_class WHERE relkind = 'r';
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE as_select1 AS SELECT * FROM pg_class WHERE relkind = 'r';
 ERROR:  relation "as_select1" already exists
 CREATE TABLE IF NOT EXISTS as_select1 AS SELECT * FROM pg_class WHERE relkind = 'r';
@@ -263,6 +319,7 @@ NOTICE:  relation "as_select1" already exists, skipping
 DROP TABLE as_select1;
 PREPARE select1 AS SELECT 1 as a;
 CREATE TABLE as_select1 AS EXECUTE select1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE TABLE as_select1 AS EXECUTE select1;
 ERROR:  relation "as_select1" already exists
 SELECT * FROM as_select1;
@@ -278,8 +335,12 @@ DEALLOCATE select1;
 -- create an extra wide table to test for issues related to that
 -- (temporarily hide query, to avoid the long CREATE TABLE stmt)
 \set ECHO none
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'firstc' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO extra_wide_table(firstc, lastc) VALUES('first col', 'last col');
 SELECT firstc, lastc FROM extra_wide_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: extra_wide_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   firstc   |  lastc   
 -----------+----------
  first col | last col
@@ -291,54 +352,76 @@ ERROR:  syntax error at or near "OIDS"
 LINE 1: CREATE TABLE withoid() WITH OIDS;
                                     ^
 CREATE TABLE withoid() WITH (oids);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  tables declared WITH OIDS are not supported
 CREATE TABLE withoid() WITH (oids = true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  tables declared WITH OIDS are not supported
 -- but explicitly not adding oids is still supported
 CREATE TEMP TABLE withoutoid() WITHOUT OIDS; DROP TABLE withoutoid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TEMP TABLE withoutoid() WITH (oids = false); DROP TABLE withoutoid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 -- check restriction with default expressions
 -- invalid use of column reference in default expressions
 CREATE TABLE default_expr_column (id int DEFAULT (id));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use column reference in DEFAULT expression
 LINE 1: CREATE TABLE default_expr_column (id int DEFAULT (id));
                                                           ^
 CREATE TABLE default_expr_column (id int DEFAULT (bar.id));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use column reference in DEFAULT expression
 LINE 1: CREATE TABLE default_expr_column (id int DEFAULT (bar.id));
                                                           ^
 CREATE TABLE default_expr_agg_column (id int DEFAULT (avg(id)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use column reference in DEFAULT expression
 LINE 1: ...TE TABLE default_expr_agg_column (id int DEFAULT (avg(id)));
                                                                  ^
 -- invalid column definition
 CREATE TABLE default_expr_non_column (a int DEFAULT (avg(non_existent)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use column reference in DEFAULT expression
 LINE 1: ...TABLE default_expr_non_column (a int DEFAULT (avg(non_existe...
                                                              ^
 -- invalid use of aggregate
 CREATE TABLE default_expr_agg (a int DEFAULT (avg(1)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  aggregate functions are not allowed in DEFAULT expressions
 LINE 1: CREATE TABLE default_expr_agg (a int DEFAULT (avg(1)));
                                                       ^
 -- invalid use of subquery
 CREATE TABLE default_expr_agg (a int DEFAULT (select 1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use subquery in DEFAULT expression
 LINE 1: CREATE TABLE default_expr_agg (a int DEFAULT (select 1));
                                                      ^
 -- invalid use of set-returning function
 CREATE TABLE default_expr_agg (a int DEFAULT (generate_series(1,3)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  set-returning functions are not allowed in DEFAULT expressions
 LINE 1: CREATE TABLE default_expr_agg (a int DEFAULT (generate_serie...
                                                       ^
 -- Verify that subtransaction rollback restores rd_createSubid.
 BEGIN;
 CREATE TABLE remember_create_subid (c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SAVEPOINT q; DROP TABLE remember_create_subid; ROLLBACK TO q;
 COMMIT;
 DROP TABLE remember_create_subid;
 -- Verify that subtransaction rollback restores rd_firstRelfilenodeSubid.
 CREATE TABLE remember_node_subid (c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 BEGIN;
 ALTER TABLE remember_node_subid ALTER c TYPE bigint;
 SAVEPOINT q; DROP TABLE remember_node_subid; ROLLBACK TO q;
@@ -357,6 +440,8 @@ CREATE TABLE partitioned (
 	a1 int,
 	a2 int
 ) PARTITION BY LIST (a1, a2);	-- fail
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use "list" partition strategy with more than one column
 -- unsupported constraint type for partitioned tables
 CREATE TABLE partitioned (
@@ -371,40 +456,56 @@ CREATE FUNCTION retset (a int) RETURNS SETOF int AS $$ SELECT 1; $$ LANGUAGE SQL
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE (retset(a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  set-returning functions are not allowed in partition key expressions
 DROP FUNCTION retset(int);
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE ((avg(a)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  aggregate functions are not allowed in partition key expressions
 CREATE TABLE partitioned (
 	a int,
 	b int
 ) PARTITION BY RANGE ((avg(a) OVER (PARTITION BY b)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  window functions are not allowed in partition key expressions
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY LIST ((a LIKE (SELECT 1)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use subquery in partition key expression
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE ((42));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use constant expression as partition key
 CREATE FUNCTION const_func () RETURNS int AS $$ SELECT 1; $$ LANGUAGE SQL IMMUTABLE;
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE (const_func());
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use constant expression as partition key
 DROP FUNCTION const_func();
 -- only accept valid partitioning strategy
 CREATE TABLE partitioned (
     a int
 ) PARTITION BY MAGIC (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized partitioning strategy "magic"
 -- specified column must be present in the table
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  column "b" named in partition key does not exist
 LINE 3: ) PARTITION BY RANGE (b);
                               ^
@@ -412,6 +513,8 @@ LINE 3: ) PARTITION BY RANGE (b);
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE (xmin);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use system column "xmin" in partition key
 LINE 3: ) PARTITION BY RANGE (xmin);
                               ^
@@ -420,43 +523,55 @@ CREATE TABLE partitioned (
 	a int,
 	b int
 ) PARTITION BY RANGE (((a, b)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition key column 1 has pseudo-type record
 CREATE TABLE partitioned (
 	a int,
 	b int
 ) PARTITION BY RANGE (a, ('unknown'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition key column 2 has pseudo-type unknown
 -- functions in key must be immutable
 CREATE FUNCTION immut_func (a int) RETURNS int AS $$ SELECT a + random()::int; $$ LANGUAGE SQL;
 CREATE TABLE partitioned (
 	a int
 ) PARTITION BY RANGE (immut_func(a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  functions in partition key expression must be marked IMMUTABLE
 DROP FUNCTION immut_func(int);
 -- prevent using columns of unsupported types in key (type must have a btree operator class)
 CREATE TABLE partitioned (
 	a point
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  data type point has no default operator class for access method "btree"
 HINT:  You must specify a btree operator class or define a default btree operator class for the data type.
 CREATE TABLE partitioned (
 	a point
 ) PARTITION BY LIST (a point_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  operator class "point_ops" does not exist for access method "btree"
 CREATE TABLE partitioned (
 	a point
 ) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  data type point has no default operator class for access method "btree"
 HINT:  You must specify a btree operator class or define a default btree operator class for the data type.
 CREATE TABLE partitioned (
 	a point
 ) PARTITION BY RANGE (a point_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ERROR:  operator class "point_ops" does not exist for access method "btree"
 -- cannot add NO INHERIT constraints to partitioned tables
 CREATE TABLE partitioned (
 	a int,
 	CONSTRAINT check_a CHECK (a > 0) NO INHERIT
 ) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot add NO INHERIT constraint to partitioned table "partitioned"
 -- some checks after successful creation of a partitioned table
 CREATE FUNCTION plusone(a int) RETURNS INT AS $$ SELECT a+1; $$ LANGUAGE SQL;
@@ -466,6 +581,8 @@ CREATE TABLE partitioned (
 	c text,
 	d text
 ) PARTITION BY RANGE (a oid_ops, plusone(b), c collate "default", d collate "C");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- check relkind
 SELECT relkind FROM pg_class WHERE relname = 'partitioned';
  relkind 
@@ -483,7 +600,10 @@ CREATE TABLE partitioned2 (
 	a int,
 	b text
 ) PARTITION BY RANGE ((a+1), substr(b, 1, 5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE fail () INHERITS (partitioned2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot inherit from partitioned table "partitioned2"
 -- Partition key in describe output
 \d partitioned
@@ -496,37 +616,45 @@ ERROR:  cannot inherit from partitioned table "partitioned2"
  d      | text    |           |          | 
 Partition key: RANGE (a oid_ops, plusone(b), c, d COLLATE "C")
 Number of partitions: 0
+Distributed by: (a)
 
 \d+ partitioned2
-                          Partitioned table "public.partitioned2"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- a      | integer |           |          |         | plain    |              | 
- b      | text    |           |          |         | extended |              | 
+                                 Partitioned table "public.partitioned2"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain    |             |              | 
+ b      | text    |           |          |         | extended |             |              | 
 Partition key: RANGE (((a + 1)), substr(b, 1, 5))
 Number of partitions: 0
+Distributed by: (a)
 
 INSERT INTO partitioned2 VALUES (1, 'hello');
-ERROR:  no partition of relation "partitioned2" found for row
+ERROR:  no partition of relation "partitioned2" found for row  (seg1 172.17.0.3:7003 pid=170504)
 DETAIL:  Partition key of the failing row contains ((a + 1), substr(b, 1, 5)) = (2, hello).
 CREATE TABLE part2_1 PARTITION OF partitioned2 FOR VALUES FROM (-1, 'aaaaa') TO (100, 'ccccc');
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ part2_1
-                                  Table "public.part2_1"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- a      | integer |           |          |         | plain    |              | 
- b      | text    |           |          |         | extended |              | 
+                                         Table "public.part2_1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain    |             |              | 
+ b      | text    |           |          |         | extended |             |              | 
 Partition of: partitioned2 FOR VALUES FROM ('-1', 'aaaaa') TO (100, 'ccccc')
 Partition constraint: (((a + 1) IS NOT NULL) AND (substr(b, 1, 5) IS NOT NULL) AND (((a + 1) > '-1'::integer) OR (((a + 1) = '-1'::integer) AND (substr(b, 1, 5) >= 'aaaaa'::text))) AND (((a + 1) < 100) OR (((a + 1) = 100) AND (substr(b, 1, 5) < 'ccccc'::text))))
+Distributed by: (a)
 
 DROP TABLE partitioned, partitioned2;
 -- check reference to partitioned table's rowtype in partition descriptor
 create table partitioned (a int, b int)
   partition by list ((row(a, b)::partitioned));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table partitioned1
   partition of partitioned for values in ('(1,2)'::partitioned);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table partitioned2
   partition of partitioned for values in ('(2,4)'::partitioned);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off)
 select * from partitioned where row(a,b)::partitioned = '(1,2)'::partitioned;
                            QUERY PLAN                            
@@ -541,10 +669,14 @@ drop table partitioned;
 -- whole-row Var in partition key works too
 create table partitioned (a int, b int)
   partition by list ((partitioned));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table partitioned1
   partition of partitioned for values in ('(1,2)');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table partitioned2
   partition of partitioned for values in ('(2,4)');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off)
 select * from partitioned where partitioned = '(1,2)'::partitioned;
                               QUERY PLAN                               
@@ -556,13 +688,14 @@ select * from partitioned where partitioned = '(1,2)'::partitioned;
 (4 rows)
 
 \d+ partitioned1
-                               Table "public.partitioned1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                      Table "public.partitioned1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Partition of: partitioned FOR VALUES IN ('(1,2)')
 Partition constraint: (((partitioned1.*)::partitioned IS DISTINCT FROM NULL) AND ((partitioned1.*)::partitioned = '(1,2)'::partitioned))
+Distributed by: (a)
 
 drop table partitioned;
 -- check that dependencies of partition columns are handled correctly
@@ -571,6 +704,8 @@ create table partitioned (
 	a intdom1,
 	b text
 ) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partitioned drop column a;  -- fail
 ERROR:  cannot drop column "a" because it is part of the partition key of relation "partitioned"
 drop domain intdom1;  -- fail, requires cascade
@@ -589,6 +724,8 @@ create table partitioned (
 	a intdom1,
 	b text
 ) partition by range (plusone(a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partitioned drop column a;  -- fail
 ERROR:  cannot drop column "a" because it is part of the partition key of relation "partitioned"
 drop domain intdom1;  -- fail, requires cascade
@@ -608,55 +745,71 @@ LINE 1: table partitioned;
 CREATE TABLE list_parted (
 	a int
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_p1 PARTITION OF list_parted FOR VALUES IN ('1');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_p2 PARTITION OF list_parted FOR VALUES IN (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_p3 PARTITION OF list_parted FOR VALUES IN ((2+1));
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_null PARTITION OF list_parted FOR VALUES IN (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ list_parted
-                          Partitioned table "public.list_parted"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
+                                 Partitioned table "public.list_parted"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
 Partition key: LIST (a)
 Partitions: part_null FOR VALUES IN (NULL),
             part_p1 FOR VALUES IN (1),
             part_p2 FOR VALUES IN (2),
             part_p3 FOR VALUES IN (3)
+Distributed by: (a)
 
 -- forbidden expressions for partition bound with list partitioned table
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (somename);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 1: ...expr_fail PARTITION OF list_parted FOR VALUES IN (somename);
                                                              ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (somename.somename);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 1: ...expr_fail PARTITION OF list_parted FOR VALUES IN (somename.s...
                                                              ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 1: ..._bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (a);
                                                                     ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (sum(a));
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 1: ...s_expr_fail PARTITION OF list_parted FOR VALUES IN (sum(a));
                                                                    ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (sum(somename));
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 1: ..._fail PARTITION OF list_parted FOR VALUES IN (sum(somename))...
                                                              ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (sum(1));
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  aggregate functions are not allowed in partition bound
 LINE 1: ...s_expr_fail PARTITION OF list_parted FOR VALUES IN (sum(1));
                                                                ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN ((select 1));
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use subquery in partition bound
 LINE 1: ...expr_fail PARTITION OF list_parted FOR VALUES IN ((select 1)...
                                                              ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN (generate_series(4, 6));
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  set-returning functions are not allowed in partition bound
 LINE 1: ...expr_fail PARTITION OF list_parted FOR VALUES IN (generate_s...
                                                              ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF list_parted FOR VALUES IN ((1+1) collate "POSIX");
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  collations are not supported by type integer
 LINE 1: ...ail PARTITION OF list_parted FOR VALUES IN ((1+1) collate "P...
                                                              ^
@@ -667,17 +820,21 @@ LINE 1: ...E TABLE fail_part PARTITION OF list_parted FOR VALUES IN ();
                                                                      ^
 -- trying to specify range for list partitioned table
 CREATE TABLE fail_part PARTITION OF list_parted FOR VALUES FROM (1) TO (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a list partition
 LINE 1: ...BLE fail_part PARTITION OF list_parted FOR VALUES FROM (1) T...
                                                              ^
 -- trying to specify modulus and remainder for list partitioned table
 CREATE TABLE fail_part PARTITION OF list_parted FOR VALUES WITH (MODULUS 10, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a list partition
 LINE 1: ...BLE fail_part PARTITION OF list_parted FOR VALUES WITH (MODU...
                                                              ^
 -- check default partition cannot be created more than once
 CREATE TABLE part_default PARTITION OF list_parted DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_default_part PARTITION OF list_parted DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_default_part" conflicts with existing default partition "part_default"
 LINE 1: ...TE TABLE fail_default_part PARTITION OF list_parted DEFAULT;
                                                                ^
@@ -685,7 +842,10 @@ LINE 1: ...TE TABLE fail_default_part PARTITION OF list_parted DEFAULT;
 CREATE TABLE bools (
 	a bool
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bools_true PARTITION OF bools FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  specified value cannot be cast to type boolean for column "a"
 LINE 1: ...REATE TABLE bools_true PARTITION OF bools FOR VALUES IN (1);
                                                                     ^
@@ -694,17 +854,25 @@ DROP TABLE bools;
 CREATE TABLE moneyp (
 	a money
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE moneyp_10 PARTITION OF moneyp FOR VALUES IN (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE moneyp_11 PARTITION OF moneyp FOR VALUES IN ('11');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE moneyp_12 PARTITION OF moneyp FOR VALUES IN (to_char(12, '99')::int);
+NOTICE:  table has parent, setting distribution columns to match parent table
 DROP TABLE moneyp;
 -- cast is immutable
 CREATE TABLE bigintp (
 	a bigint
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bigintp_10 PARTITION OF bigintp FOR VALUES IN (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- fails due to overlap:
 CREATE TABLE bigintp_10_2 PARTITION OF bigintp FOR VALUES IN ('10');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "bigintp_10_2" would overlap partition "bigintp_10"
 LINE 1: ...ABLE bigintp_10_2 PARTITION OF bigintp FOR VALUES IN ('10');
                                                                  ^
@@ -712,68 +880,84 @@ DROP TABLE bigintp;
 CREATE TABLE range_parted (
 	a date
 ) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- forbidden expressions for partition bounds with range partitioned table
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (somename) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 2:   FOR VALUES FROM (somename) TO ('2019-01-01');
                            ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (somename.somename) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 2:   FOR VALUES FROM (somename.somename) TO ('2019-01-01');
                            ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (a) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 2:   FOR VALUES FROM (a) TO ('2019-01-01');
                            ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (max(a)) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 2:   FOR VALUES FROM (max(a)) TO ('2019-01-01');
                                ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (max(somename)) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use column reference in partition bound expression
 LINE 2:   FOR VALUES FROM (max(somename)) TO ('2019-01-01');
                                ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (max('2019-02-01'::date)) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  aggregate functions are not allowed in partition bound
 LINE 2:   FOR VALUES FROM (max('2019-02-01'::date)) TO ('2019-01-01'...
                            ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM ((select 1)) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot use subquery in partition bound
 LINE 2:   FOR VALUES FROM ((select 1)) TO ('2019-01-01');
                            ^
 CREATE TABLE part_bogus_expr_fail PARTITION OF range_parted
   FOR VALUES FROM (generate_series(1, 3)) TO ('2019-01-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  set-returning functions are not allowed in partition bound
 LINE 2:   FOR VALUES FROM (generate_series(1, 3)) TO ('2019-01-01');
                            ^
 -- trying to specify list for range partitioned table
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES IN ('a');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a range partition
 LINE 1: ...BLE fail_part PARTITION OF range_parted FOR VALUES IN ('a');
                                                               ^
 -- trying to specify modulus and remainder for range partitioned table
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES WITH (MODULUS 10, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a range partition
 LINE 1: ...LE fail_part PARTITION OF range_parted FOR VALUES WITH (MODU...
                                                              ^
 -- each of start and end bounds must have same number of values as the
 -- length of the partition key
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES FROM ('a', 1) TO ('z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  FROM must specify exactly one value per partitioning column
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES FROM ('a') TO ('z', 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  TO must specify exactly one value per partitioning column
 -- cannot specify null values in range bounds
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES FROM (null) TO (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot specify NULL in range bound
 -- trying to specify modulus and remainder for range partitioned table
 CREATE TABLE fail_part PARTITION OF range_parted FOR VALUES WITH (MODULUS 10, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a range partition
 LINE 1: ...LE fail_part PARTITION OF range_parted FOR VALUES WITH (MODU...
                                                              ^
@@ -781,139 +965,191 @@ LINE 1: ...LE fail_part PARTITION OF range_parted FOR VALUES WITH (MODU...
 CREATE TABLE hash_parted (
 	a int
 ) PARTITION BY HASH (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE hpart_1 PARTITION OF hash_parted FOR VALUES WITH (MODULUS 10, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE hpart_2 PARTITION OF hash_parted FOR VALUES WITH (MODULUS 50, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE hpart_3 PARTITION OF hash_parted FOR VALUES WITH (MODULUS 200, REMAINDER 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- modulus 25 is factor of modulus of 50 but 10 is not a factor of 25.
 CREATE TABLE fail_part PARTITION OF hash_parted FOR VALUES WITH (MODULUS 25, REMAINDER 3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  every hash partition modulus must be a factor of the next larger modulus
 DETAIL:  The new modulus 25 is not divisible by 10, the modulus of existing partition "hpart_1".
 -- previous modulus 50 is factor of 150 but this modulus is not a factor of next modulus 200.
 CREATE TABLE fail_part PARTITION OF hash_parted FOR VALUES WITH (MODULUS 150, REMAINDER 3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  every hash partition modulus must be a factor of the next larger modulus
 DETAIL:  The new modulus 150 is not a factor of 200, the modulus of existing partition "hpart_3".
 -- trying to specify range for the hash partitioned table
 CREATE TABLE fail_part PARTITION OF hash_parted FOR VALUES FROM ('a', 1) TO ('z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a hash partition
 LINE 1: ...BLE fail_part PARTITION OF hash_parted FOR VALUES FROM ('a',...
                                                              ^
 -- trying to specify list value for the hash partitioned table
 CREATE TABLE fail_part PARTITION OF hash_parted FOR VALUES IN (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  invalid bound specification for a hash partition
 LINE 1: ...BLE fail_part PARTITION OF hash_parted FOR VALUES IN (1000);
                                                              ^
 -- trying to create default partition for the hash partitioned table
 CREATE TABLE fail_default_part PARTITION OF hash_parted DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  a hash-partitioned table may not have a default partition
 -- check if compatible with the specified parent
 -- cannot create as partition of a non-partitioned table
 CREATE TABLE unparted (
 	a int
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE fail_part PARTITION OF unparted FOR VALUES IN ('a');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  "unparted" is not partitioned
 CREATE TABLE fail_part PARTITION OF unparted FOR VALUES WITH (MODULUS 2, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  "unparted" is not partitioned
 DROP TABLE unparted;
 -- cannot create a permanent rel as partition of a temp rel
 CREATE TEMP TABLE temp_parted (
 	a int
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE fail_part PARTITION OF temp_parted FOR VALUES IN ('a');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot create a permanent relation as partition of temporary relation "temp_parted"
 DROP TABLE temp_parted;
 -- check for partition bound overlap and other invalid specifications
 CREATE TABLE list_parted2 (
 	a varchar
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_null_z PARTITION OF list_parted2 FOR VALUES IN (null, 'z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_ab PARTITION OF list_parted2 FOR VALUES IN ('a', 'b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE list_parted2_def PARTITION OF list_parted2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF list_parted2 FOR VALUES IN (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part_null_z"
 LINE 1: ...LE fail_part PARTITION OF list_parted2 FOR VALUES IN (null);
                                                                  ^
 CREATE TABLE fail_part PARTITION OF list_parted2 FOR VALUES IN ('b', 'c');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part_ab"
 LINE 1: ...ail_part PARTITION OF list_parted2 FOR VALUES IN ('b', 'c');
                                                              ^
 -- check default partition overlap
 INSERT INTO list_parted2 VALUES('X');
 CREATE TABLE fail_part PARTITION OF list_parted2 FOR VALUES IN ('W', 'X', 'Y');
-ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row
+NOTICE:  table has parent, setting distribution columns to match parent table
+ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row  (seg1 172.17.0.3:7003 pid=170504)
 CREATE TABLE range_parted2 (
 	a int
 ) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- trying to create range partition with empty range
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (1) TO (0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  empty range bound specified for partition "fail_part"
 LINE 1: ..._part PARTITION OF range_parted2 FOR VALUES FROM (1) TO (0);
                                                              ^
 DETAIL:  Specified lower bound (1) is greater than or equal to upper bound (0).
 -- note that the range '[1, 1)' has no elements
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (1) TO (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  empty range bound specified for partition "fail_part"
 LINE 1: ..._part PARTITION OF range_parted2 FOR VALUES FROM (1) TO (1);
                                                              ^
 DETAIL:  Specified lower bound (1) is greater than or equal to upper bound (1).
 CREATE TABLE part0 PARTITION OF range_parted2 FOR VALUES FROM (minvalue) TO (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (minvalue) TO (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part0"
 LINE 1: ..._part PARTITION OF range_parted2 FOR VALUES FROM (minvalue) ...
                                                              ^
 CREATE TABLE part1 PARTITION OF range_parted2 FOR VALUES FROM (1) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (-1) TO (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part0"
 LINE 1: ..._part PARTITION OF range_parted2 FOR VALUES FROM (-1) TO (1)...
                                                              ^
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (9) TO (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part1"
 LINE 1: ..._part PARTITION OF range_parted2 FOR VALUES FROM (9) TO (max...
                                                              ^
 CREATE TABLE part2 PARTITION OF range_parted2 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part3 PARTITION OF range_parted2 FOR VALUES FROM (30) TO (40);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (10) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part2"
 LINE 1: ...art PARTITION OF range_parted2 FOR VALUES FROM (10) TO (30);
                                                                    ^
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (10) TO (50);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part2"
 LINE 1: ...art PARTITION OF range_parted2 FOR VALUES FROM (10) TO (50);
                                                                    ^
 -- Create a default partition for range partitioned table
 CREATE TABLE range2_default PARTITION OF range_parted2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- More than one default partition is not allowed, so this should give error
 CREATE TABLE fail_default_part PARTITION OF range_parted2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_default_part" conflicts with existing default partition "range2_default"
 LINE 1: ... TABLE fail_default_part PARTITION OF range_parted2 DEFAULT;
                                                                ^
 -- Check if the range for default partitions overlap
 INSERT INTO range_parted2 VALUES (85);
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (80) TO (90);
-ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row
+NOTICE:  table has parent, setting distribution columns to match parent table
+ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row  (seg2 172.17.0.3:7004 pid=170505)
 CREATE TABLE part4 PARTITION OF range_parted2 FOR VALUES FROM (90) TO (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- now check for multi-column range partition key
 CREATE TABLE range_parted3 (
 	a int,
 	b int
 ) PARTITION BY RANGE (a, (b+1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part00 PARTITION OF range_parted3 FOR VALUES FROM (0, minvalue) TO (0, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF range_parted3 FOR VALUES FROM (0, minvalue) TO (0, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part00"
 LINE 1: ..._part PARTITION OF range_parted3 FOR VALUES FROM (0, minvalu...
                                                              ^
 CREATE TABLE part10 PARTITION OF range_parted3 FOR VALUES FROM (1, minvalue) TO (1, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part11 PARTITION OF range_parted3 FOR VALUES FROM (1, 1) TO (1, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part12 PARTITION OF range_parted3 FOR VALUES FROM (1, 10) TO (1, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fail_part PARTITION OF range_parted3 FOR VALUES FROM (1, 10) TO (1, 20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part12"
 LINE 1: ...rt PARTITION OF range_parted3 FOR VALUES FROM (1, 10) TO (1,...
                                                              ^
 CREATE TABLE range3_default PARTITION OF range_parted3 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- cannot create a partition that says column b is allowed to range
 -- from -infinity to +infinity, while there exist partitions that have
 -- more specific ranges
 CREATE TABLE fail_part PARTITION OF range_parted3 FOR VALUES FROM (1, minvalue) TO (1, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "part10"
 LINE 1: ..._part PARTITION OF range_parted3 FOR VALUES FROM (1, minvalu...
                                                              ^
@@ -921,20 +1157,29 @@ LINE 1: ..._part PARTITION OF range_parted3 FOR VALUES FROM (1, minvalu...
 CREATE TABLE hash_parted2 (
 	a varchar
 ) PARTITION BY HASH (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE h2part_1 PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE h2part_2 PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE h2part_3 PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE h2part_4 PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- overlap with part_4
 CREATE TABLE fail_part PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 2, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  partition "fail_part" would overlap partition "h2part_4"
 LINE 1: ...LE fail_part PARTITION OF hash_parted2 FOR VALUES WITH (MODU...
                                                              ^
 -- modulus must be greater than zero
 CREATE TABLE fail_part PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 0, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  modulus for hash partition must be a positive integer
 -- remainder must be greater than or equal to zero and less than modulus
 CREATE TABLE fail_part PARTITION OF hash_parted2 FOR VALUES WITH (MODULUS 8, REMAINDER 8);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  remainder for hash partition must be less than modulus
 -- check schema propagation from parent
 CREATE TABLE parted (
@@ -942,7 +1187,10 @@ CREATE TABLE parted (
 	b int NOT NULL DEFAULT 0,
 	CONSTRAINT check_a CHECK (length(a) > 0)
 ) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_a PARTITION OF parted FOR VALUES IN ('a');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- only inherited attributes (never local ones)
 SELECT attname, attislocal, attinhcount FROM pg_attribute
   WHERE attrelid = 'part_a'::regclass and attnum > 0
@@ -961,12 +1209,14 @@ CREATE TABLE part_b PARTITION OF parted (
 	b CHECK (b >= 0),
 	CONSTRAINT check_a CHECK (length(a) > 0)
 ) FOR VALUES IN ('b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  column "b" specified more than once
 CREATE TABLE part_b PARTITION OF parted (
 	b NOT NULL DEFAULT 1,
 	CONSTRAINT check_a CHECK (length(a) > 0),
 	CONSTRAINT check_b CHECK (b >= 0)
 ) FOR VALUES IN ('b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging constraint "check_a" with inherited definition
 -- conislocal should be false for any merged constraints, true otherwise
 SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass ORDER BY conislocal, coninhcount;
@@ -1002,17 +1252,23 @@ SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::reg
 
 -- specify PARTITION BY for a partition
 CREATE TABLE fail_part_col_not_found PARTITION OF parted FOR VALUES IN ('c') PARTITION BY RANGE (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  column "c" named in partition key does not exist
 LINE 1: ...TITION OF parted FOR VALUES IN ('c') PARTITION BY RANGE (c);
                                                                     ^
 CREATE TABLE part_c PARTITION OF parted (b WITH OPTIONS NOT NULL DEFAULT 0) FOR VALUES IN ('c') PARTITION BY RANGE ((b));
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- create a level-2 partition
 CREATE TABLE part_c_1_10 PARTITION OF part_c FOR VALUES FROM (1) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- check that NOT NULL and default value are inherited correctly
 create table parted_notnull_inh_test (a int default 1, b int not null default 0) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_notnull_inh_test1 partition of parted_notnull_inh_test (a not null, b default 1) for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parted_notnull_inh_test (b) values (null);
-ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint
+ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint  (seg1 172.17.0.3:7003 pid=170504)
 DETAIL:  Failing row contains (1, null).
 -- note that while b's default is overriden, a's default is preserved
 \d parted_notnull_inh_test1
@@ -1022,68 +1278,86 @@ DETAIL:  Failing row contains (1, null).
  a      | integer |           | not null | 1
  b      | integer |           | not null | 1
 Partition of: parted_notnull_inh_test FOR VALUES IN (1)
+Distributed by: (a)
 
 drop table parted_notnull_inh_test;
 -- check that collations are assigned in partition bound expressions
 create table parted_boolean_col (a bool, b text) partition by list(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_boolean_less partition of parted_boolean_col
   for values in ('foo' < 'bar');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_boolean_greater partition of parted_boolean_col
   for values in ('foo' > 'bar');
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop table parted_boolean_col;
 -- check for a conflicting COLLATE clause
 create table parted_collate_must_match (a text collate "C", b text collate "C")
   partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- on the partition key
 create table parted_collate_must_match1 partition of parted_collate_must_match
   (a collate "POSIX") for values from ('a') to ('m');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- on another column
 create table parted_collate_must_match2 partition of parted_collate_must_match
   (b collate "POSIX") for values from ('m') to ('z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop table parted_collate_must_match;
 -- check that non-matching collations for partition bound
 -- expressions are coerced to the right collation
 create table test_part_coll_posix (a text) partition by range (a collate "POSIX");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- ok, collation is implicitly coerced
 create table test_part_coll partition of test_part_coll_posix for values from ('a' collate "C") to ('g');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- ok
 create table test_part_coll2 partition of test_part_coll_posix for values from ('g') to ('m');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- ok, collation is implicitly coerced
 create table test_part_coll_cast partition of test_part_coll_posix for values from (name 'm' collate "C") to ('s');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- ok; partition collation silently overrides the default collation of type 'name'
 create table test_part_coll_cast2 partition of test_part_coll_posix for values from (name 's') to ('z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop table test_part_coll_posix;
 -- Partition bound in describe output
 \d+ part_b
-                                   Table "public.part_b"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- a      | text    |           |          |         | extended |              | 
- b      | integer |           | not null | 1       | plain    |              | 
+                                          Table "public.part_b"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text    |           |          |         | extended |             |              | 
+ b      | integer |           | not null | 1       | plain    |             |              | 
 Partition of: parted FOR VALUES IN ('b')
 Partition constraint: ((a IS NOT NULL) AND (a = 'b'::text))
+Distributed by: (a)
 
 -- Both partition bound and partition key in describe output
 \d+ part_c
-                             Partitioned table "public.part_c"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- a      | text    |           |          |         | extended |              | 
- b      | integer |           | not null | 0       | plain    |              | 
+                                    Partitioned table "public.part_c"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text    |           |          |         | extended |             |              | 
+ b      | integer |           | not null | 0       | plain    |             |              | 
 Partition of: parted FOR VALUES IN ('c')
 Partition constraint: ((a IS NOT NULL) AND (a = 'c'::text))
 Partition key: RANGE (b)
 Partitions: part_c_1_10 FOR VALUES FROM (1) TO (10)
+Distributed by: (a)
 
 -- a level-2 partition's constraint will include the parent's expressions
 \d+ part_c_1_10
-                                Table "public.part_c_1_10"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- a      | text    |           |          |         | extended |              | 
- b      | integer |           | not null | 0       | plain    |              | 
+                                       Table "public.part_c_1_10"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text    |           |          |         | extended |             |              | 
+ b      | integer |           | not null | 0       | plain    |             |              | 
 Partition of: part_c FOR VALUES FROM (1) TO (10)
 Partition constraint: ((a IS NOT NULL) AND (a = 'c'::text) AND (b IS NOT NULL) AND (b >= 1) AND (b < 10))
+Distributed by: (a)
 
 -- Show partition count in the parent's describe output
 -- Tempted to include \d+ output listing partitions with bound info but
@@ -1097,6 +1371,7 @@ Partition constraint: ((a IS NOT NULL) AND (a = 'c'::text) AND (b IS NOT NULL) A
  b      | integer |           | not null | 0
 Partition key: LIST (a)
 Number of partitions: 3 (Use \d+ to list them.)
+Distributed by: (a)
 
 \d hash_parted
       Partitioned table "public.hash_parted"
@@ -1105,53 +1380,64 @@ Number of partitions: 3 (Use \d+ to list them.)
  a      | integer |           |          | 
 Partition key: HASH (a)
 Number of partitions: 3 (Use \d+ to list them.)
+Distributed by: (a)
 
 -- check that we get the expected partition constraints
 CREATE TABLE range_parted4 (a int, b int, c int) PARTITION BY RANGE (abs(a), abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE unbounded_range_part PARTITION OF range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (MAXVALUE, MAXVALUE, MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ unbounded_range_part
-                           Table "public.unbounded_range_part"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+                                  Table "public.unbounded_range_part"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
+ c      | integer |           |          |         | plain   |             |              | 
 Partition of: range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (MAXVALUE, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL))
+Distributed by: (a)
 
 DROP TABLE unbounded_range_part;
 CREATE TABLE range_parted4_1 PARTITION OF range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (1, MAXVALUE, MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_1
-                              Table "public.range_parted4_1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+                                     Table "public.range_parted4_1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
+ c      | integer |           |          |         | plain   |             |              | 
 Partition of: range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (1, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND (abs(a) <= 1))
+Distributed by: (a)
 
 CREATE TABLE range_parted4_2 PARTITION OF range_parted4 FOR VALUES FROM (3, 4, 5) TO (6, 7, MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_2
-                              Table "public.range_parted4_2"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+                                     Table "public.range_parted4_2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
+ c      | integer |           |          |         | plain   |             |              | 
 Partition of: range_parted4 FOR VALUES FROM (3, 4, 5) TO (6, 7, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND ((abs(a) > 3) OR ((abs(a) = 3) AND (abs(b) > 4)) OR ((abs(a) = 3) AND (abs(b) = 4) AND (c >= 5))) AND ((abs(a) < 6) OR ((abs(a) = 6) AND (abs(b) <= 7))))
+Distributed by: (a)
 
 CREATE TABLE range_parted4_3 PARTITION OF range_parted4 FOR VALUES FROM (6, 8, MINVALUE) TO (9, MAXVALUE, MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_3
-                              Table "public.range_parted4_3"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+                                     Table "public.range_parted4_3"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
+ c      | integer |           |          |         | plain   |             |              | 
 Partition of: range_parted4 FOR VALUES FROM (6, 8, MINVALUE) TO (9, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND ((abs(a) > 6) OR ((abs(a) = 6) AND (abs(b) >= 8))) AND (abs(a) <= 9))
+Distributed by: (a)
 
 DROP TABLE range_parted4;
 -- user-defined operator class in partition key
@@ -1162,7 +1448,10 @@ CREATE OPERATOR CLASS test_int4_ops FOR TYPE int4 USING btree AS
   OPERATOR 3 = (int4,int4), OPERATOR 4 >= (int4,int4),
   OPERATOR 5 > (int4,int4), FUNCTION 1 my_int4_sort(int4,int4);
 CREATE TABLE partkey_t (a int4) PARTITION BY RANGE (a test_int4_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE partkey_t_1 PARTITION OF partkey_t FOR VALUES FROM (0) TO (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO partkey_t VALUES (100);
 INSERT INTO partkey_t VALUES (200);
 -- cleanup
@@ -1172,6 +1461,8 @@ DROP OPERATOR CLASS test_int4_ops USING btree;
 DROP FUNCTION my_int4_sort(int4,int4);
 -- comments on partitioned tables columns
 CREATE TABLE parted_col_comment (a int, b text) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COMMENT ON TABLE parted_col_comment IS 'Am partitioned table';
 COMMENT ON COLUMN parted_col_comment.a IS 'Partition key';
 SELECT obj_description('parted_col_comment'::regclass);
@@ -1181,49 +1472,66 @@ SELECT obj_description('parted_col_comment'::regclass);
 (1 row)
 
 \d+ parted_col_comment
-                        Partitioned table "public.parted_col_comment"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target |  Description  
---------+---------+-----------+----------+---------+----------+--------------+---------------
- a      | integer |           |          |         | plain    |              | Partition key
- b      | text    |           |          |         | extended |              | 
+                               Partitioned table "public.parted_col_comment"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target |  Description  
+--------+---------+-----------+----------+---------+----------+-------------+--------------+---------------
+ a      | integer |           |          |         | plain    |             |              | Partition key
+ b      | text    |           |          |         | extended |             |              | 
 Partition key: LIST (a)
 Number of partitions: 0
+Distributed by: (a)
 
 DROP TABLE parted_col_comment;
 -- list partitioning on array type column
 CREATE TABLE arrlp (a int[]) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE arrlp12 PARTITION OF arrlp FOR VALUES IN ('{1}', '{2}');
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ arrlp12
-                                   Table "public.arrlp12"
- Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+--------------+-------------
- a      | integer[] |           |          |         | extended |              | 
+                                          Table "public.arrlp12"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | integer[] |           |          |         | extended |             |              | 
 Partition of: arrlp FOR VALUES IN ('{1}', '{2}')
 Partition constraint: ((a IS NOT NULL) AND ((a = '{1}'::integer[]) OR (a = '{2}'::integer[])))
+Distributed by: (a)
 
 DROP TABLE arrlp;
 -- partition on boolean column
 create table boolspart (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolspart_t partition of boolspart for values in (true);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolspart_f partition of boolspart for values in (false);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ boolspart
-                           Partitioned table "public.boolspart"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | boolean |           |          |         | plain   |              | 
+                                  Partitioned table "public.boolspart"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | boolean |           |          |         | plain   |             |              | 
 Partition key: LIST (a)
 Partitions: boolspart_f FOR VALUES IN (false),
             boolspart_t FOR VALUES IN (true)
+Distributed by: (a)
 
 drop table boolspart;
 -- partitions mixing temporary and permanent relations
 create table perm_parted (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temporary table temp_parted (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table perm_part partition of temp_parted default; -- error
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot create a permanent relation as partition of temporary relation "temp_parted"
 create temp table temp_part partition of perm_parted default; -- error
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  cannot create a temporary relation as partition of permanent relation "perm_parted"
 create temp table temp_part partition of temp_parted default; -- ok
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop table perm_parted cascade;
 drop table temp_parted cascade;
 -- check that adding partitions to a table while it is being used is prevented
@@ -1232,6 +1540,8 @@ drop table temp_parted cascade;
 -- codepath as this does in upstream. So this test produces a different error,
 -- and isn't very interesting in GPDB.
 create table tab_part_create (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function func_part_create() returns trigger
   language plpgsql as $$
   begin
@@ -1242,17 +1552,23 @@ create trigger trig_part_create before insert on tab_part_create
   for each statement execute procedure func_part_create();
 ERROR:  Triggers for statements are not yet supported
 insert into tab_part_create values (1);
+ERROR:  no partition of relation "tab_part_create" found for row  (seg1 172.17.0.3:7003 pid=170504)
 DETAIL:  Partition key of the failing row contains (a) = (1).
-ERROR:  no partition of relation "tab_part_create" found for row
 drop table tab_part_create;
 drop function func_part_create();
 -- test using a volatile expression as partition bound
 create table volatile_partbound_test (partkey timestamp) partition by range (partkey);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'partkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table volatile_partbound_test1 partition of volatile_partbound_test for values from (minvalue) to (current_timestamp);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table volatile_partbound_test2 partition of volatile_partbound_test for values from (current_timestamp) to (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- this should go into the partition volatile_partbound_test2
 insert into volatile_partbound_test values (current_timestamp);
 select tableoid::regclass from volatile_partbound_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: volatile_partbound_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          tableoid         
 --------------------------
  volatile_partbound_test2
@@ -1262,15 +1578,21 @@ drop table volatile_partbound_test;
 -- test the case where a check constraint on default partition allows
 -- to avoid scanning it when adding a new partition
 create table defcheck (a int, b int) partition by list (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table defcheck_def (a int, c int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table defcheck_def drop c;
 alter table defcheck attach partition defcheck_def default;
 alter table defcheck_def add check (b <= 0 and b is not null);
 create table defcheck_1 partition of defcheck for values in (1, null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- test that complex default partition constraints are enforced correctly
 insert into defcheck_def values (0, 0);
 create table defcheck_0 partition of defcheck for values in (0);
-ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row
+NOTICE:  table has parent, setting distribution columns to match parent table
+ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row  (seg1 172.17.0.3:7003 pid=170504)
 drop table defcheck;
 -- Test github issue #7340. truncating a toast unlogged table fails.
 -- Leave the table on purpose for pg_dump and gp_replica_check tests.
@@ -1288,7 +1610,10 @@ create table part_column_drop (
   b int,
   useless_3 int
 ) partition by range (id);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'useless_1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table part_column_drop drop column useless_1;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table part_column_drop drop column useless_2;
 alter table part_column_drop drop column useless_3;
 create index part_column_drop_b_pred on part_column_drop(b) where b = 1;
@@ -1297,6 +1622,7 @@ create index part_column_drop_d_pred on part_column_drop(d) where d = 2;
 create index part_column_drop_d_expr on part_column_drop((d = 2));
 create table part_column_drop_1_10 partition of
   part_column_drop for values from (1) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d part_column_drop
     Partitioned table "public.part_column_drop"
  Column |  Type   | Collation | Nullable | Default 
@@ -1311,6 +1637,7 @@ Indexes:
     "part_column_drop_d_expr" btree ((d = 2))
     "part_column_drop_d_pred" btree (d) WHERE d = 2
 Number of partitions: 1 (Use \d+ to list them.)
+Distributed randomly
 
 \d part_column_drop_1_10
        Table "public.part_column_drop_1_10"
@@ -1325,5 +1652,6 @@ Indexes:
     "part_column_drop_1_10_d_idx" btree (d) WHERE d = 2
     "part_column_drop_1_10_expr_idx" btree ((b = 1))
     "part_column_drop_1_10_expr_idx1" btree ((d = 2))
+Distributed randomly
 
 drop table part_column_drop;

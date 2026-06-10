@@ -239,6 +239,8 @@ SELECT 3 AS x, 'Hello', 4 AS y, true AS "dirty\name" \gdesc \g
 
 -- \gexec
 create temporary table gexec_test(a int, b text, c date, d float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select format('create index on gexec_test(%I)', attname)
 from pg_attribute
 where attrelid = 'gexec_test'::regclass and attnum > 0
@@ -2667,6 +2669,8 @@ deallocate q;
 \pset border 1
 -- support table for output-format tests (useful to create a footer)
 create table psql_serial_tab (id serial);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- test header/footer/tuples_only behavior in aligned/unaligned/wrapped cases
 \pset format aligned
 \pset expanded off
@@ -2824,63 +2828,74 @@ Type                | func
 \pset expanded off
 CREATE SCHEMA tableam_display;
 CREATE ROLE regress_display_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER SCHEMA tableam_display OWNER TO regress_display_role;
 SET search_path TO tableam_display;
 CREATE ACCESS METHOD heap_psql TYPE TABLE HANDLER heap_tableam_handler;
 SET ROLE TO regress_display_role;
 -- Use only relations with a physical size of zero.
 CREATE TABLE tbl_heap_psql(f1 int, f2 char(100)) using heap_psql;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbl_heap(f1 int, f2 char(100)) using heap;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW view_heap_psql AS SELECT f1 from tbl_heap_psql;
 CREATE MATERIALIZED VIEW mat_view_heap_psql USING heap_psql AS SELECT f1 from tbl_heap_psql;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ tbl_heap_psql
-                              Table "tableam_display.tbl_heap_psql"
- Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+--------------+-------------
- f1     | integer        |           |          |         | plain    |              | 
- f2     | character(100) |           |          |         | extended |              | 
+                                     Table "tableam_display.tbl_heap_psql"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |             |              | 
+ f2     | character(100) |           |          |         | extended |             |              | 
+Distributed by: (f1)
 
 \d+ tbl_heap
-                                 Table "tableam_display.tbl_heap"
- Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+--------------+-------------
- f1     | integer        |           |          |         | plain    |              | 
- f2     | character(100) |           |          |         | extended |              | 
+                                        Table "tableam_display.tbl_heap"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |             |              | 
+ f2     | character(100) |           |          |         | extended |             |              | 
+Distributed by: (f1)
 
 \set HIDE_TABLEAM off
 \d+ tbl_heap_psql
-                              Table "tableam_display.tbl_heap_psql"
- Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+--------------+-------------
- f1     | integer        |           |          |         | plain    |              | 
- f2     | character(100) |           |          |         | extended |              | 
+                                     Table "tableam_display.tbl_heap_psql"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |             |              | 
+ f2     | character(100) |           |          |         | extended |             |              | 
+Distributed by: (f1)
 Access method: heap_psql
 
 \d+ tbl_heap
-                                 Table "tableam_display.tbl_heap"
- Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+--------------+-------------
- f1     | integer        |           |          |         | plain    |              | 
- f2     | character(100) |           |          |         | extended |              | 
+                                        Table "tableam_display.tbl_heap"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |             |              | 
+ f2     | character(100) |           |          |         | extended |             |              | 
+Distributed by: (f1)
 Access method: heap
 
 -- AM is displayed for tables, indexes and materialized views.
 \d+
-                                                           List of relations
-     Schema      |        Name        |       Type        |        Owner         | Persistence | Access method |  Size   | Description 
------------------+--------------------+-------------------+----------------------+-------------+---------------+---------+-------------
- tableam_display | mat_view_heap_psql | materialized view | regress_display_role | permanent   | heap_psql     | 0 bytes | 
- tableam_display | tbl_heap           | table             | regress_display_role | permanent   | heap          | 0 bytes | 
- tableam_display | tbl_heap_psql      | table             | regress_display_role | permanent   | heap_psql     | 0 bytes | 
- tableam_display | view_heap_psql     | view              | regress_display_role | permanent   |               | 0 bytes | 
+                                                                 List of relations
+     Schema      |        Name        |       Type        |        Owner         |  Storage  | Persistence | Access method |  Size   | Description 
+-----------------+--------------------+-------------------+----------------------+-----------+-------------+---------------+---------+-------------
+ tableam_display | mat_view_heap_psql | materialized view | regress_display_role | heap_psql | permanent   | heap_psql     | 0 bytes | 
+ tableam_display | tbl_heap           | table             | regress_display_role | heap      | permanent   | heap          | 0 bytes | 
+ tableam_display | tbl_heap_psql      | table             | regress_display_role | heap_psql | permanent   | heap_psql     | 0 bytes | 
+ tableam_display | view_heap_psql     | view              | regress_display_role |           | permanent   |               | 0 bytes | 
 (4 rows)
 
 \dt+
-                                                  List of relations
-     Schema      |     Name      | Type  |        Owner         | Persistence | Access method |  Size   | Description 
------------------+---------------+-------+----------------------+-------------+---------------+---------+-------------
- tableam_display | tbl_heap      | table | regress_display_role | permanent   | heap          | 0 bytes | 
- tableam_display | tbl_heap_psql | table | regress_display_role | permanent   | heap_psql     | 0 bytes | 
+                                                        List of relations
+     Schema      |     Name      | Type  |        Owner         |  Storage  | Persistence | Access method |  Size   | Description 
+-----------------+---------------+-------+----------------------+-----------+-------------+---------------+---------+-------------
+ tableam_display | tbl_heap      | table | regress_display_role | heap      | permanent   | heap          | 0 bytes | 
+ tableam_display | tbl_heap_psql | table | regress_display_role | heap_psql | permanent   | heap_psql     | 0 bytes | 
 (2 rows)
 
 \dm+
@@ -2900,13 +2915,13 @@ Access method: heap
 
 \set HIDE_TABLEAM on
 \d+
-                                                   List of relations
-     Schema      |        Name        |       Type        |        Owner         | Persistence |  Size   | Description 
------------------+--------------------+-------------------+----------------------+-------------+---------+-------------
- tableam_display | mat_view_heap_psql | materialized view | regress_display_role | permanent   | 0 bytes | 
- tableam_display | tbl_heap           | table             | regress_display_role | permanent   | 0 bytes | 
- tableam_display | tbl_heap_psql      | table             | regress_display_role | permanent   | 0 bytes | 
- tableam_display | view_heap_psql     | view              | regress_display_role | permanent   | 0 bytes | 
+                                                         List of relations
+     Schema      |        Name        |       Type        |        Owner         |  Storage  | Persistence |  Size   | Description 
+-----------------+--------------------+-------------------+----------------------+-----------+-------------+---------+-------------
+ tableam_display | mat_view_heap_psql | materialized view | regress_display_role | heap_psql | permanent   | 0 bytes | 
+ tableam_display | tbl_heap           | table             | regress_display_role | heap      | permanent   | 0 bytes | 
+ tableam_display | tbl_heap_psql      | table             | regress_display_role | heap_psql | permanent   | 0 bytes | 
+ tableam_display | view_heap_psql     | view              | regress_display_role |           | permanent   | 0 bytes | 
 (4 rows)
 
 RESET ROLE;
@@ -4849,16 +4864,25 @@ last error code: 22012
 \unset FETCH_COUNT
 create schema testpart;
 create role regress_partitioning_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 alter schema testpart owner to regress_partitioning_role;
 set role to regress_partitioning_role;
 -- run test inside own schema and hide other partitions
 set search_path to testpart;
 create table testtable_apple(logdate date);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table testtable_orange(logdate date);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index testtable_apple_index on testtable_apple(logdate);
 create index testtable_orange_index on testtable_orange(logdate);
 create table testpart_apple(logdate date) partition by range(logdate);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table testpart_orange(logdate date) partition by range(logdate);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index testpart_apple_index on testpart_apple(logdate);
 create index testpart_orange_index on testpart_orange(logdate);
 -- only partition related object should be displayed
@@ -4889,21 +4913,29 @@ drop table testtable_orange;
 drop table testpart_apple;
 drop table testpart_orange;
 create table parent_tab (id int) partition by range (id);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index parent_index on parent_tab (id);
 create table child_0_10 partition of parent_tab
   for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_10_20 partition of parent_tab
   for values from (10) to (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_20_30 partition of parent_tab
   for values from (20) to (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parent_tab values (generate_series(0,29));
 create table child_30_40 partition of parent_tab
 for values from (30) to (40)
   partition by range(id);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_30_35 partition of child_30_40
   for values from (30) to (35);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_35_40 partition of child_30_40
    for values from (35) to (40);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parent_tab values (generate_series(30,39));
 \dPt
             List of partitioned tables
@@ -5193,11 +5225,13 @@ List of access methods
                              List of functions
    Schema   |     Name     | Result data type | Argument data types | Type 
 ------------+--------------+------------------+---------------------+------
+ pg_catalog | complex_sqrt | complex          | complex             | func
  pg_catalog | dsqrt        | double precision | double precision    | func
  pg_catalog | numeric_sqrt | numeric          | numeric             | func
+ pg_catalog | sqrt         | complex          | complex             | func
  pg_catalog | sqrt         | double precision | double precision    | func
  pg_catalog | sqrt         | numeric          | numeric             | func
-(4 rows)
+(6 rows)
 
 \df *sqrt num*
                              List of functions

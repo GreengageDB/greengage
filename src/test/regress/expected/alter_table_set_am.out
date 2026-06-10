@@ -34,6 +34,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'se
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- relfilenodes shouldn't change
 SELECT * FROM relfilebeforesameam EXCEPT SELECT * FROM relfileaftersameam;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforesameam, relfileaftersameam
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
@@ -59,8 +61,8 @@ INSERT INTO heap2ao2 SELECT i,i FROM generate_series(1,5) i;
 SELECT reloptions from pg_class where relname in ('heap2ao', 'heap2ao2');
    reloptions    
 -----------------
- 
  {fillfactor=70}
+ 
 (2 rows)
 
 CREATE TEMP TABLE relfilebeforeao AS
@@ -79,11 +81,11 @@ ALTER TABLE heap2ao2 SET WITH (appendoptimized=true);
 -- And, the original heap reloptions are gone (in this case, 'fillfactor').
 -- Also, equivalent indexes have been created
 \d+ heap2ao
-                                  Table "public.heap2ao"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                         Table "public.heap2ao"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 5
 Block Size: 65536
@@ -95,11 +97,11 @@ Access method: ao_row
 Options: blocksize=65536, compresslevel=5
 
 \d+ heap2ao2
-                                 Table "public.heap2ao2"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                        Table "public.heap2ao2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 5
 Block Size: 65536
@@ -112,23 +114,27 @@ Options: blocksize=65536, compresslevel=5
 
 -- Check data is intact
 SELECT * FROM heap2ao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 1
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
 (5 rows)
 
 SELECT * FROM heap2ao2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2ao2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
+ 1 | 1
 (5 rows)
 
 -- The tables and indexes should have been rewritten (should have different relfilenodes)
@@ -139,6 +145,8 @@ CREATE TEMP TABLE relfileafterao AS
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforeao, relfileafterao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
@@ -160,17 +168,17 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2ao')).* FROM gp_dist_rand
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('heap2ao2');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
-          1 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
-          2 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
           0 |     0 |  72 |        3 |             1 |               88 |        1 |             4 |     1
+          2 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
+          1 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
 (3 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2ao2')).* FROM gp_dist_random('gp_id');
@@ -182,8 +190,8 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2ao2')).* FROM gp_dist_ran
 SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heap2ao%' AND c.oid = p.relid;
  relname  
 ----------
- heap2ao
  heap2ao2
+ heap2ao
 (2 rows)
 
 -- check inherited tables
@@ -254,20 +262,20 @@ SELECT reloptions from pg_class where relname in ('heapchild','heapchild2');
 SELECT c.relname, a.amname FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'heapbase%' OR c.relname LIKE 'heapchild%';
   relname   | amname 
 ------------+--------
- heapbase   | ao_row
- heapbase2  | ao_row
  heapchild  | heap
  heapchild2 | heap
+ heapbase   | ao_row
+ heapbase2  | ao_row
 (4 rows)
 
 -- Check data is intact
 SELECT * FROM heapbase;
  a | b 
 ---+---
- 5 | 5
- 5 | 5
  1 | 1
  1 | 1
+ 5 | 5
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
@@ -285,10 +293,10 @@ SELECT * FROM heapbase2;
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
- 5 | 5
  1 | 1
  1 | 1
+ 5 | 5
+ 5 | 5
 (10 rows)
 
 -- relfile node should change for base table set to AO
@@ -299,6 +307,8 @@ CREATE TEMP TABLE inheritrelfileafter AS
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM inheritrelfilebefore INTERSECT SELECT * FROM inheritrelfileafter;
+NOTICE:  One or more columns in the following table(s) do not have statistics: inheritrelfilebefore, inheritrelfileafter
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
@@ -311,6 +321,8 @@ CREATE TEMP TABLE inheritchildrelfileafter AS
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT count(*) FROM (SELECT * FROM inheritchildrelfilebefore UNION SELECT * FROM inheritchildrelfileafter)a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: inheritchildrelfilebefore, inheritchildrelfileafter
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      8
@@ -334,8 +346,8 @@ SELECT * FROM gp_toolkit.__gp_aoseg('heapbase2');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
           1 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
-          2 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
           0 |     0 |  72 |        3 |             1 |               88 |        1 |             4 |     1
+          2 |     0 |  40 |        1 |             1 |               40 |        1 |             4 |     1
 (3 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapbase2')).* FROM gp_dist_random('gp_id');
@@ -352,13 +364,13 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heapbase
 
 -- aux tables are not created for child table
 SELECT * FROM gp_toolkit.__gp_aoseg('heapchild');
-ERROR:  'heapchild' is not an append-only row relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  'heapchild' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapchild')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aoseg('heapchild2');
-ERROR:  'heapchild2' is not an append-only row relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  'heapchild2' is not an append-only row relation  (seg1 slice1 172.17.0.3:7003 pid=204649)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapchild2')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg1 slice1 172.17.0.3:7003 pid=204649)
 SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heapchild%' AND c.oid = p.relid;
  relname 
 ---------
@@ -408,42 +420,48 @@ CREATE TEMP TABLE relfileafterao2heap AS
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao2heap INTERSECT SELECT * FROM relfileafterao2heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforeao2heap, relfileafterao2heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
 
 -- Check data is intact
 SELECT * FROM ao2heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
  1 | 1
- 5 | 5
 (5 rows)
 
 SELECT * FROM ao2heap2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2heap2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
+ 1 | 1
  2 | 2
  3 | 3
  4 | 4
- 1 | 1
  5 | 5
 (5 rows)
 
 -- No AO aux tables should be left
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2heap');
-ERROR:  'ao2heap' is not an append-only row relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  'ao2heap' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('ao2heap')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg2 slice1 172.17.0.3:7004 pid=204650)
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('ao2heap')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on non append-optimized relation  (seg2 slice1 192.168.0.148:7004 pid=1401173)
+ERROR:  function not supported on non append-optimized relation  (seg1 slice1 172.17.0.3:7003 pid=204649)
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2heap2');
-ERROR:  'ao2heap2' is not an append-only row relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  'ao2heap2' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('ao2heap2')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 -- No pg_appendonly entries should be left too
 SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'ao2heap%' AND c.oid = p.relid;
  relname 
@@ -454,8 +472,8 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'ao2heap%
 SELECT c.relname, a.amname FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ao2heap%';
  relname  | amname 
 ----------+--------
- ao2heap  | heap
  ao2heap2 | heap
+ ao2heap  | heap
 (2 rows)
 
 -- The new heap tables shouldn't have the old AO table's reloptions
@@ -478,7 +496,11 @@ DROP TABLE ao2heap;
 DROP TABLE ao2heap2;
 -- Scenario 4: Set reloptions along with change of AM.
 CREATE TABLE ataoset(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ataoset2(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ataoset select * from generate_series(1, 5);
 INSERT INTO ataoset2 select * from generate_series(1, 5);
 -- Error: user specifies a different AM than the one indicated in the WITH clause
@@ -488,6 +510,8 @@ LINE 1: ALTER TABLE ataoset SET ACCESS METHOD ao_row WITH(appendonly...
                                                      ^
 -- Error: user specifiies AO reloption when altering an AO table to heap.
 CREATE TABLE ao2heaperror (a int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ao2heaperror SET ACCESS METHOD heap WITH (blocksize=65536);
 ERROR:  unrecognized parameter "blocksize"
 DROP TABLE ao2heaperror;
@@ -496,12 +520,16 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ataoset SET WITH (appendonly=true, blocksize=65536, compresslevel=7);
 ALTER TABLE ataoset2 SET ACCESS METHOD ao_row WITH (blocksize=65536, compresslevel=7);
 CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- relfilenode changed
 SELECT * FROM relfilebeforeat INTERSECT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -514,18 +542,22 @@ DROP TABLE relfileafterat;
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ataoset%';
  relname  | amname |            reloptions             
 ----------+--------+-----------------------------------
- ataoset  | ao_row | {blocksize=65536,compresslevel=7}
  ataoset2 | ao_row | {blocksize=65536,compresslevel=7}
+ ataoset  | ao_row | {blocksize=65536,compresslevel=7}
 (2 rows)
 
 -- data are intact
 SELECT count(*) FROM ataoset;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ataoset
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM ataoset2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ataoset2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -537,6 +569,8 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Firstly alter them with the exact same options as case 1.
 -- Secondly alter them with same option values but different order.
 -- Neither should trigger table rewrite. 
@@ -548,6 +582,8 @@ CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- no change to relfilenode
 SELECT * FROM relfilebeforeat EXCEPT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -560,18 +596,22 @@ DROP TABLE relfileafterat;
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ataoset%';
  relname  | amname |            reloptions             
 ----------+--------+-----------------------------------
- ataoset  | ao_row | {compresslevel=7,blocksize=65536}
  ataoset2 | ao_row | {compresslevel=7,blocksize=65536}
+ ataoset  | ao_row | {compresslevel=7,blocksize=65536}
 (2 rows)
 
 -- data still intact
 SELECT count(*) FROM ataoset;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ataoset
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM ataoset2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ataoset2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -593,6 +633,8 @@ CREATE TEMP TABLE relfileafterao AS
 ERROR:  relation "relfileafterao" already exists
 -- table is rewritten
 SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforeao, relfileafterao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
@@ -601,8 +643,8 @@ SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ataoset%';
  relname  | amname |            reloptions             
 ----------+--------+-----------------------------------
- ataoset  | ao_row | {compresslevel=7,blocksize=32768}
  ataoset2 | ao_row | {compresslevel=7,blocksize=32768}
+ ataoset  | ao_row | {compresslevel=7,blocksize=32768}
 (2 rows)
 
 DROP TABLE relfilebeforeao;
@@ -612,12 +654,16 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ataoset SET ACCESS METHOD heap WITH (fillfactor=70);
 ALTER TABLE ataoset2 SET ACCESS METHOD heap WITH (fillfactor=70);
 CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- there's a table rewrite
 SELECT * FROM relfilebeforeat INTERSECT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -630,8 +676,8 @@ DROP TABLE relfileafterat;
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ataoset%';
  relname  | amname |   reloptions    
 ----------+--------+-----------------
- ataoset  | heap   | {fillfactor=70}
  ataoset2 | heap   | {fillfactor=70}
+ ataoset  | heap   | {fillfactor=70}
 (2 rows)
 
 DROP TABLE ataoset;
@@ -639,9 +685,17 @@ DROP TABLE ataoset2;
 -- Scenario 5: AO to AOCO 
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE ao2co(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co2(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co3(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co4(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_ao2co ON ao2co(b);
 CREATE INDEX index_ao2co3 ON ao2co3(b);
 INSERT INTO ao2co SELECT i,i FROM generate_series(1,5) i;
@@ -655,20 +709,22 @@ LINE 1: ALTER TABLE ao2co SET ACCESS METHOD ao_column WITH (appendop...
                                                       ^
 -- Use of *both* ACCESS METHOD and WITH clauses is allowed, but we'll print a hint to indicate the redundancy.
 ALTER TABLE ao2co SET ACCESS METHOD ao_row WITH (appendoptimized=true, orientation=row);
-HINT:  Only one of these is needed to indicate access method: the SET ACCESS METHOD clause or the options in the WITH clause.
 NOTICE:  Redundant clauses are used to indicate the access method.
+HINT:  Only one of these is needed to indicate access method: the SET ACCESS METHOD clause or the options in the WITH clause.
 CREATE TEMP TABLE relfilebeforeao AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ao2co%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ao2co%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Check once the reloptions
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ao2co%';
  relname | amname |            reloptions             
 ---------+--------+-----------------------------------
- ao2co   | ao_row | {blocksize=65536,compresslevel=5}
- ao2co2  | ao_row | {blocksize=65536,compresslevel=5}
- ao2co3  | ao_row | {blocksize=65536,compresslevel=5}
  ao2co4  | ao_row | {blocksize=65536,compresslevel=5}
+ ao2co3  | ao_row | {blocksize=65536,compresslevel=5}
+ ao2co2  | ao_row | {blocksize=65536,compresslevel=5}
+ ao2co   | ao_row | {blocksize=65536,compresslevel=5}
 (4 rows)
 
 -- Altering AO to AOCO with various syntaxes, reloptions:
@@ -681,6 +737,8 @@ CREATE TEMP TABLE relfileafterao AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ao2co%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ao2co%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
  segid | relname | relfilenode 
 -------+---------+-------------
@@ -690,24 +748,32 @@ DROP TABLE relfilebeforeao;
 DROP TABLE relfileafterao;
 -- Check data is intact
 SELECT count(*) FROM ao2co;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2co
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM ao2co2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2co2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM ao2co3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2co3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM ao2co4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao2co4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -717,7 +783,7 @@ SELECT count(*) FROM ao2co4;
 -- Only tested for 2 out of the 4 tables being created, where the tables were altered w/wo reloptions. 
 -- No need to test the other ones created by the alternative syntax SET WITH().
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2co');
-ERROR:  'ao2co' is not an append-only row relation
+ERROR:  'ao2co' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aovisimap('ao2co');
  tid | segno | row_num 
 -----+-------+---------
@@ -735,7 +801,7 @@ SELECT * FROM gp_toolkit.__gp_aoblkdir('ao2co');
 (0 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2co3');
-ERROR:  'ao2co3' is not an append-only row relation
+ERROR:  'ao2co3' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aovisimap('ao2co3');
  tid | segno | row_num 
 -----+-------+---------
@@ -770,10 +836,10 @@ SELECT c.relname, a.attnum, a.attoptions FROM pg_attribute_encoding a, pg_class 
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ao2co%';
  relname |  amname   |                       reloptions                        
 ---------+-----------+---------------------------------------------------------
- ao2co   | ao_column | 
- ao2co2  | ao_column | 
- ao2co3  | ao_column | {blocksize=32768,compresstype=rle_type,compresslevel=3}
  ao2co4  | ao_column | {blocksize=32768,compresstype=rle_type,compresslevel=3}
+ ao2co3  | ao_column | {blocksize=32768,compresstype=rle_type,compresslevel=3}
+ ao2co2  | ao_column | 
+ ao2co   | ao_column | 
 (4 rows)
 
 -- pg_appendonly should reflect the changes in reloptions
@@ -794,9 +860,17 @@ DROP TABLE ao2co4;
 -- Scenario 6: AOCO to Heap
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE co2heap(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap2(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap3(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap4(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aoi ON co2heap(b);
 INSERT INTO co2heap SELECT i,i FROM generate_series(1,5) i;
 INSERT INTO co2heap2 SELECT i,i FROM generate_series(1,5) i;
@@ -841,6 +915,8 @@ CREATE TEMP TABLE relfilebeforeco2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2heap%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2heap%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Various cases of altering AOCO to AO:
 -- 1. Basic ATSETAMs:
 ALTER TABLE co2heap SET ACCESS METHOD heap;
@@ -853,31 +929,43 @@ CREATE TEMP TABLE relfileafterco2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2heap%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2heap%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeco2heap INTERSECT SELECT * FROM relfileafterco2heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforeco2heap, relfileafterco2heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
 
 -- Check data is intact
 SELECT count(*) FROM co2heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2heap2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2heap2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2heap3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2heap3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2heap4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2heap4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -887,19 +975,19 @@ SELECT count(*) FROM co2heap4;
 -- Only testing 2 out of the 4 tables being created, where the tables were altered w/wo reloptions.
 -- No need to test the other ones created by the alternative syntax SET WITH().
 SELECT * FROM gp_toolkit.__gp_aoseg('co2heap');
-ERROR:  'co2heap' is not an append-only row relation
+ERROR:  'co2heap' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aovisimap('co2heap');
 ERROR:  function not supported on relation
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('co2heap');
-ERROR:  'co2heap' is not an append-only columnar relation
+ERROR:  'co2heap' is not an append-only columnar relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aoblkdir('co2heap');
 ERROR:  function not supported on non append-optimized relation
 SELECT * FROM gp_toolkit.__gp_aoseg('co2heap3');
-ERROR:  'co2heap3' is not an append-only row relation
+ERROR:  'co2heap3' is not an append-only row relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aovisimap('co2heap3');
 ERROR:  function not supported on relation
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('co2heap3');
-ERROR:  'co2heap3' is not an append-only columnar relation
+ERROR:  'co2heap3' is not an append-only columnar relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT * FROM gp_toolkit.__gp_aoblkdir('co2heap3');
 ERROR:  function not supported on non append-optimized relation
 -- No pg_appendonly entries should be left too
@@ -912,10 +1000,10 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'co2heap%
 SELECT c.relname, a.amname FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'co2heap%';
  relname  | amname 
 ----------+--------
- co2heap  | heap
- co2heap2 | heap
- co2heap3 | heap
  co2heap4 | heap
+ co2heap3 | heap
+ co2heap2 | heap
+ co2heap  | heap
 (4 rows)
 
 -- The new heap tables shouldn't have the old AO table's reloptions
@@ -950,9 +1038,17 @@ DROP TABLE co2heap3;
 DROP TABLE co2heap4;
 -- Scenario 7: AOCO to AO
 CREATE TABLE co2ao(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao2(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao3(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao4(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aoi ON co2ao(b);
 CREATE INDEX aoi2 ON co2ao3(b);
 INSERT INTO co2ao SELECT i,i FROM generate_series(1,5) i;
@@ -974,10 +1070,10 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'co2ao%';
 SELECT c.relname, p.compresstype, p.compresslevel, p.blocksize FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'co2ao%' AND c.oid = p.relid;
  relname | compresstype | compresslevel | blocksize 
 ---------+--------------+---------------+-----------
- co2ao   | rle_type     |             3 |     65536
  co2ao2  | rle_type     |             3 |     65536
- co2ao3  | rle_type     |             3 |     65536
  co2ao4  | rle_type     |             3 |     65536
+ co2ao   | rle_type     |             3 |     65536
+ co2ao3  | rle_type     |             3 |     65536
 (4 rows)
 
 -- Check once that the pg_attribute_encoding has entries for the AOCO tables.
@@ -998,29 +1094,31 @@ SELECT c.relname, a.attnum, attoptions FROM pg_attribute_encoding a, pg_class c 
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
-             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
              1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
              2 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              2 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
+             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
 (6 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao3')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
-             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
              1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
              2 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              2 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
+             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
 (6 rows)
 
 CREATE TEMP TABLE relfilebeforeco2ao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2ao%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2ao%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Various cases of altering AOCO to AO:
 -- 1. Basic ATSETAMs:
 ALTER TABLE co2ao SET ACCESS METHOD ao_row;
@@ -1033,7 +1131,11 @@ CREATE TEMP TABLE relfileafterco2ao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2ao%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2ao%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeco2ao INTERSECT SELECT * FROM relfileafterco2ao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: relfilebeforeco2ao, relfileafterco2ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  segid | relfilenode 
 -------+-------------
 (0 rows)
@@ -1042,24 +1144,32 @@ DROP TABLE relfilebeforeco2ao;
 DROP TABLE relfileafterco2ao;
 -- Check data is intact
 SELECT count(*) FROM co2ao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2ao2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2ao2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2ao3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2ao3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM co2ao4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co2ao4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1077,7 +1187,7 @@ SELECT * FROM gp_toolkit.__gp_aoseg('co2ao');
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aocsseg('co2ao');
-ERROR:  'co2ao' is not an append-only columnar relation
+ERROR:  'co2ao' is not an append-only columnar relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tid | segno | row_num 
 ---------------+-----+-------+---------
@@ -1086,9 +1196,9 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao')).* FROM gp_dist_random
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('co2ao3');
@@ -1100,7 +1210,7 @@ SELECT * FROM gp_toolkit.__gp_aoseg('co2ao3');
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aocsseg('co2ao3');
-ERROR:  'co2ao3' is not an append-only columnar relation
+ERROR:  'co2ao3' is not an append-only columnar relation  (seg0 slice1 172.17.0.3:7002 pid=204651)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao3')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tid | segno | row_num 
 ---------------+-----+-------+---------
@@ -1128,10 +1238,10 @@ SELECT c.relname, p.compresstype, p.compresslevel, p.blocksize FROM pg_class c, 
 SELECT c.relname, a.amname FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'co2ao%';
  relname | amname 
 ---------+--------
- co2ao   | ao_row
- co2ao2  | ao_row
- co2ao3  | ao_row
  co2ao4  | ao_row
+ co2ao3  | ao_row
+ co2ao2  | ao_row
+ co2ao   | ao_row
 (4 rows)
 
 -- Only the new tables altered w/ reloptions supplies should have reloptions.
@@ -1193,10 +1303,10 @@ HINT:  Only one of these is needed to indicate access method: the SET ACCESS MET
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'heap2co%';
  relname  |  amname   |            reloptions             
 ----------+-----------+-----------------------------------
- heap2co  | ao_column | {blocksize=65536,compresslevel=5}
- heap2co2 | heap      | 
- heap2co3 | heap      | 
  heap2co4 | heap      | 
+ heap2co3 | heap      | 
+ heap2co2 | heap      | 
+ heap2co  | ao_column | {blocksize=65536,compresslevel=5}
 (4 rows)
 
 -- Altering AO to AOCO with various syntaxes, reloptions:
@@ -1220,24 +1330,32 @@ DROP TABLE relfilebeforeaoco;
 DROP TABLE relfileafteraoco;
 -- Check data is intact
 SELECT count(*) FROM heap2co;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2co
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM heap2co2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2co2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM heap2co3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2co3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
 (1 row)
 
 SELECT count(*) FROM heap2co4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heap2co4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1253,10 +1371,10 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2co')).* FROM gp_dist_rand
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2co')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              0 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         3
+             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
 (6 rows)
@@ -1275,12 +1393,12 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2co3')).* FROM gp_dist_ran
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2co3')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
-             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              0 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         3
+             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
+             1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
 (6 rows)
 
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('heap2co3');
@@ -1293,24 +1411,24 @@ SELECT count(*) FROM gp_toolkit.__gp_aocsseg('heap2co3');
 SELECT c.relname, a.attnum, a.attoptions FROM pg_attribute_encoding a, pg_class c WHERE a.attrelid = c.oid AND c.relname LIKE 'heap2co%';
  relname  | attnum |                     attoptions                      
 ----------+--------+-----------------------------------------------------
- heap2co  |      2 | {compresstype=zlib,blocksize=65536,compresslevel=5}
  heap2co  |      1 | {compresstype=zlib,blocksize=65536,compresslevel=5}
- heap2co2 |      2 | {compresstype=zlib,blocksize=65536,compresslevel=5}
+ heap2co  |      2 | {compresstype=zlib,blocksize=65536,compresslevel=5}
  heap2co2 |      1 | {compresstype=zlib,blocksize=65536,compresslevel=5}
- heap2co3 |      2 | {blocksize=32768,compresslevel=3,compresstype=zlib}
+ heap2co2 |      2 | {compresstype=zlib,blocksize=65536,compresslevel=5}
  heap2co3 |      1 | {blocksize=32768,compresslevel=3,compresstype=zlib}
- heap2co4 |      2 | {blocksize=32768,compresslevel=3,compresstype=zlib}
+ heap2co3 |      2 | {blocksize=32768,compresslevel=3,compresstype=zlib}
  heap2co4 |      1 | {blocksize=32768,compresslevel=3,compresstype=zlib}
+ heap2co4 |      2 | {blocksize=32768,compresslevel=3,compresstype=zlib}
 (8 rows)
 
 -- AM and reloptions changed accordingly
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'heap2co%';
  relname  |  amname   |            reloptions             
 ----------+-----------+-----------------------------------
- heap2co  | ao_column | {blocksize=65536,compresslevel=5}
- heap2co2 | ao_column | {blocksize=65536,compresslevel=5}
- heap2co3 | ao_column | {blocksize=32768,compresslevel=3}
  heap2co4 | ao_column | {blocksize=32768,compresslevel=3}
+ heap2co3 | ao_column | {blocksize=32768,compresslevel=3}
+ heap2co2 | ao_column | {blocksize=65536,compresslevel=5}
+ heap2co  | ao_column | {blocksize=65536,compresslevel=5}
 (4 rows)
 
 -- pg_appendonly should reflect the changes in reloptions
@@ -1334,19 +1452,25 @@ DROP TABLE heap2co4;
 -- FIXME: currently children tables aren't inheriting reloptions of the root. After that is corrected, we 
 -- should add a corresponding test case for ALTER TABLE here too.
 CREATE TABLE atsetam_part(a int, b int) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE atsetam_part_1 partition OF atsetam_part FOR VALUES FROM (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2 partition OF atsetam_part FOR VALUES FROM (100) to (200) PARTITION BY RANGE(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2_1 partition OF atsetam_part_2 FOR VALUES FROM (100) to (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2_2 partition OF atsetam_part_2 FOR VALUES FROM (150) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE atsetam_part SET ACCESS METHOD ao_row WITH (blocksize=65536, compresslevel=7);
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'atsetam_part%';
      relname      | amname |            reloptions             
 ------------------+--------+-----------------------------------
- atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_1   | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_2   | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_2_1 | ao_row | {blocksize=65536,compresslevel=7}
  atsetam_part_2_2 | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_2_1 | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_2   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_1   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
 (5 rows)
 
 -- altering it again with the same AM and reloptions. Nothing should change.
@@ -1354,11 +1478,11 @@ ALTER TABLE atsetam_part SET ACCESS METHOD ao_row WITH (blocksize=65536, compres
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'atsetam_part%';
      relname      | amname |            reloptions             
 ------------------+--------+-----------------------------------
- atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_1   | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_2   | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_2_1 | ao_row | {blocksize=65536,compresslevel=7}
  atsetam_part_2_2 | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_2_1 | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_2   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_1   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
 (5 rows)
 
 -- altering a subpartition root, should apply and only apply to the subpartition root/child.
@@ -1366,15 +1490,17 @@ ALTER TABLE atsetam_part_2 SET ACCESS METHOD ao_column WITH (compresstype=rle_ty
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'atsetam_part%';
      relname      |  amname   |               reloptions                
 ------------------+-----------+-----------------------------------------
- atsetam_part     | ao_row    | {blocksize=65536,compresslevel=7}
  atsetam_part_1   | ao_row    | {blocksize=65536,compresslevel=7}
- atsetam_part_2   | ao_column | {compresstype=rle_type,compresslevel=3}
- atsetam_part_2_1 | ao_column | {compresstype=rle_type,compresslevel=3}
+ atsetam_part     | ao_row    | {blocksize=65536,compresslevel=7}
  atsetam_part_2_2 | ao_column | {compresstype=rle_type,compresslevel=3}
+ atsetam_part_2_1 | ao_column | {compresstype=rle_type,compresslevel=3}
+ atsetam_part_2   | ao_column | {compresstype=rle_type,compresslevel=3}
 (5 rows)
 
 -- attaching an existing table to the partition and the table should keep its AM.
 CREATE TABLE atsetam_part_att(a int, b int); -- default is heap
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE atsetam_part ATTACH PARTITION atsetam_part_att FOR VALUES FROM (1000) to (1100);
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname = 'atsetam_part_att';
      relname      | amname | reloptions 
@@ -1386,37 +1512,49 @@ DROP TABLE atsetam_part;
 -- Altering the storage model at the partition root with the ONLY keyword should change the 
 -- storage model for all future children. Existing children should remain unaffected.
 CREATE TABLE atsetam_part(a int, b int) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE atsetam_part_1 partition OF atsetam_part FOR VALUES FROM (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2 partition OF atsetam_part FOR VALUES FROM (100) to (200) PARTITION BY RANGE(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2_1 partition OF atsetam_part_2 FOR VALUES FROM (100) to (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ONLY atsetam_part SET ACCESS METHOD ao_row WITH (blocksize=65536, compresslevel=7);
 CREATE TABLE atsetam_part_3 partition OF atsetam_part FOR VALUES FROM (200) to (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_4 partition OF atsetam_part FOR VALUES FROM (300) to (400) PARTITION BY RANGE(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_4_1 partition OF atsetam_part_4 FOR VALUES FROM (300) to (350);
+NOTICE:  table has parent, setting distribution columns to match parent table
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'atsetam_part%';
      relname      | amname |            reloptions             
 ------------------+--------+-----------------------------------
- atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_1   | heap   | 
- atsetam_part_2   | heap   | 
  atsetam_part_2_1 | heap   | 
- atsetam_part_3   | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_4   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_2   | heap   | 
+ atsetam_part_1   | heap   | 
  atsetam_part_4_1 | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_4   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part_3   | ao_row | {blocksize=65536,compresslevel=7}
+ atsetam_part     | ao_row | {blocksize=65536,compresslevel=7}
 (7 rows)
 
 DROP TABLE atsetam_part;
 -- Altering the storage model at a leaf should change the storage model for the leaf.
 CREATE TABLE atsetam_part(a int, b int) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE atsetam_part_1 partition OF atsetam_part FOR VALUES FROM (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE atsetam_part_2 partition OF atsetam_part FOR VALUES FROM (100) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ONLY atsetam_part_1 SET ACCESS METHOD ao_row WITH (blocksize=65536, compresslevel=7);
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'atsetam_part%';
     relname     | amname |            reloptions             
 ----------------+--------+-----------------------------------
+ atsetam_part_2 | heap   | 
  atsetam_part   | heap   | 
  atsetam_part_1 | ao_row | {blocksize=65536,compresslevel=7}
- atsetam_part_2 | heap   | 
 (3 rows)
 
 DROP TABLE atsetam_part;
@@ -1427,6 +1565,8 @@ DROP TABLE atsetam_part;
 -- 3. Heap->AOCO->Heap->AOCO
 -- 1. Heap->AO->Heap->AO
 CREATE TABLE heapao(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX heapaoindex ON heapao(b);
 INSERT INTO heapao SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE heapao SET ACCESS METHOD ao_row;
@@ -1434,6 +1574,8 @@ ALTER TABLE heapao SET ACCESS METHOD heap;
 ALTER TABLE heapao SET ACCESS METHOD ao_row;
 -- Just checking data is intact. 
 SELECT count(*) FROM heapao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heapao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1442,6 +1584,8 @@ SELECT count(*) FROM heapao;
 DROP TABLE heapao;
 -- 2. AO->AOCO->AO->AOCO
 CREATE TABLE aoco(a int, b int) with (appendoptimized=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aocoindex ON aoco(b);
 INSERT INTO aoco SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE aoco SET ACCESS METHOD ao_column;
@@ -1449,6 +1593,8 @@ ALTER TABLE aoco SET ACCESS METHOD ao_row;
 ALTER TABLE aoco SET ACCESS METHOD ao_column;
 -- Just checking data is intact.
 SELECT count(*) FROM aoco;
+NOTICE:  One or more columns in the following table(s) do not have statistics: aoco
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1457,6 +1603,8 @@ SELECT count(*) FROM aoco;
 DROP TABLE aoco;
 -- 3. Heap->AOCO->Heap->AOCO
 CREATE TABLE heapco(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX heapcoindex ON heapco(b);
 INSERT INTO heapco SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE heapco SET ACCESS METHOD ao_column;
@@ -1464,6 +1612,8 @@ ALTER TABLE heapco SET ACCESS METHOD heap;
 ALTER TABLE heapco SET ACCESS METHOD ao_column;
 -- Just checking data is intact.
 SELECT count(*) FROM heapco;
+NOTICE:  One or more columns in the following table(s) do not have statistics: heapco
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5

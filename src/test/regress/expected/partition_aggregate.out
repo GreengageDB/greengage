@@ -19,9 +19,14 @@ SET enable_incremental_sort TO off;
 -- Tests for list partitioned tables.
 --
 CREATE TABLE pagg_tab (a int, b int, c text, d int) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_p1 PARTITION OF pagg_tab FOR VALUES IN ('0000', '0001', '0002', '0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p2 PARTITION OF pagg_tab FOR VALUES IN ('0005', '0006', '0007', '0008');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p3 PARTITION OF pagg_tab FOR VALUES IN ('0009', '0010', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab SELECT i % 20, i % 30, to_char(i % 12, 'FM0000'), i % 30 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.
@@ -61,7 +66,7 @@ SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVI
                                        Group Key: pagg_tab_2.c
                                        ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
-(30 rows)
+(32 rows)
 
 SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVING avg(d) < 15 ORDER BY 1, 2, 3;
   c   | sum  |         avg         | count | min | max 
@@ -483,13 +488,23 @@ SELECT a, sum(b order by a) FROM pagg_tab GROUP BY a ORDER BY 1, 2;
 
 -- JOIN query
 CREATE TABLE pagg_tab1(x int, y int) PARTITION BY RANGE(x);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab1_p1 PARTITION OF pagg_tab1 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p2 PARTITION OF pagg_tab1 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p3 PARTITION OF pagg_tab1 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2(x int, y int) PARTITION BY RANGE(y);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab2_p1 PARTITION OF pagg_tab2 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p2 PARTITION OF pagg_tab2 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p3 PARTITION OF pagg_tab2 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab1 SELECT i % 30, i % 20 FROM generate_series(0, 299, 2) i;
 INSERT INTO pagg_tab2 SELECT i % 20, i % 30 FROM generate_series(0, 299, 3) i;
 ANALYZE pagg_tab1;
@@ -972,7 +987,8 @@ SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a
          Sort Key: pagg_tab1.y
          ->  Result
                One-Time Filter: false
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a LEFT JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, a.y ORDER BY 1, 2;
  x | y | count 
@@ -981,9 +997,14 @@ SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a
 
 -- Partition by multiple columns
 CREATE TABLE pagg_tab_m (a int, b int, c int) PARTITION BY RANGE(a, ((a+b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_m_p1 PARTITION OF pagg_tab_m FOR VALUES FROM (0, 0) TO (12, 12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p2 PARTITION OF pagg_tab_m FOR VALUES FROM (12, 12) TO (22, 22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p3 PARTITION OF pagg_tab_m FOR VALUES FROM (22, 22) TO (30, 30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_m SELECT i % 30, i % 40, i % 50 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab_m;
 -- Partial aggregation as GROUP BY clause does not match with PARTITION KEY
@@ -1096,16 +1117,27 @@ SELECT a, c, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY (a+b)/2, 2, 1 HAV
 
 -- Test with multi-level partitioning scheme
 CREATE TABLE pagg_tab_ml (a int, b int, c text) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_ml_p1 PARTITION OF pagg_tab_ml FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2 PARTITION OF pagg_tab_ml FOR VALUES FROM (12) TO (20) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s1 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0000', '0001', '0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s2 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- This level of partitioning has different column positions than the parent
 CREATE TABLE pagg_tab_ml_p3(b int, c text, a int) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE pagg_tab_ml_p3 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s1(c text, a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE pagg_tab_ml_p3_s1 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s2 PARTITION OF pagg_tab_ml_p3 FOR VALUES FROM (7) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE pagg_tab_ml_p3 ATTACH PARTITION pagg_tab_ml_p3_s1 FOR VALUES FROM (0) TO (7);
 ALTER TABLE pagg_tab_ml ATTACH PARTITION pagg_tab_ml_p3 FOR VALUES FROM (20) TO (30);
 INSERT INTO pagg_tab_ml SELECT i % 30, i % 10, to_char(i % 4, 'FM0000') FROM generate_series(0, 29999) i;
@@ -1513,9 +1545,14 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a, b, c HAVING avg(b) > 7 O
 -- costing such plans.
 SET parallel_setup_cost TO 10;
 CREATE TABLE pagg_tab_para(x int, y int) PARTITION BY RANGE(x);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_para_p1 PARTITION OF pagg_tab_para FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p2 PARTITION OF pagg_tab_para FOR VALUES FROM (12) TO (22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p3 PARTITION OF pagg_tab_para FOR VALUES FROM (22) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_para SELECT i % 30, i % 20 FROM generate_series(0, 29999) i;
 ANALYZE pagg_tab_para;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.
@@ -1593,11 +1630,12 @@ SELECT y, sum(x), avg(x), count(*) FROM pagg_tab_para GROUP BY y HAVING avg(x) <
 (4 rows)
 
 -- Test when parent can produce parallel paths but not any (or some) of its children
+-- (Use one more aggregate to tilt the cost estimates for the plan we want)
 ALTER TABLE pagg_tab_para_p1 SET (parallel_workers = 0);
 ALTER TABLE pagg_tab_para_p3 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 EXPLAIN (COSTS OFF)
-SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
+SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
                                     QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1620,21 +1658,21 @@ SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) <
  Optimizer: Postgres query optimizer
 (18 rows)
 
-SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
- x  | sum  |        avg         | count 
-----+------+--------------------+-------
-  0 | 5000 | 5.0000000000000000 |  1000
-  1 | 6000 | 6.0000000000000000 |  1000
- 10 | 5000 | 5.0000000000000000 |  1000
- 11 | 6000 | 6.0000000000000000 |  1000
- 20 | 5000 | 5.0000000000000000 |  1000
- 21 | 6000 | 6.0000000000000000 |  1000
+SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
+ x  | sum  |        avg         |  sum  | count 
+----+------+--------------------+-------+-------
+  0 | 5000 | 5.0000000000000000 |  5000 |  1000
+  1 | 6000 | 6.0000000000000000 |  7000 |  1000
+ 10 | 5000 | 5.0000000000000000 | 15000 |  1000
+ 11 | 6000 | 6.0000000000000000 | 17000 |  1000
+ 20 | 5000 | 5.0000000000000000 | 25000 |  1000
+ 21 | 6000 | 6.0000000000000000 | 27000 |  1000
 (6 rows)
 
 ALTER TABLE pagg_tab_para_p2 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 EXPLAIN (COSTS OFF)
-SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
+SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
                                     QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1657,15 +1695,15 @@ SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) <
  Optimizer: Postgres query optimizer
 (18 rows)
 
-SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
- x  | sum  |        avg         | count 
-----+------+--------------------+-------
-  0 | 5000 | 5.0000000000000000 |  1000
-  1 | 6000 | 6.0000000000000000 |  1000
- 10 | 5000 | 5.0000000000000000 |  1000
- 11 | 6000 | 6.0000000000000000 |  1000
- 20 | 5000 | 5.0000000000000000 |  1000
- 21 | 6000 | 6.0000000000000000 |  1000
+SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
+ x  | sum  |        avg         |  sum  | count 
+----+------+--------------------+-------+-------
+  0 | 5000 | 5.0000000000000000 |  5000 |  1000
+  1 | 6000 | 6.0000000000000000 |  7000 |  1000
+ 10 | 5000 | 5.0000000000000000 | 15000 |  1000
+ 11 | 6000 | 6.0000000000000000 | 17000 |  1000
+ 20 | 5000 | 5.0000000000000000 | 25000 |  1000
+ 21 | 6000 | 6.0000000000000000 | 27000 |  1000
 (6 rows)
 
 -- Reset parallelism parameters to get partitionwise aggregation plan.

@@ -302,6 +302,8 @@ select verify('constraint_pt1_1_prt_feb08');
 (1 row)
 
 SELECT * FROM constraint_t1 ORDER BY date, id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: constraint_t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id |    date    |  amt  
 ----+------------+-------
  11 | 02-02-2008 | 11.00
@@ -351,6 +353,8 @@ INSERT INTO constraint_t2 SELECT i, '2008-02-02', i FROM generate_series(11,15)i
 ALTER TABLE constraint_pt2 EXCHANGE PARTITION Feb08 WITH TABLE constraint_t2,
       SPLIT PARTITION FOR ('2008-01-01') AT ('2008-01-16') INTO
        (PARTITION jan08_15, PARTITION jan08_31);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_97644
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ANALYZE constraint_pt2;
 select verify('constraint_pt2_1_prt_feb08');
  verify 
@@ -390,6 +394,8 @@ SELECT * FROM constraint_pt2 ORDER BY date, id;
 (20 rows)
 
 SELECT * FROM constraint_t2 ORDER BY date, id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: constraint_t2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id |    date    | amt  
 ----+------------+------
   1 | 02-13-2008 | 1.00
@@ -537,6 +543,8 @@ SELECT * FROM constraint_pt3 ORDER BY year, month, region, id;
 (25 rows)
 
 SELECT * FROM constraint_t3 ORDER BY year, month, region, id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: constraint_t3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   1 | 2001 |     2 |   1 | europe
@@ -547,14 +555,14 @@ SELECT * FROM constraint_t3 ORDER BY year, month, region, id;
 (5 rows)
 
 \d+ constraint_pt3_1_prt_2_2_prt_3_3_prt_europe
-                Table "public.constraint_pt3_1_prt_2_2_prt_3_3_prt_europe"
- Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------+----------+--------------+-------------
- id     | integer |           |          |         | plain    |              | 
- year   | integer |           |          |         | plain    |              | 
- month  | integer |           |          |         | plain    |              | 
- day    | integer |           |          |         | plain    |              | 
- region | text    |           |          |         | extended |              | 
+                       Table "public.constraint_pt3_1_prt_2_2_prt_3_3_prt_europe"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
+ id     | integer |           |          |         | plain    |             |              | 
+ year   | integer |           |          |         | plain    |             |              | 
+ month  | integer |           |          |         | plain    |             |              | 
+ day    | integer |           |          |         | plain    |             |              | 
+ region | text    |           |          |         | extended |             |              | 
 Partition of: constraint_pt3_1_prt_2_2_prt_3 FOR VALUES IN ('europe')
 Partition constraint: ((year IS NOT NULL) AND (year >= 2001) AND (year < 2002) AND (month IS NOT NULL) AND (month >= 2) AND (month < 3) AND (region IS NOT NULL) AND (region = 'europe'::text))
 Compression Type: None
@@ -701,6 +709,7 @@ select count(foo.*) from
 --
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 --end_ignore
 select count(foo.*) 
 from (
@@ -791,6 +800,10 @@ $$
   end
 $$ language plpgsql no sql;
 create trigger troid_trigger after insert on trigger_oid for each row execute procedure trig_func();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=204645)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=204644)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=204643)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 select verify('trigger_oid');
  verify 
 --------
@@ -808,6 +821,5 @@ exception when others then
         return 2;
 end$$;
 create materialized view mv_14465 as select 1 as c;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 create index on mv_14465 (c) where func_fail_14465(1) > 0;

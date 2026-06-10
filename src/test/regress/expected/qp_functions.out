@@ -10,10 +10,11 @@ select ambigargfunc(1,'2');
 (1 row)
 
 drop table if exists test;
-NOTICE:  table "test" does not exist, skipping
 create table test (a integer, b integer) distributed by (a);
 insert into test select a, a%25 from generate_series(1,100) a;
 select greatest(a,b) from test order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  greatest 
 ----------
         1
@@ -119,6 +120,8 @@ select greatest(a,b) from test order by a;
 (100 rows)
 
 select least(a,b) from test order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  least 
 -------
      1
@@ -282,6 +285,8 @@ select ac_debit(4, 500);
 (1 row)
 
 select * from bank_ac order by acno;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bank_ac
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  acno |         name         | balance 
 ------+----------------------+---------
     1 | anne                 |    1000
@@ -310,6 +315,8 @@ select ac_delete(1);
 (1 row)
 
 select * from bank_ac where acno = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bank_ac
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  acno | name | balance 
 ------+------+---------
 (0 rows)
@@ -321,6 +328,8 @@ insert into emp_fun values ( 'cathy',3000,22,'(2,1)');
 insert into emp_fun values ( 'drill',3400,45,'(2,2)');
 create or replace function increment(emp_fun) returns numeric as ' select $1.salary*2 as salary; ' language sql;
 select * from emp_fun order by name;
+NOTICE:  One or more columns in the following table(s) do not have statistics: emp_fun
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name  | salary | age | cubicle 
 -------+--------+-----+---------
  apple |   1000 |  23 | (1,1)
@@ -330,18 +339,24 @@ select * from emp_fun order by name;
 (4 rows)
 
 select name, increment(emp_fun) as new_sal from emp_fun where emp_fun.name='bill';
+NOTICE:  One or more columns in the following table(s) do not have statistics: emp_fun
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | new_sal 
 ------+---------
  bill |    4000
 (1 row)
 
 select name, increment(emp_fun.*) AS new_sal from emp_fun where emp_fun.cubicle ~= point '(2,1)';
+NOTICE:  One or more columns in the following table(s) do not have statistics: emp_fun
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name  | new_sal 
 -------+---------
  cathy |    6000
 (1 row)
 
 select name, increment(ROW(name,salary*1.1,age,cubicle)) AS new_sal from emp_fun order by name;
+NOTICE:  One or more columns in the following table(s) do not have statistics: emp_fun
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name  | new_sal 
 -------+---------
  apple |  2200.0
@@ -433,11 +448,13 @@ insert into tab_sour values(1,1,'joe');
 insert into tab_sour values(1,2,'ed');
 insert into tab_sour values(2,1,'mary');
 select * from tab_sour;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab_sour
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tabid | tabsubid | tabname 
 -------+----------+---------
+     2 |        1 | mary
      1 |        1 | joe
      1 |        2 | ed
-     2 |        1 | mary
 (3 rows)
 
 create or replace function get_tab(int) returns tab_sour AS $$ select * from tab_sour where tabid=$1; $$ language sql;
@@ -465,16 +482,18 @@ insert into fun_tree values('child2','parent1');
 insert into fun_tree values('child3','parent2');
 insert into fun_tree values('child4','parent3');
 select * from fun_tree;
+NOTICE:  One or more columns in the following table(s) do not have statistics: fun_tree
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      name     |    parent    
 --------------+--------------
+ child3       | parent2
+ parent3      | grand_parent
+ child1       | parent1
+ child2       | parent1
+ child4       | parent3
  grand_parent | 
  parent1      | grand_parent
- child1       | parent1
- child4       | parent3
- parent3      | grand_parent
- child3       | parent2
  parent2      | grand_parent
- child2       | parent1
 (8 rows)
 
 create or replace function child_list(text) returns SETOF text AS $$ select name FROM fun_tree where parent =$1 order by name $$ language sql;
@@ -487,7 +506,9 @@ select child_list('grand_parent');
 (3 rows)
 
 select name, child_list(name) from fun_tree;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fun_tree"  (seg0 slice1 krajaraman:25432 pid=57476)
+NOTICE:  One or more columns in the following table(s) do not have statistics: fun_tree
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fun_tree"  (seg0 slice1 172.17.0.3:7002 pid=223601)
 CONTEXT:  SQL function "child_list" during startup
 create or replace function fun_array(anyelement,anyelement) returns anyarray AS $$ select array[$1,$2]; $$ language sql;
 select fun_array(25,50) as intarray, fun_array('abc'::text, 'bcf') AS textarray;
@@ -513,7 +534,7 @@ select fun_is_greater(7,5);
 
 create or replace function invalid_func() returns anyelement as $$ select 1; $$ language sql;
 ERROR:  cannot determine result data type
-DETAIL:  A result of type anyelement requires at least one input of type anyelement, anyarray, anynonarray, anyenum, or anyrange.
+DETAIL:  A result of type anyelement requires at least one input of type anyelement, anyarray, anynonarray, anyenum, anyrange, or anymultirange.
 create or replace function fun_dup(f1 anyelement, OUT f2 anyelement, OUT f3 anyarray) AS 'select $1, array[$1,$1]' language sql;
 select * from fun_dup(22);
  f2 |   f3    
@@ -793,6 +814,8 @@ select logfunc1('firstrow');
 (1 row)
 
 select * from logtable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: logtable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a     |             b              
 ----------+----------------------------
  firstrow | 2007-12-12 10:00:00.000000
@@ -831,12 +854,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT merge_db(1, 'david');
+NOTICE:  One or more columns in the following table(s) do not have statistics: db
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  merge_db 
 ----------
  
 (1 row)
 
 SELECT merge_db(1, 'dennis');
+NOTICE:  One or more columns in the following table(s) do not have statistics: db
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  merge_db 
 ----------
  
@@ -908,6 +935,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT * FROM set_tab1();
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab_sour
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  set_tab1 
 ----------
         1
@@ -926,11 +955,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT * FROM set_tab2();
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab_sour
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tabid | tabsubid | tabname 
 -------+----------+---------
+     2 |        1 | mary
      1 |        1 | joe
      1 |        2 | ed
-     2 |        1 | mary
 (3 rows)
 
 CREATE OR REPLACE FUNCTION ref_tab1(tab_cur refcursor) RETURNS refcursor AS $$
@@ -959,8 +990,7 @@ drop table fun_tree;
 drop table logtable;
 drop table db;
 create table stress_source as select a from generate_series(1,100) a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 create table stress_table (a int primary key, b int);
 create or replace function stress_test() returns text as $body$
 declare
@@ -977,12 +1007,412 @@ begin
 end;
 $body$ language plpgsql volatile strict;
 select stress_test();
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  stress_test 
 -------------
  ok
 (1 row)
 
 select stress_test();
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: stress_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  stress_test 
 -------------
  ok
@@ -1036,13 +1466,13 @@ ERROR:  syntax error at or near "RTRN"
 LINE 1: RTRN 0
         ^
 QUERY:  RTRN 0
-CONTEXT:  PL/pgSQL function "bad_syntax_func" line 2 at SQL statement
+CONTEXT:  PL/pgSQL function bad_syntax_func() line 3 at SQL statement
 SELECT * from bad_syntax_func();
 ERROR:  syntax error at or near "RTRN"
 LINE 1: RTRN 0
         ^
 QUERY:  RTRN 0
-CONTEXT:  PL/pgSQL function "bad_syntax_func" line 2 at SQL statement
+CONTEXT:  PL/pgSQL function bad_syntax_func() line 3 at SQL statement
 DROP FUNCTION bad_syntax_func();
 RESET check_function_bodies;
 CREATE FUNCTION bad_syntax_func() RETURNS INTEGER AS '
@@ -1053,7 +1483,6 @@ LANGUAGE 'plpgsql';
 ERROR:  syntax error at or near "RTRN"
 LINE 3:  RTRN 0;
          ^
-CONTEXT:  SQL statement in PL/PgSQL function "bad_syntax_func" near line 2
 CREATE AGGREGATE agg_point_add1 (
 	basetype=point,
 	SFUNC=point_add,
@@ -1064,6 +1493,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suita
 insert into agg_point_tbl values (POINT(3,5));
 insert into agg_point_tbl values (POINT(30,50));
 select ' ' as "Expect (33,55)", agg_point_add1(p) from agg_point_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: agg_point_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Expect (33,55) | agg_point_add1 
 ----------------+----------------
                 | (33,55)
@@ -1076,6 +1507,8 @@ CREATE AGGREGATE agg_point_add2 (
 	INITCOND='(25, 47)'
 );
 select '' as "Expect (58,102)", agg_point_add2(p)  from agg_point_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: agg_point_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Expect (58,102) | agg_point_add2 
 -----------------+----------------
                  | (58,102)
@@ -1090,6 +1523,8 @@ create table agg_numeric_tbl(num numeric) distributed by (num);
 insert into agg_numeric_tbl VALUES(30);
 insert into agg_numeric_tbl VALUES(-20);
 select '' as ten, numeric_sum(num) from agg_numeric_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: agg_numeric_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ten | numeric_sum 
 -----+-------------
      |          10
@@ -1103,6 +1538,8 @@ create aggregate numeric_sum_plus_fifty (
 	INITCOND='50'
 );
 select '' as sixty, numeric_sum_plus_fifty(num) from agg_numeric_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: agg_numeric_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  sixty | numeric_sum_plus_fifty 
 -------+------------------------
        |                     60

@@ -2,6 +2,8 @@
 -- insert...on conflict do unique index inference
 --
 create table insertconflicttest(key int4, fruit text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --
 -- Test unique index inference with operator class specifications and
 -- named collations
@@ -22,8 +24,11 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (fruit, key, fruit, key) do nothing;
                                   QUERY PLAN                                   
@@ -31,17 +36,23 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit), key, lower(fruit), key) do nothing;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (key, fruit) do update set fruit = excluded.fruit
   where exists (select 1 from insertconflicttest ii where ii.key = excluded.key);
@@ -50,19 +61,18 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   Conflict Filter: (alternatives: SubPlan 1 or hashed SubPlan 2)
-   ->  Result
+   Conflict Filter: (SubPlan 1)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
    SubPlan 1
      ->  Result
            Filter: (ii.key = excluded.key)
            ->  Materialize
-                 ->  Broadcast Motion 3:1  (slice1; segments: 3)
+                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
                        ->  Seq Scan on insertconflicttest ii
-   SubPlan 2
-     ->  Broadcast Motion 3:1  (slice2; segments: 3)
-           ->  Seq Scan on insertconflicttest ii_1
  Optimizer: Postgres query optimizer
-(15 rows)
+(14 rows)
 
 -- Neither collation nor operator class specifications are required --
 -- supplying them merely *limits* matches to indexes with matching opclasses
@@ -73,8 +83,11 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- Okay, arbitrates using both index where text_pattern_ops opclass does and
 -- does not appear.
@@ -84,30 +97,39 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: collation_index_key, both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- Okay, but only accepts the single index where both opclass and collation are
 -- specified
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (fruit collate "C" text_pattern_ops, key) do nothing;
-                 QUERY PLAN                 
---------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- Okay, but only accepts the single index where both opclass and collation are
 -- specified (plus expression variant)
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) collate "C", key, key) do nothing;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- Attribute appears twice, while not all attributes/expressions on attributes
 -- appearing within index definition match in terms of both opclass and
@@ -129,17 +151,23 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, both_index_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) collate "C" text_pattern_ops, key, key) do nothing;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 drop index op_index_key;
 drop index collation_index_key;
@@ -151,20 +179,16 @@ drop index both_index_expr_key;
 -- GPDB: it is not possible (yet) to express a unique index with the required characteristics
 -- start_ignore
 create unique index cross_match on insertconflicttest(lower(fruit) collate "C", upper(fruit) text_pattern_ops);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "key" is not included in the constraint.
 -- fails:
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) text_pattern_ops, upper(fruit) collate "C") do nothing;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 -- works:
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) collate "C", upper(fruit) text_pattern_ops) do nothing;
-               QUERY PLAN                
------------------------------------------
- Insert on insertconflicttest
-   Conflict Resolution: NOTHING
-   Conflict Arbiter Indexes: cross_match
-   ->  Result
-(4 rows)
-
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 drop index cross_match;
+ERROR:  index "cross_match" does not exist
 -- end_ignore
 --
 -- Single key tests
@@ -174,13 +198,16 @@ create unique index key_index on insertconflicttest(key);
 -- Explain tests
 --
 explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit;
-              QUERY PLAN               
----------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- Should display qual actually attributable to internal sequential scan:
 explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Cawesh';
@@ -190,8 +217,11 @@ explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on con
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
    Conflict Filter: (insertconflicttest.fruit <> 'Cawesh'::text)
-   ->  Result
-(5 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 -- With EXCLUDED.* expression in scan node:
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (key) do update set fruit = excluded.fruit where excluded.fruit != 'Elderberry';
@@ -201,8 +231,11 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
    Conflict Filter: (excluded.fruit <> 'Elderberry'::text)
-   ->  Result
-(5 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 -- Does the same, but JSON format shows "Conflict Arbiter Index" as JSON array:
 explain (costs off, format json) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Lime' returning *;
@@ -212,21 +245,23 @@ explain (costs off, format json) insert into insertconflicttest values (0, 'Bilb
    {                                                                       +
      "Plan": {                                                             +
        "Node Type": "Gather Motion",                                       +
-       "Senders": 1,                                                       +
+       "Senders": 3,                                                       +
        "Receivers": 1,                                                     +
        "Slice": 1,                                                         +
-       "Segments": 1,                                                      +
+       "Segments": 3,                                                      +
        "Gang Type": "primary writer",                                      +
        "Parallel Aware": false,                                            +
+       "Async Capable": false,                                             +
        "Plans": [                                                          +
          {                                                                 +
            "Node Type": "ModifyTable",                                     +
            "Operation": "Insert",                                          +
            "Parent Relationship": "Outer",                                 +
            "Slice": 1,                                                     +
-           "Segments": 1,                                                  +
+           "Segments": 3,                                                  +
            "Gang Type": "primary writer",                                  +
            "Parallel Aware": false,                                        +
+           "Async Capable": false,                                         +
            "Relation Name": "insertconflicttest",                          +
            "Alias": "insertconflicttest",                                  +
            "Conflict Resolution": "UPDATE",                                +
@@ -234,12 +269,27 @@ explain (costs off, format json) insert into insertconflicttest values (0, 'Bilb
            "Conflict Filter": "(insertconflicttest.fruit <> 'Lime'::text)",+
            "Plans": [                                                      +
              {                                                             +
-               "Node Type": "Result",                                      +
-               "Parent Relationship": "Member",                            +
-               "Slice": 1,                                                 +
+               "Node Type": "Redistribute Motion",                         +
+               "Senders": 1,                                               +
+               "Receivers": 3,                                             +
+               "Parent Relationship": "Outer",                             +
+               "Slice": 2,                                                 +
                "Segments": 1,                                              +
-               "Gang Type": "primary writer",                              +
-               "Parallel Aware": false                                     +
+               "Gang Type": "singleton reader",                            +
+               "Parallel Aware": false,                                    +
+               "Async Capable": false,                                     +
+               "Hash Key": "0",                                            +
+               "Plans": [                                                  +
+                 {                                                         +
+                   "Node Type": "Result",                                  +
+                   "Parent Relationship": "Outer",                         +
+                   "Slice": 2,                                             +
+                   "Segments": 1,                                          +
+                   "Gang Type": "singleton reader",                        +
+                   "Parallel Aware": false,                                +
+                   "Async Capable": false                                  +
+                 }                                                         +
+               ]                                                           +
              }                                                             +
            ]                                                               +
          }                                                                 +
@@ -276,7 +326,7 @@ insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update 
 ERROR:  column "keyy" does not exist
 LINE 1: ...nsertconflicttest values (1, 'Apple') on conflict (keyy) do ...
                                                              ^
-HINT:  Perhaps you meant to reference the column "insertconflicttest.key".
+HINT:  Perhaps you meant to reference the column "insertconflicttest.key" or the column "excluded.key".
 -- Have useful HINT for EXCLUDED.* RTE within UPDATE:
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
 ERROR:  column excluded.fruitt does not exist
@@ -343,15 +393,20 @@ drop index expr_part_comp_key_index;
 --
 -- start_ignore
 create unique index expr_key_index on insertconflicttest(lower(fruit));
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "key" is not included in the constraint.
 -- inference succeeds:
 insert into insertconflicttest values (20, 'Quince') on conflict (lower(fruit)) do update set fruit = excluded.fruit;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 insert into insertconflicttest values (21, 'Pomegranate') on conflict (lower(fruit), lower(fruit)) do update set fruit = excluded.fruit;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 -- inference fails:
 insert into insertconflicttest values (22, 'Apricot') on conflict (upper(fruit)) do update set fruit = excluded.fruit;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 insert into insertconflicttest values (23, 'Blackberry') on conflict (fruit) do update set fruit = excluded.fruit;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 drop index expr_key_index;
+ERROR:  index "expr_key_index" does not exist
 -- end_ignore
 --
 -- Expression index tests (with regular column)
@@ -363,13 +418,16 @@ insert into insertconflicttest values (24, 'Plum') on conflict (key, lower(fruit
 insert into insertconflicttest values (25, 'Peach') on conflict (lower(fruit), key) do update set fruit = excluded.fruit;
 -- Should not infer "tricky_expr_comp_key_index" index:
 explain (costs off) insert into insertconflicttest values (26, 'Fig') on conflict (lower(fruit), key, lower(fruit), key) do update set fruit = excluded.fruit;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: expr_comp_key_index
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 26
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- inference fails:
 insert into insertconflicttest values (27, 'Prune') on conflict (key, upper(fruit)) do update set fruit = excluded.fruit;
@@ -386,18 +444,20 @@ drop index tricky_expr_comp_key_index;
 -- start_ignore
 create unique index key_index on insertconflicttest(key);
 create unique index fruit_index on insertconflicttest(fruit);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "key" is not included in the constraint.
 -- succeeds, since UPDATE happens to update "fruit" to existing value:
 insert into insertconflicttest values (26, 'Fig') on conflict (key) do update set fruit = excluded.fruit;
 -- fails, since UPDATE is to row with key value 26, and we're updating "fruit"
 -- to a value that happens to exist in another row ('peach'):
 insert into insertconflicttest values (26, 'Peach') on conflict (key) do update set fruit = excluded.fruit;
-ERROR:  duplicate key value violates unique constraint "fruit_index"
-DETAIL:  Key (fruit)=(Peach) already exists.
 -- succeeds, since "key" isn't repeated/referenced in UPDATE, and "fruit"
 -- arbitrates that statement updates existing "Fig" row:
 insert into insertconflicttest values (25, 'Fig') on conflict (fruit) do update set fruit = excluded.fruit;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 drop index key_index;
 drop index fruit_index;
+ERROR:  index "fruit_index" does not exist
 -- end_ignore
 --
 -- Test partial unique index inference
@@ -405,7 +465,7 @@ drop index fruit_index;
 create unique index partial_key_index on insertconflicttest(key) where fruit like '%berry';
 -- Succeeds
 insert into insertconflicttest values (23, 'Blackberry') on conflict (key) where fruit like '%berry' do update set fruit = excluded.fruit;
-insert into insertconflicttest values (23, 'Blackberry') on conflict (key) where fruit like '%berry' and fruit = 'inconsequential' do nothing;
+insert into insertconflicttest as t values (23, 'Blackberry') on conflict (key) where fruit like '%berry' and t.fruit = 'inconsequential' do nothing;
 -- fails
 insert into insertconflicttest values (23, 'Blackberry') on conflict (key) do update set fruit = excluded.fruit;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
@@ -451,23 +511,29 @@ insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do 
 
 -- deparse whole row var in WHERE and SET clauses:
 explain (costs off) insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do update set fruit = excluded.fruit where excluded.* is null;
-               QUERY PLAN                
------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest i
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: plain
    Conflict Filter: (excluded.* IS NULL)
-   ->  Result
-(5 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 23
+         ->  Result
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 explain (costs off) insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do update set fruit = excluded.*::text;
-            QUERY PLAN             
------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Insert on insertconflicttest i
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: plain
-   ->  Result
-(4 rows)
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 23
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 drop index plain;
 -- Cleanup
@@ -478,6 +544,8 @@ drop table insertconflicttest;
 -- (and thus doesn't have a ctid etc).
 --
 create table syscolconflicttest(key int4, data text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into syscolconflicttest values (1);
 insert into syscolconflicttest values (1) on conflict (key) do update set data = excluded.ctid::text;
 ERROR:  column excluded.ctid does not exist
@@ -491,15 +559,24 @@ drop table syscolconflicttest;
 -- GPDB: it is not possible (yet) to express a unique index with expressions
 -- start_ignore
 create table insertconflict (a bigint, b bigint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create unique index insertconflicti1 on insertconflict(coalesce(a, 0));
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "a" is not included in the constraint.
 create unique index insertconflicti2 on insertconflict(b)
   where coalesce(a, 1) > 0;
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "a" is not included in the constraint.
 insert into insertconflict values (1, 2)
 on conflict (coalesce(a, 0)) do nothing;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 insert into insertconflict values (1, 2)
 on conflict (b) where coalesce(a, 1) > 0 do nothing;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 insert into insertconflict values (1, 2)
 on conflict (b) where coalesce(a, 1) > 1 do nothing;
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
 drop table insertconflict;
 -- end_ignore
 --
@@ -511,6 +588,8 @@ create view insertconflictv as
 insert into insertconflictv values (1,'foo')
   on conflict (f1) do update set f2 = excluded.f2;
 select * from insertconflict;
+NOTICE:  One or more columns in the following table(s) do not have statistics: insertconflict
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | foo
@@ -519,6 +598,8 @@ select * from insertconflict;
 insert into insertconflictv values (1,'bar')
   on conflict (f1) do update set f2 = excluded.f2;
 select * from insertconflict;
+NOTICE:  One or more columns in the following table(s) do not have statistics: insertconflict
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | bar
@@ -536,9 +617,12 @@ create table cities (
 	population	float8,
 	altitude	int		-- (in ft)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table capitals (
 	state		char(2)
 ) inherits (cities);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Create unique indexes.  Due to a general limitation of inheritance,
 -- uniqueness is only enforced per-relation.  Unique index inference
 -- specification will do the right thing, though.
@@ -552,10 +636,12 @@ insert into capitals values ('Sacramento', 3.694E+5, 30, 'CA');
 insert into capitals values ('Madison', 1.913E+5, 845, 'WI');
 -- Tests proper for inheritance:
 select * from capitals;
+NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
- Sacramento |     369400 |       30 | CA
  Madison    |     191300 |      845 | WI
+ Sacramento |     369400 |       30 | CA
 (2 rows)
 
 -- Succeeds:
@@ -564,26 +650,30 @@ insert into capitals values ('Sacramento', 4664.E+5, 30, 'CA') on conflict (name
 -- Wrong "Sacramento", so do nothing:
 insert into capitals values ('Sacramento', 50, 2267, 'NE') on conflict (name) do nothing;
 select * from capitals;
+NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
- Madison    |     191300 |      845 | WI
  Sacramento |  466400000 |       30 | CA
+ Madison    |     191300 |      845 | WI
 (2 rows)
 
 insert into cities values ('Las Vegas', 5.83E+5, 2001) on conflict (name) do update set population = excluded.population, altitude = excluded.altitude;
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
+ cities   | Las Vegas     |     583000 |     2001
+ capitals | Sacramento    |  466400000 |       30
  cities   | San Francisco |     724000 |       63
  cities   | Mariposa      |       1200 |     1953
- cities   | Las Vegas     |     583000 |     2001
  capitals | Madison       |     191300 |      845
- capitals | Sacramento    |  466400000 |       30
 (5 rows)
 
 insert into capitals values ('Las Vegas', 5.83E+5, 2222, 'NV') on conflict (name) do update set population = excluded.population;
 -- Capitals will contain new capital, Las Vegas:
 select * from capitals;
+NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
  Madison    |     191300 |      845 | WI
@@ -596,12 +686,12 @@ select * from capitals;
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
- cities   | San Francisco |     724000 |       63
- cities   | Mariposa      |       1200 |     1953
  cities   | Las Vegas     |     583000 |     2001
- capitals | Madison       |     191300 |      845
  capitals | Sacramento    |  466400000 |       30
  capitals | Las Vegas     |     583000 |     2222
+ cities   | San Francisco |     724000 |       63
+ cities   | Mariposa      |       1200 |     1953
+ capitals | Madison       |     191300 |      845
 (6 rows)
 
 -- This only affects "cities" version of "Las Vegas":
@@ -609,12 +699,12 @@ insert into cities values ('Las Vegas', 5.86E+5, 2223) on conflict (name) do upd
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
- cities   | San Francisco |     724000 |       63
  cities   | Mariposa      |       1200 |     1953
- cities   | Las Vegas     |     586000 |     2223
  capitals | Madison       |     191300 |      845
+ cities   | Las Vegas     |     586000 |     2223
  capitals | Sacramento    |  466400000 |       30
  capitals | Las Vegas     |     583000 |     2222
+ cities   | San Francisco |     724000 |       63
 (6 rows)
 
 -- clean up
@@ -705,26 +795,37 @@ DROP TABLE dropcol;
 -- start_ignore
 create table twoconstraints (f1 int unique, f2 box,
                              exclude using gist(f2 with &&));
+ERROR:  exclusion constraint is not compatible with the table's distribution policy
+DETAIL:  Distribution key column "f1" is not included in the constraint.
+HINT:  Add "f1" to the constraint with the =(integer,integer) operator.
 insert into twoconstraints values(1, '((0,0),(1,1))');
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: insert into twoconstraints values(1, '((0,0),(1,1))');
+                    ^
 insert into twoconstraints values(1, '((2,2),(3,3))');  -- fail on f1
-ERROR:  duplicate key value violates unique constraint "twoconstraints_f1_key"
-DETAIL:  Key (f1)=(1) already exists.
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: insert into twoconstraints values(1, '((2,2),(3,3))');
+                    ^
 insert into twoconstraints values(2, '((0,0),(1,2))');  -- fail on f2
-ERROR:  conflicting key value violates exclusion constraint "twoconstraints_f2_excl"
-DETAIL:  Key (f2)=((1,2),(0,0)) conflicts with existing key (f2)=((1,1),(0,0)).
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: insert into twoconstraints values(2, '((0,0),(1,2))');
+                    ^
 insert into twoconstraints values(2, '((0,0),(1,2))')
   on conflict on constraint twoconstraints_f1_key do nothing;  -- fail on f2
-ERROR:  conflicting key value violates exclusion constraint "twoconstraints_f2_excl"
-DETAIL:  Key (f2)=((1,2),(0,0)) conflicts with existing key (f2)=((1,1),(0,0)).
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: insert into twoconstraints values(2, '((0,0),(1,2))')
+                    ^
 insert into twoconstraints values(2, '((0,0),(1,2))')
   on conflict on constraint twoconstraints_f2_excl do nothing;  -- do nothing
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: insert into twoconstraints values(2, '((0,0),(1,2))')
+                    ^
 select * from twoconstraints;
- f1 |     f2      
-----+-------------
-  1 | (1,1),(0,0)
-(1 row)
-
+ERROR:  relation "twoconstraints" does not exist
+LINE 1: select * from twoconstraints;
+                      ^
 drop table twoconstraints;
+ERROR:  table "twoconstraints" does not exist
 -- end_ignore
 -- check handling of self-conflicts at various isolation levels
 create table selfconflict (f1 int primary key, f2 int);
@@ -739,25 +840,27 @@ insert into selfconflict values (3,1), (3,2) on conflict do nothing;
 commit;
 begin transaction isolation level read committed;
 insert into selfconflict values (4,1), (4,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.3:7002 pid=170649)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level repeatable read;
 insert into selfconflict values (5,1), (5,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.3:7004 pid=170651)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level serializable;
 insert into selfconflict values (6,1), (6,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.3:7004 pid=170651)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 select * from selfconflict;
+NOTICE:  One or more columns in the following table(s) do not have statistics: selfconflict
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
-  1 |  1
   2 |  1
   3 |  1
+  1 |  1
 (3 rows)
 
 drop table selfconflict;
@@ -777,14 +880,17 @@ insert into parted_conflict_test_1 values (1, 'b') on conflict (a) do update set
 -- Greenplum could not update the distribution column on conflict
 -- index on b required, which doesn't exist in parent
 insert into parted_conflict_test values (2, 'b') on conflict (b) do update set a = excluded.a;
-ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
+ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 -- targeting partition directly will work
 insert into parted_conflict_test_1 values (2, 'b') on conflict (b) do update set a = excluded.a;
+ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 -- should see (2, 'b')
 select * from parted_conflict_test order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 2 | b
+ 1 | b
 (1 row)
 
 -- end_ignore
@@ -797,6 +903,8 @@ insert into parted_conflict_test values (3, 'a') on conflict (a) do update set b
 insert into parted_conflict_test values (3, 'b') on conflict (a) do update set b = excluded.b;
 -- should see (3, 'b')
 select * from parted_conflict_test order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  3 | b
@@ -805,11 +913,14 @@ select * from parted_conflict_test order by a;
 -- case where parent will have a dropped column, but the partition won't
 alter table parted_conflict_test drop b, add b char;
 create table parted_conflict_test_3 partition of parted_conflict_test for values in (4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 truncate parted_conflict_test;
 insert into parted_conflict_test (a, b) values (4, 'a') on conflict (a) do update set b = excluded.b;
 insert into parted_conflict_test (a, b) values (4, 'b') on conflict (a) do update set b = excluded.b where parted_conflict_test.b = 'a';
 -- should see (4, 'b')
 select * from parted_conflict_test order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  4 | b
@@ -817,7 +928,9 @@ select * from parted_conflict_test order by a;
 
 -- case with multi-level partitioning
 create table parted_conflict_test_4 partition of parted_conflict_test for values in (5) partition by list (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_conflict_test_4_1 partition of parted_conflict_test_4 for values in (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 truncate parted_conflict_test;
 insert into parted_conflict_test (a, b) values (5, 'a') on conflict (a) do update set b = excluded.b;
 insert into parted_conflict_test (a, b) values (5, 'b') on conflict (a) do update set b = excluded.b where parted_conflict_test.b = 'a';
@@ -846,7 +959,9 @@ drop table parted_conflict_test;
 -- partitioning level
 create table parted_conflict (a int primary key, b text) partition by range (a);
 create table parted_conflict_1 partition of parted_conflict for values from (0) to (1000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_conflict_1_1 partition of parted_conflict_1 for values from (0) to (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parted_conflict values (40, 'forty');
 insert into parted_conflict_1 values (40, 'cuarenta')
   on conflict (a) do update set b = excluded.b;
@@ -854,8 +969,12 @@ drop table parted_conflict;
 -- same thing, but this time try to use an index that's created not in the
 -- partition
 create table parted_conflict (a int, b text) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_conflict_1 partition of parted_conflict for values from (0) to (1000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_conflict_1_1 partition of parted_conflict_1 for values from (0) to (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create unique index on only parted_conflict_1 (a);
 create unique index on only parted_conflict (a);
 alter index parted_conflict_a_idx attach partition parted_conflict_1_a_idx;
@@ -866,7 +985,11 @@ ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT spec
 drop table parted_conflict;
 -- test whole-row Vars in ON CONFLICT expressions
 create table parted_conflict (a int, b text, c int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_conflict_1 (drp text, c int, a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'drp' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_conflict_1 set distributed by (a);
 alter table parted_conflict_1 drop column drp;
 create unique index on parted_conflict (a, b);
@@ -879,11 +1002,14 @@ insert into parted_conflict values (50, 'cincuenta', 2)
   on conflict (a, b) do update set (a, b, c) = row(excluded.*)
   where parted_conflict = (50, text 'cincuenta', 1) and
         excluded = (50, text 'cincuenta', 2);
+ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 -- should see (50, 'cincuenta', 2)
 select * from parted_conflict order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  |     b     | c 
 ----+-----------+---
- 50 | cincuenta | 2
+ 50 | cincuenta | 1
 (1 row)
 
 -- end_ignore

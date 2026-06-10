@@ -5,40 +5,40 @@
 -- end_matchsubs
 -- Ensure that our expectation of pg_statistic's schema is up-to-date
 \d+ pg_statistic
-                                 Table "pg_catalog.pg_statistic"
-   Column    |   Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
--------------+----------+-----------+----------+---------+----------+--------------+-------------
- starelid    | oid      |           | not null |         | plain    |              | 
- staattnum   | smallint |           | not null |         | plain    |              | 
- stainherit  | boolean  |           | not null |         | plain    |              | 
- stanullfrac | real     |           | not null |         | plain    |              | 
- stawidth    | integer  |           | not null |         | plain    |              | 
- stadistinct | real     |           | not null |         | plain    |              | 
- stakind1    | smallint |           | not null |         | plain    |              | 
- stakind2    | smallint |           | not null |         | plain    |              | 
- stakind3    | smallint |           | not null |         | plain    |              | 
- stakind4    | smallint |           | not null |         | plain    |              | 
- stakind5    | smallint |           | not null |         | plain    |              | 
- staop1      | oid      |           | not null |         | plain    |              | 
- staop2      | oid      |           | not null |         | plain    |              | 
- staop3      | oid      |           | not null |         | plain    |              | 
- staop4      | oid      |           | not null |         | plain    |              | 
- staop5      | oid      |           | not null |         | plain    |              | 
- stacoll1    | oid      |           | not null |         | plain    |              | 
- stacoll2    | oid      |           | not null |         | plain    |              | 
- stacoll3    | oid      |           | not null |         | plain    |              | 
- stacoll4    | oid      |           | not null |         | plain    |              | 
- stacoll5    | oid      |           | not null |         | plain    |              | 
- stanumbers1 | real[]   |           |          |         | extended |              | 
- stanumbers2 | real[]   |           |          |         | extended |              | 
- stanumbers3 | real[]   |           |          |         | extended |              | 
- stanumbers4 | real[]   |           |          |         | extended |              | 
- stanumbers5 | real[]   |           |          |         | extended |              | 
- stavalues1  | anyarray |           |          |         | extended |              | 
- stavalues2  | anyarray |           |          |         | extended |              | 
- stavalues3  | anyarray |           |          |         | extended |              | 
- stavalues4  | anyarray |           |          |         | extended |              | 
- stavalues5  | anyarray |           |          |         | extended |              | 
+                                        Table "pg_catalog.pg_statistic"
+   Column    |   Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+-------------+----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ starelid    | oid      |           | not null |         | plain    |             |              | 
+ staattnum   | smallint |           | not null |         | plain    |             |              | 
+ stainherit  | boolean  |           | not null |         | plain    |             |              | 
+ stanullfrac | real     |           | not null |         | plain    |             |              | 
+ stawidth    | integer  |           | not null |         | plain    |             |              | 
+ stadistinct | real     |           | not null |         | plain    |             |              | 
+ stakind1    | smallint |           | not null |         | plain    |             |              | 
+ stakind2    | smallint |           | not null |         | plain    |             |              | 
+ stakind3    | smallint |           | not null |         | plain    |             |              | 
+ stakind4    | smallint |           | not null |         | plain    |             |              | 
+ stakind5    | smallint |           | not null |         | plain    |             |              | 
+ staop1      | oid      |           | not null |         | plain    |             |              | 
+ staop2      | oid      |           | not null |         | plain    |             |              | 
+ staop3      | oid      |           | not null |         | plain    |             |              | 
+ staop4      | oid      |           | not null |         | plain    |             |              | 
+ staop5      | oid      |           | not null |         | plain    |             |              | 
+ stacoll1    | oid      |           | not null |         | plain    |             |              | 
+ stacoll2    | oid      |           | not null |         | plain    |             |              | 
+ stacoll3    | oid      |           | not null |         | plain    |             |              | 
+ stacoll4    | oid      |           | not null |         | plain    |             |              | 
+ stacoll5    | oid      |           | not null |         | plain    |             |              | 
+ stanumbers1 | real[]   |           |          |         | extended |             |              | 
+ stanumbers2 | real[]   |           |          |         | extended |             |              | 
+ stanumbers3 | real[]   |           |          |         | extended |             |              | 
+ stanumbers4 | real[]   |           |          |         | extended |             |              | 
+ stanumbers5 | real[]   |           |          |         | extended |             |              | 
+ stavalues1  | anyarray |           |          |         | extended |             |              | 
+ stavalues2  | anyarray |           |          |         | extended |             |              | 
+ stavalues3  | anyarray |           |          |         | extended |             |              | 
+ stavalues4  | anyarray |           |          |         | extended |             |              | 
+ stavalues5  | anyarray |           |          |         | extended |             |              | 
 Indexes:
     "pg_statistic_relid_att_inh_index" UNIQUE, btree (starelid, staattnum, stainherit)
 
@@ -47,6 +47,7 @@ Indexes:
 --------------------------------------------------------------------------------
 -- start_ignore
 drop database if exists gpsd_db_without_hll;
+NOTICE:  database "gpsd_db_without_hll" does not exist, skipping
 -- end_ignore
 create database gpsd_db_without_hll;
 \c gpsd_db_without_hll
@@ -65,11 +66,169 @@ analyze gpsd_foo;
 set allow_system_table_mods to on;
 update pg_statistic set stavalues3='{"hello", "''world''"}'::text[] where starelid='gpsd_foo'::regclass and staattnum=2;
 -- start_ignore
+\! PYTHONIOENCODING=utf-8 gpsd gpsd_db_without_hll > data/gpsd-without-hll.sql
+/usr/local/greenplum-db-devel/bin/gpsd:13: DeprecationWarning: The distutils package is deprecated and slated for removal in Python 3.12. Use setuptools or check PEP 632 for potential alternatives
+  from distutils.version import LooseVersion
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 \c regression
 drop database gpsd_db_without_hll;
 create database gpsd_db_without_hll;
 -- start_ignore
+\! psql -f data/gpsd-without-hll.sql gpsd_db_without_hll
+SET
+SET
+SET
+psql:data/gpsd-without-hll.sql:25: ERROR:  role "errlog_exttab_user3" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:27: ERROR:  role "errlog_exttab_user4" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:29: ERROR:  role "extprot_non_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:31: ERROR:  role "exttab_non_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:33: ERROR:  role "exttab_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:35: ERROR:  role "exttab_user1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:37: ERROR:  role "exttab_user2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:39: ERROR:  role "gpadmin" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:41: ERROR:  role "guc_gp_test_role1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:43: ERROR:  role "guc_gp_test_role2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:45: ERROR:  role "guctestrole" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:47: ERROR:  role "mpp3641_user" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:49: ERROR:  role "part_acl_owner" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:51: ERROR:  role "part_acl_u1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:53: ERROR:  role "regtest_alter_user1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:55: ERROR:  role "regtest_alter_user2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:57: ERROR:  role "regtest_alter_user3" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:59: ERROR:  role "role_dump_test1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:61: ERROR:  role "role_dump_test2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:63: ERROR:  role "role_dump_test3" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:65: ERROR:  role "role_setting_test_1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:67: ERROR:  role "role_setting_test_2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:69: ERROR:  role "role_setting_test_3" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:71: ERROR:  role "role_setting_test_4" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:73: ERROR:  role "role_setting_test_5" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:75: ERROR:  role "role_setting_test_6" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:77: ERROR:  role "test1" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:79: ERROR:  role "test2" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:81: ERROR:  role "triggertest_nopriv_a" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:83: ERROR:  role "triggertest_nopriv_b" already exists
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:85: ERROR:  role "user_disallowed_via_local" already exists
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+psql:data/gpsd-without-hll.sql:134: NOTICE:  role "regtest_alter_user1" is already a member of role "regtest_alter_user3"
+GRANT ROLE
+You are now connected to database "gpsd_db_without_hll" as user "gpadmin".
+SET
+SET
+SET
+SET
+SET
+SET
+ set_config 
+------------
+ 
+(1 row)
+
+SET
+SET
+SET
+SET
+SET
+SET
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+SET
+SET
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
 -- end_ignore
 \c gpsd_db_without_hll
 select
@@ -106,8 +265,8 @@ select
 from pg_statistic where starelid IN ('gpsd_foo'::regclass, 'gpsd_foo_1'::regclass);
  staattnum | stainherit | stanullfrac | stawidth | stadistinct | stakind1 | stakind2 | stakind3 | stakind4 | stakind5 | staop1 | staop2 | staop3 | staop4 | staop5 | stacoll1 | stacoll2 | stacoll3 | stacoll4 | stacoll5 | stanumbers1 | stanumbers2 | stanumbers3 | stanumbers4 | stanumbers5 |           stavalues1            | stavalues2 |   stavalues3    | stavalues4 | stavalues5 
 -----------+------------+-------------+----------+-------------+----------+----------+----------+----------+----------+--------+--------+--------+--------+--------+----------+----------+----------+----------+----------+-------------+-------------+-------------+-------------+-------------+---------------------------------+------------+-----------------+------------+------------
-         1 | t          |           0 |        4 |          -1 |        2 |        0 |        0 |        0 |        0 |     97 |      0 |      0 |      0 |      0 |        0 |        0 |        0 |        0 |        0 |             |             |             |             |             | {1,2,3,4}                       |            |                 |            | 
-         2 | t          |           0 |        6 |          -1 |        2 |        0 |        0 |        0 |        0 |    664 |      0 |      0 |      0 |      0 |        0 |        0 |        0 |        0 |        0 |             |             |             |             |             | {"a \\ and a \"",i,something,Ϩ} |            | {hello,'world'} |            | 
+         1 | t          |           0 |        4 |          -1 |        2 |        3 |        0 |        0 |        0 |     97 |     97 |      0 |      0 |      0 |        0 |        0 |        0 |        0 |        0 |             | {-0.2}      |             |             |             | {1,2,3,4}                       |            |                 |            | 
+         2 | t          |           0 |        6 |          -1 |        2 |        3 |        0 |        0 |        0 |    664 |    664 |      0 |      0 |      0 |      100 |      100 |        0 |        0 |        0 |             | {-0.4}      |             |             |             | {"a \\ and a \"",i,something,Ϩ} |            | {hello,'world'} |            | 
          1 | f          |           0 |        4 |          -1 |        2 |        3 |        0 |        0 |        0 |     97 |     97 |      0 |      0 |      0 |        0 |        0 |        0 |        0 |        0 |             | {-0.2}      |             |             |             | {1,2,3,4}                       |            |                 |            | 
          2 | f          |           0 |        6 |          -1 |        2 |        3 |        0 |        0 |        0 |    664 |    664 |      0 |      0 |      0 |      100 |      100 |        0 |        0 |        0 |             | {-0.4}      |             |             |             | {"a \\ and a \"",i,something,Ϩ} |            |                 |            | 
 (4 rows)
@@ -117,6 +276,7 @@ from pg_statistic where starelid IN ('gpsd_foo'::regclass, 'gpsd_foo_1'::regclas
 --------------------------------------------------------------------------------
 -- start_ignore
 drop database if exists gpsd_db_with_hll;
+NOTICE:  database "gpsd_db_with_hll" does not exist, skipping
 -- end_ignore
 create database gpsd_db_with_hll;
 \c gpsd_db_with_hll
@@ -132,11 +292,169 @@ analyze gpsd_foo;
 set allow_system_table_mods to on;
 update pg_statistic set stavalues3='{"hello", "''world''"}'::text[] where starelid='gpsd_foo'::regclass and staattnum=2;
 -- start_ignore
+\! PYTHONIOENCODING=utf-8 gpsd gpsd_db_with_hll --hll > data/gpsd-with-hll.sql
+/usr/local/greenplum-db-devel/bin/gpsd:13: DeprecationWarning: The distutils package is deprecated and slated for removal in Python 3.12. Use setuptools or check PEP 632 for potential alternatives
+  from distutils.version import LooseVersion
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 \c regression
 drop database gpsd_db_with_hll;
 create database gpsd_db_with_hll;
 -- start_ignore
+\! psql -f data/gpsd-with-hll.sql gpsd_db_with_hll
+SET
+SET
+SET
+psql:data/gpsd-with-hll.sql:25: ERROR:  role "errlog_exttab_user3" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:27: ERROR:  role "errlog_exttab_user4" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:29: ERROR:  role "extprot_non_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:31: ERROR:  role "exttab_non_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:33: ERROR:  role "exttab_superuser" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:35: ERROR:  role "exttab_user1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:37: ERROR:  role "exttab_user2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:39: ERROR:  role "gpadmin" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:41: ERROR:  role "guc_gp_test_role1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:43: ERROR:  role "guc_gp_test_role2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:45: ERROR:  role "guctestrole" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:47: ERROR:  role "mpp3641_user" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:49: ERROR:  role "part_acl_owner" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:51: ERROR:  role "part_acl_u1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:53: ERROR:  role "regtest_alter_user1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:55: ERROR:  role "regtest_alter_user2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:57: ERROR:  role "regtest_alter_user3" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:59: ERROR:  role "role_dump_test1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:61: ERROR:  role "role_dump_test2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:63: ERROR:  role "role_dump_test3" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:65: ERROR:  role "role_setting_test_1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:67: ERROR:  role "role_setting_test_2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:69: ERROR:  role "role_setting_test_3" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:71: ERROR:  role "role_setting_test_4" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:73: ERROR:  role "role_setting_test_5" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:75: ERROR:  role "role_setting_test_6" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:77: ERROR:  role "test1" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:79: ERROR:  role "test2" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:81: ERROR:  role "triggertest_nopriv_a" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:83: ERROR:  role "triggertest_nopriv_b" already exists
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:85: ERROR:  role "user_disallowed_via_local" already exists
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+psql:data/gpsd-with-hll.sql:134: NOTICE:  role "regtest_alter_user1" is already a member of role "regtest_alter_user3"
+GRANT ROLE
+You are now connected to database "gpsd_db_with_hll" as user "gpadmin".
+SET
+SET
+SET
+SET
+SET
+SET
+ set_config 
+------------
+ 
+(1 row)
+
+SET
+SET
+SET
+SET
+SET
+SET
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+SET
+SET
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
 -- end_ignore
 \c gpsd_db_with_hll
 select

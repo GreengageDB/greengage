@@ -11,9 +11,9 @@ HINT:  Creating replication slots on a single segment is not advised.  Replicati
 
 -- And I should see that my replication slot exists
 select * from pg_get_replication_slots() where not active;
-       slot_name       | plugin | slot_type | datoid | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn | wal_status | safe_wal_size 
------------------------+--------+-----------+--------+-----------+--------+------------+------+--------------+-------------+---------------------+------------+---------------
- some_replication_slot |        | physical  |        | f         | f      |            |      |              |             |                     |            |              
+       slot_name       | plugin | slot_type | datoid | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn | wal_status | safe_wal_size | two_phase 
+-----------------------+--------+-----------+--------+-----------+--------+------------+------+--------------+-------------+---------------------+------------+---------------+-----------
+ some_replication_slot |        | physical  |        | f         | f      |            |      |              |             |                     |            |               | f
 (1 row)
 
 -- Cleanup:

@@ -3,11 +3,11 @@
 \set HIDE_TABLEAM off
 create table create_am_gp_ao1 (a int, b int) using ao_row distributed by (a);
 \d+ create_am_gp_ao1
-                             Table "public.create_am_gp_ao1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                    Table "public.create_am_gp_ao1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: None
 Compression Level: 0
 Block Size: 32768
@@ -17,11 +17,11 @@ Access method: ao_row
 
 create table create_am_gp_ao2 (a int, b int) using ao_row with (compresstype=zlib) distributed by (a);
 \d+ create_am_gp_ao2
-                             Table "public.create_am_gp_ao2"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                    Table "public.create_am_gp_ao2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 1
 Block Size: 32768
@@ -37,11 +37,11 @@ create table create_am_gp_ao3 (a int, b int) using heap with (compresstype=rle_t
 ERROR:  unrecognized parameter "compresstype"
 create table create_am_gp_ao3 (a int, b int) using ao_column with (compresstype=rle_type) distributed by (a);
 \d+ create_am_gp_ao3
-                                                       Table "public.create_am_gp_ao3"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
- b      | integer |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+                                                              Table "public.create_am_gp_ao3"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
+ b      | integer |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 Access method: ao_column
@@ -54,11 +54,11 @@ set gp_default_storage_options='compresstype=rle_type';
 create table create_am_gp_heap(a int, b int) using heap distributed by (a);
 -- should not have compresstype parameter
 \d+ create_am_gp_heap
-                             Table "public.create_am_gp_heap"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                    Table "public.create_am_gp_heap"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Distributed by: (a)
 Access method: heap
 
@@ -68,11 +68,11 @@ create table create_am_gp_ao5(a int, b int) using ao_row distributed by (a);
 ERROR:  rle_type cannot be used with Append Only relations row orientation
 create table create_am_gp_ao6(a int, b int) using ao_row with (compresstype=zlib) distributed by (a);
 \d+ create_am_gp_ao6
-                             Table "public.create_am_gp_ao6"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                    Table "public.create_am_gp_ao6"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 1
 Block Size: 32768
@@ -83,11 +83,11 @@ Options: compresstype=zlib
 
 create table create_am_gp_ao7(a int, b int encoding (compresstype=zlib)) using ao_column distributed by (a);
 \d+ create_am_gp_ao7
-                                                       Table "public.create_am_gp_ao7"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
- b      | integer |           |          |         | plain   |              | zlib             | 1                 | 32768      | 
+                                                              Table "public.create_am_gp_ao7"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
+ b      | integer |           |          |         | plain   |             |              | zlib             | 1                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 Access method: ao_column
@@ -100,11 +100,11 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into create_am_gp_part1 select 1, i from generate_series(1, 10) i;
 \d+ create_am_gp_part1
-                      Partitioned table "public.create_am_gp_part1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                             Partitioned table "public.create_am_gp_part1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Partition key: RANGE (a)
 Partitions: create_am_gp_part1_1_prt_1 FOR VALUES FROM (1) TO (2)
 Distributed by: (a)
@@ -118,6 +118,8 @@ select amname, relname from pg_class join pg_am a on a.oid = relam where relname
 (2 rows)
 
 select count(*) from create_am_gp_part1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: create_am_gp_part1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     10

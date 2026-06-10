@@ -28,9 +28,10 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- Make sure rel_tuples starts at zero
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:783620 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
- autostats_test |         0
+ autostats_test |        -1
 (1 row)
 
 -- Try it with gp_autostats_allow_nonowner GUC enabled, but as a non-owner
@@ -42,13 +43,15 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(1, 10);
 LOG:  statement: insert into autostats_test select generate_series(1, 10);
+LOG:  2026-06-10 22:51:44:785503 UTC,THD000,ERROR,"PG exception raised",
 LOG:  An exception was encountered during the execution of statement: insert into autostats_test select generate_series(1, 10);
 ERROR:  permission denied for table autostats_test
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:786260 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
- autostats_test |         0
+ autostats_test |        -1
 (1 row)
 
 reset role;
@@ -60,9 +63,10 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(11, 20);
 LOG:  statement: insert into autostats_test select generate_series(11, 20);
-LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(XXXXX,XXXXX) modifying 10 tuples caused Auto-ANALYZE.
+LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(16384,131751) modifying 10 tuples caused Auto-ANALYZE.
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:797302 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
  autostats_test |        10
@@ -76,6 +80,7 @@ LOG:  statement: analyze autostats_test;
 WARNING:  skipping "autostats_test" --- only table or database owner can analyze it
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:798467 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
  autostats_test |        10
@@ -96,9 +101,10 @@ LOG:  statement: show gp_autostats_allow_nonowner;
 -- GUC should still be enabled, stats should update to 20
 insert into autostats_test select generate_series(21, 30);
 LOG:  statement: insert into autostats_test select generate_series(21, 30);
-LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(XXXXX,XXXXX) modifying 10 tuples caused Auto-ANALYZE.
+LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(16384,131751) modifying 10 tuples caused Auto-ANALYZE.
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:803425 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
  autostats_test |        20
@@ -121,10 +127,11 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(31, 40);
 LOG:  statement: insert into autostats_test select generate_series(31, 40);
-LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(XXXXX,XXXXX) modifying 10 tuples caused Auto-ANALYZE.
-LOG:  Auto-stats did not issue ANALYZE on tableoid XXXXX since the user does not have table-owner level permissions.
+LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(16384,131751) modifying 10 tuples caused Auto-ANALYZE.
+LOG:  Auto-stats did not issue ANALYZE on tableoid 131751 since the user does not have table-owner level permissions.
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
+LOG:  2026-06-10 22:51:44:808579 UTC,THD000,NOTICE,"Feature not supported: Queries on master-only tables",
     relname     | reltuples 
 ----------------+-----------
  autostats_test |        20
@@ -136,7 +143,7 @@ LOG:  statement: reset role;
 -- GUC should still be disabled, stats should update from 20 to 40
 insert into autostats_test select generate_series(21, 30);
 LOG:  statement: insert into autostats_test select generate_series(21, 30);
-LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(XXXXX,XXXXX) modifying 10 tuples caused Auto-ANALYZE.
+LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(16384,131751) modifying 10 tuples caused Auto-ANALYZE.
 reset client_min_messages;
 LOG:  statement: reset client_min_messages;
 select relname, reltuples from pg_class where relname='autostats_test';

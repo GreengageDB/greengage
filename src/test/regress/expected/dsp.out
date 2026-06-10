@@ -48,11 +48,11 @@ show gp_default_storage_options;
 
 create table t1 (a int, b int) distributed by (a);
 \d+ t1
-                                                              Table "public.t1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
- b      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+                                                                     Table "public.t1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
+ b      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 
@@ -64,6 +64,8 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 
 insert into t1 select i, i from generate_series(1,5)i;
 update t1 set b = 50 where a < 50;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 set default_table_access_method = ao_column;
 set gp_default_storage_options = "blocksize=8192";
 show default_table_access_method;
@@ -80,12 +82,12 @@ show gp_default_storage_options;
 
 create table t2 (a int, b varchar, c text) distributed by (a);
 \d+ t2
-                                                                    Table "public.t2"
- Column |       Type        | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
- a      | integer           |           |          |         | plain    |              | none             | 0                 | 8192       | 
- b      | character varying |           |          |         | extended |              | none             | 0                 | 8192       | 
- c      | text              |           |          |         | extended |              | none             | 0                 | 8192       | 
+                                                                           Table "public.t2"
+ Column |       Type        | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer           |           |          |         | plain    |             |              | none             | 0                 | 8192       | 
+ b      | character varying |           |          |         | extended |             |              | none             | 0                 | 8192       | 
+ c      | text              |           |          |         | extended |             |              | none             | 0                 | 8192       | 
 Checksum: t
 Distributed by: (a)
 Options: blocksize=8192
@@ -99,11 +101,11 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 create table t3 (a int, b float) with (appendonly=false)
 	distributed by (a);
 \d+ t3
-                                         Table "public.t3"
- Column |       Type       | Collation | Nullable | Default | Storage | Stats target | Description 
---------+------------------+-----------+----------+---------+---------+--------------+-------------
- a      | integer          |           |          |         | plain   |              | 
- b      | double precision |           |          |         | plain   |              | 
+                                                Table "public.t3"
+ Column |       Type       | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+------------------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer          |           |          |         | plain   |             |              | 
+ b      | double precision |           |          |         | plain   |             |              | 
 Distributed by: (a)
 
 SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE c.relname = 't3';
@@ -133,6 +135,8 @@ show enable_seqscan;
 (1 row)
 
 select * from h1 where a > 5 and a < 10 order by a,b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: h1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  6 | 12
@@ -179,11 +183,11 @@ show gp_default_storage_options;
 
 create table t1 (a int, b int) distributed by (a);
 \d+ t1
-                                    Table "public.t1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                           Table "public.t1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 2
 Block Size: 32768
@@ -213,13 +217,13 @@ create table t2 (
 	d text
 ) with (appendonly=true,orientation=column) distributed by (a);
 \d+ t2
-                                                                   Table "public.t2"
- Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
- a      | integer          |           |          |         | plain    |              | zlib             | 2                 | 65536      | 
- b      | double precision |           |          |         | plain    |              | zlib             | 2                 | 32768      | 
- c      | integer          |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
- d      | text             |           |          |         | extended |              | zlib             | 2                 | 32768      | 
+                                                                          Table "public.t2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer          |           |          |         | plain    |             |              | zlib             | 2                 | 65536      | 
+ b      | double precision |           |          |         | plain    |             |              | zlib             | 2                 | 32768      | 
+ c      | integer          |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
+ d      | text             |           |          |         | extended |             |              | zlib             | 2                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 Options: compresslevel=2
@@ -232,6 +236,8 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 
 insert into t2 select i, 71/i, 2*i, 'abc'||2*i from generate_series(1,5)i;
 select * from t2 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  | c  |   d   
 ---+----+----+-------
  1 | 71 |  2 | abc2
@@ -270,6 +276,8 @@ show gp_default_storage_options;
 create table t3 (a int, b int, c text) distributed by (a);
 insert into t3 select i, i, 'abc' from generate_series(1,5)i;
 select * from t3 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b |  c  
 ---+---+-----
  1 | 1 | abc
@@ -430,6 +438,7 @@ select attrelid::regclass,attnum,attoptions
 (24 rows)
 
 drop database if exists dsp3;
+NOTICE:  database "dsp3" does not exist, skipping
 create database dsp3;
 \c dsp3
 set default_table_access_method = ao_column;
@@ -635,11 +644,11 @@ show gp_default_storage_options;
 
 create table co8 (a int, b float) distributed by (a);
 \d+ co8
-                                                                  Table "public.co8"
- Column |       Type       | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer          |           |          |         | plain   |              | none             | 0                 | 32768      | 
- b      | double precision |           |          |         | plain   |              | none             | 0                 | 32768      | 
+                                                                         Table "public.co8"
+ Column |       Type       | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer          |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
+ b      | double precision |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 
@@ -653,6 +662,8 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 -- select into a column oriented table.
 insert into co8 select i, i/2 from generate_series(1,10)i;
 select count(b) from co8;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co8
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     10
@@ -685,11 +696,11 @@ show gp_default_storage_options;
 
 create table ao1 (a int, b int) with (appendonly=true) distributed by (a);
 \d+ ao1;
-                                    Table "public.ao1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                                           Table "public.ao1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Compression Type: zlib
 Compression Level: 2
 Block Size: 32768
@@ -705,6 +716,8 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 
 insert into ao1 select i, i from generate_series(1,100)i;
 select count(*) from ao1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    100
@@ -721,11 +734,11 @@ show gp_default_storage_options;
 -- verify reset happendon on segments by create, insert, select.
 create table co9 (x int, y float) distributed by (x);
 \d+ co9
-                                                                  Table "public.co9"
- Column |       Type       | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- x      | integer          |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
- y      | double precision |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+                                                                         Table "public.co9"
+ Column |       Type       | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ x      | integer          |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
+ y      | double precision |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
 Checksum: t
 Distributed by: (x)
 Options: compresstype=rle_type
@@ -740,6 +753,8 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE 
 -- select into a column oriented table.
 insert into co9 select i, i/2 from generate_series(1,10)i;
 select count(y) from co9;
+NOTICE:  One or more columns in the following table(s) do not have statistics: co9
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     10
@@ -842,6 +857,8 @@ insert into ao5 select i, i from generate_series(1,10)i;
 -- compresslevel only
 create table ao6 with (compresslevel=4) as select * from ao5
     distributed by (a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 \d ao6
                 Table "public.ao6"
  Column |  Type   | Collation | Nullable | Default 
@@ -857,6 +874,8 @@ Distributed by: (a)
 -- both compresstype and compresslevel
 create table ao7 with (compresstype=zlib, compresslevel=3) as
     select * from ao6 distributed by (a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao6
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 \d ao7
                 Table "public.ao7"
  Column |  Type   | Collation | Nullable | Default 
@@ -881,6 +900,8 @@ show gp_default_storage_options;
 -- compresstype only
 create table ao8 with (compresstype=none) as select * from ao7
     distributed by (a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao7
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 \d ao8
                 Table "public.ao8"
  Column |  Type   | Collation | Nullable | Default 
@@ -896,9 +917,13 @@ Distributed by: (a)
 -- compresslevel only (should fail)
 create table ao9 with (compresslevel=0) as select * from ao8
     distributed by (a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao8
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ERROR:  compresstype "zlib" can't be used with compresslevel 0
 create table ao10 with (compresslevel=0, compresstype=none)
     as select * from ao8 distributed by (a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ao8
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- MPP-14504: we need to allow compresstype=none with compresslevel>0
 create table ao11 (a int, b int) with (compresstype=none, compresslevel=2)
     distributed by (a);
@@ -1102,8 +1127,9 @@ insert into select_into_heap_from select i, 'aaa' from generate_series(1,50)i;
 set default_table_access_method = ao_column;
 set gp_default_storage_options = "blocksize=32768";
 select * into select_into_heap_to from select_into_heap_from;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  One or more columns in the following table(s) do not have statistics: select_into_heap_from
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select c.relname, am.amname, c.relkind, c.reloptions
 	from pg_class c left join pg_am am on (c.relam = am.oid)
     where c.relname = 'select_into_heap_to';
@@ -1120,8 +1146,9 @@ select count(*) from select_into_heap_to;
 
 -- Also check CTAS works fine
 create table ctas_ao_from_heap as select * from select_into_heap_from;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  One or more columns in the following table(s) do not have statistics: select_into_heap_from
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select c.relname, am.amname, c.relkind, c.reloptions
 	from pg_class c left join pg_am am on (c.relam = am.oid)
     where c.relname = 'ctas_ao_from_heap';
@@ -1142,6 +1169,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Insert into dsp_partition1 select i, i+1, i+2 from generate_series(1,9) i;
 select count(*) from dsp_partition1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dsp_partition1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      9
@@ -1185,6 +1214,8 @@ select c.relname, am.amname, c.relkind, c.reloptions
 
 -- Split partition
 alter table dsp_partition1 split partition for (6) at (7) into (partition split_p1, partition split_p2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_93798
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select c.relname, am.amname, c.relkind, c.reloptions
 	from pg_class c left join pg_am am on (c.relam = am.oid)
     where c.relname like 'dsp_partition1%' order by relname;
@@ -1210,10 +1241,10 @@ RESET gp_default_storage_options;
 -- s/.*\[ERROR\]/[ERROR]/gm
 -- end_matchsubs
 \!gpconfig -c gp_default_storage_options -v 'checksum=false' --masteronly
-[ERROR]:-gp_default_storage_options value cannot be different on coordinator and segments
+20260610:22:47:14:202336 gpconfig:3a76691f25e1:gpadmin-[ERROR]:-gp_default_storage_options value cannot be different on coordinator and segments
 gp_default_storage_options value cannot be different on coordinator and segments
 \!gpconfig -c gp_default_storage_options -v 'checksum=false' -m 'checksum=true'
-[ERROR]:-gp_default_storage_options value cannot be different on coordinator and segments
+20260610:22:47:14:202342 gpconfig:3a76691f25e1:gpadmin-[ERROR]:-gp_default_storage_options value cannot be different on coordinator and segments
 gp_default_storage_options value cannot be different on coordinator and segments
 \!gpconfig -s gp_default_storage_options
 Values on all segments are consistent

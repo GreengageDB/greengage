@@ -5,40 +5,40 @@
 -- end_matchsubs
 -- Ensure that our expectation of pg_statistic's schema is up-to-date
 \d+ pg_statistic
-                                 Table "pg_catalog.pg_statistic"
-   Column    |   Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
--------------+----------+-----------+----------+---------+----------+--------------+-------------
- starelid    | oid      |           | not null |         | plain    |              | 
- staattnum   | smallint |           | not null |         | plain    |              | 
- stainherit  | boolean  |           | not null |         | plain    |              | 
- stanullfrac | real     |           | not null |         | plain    |              | 
- stawidth    | integer  |           | not null |         | plain    |              | 
- stadistinct | real     |           | not null |         | plain    |              | 
- stakind1    | smallint |           | not null |         | plain    |              | 
- stakind2    | smallint |           | not null |         | plain    |              | 
- stakind3    | smallint |           | not null |         | plain    |              | 
- stakind4    | smallint |           | not null |         | plain    |              | 
- stakind5    | smallint |           | not null |         | plain    |              | 
- staop1      | oid      |           | not null |         | plain    |              | 
- staop2      | oid      |           | not null |         | plain    |              | 
- staop3      | oid      |           | not null |         | plain    |              | 
- staop4      | oid      |           | not null |         | plain    |              | 
- staop5      | oid      |           | not null |         | plain    |              | 
- stacoll1    | oid      |           | not null |         | plain    |              | 
- stacoll2    | oid      |           | not null |         | plain    |              | 
- stacoll3    | oid      |           | not null |         | plain    |              | 
- stacoll4    | oid      |           | not null |         | plain    |              | 
- stacoll5    | oid      |           | not null |         | plain    |              | 
- stanumbers1 | real[]   |           |          |         | extended |              | 
- stanumbers2 | real[]   |           |          |         | extended |              | 
- stanumbers3 | real[]   |           |          |         | extended |              | 
- stanumbers4 | real[]   |           |          |         | extended |              | 
- stanumbers5 | real[]   |           |          |         | extended |              | 
- stavalues1  | anyarray |           |          |         | extended |              | 
- stavalues2  | anyarray |           |          |         | extended |              | 
- stavalues3  | anyarray |           |          |         | extended |              | 
- stavalues4  | anyarray |           |          |         | extended |              | 
- stavalues5  | anyarray |           |          |         | extended |              | 
+                                        Table "pg_catalog.pg_statistic"
+   Column    |   Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+-------------+----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ starelid    | oid      |           | not null |         | plain    |             |              | 
+ staattnum   | smallint |           | not null |         | plain    |             |              | 
+ stainherit  | boolean  |           | not null |         | plain    |             |              | 
+ stanullfrac | real     |           | not null |         | plain    |             |              | 
+ stawidth    | integer  |           | not null |         | plain    |             |              | 
+ stadistinct | real     |           | not null |         | plain    |             |              | 
+ stakind1    | smallint |           | not null |         | plain    |             |              | 
+ stakind2    | smallint |           | not null |         | plain    |             |              | 
+ stakind3    | smallint |           | not null |         | plain    |             |              | 
+ stakind4    | smallint |           | not null |         | plain    |             |              | 
+ stakind5    | smallint |           | not null |         | plain    |             |              | 
+ staop1      | oid      |           | not null |         | plain    |             |              | 
+ staop2      | oid      |           | not null |         | plain    |             |              | 
+ staop3      | oid      |           | not null |         | plain    |             |              | 
+ staop4      | oid      |           | not null |         | plain    |             |              | 
+ staop5      | oid      |           | not null |         | plain    |             |              | 
+ stacoll1    | oid      |           | not null |         | plain    |             |              | 
+ stacoll2    | oid      |           | not null |         | plain    |             |              | 
+ stacoll3    | oid      |           | not null |         | plain    |             |              | 
+ stacoll4    | oid      |           | not null |         | plain    |             |              | 
+ stacoll5    | oid      |           | not null |         | plain    |             |              | 
+ stanumbers1 | real[]   |           |          |         | extended |             |              | 
+ stanumbers2 | real[]   |           |          |         | extended |             |              | 
+ stanumbers3 | real[]   |           |          |         | extended |             |              | 
+ stanumbers4 | real[]   |           |          |         | extended |             |              | 
+ stanumbers5 | real[]   |           |          |         | extended |             |              | 
+ stavalues1  | anyarray |           |          |         | extended |             |              | 
+ stavalues2  | anyarray |           |          |         | extended |             |              | 
+ stavalues3  | anyarray |           |          |         | extended |             |              | 
+ stavalues4  | anyarray |           |          |         | extended |             |              | 
+ stavalues5  | anyarray |           |          |         | extended |             |              | 
 Indexes:
     "pg_statistic_relid_att_inh_index" UNIQUE, btree (starelid, staattnum, stainherit)
 
@@ -54,11 +54,26 @@ insert into minirepro_foo values(1);
 analyze minirepro_foo;
 -- Generate minirepro
 -- start_ignore
+\! echo "select * from minirepro_foo;" > ./data/minirepro_q.sql
+\! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
+Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Extracting metadata from query file data/minirepro_q.sql ...
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224909/toolkit.sql
+Invoking pg_dump to dump DDL ...
+pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118658,118661 --function-oids 0 -f /tmp/20260610224909/pg_dump_out.sql
+Writing schema DDLs ...
+Writing relation and function DDLs ...
+Writing table statistics ...
+Writing column statistics ...
+Attaching raw query text ...
+--- MiniRepro completed! ---
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 -- Run minirepro
 drop table minirepro_foo; -- this will also delete the pg_statistic tuples for minirepro_foo and minirepro_foo_1
 \! psql -f data/minirepro.sql regression
-You are now connected to database "regression" as user "pivotal".
+You are now connected to database "regression" as user "gpadmin".
 SET
 SET
 SET
@@ -137,11 +152,26 @@ insert into minirepro_foo values(1);
 analyze minirepro_foo;
 -- Generate minirepro
 -- start_ignore
+\! echo "select * from minirepro_foo;" > data/minirepro_q.sql
+\! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql --hll
+Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Extracting metadata from query file data/minirepro_q.sql ...
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224909/toolkit.sql
+Invoking pg_dump to dump DDL ...
+pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118670,118673 --function-oids 0 -f /tmp/20260610224909/pg_dump_out.sql
+Writing schema DDLs ...
+Writing relation and function DDLs ...
+Writing table statistics ...
+Writing column statistics ...
+Attaching raw query text ...
+--- MiniRepro completed! ---
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 -- Run minirepro
 drop table minirepro_foo; -- this will also delete the pg_statistic tuples for minirepro_foo and minirepro_foo_1
 \! psql -f data/minirepro.sql regression
-You are now connected to database "regression" as user "pivotal".
+You are now connected to database "regression" as user "gpadmin".
 SET
 SET
 SET
@@ -222,11 +252,26 @@ set allow_system_table_mods to on;
 update pg_statistic set stavalues3='{"hello", "''world''"}'::text[] where starelid='minirepro_foo'::regclass;
 -- Generate minirepro
 -- start_ignore
+\! echo "select * from minirepro_foo;" > data/minirepro_q.sql
+\! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
+Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Extracting metadata from query file data/minirepro_q.sql ...
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224910/toolkit.sql
+Invoking pg_dump to dump DDL ...
+pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118682 --function-oids 0 -f /tmp/20260610224910/pg_dump_out.sql
+Writing schema DDLs ...
+Writing relation and function DDLs ...
+Writing table statistics ...
+Writing column statistics ...
+Attaching raw query text ...
+--- MiniRepro completed! ---
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 -- Run minirepro
 drop table minirepro_foo; -- this should also delete the pg_statistic tuple for minirepro_foo
 \! psql -f data/minirepro.sql regression
-You are now connected to database "regression" as user "pivotal".
+You are now connected to database "regression" as user "gpadmin".
 SET
 SET
 SET
@@ -262,13 +307,28 @@ drop table minirepro_foo;
 --------------------------------------------------------------------------------
 -- Generate minirepro
 -- start_ignore
+\! echo "select oid from pg_tablespace;" > data/minirepro_q.sql
+\! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
+Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Extracting metadata from query file data/minirepro_q.sql ...
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224910/toolkit.sql
+Invoking pg_dump to dump DDL ...
+pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 1213 --function-oids 0 -f /tmp/20260610224910/pg_dump_out.sql
+Writing schema DDLs ...
+Writing relation and function DDLs ...
+Writing table statistics ...
+Writing column statistics ...
+Attaching raw query text ...
+--- MiniRepro completed! ---
+WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.
+Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 -- Run minirepro
 -- Caution: The following operation will remove the pg_statistic tuple
 -- corresponding to pg_tablespace before it re-inserts it, which may lead to
 -- corrupted stats for pg_tablespace. But, that shouldn't matter too much?
 \! psql -f data/minirepro.sql regression
-You are now connected to database "regression" as user "pivotal".
+You are now connected to database "regression" as user "gpadmin".
 SET
 SET
 SET

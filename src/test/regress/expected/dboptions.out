@@ -42,7 +42,7 @@ select pg_reload_conf();
 
 -- should fail, because the connection limit is 0
 \! psql limitdb -c "select 'connected'" -U connlimit_test_user
-psql: error: FATAL:  too many connections for database "limitdb"
+psql: error: connection to server on socket "/tmp/.s.PGSQL.7000" failed: FATAL:  too many connections for database "limitdb"
 -- Test ALLOW_CONNECTIONS
 create database limitdb2 allow_connections = true;
 select -1 as gp_segment_id, datconnlimit, datallowconn from pg_database where datname='limitdb2'
@@ -72,7 +72,7 @@ order by gp_segment_id;
 
 -- should fail, as we have disallowed connections
 \! psql limitdb2 -c "select 'connected'" -U connlimit_test_user
-psql: error: FATAL:  database "limitdb2" is not currently accepting connections
+psql: error: connection to server on socket "/tmp/.s.PGSQL.7000" failed: FATAL:  database "limitdb2" is not currently accepting connections
 -- Test IS_TEMPLATE
 create database templatedb is_template=true;
 select -1 as gp_segment_id, datistemplate from pg_database where datname = 'templatedb'
