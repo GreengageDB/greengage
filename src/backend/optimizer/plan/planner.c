@@ -24,8 +24,11 @@
 #include "access/htup_details.h"
 #include "access/parallel.h"
 #include "access/sysattr.h"
+#include "access/relation.h"
 #include "access/table.h"
 #include "access/xact.h"
+#include "catalog/pg_am.h"
+#include "commands/defrem.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_proc.h"
@@ -64,6 +67,7 @@
 #include "rewrite/rewriteManip.h"
 #include "storage/dsm_impl.h"
 #include "utils/lsyscache.h"
+#include "utils/partcache.h"
 #include "utils/rel.h"
 #include "utils/selfuncs.h"
 #include "utils/syscache.h"
@@ -327,6 +331,52 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 	return result;
 }
 
+/*
+ * GPDB: does any partitioned table in the query use a non-default operator
+ * class in its partition key?  ORCA's metadata translation does not support
+ * that and, worse, the exception it raises mid-retrieval leaves the
+ * optimizer state corrupted enough to crash the coordinator on this and
+ * subsequent statements.  Fall back to this planner up front instead.
+ */
+static bool
+query_has_nondefault_partition_opclass(Query *parse)
+{
+	ListCell   *lc;
+
+	foreach(lc, parse->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+		Relation	rel;
+		PartitionKey key;
+		bool		nondefault = false;
+
+		if (rte->rtekind != RTE_RELATION ||
+			rte->relkind != RELKIND_PARTITIONED_TABLE)
+			continue;
+
+		/* parser/rewriter already hold a lock on every query relation */
+		rel = relation_open(rte->relid, NoLock);
+		key = RelationGetPartitionKey(rel);
+		for (int i = 0; i < key->partnatts; i++)
+		{
+			Oid			am = (key->strategy == PARTITION_STRATEGY_HASH) ?
+				HASH_AM_OID : BTREE_AM_OID;
+			Oid			defopclass = GetDefaultOpClass(key->parttypid[i], am);
+
+			if (!OidIsValid(defopclass) ||
+				get_opclass_family(defopclass) != key->partopfamily[i])
+			{
+				nondefault = true;
+				break;
+			}
+		}
+		relation_close(rel, NoLock);
+		if (nondefault)
+			return true;
+	}
+	return false;
+}
+
 PlannedStmt *
 standard_planner(Query *parse, const char *query_string, int cursorOptions,
 				 ParamListInfo boundParams)
@@ -362,7 +412,8 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		GP_ROLE_DISPATCH == Gp_role &&
 		IS_QUERY_DISPATCHER() &&
 		(cursorOptions & CURSOR_OPT_SKIP_FOREIGN_PARTITIONS) == 0 &&
-		(cursorOptions & CURSOR_OPT_PARALLEL_RETRIEVE) == 0)
+		(cursorOptions & CURSOR_OPT_PARALLEL_RETRIEVE) == 0 &&
+		!query_has_nondefault_partition_opclass(parse))
 	{
 		if (gp_log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
