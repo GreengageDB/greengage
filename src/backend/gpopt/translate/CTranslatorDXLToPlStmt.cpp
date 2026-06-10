@@ -4397,6 +4397,28 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	if (m_cmd_type == CMD_UPDATE)
 	{
 		dml->isSplitUpdates = ListMake1Int((int) isSplit);
+
+		// PG14: ModifyTable uses updateColnosLists to map each non-junk
+		// column produced by the subplan to its target-table attribute
+		// number (see ExecInitUpdateProjection / ExecBuildUpdateProjection).
+		// Unlike the Postgres planner, which emits only the SET columns,
+		// ORCA emits a full new tuple whose non-junk entries are the table
+		// columns in physical order, so the mapping is simply each non-junk
+		// entry's resno.  There is one entry per result relation.
+		List	   *update_colnos = NIL;
+		ListCell   *lc_tle = nullptr;
+
+		foreach(lc_tle, target_list_with_dropped_cols)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc_tle);
+
+			if (!tle->resjunk)
+			{
+				update_colnos =
+					gpdb::LAppendInt(update_colnos, tle->resno);
+			}
+		}
+		dml->updateColnosLists = ListMake1(update_colnos);
 	}
 
 	plan->targetlist = NIL;
