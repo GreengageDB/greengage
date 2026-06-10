@@ -2781,15 +2781,13 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("max");
 
 /* ALTER/CREATE/DROP RESOURCE QUEUE */
-	else if(TailMatches("CREATE|ALTER|DROP", "RESOURCE", "QUEUE"))
+	else if(TailMatches("ALTER|DROP", "RESOURCE", "QUEUE"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
 
 	else if(TailMatches("CREATE", "RESOURCE", "QUEUE", MatchAny))
-		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
-			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (");
+		COMPLETE_WITH("WITH (");
 	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny))
-		COMPLETE_WITH("ACTIVE THRESHOLD", "COST THRESHOLD", "IGNORE THRESHOLD",
-			"OVERCOMMIT", "NOOVERCOMMIT", "WITH (", "WITHOUT (");
+		COMPLETE_WITH("WITH (", "WITHOUT (");
 	else if((HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*") &&
 			!HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*)")) || 
 			(HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*") &&
@@ -2799,6 +2797,12 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
 		else if(TailMatches("ACTIVE_STATEMENTS|MEMORY_LIMIT|MAX_COST|COST_OVERCOMMIT|MIN_COST|PRIORITY"))
 			COMPLETE_WITH("=");
+		else if(TailMatches("COST_OVERCOMMIT", "="))
+			COMPLETE_WITH("TRUE", "FALSE");
+		else if(TailMatches("PRIORITY", "="))
+			COMPLETE_WITH("MIN", "LOW", "MEDIUM", "HIGH", "MAX");
+		else if(TailMatches(MatchAny, "=", MatchAny))
+			COMPLETE_WITH(",", ")");
 	}
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
