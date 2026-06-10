@@ -18,14 +18,14 @@ update parent set c=c+100 from todelete where parent.a = todelete.a;
 select * from parent;
  a  | b  |  c  
 ----+----+-----
-  1 |  1 |   1
   2 |  2 |   2
   8 |  8 |   8
+  7 |  7 | 107
+  1 |  1 |   1
+  5 |  5 | 105
   9 |  9 |   9
  10 | 10 |  10
-  5 |  5 | 105
   6 |  6 | 106
-  7 |  7 | 107
 (8 rows)
 
 drop table todelete;
@@ -46,15 +46,17 @@ delete from target where c = 3 and a in (select b from todelete);
 insert into todelete values (1, 5);
 update target set b=target.b+100 where c = 3 and a in (select b from todelete);
 select * from target;
+NOTICE:  One or more columns in the following table(s) do not have statistics: target
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |  b  | c 
 ---+-----+---
  1 |   0 | 1
- 2 |   0 | 1
- 4 |   0 | 3
+ 5 |   0 | 1
  5 | 100 | 3
+ 2 |   0 | 1
  3 |   0 | 1
  4 |   0 | 1
- 5 |   0 | 1
+ 4 |   0 | 3
 (7 rows)
 
 -- Also test an update with a qual that doesn't match any partition. The
@@ -79,16 +81,16 @@ explain (costs off) update base_tbl set a=a+1;
                           QUERY PLAN                           
 ---------------------------------------------------------------
  Update on base_tbl
-   Update on base_tbl
-   Update on child_a base_tbl_1
-   Update on child_b base_tbl_2
+   Update on base_tbl base_tbl_1
+   Update on child_a base_tbl_2
+   Update on child_b base_tbl_3
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          ->  Split
-               ->  Seq Scan on base_tbl
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
-         ->  Split
-               ->  Seq Scan on child_a base_tbl_1
-   ->  Seq Scan on child_b base_tbl_2
+               ->  Result
+                     ->  Append
+                           ->  Seq Scan on base_tbl base_tbl_1
+                           ->  Seq Scan on child_a base_tbl_2
+                           ->  Seq Scan on child_b base_tbl_3
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -178,6 +180,8 @@ SELECT user_vie_act_cntr_marg_cum FROM keo1;
 CREATE TABLE keo5 (x int, y int) DISTRIBUTED BY (x);
 INSERT INTO keo5 VALUES (1,1);
 EXPLAIN (COSTS OFF) DELETE FROM keo5 WHERE x IN (SELECT x FROM keo5 WHERE EXISTS (SELECT x FROM keo5 WHERE x < 2));
+NOTICE:  One or more columns in the following table(s) do not have statistics: keo5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Delete on keo5
@@ -194,11 +198,15 @@ EXPLAIN (COSTS OFF) DELETE FROM keo5 WHERE x IN (SELECT x FROM keo5 WHERE EXISTS
                                        ->  Gather Motion 3:1  (slice2; segments: 3)
                                              ->  Seq Scan on keo5 keo5_2
                                                    Filter: (x < 2)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (15 rows)
 
 DELETE FROM keo5 WHERE x IN (SELECT x FROM keo5 WHERE EXISTS (SELECT x FROM keo5 WHERE x < 2));
+NOTICE:  One or more columns in the following table(s) do not have statistics: keo5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT x FROM keo5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: keo5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x 
 ---
 (0 rows)
@@ -215,39 +223,51 @@ DROP TABLE keo5;
 CREATE TEMP TABLE ttab1 (a varchar(15), b integer) DISTRIBUTED BY (a);
 CREATE TEMP TABLE ttab2 (a varchar(15), b integer) DISTRIBUTED BY (a);
 UPDATE ttab1 SET b = ttab2.b FROM ttab2 WHERE ttab1.a = ttab2.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ttab1, ttab2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP TABLE ttab1;
 DROP TABLE ttab2;
 CREATE TEMP TABLE ttab1 (a text, b integer) DISTRIBUTED BY (a);
 CREATE TEMP TABLE ttab2 (a text, b integer) DISTRIBUTED BY (a);
 UPDATE ttab1 SET b = ttab2.b FROM ttab2 WHERE ttab1.a = ttab2.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ttab1, ttab2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP TABLE ttab1;
 DROP TABLE ttab2;
 CREATE TEMP TABLE ttab1 (a varchar, b integer) DISTRIBUTED BY (a);
 CREATE TEMP TABLE ttab2 (a varchar, b integer) DISTRIBUTED BY (a);
 UPDATE ttab1 SET b = ttab2.b FROM ttab2 WHERE ttab1.a = ttab2.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ttab1, ttab2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP TABLE ttab1;
 DROP TABLE ttab2;
 CREATE TEMP TABLE ttab1 (a char(15), b integer) DISTRIBUTED BY (a);
 CREATE TEMP TABLE ttab2 (a char(15), b integer) DISTRIBUTED BY (a);
 UPDATE ttab1 SET b = ttab2.b FROM ttab2 WHERE ttab1.a = ttab2.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ttab1, ttab2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP TABLE IF EXISTS update_distr_key;
 NOTICE:  table "update_distr_key" does not exist, skipping
 CREATE TEMP TABLE update_distr_key (a int, b int) DISTRIBUTED BY (a);
 INSERT INTO update_distr_key select i, i* 10 from generate_series(0, 9) i;
 UPDATE update_distr_key SET a = 5 WHERE b = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_distr_key
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT * from update_distr_key;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_distr_key
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  0 |  0
  2 | 20
- 4 | 40
- 6 | 60
- 8 | 80
- 5 | 10
  3 | 30
- 5 | 50
+ 4 | 40
  7 | 70
+ 8 | 80
+ 5 | 50
+ 6 | 60
  9 | 90
+ 5 | 10
 (10 rows)
 
 DROP TABLE update_distr_key;
@@ -258,24 +278,33 @@ INSERT INTO tab3 SELECT i, i, i, i, i FROM generate_series(1, 10)i;
 INSERT INTO tab5 SELECT i, i, i, i, i FROM generate_series(1, 10)i;
 -- test tab3
 SELECT gp_segment_id, * FROM tab3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
-             0 |  5 |  5 |  5 |  5 |  5
-             0 |  8 |  8 |  8 |  8 |  8
-             1 |  3 |  3 |  3 |  3 |  3
-             1 |  4 |  4 |  4 |  4 |  4
-             1 |  9 |  9 |  9 |  9 |  9
-             1 | 10 | 10 | 10 | 10 | 10
              2 |  1 |  1 |  1 |  1 |  1
              2 |  2 |  2 |  2 |  2 |  2
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
+             0 |  5 |  5 |  5 |  5 |  5
+             0 |  8 |  8 |  8 |  8 |  8
+             1 |  3 |  3 |  3 |  3 |  3
+             1 |  4 |  4 |  4 |  4 |  4
+             1 |  9 |  9 |  9 |  9 |  9
+             1 | 10 | 10 | 10 | 10 | 10
 (10 rows)
 
 UPDATE tab3 set c1 = 9 where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
+             0 |  5 |  5 |  5 |  5 |  5
+             0 |  8 |  8 |  8 |  8 |  8
+             0 |  9 |  1 |  1 |  1 |  1
              1 |  3 |  3 |  3 |  3 |  3
              1 |  4 |  4 |  4 |  4 |  4
              1 |  9 |  9 |  9 |  9 |  9
@@ -283,45 +312,52 @@ SELECT gp_segment_id, * FROM tab3;
              2 |  2 |  2 |  2 |  2 |  2
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
-             0 |  5 |  5 |  5 |  5 |  5
-             0 |  8 |  8 |  8 |  8 |  8
-             0 |  9 |  1 |  1 |  1 |  1
 (10 rows)
 
 UPDATE tab3 set (c1,c2) = (5,6) where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
              1 |  3 |  3 |  3 |  3 |  3
              1 |  4 |  4 |  4 |  4 |  4
              1 |  9 |  9 |  9 |  9 |  9
              1 | 10 | 10 | 10 | 10 | 10
-             0 |  5 |  5 |  5 |  5 |  5
-             0 |  8 |  8 |  8 |  8 |  8
              2 |  2 |  2 |  2 |  2 |  2
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
              2 |  5 |  6 |  1 |  1 |  1
+             0 |  5 |  5 |  5 |  5 |  5
+             0 |  8 |  8 |  8 |  8 |  8
 (10 rows)
 
 UPDATE tab3 set (c1,c2,c3) = (3,2,1) where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
-             2 |  2 |  2 |  2 |  2 |  2
-             2 |  6 |  6 |  6 |  6 |  6
-             2 |  7 |  7 |  7 |  7 |  7
-             2 |  3 |  2 |  1 |  1 |  1
              1 |  3 |  3 |  3 |  3 |  3
              1 |  4 |  4 |  4 |  4 |  4
              1 |  9 |  9 |  9 |  9 |  9
              1 | 10 | 10 | 10 | 10 | 10
+             2 |  2 |  2 |  2 |  2 |  2
+             2 |  6 |  6 |  6 |  6 |  6
+             2 |  7 |  7 |  7 |  7 |  7
+             2 |  3 |  2 |  1 |  1 |  1
              0 |  5 |  5 |  5 |  5 |  5
              0 |  8 |  8 |  8 |  8 |  8
 (10 rows)
 
 UPDATE tab3 set c1 = 11 where c2 = 10 and c2 < 1;
 SELECT gp_segment_id, * FROM tab3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
              0 |  5 |  5 |  5 |  5 |  5
@@ -338,8 +374,13 @@ SELECT gp_segment_id, * FROM tab3;
 
 -- test tab5
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
+             0 |  4 |  4 |  4 |  4 |  4
+             0 |  9 |  9 |  9 |  9 |  9
+             0 | 10 | 10 | 10 | 10 | 10
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
              2 |  8 |  8 |  8 |  8 |  8
@@ -347,61 +388,74 @@ SELECT gp_segment_id, * FROM tab5;
              1 |  2 |  2 |  2 |  2 |  2
              1 |  3 |  3 |  3 |  3 |  3
              1 |  5 |  5 |  5 |  5 |  5
-             0 |  4 |  4 |  4 |  4 |  4
-             0 |  9 |  9 |  9 |  9 |  9
-             0 | 10 | 10 | 10 | 10 | 10
 (10 rows)
 
 UPDATE tab5 set c1 = 1000 where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id |  c1  | c2 | c3 | c4 | c5 
 ---------------+------+----+----+----+----
-             0 |    4 |  4 |  4 |  4 |  4
-             0 |    9 |  9 |  9 |  9 |  9
-             0 |   10 | 10 | 10 | 10 | 10
+             2 |    6 |  6 |  6 |  6 |  6
+             2 |    7 |  7 |  7 |  7 |  7
+             2 |    8 |  8 |  8 |  8 |  8
              1 |    2 |  2 |  2 |  2 |  2
              1 |    3 |  3 |  3 |  3 |  3
              1 |    5 |  5 |  5 |  5 |  5
              1 | 1000 |  1 |  1 |  1 |  1
-             2 |    6 |  6 |  6 |  6 |  6
-             2 |    7 |  7 |  7 |  7 |  7
-             2 |    8 |  8 |  8 |  8 |  8
+             0 |    4 |  4 |  4 |  4 |  4
+             0 |    9 |  9 |  9 |  9 |  9
+             0 |   10 | 10 | 10 | 10 | 10
 (10 rows)
 
 UPDATE tab5 set (c1,c2) = (9,10) where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
-             1 |  2 |  2 |  2 |  2 |  2
-             1 |  3 |  3 |  3 |  3 |  3
-             1 |  5 |  5 |  5 |  5 |  5
              0 |  4 |  4 |  4 |  4 |  4
              0 |  9 |  9 |  9 |  9 |  9
              0 | 10 | 10 | 10 | 10 | 10
              0 |  9 | 10 |  1 |  1 |  1
+             1 |  2 |  2 |  2 |  2 |  2
+             1 |  3 |  3 |  3 |  3 |  3
+             1 |  5 |  5 |  5 |  5 |  5
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
              2 |  8 |  8 |  8 |  8 |  8
 (10 rows)
 
 UPDATE tab5 set (c1,c2,c4) = (5,8,6) where c4 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
+             0 |  4 |  4 |  4 |  4 |  4
+             0 |  9 |  9 |  9 |  9 |  9
+             0 | 10 | 10 | 10 | 10 | 10
+             0 |  5 |  8 |  1 |  6 |  1
              1 |  2 |  2 |  2 |  2 |  2
              1 |  3 |  3 |  3 |  3 |  3
              1 |  5 |  5 |  5 |  5 |  5
              2 |  6 |  6 |  6 |  6 |  6
              2 |  7 |  7 |  7 |  7 |  7
              2 |  8 |  8 |  8 |  8 |  8
-             0 |  4 |  4 |  4 |  4 |  4
-             0 |  9 |  9 |  9 |  9 |  9
-             0 | 10 | 10 | 10 | 10 | 10
-             0 |  5 |  8 |  1 |  6 |  1
 (10 rows)
 
 UPDATE tab5 set (c1,c2,c3,c4,c5) = (1,2,3,0,6) where c5 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
              0 |  4 |  4 |  4 |  4 |  4
@@ -418,8 +472,13 @@ SELECT gp_segment_id, * FROM tab5;
 
 UPDATE tab5 set c1 = 11 where c3 = 10 and c3 < 1;
 SELECT gp_segment_id, * FROM tab5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab5
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | c1 | c2 | c3 | c4 | c5 
 ---------------+----+----+----+----+----
+             2 |  6 |  6 |  6 |  6 |  6
+             2 |  7 |  7 |  7 |  7 |  7
+             2 |  8 |  8 |  8 |  8 |  8
              0 |  4 |  4 |  4 |  4 |  4
              0 |  9 |  9 |  9 |  9 |  9
              0 | 10 | 10 | 10 | 10 | 10
@@ -427,12 +486,11 @@ SELECT gp_segment_id, * FROM tab5;
              1 |  3 |  3 |  3 |  3 |  3
              1 |  5 |  5 |  5 |  5 |  5
              1 |  1 |  2 |  3 |  0 |  6
-             2 |  6 |  6 |  6 |  6 |  6
-             2 |  7 |  7 |  7 |  7 |  7
-             2 |  8 |  8 |  8 |  8 |  8
 (10 rows)
 
 EXPLAIN (COSTS OFF ) UPDATE tab3 SET C1 = C1 + 1, C5 = C5+1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                          QUERY PLAN                         
 ------------------------------------------------------------
  Update on tab3
@@ -441,7 +499,7 @@ EXPLAIN (COSTS OFF ) UPDATE tab3 SET C1 = C1 + 1, C5 = C5+1;
                Hash Key: tab3_1.c1, tab3_1.c2, tab3_1.c3
                ->  Split
                      ->  Seq Scan on tab3 tab3_1
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 -- clean up
@@ -464,7 +522,11 @@ NOTICE:  table "update_aoco_table" does not exist, skipping
 create table update_dist(a int) distributed by (a);
 insert into update_dist values(1);
 update update_dist set a=0 where a=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_dist
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from update_dist;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_dist
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  0
@@ -476,6 +538,8 @@ create table s (a int, b int) distributed by (a);
 insert into r select generate_series(1, 5), generate_series(1, 5) * 2;
 insert into s select generate_series(1, 5), generate_series(1, 5) * 2;
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  1 |  2
@@ -486,172 +550,226 @@ select * from r;
 (5 rows)
 
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
- 1 |  2
  2 |  4
  3 |  6
  4 |  8
  5 | 10
+ 1 |  2
 (5 rows)
 
 update r set a = r.a + 1 from s where r.a = s.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r, s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
- 4 |  6
- 5 |  8
- 6 | 10
  3 |  4
+ 4 |  6
  2 |  2
+ 6 | 10
+ 5 |  8
 (5 rows)
 
 update r set a = r.a + 1 where a in (select a from s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: r, s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
- 6 | 10
- 3 |  2
- 5 |  6
- 6 |  8
  4 |  4
+ 3 |  2
+ 6 | 10
+ 6 |  8
+ 5 |  6
 (5 rows)
 
 -- Update redistribution
 delete from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into r select generate_series(1, 5), generate_series(1, 5);
 insert into s select generate_series(1, 5), generate_series(1, 5) * 2;
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
+ 2 | 2
  3 | 3
  4 | 4
  5 | 5
  1 | 1
- 2 | 2
 (5 rows)
 
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
+ 2 |  4
  3 |  6
  4 |  8
- 5 | 10
  1 |  2
- 2 |  4
+ 5 | 10
 (5 rows)
 
 update r set a = r.a + 1 from s where r.b = s.b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r, s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  3 | 3
- 5 | 5
  3 | 2
+ 5 | 5
  5 | 4
  1 | 1
 (5 rows)
 
 update r set a = r.a + 1 where b in (select b from s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: r, s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 3 | 3
  5 | 5
  6 | 4
+ 3 | 3
  4 | 2
  1 | 1
 (5 rows)
 
 -- Update hash aggreate group by
 delete from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into r select generate_series(1, 5), generate_series(1, 5) * 2;
 insert into s select generate_series(1, 5), generate_series(1, 5);
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
- 1 |  2
  2 |  4
  3 |  6
  4 |  8
+ 1 |  2
  5 | 10
 (5 rows)
 
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
+ 5 | 5
+ 2 | 2
  3 | 3
  4 | 4
- 5 | 5
  1 | 1
- 2 | 2
 (5 rows)
 
 update s set a = s.a + 1 where exists (select 1 from r where s.a = r.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: s, r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
  3 | 3
+ 3 | 2
+ 1 | 1
  5 | 5
  5 | 4
- 3 | 2
 (5 rows)
 
 -- Update ao table distribution key
 create table update_ao_table (a int, b int) WITH (appendonly=true) distributed by (a);
 insert into update_ao_table select g, g from generate_series(1, 5) g;
 select * from update_ao_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_ao_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
+ 1 | 1
 (5 rows)
 
 update update_ao_table set a = a + 1 where b = 3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_ao_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from update_ao_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_ao_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
+ 5 | 5
  2 | 2
  4 | 4
- 5 | 5
  4 | 3
+ 1 | 1
 (5 rows)
 
 -- Update aoco table distribution key
 create table update_aoco_table (a int, b int) WITH (appendonly=true, orientation=column) distributed by (a);
 insert into update_aoco_table select g,g from generate_series(1, 5) g;
 select * from update_aoco_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_aoco_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
+ 1 | 1
 (5 rows)
 
 update update_aoco_table set a = a + 1 where b = 3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_aoco_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from update_aoco_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_aoco_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
+ 5 | 5
  2 | 2
  4 | 4
- 5 | 5
  4 | 3
+ 1 | 1
 (5 rows)
 
 -- Update prepare
 delete from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into s select generate_series(1, 5), generate_series(1, 5);
 select * from r;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  1 |  2
@@ -662,25 +780,31 @@ select * from r;
 (5 rows)
 
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
- 1 | 1
  2 | 2
  3 | 3
  4 | 4
  5 | 5
+ 1 | 1
 (5 rows)
 
 prepare update_s(int) as update s set a = s.a + $1 where exists (select 1 from r where s.a = r.b);
 execute update_s(10);
+NOTICE:  One or more columns in the following table(s) do not have statistics: s, r
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b 
 ----+---
-  1 | 1
- 14 | 4
-  3 | 3
   5 | 5
+ 14 | 4
+  1 | 1
  12 | 2
+  3 | 3
 (5 rows)
 
 -- Confirm that a split update is not created for a table excluded by
@@ -690,12 +814,12 @@ explain update nosplitupdate set a=0 where a=1 and a<1;
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Update on nosplitupdate  (cost=0.00..0.00 rows=0 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=22)
+   ->  Result  (cost=0.00..0.00 rows=0 width=0)
          ->  Result  (cost=0.00..0.00 rows=0 width=18)
                ->  Split  (cost=0.00..0.00 rows=0 width=18)
                      ->  Result  (cost=0.00..0.00 rows=0 width=18)
                            One-Time Filter: false
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 -- test split-update when split-node's flow is entry
@@ -707,16 +831,16 @@ analyze tsplit_entry;
 explain update tsplit_entry set c = s.a from (select count(*) as a from gp_segment_configuration) s;
                                                     QUERY PLAN                                                    
 ------------------------------------------------------------------------------------------------------------------
- Update on tsplit_entry  (cost=10000000001.00..10000000003.18 rows=3 width=54)
-   ->  Explicit Redistribute Motion 1:3  (slice1)  (cost=10000000001.00..10000000003.18 rows=7 width=54)
-         ->  Split  (cost=10000000001.00..10000000003.18 rows=7 width=54)
-               ->  Nested Loop  (cost=10000000001.00..10000000003.12 rows=4 width=54)
-                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..2.06 rows=2 width=14)
-                           ->  Seq Scan on tsplit_entry  (cost=0.00..2.02 rows=1 width=14)
-                     ->  Materialize  (cost=1.00..1.03 rows=1 width=40)
-                           ->  Subquery Scan on s  (cost=1.00..1.02 rows=1 width=40)
-                                 ->  Aggregate  (cost=1.00..1.01 rows=1 width=8)
-                                       ->  Seq Scan on gp_segment_configuration  (cost=0.00..1.00 rows=1 width=0)
+ Update on tsplit_entry  (cost=10000000001.01..10000000002.20 rows=0 width=0)
+   ->  Explicit Redistribute Motion 1:3  (slice1)  (cost=10000000001.01..10000000002.20 rows=2 width=46)
+         ->  Split  (cost=10000000001.01..10000000002.11 rows=7 width=46)
+               ->  Nested Loop  (cost=10000000001.01..10000000002.11 rows=3 width=46)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.04 rows=2 width=10)
+                           ->  Seq Scan on tsplit_entry  (cost=0.00..1.01 rows=1 width=10)
+                     ->  Materialize  (cost=1.01..1.04 rows=1 width=40)
+                           ->  Subquery Scan on s  (cost=1.01..1.03 rows=1 width=40)
+                                 ->  Aggregate  (cost=1.01..1.02 rows=1 width=8)
+                                       ->  Seq Scan on gp_segment_configuration  (cost=0.00..1.01 rows=1 width=0)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -748,6 +872,8 @@ SET    b = update_gp_foo.c_part,
        d = update_gp_foo1.a_dist
 FROM   update_gp_foo1;
 SELECT * from update_gp_foo;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_gp_foo
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a_dist | b | c_part | d  
 --------+---+--------+----
      12 | 1 |      1 | 12
@@ -789,6 +915,8 @@ UPDATE update_gp_rangep SET a = 10 WHERE a = 3;
 -- Move row to different partition and also change distribution key
 UPDATE update_gp_rangep SET a = 11, b = 1 WHERE a = 4;
 SELECT tableoid::regclass, * FROM update_gp_rangep ORDER BY orig_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_gp_rangep
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          tableoid          | a  | b | orig_a 
 ---------------------------+----+---+--------
  update_gp_rangep_1_to_10  |  9 | 1 |      1
@@ -801,6 +929,8 @@ SELECT tableoid::regclass, * FROM update_gp_rangep ORDER BY orig_a;
 -- correctly moved across segments, this would fail to find them, assuming
 -- that direct dispatch is effective.
 SELECT tableoid::regclass, * FROM update_gp_rangep WHERE b = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_gp_rangep
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          tableoid          | a  | b | orig_a 
 ---------------------------+----+---+--------
  update_gp_rangep_1_to_10  |  9 | 1 |      1
@@ -821,14 +951,14 @@ insert into t2_13265 values (2, null, 2, 2);
 explain (verbose, costs off)
 update t1_13265 set b = 2 where
 (c, d) not in (select c, d from t2_13265 where a = 2);
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Update on public.t1_13265
    ->  Nested Loop Left Anti Semi (Not-In) Join
-         Output: t1_13265.a, 2, t1_13265.c, t1_13265.d, t1_13265.ctid, t1_13265.gp_segment_id, t2_13265.ctid
+         Output: 2, t1_13265.ctid, t1_13265.gp_segment_id, t2_13265.ctid
          Join Filter: ((t1_13265.c = t2_13265.c) AND (t1_13265.d = t2_13265.d))
          ->  Seq Scan on public.t1_13265
-               Output: t1_13265.a, t1_13265.c, t1_13265.d, t1_13265.ctid, t1_13265.gp_segment_id
+               Output: t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.c, t1_13265.d
          ->  Materialize
                Output: t2_13265.ctid, t2_13265.c, t2_13265.d
                ->  Broadcast Motion 1:3  (slice1; segments: 1)
@@ -837,12 +967,13 @@ update t1_13265 set b = 2 where
                            Output: t2_13265.ctid, t2_13265.c, t2_13265.d
                            Filter: (t2_13265.a = 2)
  Optimizer: Postgres query optimizer
- Settings: optimizer=on
-(15 rows)
+(14 rows)
 
 update t1_13265 set b = 2 where
 (c, d) not in (select c, d from t2_13265 where a = 2);
 select * from t1_13265;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_13265
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d 
 ---+---+---+---
  1 | 2 | 1 | 1
@@ -857,10 +988,6 @@ CREATE TABLE into_table (
   e character varying(10),
   f int
 ) DISTRIBUTED BY (a, b, c) PARTITION BY RANGE(f) (start (1) end(5) every(1));
-NOTICE:  CREATE TABLE will create partition "into_table_1_prt_1" for table "into_table"
-NOTICE:  CREATE TABLE will create partition "into_table_1_prt_2" for table "into_table"
-NOTICE:  CREATE TABLE will create partition "into_table_1_prt_3" for table "into_table"
-NOTICE:  CREATE TABLE will create partition "into_table_1_prt_4" for table "into_table"
 CREATE TABLE from_table (
   a numeric(10,0) NOT NULL,
   b numeric(10,0) NOT NULL,
@@ -874,27 +1001,32 @@ insert into from_table select i*1.5,i*2,i*3,'xx'||i,'yy'||i, i+1 from generate_s
 explain (costs off)
 update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
 where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
-                                                                   QUERY PLAN                                                                   
-------------------------------------------------------------------------------------------------------------------------------------------------
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
  Update on into_table
-   ->  Result
-         ->  Redistribute Motion 3:3  (slice1; segments: 3)
-               Hash Key: into_table_1.a, into_table_1.b, into_table_1.c
-               ->  Split
-                     ->  Hash Join
-                           Hash Cond: ((into_table_1.a = from_table.a) AND (into_table_1.b = from_table.b) AND (into_table_1.c = from_table.c))
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: into_table_1.a
-                                 ->  Dynamic Seq Scan on into_table into_table_1
-                                       Number of partitions to scan: 4 (out of 4)
-                           ->  Hash
-                                 ->  Seq Scan on from_table
- Optimizer: Pivotal Optimizer (GPORCA)
-(14 rows)
+   Update on into_table_1_prt_1 into_table_1
+   Update on into_table_1_prt_2 into_table_2
+   Update on into_table_1_prt_3 into_table_3
+   Update on into_table_1_prt_4 into_table_4
+   ->  Hash Join
+         Hash Cond: ((into_table.a = from_table.a) AND (into_table.b = from_table.b) AND (into_table.c = from_table.c))
+         ->  Append
+               ->  Seq Scan on into_table_1_prt_1 into_table_1
+               ->  Seq Scan on into_table_1_prt_2 into_table_2
+               ->  Seq Scan on into_table_1_prt_3 into_table_3
+               ->  Seq Scan on into_table_1_prt_4 into_table_4
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                     Hash Key: from_table.a, from_table.b, from_table.c
+                     ->  Seq Scan on from_table
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
 where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
 select * from into_table order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: into_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c  |  d  |  e  | f 
 ---+---+----+-----+-----+---
  2 | 2 |  3 | xx1 | yy1 | 2

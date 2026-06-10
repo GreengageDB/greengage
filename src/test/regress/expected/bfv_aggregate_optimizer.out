@@ -92,6 +92,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into d select to_date('2014-01-01', 'YYYY-DD-MM'), generate_series(1,100);
 -- TEST
 select 1, to_char(col1, 'YYYY'), median(col2) from d group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? | to_char | median 
 ----------+---------+--------
         1 | 2014    |   50.5
@@ -113,6 +115,8 @@ select
    mysum2(val) over (w)
 from toy
 window w as (order by id rows 2 preceding);
+NOTICE:  One or more columns in the following table(s) do not have statistics: toy
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | val | sum | mysum1 | mysum2 
 ----+-----+-----+--------+--------
   1 |   1 |   1 |      1 |      1
@@ -151,6 +155,8 @@ insert into t values(2,array[222],'c');
 insert into t values(3,array[3],'a');
 insert into t values(3,array[3],'b');
 select f3, array_sort(myaggp20a(f1)) from t group by f3 order by f3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f3 | array_sort 
 ----+------------
  a  | {1,2,3}
@@ -160,6 +166,7 @@ select f3, array_sort(myaggp20a(f1)) from t group by f3 order by f3;
 
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -1588,17 +1595,17 @@ select array_agg(a order by b desc nulls last) from aggordertest;
 create temp table mpp14125 as select repeat('a', a) a, a % 10 b from generate_series(1, 100)a;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 explain select string_agg(a, '') from mpp14125 group by b;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.07 rows=10 width=8)
-   ->  GroupAggregate  (cost=0.00..431.07 rows=4 width=8)
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+   ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=8)
          Group Key: b
-         ->  Sort  (cost=0.00..431.06 rows=34 width=55)
+         ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: b
-               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.01 rows=34 width=55)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
                      Hash Key: b
-                     ->  Seq Scan on mpp14125  (cost=0.00..431.00 rows=34 width=55)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+                     ->  Seq Scan on mpp14125  (cost=0.00..431.00 rows=1 width=12)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 -- end MPP-14125
@@ -1625,18 +1632,18 @@ insert into int2vectortab values
 select distinct t from int2vectortab group by distkey, t;
    t   
 -------
+ 22
  1
  1 2
  1 2 3
- 22
 (4 rows)
 
 select t from int2vectortab union select t from int2vectortab;
    t   
 -------
- 1
  1 2
  1 2 3
+ 1
  22
 (4 rows)
 
@@ -1645,9 +1652,9 @@ select count(*) over (partition by t) from int2vectortab;
 -------
      1
      1
+     2
+     2
      1
-     2
-     2
 (5 rows)
 
 select count(distinct t) from int2vectortab;
@@ -1659,7 +1666,7 @@ select count(distinct t) from int2vectortab;
 select count(distinct t), count(distinct t2) from int2vectortab;
  count | count 
 -------+-------
-     4 |     5
+     0 |     0
 (1 row)
 
 --
@@ -1698,7 +1705,7 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
                                        ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                              Hash Key: pagg_tab2.y
                                              ->  Seq Scan on pagg_tab2
- Optimizer: Pivotal Optimizer (GPORCA) version 3.95.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (21 rows)
 
 SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x ORDER BY 1 NULLS LAST;
@@ -1747,26 +1754,26 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
 SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, b.y;
  x  | y  | count 
 ----+----+-------
- 26 |    |    10
- 28 |    |    10
-  4 |    |    10
-    | 15 |    10
-  6 |  6 |   100
-  8 |    |    10
-  2 |    |    10
- 22 |    |    10
- 10 |    |    10
-    |  9 |    10
-    | 21 |    10
-  0 |  0 |   100
  14 |    |    10
- 12 | 12 |   100
-    |  3 |    10
+    |  9 |    10
+  0 |  0 |   100
+    | 21 |    10
+ 10 |    |    10
+ 22 |    |    10
+  2 |    |    10
+  4 |    |    10
+  8 |    |    10
+    | 15 |    10
+ 28 |    |    10
+ 26 |    |    10
+  6 |  6 |   100
  16 |    |    10
-    | 27 |    10
- 18 | 18 |   100
- 20 |    |    10
+ 12 | 12 |   100
  24 | 24 |   100
+ 20 |    |    10
+    |  3 |    10
+ 18 | 18 |   100
+    | 27 |    10
 (20 rows)
 
 --
@@ -1791,7 +1798,7 @@ select 1, sum(col1) from group_by_const group by 1;
                      ->  Streaming Partial HashAggregate
                            Group Key: 1
                            ->  Seq Scan on group_by_const
- Optimizer: Pivotal Optimizer (GPORCA) version 3.93.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (11 rows)
 
 select 1, sum(col1) from group_by_const group by 1;

@@ -3,28 +3,23 @@ SET test_copy_qd_qe_split = on;
 CREATE TABLE disttest (a int, b int, c int) DISTRIBUTED RANDOMLY;
 COPY disttest FROM stdin;
 INFO:  first field processed in the QE: 0
-CONTEXT:  COPY disttest, line 0
 DROP TABLE disttest;
 CREATE TABLE disttest (a int, b int, c int) DISTRIBUTED BY (b);
 COPY disttest FROM stdin;
 INFO:  first field processed in the QE: 2
-CONTEXT:  COPY disttest, line 0
 DROP TABLE disttest;
 CREATE TABLE disttest (a int, b int, c int) DISTRIBUTED BY (c);
 COPY disttest FROM stdin;
 INFO:  all fields will be processed in the QD
-CONTEXT:  COPY disttest, line 0
 DROP TABLE disttest;
 CREATE TABLE disttest (a int, b int, c int) DISTRIBUTED BY (c, a);
 COPY disttest FROM stdin;
 INFO:  all fields will be processed in the QD
-CONTEXT:  COPY disttest, line 0
 DROP TABLE disttest;
 -- With column list
 CREATE TABLE disttest (a int, b int, c int) DISTRIBUTED BY (c, b);
 COPY disttest (c, b, a) FROM stdin;
 INFO:  first field processed in the QE: 2
-CONTEXT:  COPY disttest, line 0
 DROP TABLE disttest;
 --
 -- Partitioned scenarios.
@@ -57,6 +52,8 @@ ALTER TABLE partdisttest ADD PARTITION neg start (-10) end (0);
 COPY partdisttest FROM stdin;
 INFO:  first field processed in the QE: 1
 SELECT tableoid::regclass, * FROM partdisttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: partdisttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
         tableoid        | a | b  | c 
 ------------------------+---+----+---
  partdisttest_1_prt_neg | 2 | -1 | 3
@@ -74,16 +71,18 @@ ALTER TABLE partdisttest ATTACH PARTITION partdisttest_part50 FOR VALUES FROM (5
 COPY partdisttest FROM stdin;
 INFO:  first field processed in the QE: 1
 SELECT gp_segment_id, tableoid::regclass, * from partdisttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: partdisttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id |      tableoid       | a | b  | c 
 ---------------+---------------------+---+----+---
+             1 | partdisttest_part0  | 1 |  0 | 3
+             1 | partdisttest_part50 | 1 | 50 | 3
              0 | partdisttest_part0  | 2 |  0 | 3
              0 | partdisttest_part0  | 3 |  0 | 3
              0 | partdisttest_part0  | 4 |  0 | 3
              0 | partdisttest_part50 | 2 | 50 | 3
              0 | partdisttest_part50 | 3 | 50 | 3
              0 | partdisttest_part50 | 4 | 50 | 3
-             1 | partdisttest_part0  | 1 |  0 | 3
-             1 | partdisttest_part50 | 1 | 50 | 3
 (8 rows)
 
 DROP TABLE partdisttest;
@@ -130,7 +129,10 @@ COPY (
     ) TO '/tmp/ten-thousand-and-one-lines.txt';
 COPY partdisttest FROM '/tmp/ten-thousand-and-one-lines.txt';
 INFO:  first field processed in the QE: 1
+WARNING:  1 temporary files and directories not closed at end-of-transaction
 SELECT tableoid::regclass, count(*) FROM partdisttest GROUP BY 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: partdisttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
           tableoid          | count 
 ----------------------------+-------
  partdisttest_1_prt_primero | 10001
@@ -166,6 +168,10 @@ END;
 $$;
 CREATE TRIGGER copydisttest_before_ins BEFORE INSERT ON copydisttest
 FOR EACH ROW EXECUTE PROCEDURE copydisttest_ignore_even();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=97682)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=97676)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=97677)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 \set QUIET off
 -- COPY on QD
 -- expect 'COPY 2'

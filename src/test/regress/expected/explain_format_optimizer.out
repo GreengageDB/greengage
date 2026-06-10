@@ -16,6 +16,10 @@
 -- m/\s*optimizer:\s*"off"/
 -- m/^\s+optimizer_jit\w*:/
 -- end_matchignore
+-- start_ignore
+drop function if exists explain_filter(text);
+drop function if exists explain_filter_to_json(text);
+-- end_ignore
 -- To produce stable regression test output, it's usually necessary to
 -- ignore details such as exact costs or row counts.  These filter
 -- functions replace changeable output details with fixed strings.
@@ -69,8 +73,42 @@ CREATE TABLE box_locations(id int PRIMARY KEY, address text);
 CREATE TABLE boxes(id int PRIMARY KEY, apple_id int REFERENCES apples(id), location_id int REFERENCES box_locations(id));
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=99348)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=99367)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=99345)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 --- Check Explain Text format output
 select explain_filter('EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes, apples, box_locations
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                 explain_filter                                                
 --------------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N)
@@ -92,6 +130,8 @@ select explain_filter('EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id
 
 --- Check Explain Analyze Text output that include the slices information
 select explain_filter('EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes, apples, box_locations
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                                 explain_filter                                                                
 ----------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
@@ -126,6 +166,8 @@ select explain_filter('EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON
 -- YAML Required replaces for costs and time changes
 -- Check Explain YAML output
 select explain_filter('EXPLAIN (FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes, apples, box_locations
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 - Plan: 
     Node Type: "Gather Motion"
@@ -135,6 +177,7 @@ explain_filter
     Segments: N
     Gang Type: "primary reader"
     Parallel Aware: false
+    Async Capable: false
     Startup Cost: N.N
     Total Cost: N.N
     Plan Rows: N
@@ -146,6 +189,7 @@ explain_filter
         Segments: N
         Gang Type: "primary reader"
         Parallel Aware: false
+        Async Capable: false
         Join Type: "Left"
         Startup Cost: N.N
         Total Cost: N.N
@@ -162,6 +206,7 @@ explain_filter
             Segments: N
             Gang Type: "primary reader"
             Parallel Aware: false
+            Async Capable: false
             Startup Cost: N.N
             Total Cost: N.N
             Plan Rows: N
@@ -174,6 +219,7 @@ explain_filter
                 Segments: N
                 Gang Type: "primary reader"
                 Parallel Aware: false
+                Async Capable: false
                 Join Type: "Left"
                 Startup Cost: N.N
                 Total Cost: N.N
@@ -190,6 +236,7 @@ explain_filter
                     Segments: N
                     Gang Type: "primary reader"
                     Parallel Aware: false
+                    Async Capable: false
                     Startup Cost: N.N
                     Total Cost: N.N
                     Plan Rows: N
@@ -202,6 +249,7 @@ explain_filter
                         Segments: N
                         Gang Type: "primary reader"
                         Parallel Aware: false
+                        Async Capable: false
                         Relation Name: "boxes"
                         Alias: "boxes"
                         Startup Cost: N.N
@@ -214,6 +262,7 @@ explain_filter
                     Segments: N
                     Gang Type: "primary reader"
                     Parallel Aware: false
+                    Async Capable: false
                     Scan Direction: "Forward"
                     Index Name: "box_locations_pkey"
                     Relation Name: "box_locations"
@@ -229,6 +278,7 @@ explain_filter
             Segments: N
             Gang Type: "primary reader"
             Parallel Aware: false
+            Async Capable: false
             Scan Direction: "Forward"
             Index Name: "apples_pkey"
             Relation Name: "apples"
@@ -243,6 +293,8 @@ explain_filter
 SET random_page_cost = 1;
 SET cpu_index_tuple_cost = 0.1;
 select explain_filter('EXPLAIN (FORMAT YAML, VERBOSE) SELECT * from boxes;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 - Plan: 
     Node Type: "Gather Motion"
@@ -252,6 +304,7 @@ explain_filter
     Segments: N
     Gang Type: "primary reader"
     Parallel Aware: false
+    Async Capable: false
     Startup Cost: N.N
     Total Cost: N.N
     Plan Rows: N
@@ -267,6 +320,7 @@ explain_filter
         Segments: N
         Gang Type: "primary reader"
         Parallel Aware: false
+        Async Capable: false
         Relation Name: "boxes"
         Schema: "public"
         Alias: "boxes"
@@ -284,6 +338,8 @@ explain_filter
     random_page_cost: "N"
 (1 row)
 select explain_filter('EXPLAIN (FORMAT YAML, VERBOSE, SETTINGS ON) SELECT * from boxes;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 - Plan: 
     Node Type: "Gather Motion"
@@ -293,6 +349,7 @@ explain_filter
     Segments: N
     Gang Type: "primary reader"
     Parallel Aware: false
+    Async Capable: false
     Startup Cost: N.N
     Total Cost: N.N
     Plan Rows: N
@@ -308,6 +365,7 @@ explain_filter
         Segments: N
         Gang Type: "primary reader"
         Parallel Aware: false
+        Async Capable: false
         Relation Name: "boxes"
         Schema: "public"
         Alias: "boxes"
@@ -326,6 +384,8 @@ explain_filter
 (1 row)
 --- Check Explain Analyze YAML output that include the slices information
 select explain_filter('EXPLAIN (ANALYZE, FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes, apples, box_locations
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 - Plan: 
     Node Type: "Gather Motion"
@@ -335,6 +395,7 @@ explain_filter
     Segments: N
     Gang Type: "primary reader"
     Parallel Aware: false
+    Async Capable: false
     Startup Cost: N.N
     Total Cost: N.N
     Plan Rows: N
@@ -350,6 +411,7 @@ explain_filter
         Segments: N
         Gang Type: "primary reader"
         Parallel Aware: false
+        Async Capable: false
         Join Type: "Left"
         Startup Cost: N.N
         Total Cost: N.N
@@ -371,6 +433,7 @@ explain_filter
             Segments: N
             Gang Type: "primary reader"
             Parallel Aware: false
+            Async Capable: false
             Startup Cost: N.N
             Total Cost: N.N
             Plan Rows: N
@@ -387,6 +450,7 @@ explain_filter
                 Segments: N
                 Gang Type: "primary reader"
                 Parallel Aware: false
+                Async Capable: false
                 Join Type: "Left"
                 Startup Cost: N.N
                 Total Cost: N.N
@@ -408,6 +472,7 @@ explain_filter
                     Segments: N
                     Gang Type: "primary reader"
                     Parallel Aware: false
+                    Async Capable: false
                     Startup Cost: N.N
                     Total Cost: N.N
                     Plan Rows: N
@@ -424,6 +489,7 @@ explain_filter
                         Segments: N
                         Gang Type: "primary reader"
                         Parallel Aware: false
+                        Async Capable: false
                         Relation Name: "boxes"
                         Alias: "boxes"
                         Startup Cost: N.N
@@ -440,6 +506,7 @@ explain_filter
                     Segments: N
                     Gang Type: "primary reader"
                     Parallel Aware: false
+                    Async Capable: false
                     Scan Direction: "Forward"
                     Index Name: "box_locations_pkey"
                     Relation Name: "box_locations"
@@ -460,6 +527,7 @@ explain_filter
             Segments: N
             Gang Type: "primary reader"
             Parallel Aware: false
+            Async Capable: false
             Scan Direction: "Forward"
             Index Name: "apples_pkey"
             Relation Name: "apples"
@@ -475,8 +543,7 @@ explain_filter
             Index Cond: "(id = boxes.apple_id)"
             Rows Removed by Index Recheck: N
   Optimizer: "Pivotal Optimizer (GPORCA)"
-  Planning: 
-    Planning Time: N.N
+  Planning Time: N.N
   Triggers: 
   Slice statistics: 
     - Slice: N
@@ -502,6 +569,8 @@ explain_filter
 (1 row)
 --- Check explain analyze sort information in verbose mode
 select explain_filter('EXPLAIN (ANALYZE, VERBOSE) SELECT * from boxes ORDER BY apple_id;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: boxes
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
   Output: id, apple_id, location_id
@@ -532,7 +601,7 @@ RESET cpu_index_tuple_cost;
 -- Check JSON format
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM generate_series(1, 10);');
 explain_filter_to_json
-[{"Plan": {"Alias": "generate_series", "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Function Scan", "Function Name": "generate_series", "Parallel Aware": false}, "Optimizer": "Pivotal Optimizer (GPORCA)"}]
+[{"Plan": {"Alias": "generate_series", "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Function Scan", "Async Capable": false, "Function Name": "generate_series", "Parallel Aware": false}, "Optimizer": "Pivotal Optimizer (GPORCA)"}]
 (1 row)
 select explain_filter('EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);');
 explain_filter
@@ -544,6 +613,7 @@ explain_filter
       <Segments>N</Segments>
       <Gang-Type>unallocated</Gang-Type>
       <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
       <Function-Name>generate_series</Function-Name>
       <Alias>generate_series</Alias>
     </Plan>
@@ -557,8 +627,10 @@ CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EV
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: jsonexplaintest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter_to_json
-[{"Plan": {"Plans": [{"Alias": "jsonexplaintest", "Slice": 0, "Filter": "(i = 0)", "Segments": 0, "Gang Type": "primary reader", "Node Type": "Dynamic Seq Scan", "Relation Name": "jsonexplaintest", "Parallel Aware": false, "Parent Relationship": "Outer", "Number of partitions to scan": 0}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Receivers": 0, "Parallel Aware": false}, "Optimizer": "Pivotal Optimizer (GPORCA)"}]
+[{"Plan": {"Plans": [{"Alias": "jsonexplaintest", "Slice": 0, "Filter": "(i = 0)", "Segments": 0, "Gang Type": "primary reader", "Node Type": "Dynamic Seq Scan", "Async Capable": false, "Relation Name": "jsonexplaintest", "Parallel Aware": false, "Parent Relationship": "Outer", "Number of partitions to scan": 0}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Receivers": 0, "Async Capable": false, "Parallel Aware": false}, "Optimizer": "Pivotal Optimizer (GPORCA)"}]
 (1 row)
 -- Check Explain Text format output with jit enable
 CREATE TABLE jit_explain_output(c1 int);
@@ -572,6 +644,8 @@ SET gp_explain_jit = on;
 set optimizer_jit to on;
 set optimizer_jit_above_cost to 1;
 select explain_filter('EXPLAIN SELECT * FROM jit_explain_output LIMIT 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: jit_explain_output
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 Limit  (cost=N.N..N.N rows=N width=N)
   ->  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N)
@@ -583,6 +657,8 @@ JIT:
 (7 rows)
 -- Check explain anlyze text format output with jit enable
 select explain_filter('EXPLAIN (ANALYZE) SELECT * FROM jit_explain_output LIMIT 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: jit_explain_output
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter
 Limit  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
   ->  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
@@ -599,8 +675,10 @@ Execution Time: N.N ms
 (12 rows)
 -- Check explain analyze json format output with jit enable
 select explain_filter_to_json('EXPLAIN (ANALYZE, FORMAT json) SELECT * FROM jit_explain_output LIMIT 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: jit_explain_output
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 explain_filter_to_json
-[{"JIT": {"slice": {"slice": 0, "Timing": 0.0, "functions": 0.0}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Planning": {"Planning Time": 0.0}, "Triggers": [], "Optimizer": "Pivotal Optimizer (GPORCA)", "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
+[{"JIT": {"slice": {"slice": 0, "Timing": 0.0, "functions": 0.0}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Triggers": [], "Optimizer": "Pivotal Optimizer (GPORCA)", "Planning Time": 0.0, "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
 (1 row)
 RESET jit;
 RESET jit_above_cost;

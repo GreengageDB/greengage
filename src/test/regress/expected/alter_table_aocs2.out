@@ -3,6 +3,7 @@
 -- Setup test tables
 -- AOCO multiple insert to create multiple var-block
 DROP TABLE IF EXISTS multivarblock_tab;
+NOTICE:  table "multivarblock_tab" does not exist, skipping
 CREATE TABLE multivarblock_tab (
     c_custkey integer,
     c_name character varying(25),
@@ -19,6 +20,7 @@ insert into multivarblock_tab values( 2, 'ab','this is also a looong text' , 4.5
 insert into multivarblock_tab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 -- AOCO multiple insert to create multiple var-block for table with btree index
 DROP TABLE IF EXISTS multivarblock_bitab;
+NOTICE:  table "multivarblock_bitab" does not exist, skipping
 CREATE TABLE multivarblock_bitab (
     c_custkey integer,
     c_name character varying(25),
@@ -36,6 +38,7 @@ insert into multivarblock_bitab values( 2, 'ab','this is also a looong text' , 4
 insert into multivarblock_bitab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 -- AOCO multiple insert to create multiple var-block for table with partitions
 DROP TABLE IF EXISTS multivarblock_parttab;
+NOTICE:  table "multivarblock_parttab" does not exist, skipping
 CREATE TABLE multivarblock_parttab (
     c_custkey integer,
     c_name character varying(25),
@@ -55,6 +58,7 @@ insert into multivarblock_parttab values( 2, 'ab','this is also a looong text' ,
 insert into multivarblock_parttab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',4000.25,'2014/08/10',now());
 -- AOCO multiple insert to create multiple var-block
 DROP TABLE IF EXISTS multivarblock_toast;
+NOTICE:  table "multivarblock_toast" does not exist, skipping
 CREATE TABLE multivarblock_toast (
     c_custkey integer,
     c_name character varying(25),
@@ -71,6 +75,7 @@ insert into multivarblock_toast values( 2, 'ab','this is also a looong text' , 4
 insert into multivarblock_toast values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 -- AOCO multiple insert to create multiple var-block
 DROP TABLE IF EXISTS multivarblock_zlibtab;
+NOTICE:  table "multivarblock_zlibtab" does not exist, skipping
 CREATE TABLE multivarblock_zlibtab (
     c_custkey integer,
     c_name character varying(25),
@@ -86,6 +91,7 @@ insert into multivarblock_zlibtab values( 1, 'aa','this is a looong text' , 3.5,
 insert into multivarblock_zlibtab values( 2, 'ab','this is also a looong text' , 4.5, '3456789',3000.45,'2014/08/10',now());
 insert into multivarblock_zlibtab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 DROP TABLE IF EXISTS multi_segfile_tab;
+NOTICE:  table "multi_segfile_tab" does not exist, skipping
 CREATE TABLE multi_segfile_tab (
     c_custkey integer,
     c_name character varying(25),
@@ -100,9 +106,20 @@ WITH (checksum=true, appendonly=true, orientation=column, compresstype=zlib, com
 insert into multi_segfile_tab values( 1, 'aa','this is a looong text' , 3.5, '12121212',1000.34,'2015/10/10',now());
 insert into multi_segfile_tab values( 2, 'ab','this is also a looong text' , 4.5, '3456789',3000.45,'2014/08/10',now());
 update multi_segfile_tab set c_name = 'bcx' where c_custkey = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: multi_segfile_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 vacuum multi_segfile_tab;
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 insert into multi_segfile_tab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 DROP TABLE IF EXISTS multi_segfile_bitab;
+NOTICE:  table "multi_segfile_bitab" does not exist, skipping
 CREATE TABLE multi_segfile_bitab (
     c_custkey integer,
     c_name character varying(25),
@@ -118,9 +135,24 @@ CREATE INDEX multi_segfile_btree_idx ON multi_segfile_bitab USING btree (c_custk
 insert into multi_segfile_bitab values( 1, 'aa','this is a looong text' , 3.5, '12121212',1000.34,'2015/10/10',now());
 insert into multi_segfile_bitab values( 2, 'ab','this is also a looong text' , 4.5, '3456789',3000.45,'2014/08/10',now());
 update multi_segfile_bitab set c_name = 'bcx' where c_custkey = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: multi_segfile_bitab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 vacuum multi_segfile_bitab;
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 insert into multi_segfile_bitab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 DROP TABLE IF EXISTS multi_segfile_zlibtab;
+NOTICE:  table "multi_segfile_zlibtab" does not exist, skipping
 CREATE TABLE multi_segfile_zlibtab (
     c_custkey integer,
     c_name character varying(25),
@@ -135,9 +167,20 @@ WITH (checksum=true, appendonly=true, orientation=column, compresstype=zlib, com
 insert into multi_segfile_zlibtab values( 1, 'aa','this is a looong text' , 3.5, '12121212',1000.34,'2015/10/10',now());
 insert into multi_segfile_zlibtab values( 2, 'ab','this is also a looong text' , 4.5, '3456789',3000.45,'2014/08/10',now());
 update multi_segfile_zlibtab set c_name = 'bcx' where c_custkey = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: multi_segfile_zlibtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 vacuum multi_segfile_zlibtab;
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 insert into multi_segfile_zlibtab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 DROP TABLE IF EXISTS multi_segfile_parttab;
+NOTICE:  table "multi_segfile_parttab" does not exist, skipping
 CREATE TABLE multi_segfile_parttab (
     c_custkey integer,
     c_name character varying(25),
@@ -156,8 +199,73 @@ insert into multi_segfile_parttab values( 1, 'aa','this is a looong text' , 4.5,
 insert into multi_segfile_parttab values( 2, 'ab','this is also a looong text' , 7.5, '3456789',3000.45,'2014/08/10',now());
 update multi_segfile_parttab set c_name = 'bcx' where c_custkey = 2;
 vacuum multi_segfile_parttab;
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 insert into multi_segfile_parttab values( 3, 'ac','this  too is a looong text' , 1.5, '878787',4000.25,'2014/08/10',now());
 DROP TABLE IF EXISTS multi_segfile_toast;
+NOTICE:  table "multi_segfile_toast" does not exist, skipping
 CREATE TABLE multi_segfile_toast (
     c_custkey integer,
     c_name character varying(25),
@@ -172,7 +280,17 @@ WITH (checksum=true, appendonly=true, orientation=column, compresstype=zlib, com
 insert into multi_segfile_toast values( 1, 'aa','this is a looong text' , 3.5, '12121212',1000.34,'2015/10/10',now());
 insert into multi_segfile_toast values( 2, 'ab','this is also a looong text' , 4.5, '3456789',3000.45,'2014/08/10',now());
 update multi_segfile_toast set c_name = 'bcx' where c_custkey = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: multi_segfile_toast
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 vacuum multi_segfile_toast;
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 insert into multi_segfile_toast values( 3, 'ac','this  too is a looong text' , 1.5, '878787',500.54,'2014/04/04',now());
 --
 -- @description AOCO multi_segfile table : add column with default value NULL
@@ -239,6 +357,18 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_bitab;
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multi_segfile table : drop column with default value non NULL
 alter table multi_segfile_bitab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -256,6 +386,18 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_bitab;
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160025" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multi_segfile table : drop column with default value NULL
 alter table multi_segfile_tab ADD COLUMN added_col33 character varying(35) default NULL;
@@ -273,6 +415,18 @@ select count(*) as added_col33 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_tab;
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multi_segfile table : drop column with default value non NULL
 alter table multi_segfile_tab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -290,6 +444,18 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_tab;
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159848" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 --
 -- @description AOCO multi_segfile table : add column with default value NULL
 alter table multi_segfile_parttab ADD COLUMN added_col2 character varying(35) default NULL;
@@ -325,6 +491,70 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_parttab;
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 --
 -- @description AOCO multi_segfile table : drop column with default value non NULL
 alter table multi_segfile_parttab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -342,6 +572,70 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_parttab;
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160428" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160421" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160413" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160408" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160403" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160395" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160390" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160385" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multi_segfile table : add column toast with default value NULL
 alter table multi_segfile_toast ADD COLUMN added_col3 bytea  default NULL;
@@ -377,6 +671,14 @@ select count(*) as added_col33 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_toast;
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
 --
 -- @description AOCO multi_segfile table : drop column with default value non NULL
 alter table multi_segfile_toast ADD COLUMN added_col44  bytea default ("decode"(repeat('1234567890',10000),'escape'));
@@ -394,6 +696,14 @@ select count(*) as added_col44 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_toast;
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160598" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 --
 -- @description AOCO multi_segfile table : add column with default value NULL
 alter table multi_segfile_zlibtab ADD COLUMN added_col2 character varying(35) default NULL;
@@ -429,6 +739,14 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_zlibtab;
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multi_segfile table : drop column with default value non NULL
 alter table multi_segfile_zlibtab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -446,6 +764,14 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multi_segfile_zlibtab;
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_160221" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock table : add column with default value NULL
 alter table multivarblock_tab ADD COLUMN added_col2 character varying(35) default NULL;
@@ -468,7 +794,7 @@ select count(*) as added_col5 from pg_attribute pa, pg_class pc where pa.attreli
 -- @description AOCO multivarblock table : add column with constraint and default value non NULL
 -- Negative test
 alter table multivarblock_tab add column added_col66 int CONSTRAINT multivarblock_tab_check1 CHECK (added_col66 < 10)  default 30;
-ERROR:  check constraint "multivarblock_tab_check1" of relation "multivarblock_tab" is violated by some row  (seg1 rh55-qa02.sanmateo.greenplum.com:30000 pid=8212)
+ERROR:  check constraint "multivarblock_tab_check1" of relation "multivarblock_tab" is violated by some row  (seg0 172.17.0.3:7002 pid=114936)
 select count(*) as added_col66 from pg_attribute pa, pg_class pc where pa.attrelid = pc.oid and pc.relname='multivarblock_tab' and attname='added_col66';
  added_col66 
 -------------
@@ -530,6 +856,18 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_bitab;
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
 --
 -- @description AOCO multivarblock table : drop column with default value non NULL
 alter table multivarblock_bitab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -547,6 +885,18 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_bitab;
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159569" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock table : drop column with default value NULL
 alter table multivarblock_tab ADD COLUMN added_col22 character varying(35) default NULL;
@@ -564,6 +914,18 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_tab;
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 --
 -- @description AOCO multivarblock table : drop column with default value non NULL
 alter table multivarblock_tab ADD COLUMN added_col55 TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW() ;
@@ -581,6 +943,18 @@ select count(*) as added_col55 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_tab;
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_161273" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aoblkdir_159498" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_161273" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock table : add column with default value NULL
 alter table multivarblock_parttab ADD COLUMN added_col2 character varying(35) default NULL;
@@ -616,6 +990,70 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_parttab;
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock partition table : drop column with default value non NULL
 alter table multivarblock_parttab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -633,6 +1071,70 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_parttab;
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159737" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159737" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159732" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159732" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159715" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159715" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159704" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159704" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159688" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159688" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159675" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159675" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159660" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159660" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159644" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159644" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock table : add column toast with default value NULL
 alter table multivarblock_toast ADD COLUMN added_col3 bytea  default NULL;
@@ -668,6 +1170,14 @@ select count(*) as added_col33 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_toast;
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
 --
 -- @description AOCO multivarblock table : drop column with default value non NULL
 alter table multivarblock_toast ADD COLUMN added_col44  bytea default ("decode"(repeat('1234567890',10000),'escape'));
@@ -685,6 +1195,14 @@ select count(*) as added_col44 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_toast;
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock table : add column with default value NULL
 alter table multivarblock_zlibtab ADD COLUMN added_col2 character varying(35) default NULL;
@@ -720,6 +1238,14 @@ select count(*) as added_col22 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_zlibtab;
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- @description AOCO multivarblock zlib compressed table : drop column with default value non NULL
 alter table multivarblock_zlibtab ADD COLUMN added_col11 character varying(35) default 'this is default value of non null';
@@ -737,6 +1263,14 @@ select count(*) as added_col11 from pg_attribute pa, pg_class pc where pa.attrel
 (1 row)
 
 VACUUM multivarblock_zlibtab;
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114936)
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114945)
+WARNING:  skipping "pg_aocsseg_159810" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
+WARNING:  skipping "pg_aovisimap_159810" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114935)
 --
 -- Non-bulk dense content header with RLE compression
 -- This will  insert more rows than a small content header can accommodate in the same insert statement
@@ -799,18 +1333,20 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO rewrite_optimization_aoco_parent SELECT i, i % 2, i FROM generate_series(1,10)i;
 ALTER TABLE rewrite_optimization_aoco_parent ADD COLUMN new_col int DEFAULT 1;
 SELECT * FROM rewrite_optimization_aoco_parent;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rewrite_optimization_aoco_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b | c  | new_col 
 ----+---+----+---------
   1 | 1 |  1 |       1
-  6 | 0 |  6 |       1
- 10 | 0 | 10 |       1
-  5 | 1 |  5 |       1
-  9 | 1 |  9 |       1
   2 | 0 |  2 |       1
   4 | 0 |  4 |       1
   8 | 0 |  8 |       1
   3 | 1 |  3 |       1
   7 | 1 |  7 |       1
+  6 | 0 |  6 |       1
+ 10 | 0 | 10 |       1
+  5 | 1 |  5 |       1
+  9 | 1 |  9 |       1
 (10 rows)
 
 :chk_co_opt_qry;
@@ -841,8 +1377,11 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO rewrite_optimization_heap_parent SELECT i, i % 2, i FROM generate_series(1,10)i;
 ALTER TABLE rewrite_optimization_heap_parent ADD COLUMN new_col int DEFAULT 1;
 SELECT * FROM rewrite_optimization_heap_parent;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rewrite_optimization_heap_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b | c  | new_col 
 ----+---+----+---------
+  1 | 1 |  1 |       1
   6 | 0 |  6 |       1
  10 | 0 | 10 |       1
   5 | 1 |  5 |       1
@@ -852,7 +1391,6 @@ SELECT * FROM rewrite_optimization_heap_parent;
   8 | 0 |  8 |       1
   3 | 1 |  3 |       1
   7 | 1 |  7 |       1
-  1 | 1 |  1 |       1
 (10 rows)
 
 :chk_co_opt_qry;
@@ -869,6 +1407,8 @@ SELECT * FROM rewrite_optimization_heap_parent;
 REFRESH MATERIALIZED VIEW table_relfilenode;
 ALTER TABLE rewrite_optimization_heap_parent ADD COLUMN new_col2 int DEFAULT 1, ALTER COLUMN c TYPE bigint;
 SELECT * FROM rewrite_optimization_heap_parent;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rewrite_optimization_heap_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b | c  | new_col | new_col2 
 ----+---+----+---------+----------
   1 | 1 |  1 |       1 |        1
@@ -916,7 +1456,6 @@ ALTER TABLE subpartition_aoco_leaf ADD COLUMN new_col int DEFAULT 1;
 SELECT * FROM subpartition_aoco_leaf;
  a  | b | c | new_col 
 ----+---+---+---------
-  1 | 1 | 1 |       1
   5 | 1 | 1 |       1
   6 | 0 | 0 |       1
   9 | 1 | 1 |       1
@@ -926,6 +1465,7 @@ SELECT * FROM subpartition_aoco_leaf;
   4 | 0 | 0 |       1
   7 | 1 | 1 |       1
   8 | 0 | 0 |       1
+  1 | 1 | 1 |       1
 (10 rows)
 
 :chk_co_opt_qry;
@@ -971,16 +1511,22 @@ SELECT * FROM subpartition_aoco_leaf;
 
 -- Check if add column doesn't rewrite the table
 CREATE TABLE testaddcol(i int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO testaddcol SELECT generate_series(1, 5);
 CREATE TEMP TABLE relfilebeforetestaddcol AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'testaddcol%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'testaddcol%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE testaddcol ADD COLUMN j int DEFAULT 5;
 CREATE TEMP TABLE relfileaftertestaddcol AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'testaddcol%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'testaddcol%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- table shouldn't be rewritten
 SELECT count(*) FROM (SELECT * FROM relfilebeforetestaddcol UNION SELECT * FROM relfileaftertestaddcol)a;
  count 
@@ -990,12 +1536,14 @@ SELECT count(*) FROM (SELECT * FROM relfilebeforetestaddcol UNION SELECT * FROM 
 
 -- data is intact
 SELECT * FROM testaddcol;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testaddcol
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
  2 | 5
  3 | 5
  4 | 5
- 5 | 5
  1 | 5
+ 5 | 5
 (5 rows)
 

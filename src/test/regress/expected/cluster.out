@@ -10,16 +10,42 @@ CREATE TABLE clstr_tst (a SERIAL PRIMARY KEY,
 	CONSTRAINT clstr_tst_con FOREIGN KEY (b) REFERENCES clstr_tst_s)
 	DISTRIBUTED BY (a);
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE INDEX clstr_tst_b ON clstr_tst (b);
 CREATE INDEX clstr_tst_c ON clstr_tst (c);
 CREATE INDEX clstr_tst_c_b ON clstr_tst (c,b);
 CREATE INDEX clstr_tst_b_c ON clstr_tst (b,c);
 INSERT INTO clstr_tst_s (b) VALUES (0);
 INSERT INTO clstr_tst_s (b) SELECT b FROM clstr_tst_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_tst_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO clstr_tst_s (b) SELECT b FROM clstr_tst_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_tst_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO clstr_tst_s (b) SELECT b FROM clstr_tst_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_tst_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO clstr_tst_s (b) SELECT b FROM clstr_tst_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_tst_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO clstr_tst_s (b) SELECT b FROM clstr_tst_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_tst_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 CREATE TABLE clstr_tst_inh () INHERITS (clstr_tst);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO clstr_tst (b, c) VALUES (11, 'once');
@@ -59,38 +85,38 @@ CLUSTER clstr_tst_c ON clstr_tst;
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  | b  |       c       |           substring            | length 
 ----+----+---------------+--------------------------------+--------
- 10 | 14 | catorce       |                                |       
- 18 |  5 | cinco         |                                |       
-  9 |  4 | cuatro        |                                |       
  26 | 19 | diecinueve    |                                |       
  12 | 18 | dieciocho     |                                |       
  30 | 16 | dieciseis     |                                |       
- 24 | 17 | diecisiete    |                                |       
-  2 | 10 | diez          |                                |       
  23 | 12 | doce          |                                |       
- 11 |  2 | dos           |                                |       
- 25 |  9 | nueve         |                                |       
  31 |  8 | ocho          |                                |       
   1 | 11 | once          |                                |       
- 28 | 15 | quince        |                                |       
- 32 |  6 | seis          | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
- 29 |  7 | siete         |                                |       
  15 | 13 | trece         |                                |       
- 22 | 30 | treinta       |                                |       
- 17 | 32 | treinta y dos |                                |       
-  3 | 31 | treinta y uno |                                |       
-  5 |  3 | tres          |                                |       
  20 |  1 | uno           |                                |       
-  6 | 20 | veinte        |                                |       
- 14 | 25 | veinticinco   |                                |       
- 21 | 24 | veinticuatro  |                                |       
+ 18 |  5 | cinco         |                                |       
+ 24 | 17 | diecisiete    |                                |       
+  2 | 10 | diez          |                                |       
+ 29 |  7 | siete         |                                |       
+ 22 | 30 | treinta       |                                |       
+  3 | 31 | treinta y uno |                                |       
   4 | 22 | veintidos     |                                |       
  19 | 29 | veintinueve   |                                |       
  16 | 28 | veintiocho    |                                |       
  27 | 26 | veintiseis    |                                |       
- 13 | 27 | veintisiete   |                                |       
   7 | 23 | veintitres    |                                |       
   8 | 21 | veintiuno     |                                |       
+ 10 | 14 | catorce       |                                |       
+  9 |  4 | cuatro        |                                |       
+ 11 |  2 | dos           |                                |       
+ 25 |  9 | nueve         |                                |       
+ 28 | 15 | quince        |                                |       
+ 32 |  6 | seis          | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
+ 17 | 32 | treinta y dos |                                |       
+  5 |  3 | tres          |                                |       
+  6 | 20 | veinte        |                                |       
+ 14 | 25 | veinticinco   |                                |       
+ 21 | 24 | veinticuatro  |                                |       
+ 13 | 27 | veintisiete   |                                |       
 (32 rows)
 
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst ORDER BY a;
@@ -209,39 +235,39 @@ INSERT INTO clstr_tst_inh VALUES (0, 100, 'in child table');
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  |  b  |       c        |           substring            | length 
 ----+-----+----------------+--------------------------------+--------
- 10 |  14 | catorce        |                                |       
- 18 |   5 | cinco          |                                |       
-  9 |   4 | cuatro         |                                |       
  26 |  19 | diecinueve     |                                |       
  12 |  18 | dieciocho      |                                |       
  30 |  16 | dieciseis      |                                |       
- 24 |  17 | diecisiete     |                                |       
-  2 |  10 | diez           |                                |       
  23 |  12 | doce           |                                |       
- 11 |   2 | dos            |                                |       
- 25 |   9 | nueve          |                                |       
  31 |   8 | ocho           |                                |       
   1 |  11 | once           |                                |       
- 28 |  15 | quince         |                                |       
- 32 |   6 | seis           | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
- 29 |   7 | siete          |                                |       
  15 |  13 | trece          |                                |       
- 22 |  30 | treinta        |                                |       
- 17 |  32 | treinta y dos  |                                |       
-  3 |  31 | treinta y uno  |                                |       
-  5 |   3 | tres           |                                |       
  20 |   1 | uno            |                                |       
-  6 |  20 | veinte         |                                |       
- 14 |  25 | veinticinco    |                                |       
- 21 |  24 | veinticuatro   |                                |       
+  0 | 100 | in child table |                                |       
+ 18 |   5 | cinco          |                                |       
+ 24 |  17 | diecisiete     |                                |       
+  2 |  10 | diez           |                                |       
+ 29 |   7 | siete          |                                |       
+ 22 |  30 | treinta        |                                |       
+  3 |  31 | treinta y uno  |                                |       
   4 |  22 | veintidos      |                                |       
  19 |  29 | veintinueve    |                                |       
  16 |  28 | veintiocho     |                                |       
  27 |  26 | veintiseis     |                                |       
- 13 |  27 | veintisiete    |                                |       
   7 |  23 | veintitres     |                                |       
   8 |  21 | veintiuno      |                                |       
-  0 | 100 | in child table |                                |       
+ 10 |  14 | catorce        |                                |       
+  9 |   4 | cuatro         |                                |       
+ 11 |   2 | dos            |                                |       
+ 25 |   9 | nueve          |                                |       
+ 28 |  15 | quince         |                                |       
+ 32 |   6 | seis           | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
+ 17 |  32 | treinta y dos  |                                |       
+  5 |   3 | tres           |                                |       
+  6 |  20 | veinte         |                                |       
+ 14 |  25 | veinticinco    |                                |       
+ 21 |  24 | veinticuatro   |                                |       
+ 13 |  27 | veintisiete    |                                |       
 (33 rows)
 
 -- Verify that foreign key link still works
@@ -308,6 +334,7 @@ WHERE pg_class.oid=indexrelid
 
 -- Verify that clustering all tables does in fact cluster the right ones
 CREATE USER regress_clstr_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE clstr_1 (a INT PRIMARY KEY);
 CREATE TABLE clstr_2 (a INT PRIMARY KEY);
 CREATE TABLE clstr_3 (a INT PRIMARY KEY);
@@ -328,13 +355,15 @@ CLUSTER clstr_2 USING clstr_2_pkey;
 SELECT * FROM clstr_1 UNION ALL
   SELECT * FROM clstr_2 UNION ALL
   SELECT * FROM clstr_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
- 1
+ 2
+ 2
  2
  1
- 2
- 2
+ 1
  1
 (6 rows)
 
@@ -342,6 +371,8 @@ SELECT * FROM clstr_1 UNION ALL
 DELETE FROM clstr_1;
 DELETE FROM clstr_2;
 DELETE FROM clstr_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO clstr_1 VALUES (2);
 INSERT INTO clstr_1 VALUES (1);
 INSERT INTO clstr_2 VALUES (2);
@@ -355,13 +386,15 @@ CLUSTER;
 SELECT * FROM clstr_1 UNION ALL
   SELECT * FROM clstr_2 UNION ALL
   SELECT * FROM clstr_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clstr_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
+ 2
+ 2
+ 2
  1
- 2
- 2
  1
- 2
  1
 (6 rows)
 
@@ -373,8 +406,8 @@ CLUSTER clstr_1;
 SELECT * FROM clstr_1;
  a 
 ---
- 1
  2
+ 1
 (2 rows)
 
 -- Test MVCC-safety of cluster. There isn't much we can do to verify the
@@ -390,18 +423,30 @@ INSERT INTO clustertest VALUES (50, 3);
 BEGIN;
 -- Test update where the old row version is found first in the scan
 UPDATE clustertest SET key = 100 WHERE key = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- Test update where the new row version is found first in the scan
 UPDATE clustertest SET key = 35 WHERE key = 40;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- Test longer update chain
 UPDATE clustertest SET key = 60 WHERE key = 50;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 UPDATE clustertest SET key = 70 WHERE key = 60;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 UPDATE clustertest SET key = 80 WHERE key = 70;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT key FROM clustertest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: clustertest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  key 
 -----
-  20
   30
  100
+  20
   35
   80
 (5 rows)
@@ -411,9 +456,9 @@ SELECT key FROM clustertest;
  key 
 -----
   20
-  30
   35
   80
+  30
  100
 (5 rows)
 
@@ -422,9 +467,9 @@ SELECT key FROM clustertest;
  key 
 -----
   20
-  30
   35
   80
+  30
  100
 (5 rows)
 
@@ -448,6 +493,8 @@ CLUSTER clustertest USING clustertest_pkey;
 CLUSTER clustertest;
 -- Check that partitioned tables cannot be clustered
 CREATE TABLE clstrpart (a int) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX clstrpart_idx ON clstrpart (a);
 ALTER TABLE clstrpart CLUSTER ON clstrpart_idx;
 ERROR:  cannot mark index clustered in partitioned table

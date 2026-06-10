@@ -15,16 +15,23 @@ show gp_enable_segment_copy_checking;
 (1 row)
 
 copy ats_dist_by_d from '/tmp/ats_dist_by_c<SEGID>' on segment;
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg2 172.17.0.3:7004 pid=117034)
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg0 172.17.0.3:7002 pid=117031)
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg1 172.17.0.3:7003 pid=117033)
 -- try to use the reorganize = true to fix it
 alter table ats_dist_by_d set with (reorganize = true);
 -- construct expected table
 create table ats_expected_by_d (c int, d int) distributed by (d);
 insert into ats_expected_by_d select * from ats_dist_by_c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ats_dist_by_c
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- expect to see data distributed in the same way as the freshly constructed
 -- table
 select count(*) = 0 as has_same_distribution from
 (select gp_segment_id, * from ats_dist_by_d except
 	select gp_segment_id, * from ats_expected_by_d) t;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ats_dist_by_d, ats_expected_by_d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  has_same_distribution 
 -----------------------
  t
@@ -33,12 +40,17 @@ select count(*) = 0 as has_same_distribution from
 -- reload for random distribution test
 truncate table ats_dist_by_d;
 copy ats_dist_by_d from '/tmp/ats_dist_by_c<SEGID>' on segment;
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg1 172.17.0.3:7003 pid=117033)
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg0 172.17.0.3:7002 pid=117031)
+WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg2 172.17.0.3:7004 pid=117034)
 -- we expect the new random distribution to differ from both the
 -- distributed-by-c table and the distributed-by-d table
 alter table ats_dist_by_d set with (reorganize = true) distributed randomly;
 select count(*) > 0 as has_different_distribution from
 (select gp_segment_id, * from ats_dist_by_d except
 	select gp_segment_id, * from ats_dist_by_c) t;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ats_dist_by_d, ats_dist_by_c
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  has_different_distribution 
 ----------------------------
  t
@@ -47,6 +59,8 @@ select count(*) > 0 as has_different_distribution from
 select count(*) > 0 as has_different_distribution from
 (select gp_segment_id, * from ats_dist_by_d except
 	select gp_segment_id, * from ats_expected_by_d) t;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ats_dist_by_d, ats_expected_by_d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  has_different_distribution 
 ----------------------------
  t
@@ -54,10 +68,16 @@ select count(*) > 0 as has_different_distribution from
 
 -- ALTER TABLE ... SET for partition tables
 CREATE TABLE part_relopt(a int, b int) WITH (fillfactor=90) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_relopt_1 partition OF part_relopt FOR VALUES FROM (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_relopt_2 partition OF part_relopt FOR VALUES FROM (100) to (200) PARTITION BY RANGE(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_relopt_2_1 partition OF part_relopt_2 FOR VALUES FROM (100) to (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_relopt_2_2 partition OF part_relopt_2 FOR VALUES FROM (150) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO part_relopt SELECT i,i FROM generate_series(1,199) i;
 -- All tables inherit the same reloptions as the root.
 SELECT c.relname, c.reloptions FROM pg_class c WHERE c.relname LIKE 'part_relopt%';
@@ -109,6 +129,7 @@ SELECT c.relname, c.reloptions FROM pg_class c WHERE c.relname LIKE 'part_relopt
 -- Altering the partition root but with ONLY keyword. Should affect future child but not affect existing child.
 ALTER TABLE ONLY part_relopt SET (fillfactor=60);
 CREATE TABLE part_relopt_3 partition OF part_relopt FOR VALUES FROM (200) to (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 SELECT c.relname, c.reloptions FROM pg_class c WHERE c.relname LIKE 'part_relopt%';
      relname     |   reloptions    
 -----------------+-----------------
@@ -165,24 +186,24 @@ ALTER TABLE part_relopt SET ACCESS METHOD ao_row WITH (compresstype=zlib, compre
 SELECT c.relname, c.reloptions, a.blocksize, a.compresslevel FROM pg_class c LEFT JOIN pg_appendonly a ON a.relid = c.oid WHERE c.relname LIKE 'part_relopt%';
      relname     |             reloptions              | blocksize | compresslevel 
 -----------------+-------------------------------------+-----------+---------------
- part_relopt     | {compresstype=zlib,compresslevel=5} |           |              
  part_relopt_1   | {compresstype=zlib,compresslevel=5} |     32768 |             5
- part_relopt_2   | {compresstype=zlib,compresslevel=5} |           |              
+ part_relopt_3   | {compresstype=zlib,compresslevel=5} |     32768 |             5
  part_relopt_2_1 | {compresstype=zlib,compresslevel=5} |     32768 |             5
  part_relopt_2_2 | {compresstype=zlib,compresslevel=5} |     32768 |             5
- part_relopt_3   | {compresstype=zlib,compresslevel=5} |     32768 |             5
+ part_relopt_2   | {compresstype=zlib,compresslevel=5} |           |              
+ part_relopt     | {compresstype=zlib,compresslevel=5} |           |              
 (6 rows)
 
 ALTER TABLE part_relopt SET (compresslevel=7);
 SELECT c.relname, c.reloptions, a.blocksize, a.compresslevel FROM pg_class c LEFT JOIN pg_appendonly a ON a.relid = c.oid WHERE c.relname LIKE 'part_relopt%';
      relname     |             reloptions              | blocksize | compresslevel 
 -----------------+-------------------------------------+-----------+---------------
- part_relopt     | {compresstype=zlib,compresslevel=7} |           |              
  part_relopt_1   | {compresstype=zlib,compresslevel=7} |     32768 |             7
- part_relopt_2   | {compresstype=zlib,compresslevel=7} |           |              
+ part_relopt_3   | {compresstype=zlib,compresslevel=7} |     32768 |             7
  part_relopt_2_1 | {compresstype=zlib,compresslevel=7} |     32768 |             7
  part_relopt_2_2 | {compresstype=zlib,compresslevel=7} |     32768 |             7
- part_relopt_3   | {compresstype=zlib,compresslevel=7} |     32768 |             7
+ part_relopt_2   | {compresstype=zlib,compresslevel=7} |           |              
+ part_relopt     | {compresstype=zlib,compresslevel=7} |           |              
 (6 rows)
 
 --AOCO table: Also check setting column encoding
@@ -190,12 +211,12 @@ ALTER TABLE part_relopt SET ACCESS METHOD ao_column WITH (compresstype=rle_type,
 SELECT c.relname, c.reloptions, a.blocksize, a.compresslevel FROM pg_class c LEFT JOIN pg_appendonly a ON a.relid = c.oid WHERE c.relname LIKE 'part_relopt%';
      relname     |               reloptions                | blocksize | compresslevel 
 -----------------+-----------------------------------------+-----------+---------------
- part_relopt     | {compresstype=rle_type,compresslevel=1} |           |              
  part_relopt_1   | {compresstype=rle_type,compresslevel=1} |     32768 |             1
- part_relopt_2   | {compresstype=rle_type,compresslevel=1} |           |              
+ part_relopt_3   | {compresstype=rle_type,compresslevel=1} |     32768 |             1
  part_relopt_2_1 | {compresstype=rle_type,compresslevel=1} |     32768 |             1
  part_relopt_2_2 | {compresstype=rle_type,compresslevel=1} |     32768 |             1
- part_relopt_3   | {compresstype=rle_type,compresslevel=1} |     32768 |             1
+ part_relopt_2   | {compresstype=rle_type,compresslevel=1} |           |              
+ part_relopt     | {compresstype=rle_type,compresslevel=1} |           |              
 (6 rows)
 
 SELECT c.relname, a.attname, e.attoptions FROM pg_attribute_encoding e, pg_class c, pg_attribute a
@@ -220,12 +241,12 @@ ALTER TABLE part_relopt SET (compresslevel=3);
 SELECT c.relname, c.reloptions, a.blocksize, a.compresslevel FROM pg_class c LEFT JOIN pg_appendonly a ON a.relid = c.oid WHERE c.relname LIKE 'part_relopt%';
      relname     |               reloptions                | blocksize | compresslevel 
 -----------------+-----------------------------------------+-----------+---------------
- part_relopt     | {compresstype=rle_type,compresslevel=3} |           |              
  part_relopt_1   | {compresstype=rle_type,compresslevel=3} |     32768 |             3
- part_relopt_2   | {compresstype=rle_type,compresslevel=3} |           |              
+ part_relopt_3   | {compresstype=rle_type,compresslevel=3} |     32768 |             3
  part_relopt_2_1 | {compresstype=rle_type,compresslevel=3} |     32768 |             3
  part_relopt_2_2 | {compresstype=rle_type,compresslevel=3} |     32768 |             3
- part_relopt_3   | {compresstype=rle_type,compresslevel=3} |     32768 |             3
+ part_relopt_2   | {compresstype=rle_type,compresslevel=3} |           |              
+ part_relopt     | {compresstype=rle_type,compresslevel=3} |           |              
 (6 rows)
 
 SELECT c.relname, a.attname, e.attoptions FROM pg_attribute_encoding e, pg_class c, pg_attribute a

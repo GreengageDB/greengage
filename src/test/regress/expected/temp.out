@@ -4,10 +4,16 @@
 --
 -- test temp table/index masking
 CREATE TABLE temptest(col int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_temptest ON temptest(col);
 CREATE TEMP TABLE temptest(tcol int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tcol' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_temptest ON temptest(tcol);
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tcol 
 ------
 (0 rows)
@@ -15,6 +21,8 @@ SELECT * FROM temptest;
 DROP INDEX i_temptest;
 DROP TABLE temptest;
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
 (0 rows)
@@ -23,10 +31,16 @@ DROP INDEX i_temptest;
 DROP TABLE temptest;
 -- test temp table selects
 CREATE TABLE temptest(col int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO temptest VALUES (1);
 CREATE TEMP TABLE temptest(tcol float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tcol' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO temptest VALUES (2.1);
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tcol 
 ------
   2.1
@@ -34,6 +48,8 @@ SELECT * FROM temptest;
 
 DROP TABLE temptest;
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
    1
@@ -42,6 +58,8 @@ SELECT * FROM temptest;
 DROP TABLE temptest;
 -- test temp table deletion
 CREATE TEMP TABLE temptest(col int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \c
 SELECT * FROM temptest;
 ERROR:  relation "temptest" does not exist
@@ -49,20 +67,26 @@ LINE 1: SELECT * FROM temptest;
                       ^
 -- Test ON COMMIT DELETE ROWS
 CREATE TEMP TABLE temptest(col int) ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- while we're here, verify successful truncation of index with SQL function
 CREATE INDEX ON temptest(bit_length(''));
 BEGIN;
 INSERT INTO temptest VALUES (1);
 INSERT INTO temptest VALUES (2);
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
-   1
    2
+   1
 (2 rows)
 
 COMMIT;
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
 (0 rows)
@@ -70,6 +94,7 @@ SELECT * FROM temptest;
 DROP TABLE temptest;
 BEGIN;
 CREATE TEMP TABLE temptest(col) ON COMMIT DELETE ROWS AS SELECT 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT * FROM temptest;
  col 
 -----
@@ -86,13 +111,17 @@ DROP TABLE temptest;
 -- Test ON COMMIT DROP
 BEGIN;
 CREATE TEMP TABLE temptest(col int) ON COMMIT DROP;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO temptest VALUES (1);
 INSERT INTO temptest VALUES (2);
 SELECT * FROM temptest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
-   1
    2
+   1
 (2 rows)
 
 COMMIT;
@@ -102,6 +131,7 @@ LINE 1: SELECT * FROM temptest;
                       ^
 BEGIN;
 CREATE TEMP TABLE temptest(col) ON COMMIT DROP AS SELECT 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT * FROM temptest;
  col 
 -----
@@ -115,25 +145,50 @@ LINE 1: SELECT * FROM temptest;
                       ^
 -- ON COMMIT is only allowed for TEMP
 CREATE TABLE temptest(col int) ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ON COMMIT can only be used on temporary tables
 CREATE TABLE temptest(col) ON COMMIT DELETE ROWS AS SELECT 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ERROR:  ON COMMIT can only be used on temporary tables
 -- Test foreign keys
 BEGIN;
 CREATE TEMP TABLE temptest1(col int PRIMARY KEY) DISTRIBUTED BY (col);
 CREATE TEMP TABLE temptest2(col int REFERENCES temptest1)
   ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO temptest1 VALUES (1);
 INSERT INTO temptest2 VALUES (1);
 COMMIT;
 SELECT * FROM temptest1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
    1
 (1 row)
 
 SELECT * FROM temptest2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temptest2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col 
 -----
 (0 rows)
@@ -141,12 +196,34 @@ SELECT * FROM temptest2;
 BEGIN;
 CREATE TEMP TABLE temptest3(col int PRIMARY KEY) ON COMMIT DELETE ROWS DISTRIBUTED BY (col);
 CREATE TEMP TABLE temptest4(col int REFERENCES temptest3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90389)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 COMMIT;
 -- Test manipulation of temp schema's placement in search path
 create table public.whereami (f1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into public.whereami values ('public');
 create temp table whereami (f1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into whereami values ('temp');
 create function public.whoami() returns text
   as $$select 'public'::text$$ language sql;
@@ -154,6 +231,8 @@ create function pg_temp.whoami() returns text
   as $$select 'temp'::text$$ language sql;
 -- default should have pg_temp implicitly first, but only for tables
 select * from whereami;
+NOTICE:  One or more columns in the following table(s) do not have statistics: whereami
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   f1  
 ------
  temp
@@ -168,6 +247,8 @@ select whoami();
 -- can list temp first explicitly, but it still doesn't affect functions
 set search_path = pg_temp, public;
 select * from whereami;
+NOTICE:  One or more columns in the following table(s) do not have statistics: whereami
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   f1  
 ------
  temp
@@ -182,6 +263,8 @@ select whoami();
 -- or put it last for security
 set search_path = public, pg_temp;
 select * from whereami;
+NOTICE:  One or more columns in the following table(s) do not have statistics: whereami
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    f1   
 --------
  public
@@ -221,13 +304,18 @@ reset search_path;
 begin;
 create temp table temp_parted_oncommit (a int)
   partition by list (a) on commit delete rows;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table temp_parted_oncommit_1
   partition of temp_parted_oncommit
   for values in (1) on commit delete rows;
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into temp_parted_oncommit values (1);
 commit;
 -- partitions are emptied by the previous commit
 select * from temp_parted_oncommit;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temp_parted_oncommit
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -239,12 +327,16 @@ drop table temp_parted_oncommit;
 begin;
 create temp table temp_parted_oncommit_test (a int)
   partition by list (a) on commit drop;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table temp_parted_oncommit_test1
   partition of temp_parted_oncommit_test
   for values in (1) on commit delete rows;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table temp_parted_oncommit_test2
   partition of temp_parted_oncommit_test
   for values in (2) on commit drop;
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into temp_parted_oncommit_test values (1), (2);
 commit;
 -- no relations remain in this case.
@@ -258,17 +350,23 @@ select relname from pg_class where relname ~ '^temp_parted_oncommit_test';
 begin;
 create temp table temp_parted_oncommit_test (a int)
   partition by list (a) on commit delete rows;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table temp_parted_oncommit_test1
   partition of temp_parted_oncommit_test
   for values in (1) on commit preserve rows;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table temp_parted_oncommit_test2
   partition of temp_parted_oncommit_test
   for values in (2) on commit drop;
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into temp_parted_oncommit_test values (1), (2);
 commit;
 -- Data from the remaining partition is still here as its rows are
 -- preserved.
 select * from temp_parted_oncommit_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temp_parted_oncommit_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  1
@@ -288,8 +386,11 @@ drop table temp_parted_oncommit_test;
 -- Using ON COMMIT DROP on a parent removes the whole set.
 begin;
 create temp table temp_inh_oncommit_test (a int) on commit drop;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table temp_inh_oncommit_test1 ()
   inherits(temp_inh_oncommit_test) on commit delete rows;
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into temp_inh_oncommit_test1 values (1);
 commit;
 -- no relations remain in this case
@@ -301,12 +402,17 @@ select relname from pg_class where relname ~ '^temp_inh_oncommit_test';
 -- Data on the parent is removed, and the child goes away.
 begin;
 create temp table temp_inh_oncommit_test (a int) on commit delete rows;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table temp_inh_oncommit_test1 ()
   inherits(temp_inh_oncommit_test) on commit drop;
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into temp_inh_oncommit_test1 values (1);
 insert into temp_inh_oncommit_test values (1);
 commit;
 select * from temp_inh_oncommit_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temp_inh_oncommit_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -362,8 +468,12 @@ ERROR:  PREPARE TRANSACTION is not yet supported in Greenplum Database
 rollback; -- PREPARE TRANSACTION is not supported in GPDB
 -- Temporary tables cannot be used with two-phase commit.
 create temp table twophase_tab (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 begin;
 select a from twophase_tab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: twophase_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)

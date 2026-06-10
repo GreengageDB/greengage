@@ -23,6 +23,8 @@ INSERT INTO combocidtest SELECT 1 LIMIT 0;
 INSERT INTO combocidtest VALUES (1);
 INSERT INTO combocidtest VALUES (2);
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |   10 |      1 |        
@@ -31,8 +33,12 @@ SELECT ctid,cmin,* FROM combocidtest;
 
 SAVEPOINT s1;
 UPDATE combocidtest SET foobar = foobar + 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- here we should see only updated tuples
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,3) |   12 |     11 |        
@@ -42,6 +48,8 @@ SELECT ctid,cmin,* FROM combocidtest;
 ROLLBACK TO s1;
 -- now we should see old tuples, but with combo CIDs starting at 0
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    0 |      1 |        
@@ -51,13 +59,15 @@ SELECT ctid,cmin,* FROM combocidtest;
 COMMIT;
 -- combo data is not there anymore, but should still see tuples
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    0 |      1 |        
  (0,2) |    1 |      2 |        
 (2 rows)
 
--- Test combo cids with portals
+-- Test combo CIDs with portals
 BEGIN;
 INSERT INTO combocidtest VALUES (333);
 -- In GPDB, the cursor starts executing in the segments as soon as the
@@ -68,6 +78,8 @@ INSERT INTO combocidtest VALUES (333);
 -- non-deterministic, don't display the cmin value.
 DECLARE c CURSOR FOR SELECT ctid,* FROM combocidtest;
 DELETE FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 FETCH ALL FROM c;
  ctid  | foobar | distkey 
 -------+--------+---------
@@ -78,6 +90,8 @@ FETCH ALL FROM c;
 
 ROLLBACK;
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    1 |      1 |        
@@ -99,6 +113,8 @@ INSERT INTO combocidtest SELECT 1 LIMIT 0;
 INSERT INTO combocidtest SELECT 1 LIMIT 0;
 INSERT INTO combocidtest VALUES (444);
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    1 |      1 |        
@@ -108,11 +124,9 @@ SELECT ctid,cmin,* FROM combocidtest;
 
 SAVEPOINT s1;
 -- this doesn't affect cmin
--- start_ignore
--- GPDB: GPORCA ignores FOR UPDATE, so the FOR UPDATE doesn't consume the CID,
--- which affects the cmin assigned to the UPDATE below.
--- end_ignore
 SELECT ctid,cmin,* FROM combocidtest FOR UPDATE;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    1 |      1 |        
@@ -121,6 +135,8 @@ SELECT ctid,cmin,* FROM combocidtest FOR UPDATE;
 (3 rows)
 
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |    1 |      1 |        
@@ -130,7 +146,11 @@ SELECT ctid,cmin,* FROM combocidtest;
 
 -- but this does
 UPDATE combocidtest SET foobar = foobar + 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,7) |   11 |     11 |        
@@ -140,6 +160,8 @@ SELECT ctid,cmin,* FROM combocidtest;
 
 ROLLBACK TO s1;
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |   11 |      1 |        
@@ -149,6 +171,8 @@ SELECT ctid,cmin,* FROM combocidtest;
 
 COMMIT;
 SELECT ctid,cmin,* FROM combocidtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: combocidtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ctid  | cmin | foobar | distkey 
 -------+------+--------+---------
  (0,1) |   11 |      1 |        
@@ -165,17 +189,25 @@ CREATE TABLE IF NOT EXISTS testcase(
 INSERT INTO testcase VALUES (1, 0);
 BEGIN;
 SELECT * FROM testcase WHERE testcase.id = 1 FOR UPDATE;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testcase
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | balance 
 ----+---------
   1 |       0
 (1 row)
 
 UPDATE testcase SET balance = balance + 400 WHERE id=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testcase
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SAVEPOINT subxact;
 UPDATE testcase SET balance = balance - 100 WHERE id=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testcase
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ROLLBACK TO SAVEPOINT subxact;
 -- should return one tuple
 SELECT * FROM testcase WHERE id = 1 FOR UPDATE;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testcase
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | balance 
 ----+---------
   1 |     400

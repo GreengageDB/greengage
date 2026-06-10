@@ -72,7 +72,11 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist'
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 select i, i % 6, 'hello' || i, 'bar' from generate_series(1,2) i;
 insert into pt1 select * from pt;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into pt1 select dist, pt1, pt2, pt3, ptid-100 from pt;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table pt1 set with(REORGANIZE=false) DISTRIBUTED RANDOMLY;
 analyze pt;
 analyze pt1;
@@ -82,135 +86,146 @@ analyze t1;
 -- Simple positive cases
 --
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-   ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-               Index Cond: (ptid = t.tid)
+   ->  Hash Join (actual rows=8 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(13 rows)
 
 select * from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
     0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
-    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
     0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
     0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
+    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
+    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
+    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
+    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
+    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
     0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
     0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
     0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid + 1 = ptid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-   ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-               Index Cond: (ptid = (t.tid + 1))
+   ->  Hash Join (actual rows=8 loops=1)
+         Hash Cond: (pt.ptid = (t.tid + 1))
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(13 rows)
 
 select * from t, pt where tid + 1 = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
     0 |   0 | hello0 | bar |    1 | hello1  | world | drop this |    1
-    0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
-    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
-    0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
-    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
     0 |   0 | hello0 | bar |   31 | hello31 | world | drop this |    1
-    0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
-    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
     0 |   0 | hello0 | bar |   49 | hello49 | world | drop this |    1
-    1 |   1 | hello1 | bar |    2 | hello2  | world | drop this |    2
-    1 |   1 | hello1 | bar |    8 | hello8  | world | drop this |    2
-    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
     1 |   1 | hello1 | bar |   20 | hello20 | world | drop this |    2
     1 |   1 | hello1 | bar |   26 | hello26 | world | drop this |    2
-    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
     1 |   1 | hello1 | bar |   38 | hello38 | world | drop this |    2
     1 |   1 | hello1 | bar |   44 | hello44 | world | drop this |    2
     1 |   1 | hello1 | bar |   50 | hello50 | world | drop this |    2
+    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
+    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
+    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
+    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
+    0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
+    0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
+    0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
+    1 |   1 | hello1 | bar |    2 | hello2  | world | drop this |    2
+    1 |   1 | hello1 | bar |    8 | hello8  | world | drop this |    2
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid and t1 = 'hello' || tid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-   ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-                     Filter: (t1 = ('hello'::text || (tid)::text))
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-               Index Cond: (ptid = t.tid)
+   ->  Hash Join (actual rows=8 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
+                                 Filter: (t1 = ('hello'::text || (tid)::text))
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(14 rows)
 
 select * from t, pt where tid = ptid and t1 = 'hello' || tid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
     0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
     0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
-    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
-    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
     0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
     0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
     0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
+    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
+    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
+    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
+    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
+    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where t1 = pt1 and ptid = tid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   ->  Nested Loop (actual rows=2 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on pt1_idx on pt (actual rows=1 loops=2)
-               Index Cond: (pt1 = t.t1)
-               Filter: ((pt1 = t.t1) AND (ptid = t.tid))
+   ->  Hash Join (actual rows=2 loops=1)
+         Hash Cond: ((pt.pt1 = t.t1) AND (pt.ptid = t.tid))
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(13 rows)
 
 select * from t, pt where t1 = pt1 and ptid = tid;
  dist | tid |   t1   | t2  | dist |  pt1   |  pt2  |    pt3    | ptid 
@@ -241,35 +256,35 @@ explain (costs off, timing off, summary off, analyze) select * from pt where pti
                                  ->  Sort (actual rows=2 loops=1)
                                        Sort Key: t.tid
                                        Sort Method:  quicksort  Memory: 75kB
-                                       Executor Memory: 178kB  Segments: 3  Max: 60kB (segment 0)
+                                       Executor Memory: 401kB  Segments: 3  Max: 134kB (segment 0)
                                        ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
                                              Hash Key: t.tid
                                              ->  Seq Scan on t (actual rows=2 loops=1)
                                                    Filter: (t1 = ('hello'::text || (tid)::text))
  Optimizer: Pivotal Optimizer (GPORCA)
-(20 rows)
+(22 rows)
 
 select * from pt where ptid in (select tid from t where t1 = 'hello' || tid);
  dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+---------+-------+-----------+------
-    1 | hello1  | world | drop this |    1
-    7 | hello7  | world | drop this |    1
-   13 | hello13 | world | drop this |    1
-   19 | hello19 | world | drop this |    1
-   25 | hello25 | world | drop this |    1
-   31 | hello31 | world | drop this |    1
-   37 | hello37 | world | drop this |    1
-   43 | hello43 | world | drop this |    1
-   49 | hello49 | world | drop this |    1
-    0 | hello0  | world | drop this |    0
     6 | hello6  | world | drop this |    0
-   12 | hello12 | world | drop this |    0
+   13 | hello13 | world | drop this |    1
+   25 | hello25 | world | drop this |    1
+   43 | hello43 | world | drop this |    1
    18 | hello18 | world | drop this |    0
    24 | hello24 | world | drop this |    0
+   42 | hello42 | world | drop this |    0
+    7 | hello7  | world | drop this |    1
+   19 | hello19 | world | drop this |    1
+   37 | hello37 | world | drop this |    1
+    0 | hello0  | world | drop this |    0
+   12 | hello12 | world | drop this |    0
    30 | hello30 | world | drop this |    0
    36 | hello36 | world | drop this |    0
-   42 | hello42 | world | drop this |    0
    48 | hello48 | world | drop this |    0
+    1 | hello1  | world | drop this |    1
+   31 | hello31 | world | drop this |    1
+   49 | hello49 | world | drop this |    1
 (18 rows)
 
 -- start_ignore
@@ -301,50 +316,53 @@ explain (costs off, timing off, summary off, analyze) select * from pt where exi
                                              ->  Seq Scan on t (actual rows=2 loops=1)
                                                    Filter: (t1 = ('hello'::text || (tid)::text))
  Optimizer: Pivotal Optimizer (GPORCA)
-(21 rows)
+(23 rows)
 
 select * from pt where exists (select 1 from t where tid = ptid and t1 = 'hello' || tid);
  dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+---------+-------+-----------+------
-   49 | hello49 | world | drop this |    1
-   43 | hello43 | world | drop this |    1
-   37 | hello37 | world | drop this |    1
-   31 | hello31 | world | drop this |    1
-   25 | hello25 | world | drop this |    1
-   19 | hello19 | world | drop this |    1
-   13 | hello13 | world | drop this |    1
-    7 | hello7  | world | drop this |    1
-    1 | hello1  | world | drop this |    1
-   48 | hello48 | world | drop this |    0
-   42 | hello42 | world | drop this |    0
-   36 | hello36 | world | drop this |    0
-   30 | hello30 | world | drop this |    0
-   24 | hello24 | world | drop this |    0
    18 | hello18 | world | drop this |    0
-   12 | hello12 | world | drop this |    0
-    6 | hello6  | world | drop this |    0
+   24 | hello24 | world | drop this |    0
+   42 | hello42 | world | drop this |    0
+    7 | hello7  | world | drop this |    1
+   19 | hello19 | world | drop this |    1
+   37 | hello37 | world | drop this |    1
     0 | hello0  | world | drop this |    0
+   12 | hello12 | world | drop this |    0
+   30 | hello30 | world | drop this |    0
+   36 | hello36 | world | drop this |    0
+   48 | hello48 | world | drop this |    0
+    1 | hello1  | world | drop this |    1
+   31 | hello31 | world | drop this |    1
+   49 | hello49 | world | drop this |    1
+    6 | hello6  | world | drop this |    0
+   13 | hello13 | world | drop this |    1
+   25 | hello25 | world | drop this |    1
+   43 | hello43 | world | drop this |    1
 (18 rows)
 
 --
 -- group-by on top
 --
 explain (costs off, timing off, summary off, analyze) select count(*) from t, pt where tid = ptid;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
          ->  Partial Aggregate (actual rows=1 loops=1)
-               ->  Nested Loop (actual rows=8 loops=1)
-                     Join Filter: true
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                           ->  Seq Scan on t (actual rows=2 loops=1)
-                     ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-                           Index Cond: (ptid = t.tid)
+               ->  Hash Join (actual rows=8 loops=1)
+                     Hash Cond: (pt.ptid = t.tid)
+                     Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 524288 buckets.
+                     ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                            Number of partitions to scan: 6 (out of 6)
-                           Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+                           Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+                     ->  Hash (actual rows=2 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+                           ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                                       ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+(15 rows)
 
 select count(*) from t, pt where tid = ptid;
  count 
@@ -356,8 +374,8 @@ select count(*) from t, pt where tid = ptid;
 -- window function on top
 --
 explain (costs off, timing off, summary off, analyze) select *, rank() over (order by ptid,pt1) from t, pt where tid = ptid;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  WindowAgg (actual rows=18 loops=1)
    Order By: pt.ptid, pt.pt1
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
@@ -365,17 +383,20 @@ explain (costs off, timing off, summary off, analyze) select *, rank() over (ord
          ->  Sort (actual rows=8 loops=1)
                Sort Key: pt.ptid, pt.pt1
                Sort Method:  quicksort  Memory: 76kB
-               Executor Memory: 85kB  Segments: 3  Max: 29kB (segment 1)
-               ->  Nested Loop (actual rows=8 loops=1)
-                     Join Filter: true
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                           ->  Seq Scan on t (actual rows=2 loops=1)
-                     ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-                           Index Cond: (ptid = t.tid)
+               Executor Memory: 78kB  Segments: 3  Max: 27kB (segment 1)
+               ->  Hash Join (actual rows=8 loops=1)
+                     Hash Cond: (pt.ptid = t.tid)
+                     Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 131072 buckets.
+                     ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                            Number of partitions to scan: 6 (out of 6)
-                           Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+                           Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+                     ->  Hash (actual rows=2 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+                           ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                                       ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(16 rows)
+(20 rows)
 
 select *, rank() over (order by ptid,pt1) from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid | rank 
@@ -406,70 +427,76 @@ select *, rank() over (order by ptid,pt1) from t, pt where tid = ptid;
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid
 	  union all
 	  select * from t, pt where tid + 2 = ptid;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=36 loops=1)
    ->  Append (actual rows=14 loops=1)
-         ->  Nested Loop (actual rows=8 loops=1)
-               Join Filter: true
-               ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                     ->  Seq Scan on t (actual rows=2 loops=1)
-               ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-                     Index Cond: (ptid = t.tid)
+         ->  Hash Join (actual rows=8 loops=1)
+               Hash Cond: (pt.ptid = t.tid)
+               Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 131072 buckets.
+               ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
-         ->  Nested Loop (actual rows=7 loops=1)
-               Join Filter: true
-               ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
-                     ->  Seq Scan on t t_1 (actual rows=2 loops=1)
-               ->  Dynamic Index Scan on ptid_idx on pt pt_1 (actual rows=4 loops=2)
-                     Index Cond: (ptid = (t_1.tid + 2))
+                     Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+               ->  Hash (actual rows=2 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+                     ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                                 ->  Seq Scan on t (actual rows=2 loops=1)
+         ->  Hash Join (actual rows=7 loops=1)
+               Hash Cond: (pt_1.ptid = (t_1.tid + 2))
+               Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 2 of 131072 buckets.
+               ->  Dynamic Seq Scan on pt pt_1 (actual rows=7 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+                     Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+               ->  Hash (actual rows=2 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+                     ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
+                                 ->  Seq Scan on t t_1 (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(25 rows)
 
 select * from t, pt where tid = ptid
 	  union all
 	  select * from t, pt where tid + 2 = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    1 |   1 | hello1 | bar |    3 | hello3  | world | drop this |    3
-    1 |   1 | hello1 | bar |    9 | hello9  | world | drop this |    3
-    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
-    1 |   1 | hello1 | bar |   21 | hello21 | world | drop this |    3
-    1 |   1 | hello1 | bar |   27 | hello27 | world | drop this |    3
-    1 |   1 | hello1 | bar |   33 | hello33 | world | drop this |    3
-    1 |   1 | hello1 | bar |   39 | hello39 | world | drop this |    3
-    1 |   1 | hello1 | bar |   45 | hello45 | world | drop this |    3
-    1 |   1 | hello1 | bar |   51 | hello51 | world | drop this |    3
     0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
-    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
     0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
-    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
-    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
     0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
     0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
     0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
-    0 |   0 | hello0 | bar |    2 | hello2  | world | drop this |    2
-    0 |   0 | hello0 | bar |    8 | hello8  | world | drop this |    2
-    0 |   0 | hello0 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
     0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
     0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
-    0 |   0 | hello0 | bar |   32 | hello32 | world | drop this |    2
     0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
     0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
     0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
+    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
+    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |   14 | hello14 | world | drop this |    2
+    0 |   0 | hello0 | bar |   32 | hello32 | world | drop this |    2
+    1 |   1 | hello1 | bar |    9 | hello9  | world | drop this |    3
+    1 |   1 | hello1 | bar |   21 | hello21 | world | drop this |    3
+    1 |   1 | hello1 | bar |   33 | hello33 | world | drop this |    3
+    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
+    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
+    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
+    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
+    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
+    0 |   0 | hello0 | bar |    2 | hello2  | world | drop this |    2
+    0 |   0 | hello0 | bar |    8 | hello8  | world | drop this |    2
+    1 |   1 | hello1 | bar |    3 | hello3  | world | drop this |    3
+    1 |   1 | hello1 | bar |   27 | hello27 | world | drop this |    3
+    1 |   1 | hello1 | bar |   39 | hello39 | world | drop this |    3
+    1 |   1 | hello1 | bar |   45 | hello45 | world | drop this |    3
+    1 |   1 | hello1 | bar |   51 | hello51 | world | drop this |    3
 (36 rows)
 
 --
@@ -480,30 +507,36 @@ explain (costs off, timing off, summary off, analyze) select count(*) from
 	  union all
 	  select * from t, pt where tid + 2 = ptid
 	  ) foo;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
          ->  Partial Aggregate (actual rows=1 loops=1)
                ->  Append (actual rows=14 loops=1)
-                     ->  Nested Loop (actual rows=8 loops=1)
-                           Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                                 ->  Seq Scan on t (actual rows=2 loops=1)
-                           ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-                                 Index Cond: (ptid = t.tid)
+                     ->  Hash Join (actual rows=8 loops=1)
+                           Hash Cond: (pt.ptid = t.tid)
+                           Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+                           ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                                  Number of partitions to scan: 6 (out of 6)
-                                 Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
-                     ->  Nested Loop (actual rows=7 loops=1)
-                           Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
-                                 ->  Seq Scan on t t_1 (actual rows=2 loops=1)
-                           ->  Dynamic Index Scan on ptid_idx on pt pt_1 (actual rows=4 loops=2)
-                                 Index Cond: (ptid = (t_1.tid + 2))
+                                 Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+                           ->  Hash (actual rows=2 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                                 ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                                       ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                                             ->  Seq Scan on t (actual rows=2 loops=1)
+                     ->  Hash Join (actual rows=7 loops=1)
+                           Hash Cond: (pt_1.ptid = (t_1.tid + 2))
+                           Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+                           ->  Dynamic Seq Scan on pt pt_1 (actual rows=7 loops=1)
                                  Number of partitions to scan: 6 (out of 6)
-                                 Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+                                 Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+                           ->  Hash (actual rows=2 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                                 ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
+                                             ->  Seq Scan on t t_1 (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(21 rows)
+(27 rows)
 
 select count(*) from
 	( select * from t, pt where tid = ptid
@@ -522,41 +555,44 @@ set enable_hashjoin=off;
 set enable_nestloop=on;
 set enable_mergejoin=off;
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-   ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-               Index Cond: (ptid = t.tid)
+   ->  Hash Join (actual rows=8 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(13 rows)
 
 select * from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
-    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
-    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
     0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
     0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
+    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
+    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
+    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
+    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
+    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
     0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
     0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
     0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
+    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
 (18 rows)
 
 --
@@ -571,22 +607,23 @@ set enable_hashjoin=off;
 -- Known_opt_diff: MPP-21322
 -- end_ignore
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid and pt1 = 'hello0';
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Hash Join (actual rows=1 loops=1)
-   Hash Cond: (t.tid = pt.ptid)
-   Extra Text: Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-         ->  Seq Scan on t (actual rows=2 loops=1)
-   ->  Hash (actual rows=1 loops=1)
-         Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-         ->  Gather Motion 3:1  (slice2; segments: 3) (actual rows=1 loops=1)
-               ->  Dynamic Index Scan on pt1_idx on pt (actual rows=1 loops=1)
-                     Index Cond: (pt1 = 'hello0'::text)
-                     Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
+   ->  Hash Join (actual rows=1 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=1 loops=1)
+               Number of partitions to scan: 6 (out of 6)
+               Filter: (pt1 = 'hello0'::text)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+(14 rows)
 
 select * from t, pt where tid = ptid and pt1 = 'hello0';
  dist | tid |   t1   | t2  | dist |  pt1   |  pt2  |    pt3    | ptid 
@@ -602,41 +639,44 @@ set enable_indexscan=on;
 set enable_seqscan=off;
 set enable_hashjoin=off;
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-   ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-               Index Cond: (ptid = t.tid)
+   ->  Hash Join (actual rows=8 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(13 rows)
 
 select * from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
     0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
     0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
-    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
-    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
     0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
     0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
     0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
+    0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
+    0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
+    0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
+    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
+    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
 (18 rows)
 
 --
@@ -647,25 +687,27 @@ set enable_seqscan=on;
 set enable_hashjoin=on;
 set enable_nestloop=off;
 explain (costs off, timing off, summary off, analyze) select * from t, pt where t1 = pt1;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   ->  Nested Loop (actual rows=2 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on pt1_idx on pt (actual rows=1 loops=2)
-               Index Cond: (pt1 = t.t1)
+   ->  Hash Join (actual rows=2 loops=1)
+         Hash Cond: (pt.pt1 = t.t1)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 262144 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=20 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+               ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                     ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(12 rows)
 
 select * from t, pt where t1 = pt1;
  dist | tid |   t1   | t2  | dist |  pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+--------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 | hello1 | world | drop this |    1
     0 |   0 | hello0 | bar |    0 | hello0 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1 | world | drop this |    1
 (2 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid < ptid;
@@ -673,100 +715,100 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 -----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=81 loops=1)
    ->  Nested Loop (actual rows=31 loops=1)
-         Join Filter: true
+         Join Filter: (t.tid < pt.ptid)
+         Rows Removed by Join Filter: 9
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Index Scan on ptid_idx on pt (actual rows=16 loops=2)
-               Index Cond: (ptid > t.tid)
+         ->  Dynamic Seq Scan on pt (actual rows=14 loops=3)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 4.3 x 3 workers of 3 scans.  Max 4 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
 
 select * from t, pt where tid < ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    2 | hello2  | world | drop this |    2
-    0 |   0 | hello0 | bar |    2 | hello2  | world | drop this |    2
-    1 |   1 | hello1 | bar |    8 | hello8  | world | drop this |    2
-    0 |   0 | hello0 | bar |    8 | hello8  | world | drop this |    2
-    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
-    0 |   0 | hello0 | bar |   14 | hello14 | world | drop this |    2
-    1 |   1 | hello1 | bar |   20 | hello20 | world | drop this |    2
-    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
-    1 |   1 | hello1 | bar |   26 | hello26 | world | drop this |    2
-    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
-    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
-    0 |   0 | hello0 | bar |   32 | hello32 | world | drop this |    2
-    1 |   1 | hello1 | bar |   38 | hello38 | world | drop this |    2
-    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
-    1 |   1 | hello1 | bar |   44 | hello44 | world | drop this |    2
-    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
-    1 |   1 | hello1 | bar |   50 | hello50 | world | drop this |    2
-    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
-    1 |   1 | hello1 | bar |    4 | hello4  | world | drop this |    4
-    0 |   0 | hello0 | bar |    4 | hello4  | world | drop this |    4
-    1 |   1 | hello1 | bar |   10 | hello10 | world | drop this |    4
-    0 |   0 | hello0 | bar |   10 | hello10 | world | drop this |    4
-    1 |   1 | hello1 | bar |   16 | hello16 | world | drop this |    4
-    0 |   0 | hello0 | bar |   16 | hello16 | world | drop this |    4
-    1 |   1 | hello1 | bar |   22 | hello22 | world | drop this |    4
-    0 |   0 | hello0 | bar |   22 | hello22 | world | drop this |    4
-    1 |   1 | hello1 | bar |   28 | hello28 | world | drop this |    4
-    0 |   0 | hello0 | bar |   28 | hello28 | world | drop this |    4
-    1 |   1 | hello1 | bar |   34 | hello34 | world | drop this |    4
-    0 |   0 | hello0 | bar |   34 | hello34 | world | drop this |    4
-    1 |   1 | hello1 | bar |   40 | hello40 | world | drop this |    4
-    0 |   0 | hello0 | bar |   40 | hello40 | world | drop this |    4
-    1 |   1 | hello1 | bar |   46 | hello46 | world | drop this |    4
-    0 |   0 | hello0 | bar |   46 | hello46 | world | drop this |    4
-    1 |   1 | hello1 | bar |   52 | hello52 | world | drop this |    4
-    0 |   0 | hello0 | bar |   52 | hello52 | world | drop this |    4
-    1 |   1 | hello1 | bar |    5 | hello5  | world | drop this |    5
-    0 |   0 | hello0 | bar |    5 | hello5  | world | drop this |    5
-    1 |   1 | hello1 | bar |   11 | hello11 | world | drop this |    5
-    0 |   0 | hello0 | bar |   11 | hello11 | world | drop this |    5
-    1 |   1 | hello1 | bar |   17 | hello17 | world | drop this |    5
-    0 |   0 | hello0 | bar |   17 | hello17 | world | drop this |    5
-    1 |   1 | hello1 | bar |   23 | hello23 | world | drop this |    5
-    0 |   0 | hello0 | bar |   23 | hello23 | world | drop this |    5
-    1 |   1 | hello1 | bar |   29 | hello29 | world | drop this |    5
-    0 |   0 | hello0 | bar |   29 | hello29 | world | drop this |    5
-    1 |   1 | hello1 | bar |   35 | hello35 | world | drop this |    5
-    0 |   0 | hello0 | bar |   35 | hello35 | world | drop this |    5
-    1 |   1 | hello1 | bar |   41 | hello41 | world | drop this |    5
-    0 |   0 | hello0 | bar |   41 | hello41 | world | drop this |    5
-    1 |   1 | hello1 | bar |   47 | hello47 | world | drop this |    5
-    0 |   0 | hello0 | bar |   47 | hello47 | world | drop this |    5
-    1 |   1 | hello1 | bar |   53 | hello53 | world | drop this |    5
-    0 |   0 | hello0 | bar |   53 | hello53 | world | drop this |    5
     0 |   0 | hello0 | bar |    1 | hello1  | world | drop this |    1
-    0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
-    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
-    0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
-    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
     0 |   0 | hello0 | bar |   31 | hello31 | world | drop this |    1
-    0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
-    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
     0 |   0 | hello0 | bar |   49 | hello49 | world | drop this |    1
-    1 |   1 | hello1 | bar |    3 | hello3  | world | drop this |    3
-    0 |   0 | hello0 | bar |    3 | hello3  | world | drop this |    3
-    1 |   1 | hello1 | bar |    9 | hello9  | world | drop this |    3
-    0 |   0 | hello0 | bar |    9 | hello9  | world | drop this |    3
-    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
+    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
+    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
+    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
+    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
+    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
     0 |   0 | hello0 | bar |   15 | hello15 | world | drop this |    3
-    1 |   1 | hello1 | bar |   21 | hello21 | world | drop this |    3
+    0 |   0 | hello0 | bar |   40 | hello40 | world | drop this |    4
+    0 |   0 | hello0 | bar |   46 | hello46 | world | drop this |    4
+    0 |   0 | hello0 | bar |   23 | hello23 | world | drop this |    5
+    0 |   0 | hello0 | bar |   35 | hello35 | world | drop this |    5
+    0 |   0 | hello0 | bar |   47 | hello47 | world | drop this |    5
+    1 |   1 | hello1 | bar |   20 | hello20 | world | drop this |    2
+    1 |   1 | hello1 | bar |   26 | hello26 | world | drop this |    2
+    1 |   1 | hello1 | bar |   38 | hello38 | world | drop this |    2
+    1 |   1 | hello1 | bar |   44 | hello44 | world | drop this |    2
+    1 |   1 | hello1 | bar |   50 | hello50 | world | drop this |    2
+    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
+    1 |   1 | hello1 | bar |   40 | hello40 | world | drop this |    4
+    1 |   1 | hello1 | bar |   46 | hello46 | world | drop this |    4
+    1 |   1 | hello1 | bar |   23 | hello23 | world | drop this |    5
+    1 |   1 | hello1 | bar |   35 | hello35 | world | drop this |    5
+    1 |   1 | hello1 | bar |   47 | hello47 | world | drop this |    5
+    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
+    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
+    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |   14 | hello14 | world | drop this |    2
+    0 |   0 | hello0 | bar |   32 | hello32 | world | drop this |    2
+    0 |   0 | hello0 | bar |    9 | hello9  | world | drop this |    3
     0 |   0 | hello0 | bar |   21 | hello21 | world | drop this |    3
-    1 |   1 | hello1 | bar |   27 | hello27 | world | drop this |    3
-    0 |   0 | hello0 | bar |   27 | hello27 | world | drop this |    3
-    1 |   1 | hello1 | bar |   33 | hello33 | world | drop this |    3
     0 |   0 | hello0 | bar |   33 | hello33 | world | drop this |    3
-    1 |   1 | hello1 | bar |   39 | hello39 | world | drop this |    3
+    0 |   0 | hello0 | bar |   10 | hello10 | world | drop this |    4
+    0 |   0 | hello0 | bar |   28 | hello28 | world | drop this |    4
+    0 |   0 | hello0 | bar |   52 | hello52 | world | drop this |    4
+    0 |   0 | hello0 | bar |    5 | hello5  | world | drop this |    5
+    0 |   0 | hello0 | bar |   11 | hello11 | world | drop this |    5
+    0 |   0 | hello0 | bar |   17 | hello17 | world | drop this |    5
+    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
+    1 |   1 | hello1 | bar |    9 | hello9  | world | drop this |    3
+    1 |   1 | hello1 | bar |   21 | hello21 | world | drop this |    3
+    1 |   1 | hello1 | bar |   33 | hello33 | world | drop this |    3
+    1 |   1 | hello1 | bar |   10 | hello10 | world | drop this |    4
+    1 |   1 | hello1 | bar |   28 | hello28 | world | drop this |    4
+    1 |   1 | hello1 | bar |   52 | hello52 | world | drop this |    4
+    1 |   1 | hello1 | bar |    5 | hello5  | world | drop this |    5
+    1 |   1 | hello1 | bar |   11 | hello11 | world | drop this |    5
+    1 |   1 | hello1 | bar |   17 | hello17 | world | drop this |    5
+    0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
+    0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
+    0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
+    0 |   0 | hello0 | bar |    2 | hello2  | world | drop this |    2
+    0 |   0 | hello0 | bar |    8 | hello8  | world | drop this |    2
+    0 |   0 | hello0 | bar |    3 | hello3  | world | drop this |    3
+    0 |   0 | hello0 | bar |   27 | hello27 | world | drop this |    3
     0 |   0 | hello0 | bar |   39 | hello39 | world | drop this |    3
-    1 |   1 | hello1 | bar |   45 | hello45 | world | drop this |    3
     0 |   0 | hello0 | bar |   45 | hello45 | world | drop this |    3
-    1 |   1 | hello1 | bar |   51 | hello51 | world | drop this |    3
     0 |   0 | hello0 | bar |   51 | hello51 | world | drop this |    3
+    0 |   0 | hello0 | bar |    4 | hello4  | world | drop this |    4
+    0 |   0 | hello0 | bar |   16 | hello16 | world | drop this |    4
+    0 |   0 | hello0 | bar |   22 | hello22 | world | drop this |    4
+    0 |   0 | hello0 | bar |   34 | hello34 | world | drop this |    4
+    0 |   0 | hello0 | bar |   29 | hello29 | world | drop this |    5
+    0 |   0 | hello0 | bar |   41 | hello41 | world | drop this |    5
+    0 |   0 | hello0 | bar |   53 | hello53 | world | drop this |    5
+    1 |   1 | hello1 | bar |    2 | hello2  | world | drop this |    2
+    1 |   1 | hello1 | bar |    8 | hello8  | world | drop this |    2
+    1 |   1 | hello1 | bar |    3 | hello3  | world | drop this |    3
+    1 |   1 | hello1 | bar |   27 | hello27 | world | drop this |    3
+    1 |   1 | hello1 | bar |   39 | hello39 | world | drop this |    3
+    1 |   1 | hello1 | bar |   45 | hello45 | world | drop this |    3
+    1 |   1 | hello1 | bar |   51 | hello51 | world | drop this |    3
+    1 |   1 | hello1 | bar |    4 | hello4  | world | drop this |    4
+    1 |   1 | hello1 | bar |   16 | hello16 | world | drop this |    4
+    1 |   1 | hello1 | bar |   22 | hello22 | world | drop this |    4
+    1 |   1 | hello1 | bar |   34 | hello34 | world | drop this |    4
+    1 |   1 | hello1 | bar |   29 | hello29 | world | drop this |    5
+    1 |   1 | hello1 | bar |   41 | hello41 | world | drop this |    5
+    1 |   1 | hello1 | bar |   53 | hello53 | world | drop this |    5
 (81 rows)
 
 reset enable_indexscan;
@@ -778,30 +820,43 @@ reset enable_nestloop;
 --
 -- one of the joined tables can be used for partition elimination, the other can not
 explain (costs off, timing off, summary off, analyze) select * from t, t1, pt where t1.t2 = t.t2 and t1.tid = ptid;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
  Hash Join (actual rows=36 loops=1)
    Hash Cond: (t1.t2 = t.t2)
-   Extra Text: Hash chain length 2.0 avg, 2 max, using 1 of 262144 buckets.
+   Extra Text: Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
-         ->  Nested Loop (actual rows=8 loops=1)
-               Join Filter: true
-               ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                     ->  Seq Scan on t1 (actual rows=1 loops=1)
-               ->  Dynamic Index Scan on ptid_idx on pt (actual rows=4 loops=2)
-                     Index Cond: (ptid = t1.tid)
+         ->  Hash Join (actual rows=8 loops=1)
+               Hash Cond: (pt.ptid = t1.tid)
+               Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 2 of 131072 buckets.
+               ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
+                     Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+               ->  Hash (actual rows=2 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+                     ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                                 ->  Seq Scan on t1 (actual rows=1 loops=1)
    ->  Hash (actual rows=2 loops=1)
-         Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+         Buckets: 131072  Batches: 1  Memory Usage: 1025kB
          ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(16 rows)
+(20 rows)
 
 select * from t, t1, pt where t1.t2 = t.t2 and t1.tid = ptid;
  dist | tid |   t1   | t2  | dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+-----+--------+-----+------+---------+-------+-----------+------
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
+    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
+    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
     0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
@@ -828,16 +883,6 @@ select * from t, t1, pt where t1.t2 = t.t2 and t1.tid = ptid;
     0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   44 | hello44 | world | drop this |    2
     1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   50 | hello50 | world | drop this |    2
     0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   50 | hello50 | world | drop this |    2
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
-    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
-    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
-    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
 (36 rows)
 
 -- Both joined tables can be used for partition elimination. Only partitions
@@ -849,42 +894,44 @@ insert into t1 select i, -100, 'dummy' from generate_series(1,10) i;
 analyze t;
 analyze t1;
 explain (costs off, timing off, summary off, analyze) select * from t, t1, pt where t1.tid = ptid and t.tid = ptid;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=9 loops=1)
-   ->  Hash Join (actual rows=9 loops=1)
-         Hash Cond: (t.tid = pt.ptid)
-         Extra Text: (seg1)   Hash chain length 9.0 avg, 9 max, using 1 of 262144 buckets.
-         ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               Hash Key: t.tid
-               ->  Seq Scan on t (actual rows=5 loops=1)
-         ->  Hash (actual rows=9 loops=1)
-               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-               ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=9 loops=1)
-                     Hash Key: pt.ptid
-                     ->  Nested Loop (actual rows=8 loops=1)
-                           Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=12 loops=1)
-                                 ->  Seq Scan on t1 (actual rows=6 loops=1)
-                           ->  Dynamic Index Scan on ptid_idx on pt (actual rows=1 loops=12)
-                                 Index Cond: (ptid = t1.tid)
-                                 Number of partitions to scan: 6 (out of 6)
-                                 Partitions scanned:  Avg 6.0 x 3 workers of 12 scans.  Max 6 parts (seg0).
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Hash Join (actual rows=9 loops=1)
+   Hash Cond: (t1.tid = pt.ptid)
+   Extra Text: Hash chain length 9.0 avg, 9 max, using 6 of 131072 buckets.
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=101 loops=1)
+         ->  Hash Join (actual rows=100 loops=1)
+               Hash Cond: (t.tid = t1.tid)
+               Extra Text: (seg2)   Hash chain length 10.0 avg, 10 max, using 1 of 131072 buckets.
+               ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=10 loops=1)
+                     Hash Key: t.tid
+                     ->  Seq Scan on t (actual rows=5 loops=1)
+               ->  Hash (actual rows=10 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=10 loops=1)
+                           Hash Key: t1.tid
+                           ->  Seq Scan on t1 (actual rows=6 loops=1)
+   ->  Hash (actual rows=54 loops=1)
+         Buckets: 131072  Batches: 1  Memory Usage: 1028kB
+         ->  Gather Motion 3:1  (slice4; segments: 3) (actual rows=54 loops=1)
+               ->  Dynamic Seq Scan on pt (actual rows=20 loops=1)
+                     Number of partitions to scan: 6 (out of 6)
+                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(22 rows)
 
 select * from t, t1, pt where t1.tid = ptid and t.tid = ptid;
  dist | tid |   t1   | t2  | dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+-----+--------+-----+------+---------+-------+-----------+------
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   37 | hello37 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
 (9 rows)
 
 rollback;
@@ -896,26 +943,30 @@ begin;
 set local from_collapse_limit = 1;
 set local join_collapse_limit = 1;
 explain (costs off, timing off, summary off, analyze) select * from t1 inner join (select pt1.*, pt2.ptid as ptid2 from pt as pt1, pt as pt2 WHERE pt1.ptid <= pt2.ptid and pt1.dist = pt2.dist ) as ptx ON t1.dist = ptx.dist and t1.tid = ptx.ptid and t1.tid = ptx.ptid2;
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   ->  Nested Loop (actual rows=1 loops=1)
-         Join Filter: true
-         ->  Nested Loop (actual rows=1 loops=1)
-               Join Filter: true
-               ->  Seq Scan on t1 (actual rows=1 loops=1)
-               ->  Dynamic Index Scan on ptid_idx on pt (actual rows=1 loops=1)
-                     Index Cond: (ptid = t1.tid)
-                     Filter: ((ptid = t1.tid) AND (t1.dist = dist))
-                     Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 2 workers.  Max 6 parts (seg0).
-         ->  Dynamic Index Scan on ptid_idx on pt pt_1 (actual rows=1 loops=1)
-               Index Cond: ((ptid <= pt.ptid) AND (ptid = pt.ptid))
-               Filter: ((ptid <= pt.ptid) AND (ptid = pt.ptid) AND (dist = pt.dist))
+   ->  Hash Join (actual rows=1 loops=1)
+         Hash Cond: ((pt.dist = pt_1.dist) AND (pt.ptid = pt_1.ptid))
+         Join Filter: (pt.ptid <= pt_1.ptid)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 131072 buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=3 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Partitions scanned:  Avg 6.0 x 2 workers.  Max 6 parts (seg0).
+               Partitions scanned:  Avg 1.0 x 2 workers.  Max 1 parts (seg0).
+         ->  Hash (actual rows=1 loops=1)
+               Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+               ->  Partition Selector (selector id: $0) (actual rows=1 loops=1)
+                     ->  Hash Join (actual rows=1 loops=1)
+                           Hash Cond: ((t1.tid = pt_1.ptid) AND (t1.dist = pt_1.dist))
+                           Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 20 of 262144 buckets.
+                           ->  Seq Scan on t1 (actual rows=1 loops=1)
+                           ->  Hash (actual rows=20 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                                 ->  Dynamic Seq Scan on pt pt_1 (actual rows=20 loops=1)
+                                       Number of partitions to scan: 6 (out of 6)
+                                       Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+(21 rows)
 
 rollback;
 --
@@ -941,12 +992,12 @@ explain (costs off, timing off, summary off, analyze) select * from pt, pt1 wher
                      Buckets: 131072  Batches: 1  Memory Usage: 1025kB
                      ->  Partition Selector (selector id: $0) (actual rows=1 loops=1)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                 ->  Dynamic Index Scan on pt1_idx on pt (actual rows=1 loops=1)
-                                       Index Cond: (pt1 = 'hello0'::text)
+                                 ->  Dynamic Seq Scan on pt (actual rows=1 loops=1)
                                        Number of partitions to scan: 6 (out of 6)
+                                       Filter: (pt1 = 'hello0'::text)
                                        Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(21 rows)
 
 select * from pt, pt1 where pt.ptid = pt1.ptid and pt.pt1 = 'hello0' order by pt1.dist;
  dist |  pt1   |  pt2  |    pt3    | ptid | dist |   pt1   |  pt2  |    pt3    | ptid 
@@ -978,12 +1029,12 @@ explain (costs off, timing off, summary off, analyze) select count(*) from pt, p
                            Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                            ->  Partition Selector (selector id: $0) (actual rows=1 loops=1)
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                       ->  Dynamic Index Scan on pt1_idx on pt (actual rows=1 loops=1)
-                                             Index Cond: (pt1 = 'hello0'::text)
+                                       ->  Dynamic Seq Scan on pt (actual rows=1 loops=1)
                                              Number of partitions to scan: 6 (out of 6)
+                                             Filter: (pt1 = 'hello0'::text)
                                              Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+(18 rows)
 
 select count(*) from pt, pt1 where pt.ptid = pt1.ptid and pt.pt1 = 'hello0';
  count 
@@ -1009,8 +1060,8 @@ set enable_hashjoin=off;
 set enable_seqscan=on;
 set enable_nestloop=on;
 explain (costs off, timing off, summary off, analyze) select * from t, pt where a = b;
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=5 loops=1)
    ->  Hash Join (actual rows=3 loops=1)
          Hash Cond: (t.a = pt.b)
@@ -1026,7 +1077,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
                            Number of partitions to scan: 5 (out of 5)
                            Partitions scanned:  Avg 5.0 x 3 workers.  Max 5 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(14 rows)
+(15 rows)
 
 select * from t, pt where a = b;
  id | a | id | b 
@@ -1129,7 +1180,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 79kB  Segments: 3  Max: 29kB (segment 1)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: ((fact1.pid = dim1.pid) AND (fact1.code = dim1.code))
@@ -1152,7 +1203,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                      ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                            ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(25 rows)
+(27 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid and dim1.code=fact1.code) order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -1217,7 +1268,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 79kB  Segments: 3  Max: 29kB (segment 1)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: ((fact1.pid = dim1.pid) AND (fact1.code = dim1.code))
@@ -1242,7 +1293,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                            ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                                  ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(27 rows)
+(29 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid and dim1.code=fact1.code) order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -1310,7 +1361,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=100 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 83kB
+         Sort Method:  quicksort  Memory: 82kB
          Executor Memory: 82kB  Segments: 3  Max: 32kB (segment 1)
          ->  Hash Join (actual rows=100 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -1333,7 +1384,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                      ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                            ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(25 rows)
+(27 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid) order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |   u   
@@ -1448,7 +1499,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=100 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 83kB
+         Sort Method:  quicksort  Memory: 82kB
          Executor Memory: 82kB  Segments: 3  Max: 32kB (segment 1)
          ->  Hash Join (actual rows=100 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -1473,7 +1524,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                            ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                                  ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(27 rows)
+(29 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid) order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |   u   
@@ -1609,7 +1660,7 @@ select * from dim1 inner join fact1 on (dim1.dist = fact1.dist and dim1.code=fac
                Buckets: 262144  Batches: 1  Memory Usage: 2049kB
                ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(20 rows)
+(21 rows)
 
 select * from dim1 inner join fact1 on (dim1.dist = fact1.dist and dim1.code=fact1.code);
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -1844,7 +1895,7 @@ select * from dim1 inner join fact1 on (dim1.dist = fact1.dist and dim1.code=fac
                ->  Partition Selector (selector id: $0) (actual rows=3 loops=1)
                      ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(22 rows)
+(23 rows)
 
 select * from dim1 inner join fact1 on (dim1.dist = fact1.dist and dim1.code=fact1.code);
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -2062,7 +2113,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 79kB  Segments: 3  Max: 29kB (segment 1)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -2081,7 +2132,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                      ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                            ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(21 rows)
+(23 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid) and fact1.code = 'OH' order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -2146,7 +2197,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 79kB  Segments: 3  Max: 29kB (segment 1)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -2167,7 +2218,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
                            ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
                                  ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(23 rows)
+(25 rows)
 
 select * from dim1 inner join fact1 on (dim1.pid=fact1.pid) and fact1.code = 'OH' order by fact1.u;
  dist | pid | code |   t1   | dist | pid | code |  u  
@@ -2237,8 +2288,8 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
          Group Key: fact1.code
          ->  Sort (actual rows=100 loops=1)
                Sort Key: fact1.code
-               Sort Method:  quicksort  Memory: 80kB
-               Executor Memory: 86kB  Segments: 3  Max: 31kB (segment 1)
+               Sort Method:  quicksort  Memory: 79kB
+               Executor Memory: 98kB  Segments: 3  Max: 35kB (segment 1)
                ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=100 loops=1)
                      Hash Key: fact1.code
                      ->  Hash Join (actual rows=100 loops=1)
@@ -2262,7 +2313,7 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
                                  ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=3 loops=1)
                                        ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(29 rows)
+(31 rows)
 
 select fact1.code, count(*) from dim1 inner join fact1 on (dim1.pid=fact1.pid) group by 1 order by 1;
  code | count 
@@ -2281,8 +2332,8 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
          Group Key: fact1.code
          ->  Sort (actual rows=100 loops=1)
                Sort Key: fact1.code
-               Sort Method:  quicksort  Memory: 80kB
-               Executor Memory: 86kB  Segments: 3  Max: 31kB (segment 1)
+               Sort Method:  quicksort  Memory: 79kB
+               Executor Memory: 98kB  Segments: 3  Max: 35kB (segment 1)
                ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=100 loops=1)
                      Hash Key: fact1.code
                      ->  Hash Join (actual rows=100 loops=1)
@@ -2308,7 +2359,7 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
                                        ->  Broadcast Motion 3:3  (slice3; segments: 3) (actual rows=3 loops=1)
                                              ->  Seq Scan on dim1 (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(31 rows)
+(33 rows)
 
 select fact1.code, count(*) from dim1 inner join fact1 on (dim1.pid=fact1.pid) group by 1 order by 1;
  code | count 
@@ -2372,7 +2423,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim inner jo
                      Hash Key: dim.i
                      ->  Seq Scan on dim (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
-(13 rows)
+(14 rows)
 
 set gp_dynamic_partition_pruning = off;
 select * from dim inner join malp on (dim.i = malp.i);
@@ -2423,8 +2474,8 @@ analyze b;
 analyze c;
 set gp_dynamic_partition_pruning = off;
 explain (costs off, timing off, summary off, analyze) select * from apart as a, b, c where a.t = b.t and a.id = c.id;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=5 loops=1)
    ->  Hash Join (actual rows=3 loops=1)
          Hash Cond: (apart.id = c.id)
@@ -2444,22 +2495,22 @@ explain (costs off, timing off, summary off, analyze) select * from apart as a, 
                ->  Partition Selector (selector id: $0) (actual rows=8 loops=1)
                      ->  Seq Scan on c (actual rows=8 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+(19 rows)
 
 select * from apart as a, b, c where a.t = b.t and a.id = c.id;
  id | t | id | t | id | t 
 ----+---+----+---+----+---
+  2 | 2 |  2 | 2 |  2 | 2
   3 | 3 |  3 | 3 |  3 | 3
   4 | 4 |  4 | 4 |  4 | 4
-  5 | 5 |  5 | 5 |  5 | 5
   1 | 1 |  1 | 1 |  1 | 1
-  2 | 2 |  2 | 2 |  2 | 2
+  5 | 5 |  5 | 5 |  5 | 5
 (5 rows)
 
 set gp_dynamic_partition_pruning = on;
 explain (costs off, timing off, summary off, analyze) select * from apart as a, b, c where a.t = b.t and a.id = c.id;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=5 loops=1)
    ->  Hash Join (actual rows=3 loops=1)
          Hash Cond: (apart.id = c.id)
@@ -2479,16 +2530,16 @@ explain (costs off, timing off, summary off, analyze) select * from apart as a, 
                ->  Partition Selector (selector id: $0) (actual rows=8 loops=1)
                      ->  Seq Scan on c (actual rows=8 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+(19 rows)
 
 select * from apart as a, b, c where a.t = b.t and a.id = c.id;
  id | t | id | t | id | t 
 ----+---+----+---+----+---
+  2 | 2 |  2 | 2 |  2 | 2
   3 | 3 |  3 | 3 |  3 | 3
   4 | 4 |  4 | 4 |  4 | 4
-  5 | 5 |  5 | 5 |  5 | 5
   1 | 1 |  1 | 1 |  1 | 1
-  2 | 2 |  2 | 2 |  2 | 2
+  5 | 5 |  5 | 5 |  5 | 5
 (5 rows)
 
 --
@@ -2513,6 +2564,8 @@ analyze jpat;
 -- Known_opt_diff: MPP-21323
 -- end_ignore
 explain (costs off, timing off, summary off, analyze) select * from (select count(*) over (order by a rows between 1 preceding and 1 following), a, b from jpat)jpat inner join pat using(b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pat
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Hash Join (actual rows=1 loops=1)
@@ -2534,9 +2587,11 @@ explain (costs off, timing off, summary off, analyze) select * from (select coun
                      Number of partitions to scan: 5 (out of 5)
                      Partitions scanned:  Avg 5.0 x 3 workers.  Max 5 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+(19 rows)
 
 select * from (select count(*) over (order by a rows between 1 preceding and 1 following), a, b from jpat)jpat inner join pat using(b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pat
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      b      | count | a | a 
 ------------+-------+---+---
  01-02-2010 |     1 | 1 | 1
@@ -2595,7 +2650,7 @@ select * from pt, t where t.id = pt.id;
                ->  Partition Selector (selector id: $0) (actual rows=1 loops=1)
                      ->  Seq Scan on t (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(16 rows)
 
 insert into t values (4, 4), (6, 6), (8, 8), (10, 10);
 explain (analyze, costs off, timing off, summary off)
@@ -2618,7 +2673,7 @@ select * from pt, t where t.id = pt.id;
                ->  Partition Selector (selector id: $0) (actual rows=3 loops=1)
                      ->  Seq Scan on t (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(16 rows)
 
 -- Plan-time pruning based on the 'id' partitioning column, and
 -- run-time join pruning based on the expression
@@ -2643,7 +2698,7 @@ select * from pt, t where pt.id = 4 and t.id = 4 and (t.b % 2) = (pt.b % 2);
                            Filter: (id = 4)
                            Rows Removed by Filter: 2
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 -- Mixed case
 insert into pt values (4, 5);
@@ -2667,7 +2722,7 @@ select * from pt, t where t.id = pt.id and (t.b % 2) = (pt.b % 2);
                ->  Partition Selector (selector id: $0) (actual rows=3 loops=1)
                      ->  Seq Scan on t (actual rows=3 loops=1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(16 rows)
 
 --
 -- Join pruning on an inequality qual
@@ -2695,8 +2750,8 @@ analyze t;
 analyze pt;
 explain (analyze, costs off, timing off, summary off)
 select * from pt, t where t.dist = pt.dist and t.tid < pt.ptid;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=11 loops=1)
    ->  Hash Join (actual rows=11 loops=1)
          Hash Cond: (pt.dist = t.dist)
@@ -2711,7 +2766,7 @@ select * from pt, t where t.dist = pt.dist and t.tid < pt.ptid;
                ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
                      ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+(14 rows)
 
 --
 -- Test join pruning with a MergeAppend
@@ -2764,5 +2819,5 @@ select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t
                      ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=33 width=12) (actual rows=37 loops=1)
                            ->  Seq Scan on t  (cost=0.00..431.00 rows=33 width=12) (actual rows=37 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(15 rows)
+(17 rows)
 

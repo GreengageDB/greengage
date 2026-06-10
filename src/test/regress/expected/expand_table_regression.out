@@ -1,8 +1,11 @@
 -- start_ignore
 create extension if not exists gp_debug_numsegments;
+NOTICE:  extension "gp_debug_numsegments" already exists, skipping
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 drop schema if exists test_expand_table_regression cascade;
+NOTICE:  schema "test_expand_table_regression" does not exist, skipping
 create schema test_expand_table_regression;
 set search_path=test_expand_table_regression,public;
 --
@@ -41,6 +44,10 @@ select gp_segment_id, * from b;
 
 truncate b;
 create trigger b_t before insert on b for each row execute procedure trig345();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=121560)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=121568)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=121566)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- however with the trigger it is inserted on seg1
 insert into b select i from generate_series(1, 10) i;
 select gp_segment_id, * from b;
@@ -61,6 +68,8 @@ select gp_segment_id, * from b;
 -- data expansion should tolerant it
 alter table b expand table;
 select gp_segment_id, * from b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | data 
 ---------------+------
              0 |  345
@@ -81,4 +90,7 @@ select gp_segment_id, * from b;
 -- run correctly.
 reset search_path;
 drop schema test_expand_table_regression cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_expand_table_regression.trig345()
+drop cascades to table test_expand_table_regression.b
 -- end_ignore

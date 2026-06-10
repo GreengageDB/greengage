@@ -6,6 +6,7 @@ SET client_min_messages TO 'warning';
 DROP ROLE IF EXISTS regress_addr_user;
 RESET client_min_messages;
 CREATE USER regress_addr_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- Test generic object addressing/identification functions
 CREATE SCHEMA addr_nsp;
 SET search_path TO 'addr_nsp';
@@ -24,6 +25,9 @@ CREATE TABLE addr_nsp.parttable (
 ) PARTITION BY RANGE (a);
 CREATE VIEW addr_nsp.genview AS SELECT * from addr_nsp.gentable;
 CREATE MATERIALIZED VIEW addr_nsp.genmatview AS SELECT * FROM addr_nsp.gentable;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  One or more columns in the following table(s) do not have statistics: gentable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 CREATE TYPE addr_nsp.gencomptype AS (a int);
 CREATE TYPE addr_nsp.genenum AS ENUM ('one', 'two');
 CREATE FOREIGN TABLE addr_nsp.genftable (a int) SERVER addr_fserv;
@@ -31,6 +35,10 @@ CREATE AGGREGATE addr_nsp.genaggr(int4) (sfunc = int4pl, stype = int4);
 CREATE DOMAIN addr_nsp.gendomain AS int4 CONSTRAINT domconstr CHECK (value > 0);
 CREATE FUNCTION addr_nsp.trig() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN END; $$;
 CREATE TRIGGER t BEFORE INSERT ON addr_nsp.gentable FOR EACH ROW EXECUTE PROCEDURE addr_nsp.trig();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86939)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86929)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86930)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE POLICY genpol ON addr_nsp.gentable;
 CREATE PROCEDURE addr_nsp.proc(int4) LANGUAGE SQL AS $$ $$;
 CREATE SERVER "integer" FOREIGN DATA WRAPPER addr_fdw;
@@ -48,6 +56,9 @@ CREATE PUBLICATION addr_pub FOR TABLE addr_nsp.gentable;
 RESET client_min_messages;
 CREATE SUBSCRIPTION regress_addr_sub CONNECTION '' PUBLICATION bar WITH (connect = false, slot_name = NONE);
 WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg2 172.17.0.3:7004 pid=86930)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg1 172.17.0.3:7003 pid=86939)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg0 172.17.0.3:7002 pid=86929)
 CREATE STATISTICS addr_nsp.gentable_stat ON a, b FROM addr_nsp.gentable;
 -- test some error cases
 SELECT pg_get_object_address('stone', '{}', '{}');
@@ -488,8 +499,8 @@ SELECT (pg_identify_object(addr1.classid, addr1.objid, addr1.objsubid)).*,
  text search configuration | addr_nsp   | addr_ts_conf      | addr_nsp.addr_ts_conf                                                | t
  text search template      | addr_nsp   | addr_ts_temp      | addr_nsp.addr_ts_temp                                                | t
  subscription              |            | regress_addr_sub  | regress_addr_sub                                                     | t
- publication               |            | addr_pub          | addr_pub                                                             | t
  publication relation      |            |                   | addr_nsp.gentable in publication addr_pub                            | t
+ publication               |            | addr_pub          | addr_pub                                                             | t
 (49 rows)
 
 ---

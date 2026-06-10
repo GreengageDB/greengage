@@ -1,6 +1,10 @@
 CREATE TABLE toastable_heap(a text, b varchar, c int) distributed by (b);
 CREATE TABLE toastable_ao(a text, b varchar, c int) with(appendonly=true, compresslevel=1) distributed by (b);
 ALTER TABLE toastable_ao ALTER COLUMN a SET STORAGE EXTERNAL;
+-- start_ignore
+create language plpython3u;
+ERROR:  extension "plpython3u" already exists
+-- end_ignore
 -- Helper function to generate a random string with given length. (Due to the
 -- implementation, the length is rounded down to nearest multiple of 32.
 -- That's good enough for our purposes.)
@@ -24,6 +28,8 @@ INSERT INTO toastable_ao VALUES(randomtext(10000000), randomtext(10000032), 3);
 -- Check that tuples were toasted and are detoasted correctly. we use
 -- char_length() because it guarantees a detoast without showing tho whole result
 SELECT char_length(a), char_length(b), c FROM toastable_heap ORDER BY c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c 
 -------------+-------------+---
       100000 |      100001 | 1
@@ -32,6 +38,8 @@ SELECT char_length(a), char_length(b), c FROM toastable_heap ORDER BY c;
 (3 rows)
 
 SELECT char_length(a), char_length(b), c FROM toastable_ao ORDER BY c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c 
 -------------+-------------+---
       100000 |      100001 | 1
@@ -42,6 +50,8 @@ SELECT char_length(a), char_length(b), c FROM toastable_ao ORDER BY c;
 -- Check that small tuples can be correctly toasted as long as it's beyond the toast
 -- target size (about 1/4 of the table's blocksize)
 CREATE TABLE toastable_ao2(a int, b int[]) WITH (appendonly=true, blocksize=8192);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO toastable_ao2 SELECT 1, array_agg(x) from generate_series(1, 1000) x;
 INSERT INTO toastable_ao2 SELECT 1, array_agg(x) from generate_series(1, 2030) x;
 SELECT gp_segment_id, get_rel_toast_count('toastable_ao2') FROM gp_dist_random('gp_id') order by gp_segment_id;
@@ -55,8 +65,14 @@ SELECT gp_segment_id, get_rel_toast_count('toastable_ao2') FROM gp_dist_random('
 -- UPDATE 
 -- (heap rel only) and toast the large tuple
 UPDATE toastable_heap SET a=repeat('A',100000) WHERE c=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 UPDATE toastable_heap SET a=randomtext(100032) WHERE c=3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT char_length(a), char_length(b) FROM toastable_heap ORDER BY c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length 
 -------------+-------------
       100000 |      100001
@@ -70,6 +86,8 @@ SELECT char_length(a), char_length(b) FROM toastable_heap ORDER BY c;
 ALTER TABLE toastable_heap ADD COLUMN d int DEFAULT 10;
 ALTER TABLE toastable_ao ADD COLUMN d int DEFAULT 10;
 SELECT char_length(a), char_length(b), c, d FROM toastable_heap ORDER BY c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c | d  
 -------------+-------------+---+----
       100000 |      100001 | 1 | 10
@@ -78,6 +96,8 @@ SELECT char_length(a), char_length(b), c, d FROM toastable_heap ORDER BY c;
 (3 rows)
 
 SELECT char_length(a), char_length(b), c, d FROM toastable_ao ORDER BY c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c | d  
 -------------+-------------+---+----
       100000 |      100001 | 1 | 10
@@ -108,12 +128,16 @@ select gp_segment_id, get_rel_toast_count('toastable_ao') from gp_dist_random('g
 INSERT INTO toastable_heap VALUES(repeat('a',100002), repeat('b',100003), 2, 20);
 INSERT INTO toastable_ao VALUES(repeat('a',100002), repeat('b',100003), 2, 20);
 SELECT char_length(a), char_length(b), c, d FROM toastable_heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c | d  
 -------------+-------------+---+----
       100002 |      100003 | 2 | 20
 (1 row)
 
 SELECT char_length(a), char_length(b), c, d FROM toastable_ao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  char_length | char_length | c | d  
 -------------+-------------+---+----
       100002 |      100003 | 2 | 20
@@ -136,8 +160,20 @@ select gp_segment_id, get_rel_toast_count('toastable_ao') from gp_dist_random('g
 (3 rows)
 
 delete from toastable_heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from toastable_ao;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toastable_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 vacuum toastable_heap, toastable_ao;
+WARNING:  skipping "pg_aoseg_127809" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127809" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127809" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=100323)
+WARNING:  skipping "pg_aoseg_127809" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=100324)
+WARNING:  skipping "pg_aovisimap_127809" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=100324)
+WARNING:  skipping "pg_aovisimap_127809" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=100323)
+WARNING:  skipping "pg_aoseg_127809" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=100322)
+WARNING:  skipping "pg_aovisimap_127809" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=100322)
 select gp_segment_id, get_rel_toast_count('toastable_heap') from gp_dist_random('gp_id') order by gp_segment_id;
  gp_segment_id | get_rel_toast_count 
 ---------------+---------------------
@@ -182,12 +218,16 @@ SELECT DISTINCT gp_inject_fault('decrease_toast_max_chunk_size', 'reset', dbid)
 
 -- The toasted value should still be read correctly.
 SELECT * FROM toast_chunk_test WHERE a <> repeat('abcdefghijklmnopqrstuvwxyz', 1000)::bytea;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toast_chunk_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
 
 -- Random access into the toast table should work equally well.
 SELECT encode(substring(a from 521*26+1 for 26), 'escape') FROM toast_chunk_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: toast_chunk_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            encode           
 ----------------------------
  abcdefghijklmnopqrstuvwxyz

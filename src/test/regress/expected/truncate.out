@@ -3,10 +3,12 @@ CREATE TABLE truncate_a (col1 integer primary key) DISTRIBUTED BY (col1);
 INSERT INTO truncate_a VALUES (1);
 INSERT INTO truncate_a VALUES (2);
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-    1
     2
+    1
 (2 rows)
 
 -- Roll truncate back
@@ -14,10 +16,12 @@ BEGIN;
 TRUNCATE truncate_a;
 ROLLBACK;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-    1
     2
+    1
 (2 rows)
 
 -- Commit the truncate this time
@@ -25,6 +29,8 @@ BEGIN;
 TRUNCATE truncate_a;
 COMMIT;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
 (0 rows)
@@ -34,16 +40,80 @@ CREATE TABLE trunc_b (a int REFERENCES truncate_a);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE trunc_c (a serial PRIMARY KEY) DISTRIBUTED BY (a);
 CREATE TABLE trunc_d (a int REFERENCES trunc_c);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE trunc_e (a int REFERENCES truncate_a, b int REFERENCES trunc_c);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 TRUNCATE TABLE truncate_a;		-- fail
 TRUNCATE TABLE truncate_a,trunc_b;		-- fail
 TRUNCATE TABLE truncate_a,trunc_b,trunc_e;	-- ok
@@ -57,9 +127,31 @@ TRUNCATE TABLE truncate_a RESTRICT; -- fail
 TRUNCATE TABLE truncate_a CASCADE;  -- ok
 NOTICE:  truncate cascades to table "trunc_b"
 NOTICE:  truncate cascades to table "trunc_e"
+NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=90278)
 -- circular references
 ALTER TABLE truncate_a ADD FOREIGN KEY (col1) REFERENCES trunc_c;
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- Add some data to verify that truncating actually works ...
 INSERT INTO trunc_c VALUES (1);
 INSERT INTO truncate_a VALUES (1);
@@ -79,11 +171,15 @@ SELECT * FROM truncate_a
  SELECT * FROM trunc_b
    UNION ALL
  SELECT * FROM trunc_d;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a, trunc_c, trunc_b, trunc_d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
 (0 rows)
 
 SELECT * FROM trunc_e;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_e
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -99,6 +195,18 @@ NOTICE:  truncate cascades to table "truncate_a"
 NOTICE:  truncate cascades to table "trunc_d"
 NOTICE:  truncate cascades to table "trunc_e"
 NOTICE:  truncate cascades to table "trunc_b"
+NOTICE:  truncate cascades to table "truncate_a"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "trunc_d"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncate_a"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "trunc_d"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncate_a"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "trunc_d"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=90290)
 SELECT * FROM truncate_a
    UNION ALL
  SELECT * FROM trunc_c
@@ -106,11 +214,15 @@ SELECT * FROM truncate_a
  SELECT * FROM trunc_b
    UNION ALL
  SELECT * FROM trunc_d;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a, trunc_c, trunc_b, trunc_d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
 (0 rows)
 
 SELECT * FROM trunc_e;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_e
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -121,20 +233,23 @@ CREATE TABLE trunc_f (col1 integer primary key);
 INSERT INTO trunc_f VALUES (1);
 INSERT INTO trunc_f VALUES (2);
 CREATE TABLE trunc_fa (col2a text) INHERITS (trunc_f);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trunc_fa VALUES (3, 'three');
 CREATE TABLE trunc_fb (col2b int) INHERITS (trunc_f);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trunc_fb VALUES (4, 444);
 CREATE TABLE trunc_faa (col3 text) INHERITS (trunc_fa);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trunc_faa VALUES (5, 'five', 'FIVE');
 BEGIN;
 SELECT * FROM trunc_f;
  col1 
 ------
-    1
     2
     3
     4
     5
+    1
 (5 rows)
 
 TRUNCATE trunc_f;
@@ -179,11 +294,13 @@ SELECT * FROM trunc_f;
 SELECT * FROM trunc_fa;
  col1 | col2a 
 ------+-------
-    3 | three
     5 | five
+    3 | three
 (2 rows)
 
 SELECT * FROM trunc_faa;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_faa
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2a | col3 
 ------+-------+------
     5 | five  | FIVE
@@ -194,8 +311,8 @@ SELECT * FROM trunc_f;
  col1 
 ------
     1
-    2
     5
+    2
 (3 rows)
 
 SELECT * FROM trunc_fa;
@@ -205,6 +322,8 @@ SELECT * FROM trunc_fa;
 (1 row)
 
 SELECT * FROM trunc_faa;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_faa
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2a | col3 
 ------+-------+------
     5 | five  | FIVE
@@ -216,10 +335,10 @@ SELECT * FROM trunc_f;
  col1 
 ------
     1
+    5
     2
     3
     4
-    5
 (5 rows)
 
 SELECT * FROM trunc_fa;
@@ -230,6 +349,8 @@ SELECT * FROM trunc_fa;
 (2 rows)
 
 SELECT * FROM trunc_faa;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_faa
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2a | col3 
 ------+-------+------
     5 | five  | FIVE
@@ -239,8 +360,8 @@ TRUNCATE ONLY trunc_fb, trunc_fa;
 SELECT * FROM trunc_f;
  col1 
 ------
-    1
     2
+    1
 (2 rows)
 
 SELECT * FROM trunc_fa;
@@ -249,6 +370,8 @@ SELECT * FROM trunc_fa;
 (0 rows)
 
 SELECT * FROM trunc_faa;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_faa
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2a | col3 
 ------+-------+------
 (0 rows)
@@ -261,8 +384,12 @@ drop cascades to table trunc_faa
 drop cascades to table trunc_fb
 -- Test ON TRUNCATE triggers
 CREATE TABLE trunc_trigger_test (f1 int, f2 text, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE trunc_trigger_log (tgop text, tglevel text, tgwhen text,
         tgargv text, tgtable name, rowcount bigint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tgop' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION trunctrigger() RETURNS trigger as $$
 declare c bigint;
 begin
@@ -280,24 +407,32 @@ FOR EACH STATEMENT
 EXECUTE PROCEDURE trunctrigger('before trigger truncate');
 ERROR:  Triggers for statements are not yet supported
 SELECT count(*) as "Row count in test table" FROM trunc_trigger_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Row count in test table 
 -------------------------
                        2
 (1 row)
 
 SELECT * FROM trunc_trigger_log;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_log
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tgop | tglevel | tgwhen | tgargv | tgtable | rowcount 
 ------+---------+--------+--------+---------+----------
 (0 rows)
 
 TRUNCATE trunc_trigger_test;
 SELECT count(*) as "Row count in test table" FROM trunc_trigger_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Row count in test table 
 -------------------------
                        0
 (1 row)
 
 SELECT * FROM trunc_trigger_log;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_log
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tgop | tglevel | tgwhen | tgargv | tgtable | rowcount 
 ------+---------+--------+--------+---------+----------
 (0 rows)
@@ -313,24 +448,32 @@ FOR EACH STATEMENT
 EXECUTE PROCEDURE trunctrigger('after trigger truncate');
 ERROR:  Triggers for statements are not yet supported
 SELECT count(*) as "Row count in test table" FROM trunc_trigger_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Row count in test table 
 -------------------------
                        2
 (1 row)
 
 SELECT * FROM trunc_trigger_log;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_log
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tgop | tglevel | tgwhen | tgargv | tgtable | rowcount 
 ------+---------+--------+--------+---------+----------
 (0 rows)
 
 TRUNCATE trunc_trigger_test;
 SELECT count(*) as "Row count in test table" FROM trunc_trigger_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  Row count in test table 
 -------------------------
                        0
 (1 row)
 
 SELECT * FROM trunc_trigger_log;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trunc_trigger_log
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tgop | tglevel | tgwhen | tgargv | tgtable | rowcount 
 ------+---------+--------+--------+---------+----------
 (0 rows)
@@ -342,10 +485,14 @@ DROP FUNCTION trunctrigger();
 CREATE SEQUENCE truncate_a_id1 START WITH 33 CACHE 1;
 CREATE TABLE truncate_a (id serial,
                          id1 integer default nextval('truncate_a_id1'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER SEQUENCE truncate_a_id1 OWNED BY truncate_a.id1;
 INSERT INTO truncate_a DEFAULT VALUES;
 INSERT INTO truncate_a DEFAULT VALUES;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
   1 |  33
@@ -356,6 +503,8 @@ TRUNCATE truncate_a;
 INSERT INTO truncate_a DEFAULT VALUES;
 INSERT INTO truncate_a DEFAULT VALUES;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
   3 |  35
@@ -366,6 +515,8 @@ TRUNCATE truncate_a RESTART IDENTITY;
 INSERT INTO truncate_a DEFAULT VALUES;
 INSERT INTO truncate_a DEFAULT VALUES;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
   1 |  33
@@ -373,19 +524,25 @@ SELECT * FROM truncate_a;
 (2 rows)
 
 CREATE TABLE truncate_b (id int GENERATED ALWAYS AS IDENTITY (START WITH 44));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO truncate_b DEFAULT VALUES;
 INSERT INTO truncate_b DEFAULT VALUES;
 SELECT * FROM truncate_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
- 44
  45
+ 44
 (2 rows)
 
 TRUNCATE truncate_b;
 INSERT INTO truncate_b DEFAULT VALUES;
 INSERT INTO truncate_b DEFAULT VALUES;
 SELECT * FROM truncate_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
  46
@@ -396,10 +553,12 @@ TRUNCATE truncate_b RESTART IDENTITY;
 INSERT INTO truncate_b DEFAULT VALUES;
 INSERT INTO truncate_b DEFAULT VALUES;
 SELECT * FROM truncate_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
- 44
  45
+ 44
 (2 rows)
 
 -- check rollback of a RESTART IDENTITY operation
@@ -407,6 +566,8 @@ BEGIN;
 TRUNCATE truncate_a RESTART IDENTITY;
 INSERT INTO truncate_a DEFAULT VALUES;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
   1 |  33
@@ -416,12 +577,14 @@ ROLLBACK;
 INSERT INTO truncate_a DEFAULT VALUES;
 INSERT INTO truncate_a DEFAULT VALUES;
 SELECT * FROM truncate_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: truncate_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
-  1 |  33
   2 |  34
   3 |  35
   4 |  36
+  1 |  33
 (4 rows)
 
 DROP TABLE truncate_a;
@@ -431,11 +594,14 @@ LINE 1: SELECT nextval('truncate_a_id1');
                        ^
 -- partitioned table
 CREATE TABLE truncparted (a int, b char) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- error, can't truncate a partitioned table
 TRUNCATE ONLY truncparted;
 ERROR:  cannot truncate only a partitioned table
 HINT:  Do not specify the ONLY keyword, or use TRUNCATE ONLY on the partitions directly.
 CREATE TABLE truncparted1 PARTITION OF truncparted FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO truncparted VALUES (1, 'a');
 -- error, must truncate partitions
 TRUNCATE ONLY truncparted;
@@ -463,11 +629,50 @@ $$;
 CREATE TABLE truncprim (a int PRIMARY KEY);
 CREATE TABLE truncpart (a int REFERENCES truncprim)
   PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_1 PARTITION OF truncpart FOR VALUES FROM (0) TO (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_2 PARTITION OF truncpart FOR VALUES FROM (100) TO (200)
   PARTITION BY RANGE (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE truncpart_2_1 PARTITION OF truncpart_2 FOR VALUES FROM (100) TO (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_2_d PARTITION OF truncpart_2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- GPDB: this doesn't fail in GPDB, because GPDB doesn't enforce primary keys.
 TRUNCATE TABLE truncprim;	-- should fail
 select tp_ins_data();
@@ -496,6 +701,21 @@ NOTICE:  truncate cascades to table "truncpart_1"
 NOTICE:  truncate cascades to table "truncpart_2"
 NOTICE:  truncate cascades to table "truncpart_2_1"
 NOTICE:  truncate cascades to table "truncpart_2_d"
+NOTICE:  truncate cascades to table "truncpart"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncpart"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncpart"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg1 172.17.0.3:7003 pid=90278)
 SELECT * FROM tp_chk_data();
  pktb | pkval | fktb | fkval 
 ------+-------+------+-------
@@ -522,22 +742,86 @@ DROP FUNCTION tp_ins_data(), tp_chk_data();
 -- test cascade when referencing a partitioned table
 CREATE TABLE trunc_a (a INT PRIMARY KEY) PARTITION BY RANGE (a);
 CREATE TABLE trunc_a1 PARTITION OF trunc_a FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trunc_a2 PARTITION OF trunc_a FOR VALUES FROM (10) TO (20)
   PARTITION BY RANGE (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trunc_a21 PARTITION OF trunc_a2 FOR VALUES FROM (10) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trunc_a22 PARTITION OF trunc_a2 FOR VALUES FROM (12) TO (16);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trunc_a2d PARTITION OF trunc_a2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trunc_a3 PARTITION OF trunc_a FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trunc_a VALUES (0), (5), (10), (15), (20), (25);
 -- truncate a partition cascading to a table
 CREATE TABLE ref_b (
     b INT PRIMARY KEY,
     a INT REFERENCES trunc_a(a) ON DELETE CASCADE
 );
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO ref_b VALUES (10, 0), (50, 5), (100, 10), (150, 15);
 TRUNCATE TABLE trunc_a1 CASCADE;
 NOTICE:  truncate cascades to table "ref_b"
+NOTICE:  truncate cascades to table "ref_b"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "ref_b"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "ref_b"  (seg2 172.17.0.3:7004 pid=90290)
 SELECT a FROM ref_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ref_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -548,14 +832,88 @@ CREATE TABLE ref_c (
     c INT PRIMARY KEY,
     a INT REFERENCES trunc_a(a) ON DELETE CASCADE
 ) PARTITION BY RANGE (c);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE ref_c1 PARTITION OF ref_c FOR VALUES FROM (100) TO (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE ref_c2 PARTITION OF ref_c FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO ref_c VALUES (100, 10), (150, 15), (200, 20), (250, 25);
 TRUNCATE TABLE trunc_a21 CASCADE;
 NOTICE:  truncate cascades to table "ref_c"
 NOTICE:  truncate cascades to table "ref_c1"
 NOTICE:  truncate cascades to table "ref_c2"
+NOTICE:  truncate cascades to table "ref_c"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "ref_c1"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "ref_c2"  (seg0 172.17.0.3:7002 pid=90286)
+NOTICE:  truncate cascades to table "ref_c"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "ref_c1"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "ref_c2"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "ref_c"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "ref_c1"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "ref_c2"  (seg1 172.17.0.3:7003 pid=90278)
 SELECT a as "from table ref_c" FROM ref_c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ref_c
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  from table ref_c 
 ------------------
 (0 rows)

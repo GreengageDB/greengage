@@ -78,6 +78,8 @@ CREATE TABLE SUBSELECT_TBL (
   f2 integer,
   f3 float
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO SUBSELECT_TBL VALUES (1, 2, 3);
 INSERT INTO SUBSELECT_TBL VALUES (2, 3, 4);
 INSERT INTO SUBSELECT_TBL VALUES (3, 4, 5);
@@ -86,131 +88,147 @@ INSERT INTO SUBSELECT_TBL VALUES (2, 2, 2);
 INSERT INTO SUBSELECT_TBL VALUES (3, 3, 3);
 INSERT INTO SUBSELECT_TBL VALUES (6, 7, 8);
 INSERT INTO SUBSELECT_TBL VALUES (8, 9, NULL);
-SELECT '' AS eight, * FROM SUBSELECT_TBL;
- eight | f1 | f2 | f3 
--------+----+----+----
-       |  1 |  2 |  3
-       |  2 |  3 |  4
-       |  3 |  4 |  5
-       |  1 |  1 |  1
-       |  2 |  2 |  2
-       |  3 |  3 |  3
-       |  6 |  7 |  8
-       |  8 |  9 |   
+SELECT * FROM SUBSELECT_TBL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ f1 | f2 | f3 
+----+----+----
+  2 |  3 |  4
+  3 |  4 |  5
+  2 |  2 |  2
+  3 |  3 |  3
+  8 |  9 |   
+  1 |  2 |  3
+  1 |  1 |  1
+  6 |  7 |  8
 (8 rows)
 
 -- Uncorrelated subselects
-SELECT '' AS two, f1 AS "Constant Select" FROM SUBSELECT_TBL
+SELECT f1 AS "Constant Select" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT 1);
- two | Constant Select 
------+-----------------
-     |               1
-     |               1
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Constant Select 
+-----------------
+               1
+               1
 (2 rows)
 
-SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
+SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL);
- six | Uncorrelated Field 
------+--------------------
-     |                  1
-     |                  2
-     |                  3
-     |                  1
-     |                  2
-     |                  3
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Uncorrelated Field 
+--------------------
+                  1
+                  1
+                  2
+                  3
+                  2
+                  3
 (6 rows)
 
-SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
+SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE
     f2 IN (SELECT f1 FROM SUBSELECT_TBL));
- six | Uncorrelated Field 
------+--------------------
-     |                  1
-     |                  2
-     |                  3
-     |                  1
-     |                  2
-     |                  3
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Uncorrelated Field 
+--------------------
+                  1
+                  1
+                  2
+                  3
+                  2
+                  3
 (6 rows)
 
-SELECT '' AS three, f1, f2
+SELECT f1, f2
   FROM SUBSELECT_TBL
   WHERE (f1, f2) NOT IN (SELECT f2, CAST(f3 AS int4) FROM SUBSELECT_TBL
                          WHERE f3 IS NOT NULL);
- three | f1 | f2 
--------+----+----
-       |  1 |  2
-       |  6 |  7
-       |  8 |  9
+ f1 | f2 
+----+----
+  6 |  7
+  8 |  9
+  1 |  2
 (3 rows)
 
 -- Correlated subselects
-SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
+SELECT f1 AS "Correlated Field", f2 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE f1 = upper.f1);
- six | Correlated Field | Second Field 
------+------------------+--------------
-     |                1 |            2
-     |                2 |            3
-     |                3 |            4
-     |                1 |            1
-     |                2 |            2
-     |                3 |            3
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Correlated Field | Second Field 
+------------------+--------------
+                1 |            2
+                1 |            1
+                2 |            3
+                3 |            4
+                2 |            2
+                3 |            3
 (6 rows)
 
-SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
+SELECT f1 AS "Correlated Field", f3 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f1 IN
     (SELECT f2 FROM SUBSELECT_TBL WHERE CAST(upper.f2 AS float) = f3);
- six | Correlated Field | Second Field 
------+------------------+--------------
-     |                2 |            4
-     |                3 |            5
-     |                1 |            1
-     |                2 |            2
-     |                3 |            3
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Correlated Field | Second Field 
+------------------+--------------
+                2 |            4
+                3 |            5
+                2 |            2
+                3 |            3
+                1 |            1
 (5 rows)
 
-SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
+SELECT f1 AS "Correlated Field", f3 AS "Second Field"
   FROM SUBSELECT_TBL upper
   WHERE f3 IN (SELECT upper.f1 + f2 FROM SUBSELECT_TBL
                WHERE f2 = CAST(f3 AS integer));
- six | Correlated Field | Second Field 
------+------------------+--------------
-     |                1 |            3
-     |                2 |            4
-     |                3 |            5
-     |                6 |            8
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Correlated Field | Second Field 
+------------------+--------------
+                2 |            4
+                3 |            5
+                6 |            8
+                1 |            3
 (4 rows)
 
-SELECT '' AS five, f1 AS "Correlated Field"
+SELECT f1 AS "Correlated Field"
   FROM SUBSELECT_TBL
   WHERE (f1, f2) IN (SELECT f2, CAST(f3 AS int4) FROM SUBSELECT_TBL
                      WHERE f3 IS NOT NULL);
- five | Correlated Field 
-------+------------------
-      |                2
-      |                3
-      |                1
-      |                2
-      |                3
+ Correlated Field 
+------------------
+                1
+                2
+                3
+                2
+                3
 (5 rows)
 
 --
 -- Use some existing tables in the regression test
 --
-SELECT '' AS eight, ss.f1 AS "Correlated Field", ss.f3 AS "Second Field"
+SELECT ss.f1 AS "Correlated Field", ss.f3 AS "Second Field"
   FROM SUBSELECT_TBL ss
   WHERE f1 NOT IN (SELECT f1+1 FROM INT4_TBL
                    WHERE f1 != ss.f1 AND f1 < 2147483647);
- eight | Correlated Field | Second Field 
--------+------------------+--------------
-       |                2 |            4
-       |                3 |            5
-       |                2 |            2
-       |                3 |            3
-       |                6 |            8
-       |                8 |             
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ Correlated Field | Second Field 
+------------------+--------------
+                6 |            8
+                2 |            4
+                3 |            5
+                2 |            2
+                3 |            3
+                8 |             
 (6 rows)
 
 select q1, float8(count(*)) / (select count(*) from int8_tbl)
@@ -233,24 +251,26 @@ SELECT *, pg_typeof(f1) FROM
 
 -- ... unless there's context to suggest differently
 explain (verbose, costs off) select '42' union all select '43';
-         QUERY PLAN         
-----------------------------
+              QUERY PLAN               
+---------------------------------------
  Append
    ->  Result
          Output: '42'::text
    ->  Result
          Output: '43'::text
-(5 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
 
 explain (verbose, costs off) select '42' union all select 43;
-     QUERY PLAN     
---------------------
+              QUERY PLAN               
+---------------------------------------
  Append
    ->  Result
          Output: 42
    ->  Result
          Output: 43
-(5 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
 
 -- check materialization of an initplan reference (bug #14524)
 explain (verbose, costs off)
@@ -270,8 +290,7 @@ select 1 = all (select (select 1));
          ->  Result
                Output: 1
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on
-(14 rows)
+(13 rows)
 
 select 1 = all (select (select 1));
  ?column? 
@@ -285,8 +304,8 @@ select 1 = all (select (select 1));
 explain (costs off)
 select * from int4_tbl o where exists
   (select 1 from int4_tbl i where i.f1=o.f1 limit null);
-                      QUERY PLAN                      
-------------------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Semi Join
          Hash Cond: (int4_tbl.f1 = int4_tbl_1.f1)
@@ -294,7 +313,7 @@ select * from int4_tbl o where exists
                Filter: (NOT (f1 IS NULL))
          ->  Hash
                ->  Seq Scan on int4_tbl int4_tbl_1
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 explain (costs off)
@@ -314,14 +333,14 @@ select * from int4_tbl o where not exists
                        ->  Materialize
                              ->  Gather Motion 3:1  (slice2; segments: 3)
                                    ->  Seq Scan on int4_tbl int4_tbl_1
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
 
 explain (costs off)
 select * from int4_tbl o where exists
   (select 1 from int4_tbl i where i.f1=o.f1 limit 0);
-                      QUERY PLAN                      
-------------------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Semi Join
          Join Filter: true
@@ -330,7 +349,7 @@ select * from int4_tbl o where exists
          ->  Limit
                ->  Result
                      One-Time Filter: false
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 --
@@ -375,7 +394,11 @@ select count(distinct ss.ten) from
 -- Luca Pireddu and Michael Fuhr.
 --
 CREATE TEMP TABLE foo (id integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE bar (id1 integer, id2 integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (1, 1);
 INSERT INTO bar VALUES (2, 2);
@@ -383,6 +406,8 @@ INSERT INTO bar VALUES (3, 1);
 -- These cases require an extra level of distinct-ing above subquery s
 SELECT * FROM foo WHERE id IN
     (SELECT id2 FROM (SELECT DISTINCT id1, id2 FROM bar) AS s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -390,6 +415,8 @@ SELECT * FROM foo WHERE id IN
 
 SELECT * FROM foo WHERE id IN
     (SELECT id2 FROM (SELECT id1,id2 FROM bar GROUP BY id1,id2) AS s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -398,6 +425,8 @@ SELECT * FROM foo WHERE id IN
 SELECT * FROM foo WHERE id IN
     (SELECT id2 FROM (SELECT id1, id2 FROM bar UNION
                       SELECT id1, id2 FROM bar) AS s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -413,6 +442,8 @@ SELECT * FROM foo WHERE id IN
 
 SELECT * FROM foo WHERE id IN
     (SELECT id2 FROM (SELECT id2 FROM bar GROUP BY id2) AS s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -421,6 +452,8 @@ SELECT * FROM foo WHERE id IN
 SELECT * FROM foo WHERE id IN
     (SELECT id2 FROM (SELECT id2 FROM bar UNION
                       SELECT id2 FROM bar) AS s);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -435,6 +468,8 @@ CREATE TABLE orderstest (
     po_ref integer,
     ordercanceled boolean
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'approver_ref' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO orderstest VALUES (1, 1, false);
 INSERT INTO orderstest VALUES (66, 5, false);
 INSERT INTO orderstest VALUES (66, 6, false);
@@ -483,8 +518,12 @@ END) AS "Status",
 END) AS "Status_OK"
 FROM orderstest ord;
 SELECT * FROM orders_view;
+NOTICE:  One or more columns in the following table(s) do not have statistics: orderstest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  approver_ref | po_ref | ordercanceled | Approved |  Status  | Status_OK 
 --------------+--------+---------------+----------+----------+-----------
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
             1 |      1 | f             | ---      | ---      | ---
            66 |      5 | f             | Approved | PO       | PO
            66 |      6 | f             | Approved | PO       | PO
@@ -493,9 +532,7 @@ SELECT * FROM orders_view;
            66 |      8 | f             | Approved | PO       | PO
            66 |      1 | f             | Approved | Approved | Approved
            77 |      1 | f             | Approved | Approved | Approved
-            1 |      1 | f             | ---      | ---      | ---
            66 |      1 | f             | Approved | Approved | Approved
-            1 |      1 | f             | ---      | ---      | ---
 (11 rows)
 
 DROP TABLE orderstest cascade;
@@ -508,12 +545,16 @@ create temp table parts (
     partnum     text,
     cost        float8
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'partnum' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table shipped (
     ttype       char(2),
     ordnum      int4,
     partnum     text,
     value       float8
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ttype' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp view shipped_view as
     select * from shipped where ttype = 'wt';
 create rule shipped_view_insert as on insert to shipped_view do instead
@@ -521,7 +562,11 @@ create rule shipped_view_insert as on insert to shipped_view do instead
 insert into parts (partnum, cost) values (1, 1234.56);
 insert into shipped_view (ordnum, partnum, value)
     values (0, 1, (select cost from parts where partnum = '1'));
+NOTICE:  One or more columns in the following table(s) do not have statistics: parts
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from shipped_view;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shipped
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ttype | ordnum | partnum |  value  
 -------+--------+---------+---------
  wt    |      0 | 1       | 1234.56
@@ -534,7 +579,11 @@ update shipped_view set value = 11
     from int4_tbl a join int4_tbl b
       on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1))
     where ordnum = a.f1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shipped
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from shipped_view;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shipped
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ttype | ordnum | partnum | value 
 -------+--------+---------+-------
  wt    |      0 | 1       |    11
@@ -545,9 +594,9 @@ select f1, ss1 as relabel from
      from int4_tbl a) ss;
      f1      |  relabel   
 -------------+------------
-           0 | 2147607103
       123456 | 2147607103
      -123456 | 2147483647
+           0 | 2147607103
   2147483647 | 2147483647
  -2147483647 |          0
 (5 rows)
@@ -583,26 +632,34 @@ select * from (
 -- pointless.)
 --
 create temp table numeric_table (num_col numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num_col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into numeric_table values (1), (1.000000000000000000001), (2), (3);
 create temp table float_table (float_col float8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'float_col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into float_table values (1), (2), (3);
 select * from float_table
   where float_col in (select num_col from numeric_table);
+NOTICE:  One or more columns in the following table(s) do not have statistics: float_table, numeric_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  float_col 
 -----------
-         1
          2
+         1
          3
 (3 rows)
 
 select * from numeric_table
   where num_col in (select float_col from float_table);
+NOTICE:  One or more columns in the following table(s) do not have statistics: numeric_table, float_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          num_col         
 -------------------------
-                       1
-                       2
  1.000000000000000000001
                        3
+                       1
+                       2
 (4 rows)
 
 --
@@ -623,20 +680,26 @@ select
   ( select min(tb.id) from tb
     where tb.aval = (select ta.val from ta where ta.id = tc.aid) ) as min_tb_id
 from tc;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tc, tb, ta
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  min_tb_id 
 -----------
-         1
          3
+         1
 (2 rows)
 
 --
 -- Test case for 8.3 "failed to locate grouping columns" bug
 --
 create temp table t1 (f1 numeric(14,0), f2 varchar(30));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from
   (select distinct f1, f2, (select f2 from t1 x where x.f1 = up.f1) as fs
    from t1 up) ss
 group by f1,f2,fs;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 | fs 
 ----+----+----
 (0 rows)
@@ -645,6 +708,8 @@ group by f1,f2,fs;
 -- Test case for bug #5514 (mishandling of whole-row Vars in subselects)
 --
 create temp table table_a(id integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into table_a values (42);
 create temp view view_a as select * from table_a;
 select view_a from view_a;
@@ -692,10 +757,10 @@ with q as (select max(f1) from int4_tbl group by f1 order by f1)
   select q from q;  -- order none
        q       
 ---------------
- (-2147483647)
  (-123456)
- (0)
  (123456)
+ (-2147483647)
+ (0)
  (2147483647)
 (5 rows)
 
@@ -738,6 +803,8 @@ create temp table upsert(key int4 primary key, val text);
 insert into upsert values(1, 'val') on conflict (key) do update set val = 'not seen';
 insert into upsert values(1, 'val') on conflict (key) do update set val = 'seen with subselect ' || (select f1 from int4_tbl where f1 != 0 order by f1 limit 1)::text;
 select * from upsert;
+NOTICE:  One or more columns in the following table(s) do not have statistics: upsert
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  key |               val               
 -----+---------------------------------
    1 | seen with subselect -2147483647
@@ -757,11 +824,15 @@ returning *;
 -- Test case for cross-type partial matching in hashed subplan (bug #7597)
 --
 create temp table outer_7597 (f1 int4, f2 int4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into outer_7597 values (0, 0);
 insert into outer_7597 values (1, 0);
 insert into outer_7597 values (0, null);
 insert into outer_7597 values (1, null);
 create temp table inner_7597(c1 int8, c2 int8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inner_7597 values(0, null);
 select * from outer_7597 where (f1, f2) not in (select * from inner_7597);
  f1 | f2 
@@ -776,11 +847,15 @@ select * from outer_7597 where (f1, f2) not in (select * from inner_7597);
 -- (otherwise it would error in texteq())
 --
 create temp table outer_text (f1 text, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into outer_text values ('a', 'a');
 insert into outer_text values ('b', 'a');
 insert into outer_text values ('a', null);
 insert into outer_text values ('b', null);
 create temp table inner_text (c1 text, c2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inner_text values ('a', null);
 insert into inner_text values ('123', '456');
 select * from outer_text where (f1, f2) not in (select * from inner_text);
@@ -841,6 +916,8 @@ language sql as 'select $1::text = $2';
 create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
 explain (costs off)
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -859,6 +936,8 @@ select * from int8_tbl where q1 in (select c1 from inner_text);
 (13 rows)
 
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  q1  |        q2        
 -----+------------------
  123 |              456
@@ -871,6 +950,8 @@ create or replace function bogus_int8_text_eq(int8, text) returns boolean
 language sql as 'select $1::text = $2 and $1::text = $2';
 explain (costs off)
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -889,6 +970,8 @@ select * from int8_tbl where q1 in (select c1 from inner_text);
 (13 rows)
 
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  q1  |        q2        
 -----+------------------
  123 |              456
@@ -901,6 +984,8 @@ create or replace function bogus_int8_text_eq(int8, text) returns boolean
 language sql as 'select $2 = $1::text';
 explain (costs off)
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -919,6 +1004,8 @@ select * from int8_tbl where q1 in (select c1 from inner_text);
 (13 rows)
 
 select * from int8_tbl where q1 in (select c1 from inner_text);
+NOTICE:  One or more columns in the following table(s) do not have statistics: inner_text
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  q1  |        q2        
 -----+------------------
  123 |              456
@@ -926,6 +1013,71 @@ select * from int8_tbl where q1 in (select c1 from inner_text);
 (2 rows)
 
 rollback;  -- to get rid of the bogus operator
+--
+-- Test resolution of hashed vs non-hashed implementation of EXISTS subplan
+--
+explain (costs off)
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0);
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: tenk1.unique1, tenk1.unique2, tenk1.ten, tenk1.ctid, tenk1.gp_segment_id, (true)
+                     ->  Result
+                           Filter: (CASE WHEN (NOT ((true) IS NULL)) THEN true ELSE false END OR (tenk1.ten < 0))
+                           ->  Hash Left Join
+                                 Hash Cond: (tenk1.unique2 = tenk1_1.unique1)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: tenk1.unique2
+                                       ->  Seq Scan on tenk1
+                                 ->  Hash
+                                       ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
+
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0);
+ count 
+-------
+ 10000
+(1 row)
+
+explain (costs off)
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
+  and thousand = 1;
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  GroupAggregate
+               Group Key: tenk1_1.unique1, tenk1_1.unique2, tenk1_1.ten, tenk1_1.thousand, tenk1_1.ctid, tenk1_1.gp_segment_id, (true)
+               ->  Sort
+                     Sort Key: tenk1_1.unique1, tenk1_1.unique2, tenk1_1.ten, tenk1_1.thousand, tenk1_1.ctid, tenk1_1.gp_segment_id, (true)
+                     ->  Result
+                           Filter: (CASE WHEN (NOT ((true) IS NULL)) THEN true ELSE false END OR (tenk1_1.ten < 0))
+                           ->  Hash Right Join
+                                 Hash Cond: (tenk1.unique1 = tenk1_1.unique2)
+                                 ->  Seq Scan on tenk1
+                                 ->  Hash
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                             Hash Key: tenk1_1.unique2
+                                             ->  Index Scan using tenk1_thous_tenthous on tenk1 tenk1_1
+                                                   Index Cond: (thousand = 1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
+
+select count(*) from tenk1 t
+where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
+  and thousand = 1;
+ count 
+-------
+    10
+(1 row)
+
 --
 -- Test case for planner bug with nested EXISTS handling
 --
@@ -960,14 +1112,13 @@ explain (verbose, costs off)
      ->  Result
            Output: 'regression'::name
  Optimizer: Postgres query optimizer
- Settings: optimizer=on
 (9 rows)
 
 explain (verbose, costs off)
   select x, x from
     (select (select random()) as x from (values(1),(2)) v(y)) ss;
-            QUERY PLAN             
------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Subquery Scan on ss
    Output: ss.x, ss.x
    ->  Values Scan on "*VALUES*"
@@ -994,8 +1145,7 @@ explain (verbose, costs off)
            Output: 'regression'::name
            One-Time Filter: ("*VALUES*".column1 = "*VALUES*".column1)
  Optimizer: Postgres query optimizer
- Settings: optimizer=on
-(9 rows)
+(11 rows)
 
 explain (verbose, costs off)
   select x, x from
@@ -1130,9 +1280,15 @@ where o.ten = 1;
 -- Check we don't misoptimize a NOT IN where the subquery returns no rows.
 --
 create temp table notinouter (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table notininner (b int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into notinouter values (null), (1);
 select * from notinouter where a not in (select b from notininner);
+NOTICE:  One or more columns in the following table(s) do not have statistics: notinouter, notininner
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
   
@@ -1248,9 +1404,8 @@ select * from int4_tbl where
                  Output: tenk1_1.ten
                  ->  Seq Scan on public.tenk1 tenk1_1
                        Output: tenk1_1.ten
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
- Settings: optimizer=on
-(25 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(24 rows)
 
 select * from int4_tbl where
   (case when f1 in (select unique1 from tenk1 a) then f1 else null end) in
@@ -1307,9 +1462,9 @@ select (select q from
 from int4_tbl;
      q     
 -----------
- (4,5,6.0)
- (4,5,6.0)
  (1,2,3)
+ (4,5,6.0)
+ (4,5,6.0)
  (1,2,3)
  (4,5,6.0)
 (5 rows)
@@ -1425,8 +1580,7 @@ select * from
          ->  Result
                Output: true
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on
-(9 rows)
+(8 rows)
 
 select * from
   (select 9 as x, unnest(array[1,2,3,11,12,13]) as u) ss
@@ -1463,12 +1617,16 @@ select * from
          ->  Result
                Output: true
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on
-(9 rows)
+(8 rows)
 
 select * from
   (select 9 as x, unnest(array[1,2,3,11,12,13]) as u) ss
   where tattle(x, 8);
+NOTICE:  x = 9, y = 8
+NOTICE:  x = 9, y = 8
+NOTICE:  x = 9, y = 8
+NOTICE:  x = 9, y = 8
+NOTICE:  x = 9, y = 8
 NOTICE:  x = 9, y = 8
  x | u  
 ---+----
@@ -1495,8 +1653,7 @@ select * from
          ->  Result
                Output: true
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on
-(9 rows)
+(8 rows)
 
 select * from
   (select 9 as x, unnest(array[1,2,3,11,12,13]) as u) ss
@@ -1548,18 +1705,17 @@ begin
 end;
 $$;
 select * from explain_sq_limit();
-                               explain_sq_limit                               
-------------------------------------------------------------------------------
+                           explain_sq_limit                           
+----------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1) (actual rows=3 loops=1)
    ->  Limit (actual rows=3 loops=1)
          ->  Subquery Scan on x (actual rows=3 loops=1)
                ->  Sort (actual rows=3 loops=1)
                      Sort Key: sq_limit.c1, sq_limit.pk
                      Sort Method:  top-N heapsort  Memory: xxx
-                     Executor Memory: xxx  Segments: x  Max: xxkB (segment x)
                      ->  Seq Scan on sq_limit (actual rows=8 loops=1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 -- a subpath is sorted under a subqueryscan. however, the subqueryscan is not.
 -- whether the order of subpath can applied to the subqueryscan is up-to-implement.
@@ -1600,30 +1756,34 @@ set gp_cte_sharing to on;
 explain (verbose, costs off)
 with x as (select * from (select f1 from subselect_tbl) ss)
 select * from x where f1 = 1;
-                QUERY PLAN                 
--------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: f1
    ->  Seq Scan on public.subselect_tbl
          Output: f1
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (7 rows)
 
 -- Explicitly request materialization
 explain (verbose, costs off)
 with x as materialized (select * from (select f1 from subselect_tbl) ss)
 select * from x where f1 = 1;
-                QUERY PLAN                 
--------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: f1
    ->  Seq Scan on public.subselect_tbl
          Output: f1
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (7 rows)
 
 -- Stable functions are safe to inline
@@ -1638,7 +1798,7 @@ select * from x where f1 = 1;
          Output: subselect_tbl.f1, 'regression'::name
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: gp_cte_sharing = 'on'
 (7 rows)
 
 -- Volatile functions prevent inlining
@@ -1647,6 +1807,8 @@ select * from x where f1 = 1;
 explain (verbose, costs off)
 with x as (select * from (select f1, random() from subselect_tbl) ss)
 select * from x where f1 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1664,7 +1826,7 @@ select * from x where f1 = 1;
                ->  Shared Scan (share slice:id 1:0)
                      Output: share0_ref2.f1, share0_ref2.random
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (16 rows)
 
 create temporary sequence ts;
@@ -1674,6 +1836,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 explain (verbose, costs off)
 with x as (select * from (select a, nextval('ts') from vol_test) ss)
 select * from x where a = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: vol_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                            QUERY PLAN                            
 -----------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1691,7 +1855,7 @@ select * from x where a = 1;
                ->  Shared Scan (share slice:id 1:0)
                      Output: share0_ref2.a, share0_ref2.nextval
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (16 rows)
 
 drop sequence ts;
@@ -1704,15 +1868,17 @@ drop table vol_test;
 explain (verbose, costs off)
 with x as (select * from (select f1 from subselect_tbl for update) ss)
 select * from x where f1 = 1;
-                QUERY PLAN                 
--------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: f1
    ->  Seq Scan on public.subselect_tbl
          Output: f1
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (7 rows)
 
 -- Multiply-referenced CTEs are inlined only when requested
@@ -1741,7 +1907,7 @@ select * from x, x x2 where x.n = x2.n;
                            ->  Seq Scan on public.subselect_tbl
                                  Output: subselect_tbl.f1, 'regression'::name
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (21 rows)
 
 explain (verbose, costs off)
@@ -1767,7 +1933,7 @@ select * from x, x x2 where x.n = x2.n;
                      ->  Seq Scan on public.subselect_tbl subselect_tbl_1
                            Output: subselect_tbl_1.f1, 'regression'::name
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (19 rows)
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
@@ -1794,7 +1960,7 @@ select * from x;
                ->  WorkTable Scan on x x_1
                      Output: x_1.a
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (14 rows)
 
 with recursive x(a) as
@@ -1849,7 +2015,7 @@ select * from x;
                Output: x.a
                Filter: (length((x.a || x.a)) < 5)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (10 rows)
 
 with recursive x(a) as
@@ -1873,27 +2039,27 @@ select * from x;
 explain (verbose, costs off)
 with x as (select * from int4_tbl)
 select * from (with y as (select * from x) select * from y) ss;
-                QUERY PLAN                 
--------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: f1
    ->  Seq Scan on public.int4_tbl
          Output: f1
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (6 rows)
 
 explain (verbose, costs off)
 with x as materialized (select * from int4_tbl)
 select * from (with y as (select * from x) select * from y) ss;
-                QUERY PLAN                 
--------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: f1
    ->  Seq Scan on public.int4_tbl
          Output: f1
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (6 rows)
 
 -- Ensure that we inline the currect CTE when there are
@@ -1901,26 +2067,28 @@ select * from (with y as (select * from x) select * from y) ss;
 explain (verbose, costs off)
 with x as (select 1 as y)
 select * from (with x as (select 2 as y) select * from x) ss;
-                QUERY PLAN                 
--------------------------------------------
+              QUERY PLAN               
+---------------------------------------
  Result
    Output: 2
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (4 rows)
 
 -- Row marks are not pushed into CTEs
 explain (verbose, costs off)
 with x as (select * from subselect_tbl)
 select * from x for update;
-                QUERY PLAN                 
--------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: f1, f2, f3
    ->  Seq Scan on public.subselect_tbl
          Output: f1, f2, f3
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: gp_cte_sharing=on, optimizer=on
+ Settings: gp_cte_sharing = 'on'
 (6 rows)
 
 set gp_cte_sharing to off;

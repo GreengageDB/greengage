@@ -22,9 +22,11 @@ CREATE TABLE bfv_tab1 (
 create index bfv_tab1_idx1 on bfv_tab1 using btree(unique1);
 explain select * from bfv_tab1, (values(147, 'RFAAAA'), (931, 'VJAAAA')) as v (i, j)
     WHERE bfv_tab1.unique1 = v.i and bfv_tab1.stringu1 = v.j;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_tab1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..12.00 rows=1 width=256)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..12.00 rows=2 width=256)
    ->  Nested Loop  (cost=0.00..12.00 rows=1 width=256)
          Join Filter: true
          ->  Result  (cost=0.00..0.00 rows=1 width=12)
@@ -38,9 +40,11 @@ explain select * from bfv_tab1, (values(147, 'RFAAAA'), (931, 'VJAAAA')) as v (i
 set gp_enable_relsize_collection=on;
 explain select * from bfv_tab1, (values(147, 'RFAAAA'), (931, 'VJAAAA')) as v (i, j)
     WHERE bfv_tab1.unique1 = v.i and bfv_tab1.stringu1 = v.j;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_tab1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..12.00 rows=1 width=256)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..12.00 rows=2 width=256)
    ->  Nested Loop  (cost=0.00..12.00 rows=1 width=256)
          Join Filter: true
          ->  Result  (cost=0.00..0.00 rows=1 width=12)
@@ -58,8 +62,10 @@ set allow_system_table_mods=on;
 update pg_index set indisvalid=false where indrelid='bfv_tab1_with_invalid_index'::regclass;
 reset allow_system_table_mods;
 explain select * from bfv_tab1_with_invalid_index where unique1>42;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_tab1_with_invalid_index
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=244)
    ->  Seq Scan on bfv_tab1_with_invalid_index  (cost=0.00..431.00 rows=1 width=244)
          Filter: (unique1 > 42)
@@ -129,58 +135,55 @@ explain SELECT count(*)
 FROM bfv_tab2_facttable1 ft, bfv_tab2_dimdate dt, bfv_tab2_dimtabl1 dt1
 WHERE ft.wk_id = dt.wk_id
 AND ft.id = dt1.id;
-                                                            QUERY PLAN                                                            
-----------------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..1250.34 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1250.34 rows=7 width=1)
-         ->  Hash Join  (cost=0.00..1250.34 rows=3 width=1)
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..1293.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=7 width=1)
+         ->  Hash Join  (cost=0.00..1293.00 rows=3 width=1)
                Hash Cond: (bfv_tab2_dimdate.wk_id = bfv_tab2_facttable1.wk_id)
                ->  Seq Scan on bfv_tab2_dimdate  (cost=0.00..431.00 rows=4 width=2)
-               ->  Hash  (cost=819.34..819.34 rows=3 width=2)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..819.34 rows=3 width=2)
+               ->  Hash  (cost=862.00..862.00 rows=3 width=2)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..862.00 rows=3 width=2)
                            Hash Key: bfv_tab2_facttable1.wk_id
-                           ->  Nested Loop  (cost=0.00..819.34 rows=3 width=2)
-                                 Join Filter: true
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=7 width=4)
+                           ->  Hash Join  (cost=0.00..862.00 rows=3 width=2)
+                                 Hash Cond: (bfv_tab2_facttable1.id = bfv_tab2_dimtabl1.id)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=7 width=6)
+                                       Hash Key: bfv_tab2_facttable1.id
+                                       ->  Dynamic Seq Scan on bfv_tab2_facttable1  (cost=0.00..431.00 rows=7 width=6)
+                                             Number of partitions to scan: 21 (out of 21)
+                                 ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                                        ->  Seq Scan on bfv_tab2_dimtabl1  (cost=0.00..431.00 rows=3 width=4)
-                                 ->  Dynamic Bitmap Heap Scan on bfv_tab2_facttable1  (cost=0.00..388.34 rows=1 width=2)
-                                       Number of partitions to scan: 21 
-                                       Recheck Cond: (id = bfv_tab2_dimtabl1.id)
-                                       Filter: (id = bfv_tab2_dimtabl1.id)
-                                       ->  Dynamic Bitmap Index Scan on idx_bfv_tab2_facttable1  (cost=0.00..0.00 rows=0 width=0)
-                                             Index Cond: (id = bfv_tab2_dimtabl1.id)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(17 rows)
 
 explain SELECT count(*)
 FROM bfv_tab2_facttable1 ft, bfv_tab2_dimdate dt, bfv_tab2_dimtabl1 dt1
 WHERE ft.wk_id = dt.wk_id
 AND ft.id = dt1.id;
-                                                            QUERY PLAN                                                            
-----------------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..1250.34 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1250.34 rows=7 width=1)
-         ->  Hash Join  (cost=0.00..1250.34 rows=3 width=1)
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..1293.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=7 width=1)
+         ->  Hash Join  (cost=0.00..1293.00 rows=3 width=1)
                Hash Cond: (bfv_tab2_dimdate.wk_id = bfv_tab2_facttable1.wk_id)
                ->  Seq Scan on bfv_tab2_dimdate  (cost=0.00..431.00 rows=4 width=2)
-               ->  Hash  (cost=819.34..819.34 rows=3 width=2)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..819.34 rows=3 width=2)
+               ->  Hash  (cost=862.00..862.00 rows=3 width=2)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..862.00 rows=3 width=2)
                            Hash Key: bfv_tab2_facttable1.wk_id
-                           ->  Nested Loop  (cost=0.00..819.34 rows=3 width=2)
-                                 Join Filter: true
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=7 width=4)
+                           ->  Hash Join  (cost=0.00..862.00 rows=3 width=2)
+                                 Hash Cond: (bfv_tab2_facttable1.id = bfv_tab2_dimtabl1.id)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=7 width=6)
+                                       Hash Key: bfv_tab2_facttable1.id
+                                       ->  Dynamic Seq Scan on bfv_tab2_facttable1  (cost=0.00..431.00 rows=7 width=6)
+                                             Number of partitions to scan: 21 (out of 21)
+                                 ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                                        ->  Seq Scan on bfv_tab2_dimtabl1  (cost=0.00..431.00 rows=3 width=4)
-                                 ->  Dynamic Bitmap Heap Scan on bfv_tab2_facttable1  (cost=0.00..388.34 rows=1 width=2)
-                                       Number of partitions to scan: 21 
-                                       Recheck Cond: (id = bfv_tab2_dimtabl1.id)
-                                       Filter: (id = bfv_tab2_dimtabl1.id)
-                                       ->  Dynamic Bitmap Index Scan on idx_bfv_tab2_facttable1  (cost=0.00..0.00 rows=0 width=0)
-                                             Index Cond: (id = bfv_tab2_dimtabl1.id)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(17 rows)
 
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_index_scans(explain_query text) returns int as
 $$
@@ -218,36 +221,48 @@ select disable_xform('CXformGet2TableScan');
 
 -- end_ignore
 select count_index_scans('explain select * from Tab23383 where b=''1'';');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tab23383 where b='1';
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 1
 (1 row)
 
 select count_index_scans('explain select * from Tab23383 where ''1''=b;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tab23383 where '1'=b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 1
 (1 row)
 
 select count_index_scans('explain select * from Tab23383 where ''2''> b order by a limit 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tab23383 where '2'> b order by a limit 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   1 | 1
@@ -263,12 +278,16 @@ select * from Tab23383 where '2'> b order by a limit 10;
 (10 rows)
 
 select count_index_scans('explain select * from Tab23383 where b between ''1'' and ''2'' order by a limit 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tab23383 where b between '1' and '2' order by a limit 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   1 | 1
@@ -285,12 +304,16 @@ select * from Tab23383 where b between '1' and '2' order by a limit 10;
 
 -- predicates on both index and non-index key
 select count_index_scans('explain select * from Tab23383 where b=''1'' and a=''1'';');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tab23383 where b='1' and a='1';
+NOTICE:  One or more columns in the following table(s) do not have statistics: tab23383
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 1
@@ -322,36 +345,48 @@ create index idx23383_c on Tbl23383_partitioned_1_prt_p1(c);
 create index idx23383_cd on Tbl23383_partitioned_1_prt_p2(c,d);
 set optimizer_enable_dynamictablescan = off;
 select count_index_scans('explain select * from Tbl23383_partitioned where b=''1''');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tbl23383_partitioned where b='1';
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d 
 ---+---+---+---
  1 | 1 | 1 | 1
 (1 row)
 
 select count_index_scans('explain select * from Tbl23383_partitioned where ''1''=b');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tbl23383_partitioned where '1'=b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d 
 ---+---+---+---
  1 | 1 | 1 | 1
 (1 row)
 
 select count_index_scans('explain select * from Tbl23383_partitioned where ''2''> b order by a limit 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tbl23383_partitioned where '2'> b order by a limit 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  | c  | d  
 ----+----+----+----
   1 | 1  | 1  | 1
@@ -367,12 +402,16 @@ select * from Tbl23383_partitioned where '2'> b order by a limit 10;
 (10 rows)
 
 select count_index_scans('explain select * from Tbl23383_partitioned where b between ''1'' and ''2'' order by a limit 10;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tbl23383_partitioned where b between '1' and '2' order by a limit 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  | c  | d  
 ----+----+----+----
   1 | 1  | 1  | 1
@@ -389,12 +428,16 @@ select * from Tbl23383_partitioned where b between '1' and '2' order by a limit 
 
 -- predicates on both index and non-index key
 select count_index_scans('explain select * from Tbl23383_partitioned where b=''1'' and a=''1'';');
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_index_scans 
 -------------------
                  1
 (1 row)
 
 select * from Tbl23383_partitioned where b='1' and a='1';
+NOTICE:  One or more columns in the following table(s) do not have statistics: tbl23383_partitioned
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d 
 ---+---+---+---
  1 | 1 | 1 | 1
@@ -442,10 +485,10 @@ select disable_xform('CXformGet2TableScan');
 
 -- end_ignore
 explain select * from tbl_ab where b::oid=1;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1177.97 rows=87 width=8)
-   ->  Seq Scan on tbl_ab  (cost=0.00..1176.25 rows=29 width=8)
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..393.90 rows=86 width=8)
+   ->  Seq Scan on tbl_ab  (cost=0.00..392.75 rows=29 width=8)
          Filter: ((b)::oid = '1'::oid)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -485,52 +528,60 @@ set seq_page_cost=10000000;
 set enable_indexscan=on;
 set enable_nestloop=on;
 explain select * from nestloop_x as x, nestloop_y as y where x.i + x.j < y.j;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..551.01 rows=56 width=16)
-   ->  Nested Loop  (cost=0.00..551.01 rows=19 width=16)
+NOTICE:  One or more columns in the following table(s) do not have statistics: nestloop_x, nestloop_y
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..437.00 rows=1 width=16)
+   ->  Nested Loop  (cost=0.00..437.00 rows=1 width=16)
          Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=20 width=8)
-               ->  Seq Scan on nestloop_x  (cost=0.00..431.00 rows=7 width=8)
-         ->  Index Scan using nestloop_y_idx on nestloop_y  (cost=0.00..120.01 rows=1 width=8)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+               ->  Seq Scan on nestloop_x  (cost=0.00..431.00 rows=1 width=8)
+         ->  Index Scan using nestloop_y_idx on nestloop_y  (cost=0.00..6.00 rows=1 width=8)
                Index Cond: (j > (nestloop_x.i + nestloop_x.j))
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 select * from nestloop_x as x, nestloop_y as y where x.i + x.j < y.j;
+NOTICE:  One or more columns in the following table(s) do not have statistics: nestloop_x, nestloop_y
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | i | j 
 ---+---+---+---
+ 2 | 2 | 7 | 7
  3 | 3 | 7 | 7
  1 | 1 | 3 | 3
  1 | 1 | 4 | 4
- 1 | 1 | 5 | 5
- 1 | 1 | 6 | 6
  1 | 1 | 7 | 7
  2 | 2 | 5 | 5
  2 | 2 | 6 | 6
- 2 | 2 | 7 | 7
+ 1 | 1 | 5 | 5
+ 1 | 1 | 6 | 6
 (9 rows)
 
 explain select * from nestloop_x as x, nestloop_y as y where y.j > x.i + x.j + 2;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..551.01 rows=56 width=16)
-   ->  Nested Loop  (cost=0.00..551.01 rows=19 width=16)
+NOTICE:  One or more columns in the following table(s) do not have statistics: nestloop_x, nestloop_y
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..437.00 rows=1 width=16)
+   ->  Nested Loop  (cost=0.00..437.00 rows=1 width=16)
          Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=20 width=8)
-               ->  Seq Scan on nestloop_x  (cost=0.00..431.00 rows=7 width=8)
-         ->  Index Scan using nestloop_y_idx on nestloop_y  (cost=0.00..120.01 rows=1 width=8)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+               ->  Seq Scan on nestloop_x  (cost=0.00..431.00 rows=1 width=8)
+         ->  Index Scan using nestloop_y_idx on nestloop_y  (cost=0.00..6.00 rows=1 width=8)
                Index Cond: (j > ((nestloop_x.i + nestloop_x.j) + 2))
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 select * from nestloop_x as x, nestloop_y as y where y.j > x.i + x.j + 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: nestloop_x, nestloop_y
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | i | j 
 ---+---+---+---
- 1 | 1 | 5 | 5
- 1 | 1 | 6 | 6
  1 | 1 | 7 | 7
  2 | 2 | 7 | 7
+ 1 | 1 | 5 | 5
+ 1 | 1 | 6 | 6
 (4 rows)
 
 drop table nestloop_x, nestloop_y;
@@ -542,6 +593,8 @@ CREATE TABLE bpchar_ops(id INT8, v char(10)) DISTRIBUTED BY(id);
 CREATE INDEX bpchar_ops_btree_idx ON bpchar_ops USING btree(v bpchar_pattern_ops);
 INSERT INTO bpchar_ops VALUES (0, 'row');
 SELECT * FROM bpchar_ops WHERE v = 'row '::char(20);
+NOTICE:  One or more columns in the following table(s) do not have statistics: bpchar_ops
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id |     v      
 ----+------------
   0 | row       
@@ -567,6 +620,8 @@ select c && '<(5,5), 1>'::circle,
        c && '<(5,5), 2>'::circle,
        c && '<(5,5), 3>'::circle
 from shape_heap;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? | ?column? | ?column? 
 ----------+----------+----------
  f        | f        | t
@@ -584,6 +639,8 @@ set enable_indexscan=off;
 set enable_bitmapscan=on;
 -- Use EXPLAIN to verify that these use a bitmap index scan
 explain select * from shape_heap where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..6.00 rows=1 width=24)
@@ -594,10 +651,12 @@ explain select * from shape_heap where c && '<(5,5), 1>'::circle;
 (5 rows)
 
 explain select * from shape_ao   where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..68.13 rows=1 width=24)
-   ->  Bitmap Heap Scan on shape_ao  (cost=0.00..68.13 rows=1 width=24)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=24)
+   ->  Bitmap Heap Scan on shape_ao  (cost=0.00..391.30 rows=1 width=24)
          Recheck Cond: (c && '<(5,5),1>'::circle)
          ->  Bitmap Index Scan on shape_ao_bb_idx  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: (c && '<(5,5),1>'::circle)
@@ -605,10 +664,12 @@ explain select * from shape_ao   where c && '<(5,5), 1>'::circle;
 (6 rows)
 
 explain select * from shape_aocs where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_aocs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..68.13 rows=1 width=24)
-   ->  Bitmap Heap Scan on shape_aocs  (cost=0.00..68.13 rows=1 width=24)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=24)
+   ->  Bitmap Heap Scan on shape_aocs  (cost=0.00..391.30 rows=1 width=24)
          Recheck Cond: (c && '<(5,5),1>'::circle)
          ->  Bitmap Index Scan on shape_aocs_bb_idx  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: (c && '<(5,5),1>'::circle)
@@ -617,48 +678,66 @@ explain select * from shape_aocs where c && '<(5,5), 1>'::circle;
 
 -- Test that they return correct results.
 select * from shape_heap where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_ao   where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_aocs where c && '<(5,5), 1>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_aocs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_heap where c && '<(5,5), 2>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_ao   where c && '<(5,5), 2>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_aocs where c && '<(5,5), 2>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_aocs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c 
 ---
 (0 rows)
 
 select * from shape_heap where c && '<(5,5), 3>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_heap
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      c     
 -----------
  <(0,0),5>
 (1 row)
 
 select * from shape_ao   where c && '<(5,5), 3>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_ao
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      c     
 -----------
  <(0,0),5>
 (1 row)
 
 select * from shape_aocs where c && '<(5,5), 3>'::circle;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shape_aocs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      c     
 -----------
  <(0,0),5>
@@ -684,15 +763,19 @@ SET optimizer_enable_tablescan=off;
 SET optimizer_enable_indexscan=off;
 SET optimizer_enable_indexonlyscan=on;
 EXPLAIN SELECT c, a FROM table_with_reversed_index WHERE a > 5;
-                                                                                                                                                                                      QUERY PLAN                                                                                                                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..9999999999999999210968330832147026575540427693752222372866517696718412616639336002780474141705354144110364081118142324010404785714541315284281257752757291623642503417072967859774120474650369161140553335192009630674782085554695972153397552576515276800.00 rows=1 width=7)
-   ->  Index Only Scan using table_with_reversed_index_c_a_idx on table_with_reversed_index  (cost=0.00..9999999999999999210968330832147026575540427693752222372866517696718412616639336002780474141705354144110364081118142324010404785714541315284281257752757291623642503417072967859774120474650369161140553335192009630674782085554695972153397552576515276800.00 rows=1 width=7)
+NOTICE:  One or more columns in the following table(s) do not have statistics: table_with_reversed_index
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..6.00 rows=1 width=12)
+   ->  Index Only Scan using table_with_reversed_index_c_a_idx on table_with_reversed_index  (cost=0.00..6.00 rows=1 width=12)
          Index Cond: (a > 5)
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 SELECT c, a FROM table_with_reversed_index WHERE a > 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: table_with_reversed_index
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c  | a  
 ----+----
  ab | 10

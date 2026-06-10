@@ -1,7 +1,7 @@
 -- only use parallelism when explicitly intending to do so
 SET max_parallel_maintenance_workers = 0;
 SET max_parallel_workers = 0;
--- A table with with contents that, when sorted, triggers abbreviated
+-- A table with contents that, when sorted, triggers abbreviated
 -- key aborts. One easy way to achieve that is to use uuids that all
 -- have the same prefix, as abbreviated keys for uuids just use the
 -- first sizeof(Datum) bytes.
@@ -29,11 +29,15 @@ INSERT INTO abbrev_abort_uuids (abort_increasing, abort_decreasing, noabort_incr
     SELECT abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
     FROM abbrev_abort_uuids
     WHERE (id < 10 OR id > 19990) AND id % 3 = 0 AND abort_increasing is not null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ----
 -- Check sort node uses of tuplesort wrt. abbreviated keys
 ----
 -- plain sort triggering abbreviated abort
 SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing OFFSET 20000 - 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            abort_increasing           |           abort_decreasing           
 --------------------------------------+--------------------------------------
  00000000-0000-0000-0000-000000019992 | 00000000-0000-0000-0000-000000000008
@@ -54,6 +58,8 @@ SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort
 (15 rows)
 
 SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing NULLS FIRST OFFSET 20000 - 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            abort_increasing           |           abort_decreasing           
 --------------------------------------+--------------------------------------
  00000000-0000-0000-0000-000000000011 | 00000000-0000-0000-0000-000000019989
@@ -75,6 +81,8 @@ SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort
 
 -- plain sort not triggering abbreviated abort
 SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing OFFSET 20000 - 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
           noabort_increasing          |          noabort_decreasing          
 --------------------------------------+--------------------------------------
  00009997-0000-0000-0000-000000009997 | 00010003-0000-0000-0000-000000010003
@@ -95,6 +103,8 @@ SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY n
 (15 rows)
 
 SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing NULLS FIRST OFFSET 20000 - 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
           noabort_increasing          |          noabort_decreasing          
 --------------------------------------+--------------------------------------
  00010006-0000-0000-0000-000000010006 | 00009994-0000-0000-0000-000000009994
@@ -116,6 +126,8 @@ SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY n
 
 -- bounded sort (disables abbreviated keys)
 SELECT abort_increasing, noabort_increasing FROM abbrev_abort_uuids ORDER BY abort_increasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            abort_increasing           |          noabort_increasing          
 --------------------------------------+--------------------------------------
  00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000000000
@@ -126,6 +138,8 @@ SELECT abort_increasing, noabort_increasing FROM abbrev_abort_uuids ORDER BY abo
 (5 rows)
 
 SELECT abort_increasing, noabort_increasing FROM abbrev_abort_uuids ORDER BY noabort_increasing NULLS FIRST LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            abort_increasing           |          noabort_increasing          
 --------------------------------------+--------------------------------------
                                       | 
@@ -144,6 +158,8 @@ CREATE INDEX abbrev_abort_uuids__noabort_decreasing_idx ON abbrev_abort_uuids (n
 -- verify
 EXPLAIN (COSTS OFF)
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                     QUERY PLAN                    
 --------------------------------------------------
  Limit
@@ -156,6 +172,8 @@ SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER 
 (7 rows)
 
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   id   |          noabort_increasing          |          noabort_decreasing          
 -------+--------------------------------------+--------------------------------------
      1 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
@@ -167,6 +185,8 @@ SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER 
 
 EXPLAIN (COSTS OFF)
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                     QUERY PLAN                    
 --------------------------------------------------
  Limit
@@ -179,6 +199,8 @@ SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER 
 (7 rows)
 
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   id   |          noabort_increasing          |          noabort_decreasing          
 -------+--------------------------------------+--------------------------------------
  20010 | 00009991-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
@@ -194,6 +216,8 @@ CREATE INDEX abbrev_abort_uuids__abort_decreasing_idx ON abbrev_abort_uuids (abo
 -- verify
 EXPLAIN (COSTS OFF)
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                     QUERY PLAN                    
 --------------------------------------------------
  Limit
@@ -206,6 +230,8 @@ SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY a
 (7 rows)
 
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   id   |           abort_increasing           |           abort_decreasing           
 -------+--------------------------------------+--------------------------------------
      1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000
@@ -217,6 +243,8 @@ SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY a
 
 EXPLAIN (COSTS OFF)
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                     QUERY PLAN                    
 --------------------------------------------------
  Limit
@@ -229,6 +257,8 @@ SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY a
 (7 rows)
 
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing LIMIT 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   id   |           abort_increasing           |           abort_decreasing           
 -------+--------------------------------------+--------------------------------------
  20010 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
@@ -374,6 +404,8 @@ SET LOCAL enable_indexscan = false;
 -- unfortunately can't show analyze output confirming sort method,
 -- the memory used output wouldn't be stable
 EXPLAIN (COSTS OFF) DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                  QUERY PLAN                 
 --------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -446,6 +478,8 @@ WARNING:  "work_mem": setting is deprecated, and may be removed in a future rele
 -- unfortunately can't show analyze output confirming sort method,
 -- the memory used output wouldn't be stable
 EXPLAIN (COSTS OFF) DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                  QUERY PLAN                 
 --------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -535,6 +569,8 @@ FROM (
     SELECT * FROM abbrev_abort_uuids
     UNION ALL
     SELECT NULL, NULL, NULL, NULL, NULL, NULL) s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            array_agg            |                                                                                         array_agg                                                                                          |         array_agg          | percentile_disc | percentile_disc |           percentile_disc            | percentile_disc | rank 
 --------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+-----------------+-----------------+--------------------------------------+-----------------+------
  {NULL,20010,20009,20008,20007} | {00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000019999,00000000-0000-0000-0000-000000019998,00000000-0000-0000-0000-000000019997} | {9999,9998,9997,9996,9995} |           19810 |             200 | 00000000-0000-0000-0000-000000016003 | 136             |    2
@@ -557,6 +593,8 @@ FROM (
     SELECT * FROM abbrev_abort_uuids
     UNION ALL
     SELECT NULL, NULL, NULL, NULL, NULL, NULL) s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: abbrev_abort_uuids
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            array_agg            |                                                                                         array_agg                                                                                          |         array_agg          | percentile_disc | percentile_disc |           percentile_disc            | percentile_disc | rank 
 --------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+-----------------+-----------------+--------------------------------------+-----------------+------
  {NULL,20010,20009,20008,20007} | {00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000019999,00000000-0000-0000-0000-000000019998,00000000-0000-0000-0000-000000019997} | {9999,9998,9997,9996,9995} |           19810 |             200 | 00000000-0000-0000-0000-000000016003 | 136             |    2
@@ -567,6 +605,8 @@ ROLLBACK;
 -- test tuplesort mark/restore
 ---
 CREATE TEMP TABLE test_mark_restore(col1 int, col2 int, col12 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- need a few duplicates for mark/restore to matter
 INSERT INTO test_mark_restore(col1, col2, col12)
    SELECT a.i, b.i, a.i * b.i FROM generate_series(1, 500) a(i), generate_series(1, 5) b(i);

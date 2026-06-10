@@ -10,6 +10,8 @@ insert into dml_14027_union_s select generate_series(1,1), generate_series(1,1);
 begin;
 drop table dml_14027_union_s_1_prt_def;
 explain select count(distinct(b)) from dml_14027_union_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dml_14027_union_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
  Aggregate  (cost=0.00..431.00 rows=1 width=8)
@@ -30,6 +32,8 @@ explain select count(distinct(b)) from dml_14027_union_s;
 (15 rows)
 
 select count(distinct(b)) from dml_14027_union_s;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dml_14027_union_s
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      1
@@ -37,45 +41,29 @@ select count(distinct(b)) from dml_14027_union_s;
 
 rollback;
 explain update dml_14027_union_s set a = (select null union select null)::numeric;
-                                                                        QUERY PLAN                                                                        
-----------------------------------------------------------------------------------------------------------------------------------------------------------
- Update on dml_14027_union_s  (cost=0.00..882689.29 rows=1 width=1)
-   ->  Result  (cost=0.00..882689.22 rows=2 width=30)
-         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..882689.22 rows=2 width=26)
-               Hash Key: dml_14027_union_s_1.a
-               ->  Split  (cost=0.00..882689.22 rows=1 width=26)
-                     ->  Nested Loop Left Join  (cost=0.00..882689.22 rows=1 width=30)
-                           Join Filter: true
-                           ->  Dynamic Seq Scan on dml_14027_union_s dml_14027_union_s_1  (cost=0.00..431.00 rows=1 width=22)
-                                 Number of partitions to scan: 2 (out of 2)
-                           ->  Assert  (cost=0.00..0.00 rows=1 width=8)
-                                 Assert Cond: ((row_number() OVER (?)) = 1)
-                                 ->  Materialize  (cost=0.00..0.00 rows=1 width=16)
-                                       ->  Broadcast Motion 1:3  (slice2; segments: 1)  (cost=0.00..0.00 rows=1 width=16)
-                                             ->  WindowAgg  (cost=0.00..0.00 rows=1 width=16)
-                                                   ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..0.00 rows=1 width=8)
-                                                         ->  GroupAggregate  (cost=0.00..0.00 rows=1 width=8)
-                                                               Group Key: (NULL::text)
-                                                               ->  Sort  (cost=0.00..0.00 rows=1 width=8)
-                                                                     Sort Key: (NULL::text)
-                                                                     ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..0.00 rows=1 width=8)
-                                                                           Hash Key: (NULL::text)
-                                                                           ->  GroupAggregate  (cost=0.00..0.00 rows=1 width=8)
-                                                                                 Group Key: (NULL::text)
-                                                                                 ->  Sort  (cost=0.00..0.00 rows=1 width=8)
-                                                                                       Sort Key: (NULL::text)
-                                                                                       ->  Result  (cost=0.00..0.00 rows=1 width=8)
-                                                                                             One-Time Filter: (gp_execution_segment() = 1)
-                                                                                             ->  Append  (cost=0.00..0.00 rows=1 width=8)
-                                                                                                   ->  Result  (cost=0.00..0.00 rows=1 width=1)
-                                                                                                   ->  Result  (cost=0.00..0.00 rows=1 width=1)
- Optimizer: Pivotal Optimizer (GPORCA)
-(31 rows)
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Update on dml_14027_union_s  (cost=0.07..2134.74 rows=0 width=0)
+   Update on dml_14027_union_s_1_prt_2 dml_14027_union_s_1
+   Update on dml_14027_union_s_1_prt_def dml_14027_union_s_2
+   InitPlan 1 (returns $0)  (slice2)
+     ->  HashAggregate  (cost=0.06..0.07 rows=2 width=32)
+           Group Key: (NULL::text)
+           ->  Append  (cost=0.00..0.05 rows=2 width=32)
+                 ->  Result  (cost=0.00..0.01 rows=1 width=32)
+                 ->  Result  (cost=0.00..0.01 rows=1 width=32)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..2134.67 rows=66133 width=50)
+         ->  Split  (cost=0.00..812.00 rows=66133 width=50)
+               ->  Append  (cost=0.00..812.00 rows=33067 width=50)
+                     ->  Seq Scan on dml_14027_union_s_1_prt_2 dml_14027_union_s_1  (cost=0.00..323.33 rows=16533 width=50)
+                     ->  Seq Scan on dml_14027_union_s_1_prt_def dml_14027_union_s_2  (cost=0.00..323.33 rows=16533 width=50)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 -- Should not raise error due to stale catcache in reader gang.
 -- eg: ERROR: expected partdefid 134733, but got 0
 update dml_14027_union_s set a = (select null union select null)::numeric;
-ERROR:  null value in column "a" of relation "dml_14027_union_s_1_prt_2" violates not-null constraint  (seg0 127.0.1.1:7002 pid=27466)
+ERROR:  null value in column "a" of relation "dml_14027_union_s_1_prt_2" violates not-null constraint  (seg0 172.17.0.3:7002 pid=124873)
 DETAIL:  Failing row contains (null, 1).
 drop table dml_14027_union_s;
 reset optimizer_force_multistage_agg;

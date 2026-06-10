@@ -15,12 +15,15 @@ CREATE TABLE collate_test1 (
     a int,
     b text COLLATE "C" NOT NULL
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d collate_test1
         Table "collate_tests.collate_test1"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  a      | integer |           |          | 
  b      | text    | C         | not null | 
+Distributed by: (a)
 
 CREATE TABLE collate_test_fail (
     a int COLLATE "C",
@@ -32,6 +35,7 @@ LINE 2:     a int COLLATE "C",
 CREATE TABLE collate_test_like (
     LIKE collate_test1
 );
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d collate_test_like
       Table "collate_tests.collate_test_like"
  Column |  Type   | Collation | Nullable | Default 
@@ -44,6 +48,8 @@ CREATE TABLE collate_test2 (
     a int,
     b text COLLATE "POSIX"
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO collate_test1 VALUES (1, 'abc'), (2, 'Abc'), (3, 'bbc'), (4, 'ABD');
 INSERT INTO collate_test2 SELECT * FROM collate_test1;
 SELECT * FROM collate_test1 WHERE b COLLATE "C" >= 'abc';
@@ -63,8 +69,8 @@ SELECT * FROM collate_test1 WHERE b >= 'abc' COLLATE "C";
 SELECT * FROM collate_test1 WHERE b COLLATE "C" >= 'abc' COLLATE "C";
  a |  b  
 ---+-----
- 1 | abc
  3 | bbc
+ 1 | abc
 (2 rows)
 
 SELECT * FROM collate_test1 WHERE b COLLATE "C" >= 'bbc' COLLATE "POSIX"; -- fail
@@ -78,6 +84,8 @@ CREATE TABLE collate_test4 (
     a int,
     b testdomain_p
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO collate_test4 SELECT * FROM collate_test1;
 SELECT a, b FROM collate_test4 ORDER BY b;
  a |  b  
@@ -92,6 +100,8 @@ CREATE TABLE collate_test5 (
     a int,
     b testdomain_p COLLATE "C"
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO collate_test5 SELECT * FROM collate_test1;
 SELECT a, b FROM collate_test5 ORDER BY b;
  a |  b  
@@ -167,12 +177,14 @@ CREATE TABLE collate_test10 (
     x text COLLATE "C",
     y text COLLATE "POSIX"
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO collate_test10 VALUES (1, 'hij', 'hij'), (2, 'HIJ', 'HIJ');
 SELECT a, lower(x), lower(y), upper(x), upper(y), initcap(x), initcap(y) FROM collate_test10;
  a | lower | lower | upper | upper | initcap | initcap 
 ---+-------+-------+-------+-------+---------+---------
- 1 | hij   | hij   | HIJ   | HIJ   | Hij     | Hij
  2 | hij   | hij   | HIJ   | HIJ   | Hij     | Hij
+ 1 | hij   | hij   | HIJ   | HIJ   | Hij     | Hij
 (2 rows)
 
 SELECT a, lower(x COLLATE "C"), lower(y COLLATE "C") FROM collate_test10;
@@ -263,8 +275,8 @@ SELECT * FROM (SELECT a, b, greatest(b, 'CCC') FROM collate_test2 ORDER BY 3) r 
 SELECT a, x, y, lower(greatest(x, 'foo')), lower(greatest(y, 'foo')) FROM collate_test10;
  a |  x  |  y  | lower | lower 
 ---+-----+-----+-------+-------
- 1 | hij | hij | hij   | hij
  2 | HIJ | HIJ | foo   | foo
+ 1 | hij | hij | hij   | hij
 (2 rows)
 
 SELECT a, nullif(b, 'abc') FROM collate_test1 ORDER BY 2;
@@ -288,8 +300,8 @@ SELECT a, nullif(b, 'abc') FROM collate_test2 ORDER BY 2;
 SELECT a, lower(nullif(x, 'foo')), lower(nullif(y, 'foo')) FROM collate_test10;
  a | lower | lower 
 ---+-------+-------
- 1 | hij   | hij
  2 | hij   | hij
+ 1 | hij   | hij
 (2 rows)
 
 SELECT a, CASE b WHEN 'abc' THEN 'abcd' ELSE b END FROM collate_test1 ORDER BY 2;
@@ -341,8 +353,8 @@ SELECT a, b::testdomain_p FROM collate_test2 ORDER BY 2;
 SELECT a, lower(x::testdomain), lower(y::testdomain) FROM collate_test10;
  a | lower | lower 
 ---+-------+-------
- 1 | hij   | hij
  2 | hij   | hij
+ 1 | hij   | hij
 (2 rows)
 
 SELECT min(b), max(b) FROM collate_test1;
@@ -434,14 +446,14 @@ HINT:  Use the COLLATE clause to set the collation explicitly.
 SELECT a, b FROM collate_test1 UNION ALL SELECT a, b FROM collate_test2; -- ok
  a |  b  
 ---+-----
- 1 | abc
+ 2 | Abc
+ 3 | bbc
+ 4 | ABD
  2 | Abc
  3 | bbc
  4 | ABD
  1 | abc
- 2 | Abc
- 3 | bbc
- 4 | ABD
+ 1 | abc
 (8 rows)
 
 SELECT a, b FROM collate_test1 UNION SELECT a, b FROM collate_test2 ORDER BY 2; -- fail
@@ -469,11 +481,13 @@ LINE 1: SELECT a, b FROM collate_test1 EXCEPT SELECT a, b FROM colla...
                                                         ^
 HINT:  You can choose the collation by applying the COLLATE clause to one or both expressions.
 CREATE TABLE test_u AS SELECT a, b FROM collate_test1 UNION ALL SELECT a, b FROM collate_test2; -- fail
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  no collation was derived for column "b" with collatable type text
 HINT:  Use the COLLATE clause to set the collation explicitly.
 -- ideally this would be a parse-time error, but for now it must be run-time:
 select x < y from collate_test10; -- fail
-ERROR:  could not determine which collation to use for string comparison
+ERROR:  could not determine which collation to use for string comparison  (seg0 slice1 172.17.0.3:7002 pid=86967)
 HINT:  Use the COLLATE clause to set the collation explicitly.
 select x || y from collate_test10; -- ok, because || is not collation aware
  ?column? 
@@ -507,7 +521,7 @@ SELECT a, b, a < b as lt FROM
 
 -- collation mismatch in subselects
 SELECT * FROM collate_test10 WHERE (x, y) NOT IN (SELECT y, x FROM collate_test10);
-ERROR:  could not determine which collation to use for string comparison  (seg1 slice1 127.0.0.1:40001 pid=24086)
+ERROR:  could not determine which collation to use for string comparison  (seg1 slice1 172.17.0.3:7003 pid=86952)
 HINT:  Use the COLLATE clause to set the collation explicitly.
 -- now it works with overrides
 SELECT * FROM collate_test10 WHERE (x COLLATE "POSIX", y COLLATE "C") NOT IN (SELECT y, x FROM collate_test10);
@@ -623,15 +637,70 @@ SET enable_nestloop TO 0;
 CREATE TABLE collate_test20 (f1 text COLLATE "C" PRIMARY KEY);
 INSERT INTO collate_test20 VALUES ('foo'), ('bar');
 CREATE TABLE collate_test21 (f2 text COLLATE "POSIX" REFERENCES collate_test20);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO collate_test21 VALUES ('foo'), ('bar');
 INSERT INTO collate_test21 VALUES ('baz'); -- fail
 -- Passes in GPDB, because we don't check foreign keys
 CREATE TABLE collate_test22 (f2 text COLLATE "POSIX");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO collate_test22 VALUES ('foo'), ('bar'), ('baz');
 ALTER TABLE collate_test22 ADD FOREIGN KEY (f2) REFERENCES collate_test20; -- fail
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- Passes in GPDB, because we don't check foreign keys
 DELETE FROM collate_test22 WHERE f2 = 'baz';
 ALTER TABLE collate_test22 ADD FOREIGN KEY (f2) REFERENCES collate_test20;
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86952)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86967)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86956)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 RESET enable_seqscan;
 RESET enable_hashjoin;
 RESET enable_nestloop;
@@ -667,6 +736,8 @@ CREATE COLLATION mycoll3 FROM "default";  -- intentionally unsupported
 ERROR:  collation "default" cannot be copied
 DROP COLLATION mycoll1;
 CREATE TABLE collate_test23 (f1 text collate mycoll2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP COLLATION mycoll2;  -- fail
 ERROR:  cannot drop collation mycoll2 because other objects depend on it
 DETAIL:  column f1 of table collate_test23 depends on collation mycoll2
@@ -678,6 +749,8 @@ LINE 1: CREATE COLLATION case_coll ("Lc_Collate" = "POSIX", "Lc_Ctyp...
                                     ^
 -- 9.1 bug with useless COLLATE in an expression subject to length coercion
 CREATE TEMP TABLE vctable (f1 varchar(25));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vctable VALUES ('foo' COLLATE "C");
 SELECT collation for ('foo'); -- unknown type - null
  pg_collation_for 
@@ -692,6 +765,8 @@ SELECT collation for ('foo'::text);
 (1 row)
 
 SELECT collation for ((SELECT a FROM collate_test1 LIMIT 1)); -- non-collatable type - error
+NOTICE:  One or more columns in the following table(s) do not have statistics: collate_test1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ERROR:  collations are not supported by type integer
 SELECT collation for ((SELECT b FROM collate_test1 LIMIT 1));
  pg_collation_for 

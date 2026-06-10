@@ -39,12 +39,16 @@ CREATE VIEW key_dependent_view_no_cols AS
 -- CREATE OR REPLACE VIEW
 --
 CREATE TABLE viewtest_tbl (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY viewtest_tbl FROM stdin;
 CREATE OR REPLACE VIEW viewtest AS
 	SELECT * FROM viewtest_tbl;
 CREATE OR REPLACE VIEW viewtest AS
 	SELECT * FROM viewtest_tbl WHERE a > 10;
 SELECT * FROM viewtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: viewtest_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
  15 | 20
@@ -54,6 +58,8 @@ SELECT * FROM viewtest;
 CREATE OR REPLACE VIEW viewtest AS
 	SELECT a, b FROM viewtest_tbl WHERE a > 5 ORDER BY b DESC;
 SELECT * FROM viewtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: viewtest_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
  20 | 25
@@ -69,6 +75,7 @@ ERROR:  cannot drop columns from view
 CREATE OR REPLACE VIEW viewtest AS
 	SELECT 1, * FROM viewtest_tbl;
 ERROR:  cannot change name of view column "a" to "?column?"
+HINT:  Use ALTER VIEW ... RENAME COLUMN ... to change name of view column instead.
 -- should fail
 CREATE OR REPLACE VIEW viewtest AS
 	SELECT a, b::numeric FROM viewtest_tbl;
@@ -82,8 +89,14 @@ DROP TABLE viewtest_tbl;
 CREATE SCHEMA temp_view_test
     CREATE TABLE base_table (a int, id int)
     CREATE TABLE base_table2 (a int, id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET search_path TO temp_view_test, public;
 CREATE TEMPORARY TABLE temp_table (a int, id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should be created in temp_view_test schema
 CREATE VIEW v1 AS SELECT * FROM base_table;
 -- should be created in temp object schema
@@ -187,8 +200,14 @@ SELECT relname FROM pg_class
 CREATE SCHEMA testviewschm2;
 SET search_path TO testviewschm2, public;
 CREATE TABLE t1 (num int, name text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t2 (num2 int, value text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE tt (num2 int, value text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW nontemp1 AS SELECT * FROM t1 CROSS JOIN t2;
 CREATE VIEW temporal1 AS SELECT * FROM t1 CROSS JOIN tt;
 NOTICE:  view "temporal1" will be a temporary view
@@ -226,10 +245,20 @@ SELECT relname FROM pg_class
 (4 rows)
 
 CREATE TABLE tbl1 ( a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbl2 (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbl3 (e int, f int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbl4 (g int, h int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'g' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE tmptbl (i int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --Should be in testviewschm2
 CREATE   VIEW  pubview AS SELECT * FROM tbl1 WHERE tbl1.a
 BETWEEN (SELECT d FROM tbl2 WHERE c = 1) AND (SELECT e FROM tbl3 WHERE f = 2)
@@ -368,8 +397,14 @@ SELECT a::varchar(3) FROM tt1;
 DROP VIEW tt1;
 -- Test view decompilation in the face of relation renaming conflicts
 CREATE TABLE tt1 (f1 int, f2 int, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx1 (x1 int, x2 int, x3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE temp_view_test.tt1 (y1 int, f2 int, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'y1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW aliased_view_1 AS
   select * from tt1
     where exists (select 1 from tx1 where tt1.f1 = tx1.x1);
@@ -809,10 +844,63 @@ View definition:
     (tbl3
      CROSS JOIN tbl4) same;
 
+create table tbl1a (a int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create view view_of_joins_2a as select * from tbl1 join tbl1a using (a);
+create view view_of_joins_2b as select * from tbl1 join tbl1a using (a) as x;
+create view view_of_joins_2c as select * from (tbl1 join tbl1a using (a)) as y;
+create view view_of_joins_2d as select * from (tbl1 join tbl1a using (a) as x) as y;
+select pg_get_viewdef('view_of_joins_2a', true);
+       pg_get_viewdef       
+----------------------------
+  SELECT tbl1.a,           +
+     tbl1.b,               +
+     tbl1a.c               +
+    FROM tbl1              +
+      JOIN tbl1a USING (a);
+(1 row)
+
+select pg_get_viewdef('view_of_joins_2b', true);
+         pg_get_viewdef          
+---------------------------------
+  SELECT tbl1.a,                +
+     tbl1.b,                    +
+     tbl1a.c                    +
+    FROM tbl1                   +
+      JOIN tbl1a USING (a) AS x;
+(1 row)
+
+select pg_get_viewdef('view_of_joins_2c', true);
+        pg_get_viewdef         
+-------------------------------
+  SELECT y.a,                 +
+     y.b,                     +
+     y.c                      +
+    FROM (tbl1                +
+      JOIN tbl1a USING (a)) y;
+(1 row)
+
+select pg_get_viewdef('view_of_joins_2d', true);
+           pg_get_viewdef           
+------------------------------------
+  SELECT y.a,                      +
+     y.b,                          +
+     y.c                           +
+    FROM (tbl1                     +
+      JOIN tbl1a USING (a) AS x) y;
+(1 row)
+
 -- Test view decompilation in the face of column addition/deletion/renaming
 create table tt2 (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt3 (ax int8, b int2, c numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ax' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt4 (ay int, b int, q int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ay' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view v1 as select * from tt2 natural join tt3;
 create view v1a as select * from (tt2 natural join tt3) j;
 create view v2 as select * from tt2 join tt3 using (b,c) join tt4 using (b);
@@ -1145,7 +1233,11 @@ select pg_get_viewdef('v3', true);
 (1 row)
 
 create table tt5 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt6 (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view vv1 as select * from (tt5 cross join tt6) j(aa,bb,cc,dd);
 select pg_get_viewdef('vv1', true);
              pg_get_viewdef              
@@ -1219,8 +1311,12 @@ select pg_get_viewdef('v4', true);
 
 -- Unnamed FULL JOIN USING is lots of fun too
 create table tt7 (x int, xx int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table tt7 drop column xx;
 create table tt8 (x int, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view vv2 as
 select * from (values(1,2,3,4,5)) v(a,b,c,d,e)
 union all
@@ -1381,8 +1477,12 @@ select pg_get_viewdef('vv4', true);
 
 -- Implicit coercions in a JOIN USING create issues similar to FULL JOIN
 create table tt7a (x date, xx int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table tt7a drop column xx;
 create table tt8a (x timestamptz, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view vv2a as
 select * from (values(now(),2,3,now(),5)) v(a,b,c,d,e)
 union all
@@ -1411,7 +1511,11 @@ select pg_get_viewdef('vv2a', true);
 -- Also check dropping a column that existed when the view was made
 --
 create table tt9 (x int, xx int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt10 (x int, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view vv5 as select x,y,z from tt9 join tt10 using(x);
 select pg_get_viewdef('vv5', true);
       pg_get_viewdef       
@@ -1439,8 +1543,14 @@ select pg_get_viewdef('vv5', true);
 -- JOIN USING, and thereby make the USING column name ambiguous
 --
 create table tt11 (x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt12 (x int, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tt13 (z int, q int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'z' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view vv6 as select x,y,z,q from
   (tt11 join tt12 using(x)) join tt13 using(z);
 select pg_get_viewdef('vv6', true);
@@ -1472,6 +1582,8 @@ select pg_get_viewdef('vv6', true);
 -- Check cases involving dropped/altered columns in a function's rowtype result
 --
 create table tt14t (f1 text, f2 text, f3 text, f4 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tt14t values('foo', 'bar', 'baz', '42');
 alter table tt14t drop column f2;
 create function tt14f() returns setof tt14t as
@@ -1497,6 +1609,8 @@ select pg_get_viewdef('tt14v', true);
 (1 row)
 
 select * from tt14v;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tt14t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1  | f3  | f4 
 -----+-----+----
  foo | baz | 42
@@ -1517,6 +1631,8 @@ select pg_get_viewdef('tt14v', true);
 
 -- but will fail at execution
 select f1, f4 from tt14v;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tt14t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1  | f4 
 -----+----
  foo | 42
@@ -1540,6 +1656,8 @@ select pg_get_viewdef('tt14v', true);
 
 -- but will fail at execution
 select f1, f3 from tt14v;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tt14t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1  | f3  
 -----+-----
  foo | baz
@@ -1572,22 +1690,22 @@ select pg_get_viewdef('tt15v', true);
 select row(i.*::int8_tbl)::nestedcomposite from int8_tbl i;
                    row                    
 ------------------------------------------
- ("(123,456)")
- ("(123,4567890123456789)")
  ("(4567890123456789,123)")
  ("(4567890123456789,4567890123456789)")
  ("(4567890123456789,-4567890123456789)")
+ ("(123,456)")
+ ("(123,4567890123456789)")
 (5 rows)
 
 create view tt16v as select * from int8_tbl i, lateral(values(i)) ss;
 select * from tt16v;
         q1        |        q2         |               column1                
 ------------------+-------------------+--------------------------------------
-              123 |               456 | (123,456)
-              123 |  4567890123456789 | (123,4567890123456789)
  4567890123456789 |               123 | (4567890123456789,123)
  4567890123456789 |  4567890123456789 | (4567890123456789,4567890123456789)
  4567890123456789 | -4567890123456789 | (4567890123456789,-4567890123456789)
+              123 |               456 | (123,456)
+              123 |  4567890123456789 | (123,4567890123456789)
 (5 rows)
 
 select pg_get_viewdef('tt16v', true);
@@ -1603,11 +1721,11 @@ select pg_get_viewdef('tt16v', true);
 select * from int8_tbl i, lateral(values(i.*::int8_tbl)) ss;
         q1        |        q2         |               column1                
 ------------------+-------------------+--------------------------------------
-              123 |               456 | (123,456)
-              123 |  4567890123456789 | (123,4567890123456789)
  4567890123456789 |               123 | (4567890123456789,123)
  4567890123456789 |  4567890123456789 | (4567890123456789,4567890123456789)
  4567890123456789 | -4567890123456789 | (4567890123456789,-4567890123456789)
+              123 |               456 | (123,456)
+              123 |  4567890123456789 | (123,4567890123456789)
 (5 rows)
 
 create view tt17v as select * from int8_tbl i where i in (values(i));
@@ -1633,11 +1751,11 @@ select pg_get_viewdef('tt17v', true);
 select * from int8_tbl i where i.* in (values(i.*::int8_tbl));
         q1        |        q2         
 ------------------+-------------------
-              123 |               456
-              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
+              123 |               456
+              123 |  4567890123456789
 (5 rows)
 
 -- check unique-ification of overlength names
@@ -1660,13 +1778,13 @@ select pg_get_viewdef('tt18v', true);
 (1 row)
 
 explain (costs off) select * from tt18v;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on int8_tbl
          ->  Seq Scan on int8_tbl int8_tbl_1
- Optimizer: Pivotal Optimizer (GPORCA) version 3.9.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
 -- check display of ScalarArrayOp with a sub-select
@@ -1716,11 +1834,56 @@ select pg_get_viewdef('tt20v', true);
      i4.i4,                                 +
      i8.i8                                  +
     FROM COALESCE(1, 2) c(c),               +
-     pg_collation_for('x'::text) col(col),  +
+     COLLATION FOR ('x'::text) col(col),    +
      CURRENT_DATE d(d),                     +
      LOCALTIMESTAMP(3) t(t),                +
      CAST(1 + 2 AS integer) i4(i4),         +
      CAST((1 + 2)::bigint AS bigint) i8(i8);
+(1 row)
+
+-- reverse-listing of various special function syntaxes required by SQL
+create view tt201v as
+select
+  extract(day from now()) as extr,
+  (now(), '1 day'::interval) overlaps
+    (current_timestamp(2), '1 day'::interval) as o,
+  'foo' is normalized isn,
+  'foo' is nfkc normalized isnn,
+  normalize('foo') as n,
+  normalize('foo', nfkd) as nfkd,
+  overlay('foo' placing 'bar' from 2) as ovl,
+  overlay('foo' placing 'bar' from 2 for 3) as ovl2,
+  position('foo' in 'foobar') as p,
+  substring('foo' from 2 for 3) as s,
+  substring('foo' similar 'f' escape '#') as ss,
+  substring('foo' from 'oo') as ssf,  -- historically-permitted abuse
+  trim(' ' from ' foo ') as bt,
+  trim(leading ' ' from ' foo ') as lt,
+  trim(trailing ' foo ') as rt,
+  trim(E'\\000'::bytea from E'\\000Tom\\000'::bytea) as btb,
+  trim(leading E'\\000'::bytea from E'\\000Tom\\000'::bytea) as ltb,
+  trim(trailing E'\\000'::bytea from E'\\000Tom\\000'::bytea) as rtb;
+select pg_get_viewdef('tt201v', true);
+                                        pg_get_viewdef                                         
+-----------------------------------------------------------------------------------------------
+  SELECT EXTRACT(day FROM now()) AS extr,                                                     +
+     ((now(), '@ 1 day'::interval) OVERLAPS (CURRENT_TIMESTAMP(2), '@ 1 day'::interval)) AS o,+
+     (('foo'::text) IS NORMALIZED) AS isn,                                                    +
+     (('foo'::text) IS NFKC NORMALIZED) AS isnn,                                              +
+     NORMALIZE('foo'::text) AS n,                                                             +
+     NORMALIZE('foo'::text, NFKD) AS nfkd,                                                    +
+     OVERLAY('foo'::text PLACING 'bar'::text FROM 2) AS ovl,                                  +
+     OVERLAY('foo'::text PLACING 'bar'::text FROM 2 FOR 3) AS ovl2,                           +
+     POSITION(('foo'::text) IN ('foobar'::text)) AS p,                                        +
+     SUBSTRING('foo'::text FROM 2 FOR 3) AS s,                                                +
+     SUBSTRING('foo'::text SIMILAR 'f'::text ESCAPE '#'::text) AS ss,                         +
+     "substring"('foo'::text, 'oo'::text) AS ssf,                                             +
+     TRIM(BOTH ' '::text FROM ' foo '::text) AS bt,                                           +
+     TRIM(LEADING ' '::text FROM ' foo '::text) AS lt,                                        +
+     TRIM(TRAILING FROM ' foo '::text) AS rt,                                                 +
+     TRIM(BOTH '\x00'::bytea FROM '\x00546f6d00'::bytea) AS btb,                              +
+     TRIM(LEADING '\x00'::bytea FROM '\x00546f6d00'::bytea) AS ltb,                           +
+     TRIM(TRAILING '\x00'::bytea FROM '\x00546f6d00'::bytea) AS rtb;
 (1 row)
 
 -- corner cases with empty join conditions
@@ -1911,7 +2074,7 @@ drop cascades to view aliased_view_2
 drop cascades to view aliased_view_3
 drop cascades to view aliased_view_4
 DROP SCHEMA testviewschm2 CASCADE;
-NOTICE:  drop cascades to 67 other objects
+NOTICE:  drop cascades to 73 other objects
 DETAIL:  drop cascades to table t1
 drop cascades to view temporal1
 drop cascades to view temporal2
@@ -1936,6 +2099,11 @@ drop cascades to view unspecified_types
 drop cascades to table tt1
 drop cascades to table tx1
 drop cascades to view view_of_joins
+drop cascades to table tbl1a
+drop cascades to view view_of_joins_2a
+drop cascades to view view_of_joins_2b
+drop cascades to view view_of_joins_2c
+drop cascades to view view_of_joins_2d
 drop cascades to table tt2
 drop cascades to table tt3
 drop cascades to table tt4
@@ -1973,6 +2141,7 @@ drop cascades to view tt17v
 drop cascades to view tt18v
 drop cascades to view tt19v
 drop cascades to view tt20v
+drop cascades to view tt201v
 drop cascades to view tt21v
 drop cascades to view tt22v
 drop cascades to view tt23v

@@ -86,6 +86,7 @@ create event trigger regress_event_trigger2 on ddl_command_start
 comment on event trigger regress_event_trigger is 'test comment';
 -- drop as non-superuser should fail
 create role regress_evt_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 set role regress_evt_user;
 create event trigger regress_event_trigger_noperms on ddl_command_start
    execute procedure test_event_trigger();
@@ -97,24 +98,34 @@ alter event trigger regress_event_trigger disable;
 -- fires _trigger2 and _trigger_end should fire, but not _trigger
 create table event_trigger_fire1 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 alter event trigger regress_event_trigger enable;
 set session_replication_role = replica;
 -- fires nothing
 create table event_trigger_fire2 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter event trigger regress_event_trigger enable replica;
 -- fires only _trigger
 create table event_trigger_fire3 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter event trigger regress_event_trigger enable always;
 -- fires only _trigger
 create table event_trigger_fire4 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 reset session_replication_role;
 -- fires all three
 create table event_trigger_fire5 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 -- non-top-level command
 create function f1() returns int
@@ -130,6 +141,8 @@ NOTICE:  test_event_trigger: ddl_command_end CREATE FUNCTION
 select f1();
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
  f1 
 ----
@@ -148,6 +161,8 @@ NOTICE:  test_event_trigger: ddl_command_end CREATE PROCEDURE
 call p1();
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 -- clean up
 alter event trigger regress_event_trigger disable;
@@ -206,14 +221,29 @@ CREATE SCHEMA schema_one authorization regress_evt_user;
 CREATE SCHEMA schema_two authorization regress_evt_user;
 CREATE SCHEMA audit_tbls authorization regress_evt_user;
 CREATE TEMP TABLE a_temp_tbl ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 SET SESSION AUTHORIZATION regress_evt_user;
 CREATE TABLE schema_one.table_one(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE schema_one."table two"(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE schema_one.table_three(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE audit_tbls.schema_one_table_two(the_value text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'the_value' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE schema_two.table_two(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE schema_two.table_three(a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE audit_tbls.schema_two_table_three(the_value text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'the_value' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE OR REPLACE FUNCTION schema_two.add(int, int) RETURNS int LANGUAGE plpgsql
   CALLED ON NULL INPUT
   AS $$ BEGIN RETURN coalesce($1,0) + coalesce($2,0); END; $$;
@@ -224,6 +254,8 @@ CREATE TABLE undroppable_objs (
 	object_type text,
 	object_identity text
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'object_type' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO undroppable_objs VALUES
 ('table', 'schema_one.table_three'),
 ('table', 'audit_tbls.schema_two_table_three');
@@ -232,6 +264,8 @@ CREATE TABLE dropped_objects (
 	schema text,
 	object text
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'type' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- This tests errors raised within event triggers; the one in audit_tbls
 -- uses 2nd-level recursive invocation via test_evtrig_dropped_objects().
 CREATE OR REPLACE FUNCTION undroppable() RETURNS event_trigger
@@ -289,6 +323,9 @@ CREATE EVENT TRIGGER regress_event_trigger_drop_objects ON sql_drop
 		'drop owned', 'drop schema', 'alter table')
 	EXECUTE PROCEDURE test_evtrig_dropped_objects();
 ALTER TABLE schema_one.table_one DROP COLUMN a;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP SCHEMA schema_one, schema_two CASCADE;
 NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table schema_two.table_two
@@ -300,11 +337,15 @@ drop cascades to table schema_one."table two"
 drop cascades to table schema_one.table_three
 NOTICE:  table "schema_two_table_two" does not exist, skipping
 NOTICE:  table "audit_tbls_schema_two_table_three" does not exist, skipping
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ERROR:  object audit_tbls.schema_two_table_three of type table cannot be dropped
-CONTEXT:  PL/pgSQL function undroppable() line 14 at RAISE
+CONTEXT:  PL/pgSQL function undroppable() line 24 at RAISE
 SQL statement "DROP TABLE IF EXISTS audit_tbls.schema_two_table_three"
 PL/pgSQL function test_evtrig_dropped_objects() line 8 at EXECUTE
 DELETE FROM undroppable_objs WHERE object_identity = 'audit_tbls.schema_two_table_three';
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP SCHEMA schema_one, schema_two CASCADE;
 NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table schema_two.table_two
@@ -316,12 +357,62 @@ drop cascades to table schema_one."table two"
 drop cascades to table schema_one.table_three
 NOTICE:  table "schema_two_table_two" does not exist, skipping
 NOTICE:  table "audit_tbls_schema_two_table_three" does not exist, skipping
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  table "schema_one_table_one" does not exist, skipping
 NOTICE:  table "schema_one_table two" does not exist, skipping
 NOTICE:  table "schema_one_table_three" does not exist, skipping
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ERROR:  object schema_one.table_three of type table cannot be dropped
-CONTEXT:  PL/pgSQL function undroppable() line 14 at RAISE
+CONTEXT:  PL/pgSQL function undroppable() line 24 at RAISE
 DELETE FROM undroppable_objs WHERE object_identity = 'schema_one.table_three';
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP SCHEMA schema_one, schema_two CASCADE;
 NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table schema_two.table_two
@@ -333,40 +424,115 @@ drop cascades to table schema_one."table two"
 drop cascades to table schema_one.table_three
 NOTICE:  table "schema_two_table_two" does not exist, skipping
 NOTICE:  table "audit_tbls_schema_two_table_three" does not exist, skipping
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  table "schema_one_table_one" does not exist, skipping
 NOTICE:  table "schema_one_table two" does not exist, skipping
 NOTICE:  table "schema_one_table_three" does not exist, skipping
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT * FROM dropped_objects WHERE schema IS NULL OR schema <> 'pg_toast';
+NOTICE:  One or more columns in the following table(s) do not have statistics: dropped_objects
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      type     |   schema   |               object                
 --------------+------------+-------------------------------------
- table column | schema_one | schema_one.table_one.a
  schema       |            | schema_two
- table        | schema_two | schema_two.table_two
+ schema       |            | schema_one
  type         | schema_two | schema_two.table_two
  type         | schema_two | schema_two.table_two[]
- table        | audit_tbls | audit_tbls.schema_two_table_three
  type         | audit_tbls | audit_tbls.schema_two_table_three
  type         | audit_tbls | audit_tbls.schema_two_table_three[]
- table        | schema_two | schema_two.table_three
  type         | schema_two | schema_two.table_three
  type         | schema_two | schema_two.table_three[]
  function     | schema_two | schema_two.add(integer,integer)
- aggregate    | schema_two | schema_two.newton(integer)
- schema       |            | schema_one
- table        | schema_one | schema_one.table_one
  type         | schema_one | schema_one.table_one
  type         | schema_one | schema_one.table_one[]
- table        | schema_one | schema_one."table two"
  type         | schema_one | schema_one."table two"
  type         | schema_one | schema_one."table two"[]
- table        | schema_one | schema_one.table_three
  type         | schema_one | schema_one.table_three
  type         | schema_one | schema_one.table_three[]
+ table column | schema_one | schema_one.table_one.a
+ table        | schema_two | schema_two.table_two
+ table        | audit_tbls | audit_tbls.schema_two_table_three
+ table        | schema_two | schema_two.table_three
+ aggregate    | schema_two | schema_two.newton(integer)
+ table        | schema_one | schema_one.table_one
+ table        | schema_one | schema_one."table two"
+ table        | schema_one | schema_one.table_three
 (23 rows)
 
 DROP OWNED BY regress_evt_user;
 NOTICE:  schema "audit_tbls" does not exist, skipping
+NOTICE:  schema "audit_tbls" does not exist, skipping  (seg0 172.17.0.3:7002 pid=92753)
+NOTICE:  schema "audit_tbls" does not exist, skipping  (seg2 172.17.0.3:7004 pid=92755)
+NOTICE:  schema "audit_tbls" does not exist, skipping  (seg1 172.17.0.3:7003 pid=92754)
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  One or more columns in the following table(s) do not have statistics: undroppable_objs
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT * FROM dropped_objects WHERE type = 'schema';
+NOTICE:  One or more columns in the following table(s) do not have statistics: dropped_objects
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   type  | schema |   object   
 --------+--------+------------
  schema |        | schema_two
@@ -415,6 +581,23 @@ CREATE SCHEMA evttrig
 	CREATE INDEX one_idx ON one (col_b)
 	CREATE TABLE two (col_c INTEGER CHECK (col_c > 0) REFERENCES one DEFAULT 42)
 	CREATE TABLE id (col_d int NOT NULL GENERATED ALWAYS AS IDENTITY);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col_c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=92754)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=92754)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=92754)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=92754)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=92755)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=92755)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=92755)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=92755)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=92753)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=92753)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=92753)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=92753)
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col_d' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  END: command_tag=CREATE SCHEMA type=schema identity=evttrig
 NOTICE:  END: command_tag=CREATE SEQUENCE type=sequence identity=evttrig.one_col_a_seq
 NOTICE:  END: command_tag=CREATE SEQUENCE type=sequence identity=evttrig.one_col_c_seq
@@ -428,6 +611,10 @@ NOTICE:  END: command_tag=CREATE SEQUENCE type=sequence identity=evttrig.id_col_
 NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.id
 NOTICE:  END: command_tag=ALTER SEQUENCE type=sequence identity=evttrig.id_col_d_seq
 NOTICE:  END: command_tag=CREATE INDEX type=index identity=evttrig.one_idx
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- Partitioned tables with a partitioned index
 CREATE TABLE evttrig.parted (
     id int PRIMARY KEY)
@@ -436,17 +623,22 @@ NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.parted
 NOTICE:  END: command_tag=CREATE INDEX type=index identity=evttrig.parted_pkey
 CREATE TABLE evttrig.part_1_10 PARTITION OF evttrig.parted (id)
   FOR VALUES FROM (1) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.part_1_10
 CREATE TABLE evttrig.part_10_20 PARTITION OF evttrig.parted (id)
   FOR VALUES FROM (10) TO (20) PARTITION BY RANGE (id);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.part_10_20
 CREATE TABLE evttrig.part_10_15 PARTITION OF evttrig.part_10_20 (id)
   FOR VALUES FROM (10) TO (15);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.part_10_15
 CREATE TABLE evttrig.part_15_20 PARTITION OF evttrig.part_10_20 (id)
   FOR VALUES FROM (15) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  END: command_tag=CREATE TABLE type=table identity=evttrig.part_15_20
 ALTER TABLE evttrig.two DROP COLUMN col_c;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 NOTICE:  NORMAL: orig=t normal=f istemp=f type=table column identity=evttrig.two.col_c name={evttrig,two,col_c} args={}
 NOTICE:  NORMAL: orig=f normal=t istemp=f type=table constraint identity=two_col_c_check on evttrig.two name={evttrig,two,two_col_c_check} args={}
 NOTICE:  END: command_tag=ALTER TABLE type=table identity=evttrig.two
@@ -544,12 +736,18 @@ END;
 $$;
 create type rewritetype as (a int);
 create table rewritemetoo1 of rewritetype;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rewritemetoo2 of rewritetype;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter type rewritetype alter attribute a type text cascade;
 NOTICE:  Table is being rewritten (reason = 4)
 NOTICE:  Table is being rewritten (reason = 4)
 -- but this doesn't work
 create table rewritemetoo3 (a rewritetype);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter type rewritetype alter attribute a type varchar cascade;
 ERROR:  cannot alter type "rewritetype" because column "rewritemetoo3.a" uses it
 drop table rewriteme;
@@ -558,6 +756,8 @@ drop function test_evtrig_no_rewrite();
 -- test Row Security Event Trigger
 RESET SESSION AUTHORIZATION;
 CREATE TABLE event_trigger_test (a integer, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE OR REPLACE FUNCTION start_command()
 RETURNS event_trigger AS $$
 BEGIN

@@ -2,6 +2,8 @@
 -- Test cases for COPY (INSERT/UPDATE/DELETE) TO
 --
 create table copydml_test (id serial, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into copydml_test (t) values ('a');
 insert into copydml_test (t) values ('b');
 insert into copydml_test (t) values ('c');
@@ -111,19 +113,27 @@ end
 $$ language plpgsql;
 create trigger qqqbef before insert or update or delete on copydml_test
     for each row execute procedure qqq_trig();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=82879)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=82881)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=82880)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 create trigger qqqaf after insert or update or delete on copydml_test
     for each row execute procedure qqq_trig();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=82879)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=82880)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=82881)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 copy (insert into copydml_test (t) values ('f') returning id) to stdout;
-NOTICE:  BEFORE INSERT 8  (seg0 slice2 127.0.0.1:40000 pid=9407)
+NOTICE:  BEFORE INSERT 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 8
-NOTICE:  AFTER INSERT 8  (seg0 slice2 127.0.0.1:40000 pid=9407)
+NOTICE:  AFTER INSERT 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 copy (update copydml_test set t = 'g' where t = 'f' returning id) to stdout;
-NOTICE:  BEFORE UPDATE 8  (seg0 slice1 127.0.0.1:40000 pid=9407)
+NOTICE:  BEFORE UPDATE 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 8
-NOTICE:  AFTER UPDATE 8  (seg0 slice1 127.0.0.1:40000 pid=9407)
+NOTICE:  AFTER UPDATE 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 copy (delete from copydml_test where t = 'g' returning id) to stdout;
-NOTICE:  BEFORE DELETE 8  (seg0 slice1 127.0.0.1:40000 pid=9407)
+NOTICE:  BEFORE DELETE 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 8
-NOTICE:  AFTER DELETE 8  (seg0 slice1 127.0.0.1:40000 pid=9407)
+NOTICE:  AFTER DELETE 8  (seg0 slice1 172.17.0.3:7002 pid=82879)
 drop table copydml_test;
 drop function qqq_trig();

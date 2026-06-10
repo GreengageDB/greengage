@@ -27,6 +27,8 @@ select * from yyy order by 1, 2;
 (10 rows)
 
 update yyy set a=m.b from m where m.a=yyy.b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: yyy, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from yyy order by 1, 2;
  a  | b 
 ----+---
@@ -47,6 +49,8 @@ drop table yyy;
 create table yyy(a int, b int) distributed randomly;
 insert into yyy select a,b from m;
 update yyy set b=m.b from m where m.a=yyy.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: yyy, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from yyy order by 1, 2;
  a  | b 
 ----+---
@@ -67,6 +71,8 @@ drop table yyy;
 create table yyy(a int, b int) distributed randomly;
 insert into yyy select a,b from m;
 delete from yyy where a in (select a from m);
+NOTICE:  One or more columns in the following table(s) do not have statistics: yyy, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from yyy order by 1, 2;
  a | b 
 ---+---
@@ -76,6 +82,8 @@ drop table yyy;
 create table yyy(a int, b int) distributed randomly;
 insert into yyy select a,b from m;
 delete from yyy where b in (select a from m);
+NOTICE:  One or more columns in the following table(s) do not have statistics: yyy, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from yyy order by 1, 2;
  a  | b 
 ----+---
@@ -100,6 +108,8 @@ insert into m select i, i%5 from generate_series(1,10)i;
 create table zzz(a int primary key, b int) distributed by (a);
 insert into zzz select a,b from m;
 select * from zzz order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b 
 ----+---
   1 | 1
@@ -115,7 +125,11 @@ select * from zzz order by 1, 2;
 (10 rows)
 
 delete from zzz where a in (select a from m);
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from zzz order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -124,7 +138,11 @@ drop table zzz;
 create table zzz(a int primary key, b int) distributed by (a);
 insert into zzz select a,b from m;
 delete from zzz where b in (select a from m);
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz, m
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from zzz order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b 
 ----+---
   5 | 0
@@ -139,8 +157,10 @@ insert into zzz select a,b from m;
 -- that difference in the error DETAIL line
 \set VERBOSITY terse
 update zzz set a=m.b from m where m.a=zzz.b;
-ERROR:  duplicate key value violates unique constraint "zzz_pkey"  (seg1 127.0.0.1:40001 pid=22395)
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz, m
+ERROR:  duplicate key value violates unique constraint "zzz_pkey"  (seg1 172.17.0.3:7003 pid=128392)
 select * from zzz order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
  a  | b 
 ----+---
   1 | 1
@@ -159,7 +179,9 @@ drop table zzz;
 create table zzz(a int primary key, b int) distributed by (a);
 insert into zzz select a,b from m;
 update zzz set b=m.b from m where m.a=zzz.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz, m
 select * from zzz order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
  a  | b 
 ----+---
   1 | 1
@@ -183,36 +205,42 @@ drop table m;
 create table update_pk_test (a int primary key, b int) distributed by (a);
 insert into update_pk_test values(1,1);
 explain update update_pk_test set b = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
                                        QUERY PLAN                                       
 ----------------------------------------------------------------------------------------
- Update on update_pk_test  (cost=0.00..431.03 rows=1 width=1)
+ Update on update_pk_test  (cost=0.00..431.02 rows=1 width=1)
    ->  Seq Scan on update_pk_test update_pk_test_1  (cost=0.00..431.00 rows=1 width=14)
  Optimizer: Pivotal Optimizer (GPORCA)
 (3 rows)
 
 update update_pk_test set b = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
 select * from update_pk_test order by 1,2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
  a | b 
 ---+---
  1 | 5
 (1 row)
 
 explain update update_pk_test set a = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
                                                    QUERY PLAN                                                   
 ----------------------------------------------------------------------------------------------------------------
- Update on update_pk_test  (cost=0.00..431.07 rows=1 width=1)
-   ->  Result  (cost=0.00..431.00 rows=1 width=26)
-         ->  Sort  (cost=0.00..431.00 rows=1 width=22)
+ Update on update_pk_test  (cost=0.00..431.06 rows=1 width=1)
+   ->  Result  (cost=0.00..0.00 rows=0 width=0)
+         ->  Sort  (cost=0.00..431.00 rows=2 width=22)
                Sort Key: (DMLAction)
-               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=22)
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=22)
                      Hash Key: update_pk_test_1.a
                      ->  Split  (cost=0.00..431.00 rows=1 width=22)
                            ->  Seq Scan on update_pk_test update_pk_test_1  (cost=0.00..431.00 rows=1 width=18)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 update update_pk_test set a = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
 select * from update_pk_test order by 1,2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
  a | b 
 ---+---
  5 | 5
@@ -233,6 +261,7 @@ set optimizer_trace_fallback = on;
 update update_pk_test set a=1 where row(1,2) = (SELECT 1, 2);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 select * from update_pk_test order by 1,2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_pk_test
  a | b 
 ---+---
  1 | 5
@@ -246,6 +275,7 @@ reset optimizer_trace_fallback;
 -- implemented as a "split update", which is really a DELETE and an INSERT.
 --
 CREATE TABLE bfv_dml_trigger_test (id int4, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
 INSERT INTO bfv_dml_trigger_test VALUES (1, 'foo');
 CREATE OR REPLACE FUNCTION bfv_dml_error_func() RETURNS trigger AS
 $$
@@ -257,11 +287,21 @@ $$ LANGUAGE 'plpgsql';
 CREATE TRIGGER before_trigger BEFORE INSERT or DELETE ON bfv_dml_trigger_test
 FOR EACH ROW
 EXECUTE PROCEDURE bfv_dml_error_func();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=128392)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=128390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=128391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TRIGGER after_trigger AFTER INSERT or DELETE ON bfv_dml_trigger_test
 FOR EACH ROW
 EXECUTE PROCEDURE bfv_dml_error_func();
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=128390)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=128392)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=128391)
+WARNING:  relcache reference leak: relation "pg_trigger" not closed
 UPDATE bfv_dml_trigger_test SET t = 'bar';
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_dml_trigger_test
 UPDATE bfv_dml_trigger_test SET id = id + 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_dml_trigger_test
 --
 -- Verify that ExecInsert doesn't scribble on the old tuple, when the new
 -- tuple comes directly from the old table.
@@ -273,8 +313,10 @@ INSERT INTO execinsert_test values (1, 'foo');
 -- invisible when we roll back.
 begin;
 INSERT INTO execinsert_test select * FROM execinsert_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: execinsert_test
 rollback;
 select * from execinsert_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: execinsert_test
  id |  t  
 ----+-----
   1 | foo
@@ -323,16 +365,16 @@ analyze bar;
 explain delete from foo using bar where foo.a=bar.a;
                                                  QUERY PLAN                                                  
 -------------------------------------------------------------------------------------------------------------
- Delete on foo  (cost=0.00..862.03 rows=1 width=1)
-   ->  Result  (cost=0.00..862.00 rows=1 width=22)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=18)
-               ->  Hash Join  (cost=0.00..862.00 rows=1 width=18)
+ Delete on foo  (cost=0.00..862.29 rows=4 width=1)
+   ->  Result  (cost=0.00..862.00 rows=10 width=22)
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..862.00 rows=10 width=18)
+               ->  Hash Join  (cost=0.00..862.00 rows=4 width=18)
                      Hash Cond: (foo_1.a = bar.a)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=18)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=4 width=18)
                            Hash Key: foo_1.a
-                           ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=18)
-                     ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-                           ->  Seq Scan on bar  (cost=0.00..431.00 rows=1 width=4)
+                           ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=4 width=18)
+                     ->  Hash  (cost=431.00..431.00 rows=4 width=4)
+                           ->  Seq Scan on bar  (cost=0.00..431.00 rows=4 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (11 rows)
 
@@ -354,34 +396,34 @@ alter table foo set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 analyze bar;
 explain delete from foo using bar where foo.a = bar.a returning foo.*;
-                                                     QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=679.75..277582.65 rows=7413210 width=16)
-   ->  Delete on foo  (cost=679.75..178739.85 rows=2471070 width=16)
-         ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=679.75..178739.85 rows=2471070 width=16)
-               ->  Hash Join  (cost=679.75..129318.45 rows=2471070 width=16)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.08..2.42 rows=10 width=16)
+   ->  Delete on foo  (cost=1.08..2.29 rows=3 width=16)
+         ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1.08..2.29 rows=3 width=16)
+               ->  Hash Join  (cost=1.08..2.22 rows=3 width=16)
                      Hash Cond: (foo.a = bar.a)
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..895.00 rows=28700 width=14)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.10 rows=3 width=14)
                            Hash Key: foo.a
-                           ->  Seq Scan on foo  (cost=0.00..321.00 rows=28700 width=14)
-                     ->  Hash  (cost=321.00..321.00 rows=28700 width=10)
-                           ->  Seq Scan on bar  (cost=0.00..321.00 rows=28700 width=10)
+                           ->  Seq Scan on foo  (cost=0.00..1.03 rows=3 width=14)
+                     ->  Hash  (cost=1.03..1.03 rows=3 width=10)
+                           ->  Seq Scan on bar  (cost=0.00..1.03 rows=3 width=10)
  Optimizer: Postgres query optimizer
 (11 rows)
 
 delete from foo using bar where foo.a = bar.a returning foo.*;
  a  | b 
 ----+---
-  1 |  
+  2 |  
   3 |  
   4 |  
+  7 |  
+  8 |  
+  1 |  
+  5 |  
   6 |  
   9 |  
  10 |  
-  2 |  
-  5 |  
-  7 |  
-  8 |  
 (10 rows)
 
 select * from foo;
@@ -417,15 +459,15 @@ alter table foo set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 analyze bar;
 explain delete from foo using bar where foo.a=bar.b;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
  Delete on foo  (cost=0.00..862.03 rows=1 width=1)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=18)
          Hash Cond: (foo_1.a = bar.b)
-         ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=18)
-         ->  Hash  (cost=431.00..431.00 rows=3 width=4)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
-                     ->  Seq Scan on bar  (cost=0.00..431.00 rows=1 width=4)
+         ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=10 width=18)
+         ->  Hash  (cost=431.00..431.00 rows=30 width=4)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=30 width=4)
+                     ->  Seq Scan on bar  (cost=0.00..431.00 rows=4 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -463,10 +505,10 @@ insert into foo select generate_series(1,10);
 alter table foo set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 explain delete from foo;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Delete on foo  (cost=0.00..431.03 rows=1 width=1)
-   ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=18)
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Delete on foo  (cost=0.00..431.29 rows=4 width=1)
+   ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=10 width=18)
  Optimizer: Pivotal Optimizer (GPORCA)
 (3 rows)
 
@@ -483,15 +525,15 @@ alter table bar set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 analyze bar;
 explain delete from foo using bar;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Delete on foo  (cost=0.00..1324032.10 rows=1 width=1)
-   ->  Nested Loop  (cost=0.00..1324032.07 rows=1 width=18)
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Delete on foo  (cost=0.00..1324037.59 rows=34 width=1)
+   ->  Nested Loop  (cost=0.00..1324034.73 rows=100 width=18)
          Join Filter: true
-         ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=18)
-         ->  Materialize  (cost=0.00..431.00 rows=3 width=1)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=1)
-                     ->  Seq Scan on bar  (cost=0.00..431.00 rows=1 width=1)
+         ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=10 width=18)
+         ->  Materialize  (cost=0.00..431.00 rows=30 width=1)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=30 width=1)
+                     ->  Seq Scan on bar  (cost=0.00..431.00 rows=4 width=1)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -553,9 +595,10 @@ create table bar (a int, b int) distributed randomly;
 insert into foo (a, b) values (1, 2);
 insert into bar (a, b) values (1, 2);
 explain update foo set a=4 from bar where foo.a=bar.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Update on foo  (cost=0.00..862.03 rows=1 width=1)
+ Update on foo  (cost=0.00..862.02 rows=1 width=1)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=14)
          Hash Cond: (foo_1.a = bar.a)
          ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=18)
@@ -566,6 +609,7 @@ explain update foo set a=4 from bar where foo.a=bar.a;
 (8 rows)
 
 update foo set a=4 from bar where foo.a=bar.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
 select * from foo;
  a | b 
 ---+---
@@ -581,6 +625,7 @@ insert into foo (a, b) values (1, 2);
 insert into bar (a, b) values (1, 2);
 insert into jazz (a, b) values (1, 2);
 explain insert into foo select bar.a from bar, jazz where bar.a=jazz.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bar, jazz
                                                   QUERY PLAN                                                   
 ---------------------------------------------------------------------------------------------------------------
  Insert on foo  (cost=0.00..862.02 rows=1 width=4)
@@ -596,11 +641,12 @@ explain insert into foo select bar.a from bar, jazz where bar.a=jazz.a;
 (10 rows)
 
 insert into foo select bar.a from bar, jazz where bar.a=jazz.a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bar, jazz
 select * from foo;
  a | b 
 ---+---
- 1 | 2
  1 |  
+ 1 | 2
 (2 rows)
 
 drop table foo;
@@ -617,17 +663,17 @@ alter table bar set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 analyze bar;
 explain delete from foo using (select a from foo union all select b from bar) v;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Delete on foo  (cost=0.00..1765376.09 rows=1 width=1)
-   ->  Nested Loop  (cost=0.00..1765376.07 rows=1 width=14)
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Delete on foo  (cost=0.00..1765384.91 rows=67 width=1)
+   ->  Nested Loop  (cost=0.00..1765380.23 rows=200 width=14)
          Join Filter: true
-         ->  Seq Scan on foo foo_2  (cost=0.00..431.00 rows=1 width=14)
-         ->  Materialize  (cost=0.00..862.00 rows=3 width=1)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..862.00 rows=3 width=1)
-                     ->  Append  (cost=0.00..862.00 rows=1 width=1)
-                           ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=1 width=1)
-                           ->  Seq Scan on bar  (cost=0.00..431.00 rows=1 width=1)
+         ->  Seq Scan on foo foo_2  (cost=0.00..431.00 rows=10 width=14)
+         ->  Materialize  (cost=0.00..862.00 rows=60 width=1)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..862.00 rows=60 width=1)
+                     ->  Append  (cost=0.00..862.00 rows=7 width=1)
+                           ->  Seq Scan on foo foo_1  (cost=0.00..431.00 rows=4 width=1)
+                           ->  Seq Scan on bar  (cost=0.00..431.00 rows=4 width=1)
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
 

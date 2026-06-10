@@ -2,6 +2,7 @@
 -- if file is missing.
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 -- helper functions
 CREATE FUNCTION rel_filepaths_on_segments(regclass) RETURNS TABLE(gp_segment_id int, filepath text)
@@ -61,7 +62,6 @@ SELECT change_file_permission_readonly(datadir || '/' ||
   WHERE gp_segment_id = 0) || '.1')
   FROM gp_segment_configuration WHERE content = 0 AND role = 'm';
 INFO:  changing file permission to readonly
-CONTEXT:  PL/Python function "change_file_permission_readonly"
  change_file_permission_readonly 
 ---------------------------------
  
@@ -69,6 +69,14 @@ CONTEXT:  PL/Python function "change_file_permission_readonly"
 
 -- generate truncate xlog record with non-zero EOF
 VACUUM mirror_reply_test_table;
+WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=147275)
+WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=147275)
+WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=147276)
+WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=147276)
+WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=147277)
+WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=147277)
 -- expecting mirror to be marked down
 do $$
 begin
@@ -89,7 +97,45 @@ SELECT role, preferred_role, mode, status FROM gp_segment_configuration WHERE co
 
 -- post test cleanup
 -- start_ignore
-\! gprecoverseg -aF;
+\! gprecoverseg -aF --no-progress;
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 14alpha0 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 10 2026 21:01:18'
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:----------------------------------------------------------
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Recovery type              = Standard
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:----------------------------------------------------------
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Recovery 1 of 1
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:----------------------------------------------------------
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Synchronization mode                 = Full
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Failed instance host                 = 3a76691f25e1
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Failed instance address              = 3a76691f25e1
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Failed instance port                 = 7005
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Recovery Source instance host        = 3a76691f25e1
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Recovery Source instance address     = 3a76691f25e1
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Recovery Source instance port        = 7002
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:----------------------------------------------------------
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-1 segment(s) to recover
+20260610:22:10:16:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260610:22:10:17:147402 gprecoverseg:3a76691f25e1:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0 is symlink. Assuming it is not symlink
+20260610:22:10:17:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260610:22:10:17:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Updating configuration for mirrors
+20260610:22:10:17:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260610:22:10:17:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-era is 35f7cbdd6d5349d9_260610215950
+...........
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Triggering FTS probe
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-********************************
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Segments successfully recovered.
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-********************************
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260610:22:10:29:147402 gprecoverseg:3a76691f25e1:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
 -- end_ignore
 -- loop while segments come in sync
 do $$

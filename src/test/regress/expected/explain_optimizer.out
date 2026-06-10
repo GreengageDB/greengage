@@ -8,6 +8,12 @@
 -- To produce stable regression test output, it's usually necessary to
 -- ignore details such as exact costs or row counts.  These filter
 -- functions replace changeable output details with fixed strings.
+-- start_ignore
+drop function if exists explain_filter(text);
+NOTICE:  function explain_filter(text) does not exist, skipping
+drop function if exists explain_filter_to_json(text);
+NOTICE:  function explain_filter_to_json(text) does not exist, skipping
+-- end_ignore
 create function explain_filter(text) returns setof text
 language plpgsql as
 $$
@@ -17,12 +23,15 @@ begin
     for ln in execute $1
     loop
         -- Replace any numeric word with just 'N'
-        ln := regexp_replace(ln, '\m\d+\M', 'N', 'g');
+        ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
         ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
         -- Ignore text-mode buffers output because it varies depending
         -- on the system state
         CONTINUE WHEN (ln ~ ' +Buffers: .*');
+        -- Ignore text-mode "Planning:" line because whether it's output
+        -- varies depending on the system state
+        CONTINUE WHEN (ln = 'Planning:');
         return next ln;
     end loop;
 end;
@@ -60,8 +69,8 @@ select explain_filter('explain (analyze) select * from int8_tbl i8');
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 37K bytes avg x N workers, 37K bytes max (seg0).
+   (slice0)    Executor memory: 13K bytes.
+   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -75,8 +84,8 @@ select explain_filter('explain (analyze, verbose) select * from int8_tbl i8');
          Output: q1, q2
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x N workers, 36K bytes max (seg0).
+   (slice0)    Executor memory: 13K bytes.
+   (slice1)    Executor memory: 11K bytes avg x N workers, 11K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (10 rows)
@@ -88,8 +97,8 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x N workers, 36K bytes max (seg0).
+   (slice0)    Executor memory: 13K bytes.
+   (slice1)    Executor memory: 11K bytes avg x N workers, 11K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -107,6 +116,7 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
        "Segments": N,                          +
        "Gang Type": "primary reader",          +
        "Parallel Aware": false,                +
+       "Async Capable": false,                 +
        "Startup Cost": N.N,                    +
        "Total Cost": N.N,                      +
        "Plan Rows": N,                         +
@@ -133,6 +143,7 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
            "Segments": N,                      +
            "Gang Type": "primary reader",      +
            "Parallel Aware": false,            +
+           "Async Capable": false,             +
            "Relation Name": "int8_tbl",        +
            "Alias": "int8_tbl",                +
            "Startup Cost": N.N,                +
@@ -158,7 +169,6 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
      },                                        +
      "Optimizer": "Pivotal Optimizer (GPORCA)",+
      "Planning": {                             +
-       "Planning Time": N.N,                   +
        "Shared Hit Blocks": N,                 +
        "Shared Read Blocks": N,                +
        "Shared Dirtied Blocks": N,             +
@@ -170,6 +180,7 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
        "Temp Read Blocks": N,                  +
        "Temp Written Blocks": N                +
      },                                        +
+     "Planning Time": N.N,                     +
      "Triggers": [                             +
      ],                                        +
      "Slice statistics": [                     +
@@ -207,6 +218,7 @@ select explain_filter('explain (analyze, buffers, format xml) select * from int8
        <Segments>N</Segments>                              +
        <Gang-Type>primary reader</Gang-Type>               +
        <Parallel-Aware>false</Parallel-Aware>              +
+       <Async-Capable>false</Async-Capable>                +
        <Startup-Cost>N.N</Startup-Cost>                    +
        <Total-Cost>N.N</Total-Cost>                        +
        <Plan-Rows>N</Plan-Rows>                            +
@@ -233,6 +245,7 @@ select explain_filter('explain (analyze, buffers, format xml) select * from int8
            <Segments>N</Segments>                          +
            <Gang-Type>primary reader</Gang-Type>           +
            <Parallel-Aware>false</Parallel-Aware>          +
+           <Async-Capable>false</Async-Capable>            +
            <Relation-Name>int8_tbl</Relation-Name>         +
            <Alias>int8_tbl</Alias>                         +
            <Startup-Cost>N.N</Startup-Cost>                +
@@ -258,7 +271,6 @@ select explain_filter('explain (analyze, buffers, format xml) select * from int8
      </Plan>                                               +
      <Optimizer>Pivotal Optimizer (GPORCA)</Optimizer>     +
      <Planning>                                            +
-       <Planning-Time>N.N</Planning-Time>                  +
        <Shared-Hit-Blocks>N</Shared-Hit-Blocks>            +
        <Shared-Read-Blocks>N</Shared-Read-Blocks>          +
        <Shared-Dirtied-Blocks>N</Shared-Dirtied-Blocks>    +
@@ -270,6 +282,7 @@ select explain_filter('explain (analyze, buffers, format xml) select * from int8
        <Temp-Read-Blocks>N</Temp-Read-Blocks>              +
        <Temp-Written-Blocks>N</Temp-Written-Blocks>        +
      </Planning>                                           +
+     <Planning-Time>N.N</Planning-Time>                    +
      <Triggers>                                            +
      </Triggers>                                           +
      <Slice-statistics>                                    +
@@ -305,6 +318,7 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
      Segments: N                          +
      Gang Type: "primary reader"          +
      Parallel Aware: false                +
+     Async Capable: false                 +
      Startup Cost: N.N                    +
      Total Cost: N.N                      +
      Plan Rows: N                         +
@@ -330,6 +344,7 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
          Segments: N                      +
          Gang Type: "primary reader"      +
          Parallel Aware: false            +
+         Async Capable: false             +
          Relation Name: "int8_tbl"        +
          Alias: "int8_tbl"                +
          Startup Cost: N.N                +
@@ -352,7 +367,6 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
          Temp Written Blocks: N           +
    Optimizer: "Pivotal Optimizer (GPORCA)"+
    Planning:                              +
-     Planning Time: N.N                   +
      Shared Hit Blocks: N                 +
      Shared Read Blocks: N                +
      Shared Dirtied Blocks: N             +
@@ -363,6 +377,7 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
      Local Written Blocks: N              +
      Temp Read Blocks: N                  +
      Temp Written Blocks: N               +
+   Planning Time: N.N                     +
    Triggers:                              +
    Slice statistics:                      +
      - Slice: N                           +
@@ -375,6 +390,87 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
    Statement statistics:                  +
      Memory used: N                       +
    Execution Time: N.N
+(1 row)
+
+select explain_filter('explain (buffers, format text) select * from int8_tbl i8');
+                              explain_filter                              
+--------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(3 rows)
+
+select explain_filter('explain (buffers, format json) select * from int8_tbl i8');
+                 explain_filter                 
+------------------------------------------------
+ [                                             +
+   {                                           +
+     "Plan": {                                 +
+       "Node Type": "Gather Motion",           +
+       "Senders": N,                           +
+       "Receivers": N,                         +
+       "Slice": N,                             +
+       "Segments": N,                          +
+       "Gang Type": "primary reader",          +
+       "Parallel Aware": false,                +
+       "Async Capable": false,                 +
+       "Startup Cost": N.N,                    +
+       "Total Cost": N.N,                      +
+       "Plan Rows": N,                         +
+       "Plan Width": N,                        +
+       "Shared Hit Blocks": N,                 +
+       "Shared Read Blocks": N,                +
+       "Shared Dirtied Blocks": N,             +
+       "Shared Written Blocks": N,             +
+       "Local Hit Blocks": N,                  +
+       "Local Read Blocks": N,                 +
+       "Local Dirtied Blocks": N,              +
+       "Local Written Blocks": N,              +
+       "Temp Read Blocks": N,                  +
+       "Temp Written Blocks": N,               +
+       "Plans": [                              +
+         {                                     +
+           "Node Type": "Seq Scan",            +
+           "Parent Relationship": "Outer",     +
+           "Slice": N,                         +
+           "Segments": N,                      +
+           "Gang Type": "primary reader",      +
+           "Parallel Aware": false,            +
+           "Async Capable": false,             +
+           "Relation Name": "int8_tbl",        +
+           "Alias": "int8_tbl",                +
+           "Startup Cost": N.N,                +
+           "Total Cost": N.N,                  +
+           "Plan Rows": N,                     +
+           "Plan Width": N,                    +
+           "Shared Hit Blocks": N,             +
+           "Shared Read Blocks": N,            +
+           "Shared Dirtied Blocks": N,         +
+           "Shared Written Blocks": N,         +
+           "Local Hit Blocks": N,              +
+           "Local Read Blocks": N,             +
+           "Local Dirtied Blocks": N,          +
+           "Local Written Blocks": N,          +
+           "Temp Read Blocks": N,              +
+           "Temp Written Blocks": N            +
+         }                                     +
+       ]                                       +
+     },                                        +
+     "Optimizer": "Pivotal Optimizer (GPORCA)",+
+     "Planning": {                             +
+       "Shared Hit Blocks": N,                 +
+       "Shared Read Blocks": N,                +
+       "Shared Dirtied Blocks": N,             +
+       "Shared Written Blocks": N,             +
+       "Local Hit Blocks": N,                  +
+       "Local Read Blocks": N,                 +
+       "Local Dirtied Blocks": N,              +
+       "Local Written Blocks": N,              +
+       "Temp Read Blocks": N,                  +
+       "Temp Written Blocks": N                +
+     }                                         +
+   }                                           +
+ ]
 (1 row)
 
 -- SETTINGS option
@@ -404,9 +500,7 @@ rollback;
 -- actually get (maybe none at all), we can't examine the "Workers" output
 -- in any detail.  We can check that it parses correctly as JSON, and then
 -- remove it from the displayed results.
--- Serializable isolation would disable parallel query, so explicitly use an
--- arbitrary other level.
-begin isolation level repeatable read;
+begin;
 -- encourage use of parallel plans
 set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
@@ -466,6 +560,7 @@ select jsonb_pretty(
                              "Actual Rows": 0,              +
                              "Actual Loops": 0,             +
                              "Startup Cost": 0.0,           +
+                             "Async Capable": false,        +
                              "Relation Name": "tenk1",      +
                              "Parallel Aware": false,       +
                              "Local Hit Blocks": 0,         +
@@ -506,13 +601,6 @@ select jsonb_pretty(
                      "Sort Key": [                          +
                          "tenk1.tenthous"                   +
                      ],                                     +
-                     "work_mem": {                          +
-                         "Used": 0,                         +
-                         "Segments": 0,                     +
-                         "Max Memory": 0,                   +
-                         "Workfile Spilling": 0,            +
-                         "Max Memory Segment": 0            +
-                     },                                     +
                      "Gang Type": "primary reader",         +
                      "Node Type": "Sort",                   +
                      "Plan Rows": 0,                        +
@@ -521,9 +609,9 @@ select jsonb_pretty(
                      "Actual Rows": 0,                      +
                      "Actual Loops": 0,                     +
                      "Startup Cost": 0.0,                   +
+                     "Async Capable": false,                +
                      "Sort Segments": 0,                    +
                      "Parallel Aware": false,               +
-                     "Executor Memory": 0,                  +
                      "Sort Space Used": 0,                  +
                      "Local Hit Blocks": 0,                 +
                      "Temp Read Blocks": 0,                 +
@@ -532,7 +620,6 @@ select jsonb_pretty(
                      "Shared Hit Blocks": 0,                +
                      "Shared Read Blocks": 0,               +
                      "Actual Startup Time": 0.0,            +
-                     "Executor Max Memory": 0,              +
                      "Parent Relationship": "Outer",        +
                      "Temp Written Blocks": 0,              +
                      "Local Dirtied Blocks": 0,             +
@@ -540,9 +627,7 @@ select jsonb_pretty(
                      "Shared Dirtied Blocks": 0,            +
                      "Shared Written Blocks": 0,            +
                      "Sort Avg Segment Memory": 0,          +
-                     "Sort Max Segment Memory": 0,          +
-                     "Executor Memory Segments": 0,         +
-                     "Executor Max Memory Segment": 0       +
+                     "Sort Max Segment Memory": 0           +
                  }                                          +
              ],                                             +
              "Slice": 0,                                    +
@@ -578,6 +663,7 @@ select jsonb_pretty(
              "Actual Rows": 0,                              +
              "Actual Loops": 0,                             +
              "Startup Cost": 0.0,                           +
+             "Async Capable": false,                        +
              "Parallel Aware": false,                       +
              "Local Hit Blocks": 0,                         +
              "Temp Read Blocks": 0,                         +
@@ -593,7 +679,6 @@ select jsonb_pretty(
              "Shared Written Blocks": 0                     +
          },                                                 +
          "Planning": {                                      +
-             "Planning Time": 0.0,                          +
              "Local Hit Blocks": 0,                         +
              "Temp Read Blocks": 0,                         +
              "Local Read Blocks": 0,                        +
@@ -613,6 +698,7 @@ select jsonb_pretty(
          "Triggers": [                                      +
          ],                                                 +
          "Optimizer": "Pivotal Optimizer (GPORCA)",         +
+         "Planning Time": 0.0,                              +
          "Execution Time": 0.0,                             +
          "Slice statistics": [                              +
              {                                              +
@@ -625,8 +711,7 @@ select jsonb_pretty(
                      "Average": 0,                          +
                      "Workers": 0,                          +
                      "Maximum Memory Used": 0               +
-                 },                                         +
-                 "Work Maximum Memory": 0                   +
+                 }                                          +
              }                                              +
          ],                                                 +
          "Statement statistics": {                          +
@@ -637,3 +722,14 @@ select jsonb_pretty(
 (1 row)
 
 rollback;
+set compute_query_id = on;
+select explain_filter('explain (verbose) select * from int8_tbl i8');
+                              explain_filter                              
+--------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   Output: q1, q2
+   ->  Seq Scan on public.int8_tbl  (cost=N.N..N.N rows=N width=N)
+         Output: q1, q2
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
