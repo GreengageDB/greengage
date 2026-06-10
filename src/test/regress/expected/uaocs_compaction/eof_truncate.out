@@ -18,6 +18,18 @@ SELECT COUNT(*) FROM uaocs_eof_truncate;
 (1 row)
 
 VACUUM uaocs_eof_truncate;
+WARNING:  skipping "pg_aocsseg_127551" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127551" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127551" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_127551" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225805)
+WARNING:  skipping "pg_aoblkdir_127551" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225805)
+WARNING:  skipping "pg_aovisimap_127551" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225805)
+WARNING:  skipping "pg_aocsseg_127551" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225806)
+WARNING:  skipping "pg_aoblkdir_127551" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225806)
+WARNING:  skipping "pg_aovisimap_127551" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225806)
+WARNING:  skipping "pg_aocsseg_127551" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225804)
+WARNING:  skipping "pg_aoblkdir_127551" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225804)
+WARNING:  skipping "pg_aovisimap_127551" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225804)
 SELECT COUNT(*) FROM uaocs_eof_truncate;
  count 
 -------

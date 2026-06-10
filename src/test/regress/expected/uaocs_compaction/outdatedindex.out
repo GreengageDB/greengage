@@ -8,6 +8,18 @@ ANALYZE uaocs_outdatedindex;
 SET enable_seqscan=false;
 DELETE FROM uaocs_outdatedindex WHERE a < 16;
 VACUUM uaocs_outdatedindex;
+WARNING:  skipping "pg_aocsseg_127567" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127567" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127567" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_127567" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225827)
+WARNING:  skipping "pg_aoblkdir_127567" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225827)
+WARNING:  skipping "pg_aovisimap_127567" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225827)
+WARNING:  skipping "pg_aocsseg_127567" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225833)
+WARNING:  skipping "pg_aoblkdir_127567" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225833)
+WARNING:  skipping "pg_aovisimap_127567" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225833)
+WARNING:  skipping "pg_aocsseg_127567" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225840)
+WARNING:  skipping "pg_aoblkdir_127567" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225840)
+WARNING:  skipping "pg_aovisimap_127567" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225840)
 SELECT * FROM uaocs_outdatedindex WHERE b = 20;
  a  | b  |                                                                c                                                                 
 ----+----+----------------------------------------------------------------------------------------------------------------------------------

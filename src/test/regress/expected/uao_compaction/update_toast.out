@@ -13,39 +13,51 @@ UPDATE 10
 UPDATE uao_update_toast SET b = 50 WHERE a > 20 AND a <= 30;
 UPDATE 10
 VACUUM uao_update_toast;
+WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
+WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
+WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
+WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
+WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
+WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
+WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
+WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
+WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
 VACUUM
 SELECT a, b, md5(c::text) FROM uao_update_toast;
  a  | b  |               md5                
 ----+----+----------------------------------
-  1 |  1 | d41d8cd98f00b204e9800998ecf8427e
   2 |  1 | d41d8cd98f00b204e9800998ecf8427e
   3 |  1 | d41d8cd98f00b204e9800998ecf8427e
   4 |  1 | d41d8cd98f00b204e9800998ecf8427e
-  5 |  1 | d41d8cd98f00b204e9800998ecf8427e
-  6 |  1 | d41d8cd98f00b204e9800998ecf8427e
   7 |  1 | d41d8cd98f00b204e9800998ecf8427e
   8 |  1 | d41d8cd98f00b204e9800998ecf8427e
+ 16 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 18 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 19 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 22 | 50 | 2b8c53792716ba8783ef9893499d89a1
+ 24 | 50 | 9914be844e81b8d9a00bdae16dd2a4a2
+ 27 | 50 | eedda1277d366bbd8509f4aa2fa6d6aa
+ 29 | 50 | 3f7bdfb0f49065b44ec805577607fb12
+  5 |  1 | d41d8cd98f00b204e9800998ecf8427e
+  6 |  1 | d41d8cd98f00b204e9800998ecf8427e
   9 |  1 | d41d8cd98f00b204e9800998ecf8427e
  10 |  1 | d41d8cd98f00b204e9800998ecf8427e
  11 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 12 |  1 | bb2fe6c35888be959312c51c398e1ab3
  13 |  1 | bb2fe6c35888be959312c51c398e1ab3
  14 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 15 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 16 |  1 | bb2fe6c35888be959312c51c398e1ab3
  17 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 18 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 19 |  1 | bb2fe6c35888be959312c51c398e1ab3
- 20 |  1 | bb2fe6c35888be959312c51c398e1ab3
  21 | 50 | e4ee815f9133f7754c258622c6c50b4b
- 22 | 50 | 2b8c53792716ba8783ef9893499d89a1
- 23 | 50 | ab8e449e69ac56927a11e787bcb97e3c
- 24 | 50 | 9914be844e81b8d9a00bdae16dd2a4a2
  25 | 50 | e2b84087952a14d67b9b4c738ee8e8fb
- 26 | 50 | 31b7c34cbebbddc2f58e8ceff409f6a7
- 27 | 50 | eedda1277d366bbd8509f4aa2fa6d6aa
  28 | 50 | 09889ea600ec6ab4325baf6c8fed13e0
- 29 | 50 | 3f7bdfb0f49065b44ec805577607fb12
+  1 |  1 | d41d8cd98f00b204e9800998ecf8427e
+ 12 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 15 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 20 |  1 | bb2fe6c35888be959312c51c398e1ab3
+ 23 | 50 | ab8e449e69ac56927a11e787bcb97e3c
+ 26 | 50 | 31b7c34cbebbddc2f58e8ceff409f6a7
  30 | 50 | 4830ad05263d544d83fe4b5ad2dcb84e
 (30 rows)
 

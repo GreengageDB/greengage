@@ -8,6 +8,18 @@ ANALYZE uaocs_outdatedindex_abort;
 SET enable_seqscan=false;
 DELETE FROM uaocs_outdatedindex_abort WHERE a < 16;
 VACUUM uaocs_outdatedindex_abort;
+WARNING:  skipping "pg_aocsseg_127572" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127572" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127572" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_127572" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225821)
+WARNING:  skipping "pg_aoblkdir_127572" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225821)
+WARNING:  skipping "pg_aovisimap_127572" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225821)
+WARNING:  skipping "pg_aocsseg_127572" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225838)
+WARNING:  skipping "pg_aoblkdir_127572" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225838)
+WARNING:  skipping "pg_aovisimap_127572" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225838)
+WARNING:  skipping "pg_aocsseg_127572" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225831)
+WARNING:  skipping "pg_aoblkdir_127572" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225831)
+WARNING:  skipping "pg_aovisimap_127572" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225831)
 SELECT * FROM uaocs_outdatedindex_abort WHERE b = 20;
  a  | b  |                                                                c                                                                 
 ----+----+----------------------------------------------------------------------------------------------------------------------------------
@@ -28,8 +40,8 @@ SELECT * FROM uaocs_outdatedindex_abort WHERE b < 16;
  a | b |                                                                c                                                                 
 ---+---+----------------------------------------------------------------------------------------------------------------------------------
  2 | 2 | Good morning                                                                                                                    
+ 3 | 3 | Good morning                                                                                                                    
  4 | 4 | Good morning                                                                                                                    
  1 | 1 | Good morning                                                                                                                    
- 3 | 3 | Good morning                                                                                                                    
 (4 rows)
 

@@ -4,6 +4,30 @@ CREATE INDEX uao_full_threshold_index ON uao_full_threshold(b);
 INSERT INTO uao_full_threshold SELECT i as a, 1 as b, 'hello world' as c FROM generate_series(1, 100) AS i;
 ANALYZE uao_full_threshold;
 VACUUM FULL uao_full_threshold;
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)
 DELETE FROM uao_full_threshold WHERE a < 4;
 SET gp_appendonly_compaction_threshold=100;
 VACUUM FULL uao_full_threshold;
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225542)
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225534)
+WARNING:  skipping "pg_aoseg_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)
+WARNING:  skipping "pg_aoblkdir_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)
+WARNING:  skipping "pg_aovisimap_127381" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225523)

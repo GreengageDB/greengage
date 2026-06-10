@@ -9,6 +9,18 @@ ANALYZE uao_index_abort_test;
 SET enable_seqscan=false;
 DELETE FROM uao_index_abort_test WHERE a < 16;
 VACUUM uao_index_abort_test;
+WARNING:  skipping "pg_aoseg_127366" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127366" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127366" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127366" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225508)
+WARNING:  skipping "pg_aoblkdir_127366" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225508)
+WARNING:  skipping "pg_aovisimap_127366" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225508)
+WARNING:  skipping "pg_aoseg_127366" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225505)
+WARNING:  skipping "pg_aoblkdir_127366" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225505)
+WARNING:  skipping "pg_aovisimap_127366" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225505)
+WARNING:  skipping "pg_aoseg_127366" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225513)
+WARNING:  skipping "pg_aoblkdir_127366" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225513)
+WARNING:  skipping "pg_aovisimap_127366" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225513)
 SELECT * FROM uao_index_abort_test WHERE b = 20;
  a  | b  |                                                                c                                                                 
 ----+----+----------------------------------------------------------------------------------------------------------------------------------

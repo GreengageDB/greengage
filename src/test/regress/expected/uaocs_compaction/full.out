@@ -14,6 +14,18 @@ SELECT COUNT(*) FROM uaocs_full;
 (1 row)
 
 VACUUM FULL uaocs_full;
+WARNING:  skipping "pg_aocsseg_127553" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_127553" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127553" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aocsseg_127553" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225800)
+WARNING:  skipping "pg_aoblkdir_127553" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225800)
+WARNING:  skipping "pg_aocsseg_127553" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225798)
+WARNING:  skipping "pg_aovisimap_127553" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225800)
+WARNING:  skipping "pg_aoblkdir_127553" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225798)
+WARNING:  skipping "pg_aovisimap_127553" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225798)
+WARNING:  skipping "pg_aocsseg_127553" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225799)
+WARNING:  skipping "pg_aoblkdir_127553" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225799)
+WARNING:  skipping "pg_aovisimap_127553" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225799)
 -- check if we get the same result afterwards
 SELECT COUNT(*) FROM uaocs_full;
  count 

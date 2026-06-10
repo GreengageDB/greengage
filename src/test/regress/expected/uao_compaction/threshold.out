@@ -5,6 +5,18 @@ INSERT INTO uao_threshold SELECT i as a, 1 as b, 'hello world' as c FROM generat
 ANALYZE uao_threshold;
 \set QUIET off
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
 VACUUM
 DELETE FROM uao_threshold WHERE a < 4;
 DELETE 3
@@ -22,6 +34,18 @@ SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_thresh
 
 -- 97 visible tuples, no vacuum
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
 VACUUM
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -39,6 +63,18 @@ SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_thresh
 
 -- 89 visible tuples, do vacuum
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
 VACUUM
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -49,6 +85,18 @@ SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_thresh
 
 -- no invisible tuples, no vacuum
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
 VACUUM
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -68,6 +116,18 @@ SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_thresh
 
 -- 3 invisible tuples, no vacuum
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
 VACUUM
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -81,6 +141,18 @@ SET gp_appendonly_compaction_threshold=2;
 SET
 -- 3 invisible tuples, do vacuum
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
 VACUUM
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -96,13 +168,25 @@ DELETE 74
 SELECT segment_id, segno, tupcount as tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
 ------------+-------+----------+-------
+          2 |     1 |       40 |     1
           0 |     1 |       32 |     1
           1 |     1 |       86 |     1
           1 |     2 |       29 |     1
-          2 |     1 |       40 |     1
 (4 rows)
 
 VACUUM uao_threshold;
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoblkdir_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130779" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
 VACUUM
 SELECT segment_id, segno, tupcount as tupcount, state FROM gp_toolkit.__gp_aoseg('uao_threshold');
  segment_id | segno | tupcount | state 
@@ -125,8 +209,18 @@ CREATE TABLE
 INSERT INTO uao_threshold_boundary SELECT 1, i from generate_series(1, 1000) i;
 INSERT 0 1000
 DELETE FROM uao_threshold_boundary WHERE b < 102;
+NOTICE:  One or more columns in the following table(s) do not have statistics: uao_threshold_boundary
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DELETE 101
 VACUUM uao_threshold_boundary;
+WARNING:  skipping "pg_aoseg_130787" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_130787" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_130787" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aovisimap_130787" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228877)
+WARNING:  skipping "pg_aoseg_130787" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aovisimap_130787" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228876)
+WARNING:  skipping "pg_aoseg_130787" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
+WARNING:  skipping "pg_aovisimap_130787" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228878)
 VACUUM
 SELECT * FROM gp_toolkit.__gp_aovisimap_compaction_info('uao_threshold_boundary'::regclass);
 NOTICE:  gp_appendonly_compaction_threshold = 10

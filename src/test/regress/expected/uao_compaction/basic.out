@@ -13,6 +13,14 @@ SELECT COUNT(*) FROM uao_basic;
 (1 row)
 
 VACUUM uao_basic;
+WARNING:  skipping "pg_aoseg_127360" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aovisimap_127360" --- cannot vacuum non-tables or special system tables
+WARNING:  skipping "pg_aoseg_127360" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225500)
+WARNING:  skipping "pg_aovisimap_127360" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225500)
+WARNING:  skipping "pg_aoseg_127360" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225499)
+WARNING:  skipping "pg_aovisimap_127360" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225499)
+WARNING:  skipping "pg_aoseg_127360" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225495)
+WARNING:  skipping "pg_aovisimap_127360" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225495)
 -- check if we get the same result afterwards
 SELECT COUNT(*) FROM uao_basic;
  count 
