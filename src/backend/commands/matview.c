@@ -811,8 +811,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 					 "WHERE _$newdata IS NOT NULL AND EXISTS "
 					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
 					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
-					 "AND _$newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "_$newdata.ctid)",
+					 "AND (_$newdata2.ctid OPERATOR(pg_catalog.<>) "
+					 "_$newdata.ctid OR _$newdata2.gp_segment_id "
+					 "OPERATOR(pg_catalog.<>) _$newdata.gp_segment_id))",
 					 tempname, tempname);
 	if (SPI_execute(querybuf.data, false, 1) != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -843,9 +844,18 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Start building the query for creating the diff table. */
 	resetStringInfo(&querybuf);
 
+	/*
+	 * GPDB: unlike upstream, store the new data as expanded columns rather
+	 * than a whole-row record: an anonymous record's typmod is not
+	 * registered on other nodes, so reading the record column back from
+	 * the distributed temp table fails with "record type has not been
+	 * registered".  Unmatched-side discrimination works off tid alone
+	 * (matched rows are filtered out by the WHERE clause below).
+	 */
 	appendStringInfo(&querybuf,
 					 "CREATE TEMP TABLE %s AS "
-					 "SELECT _$mv.ctid AS tid, _$newdata "
+					 "SELECT _$mv.ctid AS tid, "
+					 "_$mv.gp_segment_id AS sid, _$newdata.* "
 					 "FROM %s _$mv FULL JOIN %s _$newdata ON (",
 					 diffname, matviewname, tempname);
 
@@ -1000,10 +1010,11 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Deletes must come before inserts; do them first. */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "DELETE FROM %s _$mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
-					 "(SELECT _$diff.tid FROM %s _$diff "
+					 "DELETE FROM %s _$mv WHERE EXISTS "
+					 "(SELECT 1 FROM %s _$diff "
 					 "WHERE _$diff.tid IS NOT NULL "
-					 "AND _$diff._$newdata IS NULL)",
+					 "AND _$diff.tid OPERATOR(pg_catalog.=) _$mv.ctid "
+					 "AND _$diff.sid OPERATOR(pg_catalog.=) _$mv.gp_segment_id)",
 					 matviewname, diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_DELETE)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -1014,15 +1025,13 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	for (int i = 0; i < newHeapDesc->natts; ++i)
 	{
 		Form_pg_attribute attr = TupleDescAttr(newHeapDesc, i);
-		if (i == newHeapDesc->natts - 1)
-			appendStringInfo(&querybuf, " %s", NameStr(attr->attname));
-		else
-			appendStringInfo(&querybuf, " %s,", NameStr(attr->attname));
+
+		appendStringInfo(&querybuf, "%s %s", (i == 0) ? "" : ",",
+						 quote_identifier(NameStr(attr->attname)));
 	}
 	appendStringInfo(&querybuf,
-					 "INSERT INTO %s SELECT (_$diff._$newdata).* "
-					 "FROM %s _$diff WHERE tid IS NULL",
-					 matviewname, diffname);
+					 " FROM %s _$diff WHERE tid IS NULL",
+					 diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 
