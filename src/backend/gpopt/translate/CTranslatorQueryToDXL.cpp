@@ -1179,6 +1179,18 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 		&m_context->m_has_distributed_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 
+	if (md_rel->IsPartitioned())
+	{
+		// PG14 FIXME: ORCA targets the partition root through a dynamic
+		// scan and relied on ModifyTable.forceTupleRouting to route each
+		// tuple to its leaf; the PG14 executor rework dropped that path,
+		// so the DML would touch the storage-less root ("could not open
+		// file").  Fall back to the Postgres planner until per-tuple
+		// routing is reimplemented on the PG14 executor model.
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("DELETE on partitioned tables"));
+	}
+
 	// make note of the operator classes used in the distribution key
 	NoteDistributionPolicyOpclasses(rte);
 
@@ -1238,6 +1250,16 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte,
 		&m_context->m_has_distributed_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
+
+	if (md_rel->IsPartitioned())
+	{
+		// PG14 FIXME: see TranslateDeleteQueryToDXL; in-place UPDATEs on a
+		// partition root need per-tuple routing the PG14 executor rework
+		// dropped (split updates route their INSERT half, but ORCA emits
+		// in-place plans when the distribution key is unchanged).
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("UPDATE on partitioned tables"));
+	}
 
 	if (!optimizer_enable_dml_constraints &&
 		CTranslatorUtils::RelHasConstraints(md_rel))
