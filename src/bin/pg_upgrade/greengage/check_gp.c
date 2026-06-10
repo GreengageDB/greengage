@@ -1308,7 +1308,8 @@ check_execute_on_master_functions()
 			 */
 			script = fopen(output_path, "w");
 			if (!script)
-				pg_fatal("Could not create necessary file:  %s\n", output_path);
+				pg_fatal("could not open file \"%s\": %s\n",
+					output_path, strerror(errno));
 		}
 
 		fprintf(script, "Database: %s\n", active_db->db_name);
