@@ -4381,10 +4381,31 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 							 nullptr,  // translate context for the base table
 							 child_contexts, output_context);
 
-	// pad child plan's target list with NULLs for dropped columns for all DML operator types
-	List *target_list_with_dropped_cols =
-		CreateTargetListWithNullsForDroppedCols(dml_target_list, md_rel);
-	dml_target_list = target_list_with_dropped_cols;
+	// PG14 FIXME: a Split Update's insert half writes misaligned values on
+	// tables with dropped columns (the padded row no longer matches what
+	// ExecInsert expects), silently corrupting data.  Fall back to the
+	// Postgres planner, which handles it correctly.
+	if (CMD_UPDATE == m_cmd_type && isSplit && md_rel->HasDroppedColumns())
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT(
+					   "split UPDATE on a table with dropped columns"));
+	}
+
+	// Pad the child plan's target list with NULLs for dropped columns.  An
+	// INSERT and a Split Update (delete+insert) need the full physical row.
+	// A plain UPDATE must NOT be padded: PG14's ExecBuildUpdateProjection()
+	// pairs each non-junk subplan column with an updateColnosLists entry
+	// and rejects assignments to dropped columns, so its subplan emits the
+	// live columns only and the executor nulls the dropped ones itself.
+	BOOL pad_dropped_cols = !(CMD_UPDATE == m_cmd_type && !isSplit);
+	List *target_list_with_dropped_cols = dml_target_list;
+	if (pad_dropped_cols)
+	{
+		target_list_with_dropped_cols =
+			CreateTargetListWithNullsForDroppedCols(dml_target_list, md_rel);
+		dml_target_list = target_list_with_dropped_cols;
+	}
 
 	// Add junk columns to the target list for the 'action', 'ctid',
 	// 'gp_segment_id'. The ModifyTable node will find these based
@@ -4441,21 +4462,28 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 		// column produced by the subplan to its target-table attribute
 		// number (see ExecInitUpdateProjection / ExecBuildUpdateProjection).
 		// Unlike the Postgres planner, which emits only the SET columns,
-		// ORCA emits a full new tuple whose non-junk entries are the table
-		// columns in physical order, so the mapping is simply each non-junk
-		// entry's resno.  There is one entry per result relation.
+		// ORCA emits a full new tuple in physical column order, so the
+		// mapping is each table column's attribute number -- skipping
+		// dropped columns when the target list was not padded for them
+		// (plain update), keeping them when it was (split update; the
+		// projection is never built there).  One entry per result relation.
 		List	   *update_colnos = NIL;
-		ListCell   *lc_tle = nullptr;
+		const ULONG num_of_rel_cols = md_rel->ColumnCount();
 
-		foreach(lc_tle, target_list_with_dropped_cols)
+		for (ULONG ul = 0; ul < num_of_rel_cols; ul++)
 		{
-			TargetEntry *tle = (TargetEntry *) lfirst(lc_tle);
+			const IMDColumn *md_col = md_rel->GetMdCol(ul);
 
-			if (!tle->resjunk)
+			if (md_col->IsSystemColumn())
 			{
-				update_colnos =
-					gpdb::LAppendInt(update_colnos, tle->resno);
+				continue;
 			}
+			if (md_col->IsDropped() && !pad_dropped_cols)
+			{
+				continue;
+			}
+			update_colnos =
+				gpdb::LAppendInt(update_colnos, md_col->AttrNum());
 		}
 		dml->updateColnosLists = ListMake1(update_colnos);
 	}
