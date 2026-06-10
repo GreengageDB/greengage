@@ -382,6 +382,7 @@ _readSelectStmt(void)
 	READ_NODE_FIELD(fromClause);
 	READ_NODE_FIELD(whereClause);
 	READ_NODE_FIELD(groupClause);
+	READ_BOOL_FIELD(groupDistinct);
 	READ_NODE_FIELD(havingClause);
 	READ_NODE_FIELD(windowClause);
 	READ_NODE_FIELD(valuesLists);
@@ -397,6 +398,16 @@ _readSelectStmt(void)
 	READ_NODE_FIELD(larg);
 	READ_NODE_FIELD(rarg);
 	READ_BOOL_FIELD(disableLockingOptimization);
+	READ_DONE();
+}
+
+static ParamRef *
+_readParamRef(void)
+{
+	READ_LOCALS(ParamRef);
+
+	READ_INT_FIELD(number);
+	READ_LOCATION_FIELD(location);
 	READ_DONE();
 }
 
@@ -2147,6 +2158,12 @@ readNodeBinary(void)
 			case T_CreateFunctionStmt:
 				return_value = _readCreateFunctionStmt();
 				break;
+			case T_ReturnStmt:
+				return_value = _readReturnStmt();
+				break;
+			case T_RawStmt:
+				return_value = _readRawStmt();
+				break;
 			case T_FunctionParameter:
 				return_value = _readFunctionParameter();
 				break;
@@ -2307,6 +2324,9 @@ readNodeBinary(void)
 				break;
 			case T_InsertStmt:
 				return_value = _readInsertStmt();
+				break;
+			case T_ParamRef:
+				return_value = _readParamRef();
 				break;
 			case T_DeleteStmt:
 				return_value = _readDeleteStmt();

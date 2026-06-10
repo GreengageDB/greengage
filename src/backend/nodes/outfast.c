@@ -1353,6 +1353,9 @@ _outNode(StringInfo str, void *obj)
 			case T_CreateFunctionStmt:
 				_outCreateFunctionStmt(str, obj);
 				break;
+			case T_ReturnStmt:
+				_outReturnStmt(str, obj);
+				break;
 			case T_FunctionParameter:
 				_outFunctionParameter(str, obj);
 				break;

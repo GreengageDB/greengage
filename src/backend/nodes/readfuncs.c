@@ -3959,6 +3959,28 @@ _readAlterDomainStmt(void)
 }
 #endif /* COMPILING_BINARY_FUNCS */
 
+static ReturnStmt *
+_readReturnStmt(void)
+{
+	READ_LOCALS(ReturnStmt);
+
+	READ_NODE_FIELD(returnval);
+
+	READ_DONE();
+}
+
+static RawStmt *
+_readRawStmt(void)
+{
+	READ_LOCALS(RawStmt);
+
+	READ_NODE_FIELD(stmt);
+	READ_LOCATION_FIELD(stmt_location);
+	READ_INT_FIELD(stmt_len);
+
+	READ_DONE();
+}
+
 static CreateFunctionStmt *
 _readCreateFunctionStmt(void)
 {
@@ -3970,6 +3992,7 @@ _readCreateFunctionStmt(void)
 	READ_NODE_FIELD(parameters);
 	READ_NODE_FIELD(returnType);
 	READ_NODE_FIELD(options);
+	READ_NODE_FIELD(sql_body);
 
 	READ_DONE();
 }
