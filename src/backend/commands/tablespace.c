@@ -797,15 +797,34 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	/*
 	 * Attempt to coerce target directory to safe permissions.  If this fails,
 	 * it doesn't exist or has the wrong owner.
+	 *
+	 * During WAL replay the location may legitimately be gone: the
+	 * tablespace was dropped later in the WAL and its directory removed
+	 * (regression tests do exactly this), or a mirror was rewound to before
+	 * the CREATE.  Erroring would kill the startup process and leave the
+	 * mirror unrecoverable, so recreate the directory and press on, in the
+	 * spirit of TablespaceCreateDbspace().
 	 */
 	if (chmod(location, pg_dir_create_mode) != 0)
 	{
-		if (errno == ENOENT)
+		if (errno == ENOENT && InRecovery)
+		{
+			char	   *locbuf = pstrdup(location);
+
+			ereport(LOG,
+					(errmsg("creating missing directory \"%s\" for tablespace %u during replay",
+							location, tablespaceoid)));
+			if (pg_mkdir_p(locbuf, pg_dir_create_mode) != 0)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not create directory \"%s\": %m",
+								location)));
+			pfree(locbuf);
+		}
+		else if (errno == ENOENT)
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_FILE),
-					 errmsg("directory \"%s\" does not exist", location),
-					 InRecovery ? errhint("Create this directory for the tablespace before "
-										  "restarting the server.") : 0));
+					 errmsg("directory \"%s\" does not exist", location)));
 		else
 			ereport(ERROR,
 					(errcode_for_file_access(),
