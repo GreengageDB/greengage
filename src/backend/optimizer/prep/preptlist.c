@@ -165,7 +165,38 @@ preprocess_targetlist(PlannerInfo *root)
 			 */
 			tlist = expand_targetlist(root, tlist, command_type,
 									  result_relation, target_relation);
-			root->update_colnos = extract_update_targetlist_colnos(tlist, false);
+
+			if (!root->is_split_update)
+			{
+				/*
+				 * PG14's ExecBuildUpdateProjection() pairs each non-junk
+				 * tlist entry with its update_colnos target and rejects
+				 * dropped target columns, so strip the NULL placeholders
+				 * expand_targetlist() emitted for them; the executor sets
+				 * dropped columns of the new tuple to NULL itself.  A Split
+				 * Update keeps the placeholders: it runs as delete+insert
+				 * and its INSERT half wants the full physical row with
+				 * resno == attno.
+				 */
+				TupleDesc	tupdesc = RelationGetDescr(target_relation);
+				List	   *full_tlist = tlist;
+				ListCell   *lc2;
+
+				tlist = NIL;
+				foreach(lc2, full_tlist)
+				{
+					TargetEntry *tle = (TargetEntry *) lfirst(lc2);
+
+					if (tle->resjunk ||
+						!TupleDescAttr(tupdesc, tle->resno - 1)->attisdropped)
+						tlist = lappend(tlist, tle);
+				}
+				root->update_colnos =
+					extract_update_targetlist_colnos(tlist, true);
+			}
+			else
+				root->update_colnos =
+					extract_update_targetlist_colnos(tlist, false);
 		}
 		else
 			root->update_colnos = extract_update_targetlist_colnos(tlist, true);
