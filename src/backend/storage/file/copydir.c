@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/xlog.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/copydir.h"
@@ -63,9 +64,26 @@ copydir(char *fromdir, char *todir, bool recurse)
 		snprintf(tofile, sizeof(tofile), "%s/%s", todir, xlde->d_name);
 
 		if (lstat(fromfile, &fst) < 0)
+		{
+			/*
+			 * During WAL replay the checkpointer can unlink files of
+			 * dropped relations from under us (deferred unlinks happen at
+			 * restartpoints), so a vanished source file is expected here
+			 * and must not kill the startup process; the primary's copy
+			 * skipped it the same way.
+			 */
+			if (errno == ENOENT && InRecovery)
+			{
+				ereport(LOG,
+						(errcode_for_file_access(),
+						 errmsg("skipping vanished file \"%s\" during replay",
+								fromfile)));
+				continue;
+			}
 			ereport(ERROR,
 					(errcode_for_file_access(),
 					 errmsg("could not stat file \"%s\": %m", fromfile)));
+		}
 
 		if (S_ISDIR(fst.st_mode))
 		{
@@ -156,9 +174,21 @@ copy_file(char *fromfile, char *tofile)
 	 */
 	srcfd = OpenTransientFile(fromfile, O_RDONLY | PG_BINARY);
 	if (srcfd < 0)
+	{
+		/* See copydir(): tolerate files vanishing during WAL replay. */
+		if (errno == ENOENT && InRecovery)
+		{
+			ereport(LOG,
+					(errcode_for_file_access(),
+					 errmsg("skipping vanished file \"%s\" during replay",
+							fromfile)));
+			pfree(buffer);
+			return;
+		}
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not open file \"%s\": %m", fromfile)));
+	}
 
 	dstfd = OpenTransientFile(tofile, O_RDWR | O_CREAT | O_EXCL | PG_BINARY);
 	if (dstfd < 0)
