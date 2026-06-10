@@ -753,9 +753,26 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 
 	if (!trigger_exists)
 	{
-		/* Generate the OID for the new trigger. */
-		trigoid = GetNewOidWithIndex(tgrel, TriggerOidIndexId,
-									 Anum_pg_trigger_oid);
+		/*
+		 * Generate the OID for the new trigger.
+		 *
+		 * For RI constraint triggers, the trigger's name is derived from
+		 * the trigger OID. That creates a chicken-and-egg problem with the
+		 * usual GPDB OID dispatching mechanism. In a QE, we cannot look up
+		 * the trigger OID to use by trigger name, because the trigger name
+		 * is derived from the OID. To work around that, we use more fields
+		 * as the key. For a user-defined trigger, tgrelid and the trigger
+		 * name should be enough. For internal triggers, we use the name
+		 * prefix together with constraint OID and function OID. That
+		 * should be unique: there should be no need to have more than one
+		 * internal trigger with the same function for one constraint.
+		 */
+		trigoid = GetNewOidForTrigger(tgrel, TriggerOidIndexId,
+									  Anum_pg_trigger_oid,
+									  RelationGetRelid(rel),
+									  stmt->trigname,
+									  constraintOid,
+									  funcoid);
 	}
 	else
 	{
@@ -841,31 +858,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 											  true, /* noinherit */
 											  isInternal);	/* is_internal */
 	}
-
-	/*
-	 * Generate the trigger's OID now, so that we can use it in the name if
-	 * needed.
-	 */
-	tgrel = table_open(TriggerRelationId, RowExclusiveLock);
-
-	/*
-	 * For RI constraint triggers, the trigger's name is derived from the
-	 * trigger OID. That creates a chicken-and-egg problem with the usual
-	 * GPDB OID dispatching mechanism. In a QE, we cannot look up the
-	 * trigger OID to use by trigger name, because the trigger name is
-	 * derived from the OID. To work around that, we use more fields as
-	 * the key. For a user-defined trigger, tgrelid and the trigger name
-	 * should be enough. For internal triggers, we use the name prefix
-	 * together with constraint OID and function OID. That should be
-	 * unique: there should be no need to have more than one internal trigger
-	 * with same function for one constraint.
-	 */
-	trigoid = GetNewOidForTrigger(tgrel, TriggerOidIndexId,
-								  Anum_pg_trigger_oid,
-								  RelationGetRelid(rel),
-								  stmt->trigname,
-								  constraintOid,
-								  funcoid);
 
 	/*
 	 * If trigger is internally generated, modify the provided trigger name to
