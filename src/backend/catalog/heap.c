@@ -1737,6 +1737,7 @@ heap_create_with_catalog(const char *relname,
 
 			pfree(relarrayname);
 		}
+	}
 	else
 	{
 		/* Caller should not be expecting a type to be created. */
@@ -1744,7 +1745,6 @@ heap_create_with_catalog(const char *relname,
 		Assert(typaddress == NULL);
 
 		new_type_oid = InvalidOid;
-	}
 	}
 
 	/*
