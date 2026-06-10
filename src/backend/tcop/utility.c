@@ -1896,6 +1896,27 @@ ProcessUtilitySlow(ParseState *pstate,
 									false	/* is_new_table */);
 
 					/*
+					 * GPDB: is_alter_table made DefineIndex() skip the QE
+					 * dispatch on the assumption that an enclosing ALTER
+					 * TABLE will be dispatched as a whole, but a transformed
+					 * IndexStmt here came from expandTableLikeClause() and
+					 * has no such enclosing command.  Dispatch it ourselves,
+					 * or the index oids preassigned on the QD are never sent
+					 * ("oids were assigned, but not dispatched to QEs") and
+					 * the LIKE'd index is missing on the segments.
+					 */
+					if (Gp_role == GP_ROLE_DISPATCH && is_alter_table)
+					{
+						stmt->oldNode = InvalidOid;
+						CdbDispatchUtilityStatement((Node *) stmt,
+													DF_CANCEL_ON_ERROR |
+													DF_WITH_SNAPSHOT |
+													DF_NEED_TWO_PHASE,
+													GetAssignedOidsForDispatch(),
+													NULL);
+					}
+
+					/*
 					 * Add the CREATE INDEX node itself to stash right away;
 					 * if there were any commands stashed in the ALTER TABLE
 					 * code, we need them to appear after this one.
