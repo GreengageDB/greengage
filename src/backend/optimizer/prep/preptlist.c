@@ -48,11 +48,14 @@
 #include "parser/parsetree.h"
 #include "utils/rel.h"
 
+#include "access/htup_details.h"
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
+#include "commands/tablecmds.h"
 #include "optimizer/plancat.h"
 #include "parser/parse_relation.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 static List *expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 							   Index result_relation, Relation rel);
@@ -61,6 +64,7 @@ static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *tlist);
 static List *expand_insert_targetlist(List *tlist, Relation rel);
 static bool check_splitupdate(List *tlist, Index result_relation, Relation rel);
+static bool rel_has_appendoptimized_partition(Relation rel);
 
 
 /*
@@ -140,7 +144,8 @@ preprocess_targetlist(PlannerInfo *root)
 		root->is_split_update = check_splitupdate(tlist, result_relation,
 												  target_relation);
 		if (root->is_split_update ||
-			RelationIsAppendOptimized(target_relation))
+			RelationIsAppendOptimized(target_relation) ||
+			rel_has_appendoptimized_partition(target_relation))
 		{
 			/*
 			 * Both a Split Update and an append-optimized UPDATE need the full
@@ -416,6 +421,47 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 
 	bms_free(changed_cols);
 	return key_col_updated;
+}
+
+/*
+ * Does any leaf partition of a partitioned UPDATE target use an
+ * append-optimized access method?
+ *
+ * A partitioned root has no access method of its own, so
+ * RelationIsAppendOptimized() is always false for it, but the executor
+ * restriction that forces targetlist expansion -- an AO relation cannot
+ * fetch the old tuple by TID to fill in unchanged columns, so the plan
+ * must supply the full new tuple (see ExecModifyTable) -- applies per
+ * leaf.
+ */
+static bool
+rel_has_appendoptimized_partition(Relation rel)
+{
+	List	   *children;
+	ListCell   *lc;
+	bool		result = false;
+
+	if (rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+		return false;
+
+	children = find_all_inheritors(RelationGetRelid(rel), AccessShareLock,
+								   NULL);
+	foreach(lc, children)
+	{
+		Oid			childrelid = lfirst_oid(lc);
+		HeapTuple	tuple;
+
+		tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(childrelid));
+		if (!HeapTupleIsValid(tuple))
+			continue;
+		if (IsAccessMethodAO(((Form_pg_class) GETSTRUCT(tuple))->relam))
+			result = true;
+		ReleaseSysCache(tuple);
+		if (result)
+			break;
+	}
+	list_free(children);
+	return result;
 }
 
 
