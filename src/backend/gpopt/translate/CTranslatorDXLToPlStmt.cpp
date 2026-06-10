@@ -2760,6 +2760,45 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 
 	agg->numGroups =
 		std::max(1L, (long) std::min(agg->plan.plan_rows, (double) LONG_MAX));
+
+	// PG14: the executor reads each aggregate's result from
+	// aggvalues[aggref->aggno] and its transition state from
+	// pertrans[aggref->aggtransno].  The Postgres planner assigns these in
+	// preprocess_aggrefs(), which ORCA plans never pass through; left at
+	// their MakeNode default of 0, all aggregates in this node would share
+	// the first one's transition state and result.  Number them densely
+	// here (gaps would leave uninitialized per-agg slots), keeping the
+	// number of an instance referenced more than once, and not attempting
+	// upstream's shared-state optimization.
+	{
+		List *aggref_list = gpdb::ListConcat(
+			gpdb::ExtractNodesExpression((Node *) plan->targetlist, T_Aggref,
+										 false /*descendIntoSubqueries*/),
+			gpdb::ExtractNodesExpression((Node *) plan->qual, T_Aggref,
+										 false /*descendIntoSubqueries*/));
+		ListCell *lc_aggref;
+		int next_aggno = 0;
+
+		foreach (lc_aggref, aggref_list)
+		{
+			Aggref *aggref = (Aggref *) lfirst(lc_aggref);
+
+			aggref->aggno = -1;
+			aggref->aggtransno = -1;
+		}
+		foreach (lc_aggref, aggref_list)
+		{
+			Aggref *aggref = (Aggref *) lfirst(lc_aggref);
+
+			if (aggref->aggno == -1)
+			{
+				aggref->aggno = next_aggno;
+				aggref->aggtransno = next_aggno;
+				next_aggno++;
+			}
+		}
+	}
+
 	SetParamIds(plan);
 
 	// cleanup
