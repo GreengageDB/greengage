@@ -92,8 +92,8 @@ class GreedySolver:
                 raise ValueError("Cannot follow spread mirroring strategy")
         
         # Best known solution
-        self.best_primary_mapping: List[HostId] | None = None
-        self.best_mirror_mapping: List[HostId] | None = None
+        self.best_primary_mapping: Union[List[HostId], None] = None
+        self.best_mirror_mapping: Union[List[HostId], None] = None
         self.best_cost = None
 
     def solve(self) -> Tuple[Solution, Cost]:
@@ -320,7 +320,7 @@ class GreedySolver:
         group_size = len(segs)
         assigned_p_hosts = set(phost_to_mhost.keys())
 
-        best_mirror_host: HostId | None = None
+        best_mirror_host: Union[HostId, None] = None
 
         # Priority 1: Most used original mirror host (if has capacity)
         if mirror_uses:
