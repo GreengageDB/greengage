@@ -741,7 +741,6 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	if (cursorOptions & CURSOR_OPT_PARALLEL_RETRIEVE)
 		ExplainParallelRetrieveCursor(es, queryDesc);
 
-	if (es->summary && (planduration || bufusage))
 	if (es->verbose && plannedstmt->queryId != UINT64CONST(0))
 	{
 		char		buf[MAXINT8LEN + 1];
@@ -768,19 +767,6 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	/* Print slice table */
 	if (es->slicetable)
 		ExplainPrintSliceTable(es, queryDesc);
-
-	/* Show buffer usage */
-	if (es->summary && bufusage)
-	{
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			es->indent++;
-		show_buffer_usage(es, bufusage, false);
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			es->indent--;
-	}
-
-	if (es->summary && (planduration || bufusage))
-		ExplainCloseGroup("Planning", "Planning", true, es);
 
 	/* Print info about runtime of triggers */
 	if (es->analyze)
