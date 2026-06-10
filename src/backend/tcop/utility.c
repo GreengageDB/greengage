@@ -2010,7 +2010,17 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreateFunctionStmt:	/* CREATE FUNCTION */
-				address = CreateFunction(pstate, (CreateFunctionStmt *) parsetree);
+
+				/*
+				 * GPDB: parse analysis of a SQL-standard body (BEGIN
+				 * ATOMIC / RETURN) inside CreateFunction() scribbles on
+				 * the raw sql_body tree.  Execute a copy so the original
+				 * statement is dispatched to the QEs unmodified and their
+				 * own parse analysis starts from the raw tree (cf.
+				 * ExecDropStmt's copy-before-execute).
+				 */
+				address = CreateFunction(pstate,
+										 copyObject((CreateFunctionStmt *) parsetree));
 				break;
 
 			case T_AlterFunctionStmt:	/* ALTER FUNCTION */
