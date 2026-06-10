@@ -2005,11 +2005,14 @@ bytea *
 partitioned_table_reloptions(Datum reloptions, bool validate)
 {
 	/*
-	 * autovacuum_enabled, autovacuum_analyze_threshold and
-	 * autovacuum_analyze_scale_factor are supported for partitioned tables.
+	 * GPDB: unlike upstream, a partitioned root accepts the full set of
+	 * heap options (fillfactor, analyze_hll_non_part_table, ...).  The
+	 * root has no storage that would use them, but GPDB's partition DDL
+	 * stores them on the root and propagates them to newly created
+	 * children, and pre-PG14 GPDB (inheritance-based partitioning, where
+	 * the root was a plain table) always allowed this.
 	 */
-
-	return default_reloptions(reloptions, validate, RELOPT_KIND_PARTITIONED);
+	return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
 }
 
 /*
