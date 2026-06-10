@@ -1632,6 +1632,16 @@ acquire_sample_rows(Relation onerel, int elevel,
 
 #ifdef USE_PREFETCH
 	prefetch_maximum = get_tablespace_io_concurrency(onerel->rd_rel->reltablespace);
+
+	/*
+	 * GPDB: for AO/AOCS the sampled "block numbers" are logical row
+	 * numbers (see above), not buffer-manager blocks; prefetching them
+	 * through PrefetchBuffer() would drive md into the append-optimized
+	 * segment files and fail ("previous segment is only 0 blocks").
+	 */
+	if (RelationIsAppendOptimized(onerel))
+		prefetch_maximum = 0;
+
 	/* Create another BlockSampler, using the same seed, for prefetching */
 	if (prefetch_maximum)
 		(void) BlockSampler_Init(&prefetch_bs, totalblocks, targrows, randseed);
