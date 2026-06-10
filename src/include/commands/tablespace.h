@@ -61,6 +61,7 @@ extern Oid	get_tablespace_oid(const char *tablespacename, bool missing_ok);
 extern char *get_tablespace_name(Oid spc_oid);
 
 extern bool directory_is_empty(const char *path);
+extern bool directory_is_empty_ext(const char *path, int elevel);
 extern void remove_tablespace_symlink(const char *linkloc);
 
 extern void tblspc_redo(XLogReaderState *rptr);

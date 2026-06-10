@@ -1182,7 +1182,13 @@ remove_symlink:
 		}
 		else
 		{
-			if(directory_is_empty(link_target_dir) && rmdir(link_target_dir) < 0)
+			/*
+			 * In redo this must not ERROR: ReadDir's failure would kill the
+			 * startup process over disk space we merely failed to release
+			 * (e.g. the directory vanished after the access() check above).
+			 */
+			if(directory_is_empty_ext(link_target_dir, redo ? LOG : ERROR) &&
+			   rmdir(link_target_dir) < 0)
 				ereport(redo ? LOG : ERROR,
 						(errcode_for_file_access(),
 								errmsg("could not remove directory \"%s\": %m",
@@ -1250,12 +1256,24 @@ remove_symlink:
 bool
 directory_is_empty(const char *path)
 {
+	return directory_is_empty_ext(path, ERROR);
+}
+
+/*
+ * As above, but report problems reading the directory at the caller's
+ * chosen elevel.  WAL replay must use something weaker than ERROR, which
+ * the startup process would escalate to FATAL; an unreadable or vanished
+ * directory then counts as empty and the caller's rmdir reports the rest.
+ */
+bool
+directory_is_empty_ext(const char *path, int elevel)
+{
 	DIR		   *dirdesc;
 	struct dirent *de;
 
 	dirdesc = AllocateDir(path);
 
-	while ((de = ReadDir(dirdesc, path)) != NULL)
+	while ((de = ReadDirExtended(dirdesc, path, elevel)) != NULL)
 	{
 		if (strcmp(de->d_name, ".") == 0 ||
 			strcmp(de->d_name, "..") == 0)
@@ -1264,7 +1282,8 @@ directory_is_empty(const char *path)
 		return false;
 	}
 
-	FreeDir(dirdesc);
+	if (dirdesc)
+		FreeDir(dirdesc);
 	return true;
 }
 
