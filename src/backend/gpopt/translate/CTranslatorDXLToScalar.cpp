@@ -2130,6 +2130,12 @@ CTranslatorDXLToScalar::TranslateDXLScalarArrayRefToScalar(
 		CMDIdGPDB::CastMdid(dxlop->ArrayTypeMDid())->Oid();
 	array_ref->refelemtype =
 		CMDIdGPDB::CastMdid(dxlop->ElementTypeMDid())->Oid();
+	// PG14: exprType() of a SubscriptingRef is refrestype; left unset it
+	// breaks everything above this node with "cache lookup failed for
+	// type 0".  The DXL operator carries the result type computed from the
+	// original node (element type for a single-element fetch, container
+	// type for slices and assignments).
+	array_ref->refrestype = CMDIdGPDB::CastMdid(dxlop->ReturnTypeMDid())->Oid();
 	// GPDB_91_MERGE_FIXME: collation
 	array_ref->refcollid = gpdb::TypeCollation(array_ref->refelemtype);
 	array_ref->reftypmod = dxlop->TypeModifier();
