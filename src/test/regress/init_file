@@ -100,8 +100,14 @@ s/\s+\(entry db(.*)+\spid=\d+\)//
 
 # Mask oids in append-optimized auxiliary relation names; they vary
 # from run to run (e.g. VACUUM warnings naming pg_aoseg_<oid>).
-m/pg_ao(cs)?seg_\d+/
-s/pg_ao(cs)?seg_\d+/pg_ao$1seg_OID/
+# Kept as two capture-free rules: an optional (cs)? group leaves $1
+# undefined for the row-oriented case, and the perl warning that
+# produces can derail gpdiff comparison.
+m/pg_aocsseg_\d+/
+s/pg_aocsseg_\d+/pg_aocsseg_OID/
+
+m/pg_aoseg_\d+/
+s/pg_aoseg_\d+/pg_aoseg_OID/
 
 m/pg_aovisimap_\d+/
 s/pg_aovisimap_\d+/pg_aovisimap_OID/

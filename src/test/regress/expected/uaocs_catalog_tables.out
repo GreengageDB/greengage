@@ -34,9 +34,9 @@ insert into uaocs_table_check_hidden_tup_count_after_delete select i,'aa'||i,i+1
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uaocs_table_check_hidden_tup_count_after_delete'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
-     1 |               0 |              5
-     1 |               0 |              4
      1 |               0 |              1
+     1 |               0 |              4
+     1 |               0 |              5
 (3 rows)
 
 delete from uaocs_table_check_hidden_tup_count_after_delete where i = 1;
@@ -45,9 +45,9 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uaocs_table_check_hidden_tup_count_after_delete'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
+     1 |               0 |              4
      1 |               0 |              5
      1 |               1 |              1
-     1 |               0 |              4
 (3 rows)
 
 vacuum full uaocs_table_check_hidden_tup_count_after_delete;
@@ -55,9 +55,9 @@ select * from gp_toolkit.__gp_aovisimap_hidden_info('uaocs_table_check_hidden_tu
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
      1 |               0 |              4
-     1 |               0 |              5
      1 |               0 |              0
      2 |               0 |              0
+     1 |               0 |              5
 (4 rows)
 
 -- Verify the hidden tup_count using UDF gp_aovisimap_hidden_info(oid) for uaocs relation after update and vacuum
@@ -66,8 +66,8 @@ insert into uaocs_table_check_hidden_tup_count_after_update select i,'aa'||i,i+1
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uaocs_table_check_hidden_tup_count_after_update'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
-     1 |               0 |              1
      1 |               0 |              5
+     1 |               0 |              1
      1 |               0 |              4
 (3 rows)
 
@@ -115,22 +115,22 @@ SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT segrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aocsseg_130618" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aocsseg_130618"
+ERROR:  permission denied: "pg_aocsseg_133308" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aocsseg_133308"
 PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
 SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT blkdirrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aoblkdir_130618" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_130618"
+ERROR:  permission denied: "pg_aoblkdir_133308" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_133308"
 PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
 SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT visimaprelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aovisimap_130618" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_130618"
+ERROR:  permission denied: "pg_aovisimap_133308" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_133308"
 PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
 SET allow_system_table_mods = on;
 SELECT insert_dummy_aoco_aux_entry(s.interior_fqname)
@@ -164,23 +164,29 @@ SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT segrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aocsseg_130618"
-PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_aoco_aux_entry 
+-----------------------------
+ 
+(1 row)
+
 SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT blkdirrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_130618"
-PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_aoco_aux_entry 
+-----------------------------
+ 
+(1 row)
+
 SELECT delete_dummy_aoco_aux_entry(s.interior_fqname)
 FROM (
      SELECT visimaprelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uaocs_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_130618"
-PL/pgSQL function delete_dummy_aoco_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_aoco_aux_entry 
+-----------------------------
+ 
+(1 row)
+
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('uaocs_catalog_delete_from');
  count 
 -------
@@ -190,11 +196,15 @@ SELECT count(*) FROM gp_toolkit.__gp_aocsseg('uaocs_catalog_delete_from');
 SELECT count(*) FROM gp_toolkit.__gp_aoblkdir('uaocs_catalog_delete_from');
  count 
 -------
-     1
+     0
 (1 row)
 
 SELECT count(*) FROM gp_toolkit.__gp_aovisimap('uaocs_catalog_delete_from');
-ERROR:  got invalid value: NULL
+ count 
+-------
+     0
+(1 row)
+
 SET allow_system_table_mods = off;
 DROP FUNCTION insert_dummy_aoco_aux_entry(fqname text);
 DROP FUNCTION delete_dummy_aoco_aux_entry(fqname text);
