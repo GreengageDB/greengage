@@ -577,6 +577,14 @@ RemoveRoleFromObjectPolicy(Oid roleid, Oid classid, Oid policy_id)
 ObjectAddress
 CreatePolicy(CreatePolicyStmt *stmt)
 {
+	/*
+	 * GPDB: dispatch a pristine copy of the statement.  Transforming the
+	 * quals below replaces SubLink.subselect with the transformed Query
+	 * in place, and a QE re-transforming that fails with "unexpected
+	 * non-SELECT command in SubLink".
+	 */
+	CreatePolicyStmt *dispatchStmt =
+		(Gp_role == GP_ROLE_DISPATCH) ? copyObject(stmt) : NULL;
 	Relation	pg_policy_rel;
 	Oid			policy_id;
 	Relation	target_table;
@@ -770,7 +778,7 @@ CreatePolicy(CreatePolicyStmt *stmt)
 	{
 		Assert(stmt->type == T_CreatePolicyStmt);
 		Assert(stmt->type < 1000);
-		CdbDispatchUtilityStatement((Node *) stmt,
+		CdbDispatchUtilityStatement((Node *) dispatchStmt,
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
@@ -793,6 +801,9 @@ CreatePolicy(CreatePolicyStmt *stmt)
 ObjectAddress
 AlterPolicy(AlterPolicyStmt *stmt)
 {
+	/* GPDB: see CreatePolicy; dispatch an untransformed copy */
+	AlterPolicyStmt *dispatchStmt =
+		(Gp_role == GP_ROLE_DISPATCH) ? copyObject(stmt) : NULL;
 	Relation	pg_policy_rel;
 	Oid			policy_id;
 	Relation	target_table;
@@ -1116,7 +1127,7 @@ AlterPolicy(AlterPolicyStmt *stmt)
 	{
 		Assert(stmt->type == T_AlterPolicyStmt);
 		Assert(stmt->type < 1000);
-		CdbDispatchUtilityStatement((Node *) stmt,
+		CdbDispatchUtilityStatement((Node *) dispatchStmt,
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
