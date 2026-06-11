@@ -1586,12 +1586,18 @@ checkCpuSetByRole(const char *cpuset)
 {
 	char **arraycpuset = (char **)palloc0(sizeof(char *) * CpuSetArrayLength);
 	char *copycpuset = (char *)palloc0(sizeof(char) * MaxCpuSetLength);
+
+	if (strlen(cpuset) >= MaxCpuSetLength)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("the length of cpuset reached the upper limit %d",
+						MaxCpuSetLength)));
 	strcpy(copycpuset, cpuset);
 
 	int cnt = 0;
-	for (int i = 0; i < sizeof(cpuset); i++)
+	for (const char *p = cpuset; *p != '\0'; p++)
 	{
-		if (cpuset[i] == ';')
+		if (*p == ';')
 			cnt++;
 	}
 
