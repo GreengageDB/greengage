@@ -451,31 +451,31 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  sumx | sumy 
 ------+------
+   65 |  160
   215 |  160
+  115 |  160
   165 |  160
   265 |  160
-  115 |  160
-   65 |  160
-  165 |  165
-  265 |  165
-  115 |  165
   215 |  165
+  115 |  165
+  165 |  165
    65 |  165
-   65 |  170
-  215 |  170
+  265 |  165
   265 |  170
-  165 |  170
+   65 |  170
   115 |  170
-  265 |  175
-  115 |  175
-  165 |  175
-  215 |  175
-   65 |  175
-  265 |  155
+  215 |  170
+  165 |  170
+   65 |  155
   115 |  155
   165 |  155
   215 |  155
-   65 |  155
+  265 |  155
+   65 |  175
+  115 |  175
+  165 |  175
+  215 |  175
+  265 |  175
 (25 rows)
 
 drop table test1;
@@ -547,12 +547,12 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: s
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  vn 
 ----
- 10
-   
  20
  30
  40
  50
+   
+ 10
 (6 rows)
 
 --
@@ -702,8 +702,8 @@ from t2_github_issue_10143 a
 group by a.code;
  dongnm | sum  
 --------+------
- aname  | 2100
         | 2100
+ aname  | 2100
 (2 rows)
 
 select * from (select sum(a.salary) over(), count(*)
@@ -728,8 +728,8 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  dongnm | sum  
 --------+------
-        | 1100
-      1 | 1000
+      1 | 2100
+        | 2100
 (2 rows)
 
 with cte as (select row_number() over (order by code) as rn1, code
