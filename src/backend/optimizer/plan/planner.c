@@ -2480,6 +2480,18 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		{
 			preprocess_aggrefs(root, (Node *) root->processed_tlist);
 			preprocess_aggrefs(root, (Node *) parse->havingQual);
+
+			/*
+			 * GPDB: a TableValueExpr subquery can SCATTER BY an aggregate
+			 * expression.  Its Aggref copy must agree (be equal()) with the
+			 * targetlist instance so the scatter locus and the Motion's
+			 * hash expressions can be matched to the aggregate's output
+			 * column; without numbering it here the comparison fails and
+			 * planning errors with 'could not find hash distribution key
+			 * expressions in target list' (or leaves a raw Aggref in the
+			 * Motion: 'Aggref found in non-Agg plan node').
+			 */
+			preprocess_aggrefs(root, (Node *) parse->scatterClause);
 		}
 
 		/*
