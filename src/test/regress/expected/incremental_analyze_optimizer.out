@@ -1,4 +1,8 @@
 -- start_matchsubs
+-- m/^ foo\s+\|\s+-?[0-9.]+$/
+-- s/^ foo\s+\|\s+-?[0-9.]+$/ foo | ROOTSTAT/
+-- end_matchsubs
+-- start_matchsubs
 -- m/^LOG.*PartitionSelector/
 -- s/^LOG.*PartitionSelector/PartitionSelector/
 -- m/^LOG.*Feature not supported/
