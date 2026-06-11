@@ -152,14 +152,6 @@ select count(*) from atsdb_ao;
 -- check alter, vacuum analyze, and then alter
 delete from atsdb_ao where i = any(array(select generate_series(1,90)));
 vacuum analyze atsdb_ao;
-WARNING:  skipping "pg_aoseg_159886" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_159886" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_159886" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114956)
-WARNING:  skipping "pg_aovisimap_159886" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=114956)
-WARNING:  skipping "pg_aoseg_159886" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114955)
-WARNING:  skipping "pg_aovisimap_159886" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=114955)
-WARNING:  skipping "pg_aoseg_159886" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114954)
-WARNING:  skipping "pg_aovisimap_159886" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=114954)
 alter table atsdb_ao set distributed randomly;
 select count(*) from atsdb_ao;
  count 

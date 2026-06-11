@@ -15,9 +15,6 @@ show gp_enable_segment_copy_checking;
 (1 row)
 
 copy ats_dist_by_d from '/tmp/ats_dist_by_c<SEGID>' on segment;
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg2 172.17.0.3:7004 pid=117034)
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg0 172.17.0.3:7002 pid=117031)
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg1 172.17.0.3:7003 pid=117033)
 -- try to use the reorganize = true to fix it
 alter table ats_dist_by_d set with (reorganize = true);
 -- construct expected table
@@ -40,9 +37,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- reload for random distribution test
 truncate table ats_dist_by_d;
 copy ats_dist_by_d from '/tmp/ats_dist_by_c<SEGID>' on segment;
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg1 172.17.0.3:7003 pid=117033)
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg0 172.17.0.3:7002 pid=117031)
-WARNING:  1 temporary files and directories not closed at end-of-transaction  (seg2 172.17.0.3:7004 pid=117034)
 -- we expect the new random distribution to differ from both the
 -- distributed-by-c table and the distributed-by-d table
 alter table ats_dist_by_d set with (reorganize = true) distributed randomly;

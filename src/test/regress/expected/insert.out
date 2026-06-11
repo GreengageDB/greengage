@@ -637,10 +637,6 @@ $$
 language plpgsql;
 create trigger mlparted11_trig before insert ON mlparted11
   for each row execute procedure mlparted11_trig_fn();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=170641)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=170640)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=170639)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- check that the correct row is shown when constraint check_b fails after
 -- "(1, 2)" is routed to mlparted11 (actually "(1, 4)" would be shown due
 -- to the BR trigger mlparted11_trig_fn)
@@ -711,10 +707,6 @@ ERROR:  new row for relation "mlparted5a" violates check constraint "check_b"  (
 DETAIL:  Failing row contains (1, 45, a).
 create function mlparted5abrtrig_func() returns trigger as $$ begin new.c = 'b'; return new; end; $$ language plpgsql;
 create trigger mlparted5abrtrig before insert on mlparted5a for each row execute procedure mlparted5abrtrig_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=170641)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=170639)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=170640)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 insert into mlparted5 (a, b, c) values (1, 40, 'a');
 ERROR:  new row for relation "mlparted5a" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
 DETAIL:  Failing row contains (b, 1, 40).
@@ -944,10 +936,6 @@ create table brtrigpartcon1 partition of brtrigpartcon for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create or replace function brtrigpartcon1trigf() returns trigger as $$begin new.a := 2; return new; end$$ language plpgsql;
 create trigger brtrigpartcon1trig before insert on brtrigpartcon1 for each row execute procedure brtrigpartcon1trigf();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=170640)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=170639)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=170641)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 insert into brtrigpartcon values (1, 'hi there');
 ERROR:  new row for relation "brtrigpartcon1" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
 DETAIL:  Failing row contains (2, hi there).
@@ -993,15 +981,7 @@ alter table donothingbrtrig_test2 set distributed by (a);
 alter table donothingbrtrig_test2 drop column c;
 create or replace function donothingbrtrig_func() returns trigger as $$begin raise notice 'b: %', new.b; return NULL; end$$ language plpgsql;
 create trigger donothingbrtrig1 before insert on donothingbrtrig_test1 for each row execute procedure donothingbrtrig_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=170639)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=170640)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=170641)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 create trigger donothingbrtrig2 before insert on donothingbrtrig_test2 for each row execute procedure donothingbrtrig_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=170639)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=170640)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=170641)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 alter table donothingbrtrig_test attach partition donothingbrtrig_test1 for values in (1);
 alter table donothingbrtrig_test attach partition donothingbrtrig_test2 for values in (2);
 insert into donothingbrtrig_test values (1, 'foo'), (2, 'bar');

@@ -25,34 +25,10 @@ INSERT 0 347305
 UPDATE table_index2 SET b=101 WHERE b = 100;
 UPDATE 1041914
 VACUUM table_index2;
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
 VACUUM
 UPDATE table_index2 SET b=102 WHERE b = 101;
 UPDATE 1041916
 VACUUM table_index2;
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225694)
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225695)
-WARNING:  skipping "pg_aoseg_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
-WARNING:  skipping "pg_aoblkdir_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
-WARNING:  skipping "pg_aovisimap_127531" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225693)
 VACUUM
 SELECT COUNT(*) FROM table_index2;
   count  

@@ -800,10 +800,6 @@ $$
   end
 $$ language plpgsql no sql;
 create trigger troid_trigger after insert on trigger_oid for each row execute procedure trig_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=204645)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=204644)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=204643)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 select verify('trigger_oid');
  verify 
 --------

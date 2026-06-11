@@ -7,18 +7,6 @@ INSERT INTO uao_index_test SELECT i as a, i as b, 'hello world' as c FROM genera
 INSERT INTO uao_index_test SELECT i as a, i as b, 'hello world' as c FROM generate_series(1,10) AS i;
 ANALYZE uao_index_test;
 VACUUM uao_index_test;
-WARNING:  skipping "pg_aoseg_127523" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_127523" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_127523" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_127523" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225673)
-WARNING:  skipping "pg_aoblkdir_127523" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225673)
-WARNING:  skipping "pg_aovisimap_127523" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225673)
-WARNING:  skipping "pg_aoseg_127523" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225675)
-WARNING:  skipping "pg_aoblkdir_127523" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225675)
-WARNING:  skipping "pg_aovisimap_127523" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225675)
-WARNING:  skipping "pg_aoseg_127523" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225674)
-WARNING:  skipping "pg_aoblkdir_127523" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225674)
-WARNING:  skipping "pg_aovisimap_127523" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225674)
 SELECT * FROM uao_index_test WHERE b = 5;
  a | b |                                                                c                                                                 
 ---+---+----------------------------------------------------------------------------------------------------------------------------------

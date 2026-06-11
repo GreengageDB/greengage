@@ -129,7 +129,6 @@ COPY (
     ) TO '/tmp/ten-thousand-and-one-lines.txt';
 COPY partdisttest FROM '/tmp/ten-thousand-and-one-lines.txt';
 INFO:  first field processed in the QE: 1
-WARNING:  1 temporary files and directories not closed at end-of-transaction
 SELECT tableoid::regclass, count(*) FROM partdisttest GROUP BY 1;
 NOTICE:  One or more columns in the following table(s) do not have statistics: partdisttest
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.

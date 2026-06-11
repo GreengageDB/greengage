@@ -3862,18 +3862,6 @@ INSERT INTO brintest_ao SELECT
 	box(point(odd, even), point(thousand, twothousand))
 FROM tenk1 ORDER BY unique2 LIMIT 5 OFFSET 5;
 VACUUM brintest_ao;  -- force a summarization cycle in brinaoidx
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
 UPDATE brintest_ao SET int8col = int8col * int4col;
 NOTICE:  One or more columns in the following table(s) do not have statistics: brintest_ao
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
@@ -3882,18 +3870,6 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: b
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- Vaccum again so that a new segment file is created.
 VACUUM brintest_ao;
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195695)
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195694)
-WARNING:  skipping "pg_aoseg_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
-WARNING:  skipping "pg_aoblkdir_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
-WARNING:  skipping "pg_aovisimap_90113" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195693)
 INSERT INTO brintest_ao SELECT * FROM brintest_ao;
 NOTICE:  One or more columns in the following table(s) do not have statistics: brintest_ao
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.

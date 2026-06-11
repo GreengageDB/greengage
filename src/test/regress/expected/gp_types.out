@@ -503,7 +503,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 COPY FLOATS TO '/tmp/floats';
 TRUNCATE FLOATS;
 COPY FLOATS FROM '/tmp/floats';
-WARNING:  1 temporary files and directories not closed at end-of-transaction
 SELECT * FROM FLOATS ORDER BY a;
 NOTICE:  One or more columns in the following table(s) do not have statistics: floats
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.

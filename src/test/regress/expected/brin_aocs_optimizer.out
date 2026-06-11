@@ -3862,18 +3862,6 @@ INSERT INTO brintest_aocs SELECT
 	box(point(odd, even), point(thousand, twothousand))
 FROM tenk1 ORDER BY unique2 LIMIT 5 OFFSET 5;
 VACUUM brintest_aocs;  -- force a summarization cycle in brinaocsidx
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
 UPDATE brintest_aocs SET int8col = int8col * int4col;
 NOTICE:  One or more columns in the following table(s) do not have statistics: brintest_aocs
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
@@ -3882,18 +3870,6 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: b
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- Vaccum again so that a new segment file is created.
 VACUUM brintest_aocs;
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=195698)
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=195697)
-WARNING:  skipping "pg_aocsseg_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
-WARNING:  skipping "pg_aoblkdir_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
-WARNING:  skipping "pg_aovisimap_90115" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=195696)
 INSERT INTO brintest_aocs SELECT * FROM brintest_aocs;
 NOTICE:  One or more columns in the following table(s) do not have statistics: brintest_aocs
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.

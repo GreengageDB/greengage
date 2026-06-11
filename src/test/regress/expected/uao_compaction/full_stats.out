@@ -20,18 +20,6 @@ SELECT relname, reltuples FROM pg_class WHERE relname = 'uao_full_stats_index';
 
 DELETE FROM uao_full_stats WHERE a < 16;
 VACUUM FULL uao_full_stats;
-WARNING:  skipping "pg_aoseg_130585" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_130585" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_130585" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_130585" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228585)
-WARNING:  skipping "pg_aoblkdir_130585" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228585)
-WARNING:  skipping "pg_aovisimap_130585" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=228585)
-WARNING:  skipping "pg_aoseg_130585" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228584)
-WARNING:  skipping "pg_aoseg_130585" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228586)
-WARNING:  skipping "pg_aoblkdir_130585" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228586)
-WARNING:  skipping "pg_aoblkdir_130585" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228584)
-WARNING:  skipping "pg_aovisimap_130585" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=228586)
-WARNING:  skipping "pg_aovisimap_130585" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=228584)
 SELECT relname, reltuples FROM pg_class WHERE relname = 'uao_full_stats';
     relname     | reltuples 
 ----------------+-----------

@@ -69,14 +69,6 @@ INFO:  changing file permission to readonly
 
 -- generate truncate xlog record with non-zero EOF
 VACUUM mirror_reply_test_table;
-WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=147275)
-WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=147275)
-WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=147276)
-WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=147276)
-WARNING:  skipping "pg_aoseg_16397" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=147277)
-WARNING:  skipping "pg_aovisimap_16397" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=147277)
 -- expecting mirror to be marked down
 do $$
 begin

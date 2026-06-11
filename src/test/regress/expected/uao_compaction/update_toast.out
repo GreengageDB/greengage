@@ -13,18 +13,6 @@ UPDATE 10
 UPDATE uao_update_toast SET b = 50 WHERE a > 20 AND a <= 30;
 UPDATE 10
 VACUUM uao_update_toast;
-WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
-WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
-WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225498)
-WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
-WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
-WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225502)
-WARNING:  skipping "pg_aoseg_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
-WARNING:  skipping "pg_aoblkdir_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
-WARNING:  skipping "pg_aovisimap_127359" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225503)
 VACUUM
 SELECT a, b, md5(c::text) FROM uao_update_toast;
  a  | b  |               md5                

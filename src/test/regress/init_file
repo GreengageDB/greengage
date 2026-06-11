@@ -187,4 +187,11 @@ s/^\s+QUERY PLAN\s*$/ QUERY PLAN \n/
 m/^------------+\s*$/
 s/^------------+\s*$/------------\n/
 
+# PG14 libpq prefixes connection failure details with the server address;
+# strip it so segment-connection errors compare stably across clusters.
+m/connection to server at "[^"]+", port \d+ failed:\s*/
+s/connection to server at "[^"]+", port \d+ failed:\s*//
+m/connection to server on socket "[^"]+" failed:\s*/
+s/connection to server on socket "[^"]+" failed:\s*//
+
 -- end_matchsubs

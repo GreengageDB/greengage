@@ -7,15 +7,3 @@ DELETE FROM uao_delete_toast;
 NOTICE:  One or more columns in the following table(s) do not have statistics: uao_delete_toast
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 VACUUM uao_delete_toast;
-WARNING:  skipping "pg_aoseg_127405" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoblkdir_127405" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aovisimap_127405" --- cannot vacuum non-tables or special system tables
-WARNING:  skipping "pg_aoseg_127405" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225525)
-WARNING:  skipping "pg_aoblkdir_127405" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225525)
-WARNING:  skipping "pg_aovisimap_127405" --- cannot vacuum non-tables or special system tables  (seg2 172.17.0.3:7004 pid=225525)
-WARNING:  skipping "pg_aoseg_127405" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225545)
-WARNING:  skipping "pg_aoblkdir_127405" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225545)
-WARNING:  skipping "pg_aovisimap_127405" --- cannot vacuum non-tables or special system tables  (seg0 172.17.0.3:7002 pid=225545)
-WARNING:  skipping "pg_aoseg_127405" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225544)
-WARNING:  skipping "pg_aoblkdir_127405" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225544)
-WARNING:  skipping "pg_aovisimap_127405" --- cannot vacuum non-tables or special system tables  (seg1 172.17.0.3:7003 pid=225544)

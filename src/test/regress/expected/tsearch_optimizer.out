@@ -2885,4 +2885,3 @@ NOTICE:  text-search query contains only stop words or doesn't contain lexemes, 
 
 COPY test_tsvector TO '/tmp/test_tsvector.txt';
 COPY test_tsvector FROM '/tmp/test_tsvector.txt';
-WARNING:  1 temporary files and directories not closed at end-of-transaction
