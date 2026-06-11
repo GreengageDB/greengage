@@ -16,6 +16,7 @@ NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution 
 -- Verify default_table_access_method GUC doesn't get used
 SET default_table_access_method = ao_row;
 CREATE TABLE t_ao_d (LIKE t_ao INCLUDING ALL);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 RESET gp_default_storage_options;
 -- Verify created tables and attributes
 SELECT
@@ -32,13 +33,13 @@ WHERE
 	c.relname LIKE 't_ao%';
   relname   |  amname   | columnstore | compresstype | compresslevel 
 ------------+-----------+-------------+--------------+---------------
+ t_ao_d     | ao_column | t           |              |             0
  t_ao       | ao_column | t           |              |             0
  t_ao_enc   | ao_column | t           |              |             0
  t_ao_a     | ao_column | t           |              |             0
  t_ao_b     | ao_column | t           |              |             0
  t_ao_c     | heap      |             |              |              
  t_ao_enc_a | ao_column | t           |              |             0
- t_ao_d     | ao_column | t           |              |             0
 (7 rows)
 
 SELECT
@@ -54,7 +55,7 @@ WHERE
 ------------+--------+-----------------------------------------------------
  t_ao_enc   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
  t_ao_enc   |      1 | {compresstype=none,blocksize=32768,compresslevel=0}
- t_ao_enc_a |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ t_ao_enc_a |      2 | {compresstype=none,blocksize=32768,compresslevel=0}
  t_ao_enc_a |      1 | {compresstype=none,blocksize=32768,compresslevel=0}
 (4 rows)
 

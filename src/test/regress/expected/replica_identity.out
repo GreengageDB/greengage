@@ -162,13 +162,13 @@ SELECT relreplident FROM pg_class WHERE oid = 'test_replica_identity'::regclass;
 (1 row)
 
 \d+ test_replica_identity
-                                                Table "public.test_replica_identity"
- Column |  Type   | Collation | Nullable |                      Default                      | Storage  | Stats target | Description 
---------+---------+-----------+----------+---------------------------------------------------+----------+--------------+-------------
- id     | integer |           | not null | nextval('test_replica_identity_id_seq'::regclass) | plain    |              | 
- keya   | text    |           | not null |                                                   | extended |              | 
- keyb   | text    |           | not null |                                                   | extended |              | 
- nonkey | text    |           |          |                                                   | extended |              | 
+                                                       Table "public.test_replica_identity"
+ Column |  Type   | Collation | Nullable |                      Default                      | Storage  | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------------------------------------------------+----------+-------------+--------------+-------------
+ id     | integer |           | not null | nextval('test_replica_identity_id_seq'::regclass) | plain    |             |              | 
+ keya   | text    |           | not null |                                                   | extended |             |              | 
+ keyb   | text    |           | not null |                                                   | extended |             |              | 
+ nonkey | text    |           |          |                                                   | extended |             |              | 
 Indexes:
     "test_replica_identity_pkey" PRIMARY KEY, btree (keya)
     "test_replica_identity_expr" UNIQUE, btree (keya, keyb, (3))
@@ -202,6 +202,7 @@ ALTER TABLE test_replica_identity2 REPLICA IDENTITY USING INDEX test_replica_ide
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity2_id_key" UNIQUE CONSTRAINT, btree (id) REPLICA IDENTITY
+Distributed by: (id)
 
 ALTER TABLE test_replica_identity2 ALTER COLUMN id TYPE bigint;
 ERROR:  cannot alter column with primary key or unique constraint
@@ -213,9 +214,12 @@ HINT:  DROP the constraint first, and recreate it after the ALTER
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity2_id_key" UNIQUE CONSTRAINT, btree (id) REPLICA IDENTITY
+Distributed by: (id)
 
 -- straight index variant
 CREATE TABLE test_replica_identity3 (id int NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX test_replica_identity3_id_key ON test_replica_identity3 (id);
 ALTER TABLE test_replica_identity3 REPLICA IDENTITY USING INDEX test_replica_identity3_id_key;
 \d test_replica_identity3
@@ -225,6 +229,7 @@ ALTER TABLE test_replica_identity3 REPLICA IDENTITY USING INDEX test_replica_ide
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity3_id_key" UNIQUE, btree (id) REPLICA IDENTITY
+Distributed by: (id)
 
 ALTER TABLE test_replica_identity3 ALTER COLUMN id TYPE bigint;
 \d test_replica_identity3
@@ -234,6 +239,7 @@ ALTER TABLE test_replica_identity3 ALTER COLUMN id TYPE bigint;
  id     | bigint |           | not null | 
 Indexes:
     "test_replica_identity3_id_key" UNIQUE, btree (id) REPLICA IDENTITY
+Distributed by: (id)
 
 DROP TABLE test_replica_identity;
 DROP TABLE test_replica_identity2;

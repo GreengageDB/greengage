@@ -7,7 +7,9 @@
 -- partition_list_index.sql
 -- Test partition with CREATE INDEX
 DROP TABLE if exists mpp3033a;
+NOTICE:  table "mpp3033a" does not exist, skipping
 DROP TABLE if exists mpp3033b;
+NOTICE:  table "mpp3033b" does not exist, skipping
 CREATE TABLE mpp3033a (
         unique1         int4,
         unique2         int4,
@@ -69,6 +71,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b USING btree(unique2 int4_ops);
 CREATE INDEX mpp3033b_hundred ON mpp3033b USING btree(hundred int4_ops);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b USING btree(stringu1 name_ops);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -89,6 +93,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -117,6 +123,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b (unique2);
 CREATE INDEX mpp3033b_hundred ON mpp3033b (hundred);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b (stringu1);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -137,6 +145,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -167,7 +177,7 @@ CREATE UNIQUE INDEX mpp3033a_stringu1 ON mpp3033a (stringu1);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "unique1" is not included in the constraint.
 CREATE UNIQUE INDEX mpp3033b_unique1 ON mpp3033b (unique1);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "mpp3033b_1_prt_aa" lacks column "unique2" which is part of the partition key.
 CREATE UNIQUE INDEX mpp3033b_unique2 ON mpp3033b (unique2);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
@@ -179,6 +189,8 @@ CREATE UNIQUE INDEX mpp3033b_stringu1 ON mpp3033b (stringu1);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "unique1" is not included in the constraint.
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -235,6 +247,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b USING bitmap (unique2);
 CREATE INDEX mpp3033b_hundred ON mpp3033b USING bitmap (hundred);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b USING bitmap (stringu1);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -255,6 +269,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -337,6 +353,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b USING btree(unique2 int4_ops);
 CREATE INDEX mpp3033b_hundred ON mpp3033b USING btree(hundred int4_ops);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b USING btree(stringu1 name_ops);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -357,6 +375,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -385,6 +405,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b (unique2);
 CREATE INDEX mpp3033b_hundred ON mpp3033b (hundred);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b (stringu1);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -405,6 +427,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -435,7 +459,7 @@ CREATE UNIQUE INDEX mpp3033a_stringu1 ON mpp3033a (stringu1);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "unique1" is not included in the constraint.
 CREATE UNIQUE INDEX mpp3033b_unique1 ON mpp3033b (unique1);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "mpp3033b_1_prt_1" lacks column "unique2" which is part of the partition key.
 CREATE UNIQUE INDEX mpp3033b_unique2 ON mpp3033b (unique2);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
@@ -447,6 +471,8 @@ CREATE UNIQUE INDEX mpp3033b_stringu1 ON mpp3033b (stringu1);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "unique1" is not included in the constraint.
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -474,6 +500,8 @@ ERROR:  relation "mpp3033b_hundred" does not exist
 reindex index mpp3033b_stringu1;
 ERROR:  relation "mpp3033b_stringu1" does not exist
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -509,6 +537,8 @@ CREATE INDEX mpp3033b_unique2 ON mpp3033b USING bitmap (unique2);
 CREATE INDEX mpp3033b_hundred ON mpp3033b USING bitmap (hundred);
 CREATE INDEX mpp3033b_stringu1 ON mpp3033b USING bitmap (stringu1);
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -529,6 +559,8 @@ reindex index mpp3033b_unique2;
 reindex index mpp3033b_hundred;
 reindex index mpp3033b_stringu1;
 select count(*) from mpp3033a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3033a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
@@ -543,12 +575,12 @@ select count(*) from mpp3033b;
 create table mpp6379(a int, b date, primary key (a,b)) distributed by (a) partition by range (b) (partition p1 end ('2009-01-02'::date));
 insert into mpp6379( a, b ) values( 1, '20090101' );
 insert into mpp6379( a, b ) values( 1, '20090101' );
-ERROR:  duplicate key value violates unique constraint "mpp6379_1_prt_p1_pkey"
+ERROR:  duplicate key value violates unique constraint "mpp6379_1_prt_p1_pkey"  (seg1 172.17.0.3:7003 pid=881392)
 DETAIL:  Key (a, b)=(1, 01-01-2009) already exists.
 alter table mpp6379 add partition p2 end(date '2009-01-03');
 insert into mpp6379( a, b ) values( 2, '20090102' );
 insert into mpp6379( a, b ) values( 2, '20090102' );
-ERROR:  duplicate key value violates unique constraint "mpp6379_1_prt_p2_pkey"
+ERROR:  duplicate key value violates unique constraint "mpp6379_1_prt_p2_pkey"  (seg0 172.17.0.3:7002 pid=881391)
 DETAIL:  Key (a, b)=(2, 01-02-2009) already exists.
 drop table mpp6379;
 -- Creating an index on a partitioned table makes the partitions

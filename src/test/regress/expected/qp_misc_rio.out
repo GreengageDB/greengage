@@ -4,6 +4,7 @@
 -- start_ignore
 create schema qp_misc_rio;
 CREATE LANGUAGE plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 set search_path to qp_misc_rio;
 -- ----------------------------------------------------------------------
@@ -12,21 +13,29 @@ set search_path to qp_misc_rio;
 -- Expect NO ERROR like "ERROR:  Unexpected internal error (cdbsetop.c)"
 create table tb_function_test(a numeric,b numeric,c numeric,d character varying(20),e character varying(20)) distributed by (b,c);
 select *,row_number() over(partition by a,b,c order by d),row_number() over(partition by a,b,c order by e) from tb_function_test where  b=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tb_function_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d | e | row_number | row_number 
 ---+---+---+---+---+------------+------------
 (0 rows)
 
 select *,row_number() over(partition by a,b,c order by d),row_number() over(partition by a,b,c order by e) from tb_function_test where  c=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tb_function_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d | e | row_number | row_number 
 ---+---+---+---+---+------------+------------
 (0 rows)
 
 select *,row_number() over(partition by a,b,c order by d),row_number() over(partition by a,b,c order by e) from tb_function_test where  a=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tb_function_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d | e | row_number | row_number 
 ---+---+---+---+---+------------+------------
 (0 rows)
 
 select *,row_number() over(partition by a,b,c order by d),row_number() over(partition by a,b,c order by e) from tb_function_test where b=(select a from tb_function_test limit 1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: tb_function_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d | e | row_number | row_number 
 ---+---+---+---+---+------------+------------
 (0 rows)
@@ -37,6 +46,8 @@ select *,row_number() over(partition by a,b,c order by d),row_number() over(part
 create table t11_t(a bigint, b bigint) distributed by (a);
 insert into t11_t select a, a / 10 from generate_series(1, 100)a;
 select sum((select count(*) from t11_t group by b having b = s.b)) as sum_col from (select * from t11_t order by a)s group by b order by sum_col;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t11_t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  sum_col 
 ---------
        1
@@ -104,8 +115,9 @@ CASE WHEN (i % 6 = 0) THEN '00'
      WHEN (i % 6 = 3) THEN '33'
      WHEN (i % 6 = 4) THEN '44'
      WHEN (i % 6 = 5) THEN '55' END AS s5 FROM testtable0000;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'spend' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0000
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 CREATE VIEW testtable0002
 AS SELECT testtable0001.*,
           miro_foo.s1_xform
@@ -117,6 +129,8 @@ JOIN (SELECT s1,
 	   AS miro_foo
 ON testtable0001.s1 = miro_foo.s1;
 SELECT MIN(s1_xform), MIN(s1_xform) FROM testtable0002;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0001
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            min           |           min           
 -------------------------+-------------------------
  -0.01000000000000000000 | -0.01000000000000000000
@@ -148,6 +162,8 @@ JOIN (SELECT s2,
 	   AS miro_foo
 ON testtable0002.s2 = miro_foo.s2;
 SELECT MIN(s2_xform), MIN(s2_xform) FROM testtable0003;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0001
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            min           |           min           
 -------------------------+-------------------------
  -0.02000000000000000000 | -0.02000000000000000000
@@ -179,6 +195,8 @@ JOIN (SELECT s3,
 	   AS miro_foo
 ON testtable0003.s3 = miro_foo.s3;
 SELECT MIN(s3_xform), MIN(s3_xform) FROM testtable0004;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0001
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            min           |           min           
 -------------------------+-------------------------
  -0.03000000000000000000 | -0.03000000000000000000
@@ -210,6 +228,8 @@ JOIN (SELECT s4,
 	   AS miro_foo
 ON testtable0004.s4 = miro_foo.s4;
 SELECT MIN(s4_xform), MIN(s4_xform) FROM testtable0005;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0001
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            min           |           min           
 -------------------------+-------------------------
  -0.04000000000000000000 | -0.04000000000000000000
@@ -241,6 +261,8 @@ JOIN (SELECT s5,
 	   AS miro_foo
 ON testtable0005.s5 = miro_foo.s5;
 SELECT MIN(s5_xform), MIN(s5_xform) FROM testtable0006;
+NOTICE:  One or more columns in the following table(s) do not have statistics: testtable0001
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            min           |           min           
 -------------------------+-------------------------
  -0.05000000000000000000 | -0.05000000000000000000
@@ -322,7 +344,11 @@ create view shipped_view as
 insert into parts (partnum, cost) values (1, 1234.56);
 insert into shipped (ordnum, partnum, value)
     values (0, 1, (select cost from parts where partnum = '1'));
+NOTICE:  One or more columns in the following table(s) do not have statistics: parts
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from shipped_view ORDER BY 1,2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: shipped
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ttype | ordnum | partnum | value 
 -------+--------+---------+-------
 (0 rows)
@@ -471,6 +497,8 @@ RESET ALL;
 CREATE TABLE nt (i INT, j INT) DISTRIBUTED BY (j);
 INSERT INTO nt SELECT i, i FROM generate_series(1,10) i;
 SELECT lag(j) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM nt;
+NOTICE:  One or more columns in the following table(s) do not have statistics: nt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  lag 
 -----
     
@@ -486,6 +514,8 @@ SELECT lag(j) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FO
 (10 rows)
 
 SELECT lag(j) OVER (w) FROM nt WINDOW w AS (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+NOTICE:  One or more columns in the following table(s) do not have statistics: nt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  lag 
 -----
     
@@ -507,9 +537,10 @@ SELECT lag(x) OVER (wx) FROM (SELECT 1 AS x, 2 AS y, 3 AS z) s WINDOW w AS (PART
 (1 row)
 
 SELECT lead(j) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM nt;
+NOTICE:  One or more columns in the following table(s) do not have statistics: nt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  lead 
 ------
-     
     2
     3
     4
@@ -519,12 +550,14 @@ SELECT lead(j) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED F
     8
     9
    10
+     
 (10 rows)
 
 SELECT lead(j) OVER (w) FROM nt WINDOW w AS (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+NOTICE:  One or more columns in the following table(s) do not have statistics: nt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  lead 
 ------
-     
     2
     3
     4
@@ -534,6 +567,7 @@ SELECT lead(j) OVER (w) FROM nt WINDOW w AS (ORDER BY i ROWS BETWEEN UNBOUNDED P
     8
     9
    10
+     
 (10 rows)
 
 SELECT lead(x) OVER (wx) FROM (SELECT 1 AS x, 2 AS y, 3 AS z) s WINDOW w AS (PARTITION BY y ORDER BY z), wx AS (w);
@@ -546,8 +580,7 @@ SELECT lead(x) OVER (wx) FROM (SELECT 1 AS x, 2 AS y, 3 AS z) s WINDOW w AS (PAR
 -- Test: 33
 -- ----------------------------------------------------------------------
 create table ccdd1 (a, b) as (select 1, 1 union select 1, 1 union select 1, 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 select * from ccdd1;
  a | b 
 ---+---
@@ -568,7 +601,7 @@ AS $$
         return plpy.execute(sqlstm);
 $$ LANGUAGE plpython3u;
 INSERT INTO testdata_in SELECT * FROM func_plpythonu(2);
-ERROR:  spiexceptions.FeatureNotSupported: function cannot execute on a QE slice because it accesses relation "qp_misc_rio.testdata_in"  (entry db krajaraman:15432 pid=63091)
+ERROR:  spiexceptions.FeatureNotSupported: function cannot execute on a QE slice because it accesses relation "qp_misc_rio.testdata_in"  (entry db 172.17.0.3:7000 pid=895363)
 CONTEXT:  Traceback (most recent call last):
   PL/Python function "func_plpythonu", line 3, in <module>
     return plpy.execute(sqlstm);
@@ -597,7 +630,9 @@ NOTICE:  table "tbl_plpythonu" does not exist, skipping
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop role if exists triggertest_nopriv_a;
+NOTICE:  role "triggertest_nopriv_a" does not exist, skipping
 drop role if exists triggertest_nopriv_b;
+NOTICE:  role "triggertest_nopriv_b" does not exist, skipping
 -- end_ignore
 -- Create a non-privileged user triggertest_nopriv_a
 create role triggertest_nopriv_a with login ;
@@ -638,7 +673,7 @@ after insert on emp
     for each row execute procedure process_emp_audit();
 -- Verified the trigger works correctly
 insert into emp values ('Tammy', 100000);
-NOTICE:  100000  (seg0 krajaraman:25432 pid=59721)
+NOTICE:  100000  (seg2 172.17.0.3:7004 pid=893775)
 -- connect as non-privileged user "triggertest_nopriv_b"
 SET ROLE triggertest_nopriv_b;
 select user;
@@ -677,7 +712,7 @@ after insert on my_emp
     for each row execute procedure process_emp_audit();
 -- Verified trigger can be run correctly
 insert into my_emp values ('Tammy', 100000);
-NOTICE:  100000  (seg0 krajaraman:25432 pid=59721)
+NOTICE:  100000  (seg2 172.17.0.3:7004 pid=893775)
 -- Now to confirm that we only check trigger function's EXECUTE
 -- permission at trigger create time, but not at trigger run time
 -- by revoking EXECUTE permission from triggertest_nopriv_b after
@@ -691,7 +726,7 @@ SET ROLE triggertest_nopriv_b;
 -- even the current user does NOT have the EXECUTE permission
 -- on the trigger function.
 insert into my_emp values ('Sammy', 100001);
-NOTICE:  100001  (seg1 krajaraman:25433 pid=59722)
+NOTICE:  100001  (seg2 172.17.0.3:7004 pid=893775)
 -- Clean up
 RESET ROLE;
 -- ----------------------------------------------------------------------
@@ -709,6 +744,8 @@ from
 ) sub1
 group by a
 order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_legacy_mpp2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  median |          avg           
 --------+------------------------
       1 | 1.00000000000000000000
@@ -731,11 +768,15 @@ order by a;
 -- version 8.4.16 (commit 5c4eb9166e.)
 -- ----------------------------------------------------------------------
 select to_date('-4713-11-23', 'yyyy-mm-dd');
-ERROR:  date out of range: "-4713-11-23"
+    to_date    
+---------------
+ 11-23-4713 BC
+(1 row)
+
 select to_date('-4713-11-24', 'yyyy-mm-dd');
     to_date    
 ---------------
- 11-24-4714 BC
+ 11-24-4713 BC
 (1 row)
 
 select to_date('5874897-12-31', 'yyyy-mm-dd');
@@ -746,17 +787,3 @@ select to_date('5874897-12-31', 'yyyy-mm-dd');
 
 select to_date('5874898-01-01', 'yyyy-mm-dd');
 ERROR:  date out of range: "5874898-01-01"
--- start_ignore
-drop schema qp_misc_rio cascade;
-NOTICE:  drop cascades to table qp_misc_rio.ccdd1
-NOTICE:  drop cascades to table qp_misc_rio.int4_tbl
-NOTICE:  drop cascades to view qp_misc_rio.shipped_view
-NOTICE:  drop cascades to rule _RETURN on view qp_misc_rio.shipped_view
-NOTICE:  drop cascades to table qp_misc_rio.shipped
-NOTICE:  drop cascades to table qp_misc_rio.parts
-NOTICE:  drop cascades to table qp_misc_rio.t12_t1
-NOTICE:  drop cascades to table qp_misc_rio.t11_t
-NOTICE:  drop cascades to table qp_misc_rio.tb_function_test
-NOTICE:  drop cascades to table qp_misc_rio.b
-NOTICE:  drop cascades to table qp_misc_rio.a
--- end_ignore

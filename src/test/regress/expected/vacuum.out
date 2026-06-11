@@ -2,6 +2,8 @@
 -- VACUUM
 --
 CREATE TABLE vactst (j INT DEFAULT 1,i INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vactst(i) VALUES (1);
 ANALYZE vactst;
 INSERT INTO vactst SELECT * FROM vactst;
@@ -71,7 +73,7 @@ CREATE INDEX ON vaccluster(wrap_do_analyze(i));
 -- support that in short time. Note this causes "ANALYZE/VACUUM FULL vaccluster"
 -- succeed (On PG it fails: "ERROR:  ANALYZE cannot be executed from VACUUM or ANALYZE")
 INSERT INTO vaccluster VALUES (1), (2);
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 127.0.0.1:25433 pid=15126)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858495)
 CONTEXT:  SQL function "do_analyze" during startup
 SQL function "wrap_do_analyze" statement 1
 ANALYZE vaccluster;
@@ -95,6 +97,8 @@ VACUUM FULL vactst;
 VACUUM (DISABLE_PAGE_SKIPPING) vaccluster;
 -- PARALLEL option
 CREATE TABLE pvactst (i INT, a INT[], p POINT) with (autovacuum_enabled = off);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO pvactst SELECT i, array[1,2,3], point(i, i+1) FROM generate_series(1,1000) i;
 CREATE INDEX btree_pvactst ON pvactst USING btree (i);
 CREATE INDEX hash_pvactst ON pvactst USING hash (i);
@@ -110,11 +114,15 @@ LINE 1: VACUUM (PARALLEL 2) pvactst;
                 ^
 -- VACUUM invokes parallel bulk-deletion
 UPDATE pvactst SET i = i WHERE i < 1000;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pvactst
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 VACUUM (PARALLEL 2) pvactst;
 ERROR:  VACUUM option "parallel" not supported in GPDB
 LINE 1: VACUUM (PARALLEL 2) pvactst;
                 ^
 UPDATE pvactst SET i = i WHERE i < 1000;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pvactst
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 VACUUM (PARALLEL 0) pvactst; -- disable parallel vacuum
 ERROR:  VACUUM option "parallel" not supported in GPDB
 LINE 1: VACUUM (PARALLEL 0) pvactst;
@@ -167,13 +175,15 @@ VACUUM no_index_cleanup;
 -- Both parent relation and toast are cleaned up.
 ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true);
 VACUUM no_index_cleanup;
+ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = auto);
+VACUUM no_index_cleanup;
 -- Parameter is set for both the parent table and its toast relation.
 INSERT INTO no_index_cleanup(i, t) VALUES (generate_series(31,60),
     repeat('1234567890',269));
 DELETE FROM no_index_cleanup WHERE i < 45;
 -- Only toast index is cleaned up.
-ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = false,
-    toast.vacuum_index_cleanup = true);
+ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = off,
+    toast.vacuum_index_cleanup = yes);
 VACUUM no_index_cleanup;
 -- Only parent is cleaned up.
 ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true,
@@ -181,13 +191,15 @@ ALTER TABLE no_index_cleanup SET (vacuum_index_cleanup = true,
 VACUUM no_index_cleanup;
 -- Test some extra relations.
 VACUUM (INDEX_CLEANUP FALSE) vaccluster;
-VACUUM (INDEX_CLEANUP FALSE) vactst; -- index cleanup option is ignored if no indexes
+VACUUM (INDEX_CLEANUP AUTO) vactst; -- index cleanup option is ignored if no indexes
 VACUUM (INDEX_CLEANUP FALSE, FREEZE TRUE) vaccluster;
 -- TRUNCATE option
 CREATE TABLE vac_truncate_test(i INT NOT NULL, j text)
 	WITH (vacuum_truncate=true, autovacuum_enabled=false);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vac_truncate_test VALUES (1, NULL), (NULL, NULL);
-ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint
+ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint  (seg0 172.17.0.3:7002 pid=858495)
 DETAIL:  Failing row contains (null, null).
 VACUUM (TRUNCATE FALSE) vac_truncate_test;
 SELECT pg_relation_size('vac_truncate_test') > 0;
@@ -207,7 +219,10 @@ VACUUM (TRUNCATE FALSE, FULL TRUE) vac_truncate_test;
 DROP TABLE vac_truncate_test;
 -- partitioned table
 CREATE TABLE vacparted (a int, b char) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacparted1 PARTITION OF vacparted FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO vacparted VALUES (1, 'a');
 UPDATE vacparted SET b = 'b';
 VACUUM (ANALYZE) vacparted;
@@ -273,16 +288,29 @@ RESET default_transaction_isolation;
 BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 ANALYZE vactst;
 COMMIT;
+-- PROCESS_TOAST option
+ALTER TABLE vactst ADD COLUMN t TEXT;
+ALTER TABLE vactst ALTER COLUMN t SET STORAGE EXTERNAL;
+VACUUM (PROCESS_TOAST FALSE) vactst;
+VACUUM (PROCESS_TOAST FALSE, FULL) vactst;
+ERROR:  PROCESS_TOAST required with VACUUM FULL
 DROP TABLE vaccluster;
 DROP TABLE vactst;
 DROP TABLE vacparted;
 DROP TABLE no_index_cleanup;
 -- relation ownership, WARNING logs generated as all are skipped.
 CREATE TABLE vacowned (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacowned_parted (a int) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacowned_part1 PARTITION OF vacowned_parted FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE vacowned_part2 PARTITION OF vacowned_parted FOR VALUES IN (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE ROLE regress_vacuum;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_vacuum;
 -- Simple table
 VACUUM vacowned;
@@ -310,24 +338,24 @@ WARNING:  skipping "pg_authid" --- only superuser can vacuum it
 -- independently.
 VACUUM vacowned_parted;
 WARNING:  skipping "vacowned_parted" --- only table or database owner can vacuum it
-WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM vacowned_part2;
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
 ANALYZE vacowned_parted;
 WARNING:  skipping "vacowned_parted" --- only table or database owner can analyze it
-WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can analyze it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 ANALYZE vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 ANALYZE vacowned_part2;
 WARNING:  skipping "vacowned_part2" --- only table or database owner can analyze it
 VACUUM (ANALYZE) vacowned_parted;
 WARNING:  skipping "vacowned_parted" --- only table or database owner can vacuum it
-WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM (ANALYZE) vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM (ANALYZE) vacowned_part2;
@@ -382,22 +410,22 @@ ALTER TABLE vacowned_part1 OWNER TO CURRENT_USER;
 ALTER TABLE vacowned_part2 OWNER TO CURRENT_USER;
 SET ROLE regress_vacuum;
 VACUUM vacowned_parted;
-WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM vacowned_part2;
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
 ANALYZE vacowned_parted;
-WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can analyze it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 ANALYZE vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can analyze it
 ANALYZE vacowned_part2;
 WARNING:  skipping "vacowned_part2" --- only table or database owner can analyze it
 VACUUM (ANALYZE) vacowned_parted;
-WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 WARNING:  skipping "vacowned_part2" --- only table or database owner can vacuum it
+WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM (ANALYZE) vacowned_part1;
 WARNING:  skipping "vacowned_part1" --- only table or database owner can vacuum it
 VACUUM (ANALYZE) vacowned_part2;

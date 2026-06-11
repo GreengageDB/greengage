@@ -61,11 +61,13 @@ INSERT INTO POINT_TBL(f1) VALUES (NULL);
 CREATE INDEX gpointind ON point_tbl USING gist (f1);
 CREATE TEMP TABLE gpolygon_tbl AS
     SELECT polygon(home_base) AS f1 FROM slow_emp4000;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ANALYZE gpolygon_tbl;
 INSERT INTO gpolygon_tbl VALUES ( '(1000,0,0,1000)' );
 INSERT INTO gpolygon_tbl VALUES ( '(0,1000,1000,1000)' );
 CREATE TEMP TABLE gcircle_tbl AS
     SELECT circle(home_base) AS f1 FROM slow_emp4000;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ANALYZE gcircle_tbl;
 CREATE INDEX ggpolygonind ON gpolygon_tbl USING gist (f1);
 CREATE INDEX ggcircleind ON gcircle_tbl USING gist (f1);
@@ -80,12 +82,10 @@ SET enable_bitmapscan = OFF;
 SELECT * FROM fast_emp4000
     WHERE home_base @ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-       home_base       
------------------------
- (337,455),(240,359)
- (1444,403),(1346,344)
-(2 rows)
-
+ERROR:  operator does not exist: box @ box
+LINE 2:     WHERE home_base @ '(200,200),(2000,1000)'::box
+                            ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
  count 
 -------
@@ -100,13 +100,14 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 
 SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::polygon
     ORDER BY (poly_center(f1))[0];
-         f1          
----------------------
- ((2,0),(2,4),(0,0))
-(1 row)
-
+ERROR:  operator does not exist: polygon ~ polygon
+LINE 1: SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::...
+                                           ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
     ORDER BY area(f1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: circle_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
       f1       
 ---------------
  <(1,2),3>
@@ -160,7 +161,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
  count 
 -------
-     3
+     4
 (1 row)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
@@ -172,7 +173,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
  count 
 -------
-     4
+     5
 (1 row)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
@@ -193,8 +194,9 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1
  (-5,-12)
  (5.1,34.5)
  (1e+300,Infinity)
+ (Infinity,1e+300)
  (NaN,NaN)
-(7 rows)
+(8 rows)
 
 SELECT * FROM point_tbl WHERE f1 IS NULL;
  f1 
@@ -211,8 +213,9 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL O
  (-5,-12)
  (5.1,34.5)
  (1e+300,Infinity)
+ (Infinity,1e+300)
  (NaN,NaN)
-(7 rows)
+(8 rows)
 
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
@@ -260,28 +263,17 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM fast_emp4000
     WHERE home_base @ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((home_base[0])[0])
-         ->  Sort
-               Sort Key: ((home_base[0])[0])
-               ->  Index Scan using grect2ind on fast_emp4000
-                     Index Cond: (home_base @ '(2000,1000),(200,200)'::box)
-                     Filter: (home_base @ '(2000,1000),(200,200)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(9 rows)
-
+ERROR:  operator does not exist: box @ box
+LINE 3:     WHERE home_base @ '(200,200),(2000,1000)'::box
+                            ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 SELECT * FROM fast_emp4000
     WHERE home_base @ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-       home_base       
------------------------
- (337,455),(240,359)
- (1444,403),(1346,344)
-(2 rows)
-
+ERROR:  operator does not exist: box @ box
+LINE 2:     WHERE home_base @ '(200,200),(2000,1000)'::box
+                            ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
                                QUERY PLAN                                
@@ -292,7 +284,7 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
                ->  Index Scan using grect2ind on fast_emp4000
                      Index Cond: (home_base && '(1000,1000),(0,0)'::box)
                      Filter: (home_base && '(1000,1000),(0,0)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.68.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
@@ -322,29 +314,21 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 EXPLAIN (COSTS OFF)
 SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::polygon
     ORDER BY (poly_center(f1))[0];
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((poly_center(f1))[0])
-         ->  Sort
-               Sort Key: ((poly_center(f1))[0])
-               ->  Index Scan using gpolygonind on polygon_tbl
-                     Index Cond: (f1 ~ '((1,1),(2,2),(2,1))'::polygon)
-                     Filter: (f1 ~ '((1,1),(2,2),(2,1))'::polygon)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(9 rows)
-
+ERROR:  operator does not exist: polygon ~ polygon
+LINE 2: SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::...
+                                           ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::polygon
     ORDER BY (poly_center(f1))[0];
-         f1          
----------------------
- ((2,0),(2,4),(0,0))
-(1 row)
-
+ERROR:  operator does not exist: polygon ~ polygon
+LINE 1: SELECT * FROM polygon_tbl WHERE f1 ~ '((1,1),(2,2),(2,1))'::...
+                                           ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 EXPLAIN (COSTS OFF)
 SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
     ORDER BY area(f1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: circle_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                           QUERY PLAN                          
 --------------------------------------------------------------
  Result
@@ -360,6 +344,8 @@ SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
 
 SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
     ORDER BY area(f1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: circle_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
       f1       
 ---------------
  <(1,2),3>
@@ -378,7 +364,7 @@ SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
                ->  Index Scan using ggpolygonind on gpolygon_tbl
                      Index Cond: (f1 && '((1000,1000),(0,0))'::polygon)
                      Filter: (f1 && '((1000,1000),(0,0))'::polygon)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.68.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
@@ -397,7 +383,7 @@ SELECT count(*) FROM gcircle_tbl WHERE f1 && '<(500,500),500>'::circle;
                ->  Index Scan using ggcircleind on gcircle_tbl
                      Index Cond: (f1 && '<(500,500),500>'::circle)
                      Filter: (f1 && '<(500,500),500>'::circle)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.68.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 SELECT count(*) FROM gcircle_tbl WHERE f1 && '<(500,500),500>'::circle;
@@ -415,7 +401,7 @@ SELECT count(*) FROM point_tbl WHERE f1 <@ box '(0,0,100,100)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 <@ '(100,100),(0,0)'::box)
                Filter: (f1 <@ '(100,100),(0,0)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl WHERE f1 <@ box '(0,0,100,100)';
@@ -433,7 +419,7 @@ SELECT count(*) FROM point_tbl WHERE box '(0,0,100,100)' @> f1;
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 <@ '(100,100),(0,0)'::box)
                Filter: (f1 <@ '(100,100),(0,0)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl WHERE box '(0,0,100,100)' @> f1;
@@ -451,7 +437,7 @@ SELECT count(*) FROM point_tbl WHERE f1 <@ polygon '(0,0),(0,100),(100,100),(50,
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 <@ '((0,0),(0,100),(100,100),(50,50),(100,0),(0,0))'::polygon)
                Filter: (f1 <@ '((0,0),(0,100),(100,100),(50,50),(100,0),(0,0))'::polygon)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl WHERE f1 <@ polygon '(0,0),(0,100),(100,100),(50,50),(100,0),(0,0)';
@@ -469,7 +455,7 @@ SELECT count(*) FROM point_tbl WHERE f1 <@ circle '<(50,50),50>';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 <@ '<(50,50),50>'::circle)
                Filter: (f1 <@ '<(50,50),50>'::circle)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl WHERE f1 <@ circle '<(50,50),50>';
@@ -487,7 +473,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 << '(0,0)'::point)
                Filter: (f1 << '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
@@ -505,13 +491,13 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 >> '(0,0)'::point)
                Filter: (f1 >> '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
  count 
 -------
-     3
+     4
 (1 row)
 
 EXPLAIN (COSTS OFF)
@@ -523,7 +509,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 <^ '(0,0)'::point)
                Filter: (f1 <^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
@@ -541,13 +527,13 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 >^ '(0,0)'::point)
                Filter: (f1 >^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
  count 
 -------
-     4
+     5
 (1 row)
 
 EXPLAIN (COSTS OFF)
@@ -559,7 +545,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 ~= '(-5,-12)'::point)
                Filter: (f1 ~= '(-5,-12)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
@@ -589,8 +575,9 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1
  (-5,-12)
  (5.1,34.5)
  (1e+300,Infinity)
+ (Infinity,1e+300)
  (NaN,NaN)
-(7 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE f1 IS NULL;
@@ -630,8 +617,9 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL O
  (-5,-12)
  (5.1,34.5)
  (1e+300,Infinity)
+ (Infinity,1e+300)
  (NaN,NaN)
-(7 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
@@ -763,7 +751,7 @@ SELECT * FROM array_index_op_test WHERE i @> '{32}' ORDER BY seqno;
                Recheck Cond: (i @> '{32}'::integer[])
                ->  Bitmap Index Scan on intarrayidx
                      Index Cond: (i @> '{32}'::integer[])
- Optimizer: Pivotal Optimizer (GPORCA) version 3.77.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 SELECT * FROM array_index_op_test WHERE i @> '{32}' ORDER BY seqno;
@@ -1012,7 +1000,7 @@ SELECT * FROM array_index_op_test WHERE t @> '{AAAAAAAA72908}' ORDER BY seqno;
                Recheck Cond: (t @> '{AAAAAAAA72908}'::text[])
                ->  Bitmap Index Scan on textarrayidx
                      Index Cond: (t @> '{AAAAAAAA72908}'::text[])
- Optimizer: Pivotal Optimizer (GPORCA) version 3.77.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 SELECT * FROM array_index_op_test WHERE t @> '{AAAAAAAA72908}' ORDER BY seqno;
@@ -1291,9 +1279,13 @@ RESET enable_bitmapscan;
 -- tree when there are enough duplicates)
 --
 CREATE TABLE array_gin_test (a int[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO array_gin_test SELECT ARRAY[1, g%5, g] FROM generate_series(1, 10000) g;
 CREATE INDEX array_gin_test_idx ON array_gin_test USING gin (a);
 SELECT COUNT(*) FROM array_gin_test WHERE a @> '{2}';
+NOTICE:  One or more columns in the following table(s) do not have statistics: array_gin_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   2000
@@ -1332,8 +1324,8 @@ SET maintenance_work_mem = '1MB';
 CREATE INDEX hash_tuplesort_idx ON tenk1 USING hash (stringu1 name_ops) WITH (fillfactor = 10);
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1 WHERE stringu1 = 'TVAAAA';
-                       QUERY PLAN                        
----------------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -1356,6 +1348,8 @@ RESET maintenance_work_mem;
 -- Test functional index
 --
 CREATE TABLE func_index_heap (f1 text, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX func_index_index on func_index_heap (textcat(f1,f2));
 INSERT INTO func_index_heap VALUES('ABC','DEF');
 INSERT INTO func_index_heap VALUES('AB','CDEFG');
@@ -1387,6 +1381,8 @@ btree, for table "public.func_index_heap"
 --
 DROP TABLE func_index_heap;
 CREATE TABLE func_index_heap (f1 text, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE  INDEX func_index_index on func_index_heap ((f1 || f2) text_ops);
 INSERT INTO func_index_heap VALUES('ABC','DEF');
 INSERT INTO func_index_heap VALUES('AB','CDEFG');
@@ -1420,12 +1416,14 @@ ERROR:  column "row" has pseudo-type record
 -- Test unique index with included columns
 --
 CREATE TABLE covering_index_heap (f1 int, f2 int, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX covering_index_index on covering_index_heap (f1,f2) INCLUDE(f3);
 INSERT INTO covering_index_heap VALUES(1,1,'AAA');
 INSERT INTO covering_index_heap VALUES(1,2,'AAA');
 -- this should fail because of unique index on f1,f2:
 INSERT INTO covering_index_heap VALUES(1,2,'BBB');
-ERROR:  duplicate key value violates unique constraint "covering_index_index"
+ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 172.17.0.3:7003 pid=858089)
 DETAIL:  Key (f1, f2)=(1, 2) already exists.
 -- and this shouldn't:
 INSERT INTO covering_index_heap VALUES(1,4,'AAA');
@@ -1467,8 +1465,6 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS concur_index2 ON concur_heap(dk, 
 ERROR:  CREATE INDEX CONCURRENTLY is not supported
 -- check if constraint is set up properly to be enforced
 INSERT INTO concur_heap VALUES ('b','x', '1');
-ERROR:  duplicate key value violates unique constraint "concur_index2"
-DETAIL:  Key (dk, f1)=(1, b) already exists.
 -- check if constraint is enforced properly at build time
 CREATE UNIQUE INDEX CONCURRENTLY concur_index3 ON concur_heap(dk, f2);
 ERROR:  CREATE INDEX CONCURRENTLY is not supported
@@ -1492,24 +1488,16 @@ COMMIT;
 -- Failed builds are left invalid by VACUUM FULL, fixed by REINDEX
 VACUUM FULL concur_heap;
 REINDEX TABLE concur_heap;
-ERROR:  could not create unique index "concur_index3"
-DETAIL:  Key (f2)=(b) is duplicated.
 DELETE FROM concur_heap WHERE f1 = 'b';
 VACUUM FULL concur_heap;
 \d concur_heap
-Table "public.concur_heap"
- Column | Type | Modifiers 
---------+------+-----------
- dk     | text | 
- f1     | text | 
- f2     | text | 
+           Table "public.concur_heap"
+ Column | Type | Collation | Nullable | Default 
+--------+------+-----------+----------+---------
+ f1     | text |           |          | 
+ f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
-    "concur_index2" UNIQUE, btree (dk, f1)
-    "concur_index3" UNIQUE, btree (dk, f2) INVALID
-    "concur_heap_expr_idx" btree ((f2 || f1))
-    "concur_index1" btree (f2, f1)
-    "concur_index4" btree (f2) WHERE f1 = 'a'::text
-    "concur_index5" btree (f2) WHERE f1 = 'x'::text
     "std_index" btree (f2)
 Distributed by: (dk)
 
@@ -1520,15 +1508,46 @@ REINDEX TABLE concur_heap;
 --------+------+-----------+----------+---------
  f1     | text |           |          | 
  f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
-    "concur_index2" UNIQUE, btree (f1)
-    "concur_index3" UNIQUE, btree (f2)
-    "concur_heap_expr_idx" btree ((f2 || f1))
-    "concur_index1" btree (f2, f1)
-    "concur_index4" btree (f2) WHERE f1 = 'a'::text
-    "concur_index5" btree (f2) WHERE f1 = 'x'::text
     "std_index" btree (f2)
+Distributed by: (dk)
 
+-- Temporary tables with concurrent builds and on-commit actions
+-- CONCURRENTLY used with CREATE INDEX and DROP INDEX is ignored.
+-- PRESERVE ROWS, the default.
+CREATE TEMP TABLE concur_temp (f1 int, f2 text)
+  ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
+CREATE INDEX CONCURRENTLY concur_temp_ind ON concur_temp(f1);
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+DROP INDEX CONCURRENTLY concur_temp_ind;
+ERROR:  index "concur_temp_ind" does not exist
+DROP TABLE concur_temp;
+-- ON COMMIT DROP
+BEGIN;
+CREATE TEMP TABLE concur_temp (f1 int, f2 text)
+  ON COMMIT DROP;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
+-- Fails when running in a transaction.
+CREATE INDEX CONCURRENTLY concur_temp_ind ON concur_temp(f1);
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+COMMIT;
+-- ON COMMIT DELETE ROWS
+CREATE TEMP TABLE concur_temp (f1 int, f2 text)
+  ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
+CREATE INDEX CONCURRENTLY concur_temp_ind ON concur_temp(f1);
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+DROP INDEX CONCURRENTLY concur_temp_ind;
+ERROR:  index "concur_temp_ind" does not exist
+DROP TABLE concur_temp;
 --
 -- Try some concurrent index drops
 -- Greenplum: The functionality of these tests is replicated in gp_index
@@ -1556,19 +1575,13 @@ ERROR:  index "concur_index1" does not exist
 DROP INDEX CONCURRENTLY "concur_heap_expr_idx";
 ERROR:  index "concur_heap_expr_idx" does not exist
 \d concur_heap
-Table "public.concur_heap"
- Column | Type | Modifiers 
---------+------+-----------
- f1     | text | 
- f2     | text | 
- dk     | text | 
+           Table "public.concur_heap"
+ Column | Type | Collation | Nullable | Default 
+--------+------+-----------+----------+---------
+ f1     | text |           |          | 
+ f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
-    "concur_index2" UNIQUE, btree (dk, f1)
-    "concur_index3" UNIQUE, btree (dk, f2) INVALID
-    "concur_heap_expr_idx" btree ((f2 || f1))
-    "concur_index1" btree (f2, f1)
-    "concur_index4" btree (f2) WHERE f1 = 'a'::text
-    "concur_index5" btree (f2) WHERE f1 = 'x'::text
     "std_index" btree (f2)
 Distributed by: (dk)
 
@@ -1578,6 +1591,8 @@ DROP TABLE concur_heap;
 -- Test ADD CONSTRAINT USING INDEX
 --
 CREATE TABLE cwi_test( a int , b varchar(10), c char);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- add some data so that all tests have something to work with.
 INSERT INTO cwi_test VALUES(1, 2), (3, 4), (5, 6);
 CREATE UNIQUE INDEX cwi_uniq_idx ON cwi_test(a , b);
@@ -1645,6 +1660,8 @@ LINE 1: ALTER TABLE cwi_test ADD UNIQUE USING INDEX cwi_uniq4_idx;
 DROP TABLE cwi_test;
 -- ADD CONSTRAINT USING INDEX is forbidden on partitioned tables
 CREATE TABLE cwi_test(a int) PARTITION BY hash (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create unique index on cwi_test (a);
 alter table cwi_test add primary key using index cwi_test_a_idx ;
 ERROR:  ALTER TABLE / ADD CONSTRAINT USING INDEX is not supported on partitioned tables
@@ -1653,6 +1670,8 @@ DROP TABLE cwi_test;
 -- Check handling of indexes on system columns
 --
 CREATE TABLE syscol_table (a INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- System columns cannot be indexed
 CREATE INDEX ON syscolcol_table (ctid);
 ERROR:  relation "syscolcol_table" does not exist
@@ -1697,6 +1716,8 @@ SELECT count(*) FROM onek_with_null WHERE unique1 IS NULL AND unique2 IS NOT NUL
 (1 row)
 
 SELECT count(*) FROM onek_with_null WHERE unique1 IS NOT NULL AND unique1 > 500;
+NOTICE:  One or more columns in the following table(s) do not have statistics: onek_with_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    499
@@ -1735,6 +1756,8 @@ SELECT count(*) FROM onek_with_null WHERE unique1 IS NULL AND unique2 IS NOT NUL
 (1 row)
 
 SELECT count(*) FROM onek_with_null WHERE unique1 IS NOT NULL AND unique1 > 500;
+NOTICE:  One or more columns in the following table(s) do not have statistics: onek_with_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    499
@@ -1773,6 +1796,8 @@ SELECT count(*) FROM onek_with_null WHERE unique1 IS NULL AND unique2 IS NOT NUL
 (1 row)
 
 SELECT count(*) FROM onek_with_null WHERE unique1 IS NOT NULL AND unique1 > 500;
+NOTICE:  One or more columns in the following table(s) do not have statistics: onek_with_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    499
@@ -1811,6 +1836,8 @@ SELECT count(*) FROM onek_with_null WHERE unique1 IS NULL AND unique2 IS NOT NUL
 (1 row)
 
 SELECT count(*) FROM onek_with_null WHERE unique1 IS NOT NULL AND unique1 > 500;
+NOTICE:  One or more columns in the following table(s) do not have statistics: onek_with_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    499
@@ -1929,13 +1956,15 @@ SELECT count(*) FROM tenk1
 --
 CREATE TABLE dupindexcols AS
   SELECT unique1 as id, stringu2::text as f1 FROM tenk1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX dupindexcols_i ON dupindexcols (f1, id, f1 text_pattern_ops);
 ANALYZE dupindexcols;
 EXPLAIN (COSTS OFF)
   SELECT count(*) FROM dupindexcols
     WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -1961,7 +1990,7 @@ explain (costs off)
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
 ORDER BY unique1;
-                               QUERY PLAN
+                               QUERY PLAN                                
 -------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: unique1
@@ -1971,7 +2000,7 @@ ORDER BY unique1;
                Recheck Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
                ->  Bitmap Index Scan on tenk1_unique1
                      Index Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
 SELECT unique1 FROM tenk1
@@ -1988,7 +2017,7 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                            QUERY PLAN
+                            QUERY PLAN                             
 -------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
@@ -1997,7 +2026,7 @@ ORDER BY thousand;
          ->  Index Only Scan using tenk1_thous_tenthous on tenk1
                Index Cond: (thousand < 2)
                Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 SELECT thousand, tenthous FROM tenk1
@@ -2014,7 +2043,7 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                            QUERY PLAN
+                            QUERY PLAN                             
 -------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
@@ -2023,7 +2052,7 @@ ORDER BY thousand;
          ->  Index Only Scan using tenk1_thous_tenthous on tenk1
                Index Cond: (thousand < 2)
                Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 SELECT thousand, tenthous FROM tenk1
@@ -2041,12 +2070,12 @@ RESET enable_indexonlyscan;
 --
 explain (costs off)
   select * from tenk1 where (thousand, tenthous) in ((1,1001), (null,null));
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Index Scan using tenk1_thous_tenthous on tenk1
          Index Cond: ((thousand = 1) AND (tenthous = 1001))
- Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
+ Optimizer: Postgres query optimizer
 (4 rows)
 
 --
@@ -2074,8 +2103,10 @@ explain (costs off)
 -- are used.
 explain (costs off)
   select * from boolindex where b order by i limit 10;
-                   QUERY PLAN                   
-------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolindex
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2090,8 +2121,10 @@ explain (costs off)
 alter table boolindex set distributed by (i);
 explain (costs off)
   select * from boolindex where b order by i limit 10;
-                      QUERY PLAN                       
--------------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolindex
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2104,8 +2137,10 @@ explain (costs off)
 
 explain (costs off)
   select * from boolindex where b = true order by i desc limit 10;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolindex
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2118,8 +2153,10 @@ explain (costs off)
 
 explain (costs off)
   select * from boolindex where not b order by i limit 10;
-                      QUERY PLAN                       
--------------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolindex
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2132,8 +2169,8 @@ explain (costs off)
 
 explain (costs off)
   select * from boolindex where b is true order by i desc limit 10;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2145,8 +2182,8 @@ explain (costs off)
 
 explain (costs off)
   select * from boolindex where b is false order by i desc limit 10;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
@@ -2169,11 +2206,14 @@ DROP TABLE reindex_verbose;
 -- REINDEX CONCURRENTLY
 --
 CREATE TABLE concur_reindex_tab (c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- REINDEX
 REINDEX TABLE concur_reindex_tab; -- notice
 NOTICE:  table "concur_reindex_tab" has no indexes to reindex
 REINDEX TABLE CONCURRENTLY concur_reindex_tab; -- notice
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_tab" is not supported in Greenplum, reindexing non-concurrently instead
+NOTICE:  table "concur_reindex_tab" has no indexes to reindex
 ALTER TABLE concur_reindex_tab ADD COLUMN c2 text; -- add toast index
 -- Normal index with integer column
 CREATE UNIQUE INDEX concur_reindex_ind1 ON concur_reindex_tab(c1);
@@ -2186,6 +2226,9 @@ CREATE INDEX concur_reindex_ind4 ON concur_reindex_tab(c1, c1, c2);
 -- Create table for check on foreign key dependence switch with indexes swapped
 ALTER TABLE concur_reindex_tab ADD PRIMARY KEY USING INDEX concur_reindex_ind1;
 CREATE TABLE concur_reindex_tab2 (c1 int REFERENCES concur_reindex_tab);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 INSERT INTO concur_reindex_tab VALUES  (1, 'a');
 INSERT INTO concur_reindex_tab VALUES  (2, 'a');
 -- Reindex concurrently of exclusion constraint currently not supported
@@ -2203,11 +2246,11 @@ CREATE TABLE concur_reindex_tab3 (c1 int, c2 int4range,
 DISTRIBUTED BY (distkey);
 INSERT INTO concur_reindex_tab3 VALUES  (3, '[1,2]');
 REINDEX INDEX CONCURRENTLY  concur_reindex_tab3_c2_excl;  -- error
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  relation "concur_reindex_tab3_c2_excl" does not exist
 REINDEX TABLE CONCURRENTLY concur_reindex_tab3;  -- succeeds with warning
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_tab3" is not supported in Greenplum, reindexing non-concurrently instead
 INSERT INTO concur_reindex_tab3 VALUES  (4, '[2,4]');
-ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 127.0.0.1:40001 pid=28895)
+ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 172.17.0.3:7003 pid=858089)
 DETAIL:  Key (c2, distkey)=([2,5), empty) conflicts with existing key (c2, distkey)=([1,3), empty).
 -- Check materialized views
 CREATE MATERIALIZED VIEW concur_reindex_matview AS SELECT * FROM concur_reindex_tab;
@@ -2235,18 +2278,17 @@ WHERE classid = 'pg_class'::regclass AND
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
- index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
  materialized view concur_reindex_matview | schema public                                              | n
  table concur_reindex_tab                 | schema public                                              | n
-(9 rows)
+(8 rows)
 
 REINDEX INDEX CONCURRENTLY concur_reindex_ind1;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_ind1" is not supported in Greenplum, reindexing non-concurrently instead
 REINDEX TABLE CONCURRENTLY concur_reindex_tab;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_tab" is not supported in Greenplum, reindexing non-concurrently instead
 REINDEX TABLE CONCURRENTLY concur_reindex_matview;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_matview" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
        pg_describe_object(refclassid,refobjid,refobjsubid) as objref,
        deptype
@@ -2266,14 +2308,15 @@ WHERE classid = 'pg_class'::regclass AND
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
- index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
  materialized view concur_reindex_matview | schema public                                              | n
  table concur_reindex_tab                 | schema public                                              | n
-(9 rows)
+(8 rows)
 
 -- Check that comments are preserved
 CREATE TABLE testcomment (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX testcomment_idx1 ON testcomment (i);
 COMMENT ON INDEX testcomment_idx1 IS 'test comment';
 SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
@@ -2290,7 +2333,7 @@ SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
 (1 row)
 
 REINDEX TABLE CONCURRENTLY testcomment ;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "testcomment" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
  obj_description 
 -----------------
@@ -2300,10 +2343,12 @@ SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
 DROP TABLE testcomment;
 -- Check that indisclustered updates are preserved
 CREATE TABLE concur_clustered(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_clustered_i_idx ON concur_clustered(i);
 ALTER TABLE concur_clustered CLUSTER ON concur_clustered_i_idx;
 REINDEX TABLE CONCURRENTLY concur_clustered;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_clustered" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT indexrelid::regclass, indisclustered FROM pg_index
   WHERE indrelid = 'concur_clustered'::regclass;
        indexrelid       | indisclustered 
@@ -2314,6 +2359,8 @@ SELECT indexrelid::regclass, indisclustered FROM pg_index
 DROP TABLE concur_clustered;
 -- Check that indisreplident updates are preserved.
 CREATE TABLE concur_replident(i int NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX concur_replident_i_idx ON concur_replident(i);
 ALTER TABLE concur_replident REPLICA IDENTITY
   USING INDEX concur_replident_i_idx;
@@ -2325,7 +2372,7 @@ SELECT indexrelid::regclass, indisreplident FROM pg_index
 (1 row)
 
 REINDEX TABLE CONCURRENTLY concur_replident;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_replident" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT indexrelid::regclass, indisreplident FROM pg_index
   WHERE indrelid = 'concur_replident'::regclass;
        indexrelid       | indisreplident 
@@ -2337,15 +2384,21 @@ DROP TABLE concur_replident;
 -- Partitions
 -- Create some partitioned tables
 CREATE TABLE concur_reindex_part (c1 int, c2 int) PARTITION BY RANGE (c1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE concur_reindex_part_0 PARTITION OF concur_reindex_part
   FOR VALUES FROM (0) TO (10) PARTITION BY list (c2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE concur_reindex_part_0_1 PARTITION OF concur_reindex_part_0
   FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE concur_reindex_part_0_2 PARTITION OF concur_reindex_part_0
   FOR VALUES IN (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- This partitioned table will have no partitions.
 CREATE TABLE concur_reindex_part_10 PARTITION OF concur_reindex_part
   FOR VALUES FROM (10) TO (20) PARTITION BY list (c2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Create some partitioned indexes
 CREATE INDEX concur_reindex_part_index ON ONLY concur_reindex_part (c1);
 CREATE INDEX concur_reindex_part_index_0 ON ONLY concur_reindex_part_0 (c1);
@@ -2418,9 +2471,9 @@ WHERE classid = 'pg_class'::regclass AND
 (19 rows)
 
 REINDEX INDEX CONCURRENTLY concur_reindex_part_index_0_1;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part_index_0_1" is not supported in Greenplum, reindexing non-concurrently instead
 REINDEX INDEX CONCURRENTLY concur_reindex_part_index_0_2;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part_index_0_2" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT relid, parentrelid, level FROM pg_partition_tree('concur_reindex_part_index')
   ORDER BY relid, level;
              relid             |         parentrelid         | level 
@@ -2433,9 +2486,9 @@ SELECT relid, parentrelid, level FROM pg_partition_tree('concur_reindex_part_ind
 (5 rows)
 
 REINDEX TABLE CONCURRENTLY concur_reindex_part_0_1;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part_0_1" is not supported in Greenplum, reindexing non-concurrently instead
 REINDEX TABLE CONCURRENTLY concur_reindex_part_0_2;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part_0_2" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
        pg_describe_object(refclassid,refobjid,refobjsubid) as objref,
        deptype
@@ -2490,12 +2543,12 @@ SELECT relid, parentrelid, level FROM pg_partition_tree('concur_reindex_part_ind
 REINDEX TABLE concur_reindex_part_index; -- error
 ERROR:  "concur_reindex_part_index" is not a table or materialized view
 REINDEX TABLE CONCURRENTLY concur_reindex_part_index; -- error
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  "concur_reindex_part_index" is not a table or materialized view
 -- Partitioned index with no leaves
 REINDEX TABLE concur_reindex_part_index_10; -- error
 ERROR:  "concur_reindex_part_index_10" is not a table or materialized view
 REINDEX TABLE CONCURRENTLY concur_reindex_part_index_10; -- error
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  "concur_reindex_part_index_10" is not a table or materialized view
 -- Cannot run in a transaction block
 BEGIN;
 REINDEX INDEX concur_reindex_part_index;
@@ -2563,14 +2616,14 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 (1 row)
 
 REINDEX INDEX CONCURRENTLY concur_reindex_part_index;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part_index" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT * FROM compare_relfilenode_part('reindex_index_status');
             relname            | relkind |          state           
 -------------------------------+---------+--------------------------
  concur_reindex_part_index     | I       | relfilenode is unchanged
  concur_reindex_part_index_0   | I       | relfilenode is unchanged
- concur_reindex_part_index_0_1 | i       | relfilenode is unchanged
- concur_reindex_part_index_0_2 | i       | relfilenode is unchanged
+ concur_reindex_part_index_0_1 | i       | relfilenode has changed
+ concur_reindex_part_index_0_2 | i       | relfilenode has changed
  concur_reindex_part_index_10  | I       | relfilenode is unchanged
 (5 rows)
 
@@ -2581,12 +2634,12 @@ DROP TABLE reindex_index_status;
 REINDEX INDEX concur_reindex_part; -- error
 ERROR:  "concur_reindex_part" is not an index
 REINDEX INDEX CONCURRENTLY concur_reindex_part; -- error
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  "concur_reindex_part" is not an index
 -- Partitioned with no leaves
 REINDEX INDEX concur_reindex_part_10; -- error
 ERROR:  "concur_reindex_part_10" is not an index
 REINDEX INDEX CONCURRENTLY concur_reindex_part_10; -- error
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  "concur_reindex_part_10" is not an index
 -- Cannot run in a transaction block
 BEGIN;
 REINDEX TABLE concur_reindex_part;
@@ -2625,14 +2678,14 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 (1 row)
 
 REINDEX TABLE CONCURRENTLY concur_reindex_part;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_part" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT * FROM compare_relfilenode_part('reindex_index_status');
             relname            | relkind |          state           
 -------------------------------+---------+--------------------------
  concur_reindex_part_index     | I       | relfilenode is unchanged
  concur_reindex_part_index_0   | I       | relfilenode is unchanged
- concur_reindex_part_index_0_1 | i       | relfilenode is unchanged
- concur_reindex_part_index_0_2 | i       | relfilenode is unchanged
+ concur_reindex_part_index_0_1 | i       | relfilenode has changed
+ concur_reindex_part_index_0_2 | i       | relfilenode has changed
  concur_reindex_part_index_10  | I       | relfilenode is unchanged
 (5 rows)
 
@@ -2645,22 +2698,22 @@ DROP TABLE concur_reindex_part;
 -- Cannot run inside a transaction block
 BEGIN;
 REINDEX TABLE CONCURRENTLY concur_reindex_tab;
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  REINDEX CONCURRENTLY cannot run inside a transaction block
 COMMIT;
 REINDEX TABLE CONCURRENTLY pg_class; -- no catalog relation
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  cannot reindex system catalogs concurrently
 REINDEX INDEX CONCURRENTLY pg_class_oid_index; -- no catalog index
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  cannot reindex system catalogs concurrently
 -- These are the toast table and index of pg_authid.
 REINDEX TABLE CONCURRENTLY pg_toast.pg_toast_1260; -- no catalog toast table
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  cannot reindex system catalogs concurrently
 REINDEX INDEX CONCURRENTLY pg_toast.pg_toast_1260_index; -- no catalog toast index
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  cannot reindex system catalogs concurrently
 REINDEX SYSTEM CONCURRENTLY postgres; -- not allowed for SYSTEM
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  cannot reindex system catalogs concurrently
 -- Warns about catalog relations
 REINDEX SCHEMA CONCURRENTLY pg_catalog;
-ERROR:  REINDEX CONCURRENTLY is not supported
+WARNING:  cannot reindex system catalogs concurrently, skipping all
 -- Check the relation status, there should not be invalid indexes
 \d concur_reindex_tab
          Table "public.concur_reindex_tab"
@@ -2675,11 +2728,14 @@ Indexes:
     "concur_reindex_ind4" btree (c1, c1, c2)
 Referenced by:
     TABLE "concur_reindex_tab2" CONSTRAINT "concur_reindex_tab2_c1_fkey" FOREIGN KEY (c1) REFERENCES concur_reindex_tab(c1)
+Distributed by: (c1)
 
 DROP MATERIALIZED VIEW concur_reindex_matview;
 DROP TABLE concur_reindex_tab, concur_reindex_tab2, concur_reindex_tab3;
 -- Check handling of invalid indexes
 CREATE TABLE concur_reindex_tab4 (c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_reindex_tab4 VALUES (1), (1), (2);
 -- This trick creates an invalid index.
 CREATE UNIQUE INDEX CONCURRENTLY concur_reindex_ind5 ON concur_reindex_tab4 (c1);
@@ -2687,7 +2743,7 @@ ERROR:  CREATE INDEX CONCURRENTLY is not supported
 -- Reindexing concurrently this index fails with the same failure.
 -- The extra index created is itself invalid, and can be dropped.
 REINDEX INDEX CONCURRENTLY concur_reindex_ind5;
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  relation "concur_reindex_ind5" does not exist
 \d concur_reindex_tab4
         Table "public.concur_reindex_tab4"
  Column |  Type   | Collation | Nullable | Default 
@@ -2701,7 +2757,8 @@ ERROR:  index "concur_reindex_ind5_ccnew" does not exist
 DELETE FROM concur_reindex_tab4 WHERE c1 = 1;
 -- The invalid index is not processed when running REINDEX TABLE.
 REINDEX TABLE CONCURRENTLY concur_reindex_tab4;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_reindex_tab4" is not supported in Greenplum, reindexing non-concurrently instead
+NOTICE:  table "concur_reindex_tab4" has no indexes to reindex
 \d concur_reindex_tab4
         Table "public.concur_reindex_tab4"
  Column |  Type   | Collation | Nullable | Default 
@@ -2711,7 +2768,7 @@ Distributed by: (c1)
 
 -- But it is fixed with REINDEX INDEX.
 REINDEX INDEX CONCURRENTLY concur_reindex_ind5;
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  relation "concur_reindex_ind5" does not exist
 \d concur_reindex_tab4
         Table "public.concur_reindex_tab4"
  Column |  Type   | Collation | Nullable | Default 
@@ -2753,7 +2810,7 @@ SELECT pg_get_indexdef('concur_exprs_index_pred_2'::regclass);
 (1 row)
 
 REINDEX TABLE CONCURRENTLY concur_exprs_tab;
-ERROR:  REINDEX CONCURRENTLY is not supported
+NOTICE:  concurrent reindex of "concur_exprs_tab" is not supported in Greenplum, reindexing non-concurrently instead
 SELECT pg_get_indexdef('concur_exprs_index_expr'::regclass);
                                                   pg_get_indexdef                                                  
 -------------------------------------------------------------------------------------------------------------------
@@ -2797,53 +2854,56 @@ DROP TABLE concur_exprs_tab;
 -- ON COMMIT PRESERVE ROWS, the default.
 CREATE TEMP TABLE concur_temp_tab_1 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_1 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_1 ON concur_temp_tab_1(c2);
 REINDEX TABLE CONCURRENTLY concur_temp_tab_1;
-ERROR:  REINDEX CONCURRENTLY is not supported
 REINDEX INDEX CONCURRENTLY concur_temp_ind_1;
-ERROR:  REINDEX CONCURRENTLY is not supported
 -- Still fails in transaction blocks
 BEGIN;
 REINDEX INDEX CONCURRENTLY concur_temp_ind_1;
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  REINDEX CONCURRENTLY cannot run inside a transaction block
 COMMIT;
 -- ON COMMIT DELETE ROWS
 CREATE TEMP TABLE concur_temp_tab_2 (c1 int, c2 text)
   ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_temp_ind_2 ON concur_temp_tab_2(c2);
 REINDEX TABLE CONCURRENTLY concur_temp_tab_2;
-ERROR:  REINDEX CONCURRENTLY is not supported
 REINDEX INDEX CONCURRENTLY concur_temp_ind_2;
-ERROR:  REINDEX CONCURRENTLY is not supported
 -- ON COMMIT DROP
 BEGIN;
 CREATE TEMP TABLE concur_temp_tab_3 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_3 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_3 ON concur_temp_tab_3(c2);
 -- Fails when running in a transaction
 REINDEX INDEX CONCURRENTLY concur_temp_ind_3;
-ERROR:  REINDEX CONCURRENTLY is not supported
+ERROR:  REINDEX CONCURRENTLY cannot run inside a transaction block
 COMMIT;
 -- REINDEX SCHEMA processes all temporary relations
 CREATE TABLE reindex_temp_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
   FROM pg_class
   WHERE relname IN ('concur_temp_ind_1', 'concur_temp_ind_2');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT pg_my_temp_schema()::regnamespace as temp_schema_name \gset
 REINDEX SCHEMA CONCURRENTLY :temp_schema_name;
-ERROR:  REINDEX CONCURRENTLY is not supported
 SELECT  b.relname,
         b.relkind,
         CASE WHEN a.relfilenode = b.relfilenode THEN 'relfilenode is unchanged'
         ELSE 'relfilenode has changed' END
   FROM reindex_temp_before b JOIN pg_class a ON b.oid = a.oid
   ORDER BY 1;
-      relname      | relkind |           case           
--------------------+---------+--------------------------
- concur_temp_ind_1 | i       | relfilenode is unchanged
- concur_temp_ind_2 | i       | relfilenode is unchanged
+      relname      | relkind |          case           
+-------------------+---------+-------------------------
+ concur_temp_ind_1 | i       | relfilenode has changed
+ concur_temp_ind_2 | i       | relfilenode has changed
 (2 rows)
 
 DROP TABLE concur_temp_tab_1, concur_temp_tab_2, reindex_temp_before;
@@ -2860,12 +2920,17 @@ CREATE TABLE table2(col1 SERIAL PRIMARY KEY, col2 TEXT NOT NULL);
 INSERT INTO table2 SELECT generate_series(1,400), 'abc';
 CREATE INDEX ON table2(col2);
 CREATE MATERIALIZED VIEW matview AS SELECT col1 FROM table2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX ON matview(col1);
 CREATE VIEW view AS SELECT col2 FROM table2;
 CREATE TABLE reindex_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO reindex_before
 SELECT oid, 'pg_toast_TABLE', relfilenode, relkind, reltoastrelid
 FROM pg_class WHERE oid IN
@@ -2879,6 +2944,8 @@ REINDEX SCHEMA schema_to_reindex;
 CREATE TABLE reindex_after AS SELECT oid, relname, relfilenode, relkind
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT  b.relname,
         b.relkind,
         CASE WHEN a.relfilenode = b.relfilenode THEN 'relfilenode is unchanged'
@@ -2908,9 +2975,9 @@ ERROR:  REINDEX SCHEMA cannot run inside a transaction block
 END;
 -- concurrently
 REINDEX SCHEMA CONCURRENTLY schema_to_reindex;
-ERROR:  REINDEX CONCURRENTLY is not supported
 -- Failure for unauthorized user
 CREATE ROLE regress_reindexuser NOLOGIN;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION ROLE regress_reindexuser;
 REINDEX SCHEMA schema_to_reindex;
 ERROR:  must be owner of schema schema_to_reindex

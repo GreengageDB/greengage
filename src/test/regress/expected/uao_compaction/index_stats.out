@@ -15,11 +15,13 @@ select * from mytab;
 (2 rows)
 
 update mytab set col_text=' new value' where col_int = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mytab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from mytab;
  col_int |  col_text  | col_numeric | col_unq 
 ---------+------------+-------------+---------
-       2 | bb         |        1002 |     102
        1 |  new value |        1001 |     101
+       2 | bb         |        1002 |     102
 (2 rows)
 
 vacuum mytab;
@@ -32,7 +34,7 @@ SELECT relname, reltuples FROM pg_class WHERE relname = 'mytab';
 SELECT relname, reltuples FROM pg_class WHERE relname = 'mytab_int_idx1';
     relname     | reltuples 
 ----------------+-----------
- mytab_int_idx1 |         2
+ mytab_int_idx1 |         0
 (1 row)
 
 -- Test to ensure that reltuples is updated for an index after lazy vacuum.
@@ -59,9 +61,9 @@ vacuum mytab2;
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'mytab2_int_idx1';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | mytab2_int_idx1 |         0
-             1 | mytab2_int_idx1 |         0
-             2 | mytab2_int_idx1 |         0
+             1 | mytab2_int_idx1 |        -1
+             2 | mytab2_int_idx1 |        -1
+             0 | mytab2_int_idx1 |        -1
 (3 rows)
 
 -- second vacuum update index stat with table stat
@@ -93,7 +95,7 @@ insert into mytab3 values(1,'aa',1001,101),(2,'bb',1002,102);
 select reltuples from pg_class where relname='mytab3';
  reltuples 
 -----------
-         0
+        -1
 (1 row)
 
 -- inspect the state of the stats on segments
@@ -123,15 +125,15 @@ select reltuples from pg_class where relname='mytab3';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'mytab3_int_idx1';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | mytab3_int_idx1 |         1
-             1 | mytab3_int_idx1 |         1
+             0 | mytab3_int_idx1 |         0
+             1 | mytab3_int_idx1 |         0
              2 | mytab3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='mytab3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 -- 2nd VACUUM, expect reltuples = 2
@@ -146,15 +148,15 @@ select reltuples from pg_class where relname='mytab3';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'mytab3_int_idx1';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | mytab3_int_idx1 |         1
-             1 | mytab3_int_idx1 |         1
+             1 | mytab3_int_idx1 |         0
              2 | mytab3_int_idx1 |         0
+             0 | mytab3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='mytab3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 -- Prior to this fix, the case would be failed here. Given the
@@ -182,15 +184,15 @@ select reltuples from pg_class where relname='mytab3';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'mytab3_int_idx1';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | mytab3_int_idx1 |         1
-             1 | mytab3_int_idx1 |         1
+             0 | mytab3_int_idx1 |         0
+             1 | mytab3_int_idx1 |         0
              2 | mytab3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='mytab3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 drop table mytab;

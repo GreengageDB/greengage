@@ -6,6 +6,8 @@ CREATE TABLE update_test (
     b   INT,
     c   TEXT
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE upsert_test (
     a   INT,
     b   TEXT,
@@ -15,6 +17,8 @@ CREATE TABLE upsert_test (
 INSERT INTO update_test VALUES (5, 10, 'foo');
 INSERT INTO update_test(b, a) VALUES (15, 10);
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  |  c  
 ----+----+-----
   5 | 10 | foo
@@ -22,7 +26,11 @@ SELECT a,b,c FROM update_test ORDER BY a,b,c;
 (2 rows)
 
 UPDATE update_test SET a = DEFAULT, b = DEFAULT;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b |  c  
 ----+---+-----
  10 |   | foo
@@ -31,7 +39,11 @@ SELECT a,b,c FROM update_test ORDER BY a,b,c;
 
 -- aliases for the UPDATE target table
 UPDATE update_test AS t SET b = 10 WHERE t.a = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  |  c  
 ----+----+-----
  10 | 10 | foo
@@ -39,7 +51,11 @@ SELECT a,b,c FROM update_test ORDER BY a,b,c;
 (2 rows)
 
 UPDATE update_test t SET b = t.b + 10 WHERE t.a = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  |  c  
 ----+----+-----
  10 | 20 | foo
@@ -51,7 +67,11 @@ SELECT a,b,c FROM update_test ORDER BY a,b,c;
 --
 UPDATE update_test SET a=v.i FROM (VALUES(100, 20)) AS v(i, j)
   WHERE update_test.b = v.j;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  |  c  
 -----+----+-----
  100 | 20 | foo
@@ -69,7 +89,11 @@ HINT:  You will need to rewrite or cast the expression.
 -- Test multiple-set-clause syntax
 --
 INSERT INTO update_test SELECT a,b+1,c FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT * FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  |  c  
 -----+----+-----
  100 | 20 | foo
@@ -79,7 +103,11 @@ SELECT * FROM update_test;
 (4 rows)
 
 UPDATE update_test SET (c,b,a) = ('bugle', b+11, DEFAULT) WHERE c = 'foo';
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  |   c   
 -----+----+-------
   10 | 31 | bugle
@@ -89,7 +117,11 @@ SELECT a,b,c FROM update_test ORDER BY a,b,c;
 (4 rows)
 
 UPDATE update_test SET (c,b) = ('car', a+b), a = a + 1 WHERE a = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  |  c  
 -----+----+-----
   11 | 41 | car
@@ -106,6 +138,8 @@ UPDATE update_test
   SET (b,a) = (select a,b from update_test where b = 41 and c = 'car')
   WHERE a = 100 AND b = 20;
 SELECT * FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  |  c  
 -----+----+-----
   41 | 11 | 
@@ -119,12 +153,14 @@ UPDATE update_test o
   SET (b,a) = (select a+1,b from update_test i
                where i.a=o.a and i.b=o.b and i.c is not distinct from o.c);
 SELECT * FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  |  b  |  c  
 ----+-----+-----
  41 |  12 | car
  42 |  12 | car
- 11 |  42 | 
  21 | 101 | 
+ 11 |  42 | 
 (4 rows)
 
 -- fail, multiple rows supplied:
@@ -134,6 +170,8 @@ ERROR:  more than one row returned by a subquery used as an expression
 UPDATE update_test SET (b,a) = (select a+1,b from update_test where a = 1000)
   WHERE a = 11;
 SELECT * FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  |  b  |  c  
 ----+-----+-----
  41 |  12 | car
@@ -145,6 +183,8 @@ SELECT * FROM update_test;
 -- *-expansion should work in this context:
 UPDATE update_test SET (a,b) = ROW(v.*) FROM (VALUES(21, 100)) AS v(i, j)
   WHERE update_test.a = v.i;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- you might expect this to work, but syntactically it's not a RowExpr:
 UPDATE update_test SET (a,b) = (v.*) FROM (VALUES(21, 101)) AS v(i, j)
   WHERE update_test.a = v.i;
@@ -160,13 +200,17 @@ LINE 1: UPDATE update_test AS t SET b = update_test.b + 10 WHERE t.a...
 HINT:  Perhaps you meant to reference the table alias "t".
 -- Make sure that we can update to a TOASTed value.
 UPDATE update_test SET c = repeat('x', 10000) WHERE c = 'car';
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT a, b, char_length(c) FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  |  b  | char_length 
 ----+-----+-------------
- 21 | 100 |            
     |     |            
  41 |  12 |       10000
  42 |  12 |       10000
+ 21 | 100 |            
 (4 rows)
 
 -- Check multi-assignment with a Result node to handle a one-time filter.
@@ -194,17 +238,18 @@ UPDATE update_test t
                                          ->  Seq Scan on public.update_test s
                                                Output: s.b, s.a
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(22 rows)
+(18 rows)
 
 UPDATE update_test t
   SET (a, b) = (SELECT b, a FROM update_test s WHERE s.a = t.a)
   WHERE CURRENT_USER = SESSION_USER;
 SELECT a, b, char_length(c) FROM update_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: update_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  | char_length 
 -----+----+-------------
-     |    |            
  100 | 21 |            
+     |    |            
   12 | 41 |       10000
   12 | 42 |       10000
 (4 rows)
@@ -280,18 +325,27 @@ CREATE TABLE range_parted (
 	d int,
 	e varchar
 ) PARTITION BY RANGE (a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Create partitions intentionally in descending bound order, so as to test
 -- that update-row-movement works with the leaf partitions not in bound order.
 CREATE TABLE part_b_20_b_30 (e varchar, c numeric, a text, b bigint, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: distribution policy must match the parent table.
 alter table part_b_20_b_30 set distributed by (a);
 ALTER TABLE range_parted ATTACH PARTITION part_b_20_b_30 FOR VALUES FROM ('b', 20) TO ('b', 30);
 CREATE TABLE part_b_10_b_20 (e varchar, c numeric, a text, b bigint, d int) PARTITION BY RANGE (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table part_b_10_b_20 set distributed by (a);
 CREATE TABLE part_b_1_b_10 PARTITION OF range_parted FOR VALUES FROM ('b', 1) TO ('b', 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE range_parted ATTACH PARTITION part_b_10_b_20 FOR VALUES FROM ('b', 10) TO ('b', 20);
 CREATE TABLE part_a_10_a_20 PARTITION OF range_parted FOR VALUES FROM ('a', 10) TO ('a', 20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_a_1_a_10 PARTITION OF range_parted FOR VALUES FROM ('a', 1) TO ('a', 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Check that partition-key UPDATE works sanely on a partitioned table that
 -- does not have any child partitions.
 UPDATE part_b_10_b_20 set b = b - 6;
@@ -299,12 +353,17 @@ UPDATE part_b_10_b_20 set b = b - 6;
 -- order, but let's make the situation a bit more complex by having the
 -- attribute numbers of the columns vary from their parent partition.
 CREATE TABLE part_c_100_200 (e varchar, c numeric, a text, b bigint, d int) PARTITION BY range (abs(d));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE part_c_100_200 DROP COLUMN e, DROP COLUMN c, DROP COLUMN a;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 ALTER TABLE part_c_100_200 ADD COLUMN c numeric, ADD COLUMN e varchar, ADD COLUMN a text;
 ALTER TABLE part_c_100_200 DROP COLUMN b;
 ALTER TABLE part_c_100_200 ADD COLUMN b bigint;
 CREATE TABLE part_d_1_15 PARTITION OF part_c_100_200 FOR VALUES FROM (1) TO (15);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_d_15_20 PARTITION OF part_c_100_200 FOR VALUES FROM (15) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE part_b_10_b_20 ATTACH PARTITION part_c_100_200 FOR VALUES FROM (100) TO (200);
 ERROR:  distribution policy for "part_c_100_200" must be the same as that for "part_b_10_b_20"
 -- GPDB: distribution policy must match the parent table, so the previous command fails.
@@ -312,6 +371,8 @@ ERROR:  distribution policy for "part_c_100_200" must be the same as that for "p
 alter table part_c_100_200 set distributed by (a);
 ALTER TABLE part_b_10_b_20 ATTACH PARTITION part_c_100_200 FOR VALUES FROM (100) TO (200);
 CREATE TABLE part_c_1_100 (e varchar, d int, c numeric, b bigint, a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table part_c_1_100 set distributed by (a);
 ALTER TABLE part_b_10_b_20 ATTACH PARTITION part_c_1_100 FOR VALUES FROM (1) TO (100);
 \set init_range_parted 'truncate range_parted; insert into range_parted VALUES (''a'', 1, 1, 1), (''a'', 10, 200, 1), (''b'', 12, 96, 1), (''b'', 13, 97, 2), (''b'', 15, 105, 16), (''b'', 17, 105, 19)'
@@ -330,8 +391,8 @@ ALTER TABLE part_b_10_b_20 ATTACH PARTITION part_c_1_100 FOR VALUES FROM (1) TO 
 
 -- The order of subplans should be in bound order
 EXPLAIN (costs off) UPDATE range_parted set c = c - 50 WHERE c > 97;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Update on range_parted
    Update on part_a_1_a_10 range_parted_1
    Update on part_a_10_a_20 range_parted_2
@@ -340,38 +401,41 @@ EXPLAIN (costs off) UPDATE range_parted set c = c - 50 WHERE c > 97;
    Update on part_d_1_15 range_parted_5
    Update on part_d_15_20 range_parted_6
    Update on part_b_20_b_30 range_parted_7
-   ->  Seq Scan on part_a_1_a_10 range_parted_1
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_a_10_a_20 range_parted_2
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_b_1_b_10 range_parted_3
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_c_1_100 range_parted_4
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_d_1_15 range_parted_5
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_d_15_20 range_parted_6
-         Filter: (c > '97'::numeric)
-   ->  Seq Scan on part_b_20_b_30 range_parted_7
-         Filter: (c > '97'::numeric)
+   ->  Append
+         ->  Seq Scan on part_a_1_a_10 range_parted_1
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_a_10_a_20 range_parted_2
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_b_1_b_10 range_parted_3
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_c_1_100 range_parted_4
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_d_1_15 range_parted_5
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_d_15_20 range_parted_6
+               Filter: (c > '97'::numeric)
+         ->  Seq Scan on part_b_20_b_30 range_parted_7
+               Filter: (c > '97'::numeric)
  Optimizer: Postgres query optimizer
-(23 rows)
+(24 rows)
 
 -- fail, row movement happens only within the partition subtree.
 UPDATE part_c_100_200 set c = c - 20, d = c WHERE c = 105;
-ERROR:  new row for relation "part_c_100_200" violates partition constraint
+ERROR:  new row for relation "part_c_100_200" violates partition constraint  (seg1 172.17.0.3:7003 pid=859553)
 DETAIL:  Failing row contains (105, 85, null, b, 15).
 -- fail, no partition key update, so no attempt to move tuple,
 -- but "a = 'a'" violates partition constraint enforced by root partition)
 UPDATE part_b_10_b_20 set a = 'a';
-ERROR:  new row for relation "part_c_1_100" violates partition constraint
-DETAIL:  Failing row contains (null, 1, 96, 12, a).
+ERROR:  new row for relation "part_b_10_b_20" violates partition constraint  (seg2 172.17.0.3:7004 pid=859544)
+DETAIL:  Failing row contains (null, 96, a, 12, 1).
 -- ok, partition key update, no constraint violation
 UPDATE range_parted set d = d - 10 WHERE d > 10;
 -- ok, no partition key update, no constraint violation
 UPDATE range_parted set e = d;
 -- No row found
 UPDATE part_c_1_100 set c = c + 20 WHERE c = 98;
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_c_1_100
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ok, row movement
 UPDATE part_b_10_b_20 set c = c + 20 returning c, b, a;
   c  | b  | a 
@@ -395,8 +459,8 @@ UPDATE part_b_10_b_20 set c = c + 20 returning c, b, a;
 
 -- fail, row movement happens only within the partition subtree.
 UPDATE part_b_10_b_20 set b = b - 6 WHERE c > 116 returning *;
-ERROR:  new row for relation "part_d_1_15" violates partition constraint
-DETAIL:  Failing row contains (2, 117, 2, b, 7).
+ERROR:  new row for relation "part_b_10_b_20" violates partition constraint  (seg1 slice1 172.17.0.3:7003 pid=859553)
+DETAIL:  Failing row contains (2, 117, b, 7, 2).
 -- ok, row movement, with subset of rows moved into different partition.
 UPDATE range_parted set b = b - 6 WHERE c > 116 returning a, b + c;
  a | ?column? 
@@ -420,6 +484,8 @@ UPDATE range_parted set b = b - 6 WHERE c > 116 returning a, b + c;
 
 -- Common table needed for multiple test scenarios.
 CREATE TABLE mintab(c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT into mintab VALUES (120);
 -- update partition key using updatable view.
 CREATE VIEW upview AS SELECT * FROM range_parted WHERE (select c > c1 FROM mintab) WITH CHECK OPTION;
@@ -427,11 +493,11 @@ CREATE VIEW upview AS SELECT * FROM range_parted WHERE (select c > c1 FROM minta
 UPDATE upview set c = 199 WHERE b = 4;
 -- fail, check option violation
 UPDATE upview set c = 120 WHERE b = 4;
-ERROR:  new row violates check option for view "upview"
+ERROR:  new row violates check option for view "upview"  (seg2 172.17.0.3:7004 pid=859544)
 DETAIL:  Failing row contains (a, 4, 120, 1, 1).
 -- fail, row movement with check option violation
 UPDATE upview set a = 'b', b = 15, c = 120 WHERE b = 4;
-ERROR:  new row violates check option for view "upview"
+ERROR:  new row violates check option for view "upview"  (seg1 172.17.0.3:7003 pid=859553)
 DETAIL:  Failing row contains (b, 15, 120, 1, 1).
 -- ok, row movement, check option passes
 UPDATE upview set a = 'b', b = 15 WHERE b = 4;
@@ -595,6 +661,7 @@ DROP FUNCTION func_parted_mod_b();
 -----------------------------------------
 ALTER TABLE range_parted ENABLE ROW LEVEL SECURITY;
 CREATE USER regress_range_parted_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT ALL ON range_parted, mintab TO regress_range_parted_user;
 CREATE POLICY seeall ON range_parted AS PERMISSIVE FOR SELECT USING (true);
 CREATE POLICY policy_range_parted ON range_parted for UPDATE USING (true) WITH CHECK (c % 2 = 0);
@@ -603,7 +670,7 @@ SET SESSION AUTHORIZATION regress_range_parted_user;
 -- This should fail with RLS violation error while moving row from
 -- part_a_10_a_20 to part_d_1_15, because we are setting 'c' to an odd number.
 UPDATE range_parted set a = 'b', c = 151 WHERE a = 'a' and c = 200;
-ERROR:  new row violates row-level security policy for table "range_parted"
+ERROR:  new row violates row-level security policy for table "range_parted"  (seg1 172.17.0.3:7003 pid=859553)
 RESET SESSION AUTHORIZATION;
 -- Create a trigger on part_d_1_15
 CREATE FUNCTION func_d_1_15() RETURNS trigger AS $$
@@ -619,7 +686,7 @@ SET SESSION AUTHORIZATION regress_range_parted_user;
 -- part_d_1_15. Even though the UPDATE is setting 'c' to an odd number, the
 -- trigger at the destination partition again makes it an even number.
 UPDATE range_parted set a = 'b', c = 151 WHERE a = 'a' and c = 200;
-ERROR:  new row violates row-level security policy for table "range_parted"  (seg1 127.0.0.1:7003 pid=27238)
+ERROR:  new row violates row-level security policy for table "range_parted"  (seg1 172.17.0.3:7003 pid=859553)
 RESET SESSION AUTHORIZATION;
 :init_range_parted;
 SET SESSION AUTHORIZATION regress_range_parted_user;
@@ -640,7 +707,7 @@ CREATE POLICY policy_range_parted_subplan on range_parted
 SET SESSION AUTHORIZATION regress_range_parted_user;
 -- fail, mintab has row with c1 = 120
 UPDATE range_parted set a = 'b', c = 122 WHERE a = 'a' and c = 200;
-ERROR:  new row violates row-level security policy "policy_range_parted_subplan" for table "range_parted"
+ERROR:  new row violates row-level security policy "policy_range_parted_subplan" for table "range_parted"  (seg1 172.17.0.3:7003 pid=859553)
 -- ok
 UPDATE range_parted set a = 'b', c = 120 WHERE a = 'a' and c = 200;
 -- RLS policy expression contains whole row.
@@ -656,7 +723,7 @@ RESET SESSION AUTHORIZATION;
 SET SESSION AUTHORIZATION regress_range_parted_user;
 -- fail, the whole row RLS check should fail
 UPDATE range_parted set a = 'b', c = 116 WHERE a = 'a' and c = 200;
-ERROR:  new row violates row-level security policy "policy_range_parted_wholerow" for table "range_parted"
+ERROR:  new row violates row-level security policy "policy_range_parted_wholerow" for table "range_parted"  (seg1 172.17.0.3:7003 pid=859553)
 -- Cleanup
 RESET SESSION AUTHORIZATION;
 DROP POLICY policy_range_parted ON range_parted;
@@ -757,24 +824,30 @@ ERROR:  trigger "d15_insert_trig" for table "part_d_15_20" does not exist
 -- Creating default partition for range
 :init_range_parted;
 create table part_def partition of range_parted default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ part_def
-                                       Table "public.part_def"
- Column |       Type        | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-------------------+-----------+----------+---------+----------+--------------+-------------
- a      | text              |           |          |         | extended |              | 
- b      | bigint            |           |          |         | plain    |              | 
- c      | numeric           |           |          |         | main     |              | 
- d      | integer           |           |          |         | plain    |              | 
- e      | character varying |           |          |         | extended |              | 
+                                              Table "public.part_def"
+ Column |       Type        | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+-------------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text              |           |          |         | extended |             |              | 
+ b      | bigint            |           |          |         | plain    |             |              | 
+ c      | numeric           |           |          |         | main     |             |              | 
+ d      | integer           |           |          |         | plain    |             |              | 
+ e      | character varying |           |          |         | extended |             |              | 
 Partition of: range_parted DEFAULT
 Partition constraint: (NOT ((a IS NOT NULL) AND (b IS NOT NULL) AND (((a = 'a'::text) AND (b >= '1'::bigint) AND (b < '10'::bigint)) OR ((a = 'a'::text) AND (b >= '10'::bigint) AND (b < '20'::bigint)) OR ((a = 'b'::text) AND (b >= '1'::bigint) AND (b < '10'::bigint)) OR ((a = 'b'::text) AND (b >= '10'::bigint) AND (b < '20'::bigint)) OR ((a = 'b'::text) AND (b >= '20'::bigint) AND (b < '30'::bigint)))))
+Distributed by: (a)
 
 insert into range_parted values ('c', 9);
 -- ok
 update part_def set a = 'd' where a = 'c';
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_def
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- fail
 update part_def set a = 'a' where a = 'd';
-ERROR:  new row for relation "part_def" violates partition constraint
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_def
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  new row for relation "part_def" violates partition constraint  (seg2 172.17.0.3:7004 pid=859544)
 DETAIL:  Failing row contains (a, 9, null, null, null).
 :show_data;
     partname    | a | b  |  c  | d  | e 
@@ -791,7 +864,9 @@ DETAIL:  Failing row contains (a, 9, null, null, null).
 -- Update row movement from non-default to default partition.
 -- fail, default partition is not under part_a_10_a_20;
 UPDATE part_a_10_a_20 set a = 'ad' WHERE a = 'a';
-ERROR:  new row for relation "part_a_10_a_20" violates partition constraint
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_a_10_a_20
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  new row for relation "part_a_10_a_20" violates partition constraint  (seg2 172.17.0.3:7004 pid=859544)
 DETAIL:  Failing row contains (ad, 10, 200, 1, null).
 -- ok
 UPDATE range_parted set a = 'ad' WHERE a = 'a';
@@ -830,16 +905,24 @@ CREATE TABLE list_parted (
 	a text,
 	b int
 ) PARTITION BY list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE list_part1  PARTITION OF list_parted for VALUES in ('a', 'b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE list_default PARTITION OF list_parted default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT into list_part1 VALUES ('a', 1);
 INSERT into list_default VALUES ('d', 10);
 -- fail
 UPDATE list_default set a = 'a' WHERE a = 'd';
-ERROR:  new row for relation "list_default" violates partition constraint
+NOTICE:  One or more columns in the following table(s) do not have statistics: list_default
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  new row for relation "list_default" violates partition constraint  (seg2 172.17.0.3:7004 pid=859544)
 DETAIL:  Failing row contains (a, 10).
 -- ok
 UPDATE list_default set a = 'x' WHERE a = 'd';
+NOTICE:  One or more columns in the following table(s) do not have statistics: list_default
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DROP TABLE list_parted;
 --------------
 -- Some more update-partition-key test scenarios below. This time use list
@@ -847,14 +930,23 @@ DROP TABLE list_parted;
 --------------
 -- Setup for list partitions
 CREATE TABLE list_parted (a numeric, b int, c int8) PARTITION BY list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE sub_parted PARTITION OF list_parted for VALUES in (1) PARTITION BY list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE sub_part1(b int, c int8, a numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table sub_part1 set distributed by (a); -- GPDB: distribution policy must match the parent table.
 ALTER TABLE sub_parted ATTACH PARTITION sub_part1 for VALUES in (1);
 CREATE TABLE sub_part2(b int, c int8, a numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table sub_part2 set distributed by (a); -- GPDB: distribution policy must match the parent table.
 ALTER TABLE sub_parted ATTACH PARTITION sub_part2 for VALUES in (2);
 CREATE TABLE list_part1(a numeric, b int, c int8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE list_parted ATTACH PARTITION list_part1 for VALUES in (2,3);
 INSERT into list_parted VALUES (2,5,50);
 INSERT into list_parted VALUES (3,6,60);
@@ -863,7 +955,7 @@ INSERT into sub_parted VALUES (1,2,10);
 -- Test partition constraint violation when intermediate ancestor is used and
 -- constraint is inherited from upper root.
 UPDATE sub_parted set a = 2 WHERE c = 10;
-ERROR:  new row for relation "sub_parted" violates partition constraint
+ERROR:  new row for relation "sub_parted" violates partition constraint  (seg1 172.17.0.3:7003 pid=859553)
 DETAIL:  Failing row contains (2, 2, 10).
 -- Test update-partition-key, where the unpruned partitions do not have their
 -- partition keys updated.
@@ -920,7 +1012,7 @@ END $$ LANGUAGE plpgsql;
 CREATE TRIGGER trig_skip_delete before delete on sub_part2
    for each row execute procedure func_parted_mod_b();
 UPDATE list_parted set b = 1 WHERE c = 70;
-NOTICE:  Trigger: Got OLD row (2,70,1), but returning NULL
+NOTICE:  Trigger: Got OLD row (2,70,1), but returning NULL  (seg2 172.17.0.3:7004 pid=859544)
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
   tableoid  | a | b  | c  
 ------------+---+----+----
@@ -947,9 +1039,11 @@ DROP FUNCTION func_parted_mod_b();
 -- rows for the same row to be modified, we should tuple-route the row only
 -- once. There should not be any rows inserted.
 CREATE TABLE non_parted (id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT into non_parted VALUES (1), (1), (1), (2), (2), (2), (3), (3), (3);
 UPDATE list_parted t1 set a = 2 FROM non_parted t2 WHERE t1.a = t2.id and a = 1;
-ERROR:  multiple updates to a row by the same query is not allowed  (seg2 127.0.0.1:7004 pid=26209)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg2 172.17.0.3:7004 pid=859544)
 -- In GPDB, the above UPDATE fails because the distribution key is updated, and
 -- the Split Update codepath isn't smart enough to handle this situation. With
 -- a non-Split Update, it works:
@@ -977,16 +1071,24 @@ create table hash_parted (
 	a int,
 	b int
 ) partition by hash (a custom_opclass, b custom_opclass);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hpart1 partition of hash_parted for values with (modulus 2, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hpart2 partition of hash_parted for values with (modulus 4, remainder 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hpart3 partition of hash_parted for values with (modulus 8, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hpart4 partition of hash_parted for values with (modulus 8, remainder 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into hpart1 values (1, 1);
 insert into hpart2 values (2, 5);
 insert into hpart4 values (3, 4);
 -- fail
 update hpart1 set a = 3, b=4 where a = 1;
-ERROR:  new row for relation "hpart1" violates partition constraint
+NOTICE:  One or more columns in the following table(s) do not have statistics: hpart1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  new row for relation "hpart1" violates partition constraint  (seg0 172.17.0.3:7002 pid=859542)
 DETAIL:  Failing row contains (3, 4).
 -- ok, row movement
 update hash_parted set b = b - 1 where b = 1;

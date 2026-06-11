@@ -7,12 +7,16 @@ CREATE TABLE tid_tab (a int, b int default 0) distributed by (b);
 -- min() and max() for TIDs
 INSERT INTO tid_tab VALUES (1), (2);
 SELECT min(ctid) FROM tid_tab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tid_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   min  
 -------
  (0,1)
 (1 row)
 
 SELECT max(ctid) FROM tid_tab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tid_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   max  
 -------
  (0,2)
@@ -23,14 +27,23 @@ TRUNCATE tid_tab;
 -- Not supported in GPDB
 -- Materialized view
 CREATE MATERIALIZED VIEW tid_matview AS SELECT a FROM tid_tab;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  One or more columns in the following table(s) do not have statistics: tid_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT currtid('tid_matview'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_matview'::regclass::oid, '(0,1)'::tid);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_matview'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 INSERT INTO tid_tab VALUES (1);
 REFRESH MATERIALIZED VIEW tid_matview;
 SELECT currtid('tid_matview'::regclass::oid, '(0,1)'::tid); -- ok
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_matview'::regclass::oid, '(0,1)'::tid);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_matview'::text, '(0,1)'::tid); -- ok
 ERROR:  function currtid2 is not supported by GPDB
 DROP MATERIALIZED VIEW tid_matview;
@@ -38,21 +51,32 @@ TRUNCATE tid_tab;
 -- Sequence
 CREATE SEQUENCE tid_seq;
 SELECT currtid('tid_seq'::regclass::oid, '(0,1)'::tid); -- ok
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_seq'::regclass::oid, '(0,1)'::tid);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_seq'::text, '(0,1)'::tid); -- ok
 ERROR:  function currtid2 is not supported by GPDB
 DROP SEQUENCE tid_seq;
 -- Index, fails with incorrect relation type
 CREATE INDEX tid_ind ON tid_tab(a);
 SELECT currtid('tid_ind'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_ind'::regclass::oid, '(0,1)'::tid);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_ind'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 DROP INDEX tid_ind;
 -- Partitioned table, no storage
 CREATE TABLE tid_part (a int) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT currtid('tid_part'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_part'::regclass::oid, '(0,1)'::tid);
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_part'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 DROP TABLE tid_part;
@@ -60,19 +84,28 @@ DROP TABLE tid_part;
 -- ctid not defined in the view
 CREATE VIEW tid_view_no_ctid AS SELECT a FROM tid_tab;
 SELECT currtid('tid_view_no_ctid'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_view_no_ctid'::regclass::oid, '(0,1)'::t...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_view_no_ctid'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 DROP VIEW tid_view_no_ctid;
 -- ctid fetched directly from the source table.
 CREATE VIEW tid_view_with_ctid AS SELECT ctid, a FROM tid_tab;
 SELECT currtid('tid_view_with_ctid'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_view_with_ctid'::regclass::oid, '(0,1)':...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_view_with_ctid'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 INSERT INTO tid_tab VALUES (1);
 SELECT currtid('tid_view_with_ctid'::regclass::oid, '(0,1)'::tid); -- ok
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_view_with_ctid'::regclass::oid, '(0,1)':...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_view_with_ctid'::text, '(0,1)'::tid); -- ok
 ERROR:  function currtid2 is not supported by GPDB
 DROP VIEW tid_view_with_ctid;
@@ -80,7 +113,10 @@ TRUNCATE tid_tab;
 -- ctid attribute with incorrect data type
 CREATE VIEW tid_view_fake_ctid AS SELECT 1 AS ctid, 2 AS a;
 SELECT currtid('tid_view_fake_ctid'::regclass::oid, '(0,1)'::tid); -- fails
-ERROR:  function currtid is not supported by GPDB
+ERROR:  function currtid(oid, tid) does not exist
+LINE 1: SELECT currtid('tid_view_fake_ctid'::regclass::oid, '(0,1)':...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT currtid2('tid_view_fake_ctid'::text, '(0,1)'::tid); -- fails
 ERROR:  function currtid2 is not supported by GPDB
 DROP VIEW tid_view_fake_ctid;

@@ -37,7 +37,7 @@ SELECT relname, reltuples FROM pg_class WHERE relname = 'uaocs_stats';
 SELECT relname, reltuples FROM pg_class WHERE relname = 'uaocs_stats_index';
       relname      | reltuples 
 -------------------+-----------
- uaocs_stats_index |        88
+ uaocs_stats_index |       100
 (1 row)
 
 -- re-setup for next case

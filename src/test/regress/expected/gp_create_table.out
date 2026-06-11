@@ -34,7 +34,7 @@ create table distpol as select random(), 1 as a, 2 as b distributed by (random);
 select distkey, distclass from gp_distribution_policy where localoid = 'distpol'::regclass;
  distkey | distclass 
 ---------+-----------
- 1       | 10049
+ 1       | 10014
 (1 row)
 
 drop table distpol;
@@ -42,7 +42,7 @@ create table distpol as select random(), 2 as foo distributed by (foo);
 select distkey, distclass from gp_distribution_policy where localoid = 'distpol'::regclass;
  distkey | distclass 
 ---------+-----------
- 2       | 10055
+ 2       | 10020
 (1 row)
 
 drop table distpol;
@@ -68,8 +68,8 @@ select localoid::regclass, distkey, distclass from gp_distribution_policy where
       localoid       | distkey |  distclass  
 ---------------------+---------+-------------
  distpol_no_pk       |         | 
- distpol_with_pk     | 1       | 10055
- distpol_with_unique | 1 2     | 10055 10055
+ distpol_with_pk     | 1       | 10020
+ distpol_with_unique | 1 2     | 10020 10020
 (3 rows)
 
 -- If a table is previously DISTRIBUTED RANDOMLY, you cannot add a primary key
@@ -88,42 +88,49 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table distpol3 as select i, j from distpol1 union 
   select i, j from distpol2 distributed by (j);
+NOTICE:  One or more columns in the following table(s) do not have statistics: distpol1, distpol2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select distkey, distclass from gp_distribution_policy where localoid = 'distpol3'::regclass;
  distkey | distclass 
 ---------+-----------
- 2       | 10055
+ 2       | 10020
 (1 row)
 
 drop table distpol3;
 create table distpol3 as (select i, j from distpol1 union
   select i, j from distpol2) distributed by (j);
+NOTICE:  One or more columns in the following table(s) do not have statistics: distpol1, distpol2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select distkey, distclass from gp_distribution_policy where localoid = 'distpol3'::regclass;
  distkey | distclass 
 ---------+-----------
- 2       | 10055
+ 2       | 10020
 (1 row)
 
 -- MPP-7268: CTAS produces incorrect distribution.
 drop table if exists foo;
 NOTICE:  table "foo" does not exist, skipping
 drop table if exists bar;
-NOTICE:  table "bar" does not exist, skipping
 create table foo (a varchar(15), b int) distributed by (b);
 create table bar as select * from foo distributed by (b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
  distkey | distclass 
 ---------+-----------
- 2       | 10055
+ 2       | 10020
 (1 row)
 
 drop table if exists foo;
 drop table if exists bar;
 create table foo (a int, b varchar(15)) distributed by (b);
 create table bar as select * from foo distributed by (b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
  distkey | distclass 
 ---------+-----------
- 2       | 10073
+ 2       | 10039
 (1 row)
 
 drop table if exists foo;
@@ -134,10 +141,12 @@ col_with_default_drop_default character varying(30) DEFAULT 'test1',
 col_with_constraint numeric UNIQUE
 ) DISTRIBUTED BY (col_with_constraint);
 CREATE TABLE bar AS SELECT * FROM foo distributed by (col_with_constraint);
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
  distkey | distclass 
 ---------+-----------
- 3       | 10065
+ 3       | 10030
 (1 row)
 
 drop table if exists foo;
@@ -175,7 +184,7 @@ create table foo ("I" int, i int) distributed by ("I",I);
 select distkey, distclass from gp_distribution_policy where localoid='foo'::regclass;
  distkey |  distclass  
 ---------+-------------
- 1 2     | 10055 10055
+ 1 2     | 10020 10020
 (1 row)
 
 create table fooctas as select * from foo distributed by (i,i);

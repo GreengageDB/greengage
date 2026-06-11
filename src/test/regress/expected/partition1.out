@@ -1,7 +1,11 @@
 drop table if exists d;
+NOTICE:  table "d" does not exist, skipping
 drop table if exists c;
+NOTICE:  table "c" does not exist, skipping
 drop table if exists b;
+NOTICE:  table "b" does not exist, skipping
 drop table if exists a;
+NOTICE:  table "a" does not exist, skipping
 --ERROR: Missing boundary specification in partition 'aa' of type LIST
 create table fff (a char(1), b char(2), d char(3)) distributed by
 (a) partition by list (b) (partition aa );
@@ -145,6 +149,8 @@ insert into ggg values ('x', 'e');
 insert into ggg values ('x', 'f');
 insert into ggg values ('x', 'g');
 select * from ggg order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  | d 
 ---+----+---
  x | a  | 
@@ -165,6 +171,8 @@ select * from ggg order by 1, 2;
 
 -- ok
 select * from ggg_1_prt_aa order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_aa
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  | d 
 ---+----+---
  x | a  | 
@@ -178,6 +186,8 @@ select * from ggg_1_prt_aa order by 1, 2;
 (8 rows)
 
 select * from ggg_1_prt_bb order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_bb
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  | d 
 ---+----+---
  x | e  | 
@@ -231,6 +241,8 @@ select * from rank order by 1, 2, 3, 4;
 (10 rows)
 
 select * from rank_1_prt_boys order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_boys
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   1 |    1 | 01-15-2001 | M
@@ -241,6 +253,8 @@ select * from rank_1_prt_boys order by 1, 2, 3, 4;
 (5 rows)
 
 select * from rank_1_prt_girls order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   6 |    1 | 01-15-2001 | F
@@ -251,12 +265,16 @@ select * from rank_1_prt_girls order by 1, 2, 3, 4;
 (5 rows)
 
 select * from rank_1_prt_girls_2_prt_1 order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls_2_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   6 |    1 | 01-15-2001 | F
 (1 row)
 
 select * from rank_1_prt_girls_2_prt_2 order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls_2_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   7 |    1 | 02-15-2002 | F
@@ -311,6 +329,8 @@ partition by list (rankgender)
  partition bb values (CAST ('(1,M)' AS rank_partkey))
 );
 ERROR:  partition "rank_1_prt_bb" would overlap partition "rank_1_prt_1"
+LINE 10:  partition bb values (CAST ('(1,M)' AS rank_partkey))
+                                     ^
 -- RANGE validation
 -- legal if end of aa not inclusive
 create table ggg (a char(1), b date, d char(3))
@@ -444,6 +464,8 @@ select * from rank order by 1, 2, 3, 4;
 (10 rows)
 
 select * from rank_1_prt_boys order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_boys
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   1 |    1 | 01-15-2001 | M
@@ -454,6 +476,8 @@ select * from rank_1_prt_boys order by 1, 2, 3, 4;
 (5 rows)
 
 select * from rank_1_prt_girls order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   6 |    1 | 01-15-2001 | F
@@ -464,12 +488,16 @@ select * from rank_1_prt_girls order by 1, 2, 3, 4;
 (5 rows)
 
 select * from rank_1_prt_girls_2_prt_1 order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls_2_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   6 |    1 | 01-15-2001 | F
 (1 row)
 
 select * from rank_1_prt_girls_2_prt_2 order by 1, 2, 3, 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rank_1_prt_girls_2_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | rank |    year    | gender 
 ----+------+------------+--------
   7 |    1 | 02-15-2002 | F
@@ -491,9 +519,11 @@ insert into ggg values (7, 7);
 insert into ggg values (8, 8);
 insert into ggg values (9, 9);
 insert into ggg values (10, 10);
-ERROR:  no partition of relation "ggg" found for row  (seg2 127.0.1.1:7004 pid=6503)
+ERROR:  no partition of relation "ggg" found for row  (seg2 172.17.0.3:7004 pid=881405)
 DETAIL:  Partition key of the failing row contains (a) = (10).
 select * from ggg order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a 
 ----+---
   1 | 1
@@ -508,24 +538,32 @@ select * from ggg order by 1, 2;
 (9 rows)
 
 select * from ggg_1_prt_1 order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a 
 ----+---
   1 | 1
 (1 row)
 
 select * from ggg_1_prt_2 order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a 
 ----+---
   2 | 2
 (1 row)
 
 select * from ggg_1_prt_3 order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a 
 ----+---
   3 | 3
 (1 row)
 
 select * from ggg_1_prt_4 order by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ggg_1_prt_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a 
 ----+---
   4 | 4
@@ -545,11 +583,11 @@ partition by range (t)
   start ('aaa') end ('foobar') every (1)
 );
 \d+ ggg
-                                 Partitioned table "public.ggg"
- Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+--------------+-----------+----------+---------+----------+--------------+-------------
- a      | character(1) |           |          |         | extended |              | 
- t      | funnytext    |           |          |         | extended |              | 
+                                        Partitioned table "public.ggg"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+--------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | character(1) |           |          |         | extended |             |              | 
+ t      | funnytext    |           |          |         | extended |             |              | 
 Partition key: RANGE (t)
 Partitions: ggg_1_prt_1 FOR VALUES FROM ('aaa') TO ('b'),
             ggg_1_prt_2 FOR VALUES FROM ('b') TO ('c'),
@@ -603,42 +641,56 @@ every(interval '1 year'));
 insert into foz select i, '2001-01-01'::date + ('1 day'::interval * i) from
 generate_series(1, 1000) i;
 select count(*) from foz;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1000
 (1 row)
 
 select count(*) from foz_1_prt_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    364
 (1 row)
 
 select min(d), max(d) from foz;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     min     |    max     
 ------------+------------
  01-02-2001 | 09-28-2003
 (1 row)
 
 select min(d), max(d) from foz_1_prt_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     min     |    max     
 ------------+------------
  01-02-2001 | 12-31-2001
 (1 row)
 
 select min(d), max(d) from foz_1_prt_2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     min     |    max     
 ------------+------------
  01-01-2002 | 12-31-2002
 (1 row)
 
 select min(d), max(d) from foz_1_prt_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     min     |    max     
 ------------+------------
  01-01-2003 | 09-28-2003
 (1 row)
 
 select min(d), max(d) from foz_1_prt_4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  min | max 
 -----+-----
      | 
@@ -651,25 +703,33 @@ partition by range (d) (start (date '2001-01-01') end (date '2005-01-01')
 every(interval '1 year'));
 COPY foz FROM stdin DELIMITER '|';
 select * from foz_1_prt_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
- 1 | 01-02-2001
  2 | 10-10-2001
+ 1 | 01-02-2001
 (2 rows)
 
 select * from foz_1_prt_2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  3 | 10-30-2002
 (1 row)
 
 select * from foz_1_prt_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  4 | 01-01-2003
 (1 row)
 
 select * from foz_1_prt_4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  5 | 05-05-2004
@@ -687,6 +747,8 @@ partition by range (d) (start (date '2001-01-01') end (date '2005-01-01')
 every(interval '1 year'));
 COPY foz FROM stdin DELIMITER '|';
 select * from foz_1_prt_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  1 | 01-02-2001
@@ -694,18 +756,24 @@ select * from foz_1_prt_1;
 (2 rows)
 
 select * from foz_1_prt_2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  3 | 10-30-2002
 (1 row)
 
 select * from foz_1_prt_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  4 | 01-01-2003
 (1 row)
 
 select * from foz_1_prt_4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  5 | 05-05-2004
@@ -967,15 +1035,15 @@ insert into rank values (10, 1, date '2005-05-15', 'F');
 select * from rank ;
  id | rank |    year    | gender 
 ----+------+------------+--------
-  3 |    1 | 03-15-2003 | M
-  5 |    1 | 05-15-2005 | M
   6 |    1 | 01-15-2001 | F
-  7 |    1 | 02-15-2002 | F
   8 |    1 | 03-15-2003 | F
   9 |    1 | 04-15-2004 | F
  10 |    1 | 05-15-2005 | F
-  2 |    1 | 02-15-2002 | M
   1 |    1 | 01-15-2001 | M
+  5 |    1 | 05-15-2005 | M
+  2 |    1 | 02-15-2002 | M
+  3 |    1 | 03-15-2003 | M
+  7 |    1 | 02-15-2002 | F
   4 |    1 | 04-15-2004 | M
 (10 rows)
 
@@ -984,10 +1052,10 @@ select * from rank ;
  id | rank |    year    | gender 
 ----+------+------------+--------
   6 |    1 | 01-15-2001 | F
-  7 |    1 | 02-15-2002 | F
   8 |    1 | 03-15-2003 | F
   9 |    1 | 04-15-2004 | F
  10 |    1 | 05-15-2005 | F
+  7 |    1 | 02-15-2002 | F
 (5 rows)
 
 -- MPP-3722: complain if for(value) matches the default partition
@@ -1066,6 +1134,8 @@ insert into hhh values('a', date '2008-10-01', 'b');
 insert into hhh values('a', date '2008-11-01', 'b');
 insert into hhh values('a', date '2008-12-01', 'b');
 select * from hhh;
+NOTICE:  One or more columns in the following table(s) do not have statistics: hhh
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |     b      |  d  
 ---+------------+-----
  a | 01-02-2007 | b  
@@ -1096,6 +1166,8 @@ select * from hhh;
 
 alter table hhh truncate partition aa;
 select * from hhh;
+NOTICE:  One or more columns in the following table(s) do not have statistics: hhh
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |     b      |  d  
 ---+------------+-----
  a | 01-02-2008 | b  
@@ -1114,6 +1186,8 @@ select * from hhh;
 
 alter table hhh truncate partition bb;
 select * from hhh;
+NOTICE:  One or more columns in the following table(s) do not have statistics: hhh
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | d 
 ---+---+---
 (0 rows)
@@ -1143,6 +1217,8 @@ insert into hhh values('a', date '2008-10-01', 'b');
 insert into hhh values('a', date '2008-11-01', 'b');
 insert into hhh values('a', date '2008-12-01', 'b');
 select * from hhh;
+NOTICE:  One or more columns in the following table(s) do not have statistics: hhh
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |     b      |  d  
 ---+------------+-----
  a | 01-02-2007 | b  
@@ -1174,6 +1250,8 @@ select * from hhh;
 -- truncate child partitions recursively
 truncate table hhh;
 select * from hhh;
+NOTICE:  One or more columns in the following table(s) do not have statistics: hhh
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | d 
 ---+---+---
 (0 rows)
@@ -1212,6 +1290,8 @@ partition by range (d)
 insert into foz values(1, '2003-04-01');
 insert into foz values(2, '2010-04-01');
 select * from foz;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  2 | 04-01-2010
@@ -1219,6 +1299,8 @@ select * from foz;
 (2 rows)
 
 select * from foz_1_prt_dsf;
+NOTICE:  One or more columns in the following table(s) do not have statistics: foz_1_prt_dsf
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |     d      
 ---+------------
  2 | 04-01-2010
@@ -1234,14 +1316,14 @@ insert into d values(1, 10);
 insert into d values(1, 11);
 insert into d values(1, 55);
 insert into d values(1, 70);
-ERROR:  no partition of relation "d" found for row  (seg1 127.0.1.1:7003 pid=6502)
+ERROR:  no partition of relation "d" found for row  (seg1 172.17.0.3:7003 pid=881404)
 DETAIL:  Partition key of the failing row contains (j) = (70).
 \d+ d
-                               Partitioned table "public.d"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- i      | integer |           |          |         | plain   |              | 
- j      | integer |           |          |         | plain   |              | 
+                                      Partitioned table "public.d"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ i      | integer |           |          |         | plain   |             |              | 
+ j      | integer |           |          |         | plain   |             |              | 
 Partition key: RANGE (j)
 Partitions: d_1_prt_1 FOR VALUES FROM (10) TO (50),
             d_1_prt_2 FOR VALUES FROM (5) TO (10),
@@ -1249,6 +1331,8 @@ Partitions: d_1_prt_1 FOR VALUES FROM (10) TO (50),
 Distributed by: (i)
 
 select * from d;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j  
 ---+----
  1 |  5
@@ -1258,6 +1342,8 @@ select * from d;
 (4 rows)
 
 select * from d_1_prt_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j  
 ---+----
  1 | 10
@@ -1265,12 +1351,16 @@ select * from d_1_prt_1;
 (2 rows)
 
 select * from d_1_prt_2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
  1 | 5
 (1 row)
 
 select * from d_1_prt_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j  
 ---+----
  1 | 55
@@ -1291,6 +1381,8 @@ insert into d values(1, NULL);
 insert into d values(1, 3);
 insert into d values(1, 4);
 select * from d_1_prt_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
  1 | 1
@@ -1299,6 +1391,8 @@ select * from d_1_prt_a;
 (3 rows)
 
 select * from d_1_prt_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
  1 | 3
@@ -1315,7 +1409,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into d values (1, 1);
 insert into d values (1, 2);
 insert into d values (1, NULL);
-ERROR:  no partition of relation "d" found for row  (seg1 127.0.1.1:7003 pid=6502)
+ERROR:  no partition of relation "d" found for row  (seg1 172.17.0.3:7003 pid=881404)
 DETAIL:  Partition key of the failing row contains (j) = (null).
 drop table  d cascade;
 -- allow NULLs into the default partition
@@ -1328,6 +1422,8 @@ insert into d values (1, 1);
 insert into d values (1, 2);
 insert into d values (1, NULL);
 select * from d_1_prt_abc;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_abc
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
  1 |  
@@ -1350,11 +1446,11 @@ partition by list(k)
  partition b values(CAST('(100,20)' as d_partkey)),
  partition c values(CAST('(1000,1001)' as d_partkey), CAST('(1001,1002)' as d_partkey), CAST('(1003,1004)' as d_partkey)));
 \d+ d
-                                Partitioned table "public.d"
- Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+--------------+-------------
- a      | integer   |           |          |         | plain    |              | 
- k      | d_partkey |           |          |         | extended |              | 
+                                       Partitioned table "public.d"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | integer   |           |          |         | plain    |             |              | 
+ k      | d_partkey |           |          |         | extended |             |              | 
 Partition key: LIST (k)
 Partitions: d_1_prt_a FOR VALUES IN ('(1,2)', '(3,4)'),
             d_1_prt_b FOR VALUES IN ('(100,20)'),
@@ -1365,13 +1461,15 @@ insert into d values(1, (1, 2));
 insert into d values(1, (3, 4));
 insert into d values(1, (100, 20));
 insert into d values(1, (100, 2000));
-ERROR:  no partition of relation "d" found for row  (seg1 127.0.1.1:7003 pid=10417)
+ERROR:  no partition of relation "d" found for row  (seg1 172.17.0.3:7003 pid=881404)
 DETAIL:  Partition key of the failing row contains (k) = ((100,2000)).
 insert into d values(1, ('1000', '1001')), (1, ('1001', '1002')), (1, ('1003', '1004'));
 insert into d values(1, (100, NULL));
-ERROR:  no partition of relation "d" found for row  (seg1 127.0.1.1:7003 pid=10417)
+ERROR:  no partition of relation "d" found for row  (seg1 172.17.0.3:7003 pid=881404)
 DETAIL:  Partition key of the failing row contains (k) = ((100,)).
 select * from d_1_prt_a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |   k   
 ---+-------
  1 | (1,2)
@@ -1379,12 +1477,16 @@ select * from d_1_prt_a;
 (2 rows)
 
 select * from d_1_prt_b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |    k     
 ---+----------
  1 | (100,20)
 (1 row)
 
 select * from d_1_prt_c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: d_1_prt_c
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |      k      
 ---+-------------
  1 | (1000,1001)
@@ -1528,6 +1630,7 @@ ERROR:  table "b" does not exist
 -- MPP-3988: allow same column in multiple partitioning keys at
 -- different levels -- so this is legal again...
 drop table if exists a;
+NOTICE:  table "a" does not exist, skipping
 -- TEST: make sure GPOPT (aka pivotal query optimizer) fall back to Postgres query optimizer
 --       for queries with partition elimination over FULL OUTER JOIN
 --       between partitioned tables.
@@ -1555,6 +1658,8 @@ partition by list (p2)
 -- expect GPOPT fall back to Postgres query optimizer
 -- since GPOPT don't support partition elimination through full outer joins
 select * from s1 full outer join s2 on s1.d1 = s2.d2 and s1.p1 = s2.p2 where s1.p1 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: s1, s2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1 | p1 | d2 | p2 
 ----+----+----+----
 (0 rows)
@@ -2028,6 +2133,8 @@ insert into mpp10847_pkeyconstraints values (10000, 50, 50, 102);
 -- primary key in the same table. But GPDB cannot currently enforce that.
 insert into mpp10847_pkeyconstraints values (10000, 50, 50, 5);
 select * from mpp10847_pkeyconstraints;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp10847_pkeyconstraints
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pkid  | option1 | option2 | option3 
 -------+---------+---------+---------
  10000 |      50 |      50 |       5
@@ -2074,6 +2181,8 @@ insert into dcl_candidate(message_create_date) values (timestamp '2011-09-06');
 alter table dcl_messaging_test exchange partition for ('2011-09-06') with table dcl_candidate;
 -- SPLIT case
 alter table dcl_messaging_test split partition for (timestamp '2011-09-06') at (timestamp '2011-09-06 12:00:00') into (partition x1, partition x2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_80514
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 --
 -- Create table with 4 partitions
 CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
@@ -2260,8 +2369,8 @@ CREATE INDEX mpp7635_ix3 ON mpp7635_aoi_table2 USING BITMAP (id);
 select * from pg_indexes where tablename like 'mpp7635%';
  schemaname |         tablename          |             indexname             | tablespace |                                               indexdef                                                
 ------------+----------------------------+-----------------------------------+------------+-------------------------------------------------------------------------------------------------------
- public     | mpp7635_aoi_table2         | mpp7635_ix3                       |            | CREATE INDEX mpp7635_ix3 ON ONLY public.mpp7635_aoi_table2 USING bitmap (id)
  public     | mpp7635_aoi_table2_1_prt_1 | mpp7635_aoi_table2_1_prt_1_id_idx |            | CREATE INDEX mpp7635_aoi_table2_1_prt_1_id_idx ON public.mpp7635_aoi_table2_1_prt_1 USING bitmap (id)
+ public     | mpp7635_aoi_table2         | mpp7635_ix3                       |            | CREATE INDEX mpp7635_ix3 ON ONLY public.mpp7635_aoi_table2 USING bitmap (id)
  public     | mpp7635_aoi_table2_1_prt_2 | mpp7635_aoi_table2_1_prt_2_id_idx |            | CREATE INDEX mpp7635_aoi_table2_1_prt_2_id_idx ON public.mpp7635_aoi_table2_1_prt_2 USING bitmap (id)
 (3 rows)
 
@@ -2277,8 +2386,8 @@ CREATE INDEX mpp7635_ix3 ON mpp7635_aoi_table2 (id);
 select * from pg_indexes where tablename like 'mpp7635%';
  schemaname |         tablename          |             indexname             | tablespace |                                               indexdef                                               
 ------------+----------------------------+-----------------------------------+------------+------------------------------------------------------------------------------------------------------
- public     | mpp7635_aoi_table2         | mpp7635_ix3                       |            | CREATE INDEX mpp7635_ix3 ON ONLY public.mpp7635_aoi_table2 USING btree (id)
  public     | mpp7635_aoi_table2_1_prt_1 | mpp7635_aoi_table2_1_prt_1_id_idx |            | CREATE INDEX mpp7635_aoi_table2_1_prt_1_id_idx ON public.mpp7635_aoi_table2_1_prt_1 USING btree (id)
+ public     | mpp7635_aoi_table2         | mpp7635_ix3                       |            | CREATE INDEX mpp7635_ix3 ON ONLY public.mpp7635_aoi_table2 USING btree (id)
  public     | mpp7635_aoi_table2_1_prt_2 | mpp7635_aoi_table2_1_prt_2_id_idx |            | CREATE INDEX mpp7635_aoi_table2_1_prt_2_id_idx ON public.mpp7635_aoi_table2_1_prt_2 USING btree (id)
 (3 rows)
 
@@ -2299,49 +2408,67 @@ insert into mpp7863 values(generate_series(301, 30300),'');
 insert into mpp7863 (id) values(generate_series(30301, 60300));
 insert into mpp7863 values(generate_series(60301, 60400),'201001');
 select count(*) from mpp7863_1_prt_extra;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  60100
 (1 row)
 
 select count(*) from mpp7863_1_prt_extra where dat is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  30000
 (1 row)
 
 select count(*) from mpp7863_1_prt_extra where dat ='';
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  30000
 (1 row)
 
 select count(*) from mpp7863;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  60400
 (1 row)
 
 alter table mpp7863 split default partition start (201001) inclusive end (201002) exclusive into (partition jan10,default partition);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_81641
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from mpp7863_1_prt_extra where dat is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  30000
 (1 row)
 
 select count(*) from mpp7863_1_prt_extra where dat ='';
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  30000
 (1 row)
 
 select count(*) from mpp7863_1_prt_extra;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
  60000
 (1 row)
 
 select dat, count(*) from mpp7863 group by 1 order by 2,1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7863
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    dat    | count 
 ----------+-------
  200910   |   100
@@ -2381,8 +2508,12 @@ INSERT INTO users_test VALUES(3, 'C', 'C@abc.com', '1990-01-01', '2021-01-01 12:
 -- New partition arrives late
 ALTER TABLE users_test SPLIT DEFAULT PARTITION START ('2020-01-01'::TIMESTAMP) END ('2021-01-01'::TIMESTAMP)
  INTO (PARTITION p2020, DEFAULT PARTITION);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_82140
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- Expect A
 SELECT user_name FROM users_test_1_prt_p2019;
+NOTICE:  One or more columns in the following table(s) do not have statistics: users_test_1_prt_p2019
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  user_name 
 -----------
  A
@@ -2390,6 +2521,8 @@ SELECT user_name FROM users_test_1_prt_p2019;
 
 -- Expect B
 SELECT user_name FROM users_test_1_prt_p2020;
+NOTICE:  One or more columns in the following table(s) do not have statistics: users_test_1_prt_p2020
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  user_name 
 -----------
  B
@@ -2397,6 +2530,8 @@ SELECT user_name FROM users_test_1_prt_p2020;
 
 -- Expect C
 SELECT user_name FROM users_test_1_prt_extra;
+NOTICE:  One or more columns in the following table(s) do not have statistics: users_test_1_prt_extra
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  user_name 
 -----------
  C
@@ -2411,7 +2546,7 @@ PARTITION BY list (b)
  PARTITION t2 values (2));
 -- the following statement should fail because index cols does not contain part key
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(a);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "t_idx_col_contain_partkey" lacks column "b" which is part of the partition key.
 -- the following statement should work
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(a, b);
@@ -2443,7 +2578,7 @@ SUBPARTITION BY LIST (r_name) SUBPARTITION TEMPLATE
 );
 -- should fail, must contain all the partition keys of all levels
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(r_regionkey);
-ERROR:  insufficient columns in UNIQUE constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  UNIQUE constraint on table "t_idx_col_contain_partkey_1_prt_region1" lacks column "r_name" which is part of the partition key.
 -- should work
 CREATE UNIQUE INDEX uidx_t_idx_col_contain_partkey on t_idx_col_contain_partkey(r_regionkey, r_name);
@@ -2511,12 +2646,14 @@ CREATE TABLE end_inclusive_bigint (a int, b bigint)
         DEFAULT PARTITION other
         );
 ALTER TABLE end_inclusive_bigint SPLIT DEFAULT PARTITION START (7) END (10) INCLUSIVE INTO (PARTITION p7, DEFAULT PARTITION);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_82855
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 \d+ end_inclusive_bigint
-                     Partitioned table "public.end_inclusive_bigint"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | bigint  |           |          |         | plain   |              | 
+                            Partitioned table "public.end_inclusive_bigint"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | bigint  |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_bigint_1_prt_p1 FOR VALUES FROM ('1') TO ('4'),
             end_inclusive_bigint_1_prt_p20 FOR VALUES FROM ('20') TO ('9223372036854775805'),
@@ -2530,11 +2667,11 @@ ALTER TABLE end_inclusive_bigint DROP PARTITION pmax_create_1;
 ALTER TABLE end_inclusive_bigint DROP PARTITION pmax_create_2;
 ALTER TABLE end_inclusive_bigint ADD PARTITION pmax_add START (9223372036854775805) END (9223372036854775807) INCLUSIVE;
 \d+ end_inclusive_bigint
-                     Partitioned table "public.end_inclusive_bigint"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | bigint  |           |          |         | plain   |              | 
+                            Partitioned table "public.end_inclusive_bigint"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | bigint  |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_bigint_1_prt_p1 FOR VALUES FROM ('1') TO ('4'),
             end_inclusive_bigint_1_prt_p20 FOR VALUES FROM ('20') TO ('9223372036854775805'),
@@ -2545,12 +2682,14 @@ Distributed by: (a)
 
 ALTER TABLE end_inclusive_bigint DROP PARTITION pmax_add;
 ALTER TABLE end_inclusive_bigint SPLIT DEFAULT PARTITION START (9223372036854775805) END (9223372036854775807) INCLUSIVE INTO (PARTITION pmax_split, DEFAULT PARTITION);
+NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_82922
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 \d+ end_inclusive_bigint
-                     Partitioned table "public.end_inclusive_bigint"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | bigint  |           |          |         | plain   |              | 
+                            Partitioned table "public.end_inclusive_bigint"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | bigint  |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_bigint_1_prt_p1 FOR VALUES FROM ('1') TO ('4'),
             end_inclusive_bigint_1_prt_p20 FOR VALUES FROM ('20') TO ('9223372036854775805'),
@@ -2568,11 +2707,11 @@ CREATE TABLE end_inclusive_int (a int, b int)
         PARTITION pmax END (2147483647) INCLUSIVE
         );
 \d+ end_inclusive_int
-                       Partitioned table "public.end_inclusive_int"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                              Partitioned table "public.end_inclusive_int"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_int_1_prt_p1 FOR VALUES FROM (MINVALUE) TO (4),
             end_inclusive_int_1_prt_pmax FOR VALUES FROM (4) TO (MAXVALUE)
@@ -2587,11 +2726,11 @@ CREATE TABLE end_inclusive_smallint (a int, b smallint)
         PARTITION pmax START (4) END (32767) INCLUSIVE
         );
 \d+ end_inclusive_smallint
-                     Partitioned table "public.end_inclusive_smallint"
- Column |   Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+----------+-----------+----------+---------+---------+--------------+-------------
- a      | integer  |           |          |         | plain   |              | 
- b      | smallint |           |          |         | plain   |              | 
+                            Partitioned table "public.end_inclusive_smallint"
+ Column |   Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+----------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer  |           |          |         | plain   |             |              | 
+ b      | smallint |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_smallint_1_prt_p1 FOR VALUES FROM ('1') TO ('4'),
             end_inclusive_smallint_1_prt_pmax FOR VALUES FROM ('4') TO (MAXVALUE)
@@ -2606,11 +2745,11 @@ CREATE TABLE end_inclusive_date (a int, b date)
         PARTITION pmax START ('2020-06-18') END ('infinity') INCLUSIVE
         );
 \d+ end_inclusive_date
-                      Partitioned table "public.end_inclusive_date"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | date    |           |          |         | plain   |              | 
+                             Partitioned table "public.end_inclusive_date"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | date    |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_date_1_prt_p1 FOR VALUES FROM ('06-16-2020') TO ('06-18-2020'),
             end_inclusive_date_1_prt_pmax FOR VALUES FROM ('06-18-2020') TO (MAXVALUE)
@@ -2625,11 +2764,11 @@ CREATE TABLE end_inclusive_time (a int, b time)
         PARTITION pmax START ('23:00:00') END ('24:00:00') INCLUSIVE
         );
 \d+ end_inclusive_time
-                              Partitioned table "public.end_inclusive_time"
- Column |          Type          | Collation | Nullable | Default | Storage | Stats target | Description 
---------+------------------------+-----------+----------+---------+---------+--------------+-------------
- a      | integer                |           |          |         | plain   |              | 
- b      | time without time zone |           |          |         | plain   |              | 
+                                     Partitioned table "public.end_inclusive_time"
+ Column |          Type          | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+------------------------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer                |           |          |         | plain   |             |              | 
+ b      | time without time zone |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_time_1_prt_p1 FOR VALUES FROM ('00:00:00.000001') TO ('01:00:00.000001'),
             end_inclusive_time_1_prt_pmax FOR VALUES FROM ('23:00:00') TO (MAXVALUE)
@@ -2644,11 +2783,11 @@ CREATE TABLE end_inclusive_timetz (a int, b time with time zone)
         PARTITION pmax START ('23:00:00 EST') END ('24:00:00 PST') INCLUSIVE
         );
 \d+ end_inclusive_timetz
-                           Partitioned table "public.end_inclusive_timetz"
- Column |        Type         | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------------------+-----------+----------+---------+---------+--------------+-------------
- a      | integer             |           |          |         | plain   |              | 
- b      | time with time zone |           |          |         | plain   |              | 
+                                  Partitioned table "public.end_inclusive_timetz"
+ Column |        Type         | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------------------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer             |           |          |         | plain   |             |              | 
+ b      | time with time zone |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_timetz_1_prt_p1 FOR VALUES FROM ('00:00:00-05') TO ('01:00:00.000001-08'),
             end_inclusive_timetz_1_prt_pmax FOR VALUES FROM ('23:00:00-05') TO (MAXVALUE)
@@ -2663,11 +2802,11 @@ CREATE TABLE end_inclusive_timestamp (a int, b timestamp)
         PARTITION pmax START ('2020-06-16 23:00:00') END ('infinity') INCLUSIVE
         );
 \d+ end_inclusive_timestamp
-                              Partitioned table "public.end_inclusive_timestamp"
- Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Description 
---------+-----------------------------+-----------+----------+---------+---------+--------------+-------------
- a      | integer                     |           |          |         | plain   |              | 
- b      | timestamp without time zone |           |          |         | plain   |              | 
+                                     Partitioned table "public.end_inclusive_timestamp"
+ Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer                     |           |          |         | plain   |             |              | 
+ b      | timestamp without time zone |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_timestamp_1_prt_p1 FOR VALUES FROM ('Tue Jun 16 00:00:00 2020') TO ('Tue Jun 16 01:00:00.000001 2020'),
             end_inclusive_timestamp_1_prt_pmax FOR VALUES FROM ('Tue Jun 16 23:00:00 2020') TO (MAXVALUE)
@@ -2682,11 +2821,11 @@ CREATE TABLE end_inclusive_timestamptz (a int, b timestamp with time zone)
         PARTITION pmax START ('2020-06-16 23:00:00 EST') END ('infinity') INCLUSIVE
         );
 \d+ end_inclusive_timestamptz
-                           Partitioned table "public.end_inclusive_timestamptz"
- Column |           Type           | Collation | Nullable | Default | Storage | Stats target | Description 
---------+--------------------------+-----------+----------+---------+---------+--------------+-------------
- a      | integer                  |           |          |         | plain   |              | 
- b      | timestamp with time zone |           |          |         | plain   |              | 
+                                  Partitioned table "public.end_inclusive_timestamptz"
+ Column |           Type           | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+--------------------------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer                  |           |          |         | plain   |             |              | 
+ b      | timestamp with time zone |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_timestamptz_1_prt_p1 FOR VALUES FROM ('Tue Jun 16 01:00:00 2020 PDT') TO ('Tue Jun 16 02:00:00.000001 2020 PDT'),
             end_inclusive_timestamptz_1_prt_pmax FOR VALUES FROM ('Tue Jun 16 21:00:00 2020 PDT') TO (MAXVALUE)
@@ -2700,11 +2839,11 @@ CREATE TABLE end_inclusive_interval (a int, b interval)
         PARTITION p1 START ('1 year') END ('2 years') INCLUSIVE
         );
 \d+ end_inclusive_interval
-                     Partitioned table "public.end_inclusive_interval"
- Column |   Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+----------+-----------+----------+---------+---------+--------------+-------------
- a      | integer  |           |          |         | plain   |              | 
- b      | interval |           |          |         | plain   |              | 
+                            Partitioned table "public.end_inclusive_interval"
+ Column |   Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+----------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer  |           |          |         | plain   |             |              | 
+ b      | interval |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_interval_1_prt_p1 FOR VALUES FROM ('@ 1 year') TO ('@ 2 years 0.000001 secs')
 Distributed by: (a)
@@ -2720,11 +2859,11 @@ CREATE TABLE end_inclusive_int (a int, b int)
         PARTITION p2 START (2) END (5) INCLUSIVE
         );
 \d+ end_inclusive_int
-                       Partitioned table "public.end_inclusive_int"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                              Partitioned table "public.end_inclusive_int"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_int_1_prt_p1 FOR VALUES FROM (1) TO (2),
             end_inclusive_int_1_prt_p2 FOR VALUES FROM (2) TO (6),
@@ -2741,11 +2880,11 @@ CREATE TABLE end_inclusive_int (a int, b int)
         PARTITION p2 START (2) END (5) INCLUSIVE
         );
 \d+ end_inclusive_int
-                       Partitioned table "public.end_inclusive_int"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | integer |           |          |         | plain   |              | 
+                              Partitioned table "public.end_inclusive_int"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer |           |          |         | plain   |             |              | 
+ b      | integer |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: end_inclusive_int_1_prt_p1 FOR VALUES FROM (1) TO (2),
             end_inclusive_int_1_prt_p2 FOR VALUES FROM (2) TO (6),
@@ -2779,11 +2918,11 @@ CREATE TABLE start_exclusive_smallint (a int, b smallint)
         PARTITION pmax START (4) EXCLUSIVE
         );
 \d+ start_exclusive_smallint
-                    Partitioned table "public.start_exclusive_smallint"
- Column |   Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+----------+-----------+----------+---------+---------+--------------+-------------
- a      | integer  |           |          |         | plain   |              | 
- b      | smallint |           |          |         | plain   |              | 
+                           Partitioned table "public.start_exclusive_smallint"
+ Column |   Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+----------+-----------+----------+---------+---------+-------------+--------------+-------------
+ a      | integer  |           |          |         | plain   |             |              | 
+ b      | smallint |           |          |         | plain   |             |              | 
 Partition key: RANGE (b)
 Partitions: start_exclusive_smallint_1_prt_p1 FOR VALUES FROM ('1') TO ('4'),
             start_exclusive_smallint_1_prt_pmax FOR VALUES FROM ('5') TO (MAXVALUE)
@@ -2814,10 +2953,10 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO exchange_tbl VALUES (100);
 ALTER TABLE validation_syntax_tbl EXCHANGE PARTITION p1 WITH TABLE exchange_tbl WITH VALIDATION;
 NOTICE:  specifying "WITH VALIDATION" acts as no operation. If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 127.0.0.1:40002 pid=26267)
+ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 172.17.0.3:7004 pid=881405)
 ALTER TABLE validation_syntax_tbl EXCHANGE PARTITION p1 WITH TABLE exchange_tbl WITHOUT VALIDATION;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation. If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 127.0.0.1:40002 pid=26267)
+ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 172.17.0.3:7004 pid=881405)
 DROP TABLE exchange_tbl;
 DROP TABLE validation_syntax_tbl;
 --

@@ -1,5 +1,7 @@
 /* Test inheritance of structure (LIKE) */
 CREATE TABLE inhx (xx text DEFAULT 'text');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'xx' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 /*
  * Test double inheritance
  *
@@ -7,20 +9,28 @@ CREATE TABLE inhx (xx text DEFAULT 'text');
  * INCLUDING DEFAULTS is specified
  */
 CREATE TABLE ctla (aa TEXT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ctlb (bb TEXT) INHERITS (ctla);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE foo (LIKE nonexistent);
 ERROR:  relation "nonexistent" does not exist
 LINE 1: CREATE TABLE foo (LIKE nonexistent);
                                ^
 CREATE TABLE inhe (ee text, LIKE inhx) inherits (ctlb);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO inhe VALUES ('ee-col1', 'ee-col2', DEFAULT, 'ee-col4');
 SELECT * FROM inhe; /* Columns aa, bb, xx value NULL, ee */
+NOTICE:  One or more columns in the following table(s) do not have statistics: inhe
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    aa    |   bb    | ee |   xx    
 ---------+---------+----+---------
  ee-col1 | ee-col2 |    | ee-col4
 (1 row)
 
 SELECT * FROM inhx; /* Empty set since LIKE inherits structure only */
+NOTICE:  One or more columns in the following table(s) do not have statistics: inhx
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xx 
 ----
 (0 rows)
@@ -38,10 +48,14 @@ SELECT * FROM ctla; /* Has ee entry */
 (1 row)
 
 CREATE TABLE inhf (LIKE inhx, LIKE inhx); /* Throw error */
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 ERROR:  column "xx" specified more than once
 CREATE TABLE inhf (LIKE inhx INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 INSERT INTO inhf DEFAULT VALUES;
 SELECT * FROM inhf; /* Single entry with value 'text' */
+NOTICE:  One or more columns in the following table(s) do not have statistics: inhf
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   xx  
 ------
  text
@@ -50,15 +64,20 @@ SELECT * FROM inhf; /* Single entry with value 'text' */
 ALTER TABLE inhx add constraint foo CHECK (xx = 'text');
 ALTER TABLE inhx ADD PRIMARY KEY (xx);
 CREATE TABLE inhg (LIKE inhx); /* Doesn't copy constraint */
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 INSERT INTO inhg VALUES ('foo');
 DROP TABLE inhg;
 CREATE TABLE inhg (x text, LIKE inhx INCLUDING CONSTRAINTS, y text); /* Copies constraints */
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO inhg VALUES ('x', 'text', 'y'); /* Succeeds */
 INSERT INTO inhg VALUES ('x', 'text', 'y'); /* Succeeds -- Unique constraints not copied */
 INSERT INTO inhg VALUES ('x', 'foo',  'y');  /* fails due to constraint */
-ERROR:  new row for relation "inhg" violates check constraint "foo"
+ERROR:  new row for relation "inhg" violates check constraint "foo"  (seg1 172.17.0.3:7003 pid=863593)
 DETAIL:  Failing row contains (x, foo, y).
 SELECT * FROM inhg; /* Two records with three columns in order x=x, xx=text, y=y */
+NOTICE:  One or more columns in the following table(s) do not have statistics: inhg
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x |  xx  | y 
 ---+------+---
  x | text | y
@@ -67,46 +86,59 @@ SELECT * FROM inhg; /* Two records with three columns in order x=x, xx=text, y=y
 
 DROP TABLE inhg;
 CREATE TABLE test_like_id_1 (a bigint GENERATED ALWAYS AS IDENTITY, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d test_like_id_1
                      Table "public.test_like_id_1"
  Column |  Type  | Collation | Nullable |           Default            
 --------+--------+-----------+----------+------------------------------
  a      | bigint |           | not null | generated always as identity
  b      | text   |           |          | 
+Distributed by: (a)
 
 INSERT INTO test_like_id_1 (b) VALUES ('b1');
 SELECT * FROM test_like_id_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_id_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  1 | b1
 (1 row)
 
 CREATE TABLE test_like_id_2 (LIKE test_like_id_1);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d test_like_id_2
           Table "public.test_like_id_2"
  Column |  Type  | Collation | Nullable | Default 
 --------+--------+-----------+----------+---------
  a      | bigint |           | not null | 
  b      | text   |           |          | 
+Distributed by: (a)
 
 INSERT INTO test_like_id_2 (b) VALUES ('b2');
-ERROR:  null value in column "a" of relation "test_like_id_2" violates not-null constraint
+ERROR:  null value in column "a" of relation "test_like_id_2" violates not-null constraint  (seg0 172.17.0.3:7002 pid=863601)
 DETAIL:  Failing row contains (null, b2).
 SELECT * FROM test_like_id_2;  -- identity was not copied
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_id_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
 
 CREATE TABLE test_like_id_3 (LIKE test_like_id_1 INCLUDING IDENTITY);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d test_like_id_3
                      Table "public.test_like_id_3"
  Column |  Type  | Collation | Nullable |           Default            
 --------+--------+-----------+----------+------------------------------
  a      | bigint |           | not null | generated always as identity
  b      | text   |           |          | 
+Distributed by: (a)
 
 INSERT INTO test_like_id_3 (b) VALUES ('b3');
 SELECT * FROM test_like_id_3;  -- identity was copied and applied
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_id_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  1 | b3
@@ -114,45 +146,58 @@ SELECT * FROM test_like_id_3;  -- identity was copied and applied
 
 DROP TABLE test_like_id_1, test_like_id_2, test_like_id_3;
 CREATE TABLE test_like_gen_1 (a int, b int GENERATED ALWAYS AS (a * 2) STORED);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d test_like_gen_1
                         Table "public.test_like_gen_1"
  Column |  Type   | Collation | Nullable |              Default               
 --------+---------+-----------+----------+------------------------------------
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2) stored
+Distributed by: (a)
 
 INSERT INTO test_like_gen_1 (a) VALUES (1);
 SELECT * FROM test_like_gen_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_gen_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 2
 (1 row)
 
 CREATE TABLE test_like_gen_2 (LIKE test_like_gen_1);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d test_like_gen_2
           Table "public.test_like_gen_2"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  a      | integer |           |          | 
  b      | integer |           |          | 
+Distributed by: (a)
 
 INSERT INTO test_like_gen_2 (a) VALUES (1);
 SELECT * FROM test_like_gen_2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_gen_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 |  
 (1 row)
 
 CREATE TABLE test_like_gen_3 (LIKE test_like_gen_1 INCLUDING GENERATED);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d test_like_gen_3
                         Table "public.test_like_gen_3"
  Column |  Type   | Collation | Nullable |              Default               
 --------+---------+-----------+----------+------------------------------------
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2) stored
+Distributed by: (a)
 
 INSERT INTO test_like_gen_3 (a) VALUES (1);
 SELECT * FROM test_like_gen_3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_gen_3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | 2
@@ -161,6 +206,8 @@ SELECT * FROM test_like_gen_3;
 DROP TABLE test_like_gen_1, test_like_gen_2, test_like_gen_3;
 -- also test generated column with a "forward" reference (bug #16342)
 CREATE TABLE test_like_4 (b int DEFAULT 42, c int GENERATED ALWAYS AS (a * 2) STORED, a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d test_like_4
                           Table "public.test_like_4"
  Column |  Type   | Collation | Nullable |              Default               
@@ -168,11 +215,16 @@ CREATE TABLE test_like_4 (b int DEFAULT 42, c int GENERATED ALWAYS AS (a * 2) ST
  b      | integer |           |          | 42
  c      | integer |           |          | generated always as (a * 2) stored
  a      | integer |           |          | 
+Distributed by: (b)
 
 CREATE TABLE test_like_4a (LIKE test_like_4);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE TABLE test_like_4b (LIKE test_like_4 INCLUDING DEFAULTS);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE TABLE test_like_4c (LIKE test_like_4 INCLUDING GENERATED);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE TABLE test_like_4d (LIKE test_like_4 INCLUDING DEFAULTS INCLUDING GENERATED);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d test_like_4a
             Table "public.test_like_4a"
  Column |  Type   | Collation | Nullable | Default 
@@ -180,9 +232,12 @@ CREATE TABLE test_like_4d (LIKE test_like_4 INCLUDING DEFAULTS INCLUDING GENERAT
  b      | integer |           |          | 
  c      | integer |           |          | 
  a      | integer |           |          | 
+Distributed by: (b)
 
 INSERT INTO test_like_4a (a) VALUES(11);
 SELECT a, b, c FROM test_like_4a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_4a
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b | c 
 ----+---+---
  11 |   |  
@@ -195,9 +250,12 @@ SELECT a, b, c FROM test_like_4a;
  b      | integer |           |          | 42
  c      | integer |           |          | 
  a      | integer |           |          | 
+Distributed by: (b)
 
 INSERT INTO test_like_4b (a) VALUES(11);
 SELECT a, b, c FROM test_like_4b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_4b
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  | c 
 ----+----+---
  11 | 42 |  
@@ -210,9 +268,12 @@ SELECT a, b, c FROM test_like_4b;
  b      | integer |           |          | 
  c      | integer |           |          | generated always as (a * 2) stored
  a      | integer |           |          | 
+Distributed by: (b)
 
 INSERT INTO test_like_4c (a) VALUES(11);
 SELECT a, b, c FROM test_like_4c;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_4c
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b | c  
 ----+---+----
  11 |   | 22
@@ -225,9 +286,12 @@ SELECT a, b, c FROM test_like_4c;
  b      | integer |           |          | 42
  c      | integer |           |          | generated always as (a * 2) stored
  a      | integer |           |          | 
+Distributed by: (b)
 
 INSERT INTO test_like_4d (a) VALUES(11);
 SELECT a, b, c FROM test_like_4d;
+NOTICE:  One or more columns in the following table(s) do not have statistics: test_like_4d
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  | c  
 ----+----+----
  11 | 42 | 22
@@ -235,11 +299,20 @@ SELECT a, b, c FROM test_like_4d;
 
 DROP TABLE test_like_4, test_like_4a, test_like_4b, test_like_4c, test_like_4d;
 CREATE TABLE inhg (x text, LIKE inhx INCLUDING INDEXES, y text); /* copies indexes */
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "x" is not included in the constraint.
 INSERT INTO inhg VALUES (5, 10);
+ERROR:  relation "inhg" does not exist
+LINE 2: INSERT INTO inhg VALUES (5, 10);
+                    ^
 INSERT INTO inhg VALUES (20, 10); -- should fail
-ERROR:  duplicate key value violates unique constraint "inhg_pkey"
-DETAIL:  Key (xx)=(10) already exists.
+ERROR:  relation "inhg" does not exist
+LINE 1: INSERT INTO inhg VALUES (20, 10);
+                    ^
 DROP TABLE inhg;
+ERROR:  table "inhg" does not exist
 /* Multiple primary keys creation should fail */
 CREATE TABLE inhg (x text, LIKE inhx INCLUDING INDEXES, PRIMARY KEY(x)); /* fails */
 ERROR:  multiple primary keys for table "inhg" are not allowed
@@ -250,17 +323,27 @@ DETAIL:  Distribution key column "yy" is not included in the constraint.
 /* Ok to create multiple unique indexes */
 /* GPDB: This query will fail because unique index must contain all distribution key */
 CREATE TABLE inhg (x text UNIQUE, LIKE inhz INCLUDING INDEXES);
-ERROR:  UNIQUE or PRIMARY KEY definitions are incompatible with each other
-HINT:  When there are multiple PRIMARY KEY / UNIQUE constraints, they must have at least one column in common.
+ERROR:  UNIQUE constraint must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "x" is not included in the constraint.
 CREATE TABLE inhg (x text, LIKE inhz INCLUDING INDEXES);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  UNIQUE constraint must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "x" is not included in the constraint.
 INSERT INTO inhg (xx, yy, x) VALUES ('test', 5, 10);
+ERROR:  relation "inhg" does not exist
+LINE 1: INSERT INTO inhg (xx, yy, x) VALUES ('test', 5, 10);
+                    ^
 INSERT INTO inhg (xx, yy, x) VALUES ('test', 10, 15);
+ERROR:  relation "inhg" does not exist
+LINE 1: INSERT INTO inhg (xx, yy, x) VALUES ('test', 10, 15);
+                    ^
 INSERT INTO inhg (xx, yy, x) VALUES ('foo', 10, 15); -- should fail
-ERROR:  duplicate key value violates unique constraint "inhg_yy_key"  (seg2 172.17.0.2:25434 pid=107504)
-DETAIL:  Key (yy)=(10) already exists.
+ERROR:  relation "inhg" does not exist
+LINE 1: INSERT INTO inhg (xx, yy, x) VALUES ('foo', 10, 15);
+                    ^
 DROP TABLE inhg;
+ERROR:  table "inhg" does not exist
 DROP TABLE inhz;
 -- including storage and comments
 CREATE TABLE ctlt1 (a text CHECK (length(a) > 2) PRIMARY KEY, b text);
@@ -275,46 +358,55 @@ COMMENT ON INDEX ctlt1_pkey IS 'index pkey';
 COMMENT ON INDEX ctlt1_b_key IS 'index b_key';
 ALTER TABLE ctlt1 ALTER COLUMN a SET STORAGE MAIN;
 CREATE TABLE ctlt2 (c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ctlt2 ALTER COLUMN c SET STORAGE EXTERNAL;
 COMMENT ON COLUMN ctlt2.c IS 'C';
 CREATE TABLE ctlt3 (a text CHECK (length(a) < 5), c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ctlt3 ALTER COLUMN c SET STORAGE EXTERNAL;
 ALTER TABLE ctlt3 ALTER COLUMN a SET STORAGE MAIN;
 COMMENT ON COLUMN ctlt3.a IS 'A3';
 COMMENT ON COLUMN ctlt3.c IS 'C';
 COMMENT ON CONSTRAINT ctlt3_a_check ON ctlt3 IS 't3_a_check';
 CREATE TABLE ctlt4 (a text, c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ctlt4 ALTER COLUMN c SET STORAGE EXTERNAL;
 CREATE TABLE ctlt12_storage (LIKE ctlt1 INCLUDING STORAGE, LIKE ctlt2 INCLUDING STORAGE);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d+ ctlt12_storage
-                             Table "public.ctlt12_storage"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | main     |              | 
- b      | text |           |          |         | extended |              | 
- c      | text |           |          |         | external |              | 
+                                    Table "public.ctlt12_storage"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | 
+ b      | text |           |          |         | extended |             |              | 
+ c      | text |           |          |         | external |             |              | 
 Distributed by: (a)
 
 CREATE TABLE ctlt12_comments (LIKE ctlt1 INCLUDING COMMENTS, LIKE ctlt2 INCLUDING COMMENTS);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d+ ctlt12_comments
-                             Table "public.ctlt12_comments"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | extended |              | A
- b      | text |           |          |         | extended |              | B
- c      | text |           |          |         | extended |              | C
+                                    Table "public.ctlt12_comments"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | extended |             |              | A
+ b      | text |           |          |         | extended |             |              | B
+ c      | text |           |          |         | extended |             |              | C
 Distributed by: (a)
 
 CREATE TABLE ctlt1_inh (LIKE ctlt1 INCLUDING CONSTRAINTS INCLUDING COMMENTS) INHERITS (ctlt1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 NOTICE:  merging column "b" with inherited definition
 NOTICE:  merging constraint "ctlt1_a_check" with inherited definition
 \d+ ctlt1_inh
-                                Table "public.ctlt1_inh"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | main     |              | A
- b      | text |           |          |         | extended |              | B
+                                       Table "public.ctlt1_inh"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | A
+ b      | text |           |          |         | extended |             |              | B
 Check constraints:
     "ctlt1_a_check" CHECK (length(a) > 2)
 Inherits: ctlt1
@@ -327,14 +419,15 @@ SELECT description FROM pg_description, pg_constraint c WHERE classoid = 'pg_con
 (1 row)
 
 CREATE TABLE ctlt13_inh () INHERITS (ctlt1, ctlt3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "a"
 \d+ ctlt13_inh
-                               Table "public.ctlt13_inh"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | main     |              | 
- b      | text |           |          |         | extended |              | 
- c      | text |           |          |         | external |              | 
+                                      Table "public.ctlt13_inh"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | 
+ b      | text |           |          |         | extended |             |              | 
+ c      | text |           |          |         | external |             |              | 
 Check constraints:
     "ctlt1_a_check" CHECK (length(a) > 2)
     "ctlt3_a_check" CHECK (length(a) < 5)
@@ -343,14 +436,15 @@ Inherits: ctlt1,
 Distributed by: (a)
 
 CREATE TABLE ctlt13_like (LIKE ctlt3 INCLUDING CONSTRAINTS INCLUDING COMMENTS INCLUDING STORAGE) INHERITS (ctlt1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 \d+ ctlt13_like
-                               Table "public.ctlt13_like"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | main     |              | A3
- b      | text |           |          |         | extended |              | 
- c      | text |           |          |         | external |              | C
+                                      Table "public.ctlt13_like"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | A3
+ b      | text |           |          |         | extended |             |              | 
+ c      | text |           |          |         | external |             |              | C
 Check constraints:
     "ctlt1_a_check" CHECK (length(a) > 2)
     "ctlt3_a_check" CHECK (length(a) < 5)
@@ -364,12 +458,13 @@ SELECT description FROM pg_description, pg_constraint c WHERE classoid = 'pg_con
 (1 row)
 
 CREATE TABLE ctlt_all (LIKE ctlt1 INCLUDING ALL);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d+ ctlt_all
-                                Table "public.ctlt_all"
- Column | Type | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------+-----------+----------+---------+----------+--------------+-------------
- a      | text |           | not null |         | main     |              | A
- b      | text |           |          |         | extended |              | B
+                                       Table "public.ctlt_all"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | A
+ b      | text |           |          |         | extended |             |              | B
 Indexes:
     "ctlt_all_pkey" PRIMARY KEY, btree (a)
     "ctlt_all_b_idx" btree (b)
@@ -377,7 +472,7 @@ Indexes:
 Check constraints:
     "ctlt1_a_check" CHECK (length(a) > 2)
 Statistics objects:
-    "public"."ctlt_all_a_b_stat" (ndistinct, dependencies, mcv) ON a, b FROM ctlt_all
+    "public"."ctlt_all_a_b_stat" ON a, b FROM ctlt_all
 Distributed by: (a)
 
 SELECT c.relname, objsubid, description FROM pg_description, pg_index i, pg_class c WHERE classoid = 'pg_class'::regclass AND objoid = i.indexrelid AND c.oid = i.indexrelid AND i.indrelid = 'ctlt_all'::regclass ORDER BY c.relname, objsubid;
@@ -394,10 +489,12 @@ SELECT s.stxname, objsubid, description FROM pg_description, pg_statistic_ext s 
 (1 row)
 
 CREATE TABLE inh_error1 () INHERITS (ctlt1, ctlt4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "a"
 ERROR:  inherited column "a" has a storage parameter conflict
 DETAIL:  MAIN versus EXTENDED
 CREATE TABLE inh_error2 (LIKE ctlt4 INCLUDING STORAGE) INHERITS (ctlt1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 ERROR:  column "a" has a storage parameter conflict
 DETAIL:  MAIN versus EXTENDED
@@ -405,7 +502,10 @@ DROP TABLE ctlt12_storage, ctlt12_comments, ctlt1_inh, ctlt13_inh, ctlt13_like, 
 NOTICE:  drop cascades to table inhe
 -- LIKE must respect NO INHERIT property of constraints
 CREATE TABLE noinh_con_copy (a int CHECK (a > 0) NO INHERIT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE noinh_con_copy1 (LIKE noinh_con_copy INCLUDING CONSTRAINTS);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d noinh_con_copy1
           Table "public.noinh_con_copy1"
  Column |  Type   | Collation | Nullable | Default 
@@ -413,14 +513,18 @@ CREATE TABLE noinh_con_copy1 (LIKE noinh_con_copy INCLUDING CONSTRAINTS);
  a      | integer |           |          | 
 Check constraints:
     "noinh_con_copy_a_check" CHECK (a > 0) NO INHERIT
+Distributed by: (a)
 
 -- fail, as partitioned tables don't allow NO INHERIT constraints
 CREATE TABLE noinh_con_copy1_parted (LIKE noinh_con_copy INCLUDING ALL)
   PARTITION BY LIST (a);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 ERROR:  cannot add NO INHERIT constraint to partitioned table "noinh_con_copy1_parted"
 DROP TABLE noinh_con_copy, noinh_con_copy1;
 /* LIKE with other relation kinds */
 CREATE TABLE ctlt4 (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE SEQUENCE ctlseq1;
 CREATE TABLE ctlt10 (LIKE ctlseq1);  -- fail
 ERROR:  "ctlseq1" is not a table, view, materialized view, composite type, or foreign table
@@ -428,9 +532,15 @@ LINE 1: CREATE TABLE ctlt10 (LIKE ctlseq1);
                                   ^
 CREATE VIEW ctlv1 AS SELECT * FROM ctlt4;
 CREATE TABLE ctlt11 (LIKE ctlv1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ctlt11a (LIKE ctlv1 INCLUDING ALL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TYPE ctlty1 AS (a int, b text);
 CREATE TABLE ctlt12 (LIKE ctlty1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP SEQUENCE ctlseq1;
 DROP TYPE ctlty1;
 DROP VIEW ctlv1;

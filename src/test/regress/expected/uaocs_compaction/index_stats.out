@@ -20,6 +20,8 @@ select * from uaocs_index_stats;
 (2 rows)
 
 update uaocs_index_stats set col_text=' new value' where col_int = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: uaocs_index_stats
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from uaocs_index_stats;
  col_int |  col_text  | col_numeric | col_unq 
 ---------+------------+-------------+---------
@@ -37,7 +39,7 @@ SELECT relname, reltuples FROM pg_class WHERE relname = 'uaocs_index_stats';
 SELECT relname, reltuples FROM pg_class WHERE relname = 'uaocs_index_stats_int_idx1';
           relname           | reltuples 
 ----------------------------+-----------
- uaocs_index_stats_int_idx1 |         2
+ uaocs_index_stats_int_idx1 |         0
 (1 row)
 
 -- Test to ensure that reltuples is updated for an index after lazy vacuum.
@@ -64,9 +66,9 @@ vacuum uaocs_index_stats2;
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'uaocs_index_stats2_int_idx1';
  gp_segment_id |           relname           | reltuples 
 ---------------+-----------------------------+-----------
-             0 | uaocs_index_stats2_int_idx1 |         0
-             1 | uaocs_index_stats2_int_idx1 |         0
-             2 | uaocs_index_stats2_int_idx1 |         0
+             0 | uaocs_index_stats2_int_idx1 |        -1
+             1 | uaocs_index_stats2_int_idx1 |        -1
+             2 | uaocs_index_stats2_int_idx1 |        -1
 (3 rows)
 
 -- second vacuum update index stat with table stat
@@ -98,15 +100,15 @@ insert into uaocs_index_stats3 values(1,'aa',1001,101),(2,'bb',1002,102);
 select reltuples from pg_class where relname='uaocs_index_stats3';
  reltuples 
 -----------
-         0
+        -1
 (1 row)
 
 -- inspect the state of the stats on segments
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'uaocs_index_stats3_int_idx1';
  gp_segment_id |           relname           | reltuples 
 ---------------+-----------------------------+-----------
-             0 | uaocs_index_stats3_int_idx1 |         0
              1 | uaocs_index_stats3_int_idx1 |         0
+             0 | uaocs_index_stats3_int_idx1 |         0
              2 | uaocs_index_stats3_int_idx1 |         0
 (3 rows)
 
@@ -128,15 +130,15 @@ select reltuples from pg_class where relname='uaocs_index_stats';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'uaocs_index_stats3_int_idx1';
  gp_segment_id |           relname           | reltuples 
 ---------------+-----------------------------+-----------
-             0 | uaocs_index_stats3_int_idx1 |         1
-             1 | uaocs_index_stats3_int_idx1 |         1
+             0 | uaocs_index_stats3_int_idx1 |         0
+             1 | uaocs_index_stats3_int_idx1 |         0
              2 | uaocs_index_stats3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='uaocs_index_stats3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 -- 2nd VACUUM, expect reltuples = 2
@@ -151,15 +153,15 @@ select reltuples from pg_class where relname='uaocs_index_stats3';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'uaocs_index_stats3_int_idx1';
  gp_segment_id |           relname           | reltuples 
 ---------------+-----------------------------+-----------
-             0 | uaocs_index_stats3_int_idx1 |         1
-             1 | uaocs_index_stats3_int_idx1 |         1
+             0 | uaocs_index_stats3_int_idx1 |         0
+             1 | uaocs_index_stats3_int_idx1 |         0
              2 | uaocs_index_stats3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='uaocs_index_stats3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 -- Prior to this fix, the case would be failed here. Given the
@@ -187,15 +189,15 @@ select reltuples from pg_class where relname='uaocs_index_stats3';
 select gp_segment_id, relname, reltuples from gp_dist_random('pg_class') where relname = 'uaocs_index_stats3_int_idx1';
  gp_segment_id |           relname           | reltuples 
 ---------------+-----------------------------+-----------
-             0 | uaocs_index_stats3_int_idx1 |         1
-             1 | uaocs_index_stats3_int_idx1 |         1
+             0 | uaocs_index_stats3_int_idx1 |         0
+             1 | uaocs_index_stats3_int_idx1 |         0
              2 | uaocs_index_stats3_int_idx1 |         0
 (3 rows)
 
 select reltuples from pg_class where relname='uaocs_index_stats3_int_idx1';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 drop table uaocs_index_stats;

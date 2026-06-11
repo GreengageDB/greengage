@@ -2,8 +2,14 @@
 -- TRIGGERS
 --
 create table pkeys (pkey1 int4 not null, pkey2 text not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'pkey1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table fkeys (fkey1 int4, fkey2 text, fkey3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fkey1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table fkeys2 (fkey21 int4, fkey22 text, pkey23 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fkey21' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index fkeys_i on fkeys (fkey1, fkey2);
 create index fkeys2_i on fkeys2 (fkey21, fkey22);
 create index fkeys2p_i on fkeys2 (pkey23);
@@ -63,46 +69,50 @@ create trigger check_fkeys2_fkey_restrict
 	for each row
 	execute procedure check_foreign_key (1, 'restrict', 'pkey23', 'fkeys', 'fkey3');
 insert into fkeys2 values (10, '1', 1);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.2:25433 pid=51031)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg2 172.17.0.3:7004 pid=858511)
 CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (30, '3', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg2 172.17.0.2:25434 pid=51032)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (40, '4', 5);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg2 172.17.0.2:25434 pid=51032)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (50, '5', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg0 172.17.0.2:25432 pid=51030)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 -- no key in pkeys
 insert into fkeys2 values (70, '5', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.2:25433 pid=51031)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys values (10, '1', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.2:25433 pid=51031)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg2 172.17.0.3:7004 pid=858511)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (30, '3', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg2 172.17.0.2:25434 pid=51032)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (40, '4', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg2 172.17.0.2:25434 pid=51032)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (50, '5', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.2:25432 pid=51030)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 -- no key in pkeys
 insert into fkeys values (70, '5', 1);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.2:25433 pid=51031)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 -- no key in fkeys2
 insert into fkeys values (60, '6', 4);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.2:25432 pid=51030)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 delete from pkeys where pkey1 = 30 and pkey2 = '3';
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:25434 pid=51032)
+NOTICE:  One or more columns in the following table(s) do not have statistics: pkeys
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "delete from fkeys where fkey1 = $1 and fkey2 = $2 "
 delete from pkeys where pkey1 = 40 and pkey2 = '4';
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:25434 pid=51032)
+NOTICE:  One or more columns in the following table(s) do not have statistics: pkeys
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "delete from fkeys where fkey1 = $1 and fkey2 = $2 "
 update pkeys set pkey1 = 7, pkey2 = '70' where pkey1 = 50 and pkey2 = '5';
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
@@ -133,11 +143,15 @@ DROP TABLE fkeys;
 DROP TABLE fkeys2;
 -- Check behavior when trigger returns unmodified trigtuple
 create table trigtest (f1 int, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create trigger trigger_return_old
 	before insert or delete or update on trigtest
 	for each row execute procedure trigger_return_old();
 insert into trigtest values(1, 'foo');
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | foo
@@ -145,13 +159,19 @@ select * from trigtest;
 
 update trigtest set f2 = f2 || 'bar';
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | foo
 (1 row)
 
 delete from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
 (0 rows)
@@ -164,6 +184,8 @@ create trigger trigger_alpha
 	for each row execute procedure f1_times_10();
 insert into trigtest values(1, 'foo');
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
  10 | foo
@@ -171,13 +193,19 @@ select * from trigtest;
 
 update trigtest set f2 = f2 || 'bar';
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
  10 | foo
 (1 row)
 
 delete from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
 (0 rows)
@@ -187,6 +215,8 @@ create trigger trigger_zed
 	for each row execute procedure f1_times_10();
 insert into trigtest values(1, 'foo');
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1  | f2  
 -----+-----
  100 | foo
@@ -194,13 +224,19 @@ select * from trigtest;
 
 update trigtest set f2 = f2 || 'bar';
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   f1  | f2  
 ------+-----
  1000 | foo
 (1 row)
 
 delete from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
 (0 rows)
@@ -208,6 +244,8 @@ select * from trigtest;
 drop trigger trigger_alpha on trigtest;
 insert into trigtest values(1, 'foo');
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
  10 | foo
@@ -215,13 +253,19 @@ select * from trigtest;
 
 update trigtest set f2 = f2 || 'bar';
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1  | f2  
 -----+-----
  100 | foo
 (1 row)
 
 delete from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
 (0 rows)
@@ -234,6 +278,8 @@ create table tttest (
 	price_on	int4,
 	price_off	int4 default 999999
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'price_id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create trigger ttdummy
 	before delete or update on tttest
 	for each row
@@ -248,44 +294,54 @@ insert into tttest values (1, 1, null);
 insert into tttest values (2, 2, null);
 insert into tttest values (3, 3, 0);
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        1 |         1 |       10 |    999999
         2 |         2 |       20 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 delete from tttest where price_id = 2;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:25433 pid=51031)
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "INSERT INTO tttest VALUES ($1, $2, $3, $4)"
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- what do we see ?
 -- get current prices
 select * from tttest where price_off = 999999;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- change price for price_id == 3
 update tttest set price_val = 30 where price_id = 3;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:25434 pid=51032)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "INSERT INTO tttest VALUES ($1, $2, $3, $4)"
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- now we want to change pric_id in ALL tuples
@@ -293,11 +349,13 @@ select * from tttest;
 update tttest set price_id = 5 where price_id = 3;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- restore data as before last update:
@@ -308,24 +366,30 @@ select set_ttdummy(0);
 (1 row)
 
 delete from tttest where price_id = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 update tttest set price_off = 999999 where price_val = 30;
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- and try change price_id now!
 update tttest set price_id = 5 where price_id = 3;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- isn't it what we need ?
@@ -337,7 +401,7 @@ select set_ttdummy(1);
 
 -- we want to correct some "date"
 update tttest set price_on = -1 where price_id = 1;
-ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg2 172.17.0.2:25434 pid=221098)
+ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg1 172.17.0.3:7003 pid=858537)
 -- but this doesn't work
 -- try in this way
 select set_ttdummy(0);
@@ -347,18 +411,22 @@ select set_ttdummy(0);
 (1 row)
 
 update tttest set price_on = -1 where price_id = 1;
-ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg2 172.17.0.2:25434 pid=221098)
+ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg1 172.17.0.3:7003 pid=858537)
 select * from tttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
         2 |         2 |       20 |    999999
-        1 |         1 |       10 |    999999
         3 |         3 |       30 |    999999
+        1 |         1 |       10 |    999999
 (3 rows)
 
 -- isn't it what we need ?
 -- get price for price_id == 5 as it was @ "date" 35
 select * from tttest where price_on <= 35 and price_off > 35 and price_id = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
 (0 rows)
@@ -369,6 +437,8 @@ drop sequence ttdummy_seq;
 -- tests for per-statement triggers
 --
 CREATE TABLE log_table (tstamp timestamp default timeofday()::timestamp);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tstamp' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE main_table (a int unique, b int);
 COPY main_table (a,b) FROM stdin;
 CREATE FUNCTION trigger_func() RETURNS trigger LANGUAGE plpgsql AS '
@@ -407,6 +477,8 @@ ALTER TABLE main_table DROP CONSTRAINT main_table_a_key;
 -- COPY should fire per-row and per-statement INSERT triggers
 COPY main_table (a, b) FROM stdin;
 SELECT * FROM main_table ORDER BY a, b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: main_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   5 | 10
@@ -452,15 +524,19 @@ SELECT trigger_name, event_manipulation, event_object_schema, event_object_table
 (5 rows)
 
 INSERT INTO main_table (a) VALUES (123), (456);
-NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
+NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
 COPY main_table FROM stdin;
-NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW
+NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
 DELETE FROM main_table WHERE a IN (123, 456);
-NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
+NOTICE:  One or more columns in the following table(s) do not have statistics: main_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
 UPDATE main_table SET a = 50, b = 60;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 SELECT * FROM main_table ORDER BY a, b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: main_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   5 | 10
@@ -515,6 +591,8 @@ DROP TRIGGER delete_when ON main_table;
 ERROR:  trigger "delete_when" for table "main_table" does not exist
 -- Test WHEN condition accessing system columns.
 create table table_with_oids(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into table_with_oids values (1);
 create trigger oid_unchanged_trig after update on table_with_oids
 	for each row
@@ -526,7 +604,7 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 -- try again
 alter table table_with_oids set distributed randomly;
 update table_with_oids set a = a + 1;
-NOTICE:  trigger_func(after_upd_oid_unchanged) called: action = UPDATE, when = AFTER, level = ROW
+NOTICE:  trigger_func(after_upd_oid_unchanged) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
 drop table table_with_oids;
 -- Test column-level triggers
 DROP TRIGGER after_upd_row_trig ON main_table;
@@ -551,26 +629,28 @@ SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid = 'main_table'::regc
 UPDATE main_table SET a = 50;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 UPDATE main_table SET b = 10;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:25433 pid=113597)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:25432 pid=113596)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:25434 pid=113598)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:25432 pid=113596)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:25434 pid=113598)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:25432 pid=113596)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:25434 pid=113598)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:25432 pid=113596)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:25434 pid=113598)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
 --
 -- Test case for bug with BEFORE trigger followed by AFTER trigger with WHEN
 --
 CREATE TABLE some_t (some_col boolean NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'some_col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION dummy_update_func() RETURNS trigger AS $$
 BEGIN
   RAISE NOTICE 'dummy_update_func(%) called: action = %, old = %, new = %',
@@ -666,11 +746,11 @@ create trigger trigtest_a_stmt_tg after insert or update or delete on trigtest
 for each statement execute procedure trigtest();
 ERROR:  Triggers for statements are not yet supported
 insert into trigtest default values;
-NOTICE:  trigtest INSERT BEFORE ROW  (seg2 172.17.0.2:25434 pid=113598)
-NOTICE:  trigtest INSERT AFTER ROW  (seg2 172.17.0.2:25434 pid=113598)
+NOTICE:  trigtest INSERT BEFORE ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigtest INSERT AFTER ROW  (seg1 172.17.0.3:7003 pid=858537)
 alter table trigtest disable trigger trigtest_b_row_tg;
 insert into trigtest default values;
-NOTICE:  trigtest INSERT AFTER ROW  (seg1 172.17.0.2:25433 pid=113597)
+NOTICE:  trigtest INSERT AFTER ROW  (seg0 172.17.0.3:7002 pid=858517)
 alter table trigtest disable trigger user;
 insert into trigtest default values;
 alter table trigtest enable trigger trigtest_a_stmt_tg;
@@ -685,16 +765,24 @@ reset session_replication_role;
 insert into trigtest2 values(1);
 insert into trigtest2 values(2);
 delete from trigtest where i=2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i 
 ---
- 2
  1
+ 2
 (2 rows)
 
 alter table trigtest disable trigger all;
 delete from trigtest where i=1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trigtest2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i 
 ---
  2
@@ -704,13 +792,15 @@ select * from trigtest2;
 -- ensure we still insert, even when all triggers are disabled
 insert into trigtest default values;
 select *  from trigtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i 
 ---
  3
  4
+ 7
  5
  6
- 7
 (5 rows)
 
 drop table trigtest2;
@@ -720,6 +810,8 @@ CREATE TABLE trigger_test (
         i int,
         v varchar
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE OR REPLACE FUNCTION trigger_data()  RETURNS trigger
 LANGUAGE plpgsql AS $$
 
@@ -775,42 +867,44 @@ CREATE TRIGGER show_trigger_data_trig
 BEFORE INSERT OR UPDATE OR DELETE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(23,'skidoo');
 insert into trigger_test values(1,'insert');
-NOTICE:  TG_NAME: show_trigger_data_trig
-NOTICE:  TG_WHEN: BEFORE
-NOTICE:  TG_LEVEL: ROW
-NOTICE:  TG_OP: INSERT
-NOTICE:  TG_RELID::regclass: trigger_test
-NOTICE:  TG_RELNAME: trigger_test
-NOTICE:  TG_TABLE_NAME: trigger_test
-NOTICE:  TG_TABLE_SCHEMA: public
-NOTICE:  TG_NARGS: 2
-NOTICE:  TG_ARGV: [23, skidoo]
-NOTICE:  NEW: (1,insert)
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_OP: INSERT  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  NEW: (1,insert)  (seg1 172.17.0.3:7003 pid=858537)
 update trigger_test set v = 'update' where i = 1;
-NOTICE:  TG_NAME: show_trigger_data_trig
-NOTICE:  TG_WHEN: BEFORE
-NOTICE:  TG_LEVEL: ROW
-NOTICE:  TG_OP: UPDATE
-NOTICE:  TG_RELID::regclass: trigger_test
-NOTICE:  TG_RELNAME: trigger_test
-NOTICE:  TG_TABLE_NAME: trigger_test
-NOTICE:  TG_TABLE_SCHEMA: public
-NOTICE:  TG_NARGS: 2
-NOTICE:  TG_ARGV: [23, skidoo]
-NOTICE:  OLD: (1,insert)
-NOTICE:  NEW: (1,update)
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_OP: UPDATE  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  OLD: (1,insert)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  NEW: (1,update)  (seg1 172.17.0.3:7003 pid=858537)
 delete from trigger_test;
-NOTICE:  TG_NAME: show_trigger_data_trig
-NOTICE:  TG_WHEN: BEFORE
-NOTICE:  TG_LEVEL: ROW
-NOTICE:  TG_OP: DELETE
-NOTICE:  TG_RELID::regclass: trigger_test
-NOTICE:  TG_RELNAME: trigger_test
-NOTICE:  TG_TABLE_NAME: trigger_test
-NOTICE:  TG_TABLE_SCHEMA: public
-NOTICE:  TG_NARGS: 2
-NOTICE:  TG_ARGV: [23, skidoo]
-NOTICE:  OLD: (1,update)
+NOTICE:  One or more columns in the following table(s) do not have statistics: trigger_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_OP: DELETE  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  OLD: (1,update)  (seg1 172.17.0.3:7003 pid=858537)
 DROP TRIGGER show_trigger_data_trig on trigger_test;
 DROP FUNCTION trigger_data();
 DROP TABLE trigger_test;
@@ -836,15 +930,15 @@ FOR EACH ROW EXECUTE PROCEDURE mytrigger();
 INSERT INTO trigger_test VALUES(0, 1, 'foo', 'bar');
 INSERT INTO trigger_test VALUES(0, 2, 'baz', 'quux');
 UPDATE trigger_test SET f3 = 'bar';
-NOTICE:  row 1 not changed
-NOTICE:  row 2 changed
+NOTICE:  row 1 not changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 changed  (seg1 172.17.0.3:7003 pid=858537)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed
-NOTICE:  row 2 changed
+NOTICE:  row 1 changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 changed  (seg1 172.17.0.3:7003 pid=858537)
 -- this demonstrates that the above isn't really working as desired:
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed
-NOTICE:  row 2 changed
+NOTICE:  row 1 changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 changed  (seg1 172.17.0.3:7003 pid=858537)
 -- the right way when considering nulls is
 CREATE OR REPLACE FUNCTION mytrigger() RETURNS trigger LANGUAGE plpgsql as $$
 begin
@@ -856,14 +950,14 @@ begin
 	return new;
 end$$;
 UPDATE trigger_test SET f3 = 'bar';
-NOTICE:  row 1 changed
-NOTICE:  row 2 changed
+NOTICE:  row 1 changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 changed  (seg1 172.17.0.3:7003 pid=858537)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed
-NOTICE:  row 2 changed
+NOTICE:  row 1 changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 changed  (seg1 172.17.0.3:7003 pid=858537)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 not changed
-NOTICE:  row 2 not changed
+NOTICE:  row 1 not changed  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  row 2 not changed  (seg1 172.17.0.3:7003 pid=858537)
 DROP TABLE trigger_test;
 DROP FUNCTION mytrigger();
 -- Test snapshot management in serializable transactions involving triggers
@@ -891,6 +985,8 @@ SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 UPDATE serializable_update_tab SET description = 'no no', id = 1 WHERE id = 1;
 COMMIT;
 SELECT description FROM serializable_update_tab WHERE id = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: serializable_update_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     description     
 --------------------
  updated in trigger
@@ -902,6 +998,8 @@ CREATE TABLE min_updates_test (
 	f1	text,
 	f2 int,
 	f3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO min_updates_test VALUES ('a',1,2),('b','2',null);
 CREATE TRIGGER z_min_update
 BEFORE UPDATE ON min_updates_test
@@ -915,10 +1013,12 @@ UPDATE min_updates_test SET f3 = 2 WHERE f3 is null;
 UPDATE 1
 \set QUIET true
 SELECT * FROM min_updates_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: min_updates_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 | f3 
 ----+----+----
- a  |  2 |  2
  b  |  3 |  2
+ a  |  2 |  2
 (2 rows)
 
 DROP TABLE min_updates_test;
@@ -1067,14 +1167,14 @@ INSERT INTO main_view VALUES (21, 31) RETURNING a, b;
 INSERT 0 1
 -- Table trigger will prevent updates
 UPDATE main_view SET b = 31 WHERE a = 20;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
 UPDATE 2
 UPDATE main_view SET b = 32 WHERE a = 21 AND b = 31 RETURNING a, b;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.3:7004 pid=858511)
  a  | b  
 ----+----
  21 | 32
@@ -1085,10 +1185,10 @@ UPDATE 1
 DROP TRIGGER before_upd_a_row_trig ON main_table;
 DROP TRIGGER
 UPDATE main_view SET b = 31 WHERE a = 20;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.3:7003 pid=858537)
 UPDATE 2
 UPDATE main_view SET b = 32 WHERE a = 21 AND b = 31 RETURNING a, b;
  a | b 
@@ -1101,6 +1201,8 @@ UPDATE main_view SET b = 0 WHERE false;
 UPDATE 0
 -- Delete from view using trigger
 DELETE FROM main_view WHERE a IN (20,21);
+NOTICE:  One or more columns in the following table(s) do not have statistics: main_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DELETE 3
 DELETE FROM main_view WHERE a = 31 RETURNING a, b;
  a | b 
@@ -1300,6 +1402,8 @@ HINT:  To enable deleting from the view, provide an INSTEAD OF DELETE trigger or
 CREATE VIEW european_city_view AS
     SELECT * FROM city_view WHERE continent = 'Europe';
 SELECT count(*) FROM european_city_view;
+NOTICE:  One or more columns in the following table(s) do not have statistics: city_table, country_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      0
@@ -1381,6 +1485,8 @@ DETAIL:  Views that do not select from a single table or view are not automatica
 HINT:  To enable updating the view, provide an INSTEAD OF UPDATE trigger or an unconditional ON UPDATE DO INSTEAD rule.
 \set QUIET true
 SELECT * FROM city_view;
+NOTICE:  One or more columns in the following table(s) do not have statistics: city_table, country_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  city_id | city_name | population | country_name | continent 
 ---------+-----------+------------+--------------+-----------
 (0 rows)
@@ -1445,8 +1551,8 @@ select pg_trigger_depth();
 (1 row)
 
 insert into depth_a values (1);
-NOTICE:  depth_a_tr: depth = 1  (seg2 172.17.0.2:25434 pid=123164)
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:25434 pid=123164)
+NOTICE:  depth_a_tr: depth = 1  (seg1 172.17.0.3:7003 pid=858537)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "insert into depth_b values (new.id)"
 PL/pgSQL function depth_a_tf() line 4 at SQL statement
 select pg_trigger_depth();
@@ -1456,8 +1562,8 @@ select pg_trigger_depth();
 (1 row)
 
 insert into depth_a values (2);
-NOTICE:  depth_a_tr: depth = 1  (seg1 172.17.0.2:25433 pid=123163)
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:25433 pid=123163)
+NOTICE:  depth_a_tr: depth = 1  (seg0 172.17.0.3:7002 pid=858517)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "insert into depth_b values (new.id)"
 PL/pgSQL function depth_a_tf() line 4 at SQL statement
 select pg_trigger_depth();
@@ -1530,43 +1636,57 @@ create trigger child_del_trig after delete on child
   for each row execute procedure child_del_func();
 insert into parent values (1, 'a', 'a', 'a', 'a', 0);
 insert into child values (10, 1, 'b');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.3:7004 pid=858511)
 CONTEXT:  SQL statement "update parent set bcnt = bcnt + 1 where aid = new.aid"
 PL/pgSQL function child_ins_func() line 3 at SQL statement
 select * from parent; select * from child;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  aid | val1 | val2 | val3 | val4 | bcnt 
 -----+------+------+------+------+------
    1 | a    | a    | a    | a    |    0
 (1 row)
 
+NOTICE:  One or more columns in the following table(s) do not have statistics: child
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  bid | aid | val1 
 -----+-----+------
 (0 rows)
 
 update parent set val1 = 'b' where aid = 1; -- should fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "delete from child where child.aid = new.aid and child.val1 = new.val1"
 PL/pgSQL function parent_upd_func() line 5 at SQL statement
 select * from parent; select * from child;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  aid | val1 | val2 | val3 | val4 | bcnt 
 -----+------+------+------+------+------
    1 | a    | a    | a    | a    |    0
 (1 row)
 
+NOTICE:  One or more columns in the following table(s) do not have statistics: child
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  bid | aid | val1 
 -----+-----+------
 (0 rows)
 
 delete from parent where aid = 1; -- should fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "delete from child where aid = old.aid"
 PL/pgSQL function parent_del_func() line 3 at SQL statement
 select * from parent; select * from child;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  aid | val1 | val2 | val3 | val4 | bcnt 
 -----+------+------+------+------+------
    1 | a    | a    | a    | a    |    0
 (1 row)
 
+NOTICE:  One or more columns in the following table(s) do not have statistics: child
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  bid | aid | val1 
 -----+-----+------
 (0 rows)
@@ -1586,15 +1706,21 @@ begin
 end;
 $$;
 delete from parent where aid = 1;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "delete from child where aid = old.aid"
 PL/pgSQL function parent_del_func() line 3 at SQL statement
 select * from parent; select * from child;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  aid | val1 | val2 | val3 | val4 | bcnt 
 -----+------+------+------+------+------
    1 | a    | a    | a    | a    |    0
 (1 row)
 
+NOTICE:  One or more columns in the following table(s) do not have statistics: child
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  bid | aid | val1 
 -----+-----+------
 (0 rows)
@@ -1641,34 +1767,42 @@ create trigger self_ref_trigger_del_trig before delete on self_ref_trigger
   for each row execute procedure self_ref_trigger_del_func();
 insert into self_ref_trigger values (1, null, 'root');
 insert into self_ref_trigger values (2, 1, 'root child A');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (3, 1, 'root child B');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (4, 2, 'grandchild 1');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=858517)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (5, 3, 'grandchild 2');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.3:7004 pid=858511)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 update self_ref_trigger set data = 'root!' where id = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref_trigger
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from self_ref_trigger;
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref_trigger
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | parent | data  | nchildren 
 ----+--------+-------+-----------
   1 |        | root! |         0
 (1 row)
 
 delete from self_ref_trigger;
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref_trigger
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from self_ref_trigger;
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref_trigger
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | parent | data | nchildren 
 ----+--------+------+-----------
 (0 rows)
@@ -1680,7 +1814,10 @@ drop function self_ref_trigger_del_func();
 -- Check that statement triggers work correctly even with all children excluded
 --
 create table stmt_trig_on_empty_upd (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table stmt_trig_on_empty_upd1 () inherits (stmt_trig_on_empty_upd);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create function update_stmt_notice() returns trigger as $$
 begin
 	raise notice 'updating %', TG_TABLE_NAME;
@@ -1717,6 +1854,8 @@ create table trigger_ddl_table (
    col1 integer,
    col2 integer
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function trigger_ddl_func() returns trigger as $$
 begin
   alter table trigger_ddl_table add primary key (col1);
@@ -1725,7 +1864,7 @@ end$$ language plpgsql;
 create trigger trigger_ddl_func before insert on trigger_ddl_table for each row
   execute procedure trigger_ddl_func();
 insert into trigger_ddl_table values (1, 42);  -- fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "alter table trigger_ddl_table add primary key (col1)"
 PL/pgSQL function trigger_ddl_func() line 3 at SQL statement
 create or replace function trigger_ddl_func() returns trigger as $$
@@ -1734,7 +1873,7 @@ begin
   return new;
 end$$ language plpgsql;
 insert into trigger_ddl_table values (1, 42);  -- fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.3:7003 pid=858537)
 CONTEXT:  SQL statement "create index on trigger_ddl_table (col2)"
 PL/pgSQL function trigger_ddl_func() line 3 at SQL statement
 drop table trigger_ddl_table;
@@ -1780,37 +1919,39 @@ $$;
 create trigger upsert_after_trig after insert or update on upsert
   for each row execute procedure upsert_after_func();
 insert into upsert values(1, 'black') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (1,black)
-WARNING:  after insert (new): (1,black)
+WARNING:  before insert (new): (1,black)  (seg1 172.17.0.3:7003 pid=858537)
+WARNING:  after insert (new): (1,black)  (seg1 172.17.0.3:7003 pid=858537)
 insert into upsert values(2, 'red') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (2,red)
-WARNING:  before insert (new, modified): (3,"red trig modified")
-WARNING:  after insert (new): (3,"red trig modified")
+WARNING:  before insert (new): (2,red)  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  before insert (new, modified): (3,"red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after insert (new): (3,"red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
 insert into upsert values(3, 'orange') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (3,orange)
-WARNING:  before update (old): (3,"red trig modified")
-WARNING:  before update (new): (3,"updated red trig modified")
-WARNING:  after update (old): (3,"red trig modified")
-WARNING:  after update (new): (3,"updated red trig modified")
+WARNING:  before insert (new): (3,orange)  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  before update (old): (3,"red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  before update (new): (3,"updated red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after update (old): (3,"red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after update (new): (3,"updated red trig modified")  (seg0 172.17.0.3:7002 pid=858517)
 insert into upsert values(4, 'green') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (4,green)
-WARNING:  before insert (new, modified): (5,"green trig modified")
-WARNING:  after insert (new): (5,"green trig modified")
+WARNING:  before insert (new): (4,green)  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  before insert (new, modified): (5,"green trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after insert (new): (5,"green trig modified")  (seg0 172.17.0.3:7002 pid=858517)
 insert into upsert values(5, 'purple') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (5,purple)
-WARNING:  after insert (new): (5,purple)
+WARNING:  before insert (new): (5,purple)  (seg2 172.17.0.3:7004 pid=858511)
+WARNING:  after insert (new): (5,purple)  (seg2 172.17.0.3:7004 pid=858511)
 insert into upsert values(6, 'white') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (6,white)
-WARNING:  before insert (new, modified): (7,"white trig modified")
-WARNING:  after insert (new): (7,"white trig modified")
+WARNING:  before insert (new): (6,white)  (seg2 172.17.0.3:7004 pid=858511)
+WARNING:  before insert (new, modified): (7,"white trig modified")  (seg2 172.17.0.3:7004 pid=858511)
+WARNING:  after insert (new): (7,"white trig modified")  (seg2 172.17.0.3:7004 pid=858511)
 insert into upsert values(7, 'pink') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (7,pink)
-WARNING:  after insert (new): (7,pink)
+WARNING:  before insert (new): (7,pink)  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after insert (new): (7,pink)  (seg0 172.17.0.3:7002 pid=858517)
 insert into upsert values(8, 'yellow') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (8,yellow)
-WARNING:  before insert (new, modified): (9,"yellow trig modified")
-WARNING:  after insert (new): (9,"yellow trig modified")
+WARNING:  before insert (new): (8,yellow)  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  before insert (new, modified): (9,"yellow trig modified")  (seg0 172.17.0.3:7002 pid=858517)
+WARNING:  after insert (new): (9,"yellow trig modified")  (seg0 172.17.0.3:7002 pid=858517)
 select * from upsert;
+NOTICE:  One or more columns in the following table(s) do not have statistics: upsert
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  key |           color           
 -----+---------------------------
    3 | updated red trig modified
@@ -1830,6 +1971,8 @@ drop function upsert_after_func();
 -- views
 --
 create table my_table (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view my_view as select * from my_table;
 create function my_trigger_function() returns trigger as $$ begin end; $$ language plpgsql;
 create trigger my_trigger after update on my_view referencing old table as old_table
@@ -1842,6 +1985,8 @@ drop table my_table;
 -- Verify cases that are unsupported with partitioned tables
 --
 create table parted_trig (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function trigger_nothing() returns trigger
   language plpgsql as $$ begin end; $$;
 create trigger failed instead of update on parted_trig
@@ -1858,14 +2003,22 @@ drop table parted_trig;
 -- Verify trigger creation for partitioned tables, and drop behavior
 --
 create table trigpart (a int, b int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table trigpart1 partition of trigpart for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create trigger trg1 after insert on trigpart for each row execute procedure trigger_nothing();
 create table trigpart2 partition of trigpart for values from (1000) to (2000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trigpart3 (like trigpart);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table trigpart attach partition trigpart3 for values from (2000) to (3000);
 create table trigpart4 partition of trigpart for values from (3000) to (4000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trigpart41 partition of trigpart4 for values from (3000) to (3500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trigpart42 (like trigpart);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table trigpart4 attach partition trigpart42 for values from (3500) to (4000);
 select tgrelid::regclass, tgname, tgfoid::regproc from pg_trigger
   where tgrelid::regclass::text like 'trigpart%' order by tgrelid::regclass::text;
@@ -1920,6 +2073,7 @@ create trigger trg1 after insert on trigpart for each row execute procedure trig
 Partition of: trigpart FOR VALUES FROM (2000) TO (3000)
 Triggers:
     trg1 AFTER INSERT ON trigpart3 FOR EACH ROW EXECUTE FUNCTION trigger_nothing(), ON TABLE trigpart
+Distributed by: (a)
 
 alter table trigpart detach partition trigpart3;
 drop trigger trg1 on trigpart3; -- fail due to "does not exist"
@@ -1941,6 +2095,7 @@ select tgrelid::regclass::text, tgname, tgfoid::regproc, tgenabled, tgisinternal
 (2 rows)
 
 create table trigpart3 (like trigpart);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 create trigger trg1 after insert on trigpart3 for each row execute procedure trigger_nothing();
 \d trigpart3
              Table "public.trigpart3"
@@ -1950,6 +2105,7 @@ create trigger trg1 after insert on trigpart3 for each row execute procedure tri
  b      | integer |           |          | 
 Triggers:
     trg1 AFTER INSERT ON trigpart3 FOR EACH ROW EXECUTE FUNCTION trigger_nothing()
+Distributed by: (a)
 
 alter table trigpart attach partition trigpart3 FOR VALUES FROM (2000) to (3000); -- fail
 ERROR:  trigger "trg1" for relation "trigpart3" already exists
@@ -1960,11 +2116,19 @@ drop function trigger_nothing();
 -- Verify that triggers are fired for partitioned tables
 --
 create table parted_stmt_trig (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_stmt_trig1 partition of parted_stmt_trig for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_stmt_trig2 partition of parted_stmt_trig for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted2_stmt_trig (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted2_stmt_trig1 partition of parted2_stmt_trig for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted2_stmt_trig2 partition of parted2_stmt_trig for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create or replace function trigger_notice() returns trigger as $$
   begin
     raise notice 'trigger % on % % % for %', TG_NAME, TG_TABLE_NAME, TG_WHEN, TG_OP, TG_LEVEL;
@@ -2047,49 +2211,57 @@ HINT:  Rewrite the query to only include one writable clause.
 delete from parted_stmt_trig;
 -- insert via copy on the parent
 copy parted_stmt_trig(a) from stdin;
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig2 AFTER INSERT for ROW
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig2 AFTER INSERT for ROW  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
 -- insert via copy on the first partition
 copy parted_stmt_trig1(a) from stdin;
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
 -- Disabling a trigger in the parent table should disable children triggers too
 alter table parted_stmt_trig disable trigger trig_ins_after_parent;
 insert into parted_stmt_trig values (1);
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
 alter table parted_stmt_trig enable trigger trig_ins_after_parent;
 insert into parted_stmt_trig values (1);
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
 drop table parted_stmt_trig, parted2_stmt_trig;
 -- Verify that triggers fire in alphabetical order
 create table parted_trig (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_trig_1 partition of parted_trig for values from (0) to (1000)
    partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trig_1_1 partition of parted_trig_1 for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trig_2 partition of parted_trig for values from (1000) to (2000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create trigger zzz after insert on parted_trig for each row execute procedure trigger_notice();
 create trigger mmm after insert on parted_trig_1_1 for each row execute procedure trigger_notice();
 create trigger aaa after insert on parted_trig_1 for each row execute procedure trigger_notice();
 create trigger bbb after insert on parted_trig for each row execute procedure trigger_notice();
 create trigger qqq after insert on parted_trig_1_1 for each row execute procedure trigger_notice();
 insert into parted_trig values (50), (1500);
-NOTICE:  trigger aaa on parted_trig_1_1 AFTER INSERT for ROW
-NOTICE:  trigger bbb on parted_trig_1_1 AFTER INSERT for ROW
-NOTICE:  trigger mmm on parted_trig_1_1 AFTER INSERT for ROW
-NOTICE:  trigger qqq on parted_trig_1_1 AFTER INSERT for ROW
-NOTICE:  trigger zzz on parted_trig_1_1 AFTER INSERT for ROW
-NOTICE:  trigger bbb on parted_trig_2 AFTER INSERT for ROW
-NOTICE:  trigger zzz on parted_trig_2 AFTER INSERT for ROW
+NOTICE:  trigger bbb on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger aaa on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger zzz on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger bbb on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger mmm on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger qqq on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger zzz on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.3:7003 pid=858537)
 drop table parted_trig;
 -- Verify propagation of trigger arguments to partitions
 create table parted_trig (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_trig1 partition of parted_trig for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create or replace function trigger_notice() returns trigger as $$
   declare
     arg1 text = TG_ARGV[0];
@@ -2104,12 +2276,14 @@ create trigger aaa after insert on parted_trig
    for each row execute procedure trigger_notice('quirky', 1);
 -- Verify propagation of trigger arguments to partitions attached after creating trigger
 create table parted_trig2 partition of parted_trig for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trig3 (like parted_trig);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table parted_trig attach partition parted_trig3 for values in (3);
 insert into parted_trig values (1), (2), (3);
-NOTICE:  trigger aaa on parted_trig1 AFTER INSERT for ROW args quirky 1
-NOTICE:  trigger aaa on parted_trig2 AFTER INSERT for ROW args quirky 1
-NOTICE:  trigger aaa on parted_trig3 AFTER INSERT for ROW args quirky 1
+NOTICE:  trigger aaa on parted_trig1 AFTER INSERT for ROW args quirky 1  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger aaa on parted_trig2 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger aaa on parted_trig3 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.3:7002 pid=858517)
 drop table parted_trig;
 -- test irregular partitions (i.e., different column definitions),
 -- including that the WHEN clause works
@@ -2128,14 +2302,22 @@ create or replace function trigger_notice_ab() returns trigger as $$
   $$ language plpgsql;
 create table parted_irreg_ancestor (fd text, b text, fd2 int, fd3 int, a int)
   partition by range (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fd' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_irreg_ancestor drop column fd,
   drop column fd2, drop column fd3;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 create table parted_irreg (fd int, a int, fd2 int, b text)
   partition by range (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fd' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_irreg drop column fd, drop column fd2;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table parted_irreg_ancestor attach partition parted_irreg
   for values from ('aaaa') to ('zzzz');
 create table parted1_irreg (b text, fd int, a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted1_irreg drop column fd;
 alter table parted1_irreg set distributed randomly;
 alter table parted_irreg attach partition parted1_irreg
@@ -2147,24 +2329,28 @@ create trigger parted_trig_odd after insert on parted_irreg for each row
 -- we should hear barking for every insert, but parted_trig_odd only emits
 -- noise for odd values of a. parted_trig does it for all inserts.
 insert into parted_irreg values (1, 'aardvark'), (2, 'aanimals');
-NOTICE:  aardvark <- woof!
-NOTICE:  aanimals <- woof!
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)
-NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aanimals)
+NOTICE:  aanimals <- woof!  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  aardvark <- woof!  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aanimals)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg0 172.17.0.3:7002 pid=858517)
 insert into parted1_irreg values ('aardwolf', 2);
-NOTICE:  aardwolf <- woof!
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aardwolf)
+NOTICE:  aardwolf <- woof!  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg1 172.17.0.3:7003 pid=858537)
 insert into parted_irreg_ancestor values ('aasvogel', 3);
-NOTICE:  aasvogel <- woof!
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)
-NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)
+NOTICE:  aasvogel <- woof!  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg1 172.17.0.3:7003 pid=858537)
 drop table parted_irreg_ancestor;
 -- Before triggers and partitions
 create table parted (a int, b int, c text) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_1 partition of parted for values in (1)
   partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_1_1 partition of parted_1 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create function parted_trigfunc() returns trigger language plpgsql as $$
 begin
   new.a = new.a + 1;
@@ -2175,11 +2361,11 @@ insert into parted values (1, 1, 'uno uno v1');    -- works
 create trigger t before insert or update or delete on parted
   for each row execute function parted_trigfunc();
 insert into parted values (1, 1, 'uno uno v2');    -- fail
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.3:7003 pid=858537)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
 update parted set c = c || 'v3';                   -- fail
-ERROR:  moving row to another partition during a BEFORE trigger is not supported
-DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
+ERROR:  no partition of relation "parted" found for row  (seg1 172.17.0.3:7003 pid=858537)
+DETAIL:  Partition key of the failing row contains (a) = (2).
 create or replace function parted_trigfunc() returns trigger language plpgsql as $$
 begin
   new.b = new.b + 1;
@@ -2187,11 +2373,11 @@ begin
 end;
 $$;
 insert into parted values (1, 1, 'uno uno v4');    -- fail
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.3:7003 pid=858537)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
 update parted set c = c || 'v5';                   -- fail
-ERROR:  moving row to another partition during a BEFORE trigger is not supported
-DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
+ERROR:  no partition of relation "parted_1" found for row  (seg1 172.17.0.3:7003 pid=858537)
+DETAIL:  Partition key of the failing row contains (b) = (2).
 create or replace function parted_trigfunc() returns trigger language plpgsql as $$
 begin
   new.c = new.c || ' and so';
@@ -2209,6 +2395,8 @@ select tableoid::regclass, * from parted;
 
 drop table parted;
 create table parted (a int, b int, c text) partition by list ((a + b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function parted_trigfunc() returns trigger language plpgsql as $$
 begin
   new.a = new.a + new.b;
@@ -2216,15 +2404,17 @@ begin
 end;
 $$;
 create table parted_1 partition of parted for values in (1, 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_2 partition of parted for values in (3, 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create trigger t before insert or update on parted
   for each row execute function parted_trigfunc();
 insert into parted values (0, 1, 'zero win');
 insert into parted values (1, 1, 'one fail');
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.3:7003 pid=858537)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1".
 insert into parted values (1, 2, 'two fail');
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.3:7003 pid=858537)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_2".
 select * from parted;
  a | b |    c     
@@ -2238,11 +2428,17 @@ drop function parted_trigfunc();
 -- Constraint triggers and partitioned tables
 create table parted_constr_ancestor (a int, b text)
   partition by range (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_constr (a int, b text)
   partition by range (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_constr_ancestor attach partition parted_constr
   for values from ('aaaa') to ('zzzz');
 create table parted1_constr (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_constr attach partition parted1_constr
   for values from ('aaaa') to ('bbbb');
 create constraint trigger parted_trig after insert on parted_constr_ancestor
@@ -2257,64 +2453,84 @@ create constraint trigger parted_trig_two after insert on parted_constr
 -- is fired at commit time.
 begin;
 insert into parted_constr values (1, 'aardvark');
-NOTICE:  aardvark <- woof!
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)
+NOTICE:  aardvark <- woof!  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.3:7003 pid=858537)
 insert into parted1_constr values (2, 'aardwolf');
-NOTICE:  aardwolf <- woof!
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)
+NOTICE:  aardwolf <- woof!  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.3:7002 pid=858517)
 insert into parted_constr_ancestor values (3, 'aasvogel');
-NOTICE:  aasvogel <- woof!
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)
+NOTICE:  aasvogel <- woof!  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.3:7002 pid=858517)
 commit;
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.3:7002 pid=858517)
 -- The WHEN clause is immediate, and both constraint triggers are fired at
 -- commit time.
 begin;
 set constraints parted_trig deferred;
 insert into parted_constr values (1, 'aardvark');
-NOTICE:  aardvark <- woof!
+NOTICE:  aardvark <- woof!  (seg1 172.17.0.3:7003 pid=858537)
 insert into parted1_constr values (2, 'aardwolf'), (3, 'aasvogel');
-NOTICE:  aardwolf <- woof!
-NOTICE:  aasvogel <- woof!
+NOTICE:  aardwolf <- woof!  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  aasvogel <- woof!  (seg0 172.17.0.3:7002 pid=858517)
 commit;
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.3:7003 pid=858537)
 drop table parted_constr_ancestor;
 drop function bark(text);
 -- Test that the WHEN clause is set properly to partitions
 create table parted_trigger (a int, b text) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger set distributed by (b);
 create table parted_trigger_1 partition of parted_trigger for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_2 (drp int, a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'drp' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger_2 drop column drp;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table parted_trigger_2 set distributed by (b);
 alter table parted_trigger attach partition parted_trigger_2 for values from (1000) to (2000);
 create trigger parted_trigger after update on parted_trigger
   for each row when (new.a % 2 = 1 and length(old.b) >= 2) execute procedure trigger_notice_ab();
 create table parted_trigger_3 (b text, a int) partition by range (length(b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_trigger_3_1 partition of parted_trigger_3 for values from (1) to (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_3_2 partition of parted_trigger_3 for values from (3) to (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table parted_trigger attach partition parted_trigger_3 for values from (2000) to (3000);
 insert into parted_trigger values
     (0, 'a'), (1, 'bbb'), (2, 'bcd'), (3, 'c'),
 	(1000, 'c'), (1001, 'ddd'), (1002, 'efg'), (1003, 'f'),
 	(2000, 'e'), (2001, 'fff'), (2002, 'ghi'), (2003, 'h');
 update parted_trigger set a = a + 2; -- notice for odd 'a' values, long 'b' values
-NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(3,bbb)
-NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1003,ddd)
-NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,fff)
+NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1003,ddd)  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,fff)  (seg2 172.17.0.3:7004 pid=858511)
+NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(3,bbb)  (seg1 172.17.0.3:7003 pid=858537)
 drop table parted_trigger;
 -- try a constraint trigger, also
 create table parted_referenced (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table unparted_trigger (a int, b text);	-- for comparison purposes
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_trigger (a int, b text) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_trigger_1 partition of parted_trigger for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_2 (drp int, a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'drp' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger_2 drop column drp;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table parted_trigger_2 set distributed by (a);
 alter table parted_trigger attach partition parted_trigger_2 for values from (1000) to (2000);
 create constraint trigger parted_trigger after update on parted_trigger
@@ -2324,9 +2540,13 @@ create constraint trigger parted_trigger after update on unparted_trigger
   from parted_referenced
   for each row execute procedure trigger_notice_ab();
 create table parted_trigger_3 (b text, a int) partition by range (length(b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger_3 set distributed by (a);
 create table parted_trigger_3_1 partition of parted_trigger_3 for values from (1) to (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_3_2 partition of parted_trigger_3 for values from (3) to (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table parted_trigger attach partition parted_trigger_3 for values from (2000) to (3000);
 select tgname, conname, t.tgrelid::regclass, t.tgconstrrelid::regclass,
   c.conrelid::regclass, c.confrelid::regclass
@@ -2347,36 +2567,52 @@ select tgname, conname, t.tgrelid::regclass, t.tgconstrrelid::regclass,
 drop table parted_referenced, parted_trigger, unparted_trigger;
 -- verify that the "AFTER UPDATE OF columns" event is propagated correctly
 create table parted_trigger (a int, b text) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger set distributed randomly;
 create table parted_trigger_1 partition of parted_trigger for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_2 (drp int, a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'drp' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger_2 drop column drp;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table parted_trigger attach partition parted_trigger_2 for values from (1000) to (2000);
 create trigger parted_trigger after update of b on parted_trigger
   for each row execute procedure trigger_notice_ab();
 create table parted_trigger_3 (b text, a int) partition by range (length(b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_trigger_3 set distributed randomly;
 create table parted_trigger_3_1 partition of parted_trigger_3 for values from (1) to (4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_trigger_3_2 partition of parted_trigger_3 for values from (4) to (8);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table parted_trigger attach partition parted_trigger_3 for values from (2000) to (3000);
 insert into parted_trigger values (0, 'a'), (1000, 'c'), (2000, 'e'), (2001, 'eeee');
 update parted_trigger set a = a + 2;	-- no notices here
 update parted_trigger set b = b || 'b';	-- all triggers should fire
-NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(2,ab)
-NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1002,cb)
-NOTICE:  trigger parted_trigger on parted_trigger_3_1 AFTER UPDATE for ROW: (a,b)=(2002,eb)
-NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,eeeeb)
+NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1002,cb)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(2,ab)  (seg0 172.17.0.3:7002 pid=858517)
+NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,eeeeb)  (seg1 172.17.0.3:7003 pid=858537)
+NOTICE:  trigger parted_trigger on parted_trigger_3_1 AFTER UPDATE for ROW: (a,b)=(2002,eb)  (seg0 172.17.0.3:7002 pid=858517)
 drop table parted_trigger;
 drop function trigger_notice_ab();
 -- Make sure we don't end up with unnecessary copies of triggers, when
 -- cloning them.
 create table trg_clone (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table trg_clone1 partition of trg_clone for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table trg_clone add constraint uniq unique (a) deferrable;
 create table trg_clone2 partition of trg_clone for values from (1000) to (2000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trg_clone3 partition of trg_clone for values from (2000) to (3000)
   partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trg_clone_3_3 partition of trg_clone3 for values from (2000) to (2100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select tgrelid::regclass, count(*) from pg_trigger
   where tgrelid::regclass in ('trg_clone', 'trg_clone1', 'trg_clone2',
 	'trg_clone3', 'trg_clone_3_3')
@@ -2395,7 +2631,10 @@ drop table trg_clone;
 -- both kinds of inheritance.  Historically, legacy inheritance has
 -- not recursed to children, so that behavior is preserved.
 create table parent (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table child1 () inherits (parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create function trig_nothing() returns trigger language plpgsql
   as $$ begin return null; end $$;
 create trigger tg after insert on parent
@@ -2424,7 +2663,10 @@ select tgrelid::regclass, tgname, tgenabled from pg_trigger
 
 drop table parent, child1;
 create table parent (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table child1 partition of parent for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create trigger tg after insert on parent
   for each row execute procedure trig_nothing();
 select tgrelid::regclass, tgname, tgenabled from pg_trigger
@@ -2488,15 +2730,23 @@ $$;
 --
 -- set up a partition hierarchy with some different TupleDescriptors
 create table parent (a text, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- a child matching parent
 create table child1 partition of parent for values in ('AAA');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- a child with a dropped column
 create table child2 (x int, a text, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table child2 drop column x;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 alter table child2 set distributed by (a);
 alter table parent attach partition child2 for values in ('BBB');
 -- a child with a different column order
 create table child3 (b int, a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table child3 set distributed by (a);
 alter table parent attach partition child3 for values in ('CCC');
 create trigger parent_insert_trig
@@ -2571,8 +2821,14 @@ insert into parent values ('BBB', 42);
 insert into parent values ('CCC', 42);
 -- delete from children sees respective child-format tuples
 delete from child1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from child2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from child3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- copy into parent sees parent-format tuples
 copy parent (a, b) from stdin;
 -- DML affecting parent sees tuples collected from children even if
@@ -2622,7 +2878,10 @@ drop function intercept_insert();
 -- partitions
 --
 create table parent (a text, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table child partition of parent for values in ('AAA');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- adding row trigger with transition table fails
 create trigger child_row_trig
   after insert on child referencing new table as new_table
@@ -2649,13 +2908,19 @@ drop table child, parent;
 --
 -- set up inheritance hierarchy with different TupleDescriptors
 create table parent (a text, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- a child matching parent
 create table child1 () inherits (parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- a child with a different column order
 create table child2 (b int, a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table child2 inherit parent;
 -- a child with an extra column
 create table child3 (c text) inherits (parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create trigger parent_insert_trig
   after insert on parent referencing new table as new_table
   for each statement execute procedure dump_insert();
@@ -2718,8 +2983,14 @@ insert into child2 values (42, 'BBB');
 insert into child3 values ('CCC', 42, 'foo');
 -- delete from children sees respective child-format tuples
 delete from child1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from child2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 delete from child3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: child3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- copy into parent sees parent-format tuples (no rerouting, so these
 -- are really inserted into the parent)
 copy parent (a, b) from stdin;
@@ -2754,7 +3025,10 @@ drop table child1, child2, child3, parent;
 -- inheritance children
 --
 create table parent (a text, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table child () inherits (parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- adding row trigger with transition table fails
 create trigger child_row_trig
   after insert on child referencing new table as new_table
@@ -2780,7 +3054,11 @@ drop table child, parent;
 -- tables
 --
 create table table1 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table table2 (a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create trigger table1_trig
   after insert on table1 referencing new table as new_table
   for each statement execute procedure dump_insert();
@@ -2800,11 +3078,15 @@ ERROR:  writable CTE queries cannot be themselves writable
 DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 select * from table1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: table1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
 
 select * from table2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: table2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -2893,6 +3175,9 @@ create table refd_table (a int primary key, b text);
 create table trig_table (a int, b text,
   foreign key (a) references refd_table on update cascade on delete cascade
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 create trigger trig_table_before_trig
   before insert or update or delete on trig_table
   for each statement execute procedure trigger_func('trig_table');
@@ -2921,27 +3206,35 @@ insert into trig_table values
   (3, 'three a'),
   (3, 'three b');
 update refd_table set a = 11 where b = 'one';
+NOTICE:  One or more columns in the following table(s) do not have statistics: refd_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trig_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trig_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |    b    
 ---+---------
+ 1 | one a
+ 1 | one b
  2 | two a
  2 | two b
  3 | three a
  3 | three b
- 1 | one a
- 1 | one b
 (6 rows)
 
 delete from refd_table where length(b) = 3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: refd_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from trig_table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: trig_table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |    b    
 ---+---------
+ 1 | one a
+ 1 | one b
  2 | two a
  2 | two b
  3 | three a
  3 | three b
- 1 | one a
- 1 | one b
 (6 rows)
 
 drop table refd_table, trig_table;
@@ -2950,6 +3243,7 @@ drop table refd_table, trig_table;
 --
 create table self_ref (a int primary key,
                        b int references self_ref(a) on delete cascade);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 create trigger self_ref_before_trig
   before delete on self_ref
   for each statement execute procedure trigger_func('self_ref');
@@ -2963,13 +3257,17 @@ create trigger self_ref_s_trig
 ERROR:  Triggers for statements are not yet supported
 insert into self_ref values (1, null), (2, 1), (3, 2);
 delete from self_ref where a = 1;
-NOTICE:  trigger = self_ref_r_trig, old table = (1,)
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+NOTICE:  trigger = self_ref_r_trig, old table = (1,)  (seg1 172.17.0.3:7003 pid=858537)
 -- without AR trigger, cascaded deletes all end up in one transition table
 drop trigger self_ref_r_trig on self_ref;
 insert into self_ref values (1, null), (2, 1), (3, 2), (4, 3);
-ERROR:  duplicate key value violates unique constraint "self_ref_pkey"
+ERROR:  duplicate key value violates unique constraint "self_ref_pkey"  (seg0 172.17.0.3:7002 pid=858517)
 DETAIL:  Key (a)=(2) already exists.
 delete from self_ref where a = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: self_ref
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table self_ref;
 -- cleanup
 drop function dump_insert();
@@ -2983,4 +3281,6 @@ create trigger aft_row after insert or update on trigger_parted
   for each row execute function trigger_parted_trigfunc();
 create table trigger_parted_p1 partition of trigger_parted for values in (1)
   partition by list (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table trigger_parted_p1_1 partition of trigger_parted_p1 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table

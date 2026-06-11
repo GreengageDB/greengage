@@ -42,6 +42,8 @@ create table basictest
            , testvarchar domainvarchar
            , testnumeric domainnumeric
            );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testint4' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO basictest values ('88', 'haha', 'short', '123.12');      -- Good
 INSERT INTO basictest values ('88', 'haha', 'short text', '123.12'); -- Bad varchar
 ERROR:  value too long for type character varying(5)
@@ -52,6 +54,8 @@ ERROR:  value too long for type character varying(5)
 CONTEXT:  COPY basictest, line 1, column testvarchar: "notsoshorttext"
 COPY basictest (testvarchar) FROM stdin;
 select * from basictest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: basictest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  testint4 | testtext | testvarchar | testnumeric 
 ----------+----------+-------------+-------------
        88 | haha     | short       |      123.12
@@ -62,6 +66,8 @@ select * from basictest;
 -- check that domains inherit operations from base types
 select testtext || testvarchar as concat, testnumeric + 42 as sum
 from basictest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: basictest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   concat   |  sum   
 -----------+--------
  hahashort | 165.12
@@ -70,22 +76,16 @@ from basictest;
 (3 rows)
 
 -- check that union/case/coalesce type resolution handles domains properly
-select coalesce(4::domainint4, 7) is of (int4) as t;
- t 
----
- t
+select pg_typeof(coalesce(4::domainint4, 7));
+ pg_typeof 
+-----------
+ integer
 (1 row)
 
-select coalesce(4::domainint4, 7) is of (domainint4) as f;
- f 
----
- f
-(1 row)
-
-select coalesce(4::domainint4, 7::domainint4) is of (domainint4) as t;
- t 
----
- t
+select pg_typeof(coalesce(4::domainint4, 7::domainint4));
+ pg_typeof  
+------------
+ domainint4
 (1 row)
 
 drop table basictest;
@@ -100,6 +100,8 @@ create table domarrtest
            ( testint4arr domainint4arr
            , testchar4arr domainchar4arr
             );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testint4arr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO domarrtest values ('{2,2}', '{{"a","b"},{"c","d"}}');
 INSERT INTO domarrtest values ('{{2,2},{2,2}}', '{{"a","b"}}');
 INSERT INTO domarrtest values ('{2,2}', '{{"a","b"},{"c","d"},{"e","f"}}');
@@ -109,35 +111,41 @@ INSERT INTO domarrtest values (NULL, '{{"toolong","b","c"},{"d","e","f"}}');
 ERROR:  value too long for type character varying(4)
 INSERT INTO domarrtest (testint4arr[1], testint4arr[3]) values (11,22);
 select * from domarrtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   testint4arr  |    testchar4arr     
 ---------------+---------------------
- {2,2}         | {{a,b},{c,d}}
+ {11,NULL,22}  | 
  {{2,2},{2,2}} | {{a,b}}
+ {2,2}         | {{a,b},{c,d}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
- {11,NULL,22}  | 
 (6 rows)
 
 select testint4arr[1], testchar4arr[2:2] from domarrtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  testint4arr | testchar4arr 
 -------------+--------------
            2 | {{c,d}}
-             | {}
            2 | {{c,d}}
            2 | {{c}}
              | {{d,e,f}}
           11 | 
+             | {}
 (6 rows)
 
 select array_dims(testint4arr), array_dims(testchar4arr) from domarrtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  array_dims | array_dims 
 ------------+------------
  [1:2]      | [1:2][1:2]
- [1:2][1:2] | [1:1][1:2]
  [1:2]      | [1:3][1:2]
  [1:2]      | [1:2][1:1]
             | [1:2][1:3]
+ [1:2][1:2] | [1:1][1:2]
  [1:3]      | 
 (6 rows)
 
@@ -146,27 +154,33 @@ COPY domarrtest FROM stdin;	-- fail
 ERROR:  value too long for type character varying(4)
 CONTEXT:  COPY domarrtest, line 1, column testchar4arr: "{qwerty,w,e}"
 select * from domarrtest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   testint4arr  |    testchar4arr     
 ---------------+---------------------
  {2,2}         | {{a,b},{c,d}}
- {{2,2},{2,2}} | {{a,b}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
- {11,NULL,22}  | 
- {3,4}         | {q,w,e}
                | 
+ {11,NULL,22}  | 
+ {{2,2},{2,2}} | {{a,b}}
+ {3,4}         | {q,w,e}
 (8 rows)
 
 update domarrtest set
   testint4arr[1] = testint4arr[1] + 1,
   testint4arr[3] = testint4arr[3] - 1
 where testchar4arr is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from domarrtest where testchar4arr is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domarrtest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    testint4arr    | testchar4arr 
 ------------------+--------------
- {12,NULL,21}     | 
  {NULL,NULL,NULL} | 
+ {12,NULL,21}     | 
 (2 rows)
 
 drop table domarrtest;
@@ -208,7 +222,7 @@ create table dcomptable (d1 dcomptype unique) distributed replicated;
 insert into dcomptable values (row(1,2)::dcomptype);
 insert into dcomptable values (row(3,4)::comptype);
 insert into dcomptable values (row(1,2)::dcomptype);  -- fail on uniqueness
-ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"
+ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"  (seg0 172.17.0.3:7002 pid=865053)
 DETAIL:  Key (d1)=((1,2)) already exists.
 insert into dcomptable (d1.r) values(11);
 select * from dcomptable;
@@ -238,18 +252,18 @@ select * from dcomptable;
 
 alter domain dcomptype add constraint c1 check ((value).r <= (value).i);
 alter domain dcomptype add constraint c2 check ((value).r > (value).i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg2 172.17.0.3:7004 pid=865037)
 select row(2,1)::dcomptype;  -- fail
 ERROR:  value for domain dcomptype violates check constraint "c1"
 insert into dcomptable values (row(1,2)::comptype);
 insert into dcomptable values (row(2,1)::comptype);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg0 172.17.0.3:7002 pid=865053)
 insert into dcomptable (d1.r) values(99);
 insert into dcomptable (d1.r, d1.i) values(99, 100);
 insert into dcomptable (d1.r, d1.i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.3:7003 pid=865036)
 update dcomptable set d1.r = (d1).r + 1 where (d1).i > 0;  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg0 172.17.0.3:7002 pid=865053)
 update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 select * from dcomptable;
     d1    
@@ -271,16 +285,15 @@ explain (verbose, costs off)
          Output: ROW(((d1).r - '1'::double precision), ((d1).i + '1'::double precision)), ctid, gp_segment_id
          Filter: ((dcomptable.d1).i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(6 rows)
+(5 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 \d+ dcomptable
-                                  Table "public.dcomptable"
- Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+--------------+-------------
- d1     | dcomptype |           |          |         | extended |              | 
+                                         Table "public.dcomptable"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ d1     | dcomptype |           |          |         | extended |             |              | 
 Indexes:
     "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
@@ -321,12 +334,13 @@ NOTICE:  drop cascades to type dcomptype
 create type comptype as (r float8, i float8);
 create domain dcomptypea as comptype[];
 create table dcomptable (d1 dcomptypea unique);
-ERROR:  data type dcomptypea has no default operator class for access method "hash"
-HINT:  You must specify an operator class or define a default operator class for the data type.
 -- GPDB: marking the column as 'unique' fails, because a unique column needs
 -- to be part of the distribution key, and composite types can't be used as
 -- distribution keys because they have no hash opclasses.
 create table dcomptable (d1 dcomptypea /*unique*/);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  relation "dcomptable" already exists
 create index on dcomptable (d1);
 insert into dcomptable values (array[row(1,2)]::dcomptypea);
 insert into dcomptable values (array[row(3,4), row(5,6)]::comptype[]);
@@ -335,104 +349,116 @@ insert into dcomptable values (array[row(7,8)::comptype, row(9,10)::comptype]);
 insert into dcomptable (d1[1]) values(row(9,10));
 insert into dcomptable (d1[1].r) values(11);
 select * from dcomptable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dcomptable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          d1         
 --------------------
- {"(1,2)"}
  {"(3,4)","(5,6)"}
- {"(7,8)","(9,10)"}
+ {"(1,2)"}
  {"(9,10)"}
  {"(11,)"}
+ {"(7,8)","(9,10)"}
 (5 rows)
 
 select d1[2], d1[1].r, d1[1].i from dcomptable;
    d1   | r  | i  
 --------+----+----
-        |  1 |  2
- (5,6)  |  3 |  4
  (9,10) |  7 |  8
+ (5,6)  |  3 |  4
+        |  1 |  2
         |  9 | 10
         | 11 |   
 (5 rows)
 
 update dcomptable set d1[2] = row(d1[2].i, d1[2].r);
 select * from dcomptable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dcomptable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          d1         
 --------------------
- {"(1,2)","(,)"}
  {"(3,4)","(6,5)"}
- {"(7,8)","(10,9)"}
  {"(9,10)","(,)"}
+ {"(7,8)","(10,9)"}
  {"(11,)","(,)"}
+ {"(1,2)","(,)"}
 (5 rows)
 
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;
 select * from dcomptable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dcomptable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          d1         
 --------------------
  {"(11,)","(,)"}
- {"(2,2)","(,)"}
  {"(4,4)","(6,5)"}
- {"(8,8)","(10,9)"}
+ {"(2,2)","(,)"}
  {"(10,10)","(,)"}
+ {"(8,8)","(10,9)"}
 (5 rows)
 
 alter domain dcomptypea add constraint c1 check (value[1].r <= value[1].i);
 alter domain dcomptypea add constraint c2 check (value[1].r > value[1].i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg1 172.17.0.3:7003 pid=865036)
 select array[row(2,1)]::dcomptypea;  -- fail
 ERROR:  value for domain dcomptypea violates check constraint "c1"
 insert into dcomptable values (array[row(1,2)]::comptype[]);
 insert into dcomptable values (array[row(2,1)]::comptype[]);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg0 172.17.0.3:7002 pid=865053)
 insert into dcomptable (d1[1].r) values(99);
 insert into dcomptable (d1[1].r, d1[1].i) values(99, 100);
 insert into dcomptable (d1[1].r, d1[1].i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg0 slice1 172.17.0.3:7002 pid=865449)
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg0 slice1 172.17.0.3:7002 pid=865449)
 update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
   where d1[1].i > 0;
 select * from dcomptable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dcomptable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          d1         
 --------------------
- {"(11,)","(,)"}
- {"(99,)"}
  {"(1,3)","(,)"}
- {"(3,5)","(6,5)"}
- {"(7,9)","(10,9)"}
  {"(9,11)","(,)"}
- {"(0,3)"}
  {"(98,101)"}
+ {"(99,)"}
+ {"(7,9)","(10,9)"}
+ {"(11,)","(,)"}
+ {"(3,5)","(6,5)"}
+ {"(0,3)"}
 (8 rows)
 
 explain (verbose, costs off)
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
     where d1[1].i > 0;
-                                                          QUERY PLAN                                                           
--------------------------------------------------------------------------------------------------------------------------------
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.dcomptable
-   ->  Seq Scan on public.dcomptable
-         Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
-         Filter: (dcomptable.d1[1].i > '0'::double precision)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, (DMLAction)
+         ->  Split
+               Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, DMLAction
+               ->  Seq Scan on public.dcomptable
+                     Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
+                     Filter: (dcomptable.d1[1].i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(6 rows)
+(9 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
     where d1[1].i > 0;
 \d+ dcomptable
-                                  Table "public.dcomptable"
- Column |    Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------------+-----------+----------+---------+----------+--------------+-------------
- d1     | dcomptypea |           |          |         | extended |              | 
+                                         Table "public.dcomptable"
+ Column |    Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ d1     | dcomptypea |           |          |         | extended |             |              | 
 Indexes:
     "dcomptable_d1_idx" btree (d1)
+    "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
     silly AS
     ON DELETE TO dcomptable DO INSTEAD  UPDATE dcomptable SET d1[1].r = dcomptable.d1[1].r - 1::double precision, d1[1].i = dcomptable.d1[1].i + 1::double precision
   WHERE dcomptable.d1[1].i > 0::double precision
-Distributed randomly
+Distributed by: (d1)
 
 drop table dcomptable;
 drop type comptype cascade;
@@ -440,17 +466,25 @@ NOTICE:  drop cascades to type dcomptypea
 -- Test arrays over domains
 create domain posint as int check (value > 0);
 create table pitable (f1 posint[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pitable values(array[42]);
 insert into pitable values(array[-1]);  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg0 slice1 172.17.0.3:7002 pid=865686)
 insert into pitable values('{0}');  -- fail
 ERROR:  value for domain posint violates check constraint "posint_check"
 LINE 1: insert into pitable values('{0}');
                                    ^
 update pitable set f1[1] = f1[1] + 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pitable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 update pitable set f1[1] = 0;  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"
+NOTICE:  One or more columns in the following table(s) do not have statistics: pitable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg0 slice1 172.17.0.3:7002 pid=865686)
 select * from pitable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pitable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   f1  
 ------
  {43}
@@ -459,10 +493,14 @@ select * from pitable;
 drop table pitable;
 create domain vc4 as varchar(4);
 create table vc4table (f1 vc4[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into vc4table values(array['too long']);  -- fail
 ERROR:  value too long for type character varying(4)
 insert into vc4table values(array['too long']::vc4[]);  -- cast truncates
 select * from vc4table;
+NOTICE:  One or more columns in the following table(s) do not have statistics: vc4table
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     f1    
 ----------
  {"too "}
@@ -473,6 +511,8 @@ drop type vc4;
 -- You can sort of fake arrays-of-arrays by putting a domain in between
 create domain dposinta as posint[];
 create table dposintatable (f1 dposinta[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dposintatable values(array[array[42]]);  -- fail
 ERROR:  column "f1" is of type dposinta[] but expression is of type integer[]
 LINE 1: insert into dposintatable values(array[array[42]]);
@@ -485,30 +525,40 @@ LINE 1: insert into dposintatable values(array[array[42]::posint[]])...
 HINT:  You will need to rewrite or cast the expression.
 insert into dposintatable values(array[array[42]::dposinta]); -- but this works
 select f1, f1[1], (f1[1])[1] from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     f1    |  f1  | f1 
 ----------+------+----
  {"{42}"} | {42} | 42
 (1 row)
 
 select pg_typeof(f1) from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pg_typeof  
 ------------
  dposinta[]
 (1 row)
 
 select pg_typeof(f1[1]) from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pg_typeof 
 -----------
  dposinta
 (1 row)
 
 select pg_typeof(f1[1][1]) from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pg_typeof 
 -----------
  dposinta
 (1 row)
 
 select pg_typeof((f1[1])[1]) from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pg_typeof 
 -----------
  posint
@@ -516,6 +566,8 @@ select pg_typeof((f1[1])[1]) from dposintatable;
 
 update dposintatable set f1[2] = array[99];
 select f1, f1[1], (f1[2])[1] from dposintatable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: dposintatable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        f1        |  f1  | f1 
 -----------------+------+----
  {"{42}","{99}"} | {42} | 99
@@ -523,7 +575,7 @@ select f1, f1[1], (f1[2])[1] from dposintatable;
 
 -- it'd be nice if you could do something like this, but for now you can't:
 update dposintatable set f1[2][1] = array[97];
-ERROR:  wrong number of array subscripts
+ERROR:  wrong number of array subscripts  (seg0 slice1 172.17.0.3:7002 pid=865824)
 -- maybe someday we can make this syntax work:
 update dposintatable set (f1[2])[1] = array[98];
 ERROR:  syntax error at or near "["
@@ -543,21 +595,23 @@ create table nulltest
            , col4 dnull
            , col5 dcheck CHECK (col5 IN ('c', 'd'))
            );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO nulltest DEFAULT VALUES;
-ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint
+ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint  (seg0 172.17.0.3:7002 pid=865053)
 DETAIL:  Failing row contains (null, null, null, null, null).
 INSERT INTO nulltest values ('a', 'b', 'c', 'd', 'c');  -- Good
 insert into nulltest values ('a', 'b', 'c', 'd', NULL);
-ERROR:  domain dcheck does not allow null values
+ERROR:  domain dcheck does not allow null values  (seg0 172.17.0.3:7002 pid=865053)
 insert into nulltest values ('a', 'b', 'c', 'd', 'a');
-ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"
+ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"  (seg2 172.17.0.3:7004 pid=865037)
 DETAIL:  Failing row contains (a, b, c, d, a).
 INSERT INTO nulltest values (NULL, 'b', 'c', 'd', 'd');
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg0 172.17.0.3:7002 pid=865053)
 INSERT INTO nulltest values ('a', NULL, 'c', 'd', 'c');
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg0 172.17.0.3:7002 pid=865053)
 INSERT INTO nulltest values ('a', 'b', NULL, 'd', 'c');
-ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint
+ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint  (seg2 172.17.0.3:7004 pid=865037)
 DETAIL:  Failing row contains (a, b, null, d, c).
 INSERT INTO nulltest values ('a', 'b', 'c', NULL, 'd'); -- Good
 -- Test copy
@@ -574,6 +628,8 @@ ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5
 DETAIL:  Failing row contains (a, b, c, null, a).
 CONTEXT:  COPY nulltest, line 3: "a	b	c	\N	a"
 select * from nulltest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: nulltest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 | col4 | col5 
 ------+------+------+------+------
  a    | b    | c    | d    | c
@@ -592,7 +648,9 @@ ERROR:  domain dnotnull does not allow null values
 SELECT cast(cast(NULL as dnull) as dnotnull); -- fail
 ERROR:  domain dnotnull does not allow null values
 SELECT cast(col4 as dnotnull) from nulltest; -- fail
-ERROR:  domain dnotnull does not allow null values
+NOTICE:  One or more columns in the following table(s) do not have statistics: nulltest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  domain dnotnull does not allow null values  (seg2 slice1 172.17.0.3:7004 pid=865037)
 -- cleanup
 drop table nulltest;
 drop domain dnotnull restrict;
@@ -616,14 +674,14 @@ create table defaulttest
             , col8 ddef5
             );
 insert into defaulttest(col4) values(0); -- fails, col5 defaults to null
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.3:7003 pid=865036)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values; -- succeeds, inserts domain default
 -- We used to treat SET DEFAULT NULL as equivalent to DROP DEFAULT; wrong
 alter table defaulttest alter column col5 set default null;
 insert into defaulttest(col4) values(0); -- fails
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.3:7003 pid=865036)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values;
@@ -631,12 +689,14 @@ insert into defaulttest default values;
 -- Test defaults with copy
 COPY defaulttest(col5) FROM stdin;
 select * from defaulttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: defaulttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 | col4 | col5 | col6 | col7 | col8  
 ------+------+------+------+------+------+------+-------
-    3 |   12 | 5    |    1 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    2 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    3 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    4 |   42 |   88 | 8000 | 12.12
+    3 |   12 | 5    |    1 |    3 |   88 | 8000 | 12.12
 (4 rows)
 
 drop table defaulttest cascade;
@@ -649,24 +709,36 @@ create table domnotnull
 ) distributed by (id);
 insert into domnotnull default values;
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col1" of table "domnotnull" contains null values
+ERROR:  column "col1" of table "domnotnull" contains null values  (seg0 172.17.0.3:7002 pid=865053)
 update domnotnull set col1 = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domnotnull
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col2" of table "domnotnull" contains null values
+ERROR:  column "col2" of table "domnotnull" contains null values  (seg0 172.17.0.3:7002 pid=865053)
 update domnotnull set col2 = 6;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domnotnull
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter domain dnotnulltest set not null;
 update domnotnull set col1 = null; -- fails
-ERROR:  domain dnotnulltest does not allow null values
+NOTICE:  One or more columns in the following table(s) do not have statistics: domnotnull
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  domain dnotnulltest does not allow null values  (seg0 172.17.0.3:7002 pid=865053)
 alter domain dnotnulltest drop not null;
 update domnotnull set col1 = null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domnotnull
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop domain dnotnulltest cascade;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to column col2 of table domnotnull
 drop cascades to column col1 of table domnotnull
 -- Test ALTER DOMAIN .. DEFAULT ..
 create table domdeftest (col1 ddef1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domdeftest default values;
 select * from domdeftest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domdeftest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
     3
@@ -675,6 +747,8 @@ select * from domdeftest;
 alter domain ddef1 set default '42';
 insert into domdeftest default values;
 select * from domdeftest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domdeftest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
     3
@@ -684,6 +758,8 @@ select * from domdeftest;
 alter domain ddef1 drop default;
 insert into domdeftest default values;
 select * from domdeftest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domdeftest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
     3
@@ -695,25 +771,30 @@ drop table domdeftest;
 -- Test ALTER DOMAIN .. CONSTRAINT ..
 create domain con as integer;
 create table domcontest (col1 con);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domcontest values (1);
 insert into domcontest values (2);
 alter domain con add constraint t check (VALUE < 1); -- fails
-ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint
+ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint  (seg0 172.17.0.3:7002 pid=865053)
 alter domain con add constraint t check (VALUE < 34);
 alter domain con add check (VALUE > 0);
 insert into domcontest values (-5); -- fails
-ERROR:  value for domain con violates check constraint "con_check"
+ERROR:  value for domain con violates check constraint "con_check"  (seg2 172.17.0.3:7004 pid=865037)
 insert into domcontest values (42); -- fails
-ERROR:  value for domain con violates check constraint "t"
+ERROR:  value for domain con violates check constraint "t"  (seg1 172.17.0.3:7003 pid=865036)
 insert into domcontest values (5);
 alter domain con drop constraint t;
 insert into domcontest values (-5); --fails
-ERROR:  value for domain con violates check constraint "con_check"
+ERROR:  value for domain con violates check constraint "con_check"  (seg1 172.17.0.3:7003 pid=865036)
 insert into domcontest values (42);
 alter domain con drop constraint nonexistent;
 ERROR:  constraint "nonexistent" of domain "con" does not exist
 alter domain con drop constraint if exists nonexistent;
 NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg0 172.17.0.3:7002 pid=865053)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg2 172.17.0.3:7004 pid=865037)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg1 172.17.0.3:7003 pid=865036)
 -- Test ALTER DOMAIN .. CONSTRAINT .. NOT VALID
 create domain things AS INT;
 CREATE TABLE thethings (id int, stuff things);
@@ -721,19 +802,25 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' a
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO thethings (stuff) VALUES (55);
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11);
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.3:7002 pid=865053)
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11) NOT VALID;
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.3:7002 pid=865053)
 UPDATE thethings SET stuff = 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: thethings
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
 -- Confirm ALTER DOMAIN with RULES.
 create table domtab (col1 integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create domain dom as integer;
 create view domview as select cast(col1 as dom) from domtab;
 insert into domtab (col1) values (null);
 insert into domtab (col1) values (5);
 select * from domview;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
      
@@ -742,24 +829,32 @@ select * from domview;
 
 alter domain dom set not null;
 select * from domview; -- fail
-ERROR:  domain dom does not allow null values
+NOTICE:  One or more columns in the following table(s) do not have statistics: domtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  domain dom does not allow null values  (seg0 slice1 172.17.0.3:7002 pid=865053)
 alter domain dom drop not null;
 select * from domview;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-     
     5
+     
 (2 rows)
 
 alter domain dom add constraint domchkgt6 check(value > 6);
 select * from domview; --fail
-ERROR:  value for domain dom violates check constraint "domchkgt6"
+NOTICE:  One or more columns in the following table(s) do not have statistics: domtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  value for domain dom violates check constraint "domchkgt6"  (seg2 slice1 172.17.0.3:7004 pid=865037)
 alter domain dom drop constraint domchkgt6 restrict;
 select * from domview;
+NOTICE:  One or more columns in the following table(s) do not have statistics: domtab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-     
     5
+     
 (2 rows)
 
 -- cleanup
@@ -794,17 +889,19 @@ ERROR:  value for domain dtop violates check constraint "dinter_check"
 select 'xz23'::dtop; -- fail
 ERROR:  value for domain dtop violates check constraint "dtop_check"
 create temp table dtest(f1 dtop);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dtest values('x123');
 insert into dtest values('x1234'); -- fail, implicit coercion
 ERROR:  value too long for type character varying(4)
 insert into dtest values('y1234'); -- fail, implicit coercion
 ERROR:  value too long for type character varying(4)
 insert into dtest values('y123'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg0 172.17.0.3:7002 pid=865053)
 insert into dtest values('yz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 172.17.0.3:7003 pid=865036)
 insert into dtest values('xz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dtop_check"
+ERROR:  value for domain dtop violates check constraint "dtop_check"  (seg2 172.17.0.3:7004 pid=865037)
 drop table dtest;
 drop domain vchar4 cascade;
 NOTICE:  drop cascades to 2 other objects
@@ -815,15 +912,17 @@ drop cascades to type dtop
 -- column. Per bug #1433
 create domain str_domain as text not null;
 create table domain_test (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domain_test values (1, 2);
 insert into domain_test values (1, 2);
 -- should fail
 alter table domain_test add column c str_domain;
-ERROR:  domain str_domain does not allow null values
+ERROR:  domain str_domain does not allow null values  (seg1 172.17.0.3:7003 pid=865036)
 create domain str_domain2 as text check (value <> 'foo') default 'foo';
 -- should fail
 alter table domain_test add column d str_domain2;
-ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"
+ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"  (seg1 172.17.0.3:7003 pid=865036)
 -- Check that domain constraints on prepared statement parameters of
 -- unknown type are enforced correctly.
 create domain pos_int as int4 check (value > 0) not null;
@@ -883,6 +982,8 @@ create domain posint as int4;
 -- Currently, this doesn't work for composite types, but verify it complains
 create type ddtest1 as (f1 posint);
 create table ddtest2(f1 ddtest1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values(row(-1));
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -896,6 +997,8 @@ drop table ddtest2;
 -- Likewise for domains within domains over composite
 create domain ddtest1d as ddtest1;
 create table ddtest2(f1 ddtest1d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('(-1)');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -904,6 +1007,8 @@ drop domain ddtest1d;
 -- Likewise for domains within domains over array of composite
 create domain ddtest1d as ddtest1[];
 create table ddtest2(f1 ddtest1d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('{(-1)}');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -912,6 +1017,8 @@ drop domain ddtest1d;
 -- Doesn't work for ranges, either
 create type rposint as range (subtype = posint);
 create table ddtest2(f1 rposint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('(-1,3]');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -920,13 +1027,15 @@ drop type rposint;
 alter domain posint add constraint c1 check(value >= 0);
 create domain posint2 as posint check (value % 2 = 0);
 create table ddtest2(f1 posint2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values(11); -- fail
-ERROR:  value for domain posint2 violates check constraint "posint2_check"
+ERROR:  value for domain posint2 violates check constraint "posint2_check"  (seg0 172.17.0.3:7002 pid=865053)
 insert into ddtest2 values(-2); -- fail
-ERROR:  value for domain posint2 violates check constraint "c1"
+ERROR:  value for domain posint2 violates check constraint "c1"  (seg2 172.17.0.3:7004 pid=865037)
 insert into ddtest2 values(2);
 alter domain posint add constraint c2 check(value >= 10); -- fail
-ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint
+ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint  (seg0 172.17.0.3:7002 pid=865053)
 alter domain posint add constraint c2 check(value > 0); -- OK
 drop table ddtest2;
 drop type ddtest1;
@@ -1002,13 +1111,21 @@ select array[1,2]::orderedpair;
 select array[2,1]::orderedpair;  -- fail
 ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
 create temp table op (f1 orderedpair);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into op values (array[1,2]);
 insert into op values (array[2,1]);  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg0 172.17.0.3:7002 pid=865053)
 update op set f1[2] = 3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: op
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 update op set f1[2] = 0;  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
+NOTICE:  One or more columns in the following table(s) do not have statistics: op
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg0 slice1 172.17.0.3:7002 pid=866012)
 select * from op;
+NOTICE:  One or more columns in the following table(s) do not have statistics: op
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   f1   
 -------
  {1,3}
@@ -1104,10 +1221,12 @@ select 1::inotnull;
 select null::inotnull;
 ERROR:  value for domain inotnull violates check constraint "inotnull_check"
 create table dom_table (x inotnull);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dom_table values ('1');
 insert into dom_table values (1);
 insert into dom_table values (null);
-ERROR:  value for domain inotnull violates check constraint "inotnull_check"
+ERROR:  value for domain inotnull violates check constraint "inotnull_check"  (seg1 172.17.0.3:7003 pid=865036)
 drop table dom_table;
 drop domain inotnull;
 drop function sql_is_distinct_from(anyelement, anyelement);

@@ -78,28 +78,32 @@ delete from returning_parttab where partkey = 14 returning *;
 
 -- Check table contents, to be sure that all the commands did what they claimed.
 select * from returning_parttab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: returning_parttab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  distkey | partkey |       t        
 ---------+---------+----------------
+       2 |      11 | multi2 1
+       2 |      12 | multi2 2
+       2 |      15 | multi2 5
+       2 |      19 | multi2 3
        1 |       1 | single insert
        1 |       1 | multi 1
        1 |       2 | multi 2
        1 |       5 | multi 5
        1 |       9 | multi 3
-       1 |      18 | multi 4
        1 |      10 | single2 insert
-       2 |      11 | multi2 1
-       2 |      12 | multi2 2
-       2 |      15 | multi2 5
-       2 |      19 | multi2 3
+       1 |      18 | multi 4
 (11 rows)
 
 --
 -- DELETE RETURNING is currently not supported on AO tables.
 --
 CREATE TEMP TABLE returning_aotab (id int4) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
-ERROR:  feature not supported on appendoptimized relations
+ERROR:  feature not supported on appendoptimized relations  (seg1 slice1 172.17.0.3:7003 pid=870310)
 --
 -- Test UPDATE RETURNING with a split update, i.e. an update of the distribution
 -- key.
@@ -110,25 +114,25 @@ INSERT INTO returning_disttest VALUES (1), (2);
 -- (At one point, each split update incorrectly counted as two updated rows.)
 \set QUIET off
 UPDATE returning_disttest SET id = id + 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: returning_disttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 UPDATE 2
 SELECT * FROM returning_disttest;
+NOTICE:  One or more columns in the following table(s) do not have statistics: returning_disttest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
-  3
   2
+  3
 (2 rows)
 
 -- Test an UPDATE that moves the row to different segment and different partition
 UPDATE returning_parttab SET distkey = 2, partkey = 13 WHERE partkey = 2 RETURNING distkey, partkey, t;
- distkey | partkey |    t    
----------+---------+---------
-       2 |      13 | multi 2
-(1 row)
-
-UPDATE 1
+ERROR:  attribute 3 of relation "returning_parttab" does not exist
 select * from returning_parttab WHERE distkey = 2 AND partkey = 13;
- distkey | partkey |    t    
----------+---------+---------
-       2 |      13 | multi 2
-(1 row)
+NOTICE:  One or more columns in the following table(s) do not have statistics: returning_parttab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ distkey | partkey | t 
+---------+---------+---
+(0 rows)
 

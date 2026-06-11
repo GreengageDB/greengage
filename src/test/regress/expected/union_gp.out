@@ -3,6 +3,8 @@ create temp table t_union1 (a int, b int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select distinct a, null::integer as c from t_union1 union select a, b from t_union1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_union1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | c 
 ---+---
 (0 rows)
@@ -22,13 +24,9 @@ select 1 union select distinct null::integer;
 (2 rows)
 
 select 1 a, NULL b, NULL c UNION SELECT 2, 3, NULL UNION SELECT 3, NULL, 4;
- a | b | c 
----+---+---
- 1 |   |  
- 2 | 3 |  
- 3 |   | 4
-(3 rows)
-
+ERROR:  UNION types text and integer cannot be matched
+LINE 1: ...L b, NULL c UNION SELECT 2, 3, NULL UNION SELECT 3, NULL, 4;
+                                                                     ^
 select ARRAY[1, 2, 3] union select distinct null::integer[];
   array  
 ---------
@@ -43,8 +41,8 @@ LINE 1: select 1 intersect (select 1, 2 union all select 3, 4);
 select 1 a, row_number() over (partition by 'a') union all (select 1 a , 2 b);
  a | row_number 
 ---+------------
- 1 |          2
  1 |          1
+ 1 |          2
 (2 rows)
 
 -- This should preserve domain types
@@ -67,12 +65,9 @@ select 'b'::information_schema.sql_identifier)a;
      union
      (select 1 union select distinct null::integer)
   )s2);
- a 
----
- 1
-  
-(2 rows)
-
+ERROR:  UNION types text and integer cannot be matched
+LINE 4:      (select 1 union select distinct null::integer)
+                     ^
 -- Yet, we keep behaviors on text-like columns
 select pg_typeof(a) from(select 'foo' a union select 'foo'::name)s;
  pg_typeof 
@@ -95,8 +90,7 @@ select pg_typeof(a) from(select 1 x, 'foo' a union
 (1 row)
 
 CREATE TABLE union_ctas (a, b) AS SELECT 1, 2 UNION SELECT 1, 1 UNION SELECT 1, 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT * FROM union_ctas;
  a | b 
 ---+---
@@ -107,12 +101,12 @@ SELECT * FROM union_ctas;
 DROP TABLE union_ctas;
 -- MPP-21075: push quals below union
 CREATE TABLE union_quals1 (a, b) AS SELECT i, i%2 from generate_series(1,10) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE TABLE union_quals2 (a, b) AS SELECT i%2, i from generate_series(1,10) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT * FROM (SELECT a, b from union_quals1 UNION SELECT b, a from union_quals2) as foo(a,b) where a > b order by a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: union_quals1, union_quals2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b 
 ----+---
   2 | 0
@@ -127,6 +121,8 @@ SELECT * FROM (SELECT a, b from union_quals1 UNION SELECT b, a from union_quals2
 (9 rows)
 
 SELECT * FROM (SELECT a, max(b) over() from union_quals1 UNION SELECT * from union_quals2) as foo(a,b) where b > 6 order by a,b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: union_quals1, union_quals2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
  0 |  8
@@ -225,23 +221,23 @@ union
 (SELECT 'test2' as branch, id FROM test2);
  branch | id 
 --------+----
- test1  |  1
  test2  |  2
+ test1  |  1
 (2 rows)
 
 explain (SELECT 'test1' as branch, id FROM test1 LIMIT 1)
 union
 (SELECT 'test2' as branch, id FROM test2);
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- HashAggregate  (cost=2.08..2.10 rows=2 width=36)
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=35.57..35.59 rows=2 width=36)
    Group Key: ('test1'::text), test1.id
-   ->  Append  (cost=2.05..2.07 rows=2 width=36)
-         ->  Limit  (cost=1.01..2.04 rows=1 width=36)
-               ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1.01..2.04 rows=1 width=36)
-                     ->  Limit  (cost=1.01..2.02 rows=1 width=36)
-                           ->  Seq Scan on test1  (cost=0.00..1.01 rows=1 width=36)
-         ->  Foreign Scan on test2  (cost=0.00..0.00 rows=1 width=36)
+   ->  Append  (cost=35.53..35.56 rows=2 width=36)
+         ->  Limit  (cost=35.50..35.52 rows=1 width=36)
+               ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=35.50..35.55 rows=3 width=36)
+                     ->  Limit  (cost=35.50..35.51 rows=1 width=36)
+                           ->  Seq Scan on test1  (cost=0.00..355.00 rows=32100 width=36)
+         ->  Foreign Scan on test2  (cost=0.00..0.01 rows=1 width=36)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -263,11 +259,13 @@ with base as
 select a from base
 union all
 select a from base where a = 'foo';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pullup_distkey_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  
 -----
  foo
- xx
  foo
+ xx
 (3 rows)
 
 --
@@ -290,8 +288,8 @@ select localoid::regclass, policytype, numsegments
 explain select * from rep2 union all select * from rep3;
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=1922.00..1922.00 rows=172200 width=8)
-   ->  Append  (cost=0.00..1922.00 rows=172200 width=8)
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=2783.00..2783.00 rows=172200 width=8)
+   ->  Append  (cost=0.00..2783.00 rows=172200 width=8)
          ->  Seq Scan on rep2  (cost=0.00..961.00 rows=86100 width=8)
          ->  Seq Scan on rep3  (cost=0.00..961.00 rows=86100 width=8)
  Optimizer: Postgres query optimizer
@@ -326,6 +324,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO T_random SELECT i, i%5 from generate_series(1,30) i;
 --start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 --end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -354,6 +353,8 @@ UNION ALL
 UNION ALL
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1  
 -----
    1
@@ -433,6 +434,8 @@ UNION ALL
 UNION ALL
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1  
 -----
    1
@@ -512,6 +515,8 @@ UNION ALL
 UNION ALL
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1  
 -----
    1
@@ -591,6 +596,8 @@ UNION ALL
 UNION ALL
 (select b1 from T_b2)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -675,6 +682,8 @@ UNION ALL
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -694,6 +703,8 @@ UNION ALL
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -713,6 +724,8 @@ UNION ALL
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -732,6 +745,8 @@ UNION ALL
 (select b1 from T_b2)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -752,6 +767,8 @@ UNION
 UNION
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1  
 -----
    1
@@ -801,6 +818,8 @@ UNION
 UNION ALL
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1  
 -----
    1
@@ -850,6 +869,8 @@ UNION
 UNION ALL
 (select d1 from T_constant)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1  
 -----
    1
@@ -899,6 +920,8 @@ UNION
 UNION
 (select b1 from T_b2)
 order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -953,6 +976,8 @@ UNION
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -972,6 +997,8 @@ UNION
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -991,6 +1018,8 @@ UNION
 (select d1 from T_constant)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1010,6 +1039,8 @@ UNION
 (select b1 from T_b2)
 order by 1;'
 , 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1019,6 +1050,8 @@ order by 1;'
 -- Binary UNION ALL results
 --
 (select a1 from T_a1) UNION ALL (select b1 from T_b2) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 
 ----
   1
@@ -1054,6 +1087,8 @@ order by 1;'
 (30 rows)
 
 (select b1 from T_b2) UNION ALL (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1 
 ----
   1
@@ -1089,6 +1124,8 @@ order by 1;'
 (30 rows)
 
 (select a1 from T_a1) UNION ALL (select c1 from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 
 ----
   1
@@ -1134,6 +1171,8 @@ order by 1;'
 (40 rows)
 
 (select c1 from T_random) UNION ALL (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1 
 ----
   1
@@ -1179,6 +1218,8 @@ order by 1;'
 (40 rows)
 
 (select * from T_a1) UNION ALL (select * from T_b2) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 
 ----+----
   1 |  1
@@ -1214,6 +1255,8 @@ order by 1;'
 (30 rows)
 
 (select * from T_a1) UNION ALL (select * from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 
 ----+----
   1 |  1
@@ -1259,6 +1302,8 @@ order by 1;'
 (40 rows)
 
 (select * from T_b2) UNION ALL (select * from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1 | b2 
 ----+----
   1 |  1
@@ -1318,6 +1363,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select a1 from T_a1) UNION ALL (select d1 from T_constant) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1  
 -----
    1
@@ -1340,6 +1387,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select d1 from T_constant) UNION ALL (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -1362,6 +1411,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select c1 from T_random) UNION ALL (select d1 from T_constant) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1  
 -----
    1
@@ -1404,6 +1455,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select d1 from T_constant) UNION ALL (select c1 from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -1445,42 +1498,56 @@ UNION ALL SELECT 300, 300)
 -- Binary UNION ALL explain
 --
 select count_operator('(select a1 from T_a1) UNION ALL (select b1 from T_b2) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select b1 from T_b2) UNION ALL (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select a1 from T_a1) UNION ALL (select c1 from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select c1 from T_random) UNION ALL (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_a1) UNION ALL (select * from T_b2) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_a1) UNION ALL (select * from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_b2) UNION ALL (select * from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
@@ -1492,6 +1559,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select a1 from T_a1) UNION ALL (select d1 from T_constant) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1503,6 +1572,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select d1 from T_constant) UNION ALL (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1514,6 +1585,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select c1 from T_random) UNION ALL (select d1 from T_constant) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1524,6 +1597,8 @@ SELECT 100, 100
 UNION ALL SELECT 200, 200
 UNION ALL SELECT 300, 300)
 (select d1 from T_constant) UNION ALL (select c1 from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1533,6 +1608,8 @@ UNION ALL SELECT 300, 300)
 -- Binary UNION results
 --
 (select a1 from T_a1) UNION (select b1 from T_b2) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 
 ----
   1
@@ -1558,6 +1635,8 @@ UNION ALL SELECT 300, 300)
 (20 rows)
 
 (select b1 from T_b2) UNION (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1 
 ----
   1
@@ -1583,6 +1662,8 @@ UNION ALL SELECT 300, 300)
 (20 rows)
 
 (select a1 from T_a1) UNION (select c1 from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 
 ----
   1
@@ -1618,6 +1699,8 @@ UNION ALL SELECT 300, 300)
 (30 rows)
 
 (select c1 from T_random) UNION (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1 
 ----
   1
@@ -1653,6 +1736,8 @@ UNION ALL SELECT 300, 300)
 (30 rows)
 
 (select * from T_a1) UNION (select * from T_b2) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 
 ----+----
   1 |  1
@@ -1678,6 +1763,8 @@ UNION ALL SELECT 300, 300)
 (20 rows)
 
 (select * from T_a1) UNION (select * from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 
 ----+----
   1 |  1
@@ -1713,6 +1800,8 @@ UNION ALL SELECT 300, 300)
 (30 rows)
 
 (select * from T_b2) UNION (select * from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b1 | b2 
 ----+----
   1 |  1
@@ -1752,6 +1841,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select a1 from T_a1) UNION (select d1 from T_constant) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1  
 -----
    1
@@ -1774,6 +1865,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select d1 from T_constant) UNION (select a1 from T_a1) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -1796,6 +1889,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select c1 from T_random) UNION (select d1 from T_constant) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1  
 -----
    1
@@ -1838,6 +1933,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select d1 from T_constant) UNION (select c1 from T_random) order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  d1  
 -----
    1
@@ -1879,42 +1976,56 @@ UNION SELECT 300, 300)
 -- Binary UNION explain
 --
 select count_operator('(select a1 from T_a1) UNION (select b1 from T_b2) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select b1 from T_b2) UNION (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select a1 from T_a1) UNION (select c1 from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select c1 from T_random) UNION (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random, t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_a1) UNION (select * from T_b2) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_b2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_a1) UNION (select * from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
 (1 row)
 
 select count_operator('(select * from T_b2) UNION (select * from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_b2, t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
@@ -1926,6 +2037,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select a1 from T_a1) UNION (select d1 from T_constant) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1937,6 +2050,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select d1 from T_constant) UNION (select a1 from T_a1) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_a1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1948,6 +2063,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select c1 from T_random) UNION (select d1 from T_constant) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1958,6 +2075,8 @@ SELECT 100, 100
 UNION SELECT 200, 200
 UNION SELECT 300, 300)
 (select d1 from T_constant) UNION (select c1 from T_random) order by 1;', 'APPEND');
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_random
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               2
@@ -1971,6 +2090,8 @@ INSERT INTO t2_setop VALUES (3), (4), (5);
 UNION
 (SELECT a FROM t2_setop EXCEPT SELECT a FROM t1_setop ORDER BY a)
 ORDER BY a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_setop, t2_setop
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  1
@@ -1987,14 +2108,18 @@ insert into t1_ncols values (1, 11, 'one', '2001-01-01');
 insert into t2_ncols values (2, 22, 'two', '2002-02-02');
 insert into t2_ncols values (4, 44, 'four','2004-04-04');
 select b from t1_ncols union all select a from t2_ncols;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_ncols, t2_ncols
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b  
 ----
-  4
-  2
  11
+  2
+  4
 (3 rows)
 
 select a+100, b, d from t1_ncols union select b, a+200, d from t2_ncols order by 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_ncols, t2_ncols
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? |  b  |     d      
 ----------+-----+------------
        22 | 202 | 02-02-2002
@@ -2003,20 +2128,24 @@ select a+100, b, d from t1_ncols union select b, a+200, d from t2_ncols order by
 (3 rows)
 
 select c, a from v1_ncols;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_ncols, t2_ncols
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   c   | a 
 ------+---
  one  | 1
- four | 4
  two  | 2
+ four | 4
 (3 rows)
 
 with cte1(aa, b, c, d) as (select a*100, b, c, d from t1_ncols union select * from t2_ncols)
 select x.aa/100 aaa, x.c, y.c from cte1 x join cte1 y on x.aa=y.aa;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t1_ncols, t2_ncols
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  aaa |  c   |  c   
 -----+------+------
+   1 | one  | one
    0 | two  | two
    0 | four | four
-   1 | one  | one
 (3 rows)
 
 select from t2_ncols union select * from t2_ncols;
@@ -2082,8 +2211,8 @@ explain select union_schema.t1.a, union_schema.t2.b
   select * from union_schema.t3;
                                              QUERY PLAN                                              
 -----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.23..1472.30 rows=86130 width=8)
-   ->  Append  (cost=1.23..323.90 rows=28710 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.23..1615.85 rows=86130 width=8)
+   ->  Append  (cost=1.23..467.45 rows=28710 width=8)
          ->  Hash Join  (cost=1.23..2.80 rows=10 width=8)
                Hash Cond: (t2.b = t1.a)
                ->  Redistribute Motion 2:3  (slice2; segments: 2)  (cost=0.00..1.40 rows=20 width=4)
@@ -2100,6 +2229,8 @@ select * from union_schema.t1 join union_schema.t2
   on union_schema.t1.a = union_schema.t2.b;
  a  | b  | a  | b  
 ----+----+----+----
+  1 |  1 |  1 |  1
+  5 |  5 |  5 |  5
   2 |  2 |  2 |  2
   3 |  3 |  3 |  3
   4 |  4 |  4 |  4
@@ -2108,8 +2239,6 @@ select * from union_schema.t1 join union_schema.t2
   8 |  8 |  8 |  8
   9 |  9 |  9 |  9
  10 | 10 | 10 | 10
-  1 |  1 |  1 |  1
-  5 |  5 |  5 |  5
 (10 rows)
 
 select union_schema.t1.a, union_schema.t2.b
@@ -2158,8 +2287,8 @@ explain select union_schema.t1.a, union_schema.t2.b
   select * from union_schema.t3;
                                                 QUERY PLAN                                                 
 -----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.32..1472.20 rows=86130 width=8)
-   ->  Append  (cost=1.32..323.80 rows=28710 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.32..1615.75 rows=86130 width=8)
+   ->  Append  (cost=1.32..467.35 rows=28710 width=8)
          ->  Hash Join  (cost=1.32..2.70 rows=10 width=8)
                Hash Cond: (t1.a = t2.b)
                ->  Seq Scan on t1  (cost=0.00..1.20 rows=20 width=4)

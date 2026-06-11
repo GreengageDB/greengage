@@ -47,9 +47,9 @@ update addcol1 set b = 'new value' where a < 10 and a > 0;
 select * from addcol1 where a < 8 and a > 3;
  a |     b     
 ---+-----------
- 5 | new value
- 7 | new value
  4 | new value
+ 7 | new value
+ 5 | new value
  6 | new value
 (4 rows)
 
@@ -69,9 +69,9 @@ select * from addcol1 where a < 8 and a > 3;
  a |     b     |  c  
 ---+-----------+-----
  5 | new value | 1.2
- 7 | new value | 1.2
- 4 | new value | 1.2
  6 | new value | 1.2
+ 4 | new value | 1.2
+ 7 | new value | 1.2
 (4 rows)
 
 -- insert should result in two appendonly segments, each having eof > 0.
@@ -271,12 +271,12 @@ IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
 WHERE relname='addcol6'));
    case    | objmod | last_sequence | gp_segment_id 
 -----------+--------+---------------+---------------
- NormalXid |      0 |             0 |             1
- FrozenXid |      1 |           100 |             1
- NormalXid |      0 |             0 |             2
- FrozenXid |      1 |           100 |             2
  NormalXid |      0 |             0 |             0
  FrozenXid |      1 |           100 |             0
+ NormalXid |      0 |             0 |             2
+ FrozenXid |      1 |           100 |             2
+ NormalXid |      0 |             0 |             1
+ FrozenXid |      1 |           100 |             1
 (6 rows)
 
 abort;
@@ -287,10 +287,10 @@ IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
 WHERE relname='addcol6'));
    case    | objmod | last_sequence | gp_segment_id 
 -----------+--------+---------------+---------------
- NormalXid |      0 |             0 |             1
- FrozenXid |      1 |           100 |             1
  NormalXid |      0 |             0 |             2
  FrozenXid |      1 |           100 |             2
+ NormalXid |      0 |             0 |             1
+ FrozenXid |      1 |           100 |             1
  NormalXid |      0 |             0 |             0
  FrozenXid |      1 |           100 |             0
 (6 rows)
@@ -318,12 +318,12 @@ IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
 WHERE relname='addcol6'));
    case    | objmod | last_sequence | gp_segment_id 
 -----------+--------+---------------+---------------
- NormalXid |      0 |             0 |             0
- FrozenXid |      1 |           200 |             0
- NormalXid |      0 |             0 |             1
- FrozenXid |      1 |           200 |             1
  NormalXid |      0 |             0 |             2
  FrozenXid |      1 |           200 |             2
+ NormalXid |      0 |             0 |             1
+ FrozenXid |      1 |           200 |             1
+ NormalXid |      0 |             0 |             0
+ FrozenXid |      1 |           200 |             0
 (6 rows)
 
 -- add column with default value as sequence
@@ -467,7 +467,7 @@ alter table addcol1 rename to addcol1_renamed;
 alter table addcol1_renamed add column new_column int default 10;
 alter table addcol1_renamed alter column new_column set not null;
 alter table addcol1_renamed add column new_column2 int not null; -- should fail
-ERROR:  column "new_column2" of relation "addcol1_renamed" contains null values
+ERROR:  column "new_column2" of relation "addcol1_renamed" contains null values  (seg0 172.17.0.3:7002 pid=889749)
 select count(*) from addcol1_renamed;
  count 
 -------
@@ -568,11 +568,11 @@ alter table alter_aocs_part_table split default partition start(6) inclusive end
 ERROR:  partition "alter_aocs_part_table_1_prt_11" would overlap partition "alter_aocs_part_table_1_prt_1"
 alter table alter_aocs_part_table split default partition start(7) inclusive end(8) exclusive;
 \d+ alter_aocs_part_table
-                                            Partitioned table "aocs_addcol.alter_aocs_part_table"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
- b      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+                                                   Partitioned table "aocs_addcol.alter_aocs_part_table"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
+ b      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
 Partition key: RANGE (b)
 Partitions: alter_aocs_part_table_1_prt_1 FOR VALUES FROM (6) TO (7),
             alter_aocs_part_table_1_prt_11 FOR VALUES FROM (7) TO (8),
@@ -621,6 +621,8 @@ create table aocs_multi_level_part_table (date date, region text, region1 text, 
       (subpartition usa values ('usa'), subpartition asia values ('asia'), default subpartition def),
     partition part2 start(date '2009-01-01') end(date '2010-01-01')
       (subpartition usa values ('usa'), subpartition asia values ('asia')));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'date' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- insert some data
 insert into aocs_multi_level_part_table values ('2008-02-02', 'usa', 'Texas', 10.05), ('2008-03-03', 'asia', 'China', 1.01);
 insert into aocs_multi_level_part_table values ('2009-02-02', 'usa', 'Utah', 10.05), ('2009-03-03', 'asia', 'Japan', 1.01);
@@ -666,9 +668,9 @@ select * from aocs_multi_level_part_table;
     date    | region | region1 | amount 
 ------------+--------+---------+--------
  02-02-2008 | usa    | Texas   |  10.05
- 02-02-2009 | usa    | Utah    |  10.05
  03-03-2008 | asia   | China   |   1.01
  03-03-2009 | asia   | Japan   |   1.01
+ 02-02-2009 | usa    | Utah    |  10.05
 (4 rows)
 
 truncate aocs_multi_level_part_table_1_prt_part1_2_prt_asia;
@@ -676,16 +678,16 @@ select * from aocs_multi_level_part_table;
     date    | region | region1 | amount 
 ------------+--------+---------+--------
  02-02-2008 | usa    | Texas   |  10.05
- 02-02-2009 | usa    | Utah    |  10.05
  03-03-2009 | asia   | Japan   |   1.01
+ 02-02-2009 | usa    | Utah    |  10.05
 (3 rows)
 
 alter table aocs_multi_level_part_table truncate partition for ('02-02-2008');
 select * from aocs_multi_level_part_table;
     date    | region | region1 | amount 
 ------------+--------+---------+--------
- 02-02-2009 | usa    | Utah    |  10.05
  03-03-2009 | asia   | Japan   |   1.01
+ 02-02-2009 | usa    | Utah    |  10.05
 (2 rows)
 
 alter table aocs_multi_level_part_table alter partition part2 truncate partition usa;
@@ -777,13 +779,13 @@ RESET gp_default_storage_options;
 -- use table setting
 ALTER TABLE aocs_alter_add_col ADD COLUMN d int;
 \d+ aocs_alter_add_col
-                                                      Table "public.aocs_alter_add_col"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
- b      | integer |           |          |         | plain   |              | zlib             | 3                 | 16384      | 
- c      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
- d      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
+                                                             Table "public.aocs_alter_add_col"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
+ b      | integer |           |          |         | plain   |             |              | zlib             | 3                 | 16384      | 
+ c      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
+ d      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
 Checksum: t
 Distributed by: (a)
 Options: compresstype=rle_type, compresslevel=4, blocksize=65536
@@ -799,13 +801,13 @@ RESET gp_default_storage_options;
 -- use default value 
 ALTER TABLE aocs_alter_add_col_no_compress ADD COLUMN d int;
 \d+ aocs_alter_add_col_no_compress 
-                                                Table "public.aocs_alter_add_col_no_compress"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
- b      | integer |           |          |         | plain   |              | rle_type         | 3                 | 16384      | 
- c      | integer |           |          |         | plain   |              | zlib             | 2                 | 32768      | 
- d      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+                                                       Table "public.aocs_alter_add_col_no_compress"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
+ b      | integer |           |          |         | plain   |             |              | rle_type         | 3                 | 16384      | 
+ c      | integer |           |          |         | plain   |             |              | zlib             | 2                 | 32768      | 
+ d      | integer |           |          |         | plain   |             |              | none             | 0                 | 32768      | 
 Checksum: t
 Distributed by: (a)
 
@@ -822,13 +824,13 @@ RESET gp_default_storage_options;
 -- use table setting
 ALTER TABLE aocs_alter_add_col_reorganize ADD COLUMN d int;
 \d+ aocs_alter_add_col_reorganize
-                                                 Table "public.aocs_alter_add_col_reorganize"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
- b      | integer |           |          |         | plain   |              | zlib             | 3                 | 16384      | 
- c      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
- d      | integer |           |          |         | plain   |              | rle_type         | 4                 | 65536      | 
+                                                        Table "public.aocs_alter_add_col_reorganize"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
+ a      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
+ b      | integer |           |          |         | plain   |             |              | zlib             | 3                 | 16384      | 
+ c      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
+ d      | integer |           |          |         | plain   |             |              | rle_type         | 4                 | 65536      | 
 Checksum: t
 Distributed by: (a)
 Options: compresstype=rle_type, compresslevel=4, blocksize=65536
