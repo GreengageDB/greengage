@@ -1488,7 +1488,6 @@ psql_completion(const char *text, int start, int end)
 
 #ifdef HAVE_RL_COMPLETION_APPEND_CHARACTER
 	rl_completion_append_character = ' ';
-	rl_completion_suppress_append = 0;
 #endif
 
 	/* Clear a few things. */
