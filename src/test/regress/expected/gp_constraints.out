@@ -23,23 +23,21 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO CHECK_TBL VALUES (5);
 INSERT INTO CHECK_TBL VALUES (4);
 INSERT INTO CHECK_TBL VALUES (3);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=277154)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=2875036)
 DETAIL:  Failing row contains (3).
 INSERT INTO CHECK_TBL VALUES (2);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=277154)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=2875036)
 DETAIL:  Failing row contains (2).
 INSERT INTO CHECK_TBL VALUES (6);
 INSERT INTO CHECK_TBL VALUES (1);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg1 172.17.0.3:7003 pid=277157)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg1 172.17.0.3:7003 pid=2875019)
 DETAIL:  Failing row contains (1).
 SELECT '' AS three, * FROM CHECK_TBL;
-NOTICE:  One or more columns in the following table(s) do not have statistics: check_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  three | x 
 -------+---
+       | 4
        | 5
        | 6
-       | 4
 (3 rows)
 
 CREATE TABLE CHECK_TBL1 (x int,
@@ -49,23 +47,21 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO CHECK_TBL1 VALUES (5);
 INSERT INTO CHECK_TBL1 VALUES (4);
 INSERT INTO CHECK_TBL1 VALUES (3);
-ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=277154)
+ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=2875036)
 DETAIL:  Failing row contains (3).
 INSERT INTO CHECK_TBL1 VALUES (2);
-ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=277154)
+ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg0 172.17.0.3:7002 pid=2875036)
 DETAIL:  Failing row contains (2).
 INSERT INTO CHECK_TBL1 VALUES (6);
 INSERT INTO CHECK_TBL1 VALUES (1);
-ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg1 172.17.0.3:7003 pid=277157)
+ERROR:  new row for relation "check_tbl1" violates check constraint "check_con"  (seg1 172.17.0.3:7003 pid=2875019)
 DETAIL:  Failing row contains (1).
 SELECT '' AS three, * FROM CHECK_TBL1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: check_tbl1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  three | x 
 -------+---
+       | 4
        | 5
        | 6
-       | 4
 (3 rows)
 
 --
@@ -79,17 +75,12 @@ INSERT INTO PRIMARY_TBL VALUES (1, 'one');
 INSERT INTO PRIMARY_TBL VALUES (2, 'two');
 INSERT INTO tmp VALUES (1, 'three');
 INSERT INTO PRIMARY_TBL SELECT * FROM tmp;
-NOTICE:  One or more columns in the following table(s) do not have statistics: tmp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-ERROR:  duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.3:7003 pid=277157)
+ERROR:  duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.3:7003 pid=2875019)
 DETAIL:  Key (i)=(1) already exists.
 -- database object names as separate fields in error messages can be shown when VERBOSITY set to verbose
 \set VERBOSITY verbose
 INSERT INTO PRIMARY_TBL SELECT * FROM tmp;
-NOTICE:  00000: One or more columns in the following table(s) do not have statistics: tmp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-LOCATION:  PrintMissingStatsWarning, COptTasks.cpp:710
-ERROR:  23505: duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.3:7003 pid=277157)
+ERROR:  23505: duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.3:7003 pid=2875019)
 DETAIL:  Key (i)=(1) already exists.
 SCHEMA NAME:  gpdb_insert
 TABLE NAME:  primary_tbl
@@ -97,8 +88,6 @@ CONSTRAINT NAME:  primary_tbl_pkey
 LOCATION:  _bt_check_unique, nbtinsert.c:667
 \set VERBOSITY default
 SELECT '' AS four, * FROM PRIMARY_TBL;
-NOTICE:  One or more columns in the following table(s) do not have statistics: primary_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  four | i |  t  
 ------+---+-----
       | 2 | two
@@ -108,23 +97,17 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 INSERT INTO PRIMARY_TBL VALUES (4, 'four');
 INSERT INTO PRIMARY_TBL VALUES (5, 'five');
 DELETE FROM tmp;
-NOTICE:  One or more columns in the following table(s) do not have statistics: tmp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO tmp (t) VALUES ('six');
 INSERT INTO PRIMARY_TBL SELECT * FROM tmp;
-NOTICE:  One or more columns in the following table(s) do not have statistics: tmp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg0 172.17.0.3:7002 pid=277154)
+ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg0 172.17.0.3:7002 pid=2875036)
 DETAIL:  Failing row contains (null, six).
 SELECT '' AS four, * FROM PRIMARY_TBL;
-NOTICE:  One or more columns in the following table(s) do not have statistics: primary_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  four | i |  t   
 ------+---+------
       | 2 | two
       | 4 | four
-      | 1 | one
       | 5 | five
+      | 1 | one
 (4 rows)
 
 DROP TABLE PRIMARY_TBL;
@@ -137,20 +120,18 @@ INSERT INTO UNIQUE_TBL VALUES (1, 'one');
 INSERT INTO UNIQUE_TBL VALUES (2, 'two');
 INSERT INTO UNIQUE_TBL VALUES (1, 'three');
 INSERT INTO UNIQUE_TBL VALUES (1, 'one');
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_t_key"  (seg2 172.17.0.3:7004 pid=277161)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_t_key"  (seg2 172.17.0.3:7004 pid=2875038)
 DETAIL:  Key (i, t)=(1, one) already exists.
 INSERT INTO UNIQUE_TBL VALUES (5, 'one');
 INSERT INTO UNIQUE_TBL (t) VALUES ('six');
 SELECT '' AS five, * FROM UNIQUE_TBL;
-NOTICE:  One or more columns in the following table(s) do not have statistics: unique_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  five | i |   t   
 ------+---+-------
       | 2 | two
-      | 1 | three
-      |   | six
       | 1 | one
       | 5 | one
+      | 1 | three
+      |   | six
 (5 rows)
 
 DROP TABLE UNIQUE_TBL;
@@ -168,11 +149,7 @@ INSERT INTO fkc_primary_table1 VALUES (2, 'bar');
 INSERT INTO fkc_foreign_table1 VALUES (1, 'bar');
 INSERT INTO fkc_foreign_table1 VALUES (2, 'bar');
 UPDATE fkc_foreign_table1 SET b = 'foo';
-NOTICE:  One or more columns in the following table(s) do not have statistics: fkc_foreign_table1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DELETE FROM fkc_primary_table1 WHERE a = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: fkc_primary_table1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 COMMIT;
 BEGIN;
 -- Test with an ao table and heap table
@@ -186,9 +163,5 @@ INSERT INTO fkc_primary_table2 VALUES (2, 'bar');
 INSERT INTO fkc_foreign_table2 VALUES (1, 'bar');
 INSERT INTO fkc_foreign_table2 VALUES (2, 'bar');
 UPDATE fkc_foreign_table2 SET b = 'foo';
-NOTICE:  One or more columns in the following table(s) do not have statistics: fkc_foreign_table2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DELETE FROM fkc_primary_table2 WHERE a = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: fkc_primary_table2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 COMMIT;

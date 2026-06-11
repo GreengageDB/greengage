@@ -225,8 +225,6 @@ CREATE SEQUENCE tststats.s;
 CREATE VIEW tststats.v AS SELECT * FROM tststats.t;
 CREATE MATERIALIZED VIEW tststats.mv AS SELECT * FROM tststats.t;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
-NOTICE:  One or more columns in the following table(s) do not have statistics: t
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 CREATE TYPE tststats.ty AS (a int, b int, c text);
 CREATE FOREIGN DATA WRAPPER extstats_dummy_fdw;
 CREATE SERVER extstats_dummy_srv FOREIGN DATA WRAPPER extstats_dummy_fdw;
@@ -851,7 +849,7 @@ RESET optimizer;
 -- giving a default estimate of 0.001 * 5000 = 5 for (c = 1); check multiple
 -- clauses estimated with functional dependencies does not exceed this
 ALTER TABLE functional_dependencies ALTER COLUMN c TYPE numeric;
-ERROR:  could not serialize unrecognized node type: 772
+ERROR:  could not serialize unrecognized node type: 772 (outfast.c:1853)
 SELECT * FROM check_estimated_rows('SELECT * FROM functional_dependencies WHERE a = 1 AND b = ''1'' AND c = 1');
  estimated | actual 
 -----------+--------
@@ -1292,7 +1290,7 @@ SELECT d.stxdmcv IS NOT NULL
 
 -- check change of column type resets the MCV statistics
 ALTER TABLE mcv_lists ALTER COLUMN c TYPE numeric;
-ERROR:  could not serialize unrecognized node type: 772
+ERROR:  could not serialize unrecognized node type: 772 (outfast.c:1853)
 SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a = 1 AND b = ''1''');
  estimated | actual 
 -----------+--------

@@ -119,21 +119,21 @@ select pg_total_relation_size('pg_tables');
 create temp table t1 as select pg_relation_size('pg_tables') from pg_class limit 1;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'pg_relation_size' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  This query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=889655)
+ERROR:  This query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=2892291)
 create temp table t1 as select pg_total_relation_size('pg_tables') from pg_class limit 1;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'pg_total_relation_size' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  This query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=889660)
+ERROR:  This query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=2892296)
 create temp table t1 as select gp_segment_id as seg_id from gp_tablespace_location((SELECT oid FROM pg_tablespace WHERE spcname='pg_default'));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'seg_id' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  Cannot execute in entrydb, this query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=889667)
+ERROR:  Cannot execute in entrydb, this query is not currently supported by GPDB.  (entry db 172.17.0.3:7000 pid=2892301)
 CONTEXT:  PL/pgSQL function gp_tablespace_segment_location(oid) line 8 at RAISE
 SQL function "gp_tablespace_location" statement 1
 create temp table t1 as select gp_segment_id as seg_id from gp_switch_wal();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'seg_id' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  cannot use gp_switch_wal() when not in QD mode  (entry db 172.17.0.3:7000 pid=889672) (xlogfuncs_gp.c:214)
+ERROR:  cannot use gp_switch_wal() when not in QD mode (xlogfuncs_gp.c:214)  (entry db 172.17.0.3:7000 pid=2892306) (xlogfuncs_gp.c:214)
 --
 -- Tests on the table and index size variants.
 --
@@ -334,7 +334,7 @@ update pg_appendonly
   set visimaprelid=16383
   where relid=(select oid from pg_class where relname='ao_with_malformed_visimaprelid');
 select pg_table_size('ao_with_malformed_visimaprelid');
-ERROR:  invalid auxiliary relation oid 16383 for appendonly relation 'ao_with_malformed_visimaprelid'
+ERROR:  invalid auxiliary relation oid 16383 for appendonly relation 'ao_with_malformed_visimaprelid' (dbsize.c:610)
 drop table ao_with_malformed_visimaprelid;
 -- Also test pg_relation_size() in a query that selects from pg_class. It is a
 -- very typical way to use the functions, so make sure it works. (A
@@ -352,8 +352,6 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 copy (select pg_relation_size(oid) from pg_class where relname = 'heapsizetest') to '/tmp/t_heapsizetest_size_xxx';
 copy heapsizetest_size from '/tmp/t_heapsizetest_size_xxx';
 select count(distinct a) from heapsizetest_size;
-NOTICE:  One or more columns in the following table(s) do not have statistics: heapsizetest_size
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      1
@@ -370,8 +368,6 @@ from
 ) x(size);
 -- both method should compute the same result
 select count(distinct a) from heapsizetest_size;
-NOTICE:  One or more columns in the following table(s) do not have statistics: heapsizetest_size
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      1

@@ -173,8 +173,6 @@ NOTICE:  EXCEPTION HIT !!!
 INSERT INTO test_trans_tab VALUES (3);
 COMMIT;
 SELECT * FROM test_trans_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_trans_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  3
@@ -192,8 +190,6 @@ NOTICE:  EXCEPTION HIT !!!
 INSERT INTO test_trans_tab VALUES (4);
 ABORT;
 SELECT * FROM test_trans_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_trans_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  3
@@ -226,22 +222,16 @@ END;
 $$
 LANGUAGE plpgsql;
 SELECT insert_db(1, 'david');
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  insert_db 
 -----------
  
 (1 row)
 
 SELECT * from test_loop_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a |   b   
 ---+-------
- 1 | david
  2 | dummy
+ 1 | david
 (2 rows)
 
 INSERT INTO test_loop_tab select *,'abcdefghijklmnopqrstuvwxyz' from generate_series(1, 100);
@@ -274,16 +264,12 @@ END;
 $$
 LANGUAGE plpgsql;
 SELECT insert_db(1);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  insert_db 
 -----------
          1
 (1 row)
 
 SELECT count(*) FROM test_loop_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    153
@@ -297,8 +283,6 @@ NOTICE:  Exception Hit !!!
 (1 row)
 
 SELECT count(*) FROM test_loop_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_loop_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    156
@@ -344,20 +328,14 @@ $$
 LANGUAGE plpgsql;
 -- Raises unexpected Exception in function but cmd still should be successful
 SELECT test_plpgsql();
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_nested_blocks_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...1
 NOTICE:  catching the exception ...2
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_nested_blocks_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  test_plpgsql 
 --------------
  
 (1 row)
 
 SELECT count(*) from test_nested_blocks_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_nested_blocks_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    400
@@ -391,8 +369,6 @@ SELECT test_plpgsql();
 (1 row)
 
 SELECT count(*) FROM test_master_only_function_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_master_only_function_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    100
@@ -600,8 +576,6 @@ SELECT test_plpgsql();
 (1 row)
 
 SELECT count(*) FROM test_truncate_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_truncate_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     51
@@ -629,8 +603,6 @@ NOTICE:  catching the exception ...
 (1 row)
 
 SELECT count(*) FROM test_truncate_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_truncate_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    102
@@ -660,8 +632,6 @@ NOTICE:  catching the exception ...
 (1 row)
 
 SELECT count(*) FROM test_truncate_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_truncate_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      0
@@ -669,8 +639,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 INSERT INTO test_truncate_tab select * from generate_series(350, 400);
 SELECT count(*) FROM test_truncate_tab;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_truncate_tab
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     51
@@ -771,9 +739,7 @@ SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-ERROR:  Raise error for debug_dtm_action = 3, debug_dtm_action_protocol = Rollback Current Subtransaction  (seg0 172.17.0.3:7002 pid=891857)
+ERROR:  Raise error for debug_dtm_action = 3, debug_dtm_action_protocol = Rollback Current Subtransaction  (seg0 172.17.0.3:7002 pid=2894740)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -789,10 +755,8 @@ SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
-ERROR:  transaction 30425 at level 1 already processed (current level 1)  (seg2 172.17.0.3:7004 pid=891865) (cdbtm.c:2337)
+ERROR:  transaction 30412 at level 1 already processed (current level 1) (cdbtm.c:2337)  (seg2 172.17.0.3:7004 pid=2894756) (cdbtm.c:2337)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during exception cleanup
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -808,8 +772,6 @@ SET debug_dtm_action_nestinglevel=4;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -817,8 +779,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m
@@ -833,7 +793,7 @@ SET debug_dtm_action=fail_begin_command;
 SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
-ERROR:  Raise ERROR for debug_dtm_action = 2, debug_dtm_action_protocol =  Begin Internal Subtransaction  (seg0 172.17.0.3:7002 pid=891857)
+ERROR:  Raise ERROR for debug_dtm_action = 2, debug_dtm_action_protocol =  Begin Internal Subtransaction  (seg0 172.17.0.3:7002 pid=2894740)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during statement block entry
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -849,8 +809,6 @@ SET debug_dtm_action_nestinglevel=4;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -858,8 +816,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m
@@ -874,7 +830,7 @@ SET debug_dtm_action=fail_end_command;
 SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
-ERROR:  Raise error for debug_dtm_action = 3, debug_dtm_action_protocol =  Begin Internal Subtransaction  (seg0 172.17.0.3:7002 pid=891857)
+ERROR:  Raise error for debug_dtm_action = 3, debug_dtm_action_protocol =  Begin Internal Subtransaction  (seg0 172.17.0.3:7002 pid=2894740)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during statement block entry
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -890,8 +846,6 @@ SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -899,8 +853,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m
@@ -915,10 +867,8 @@ SET debug_dtm_action=fail_end_command;
 SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
-ERROR:  transaction 30509 at level 1 already processed (current level 1)  (seg0 172.17.0.3:7002 pid=891857) (cdbtm.c:2337)
+ERROR:  transaction 30526 at level 1 already processed (current level 1) (cdbtm.c:2337)  (seg0 172.17.0.3:7002 pid=2894740) (cdbtm.c:2337)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during exception cleanup
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -934,8 +884,6 @@ SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -943,8 +891,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m
@@ -959,9 +905,7 @@ SET debug_dtm_action=fail_begin_command;
 SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-ERROR:  Raise ERROR for debug_dtm_action = 2, debug_dtm_action_protocol = Rollback Current Subtransaction  (seg0 172.17.0.3:7002 pid=891857)
+ERROR:  Raise ERROR for debug_dtm_action = 2, debug_dtm_action_protocol = Rollback Current Subtransaction  (seg0 172.17.0.3:7002 pid=2894740)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
 select * from employees;
 ERROR:  relation "employees" does not exist
@@ -977,8 +921,6 @@ SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 NOTICE:  table "employees" does not exist, skipping
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -986,8 +928,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m
@@ -1002,8 +942,6 @@ SET debug_dtm_action=fail_end_command;
 SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 NOTICE:  catching the exception ...2
  test_protocol_allseg 
 ----------------------
@@ -1011,8 +949,6 @@ NOTICE:  catching the exception ...2
 (1 row)
 
 select * from employees;
-NOTICE:  One or more columns in the following table(s) do not have statistics: employees
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | shop_id | gender 
 ----+---------+--------
   0 |       1 | m

@@ -96,4 +96,4 @@ SELECT gp_hyperloglog_get_estimate('8gYCAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 -- b) Test convert an invalid hloglog counter.
 SELECT gp_hyperloglog_get_estimate('blah');
-ERROR:  ERROR: The stored counter is version 161 while the library is version 2. Please change library version or use upgrade function to upgrade the counter
+ERROR:  ERROR: The stored counter is version 161 while the library is version 2. Please change library version or use upgrade function to upgrade the counter (gp_hyperloglog.c:970)
