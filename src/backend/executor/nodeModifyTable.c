@@ -3143,6 +3143,28 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 		 */
 		CheckValidResultRel(resultRelInfo, operation);
 
+		/*
+		 * GPDB: We don't support SERIALIZABLE/REPEATABLE READ transaction
+		 * isolation for UPDATE/DELETE on AO/CO tables: the visibility map
+		 * machinery cannot honor a fixed transaction snapshot.  This check
+		 * was lost in the PG14 nodeModifyTable rework (it replaced the
+		 * deep checks removed in 13c98bed10c).
+		 */
+		if (IsolationUsesXactSnapshot() &&
+			RelationIsAppendOptimized(resultRelInfo->ri_RelationDesc))
+		{
+			if (operation == CMD_UPDATE)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("updates on append-only tables are not "
+								"supported in serializable transactions")));
+			else if (operation == CMD_DELETE)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("deletes on append-only tables are not "
+								"supported in serializable transactions")));
+		}
+
 		resultRelInfo++;
 		i++;
 	}
