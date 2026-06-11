@@ -556,15 +556,16 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1', f1[0];
-                     QUERY PLAN                     
-----------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((f1 <-> '(0,1)'::point))
-   ->  Index Only Scan using gpointind on point_tbl
-         Order By: (f1 <-> '(0,1)'::point)
-         Filter: (f1 <> '(1e-300,-1e-300)'::point)
+   Merge Key: ((f1 <-> '(0,1)'::point)), (f1[0])
+   ->  Sort
+         Sort Key: ((f1 <-> '(0,1)'::point)), (f1[0])
+         ->  Index Only Scan using gpointind on point_tbl
+               Filter: (f1 <> '(1e-300,-1e-300)'::point)
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1', f1[0];
         f1         
@@ -597,16 +598,17 @@ SELECT * FROM point_tbl WHERE f1 IS NULL;
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1', f1[0];
-                     QUERY PLAN                     
-----------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((f1 <-> '(0,1)'::point))
-   ->  Index Only Scan using gpointind on point_tbl
-         Index Cond: (f1 IS NOT NULL)
-         Order By: (f1 <-> '(0,1)'::point)
-         Filter: (f1 <> '(1e-300,-1e-300)'::point)
+   Merge Key: ((f1 <-> '(0,1)'::point)), (f1[0])
+   ->  Sort
+         Sort Key: ((f1 <-> '(0,1)'::point)), (f1[0])
+         ->  Index Only Scan using gpointind on point_tbl
+               Index Cond: (f1 IS NOT NULL)
+               Filter: (f1 <> '(1e-300,-1e-300)'::point)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1', f1[0];
         f1         
@@ -627,7 +629,7 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10)
 ------------------------------------------------------------------------------------------------------------
  Result
    ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
+         Sort Key: ((f1 <-> '(0,1)'::point)), (f1[0])
          ->  Result
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Index Scan using gpointind on point_tbl
@@ -710,7 +712,7 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10)
 ------------------------------------------------------------------------------------------------------------
  Result
    ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
+         Sort Key: ((f1 <-> '(0,1)'::point)), (f1[0])
          ->  Result
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Index Scan using gpointind on point_tbl
@@ -1423,7 +1425,7 @@ INSERT INTO covering_index_heap VALUES(1,1,'AAA');
 INSERT INTO covering_index_heap VALUES(1,2,'AAA');
 -- this should fail because of unique index on f1,f2:
 INSERT INTO covering_index_heap VALUES(1,2,'BBB');
-ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 172.17.0.3:7003 pid=952725)
+ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 172.17.0.3:7003 pid=1634950)
 DETAIL:  Key (f1, f2)=(1, 2) already exists.
 -- and this shouldn't:
 INSERT INTO covering_index_heap VALUES(1,4,'AAA');
@@ -2250,7 +2252,7 @@ ERROR:  relation "concur_reindex_tab3_c2_excl" does not exist
 REINDEX TABLE CONCURRENTLY concur_reindex_tab3;  -- succeeds with warning
 NOTICE:  concurrent reindex of "concur_reindex_tab3" is not supported in Greenplum, reindexing non-concurrently instead
 INSERT INTO concur_reindex_tab3 VALUES  (4, '[2,4]');
-ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 172.17.0.3:7003 pid=952725)
+ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 172.17.0.3:7003 pid=1634950)
 DETAIL:  Key (c2, distkey)=([2,5), empty) conflicts with existing key (c2, distkey)=([1,3), empty).
 -- Check materialized views
 CREATE MATERIALIZED VIEW concur_reindex_matview AS SELECT * FROM concur_reindex_tab;
