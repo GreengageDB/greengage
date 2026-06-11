@@ -589,15 +589,29 @@ class _PGDBAdapter:
         del self._conn.notices[:]
         return notices
 
+    def _dispatch_notices(self):
+        # PyGreSQL left unconsumed notices to libpq's default handler, which
+        # prints them to stderr; the gpload tests expect that output.
+        if self._notice_receiver is not None:
+            for n in self._drain_notices():
+                self._notice_receiver(_Notice(n))
+        else:
+            for n in self._drain_notices():
+                sys.stderr.write(n)
+
     def query(self, sql):
         if isinstance(sql, bytes):
             sql = sql.decode('utf-8')
         cur = self._conn.cursor()
         try:
-            cur.execute(sql)
-            if self._notice_receiver is not None:
-                for n in self._drain_notices():
-                    self._notice_receiver(_Notice(n))
+            try:
+                cur.execute(sql)
+            except psycopg2.Error as e:
+                # PyGreSQL surfaced the full server message, severity
+                # prefix included; psycopg2's str() drops the severity.
+                if e.pgerror:
+                    raise type(e)(e.pgerror) from None
+                raise
             if cur.description is not None:
                 return _PGResultAdapter(cur.fetchall(), cur.description)
             # DML: PyGreSQL returns the affected row count (as a string)
@@ -605,6 +619,7 @@ class _PGDBAdapter:
                 return str(cur.rowcount)
             return None
         finally:
+            self._dispatch_notices()
             cur.close()
 
     def notices(self):
