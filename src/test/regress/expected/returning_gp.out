@@ -103,7 +103,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' a
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
-ERROR:  feature not supported on appendoptimized relations  (seg1 slice1 172.17.0.3:7003 pid=870310)
+ERROR:  feature not supported on appendoptimized relations  (seg1 slice1 172.17.0.3:7003 pid=1070004)
 --
 -- Test UPDATE RETURNING with a split update, i.e. an update of the distribution
 -- key.
@@ -128,11 +128,17 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- Test an UPDATE that moves the row to different segment and different partition
 UPDATE returning_parttab SET distkey = 2, partkey = 13 WHERE partkey = 2 RETURNING distkey, partkey, t;
-ERROR:  attribute 3 of relation "returning_parttab" does not exist
+ distkey | partkey |    t    
+---------+---------+---------
+       2 |      13 | multi 2
+(1 row)
+
+UPDATE 1
 select * from returning_parttab WHERE distkey = 2 AND partkey = 13;
 NOTICE:  One or more columns in the following table(s) do not have statistics: returning_parttab
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
- distkey | partkey | t 
----------+---------+---
-(0 rows)
+ distkey | partkey |    t    
+---------+---------+---------
+       2 |      13 | multi 2
+(1 row)
 
