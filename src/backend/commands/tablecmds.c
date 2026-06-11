@@ -4676,6 +4676,17 @@ strip_gpdb_part_commands(List *cmds)
 			case AT_PartExchange:
 			case AT_PartSetTemplate:
 				break;
+
+				/*
+				 * Extended statistics objects exist only on the QD (CREATE
+				 * STATISTICS is not dispatched), so the AT_ReAddStatistics
+				 * subcommand that ALTER COLUMN TYPE generates to rebuild them
+				 * must not be dispatched either: the QEs have no statistics
+				 * object to rebuild, and executing it there would allocate a
+				 * pg_statistic_ext OID outside the QD's OID dispatch.
+				 */
+			case AT_ReAddStatistics:
+				break;
 			default:
 				newcmds = lappend(newcmds, cmd);
 				break;

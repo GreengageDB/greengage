@@ -865,6 +865,22 @@ _readStatsElem(void)
 	READ_DONE();
 }
 
+static CreateStatsStmt *
+_readCreateStatsStmt(void)
+{
+	READ_LOCALS(CreateStatsStmt);
+
+	READ_NODE_FIELD(defnames);
+	READ_NODE_FIELD(stat_types);
+	READ_NODE_FIELD(exprs);
+	READ_NODE_FIELD(relations);
+	READ_STRING_FIELD(stxcomment);
+	READ_BOOL_FIELD(transformed);
+	READ_BOOL_FIELD(if_not_exists);
+
+	READ_DONE();
+}
+
 static RangeSubselect *
 _readRangeSubselect(void)
 {
@@ -5091,6 +5107,8 @@ parseNodeString(void)
 		return_value = _readIndexStmt();
 	else if (MATCHX("STATSELEM"))
 		return_value = _readStatsElem();
+	else if (MATCHX("CREATESTATSSTMT"))
+		return_value = _readCreateStatsStmt();
 	else if (MATCHX("RANGESUBSELECT"))
 		return_value = _readRangeSubselect();
 	else if (MATCHX("INFERCLAUSE"))
