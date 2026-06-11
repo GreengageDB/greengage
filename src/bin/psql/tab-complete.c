@@ -3014,7 +3014,9 @@ psql_completion(const char *text, int start, int end)
 	else if(Matches("DROP", "EXTERNAL", "WEB"))
 		COMPLETE_WITH("TABLE");
 	else if(Matches("DROP", "EXTERNAL", "TABLE") ||
-			Matches("DROP", "EXTERNAL", "WEB", "TABLE"))
+			Matches("DROP", "EXTERNAL", "TABLE", "IF", "EXISTS") ||
+			Matches("DROP", "EXTERNAL", "WEB", "TABLE") ||
+			Matches("DROP", "EXTERNAL", "WEB", "TABLE", "IF", "EXISTS"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
 
 	/* help completing some of the variants */
