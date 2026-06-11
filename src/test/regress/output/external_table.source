@@ -2485,13 +2485,20 @@ UNION
 (SELECT * FROM exttab_limit_2 LIMIT 3)
 ) FOO
 ORDER BY i LIMIT 5;
-ERROR:  segment reject limit reached, aborting operation  (seg0 slice10 172.17.0.3:7002 pid=1336264)
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+NOTICE:  found 6 data formatting errors (6 or more input rows), rejected related input data
+ i |    j     
+---+----------
+ 1 | 1_number
+ 2 | 2_number
+ 3 | 3_number
+ 4 | 4_number
+ 6 | 6_number
+(5 rows)
+
 SELECT COUNT(*) > 0 FROM gp_read_error_log('exttab_limit_2');
  ?column? 
 ----------
- t
+ f
 (1 row)
 
 -- LIMIT queries with segment reject limit reached
@@ -2553,9 +2560,16 @@ UNION
 (SELECT * FROM exttab_limit_2 LIMIT 5)
 ) FOO
 ORDER BY i LIMIT 5;
-ERROR:  segment reject limit reached, aborting operation  (seg0 slice8 172.17.0.3:7002 pid=1336348)
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+NOTICE:  found 8 data formatting errors (8 or more input rows), rejected related input data
+ i |    j     
+---+----------
+ 1 | 1_number
+ 2 | 2_number
+ 3 | 3_number
+ 4 | 4_number
+ 6 | 6_number
+(5 rows)
+
 SELECT count(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_limit_1')
