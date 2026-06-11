@@ -2399,8 +2399,10 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("ROWS", "PERCENT");
 
 	/* CREATE [READABLE] EXTERNAL WEB ... */
-	else if(HeadMatches("CREATE", "EXTERNAL", "WEB") ||
-			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB"))
+	else if(HeadMatches("CREATE", "EXTERNAL", "WEB", "TABLE") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB", "TABLE") ||
+			HeadMatches("CREATE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('", "EXECUTE '");
@@ -2422,8 +2424,10 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* CREATE [READABLE] EXTERNAL ... */
-	else if(HeadMatches("CREATE", "EXTERNAL") ||
-			HeadMatches("CREATE", "READABLE", "EXTERNAL"))
+	else if(HeadMatches("CREATE", "EXTERNAL", "TABLE") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL", "TABLE") ||
+			HeadMatches("CREATE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE") ||
+			HeadMatches("CREATE", "READABLE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
@@ -2444,7 +2448,8 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("BY (", "RANDOMLY");
 
 	/* CREATE WRITABLE EXTERNAL WEB ... */
-	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB"))
+	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TABLE") ||
+			HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("EXECUTE '");
@@ -2462,7 +2467,8 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* CREATE WRITABLE EXTERNAL ... */
-	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL"))
+	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "TABLE") ||
+			HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
