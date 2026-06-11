@@ -111,6 +111,15 @@ pgstat_get_wait_event_type(uint32 wait_event_info)
 		case PG_WAIT_IO:
 			event_type = "IO";
 			break;
+		case PG_WAIT_RESOURCE_GROUP:
+			event_type = "ResourceGroup";
+			break;
+		case PG_WAIT_RESOURCE_QUEUE:
+			event_type = "ResourceQueue";
+			break;
+		case PG_WAIT_REPLICATION:
+			event_type = "Replication";
+			break;
 		default:
 			event_type = "???";
 			break;
@@ -188,6 +197,23 @@ pgstat_get_wait_event(uint32 wait_event_info)
 				event_name = pgstat_get_wait_io(w);
 				break;
 			}
+		case PG_WAIT_RESOURCE_GROUP:
+
+			/*
+			 * We don't pass details for resource groups via event id, since
+			 * it's an uint16 and resource group id is an Oid.
+			 *
+			 * Here should be never used, pg_stat_get_activity() will get the
+			 * information from backend entry.
+			 */
+			event_name = "ResourceGroup";
+			break;
+		case PG_WAIT_RESOURCE_QUEUE:
+			event_name = "ResourceQueue";
+			break;
+		case PG_WAIT_REPLICATION:
+			event_name = "Replication";
+			break;
 		default:
 			event_name = "unknown wait event";
 			break;
@@ -247,6 +273,19 @@ pgstat_get_wait_activity(WaitEventActivity w)
 			break;
 		case WAIT_EVENT_WAL_WRITER_MAIN:
 			event_name = "WalWriterMain";
+			break;
+
+			/* GPDB additions */
+		case WAIT_EVENT_BACKOFF_MAIN:
+			event_name = "BackoffSweeperMain";
+			break;
+#ifdef USE_INTERNAL_FTS
+		case WAIT_EVENT_FTS_PROBE_MAIN:
+			event_name = "FtsProbeMain";
+			break;
+#endif
+		case WAIT_EVENT_GLOBAL_DEADLOCK_DETECTOR_MAIN:
+			event_name = "GlobalDeadLockDetectorMain";
 			break;
 			/* no default case, so that compiler will warn */
 	}
@@ -450,6 +489,26 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 			break;
 		case WAIT_EVENT_XACT_GROUP_UPDATE:
 			event_name = "XactGroupUpdate";
+			break;
+
+			/* GPDB additions */
+		case WAIT_EVENT_DTX_RECOVERY:
+			event_name = "DtxRecovery";
+			break;
+		case WAIT_EVENT_SHAREINPUT_SCAN:
+			event_name = "ShareInputScan";
+			break;
+		case WAIT_EVENT_INTERCONNECT:
+			event_name = "Interconnect";
+			break;
+		case WAIT_EVENT_GANG_ASSIGN:
+			event_name = "Dispatch/Gang-Assign";
+			break;
+		case WAIT_EVENT_DISP_FINISH:
+			event_name = "Dispatch/Finish";
+			break;
+		case WAIT_EVENT_DISP_RESULT:
+			event_name = "Dispatch/Result";
 			break;
 			/* no default case, so that compiler will warn */
 	}
