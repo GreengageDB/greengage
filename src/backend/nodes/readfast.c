@@ -561,6 +561,10 @@ _readAExpr(void)
 
 			READ_NODE_FIELD(name);
 			break;
+		case AEXPR_OF:
+
+			READ_NODE_FIELD(name);
+			break;
 		case AEXPR_IN:
 
 			READ_NODE_FIELD(name);

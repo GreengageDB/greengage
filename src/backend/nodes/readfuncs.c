@@ -1324,6 +1324,11 @@ _readAExpr(void)
 		local_node->kind = AEXPR_NULLIF;
 		READ_NODE_FIELD(name);
 	}
+	else if (strncmp(token,"OF",length)==0)
+	{
+		local_node->kind = AEXPR_OF;
+		READ_NODE_FIELD(name);
+	}
 	else if (strncmp(token,"IN",length)==0)
 	{
 		local_node->kind = AEXPR_IN;

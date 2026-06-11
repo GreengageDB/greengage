@@ -569,6 +569,10 @@ _outAExpr(StringInfo str, A_Expr *node)
 
 			WRITE_NODE_FIELD(name);
 			break;
+		case AEXPR_OF:
+
+			WRITE_NODE_FIELD(name);
+			break;
 		case AEXPR_IN:
 
 			WRITE_NODE_FIELD(name);
