@@ -1675,7 +1675,7 @@ SELECT replace('yabadoo', 'bad', '') AS "yaoo";
 -- test split_part
 --
 select split_part('joeuser@mydatabase','@',0) AS "an error";
-ERROR:  field position must be greater than zero
+ERROR:  field position must not be zero
 select split_part('joeuser@mydatabase','@',1) AS "joeuser";
  joeuser 
 ---------

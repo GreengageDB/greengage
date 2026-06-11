@@ -120,7 +120,7 @@ select * from people;
 insert into quadtable (f1, q.c1.r, q.c2.i) values(44,55,66);
 update quadtable set q.c1.r = 12 where f1 = 2;
 update quadtable set q.c1 = 12;  -- error, type mismatch
-ERROR:  subfield "c1" is of type complex but expression is of type integer
+ERROR:  subfield "c1" is of type complex_t but expression is of type integer
 LINE 1: update quadtable set q.c1 = 12;
                              ^
 HINT:  You will need to rewrite or cast the expression.
