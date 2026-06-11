@@ -317,6 +317,38 @@ do { \
 	matches = completion_matches(text, complete_from_query); \
 } while (0)
 
+/* Macro to suggest unused options in bracket clause. */
+/* Looks through all tokens until it finds an opening bracket, */
+/* removing used options from suggestion list. */
+#define COMPLETE_WITH_UNUSED_OPTIONS(...) \
+do { \
+	const char* list[] = { __VA_ARGS__, NULL }; \
+\
+	int i = 0; \
+\
+	while(i < previous_words_count && \
+			!ends_with(previous_words[i], '(')) \
+	{ \
+		int cur_prev_wd_len = strlen(previous_words[i]); \
+		int j = 0; \
+\
+		while(list[j] != NULL) \
+		{ \
+			if(pg_strncasecmp(previous_words[i], list[j], \
+							  cur_prev_wd_len) == 0) \
+			{ \
+				list[j] = ""; \
+			} \
+\
+			j += 1; \
+		} \
+\
+		i += 1; \
+	} \
+\
+	COMPLETE_WITH_LIST(list); \
+} while(0)
+
 /*
  * Assembly instructions for schema queries
  */
@@ -2794,7 +2826,7 @@ psql_completion(const char *text, int start, int end)
 			!HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*)")))
 	{
 		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
+			COMPLETE_WITH_UNUSED_OPTIONS("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
 		else if(TailMatches("ACTIVE_STATEMENTS|MEMORY_LIMIT|MAX_COST|COST_OVERCOMMIT|MIN_COST|PRIORITY"))
 			COMPLETE_WITH("=");
 		else if(TailMatches("COST_OVERCOMMIT", "="))
