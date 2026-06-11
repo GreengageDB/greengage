@@ -319,7 +319,8 @@ do { \
 
 /* Macro to suggest unused options in bracket clause. */
 /* Looks through all tokens until it finds an opening bracket, */
-/* removing used options from suggestion list. */
+/* removing used options from suggestion list */
+/* and clearing up list from empty strings. */
 #define COMPLETE_WITH_UNUSED_OPTIONS(...) \
 do { \
 	const char* list[] = { __VA_ARGS__, NULL }; \
@@ -345,6 +346,27 @@ do { \
 \
 		i += 1; \
 	} \
+\
+	i = 0; \
+	int j = 0; \
+\
+	while(list[j] != NULL) \
+	{ \
+		if(list[j][0] != '\0') \
+		{ \
+			list[i] = list[j]; \
+			if(i != j) \
+			{ \
+				list[j] = ""; \
+			} \
+\
+			i += 1; \
+		} \
+\
+		j += 1; \
+	} \
+\
+	list[i] = NULL; \
 \
 	COMPLETE_WITH_LIST(list); \
 } while(0)
