@@ -983,8 +983,19 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 
 	if (relkind == RELKIND_RELATION ||
 		relkind == RELKIND_MATVIEW ||
-		relkind == RELKIND_PARTITIONED_TABLE)
+		relkind == RELKIND_PARTITIONED_TABLE ||
+		relkind == RELKIND_AOSEGMENTS ||
+		relkind == RELKIND_AOBLOCKDIR ||
+		relkind == RELKIND_AOVISIMAP)
 	{
+		/*
+		 * GPDB: append-optimized auxiliary relations are heap-storage
+		 * catalogs; UPDATE/DELETE on them identifies rows by ctid like any
+		 * table (the executor groups them with plain relations).  Without
+		 * this they fell through with no row identity at all and
+		 * ExecInitModifyTable failed with "could not find junk wholerow
+		 * column" (uao_catalog_tables' maintenance deletes).
+		 */
 		/*
 		 * Emit CTID so that executor can find the row to update or delete.
 		 */
