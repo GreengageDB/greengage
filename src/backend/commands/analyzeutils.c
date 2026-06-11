@@ -85,6 +85,18 @@ get_rel_reltuples(Oid relid)
 		ReleaseSysCache(tp);
 	}
 
+	/*
+	 * Since PG 14, reltuples == -1 means the relation has never been
+	 * vacuumed or analyzed.  The GPDB stats-merging code that uses this
+	 * helper predates that and expects the pre-14 value of 0: e.g.
+	 * leaf_parts_analyzed() would otherwise mistake a never-analyzed
+	 * partition for an analyzed non-empty one (and the root itself for a
+	 * non-empty relation missing pg_statistic rows), disabling the leaf
+	 * stats merge.
+	 */
+	if (relTuples < 0)
+		relTuples = 0;
+
 	return relTuples;
 }
 
