@@ -8,6 +8,8 @@ COPY aggtest FROM '@abs_srcdir@/data/agg.data';
 COPY onek FROM '@abs_srcdir@/data/onek.data';
 COPY onek TO '@abs_builddir@/results/onek.data';
 DELETE FROM onek;
+NOTICE:  One or more columns in the following table(s) do not have statistics: onek
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 COPY onek FROM '@abs_builddir@/results/onek.data';
 COPY tenk1 FROM '@abs_srcdir@/data/tenk.data';
 -- Create a table that's identical to 'tenk1', but all the data is in a single
@@ -83,15 +85,20 @@ create temp table copytest (
 	style	text,
 	test 	text,
 	filler	int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'style' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into copytest values('DOS',E'abc\r\ndef',1);
 insert into copytest values('Unix',E'abc\ndef',2);
 insert into copytest values('Mac',E'abc\rdef',3);
 insert into copytest values(E'esc\\ape',E'a\\r\\\r\\\n\\nb',4);
 copy copytest to '@abs_builddir@/results/copytest.csv' csv;
 create temp table copytest2 (like copytest);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 copy copytest2 from '@abs_builddir@/results/copytest.csv' csv;
 copy copytest2 from '@abs_builddir@/results/copytest.csv' csv LOG ERRORS SEGMENT REJECT LIMIT 10 ROWS;
 select * from copytest except select * from copytest2 order by 1,2,3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: copytest, copytest2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  style | test | filler 
 -------+------+--------
 (0 rows)
@@ -101,6 +108,8 @@ truncate copytest2;
 copy copytest to '@abs_builddir@/results/copytest.csv' csv quote '''' escape E'\\';
 copy copytest2 from '@abs_builddir@/results/copytest.csv' csv quote '''' escape E'\\';
 select * from copytest except select * from copytest2 order by 1,2,3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: copytest, copytest2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  style | test | filler 
 -------+------+--------
 (0 rows)
@@ -113,16 +122,22 @@ create temp table copytest3 (
 copy copytest3 from stdin csv header;
 copy copytest3 to stdout csv header;
 c1,"col with , comma","col with "" quote"
-1,a,1
 2,b,2
+1,a,1
 -- test copy force quote
 create temp table copytest4 (id int, id1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into copytest4 values (1,2);
 insert into copytest4 values (1,3);
 insert into copytest4 values (1,4);
 copy (select * from copytest4) to stdout csv delimiter ',' force quote id, id1, id2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: copytest4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 ERROR:  column "id2" does not exist
 copy (select * from copytest4) to stdout csv delimiter ',' force quote id, id1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: copytest4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 "1","2"
 "1","3"
 "1","4"
@@ -135,6 +150,8 @@ CREATE TEMP TABLE venue(
     venueseats integer) DISTRIBUTED BY (venueid);
 COPY venue FROM '@abs_srcdir@/data/venue_pipe.txt' WITH DELIMITER AS '|';
 SELECT count(*) FROM venue;
+NOTICE:  One or more columns in the following table(s) do not have statistics: venue
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     10
@@ -146,8 +163,14 @@ create table parted_copytest (
 	b int,
 	c text
 ) partition by list (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_copytest_a1 (c text, b int, a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_copytest_a2 (a int, c text, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table parted_copytest_a1 set distributed by (a);
 alter table parted_copytest attach partition parted_copytest_a1 for values in(1);
 alter table parted_copytest attach partition parted_copytest_a2 for values in(2);
@@ -157,6 +180,8 @@ insert into parted_copytest select x,1,'One' from generate_series(1,1000) x;
 insert into parted_copytest select x,2,'Two' from generate_series(1001,1010) x;
 insert into parted_copytest select x,1,'One' from generate_series(1011,1020) x;
 copy (select * from parted_copytest order by a) to '@abs_builddir@/results/parted_copytest.csv';
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_copytest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 truncate parted_copytest;
 copy parted_copytest from '@abs_builddir@/results/parted_copytest.csv';
 -- Ensure COPY FREEZE errors for partitioned tables.
@@ -199,12 +224,16 @@ drop trigger part_ins_trig on parted_copytest_a2;
 copy parted_copytest from stdin;
 -- Ensure index entries were properly added during the copy.
 select * from parted_copytest where b = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_copytest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b |  c   
 ---+---+------
  1 | 1 | str1
 (1 row)
 
 select * from parted_copytest where b = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parted_copytest
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b |  c   
 ---+---+------
  2 | 2 | str2
@@ -221,6 +250,8 @@ create table tab_progress_reporting (
 	salary int4,
 	manager name
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Add a trigger to catch and print the contents of the catalog view
 -- pg_stat_progress_copy during data insertion.  This allows to test
 -- the validation of some progress reports for COPY FROM where the trigger
@@ -254,14 +285,14 @@ create trigger check_after_tab_progress_reporting
 	after insert on tab_progress_reporting
 	for each statement
 	execute function notice_after_tab_progress_reporting();
+ERROR:  Triggers for statements are not yet supported
 -- Generate COPY FROM report with PIPE.
 copy tab_progress_reporting from stdin;
-INFO:  progress: {"type": "PIPE", "command": "COPY FROM", "relname": "tab_progress_reporting", "has_bytes_total": false, "tuples_excluded": 0, "tuples_processed": 3, "has_bytes_processed": true}
 -- Generate COPY FROM report with FILE, with some excluded tuples.
 truncate tab_progress_reporting;
 copy tab_progress_reporting from '@abs_srcdir@/data/emp.data'
 	where (salary < 2000);
-INFO:  progress: {"type": "FILE", "command": "COPY FROM", "relname": "tab_progress_reporting", "has_bytes_total": true, "tuples_excluded": 1, "tuples_processed": 2, "has_bytes_processed": true}
 drop trigger check_after_tab_progress_reporting on tab_progress_reporting;
+ERROR:  trigger "check_after_tab_progress_reporting" for table "tab_progress_reporting" does not exist
 drop function notice_after_tab_progress_reporting();
 drop table tab_progress_reporting;
