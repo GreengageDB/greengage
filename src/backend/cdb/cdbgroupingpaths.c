@@ -2151,8 +2151,17 @@ fetch_multi_dqas_info(PlannerInfo *root,
 			                                          NULL, NULL);
 		}
 
-		/* assign an agg_expr_id value to aggref*/
+		/*
+		 * Assign the agg_expr_id value to both stage instances of this
+		 * aggregate.  The guarded (TupleSplit-consuming) stage reads it to
+		 * match split tuples against its transition (see
+		 * ExecBuildAggTrans); assigning only one instance left the partial
+		 * stage at 0, so every guard compared the AggExprId column against
+		 * -1 and no transition ever advanced: all multi-DQA aggregates
+		 * returned NULL/0.
+		 */
 		aggref->agg_expr_id = agg_expr_id;
+		aggref_final->agg_expr_id = agg_expr_id;
 
 		/* rid of filter in aggref */
 		aggref->aggfilter = NULL;
@@ -2183,6 +2192,42 @@ fetch_multi_dqas_info(PlannerInfo *root,
 
 	info->partial_target= ctx->partial_grouping_target;
 	info->final_target = ctx->target;
+
+	/*
+	 * The loop above stamped agg_expr_id on the Aggref instances of the
+	 * cost lists, but the partial stage's targetlist holds separate
+	 * flat-copies made by make_partial_grouping_target() before any ids
+	 * existed.  The guarded (TupleSplit-consuming) stage is built from
+	 * exactly those copies, so without this propagation every guard
+	 * compared the AggExprId column against -1 and all multi-DQA
+	 * aggregates returned NULL/0.  Propagate by aggno, which is shared
+	 * across stage instances of the same aggregate.
+	 */
+	{
+		ListCell   *lc_t;
+
+		foreach(lc_t, info->partial_target->exprs)
+		{
+			Expr	   *expr = (Expr *) lfirst(lc_t);
+			ListCell   *lc_a;
+
+			if (!IsA(expr, Aggref))
+				continue;
+			forboth(lc_a, ctx->agg_partial_costs->distinctAggrefs,
+					lc, ctx->agg_final_costs->distinctAggrefs)
+			{
+				Aggref	   *stamped = (Aggref *) lfirst(lc_a);
+				Aggref	   *stamped_final = (Aggref *) lfirst(lc);
+
+				if (stamped->aggno == ((Aggref *) expr)->aggno)
+				{
+					((Aggref *) expr)->agg_expr_id =
+						Max(stamped->agg_expr_id, stamped_final->agg_expr_id);
+					break;
+				}
+			}
+		}
+	}
 }
 
 /*
