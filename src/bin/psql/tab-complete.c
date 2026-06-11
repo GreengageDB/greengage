@@ -2346,14 +2346,14 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("EXTERNAL");
 	else if(TailMatches("CREATE", "EXTERNAL") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL"))
-		COMPLETE_WITH("WEB", "TEMP", "TABLE");
+		COMPLETE_WITH("WEB", "TEMP", "TEMPORARY", "TABLE");
 	else if(TailMatches("CREATE", "EXTERNAL", "WEB") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB"))
-		COMPLETE_WITH("TEMP", "TABLE");
-	else if(TailMatches("CREATE", "EXTERNAL", "TEMP") ||
-			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "TEMP") ||
-			TailMatches("CREATE", "EXTERNAL", "WEB", "TEMP") ||
-			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB", "TEMP"))
+		COMPLETE_WITH("TEMP", "TEMPORARY", "TABLE");
+	else if(TailMatches("CREATE", "EXTERNAL", "TEMP|TEMPORARY") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "TEMP|TEMPORARY") ||
+			TailMatches("CREATE", "EXTERNAL", "WEB", "TEMP|TEMPORARY") ||
+			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY"))
 		COMPLETE_WITH("TABLE");
 
 	/* CREATE ... EXTERNAL ... TABLE */
