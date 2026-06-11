@@ -680,6 +680,17 @@ cdb_estimate_partitioned_numtuples(Relation rel)
 
 		childtuples = childrel->rd_rel->reltuples;
 
+		/*
+		 * Since PG 14, reltuples == -1 means the relation has never been
+		 * vacuumed or analyzed. Treat it like the pre-14 value of 0: without
+		 * this, never-analyzed relations stop counting as empty (and a
+		 * partitioned table would even sum -1 per child), so ORCA derives
+		 * stats for them and issues missing-statistics notices that GPDB 6
+		 * never issued for such relations.
+		 */
+		if (childtuples < 0)
+			childtuples = 0;
+
 		if (gp_enable_relsize_collection && childtuples == 0)
 		{
 			RelOptInfo *dummy_reloptinfo;
