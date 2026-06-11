@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/actual rows=\d+ loops=\d+/
+-- s/actual rows=\d+ loops=\d+/actual rows=## loops=##/g
+-- end_matchsubs
 --
 -- SELECT_INTO
 --

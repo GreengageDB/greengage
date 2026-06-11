@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/actual rows=\d+ loops=\d+/
+-- s/actual rows=\d+ loops=\d+/actual rows=## loops=##/g
+-- end_matchsubs
 --
 -- SELECT_INTO
 --
@@ -35,12 +39,12 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Result (actual rows=2 loops=1)
-   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
-         ->  Result (actual rows=3 loops=1)
+ Result (actual rows=## loops=##)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=## loops=##)
+         ->  Result (actual rows=## loops=##)
                One-Time Filter: (gp_execution_segment() = 2)
-               ->  ProjectSet (actual rows=3 loops=1)
-                     ->  Result (actual rows=1 loops=1)
+               ->  ProjectSet (actual rows=## loops=##)
+                     ->  Result (actual rows=## loops=##)
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
@@ -74,12 +78,12 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Result (actual rows=1 loops=1)
-   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=1 loops=1)
-         ->  Result (actual rows=3 loops=1)
+ Result (actual rows=## loops=##)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=## loops=##)
+         ->  Result (actual rows=## loops=##)
                One-Time Filter: (gp_execution_segment() = 1)
-               ->  ProjectSet (actual rows=3 loops=1)
-                     ->  Result (actual rows=1 loops=1)
+               ->  ProjectSet (actual rows=## loops=##)
+                     ->  Result (actual rows=## loops=##)
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
