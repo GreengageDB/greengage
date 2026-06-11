@@ -19,6 +19,10 @@
 #include "foreign/fdwapi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "catalog/gp_distribution_policy.h"
+#include "catalog/pg_am_d.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_inherits.h"
 #include "optimizer/appendinfo.h"
 #include "optimizer/pathnode.h"
 #include "parser/parsetree.h"
@@ -884,6 +888,82 @@ add_row_identity_var(PlannerInfo *root, Var *orig_var,
 }
 
 /*
+ * gp_update_may_move_row
+ *		Does this UPDATE touch a distribution key column of the target,
+ *		i.e. will it be planned as a SplitUpdate?
+ *
+ * Only then does the INSERT half of the split need the "wholerow" junk
+ * column to rebuild child tuples on the receiving segment.
+ */
+static bool
+gp_update_may_move_row(PlannerInfo *root, Oid rootrelid)
+{
+	GpPolicy   *policy = GpPolicyFetch(rootrelid);
+	bool		result = false;
+
+	if (policy && GpPolicyIsHashPartitioned(policy))
+	{
+		ListCell   *lc;
+
+		foreach(lc, root->update_colnos)
+		{
+			AttrNumber	colno = lfirst_int(lc);
+
+			for (int i = 0; i < policy->nattrs; i++)
+			{
+				if (policy->attrs[i] == colno)
+				{
+					result = true;
+					break;
+				}
+			}
+			if (result)
+				break;
+		}
+	}
+	if (policy)
+		pfree(policy);
+	return result;
+}
+
+/*
+ * gp_inh_tree_has_ao
+ *		Is any relation in this inheritance tree append-optimized?
+ *
+ * AO relations cannot fetch the old tuple by TID at UPDATE time, so an
+ * inheritance child with extra columns needs the "wholerow" junk column
+ * to fill them in (see ExecModifyTable).
+ */
+static bool
+gp_inh_tree_has_ao(Oid rootrelid)
+{
+	List	   *inhs;
+	ListCell   *lc;
+	bool		result = false;
+
+	inhs = find_all_inheritors(rootrelid, NoLock, NULL);
+	foreach(lc, inhs)
+	{
+		HeapTuple	tp = SearchSysCache1(RELOID,
+										 ObjectIdGetDatum(lfirst_oid(lc)));
+		Oid			relam = InvalidOid;
+
+		if (HeapTupleIsValid(tp))
+		{
+			relam = ((Form_pg_class) GETSTRUCT(tp))->relam;
+			ReleaseSysCache(tp);
+		}
+		if (relam == AO_ROW_TABLE_AM_OID || relam == AO_COLUMN_TABLE_AM_OID)
+		{
+			result = true;
+			break;
+		}
+	}
+	list_free(inhs);
+	return result;
+}
+
+/*
  * add_row_identity_columns
  *
  * This function adds the row identity columns needed by the core code.
@@ -932,6 +1012,43 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 					  InvalidOid,
 					  0);
 		add_row_identity_var(root, var, rtindex, "gp_segment_id");
+
+		/*
+		 * GPDB: for an UPDATE on an old-style inheritance tree also emit a
+		 * whole-row Var.  If the update changes the distribution key it is
+		 * planned as a SplitUpdate, and the INSERT half must rebuild the
+		 * complete new tuple of the source child relation on a different
+		 * segment; child columns that do not exist in the root are not in
+		 * the targetlist, so they can only come from the old tuple.  A
+		 * RECORD-type whole-row Var translates to each child's own
+		 * whole-row (no conversion to the root rowtype), preserving them.
+		 * Partitioned tables don't need this: the re-insert goes through
+		 * tuple routing from the root.
+		 */
+		if (commandType == CMD_UPDATE && relkind == RELKIND_RELATION)
+		{
+			RangeTblEntry *rootRte = planner_rt_fetch(root->parse->resultRelation,
+													  root);
+
+			/*
+			 * Note: this function is called for each leaf target relation
+			 * (from expand_inherited_rtentry()), where target_rte is the
+			 * leaf; whether the UPDATE targets an inheritance tree must be
+			 * read off the query's nominal result relation.
+			 */
+			if (rootRte->inh && rootRte->relkind == RELKIND_RELATION &&
+				(gp_update_may_move_row(root, rootRte->relid) ||
+				 gp_inh_tree_has_ao(rootRte->relid)))
+			{
+				var = makeVar(rtindex,
+							  InvalidAttrNumber,
+							  RECORDOID,
+							  -1,
+							  InvalidOid,
+							  0);
+				add_row_identity_var(root, var, rtindex, "wholerow");
+			}
+		}
 	}
 	else if (relkind == RELKIND_FOREIGN_TABLE)
 	{

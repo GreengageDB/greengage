@@ -511,6 +511,16 @@ typedef struct ResultRelInfo
 	AttrNumber  ri_segid_attno;		/* gp_segment_id of old tuple */
 	AttrNumber	ri_action_attno;	/* is this an INSERT or DELETE ? */
 
+	/*
+	 * GPDB: split-update support for old-style inheritance children whose
+	 * column layout differs from the root's.  The "wholerow" junk column
+	 * carries the old child tuple; the re-inserted tuple is rebuilt from it
+	 * plus the root-layout new values (matched by column name).
+	 */
+	AttrNumber	ri_wholerow_attno;	/* "wholerow" junk attno, or invalid */
+	TupleTableSlot *ri_inhNewSlot;	/* slot for the rebuilt child tuple */
+	AttrNumber *ri_inhRootMap;		/* child attno -> root-layout resno (0 = keep old) */
+
 	/* list of RETURNING expressions */
 	List	   *ri_returningList;
 

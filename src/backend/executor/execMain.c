@@ -2300,6 +2300,9 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_junkFilter = NULL;
 	resultRelInfo->ri_segid_attno = InvalidAttrNumber;
 	resultRelInfo->ri_action_attno = InvalidAttrNumber;
+	resultRelInfo->ri_wholerow_attno = InvalidAttrNumber;
+	resultRelInfo->ri_inhNewSlot = NULL;
+	resultRelInfo->ri_inhRootMap = NULL;
 	resultRelInfo->ri_projectReturning = NULL;
 	resultRelInfo->ri_onConflictArbiterIndexes = NIL;
 	resultRelInfo->ri_onConflict = NULL;

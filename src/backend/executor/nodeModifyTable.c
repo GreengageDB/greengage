@@ -2136,6 +2136,99 @@ inh_child_layout_matches_root(ResultRelInfo *childInfo, ResultRelInfo *rootInfo)
 }
 
 /*
+ * Rebuild the complete new tuple of an inheritance child for the INSERT
+ * half of a split update.
+ *
+ * The subplan emits the new tuple in the root relation's column layout,
+ * which loses child-only columns.  The "wholerow" junk column carries the
+ * old child tuple; start from it and overlay the root-layout new values,
+ * matching columns by name.
+ */
+static TupleTableSlot *
+ExecInhRebuildNewTuple(ModifyTableState *mtstate,
+					   ResultRelInfo *resultRelInfo,
+					   TupleTableSlot *planSlot)
+{
+	EState	   *estate = mtstate->ps.state;
+	Relation	rel = resultRelInfo->ri_RelationDesc;
+	TupleDesc	cdesc = RelationGetDescr(rel);
+	TupleTableSlot *newslot;
+	AttrNumber *map;
+	Datum		wrdatum;
+	bool		isNull;
+	HeapTupleHeader wrheader;
+	HeapTupleData wrtuple;
+
+	if (!AttributeNumberIsValid(resultRelInfo->ri_wholerow_attno))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("UPDATE of a distribution key column on inheritance parent \"%s\" is not supported because child table \"%s\" has a different column layout",
+						RelationGetRelationName(mtstate->rootResultRelInfo->ri_RelationDesc),
+						RelationGetRelationName(rel))));
+
+	/* First time through for this child: build slot and column map */
+	if (resultRelInfo->ri_inhNewSlot == NULL)
+	{
+		MemoryContext oldcxt = MemoryContextSwitchTo(estate->es_query_cxt);
+		TupleDesc	rdesc = RelationGetDescr(mtstate->rootResultRelInfo->ri_RelationDesc);
+
+		resultRelInfo->ri_inhNewSlot =
+			ExecAllocTableSlot(&estate->es_tupleTable, cdesc, &TTSOpsVirtual);
+
+		map = (AttrNumber *) palloc0(cdesc->natts * sizeof(AttrNumber));
+		for (int i = 0; i < cdesc->natts; i++)
+		{
+			Form_pg_attribute catt = TupleDescAttr(cdesc, i);
+
+			if (catt->attisdropped)
+				continue;
+			for (int j = 0; j < rdesc->natts; j++)
+			{
+				Form_pg_attribute ratt = TupleDescAttr(rdesc, j);
+
+				if (!ratt->attisdropped &&
+					strcmp(NameStr(catt->attname), NameStr(ratt->attname)) == 0)
+				{
+					map[i] = j + 1;
+					break;
+				}
+			}
+		}
+		resultRelInfo->ri_inhRootMap = map;
+		MemoryContextSwitchTo(oldcxt);
+	}
+	newslot = resultRelInfo->ri_inhNewSlot;
+	map = resultRelInfo->ri_inhRootMap;
+
+	wrdatum = ExecGetJunkAttribute(planSlot, resultRelInfo->ri_wholerow_attno,
+								   &isNull);
+	if (isNull)
+		elog(ERROR, "wholerow is NULL");
+
+	wrheader = DatumGetHeapTupleHeader(wrdatum);
+	wrtuple.t_len = HeapTupleHeaderGetDatumLength(wrheader);
+	ItemPointerSetInvalid(&wrtuple.t_self);
+	wrtuple.t_tableOid = InvalidOid;
+	wrtuple.t_data = wrheader;
+
+	ExecClearTuple(newslot);
+	heap_deform_tuple(&wrtuple, cdesc, newslot->tts_values, newslot->tts_isnull);
+
+	/* overlay the new values that exist in the root layout */
+	slot_getallattrs(planSlot);
+	for (int i = 0; i < cdesc->natts; i++)
+	{
+		if (map[i] > 0)
+		{
+			newslot->tts_values[i] = planSlot->tts_values[map[i] - 1];
+			newslot->tts_isnull[i] = planSlot->tts_isnull[map[i] - 1];
+		}
+	}
+
+	return ExecStoreVirtualTuple(newslot);
+}
+
+/*
  * Insert the new tuple version of a Split Update
  *
  * We have to check if this UPDATE also moves the row to
@@ -2870,6 +2963,7 @@ ExecModifyTable(PlanState *pstate)
 						 * is the result relation itself.
 						 */
 						ResultRelInfo *insertRelInfo;
+						bool		rebuildFromOld = false;
 
 						if (node->rootResultRelInfo->ri_RelationDesc->rd_rel->relkind ==
 							RELKIND_PARTITIONED_TABLE)
@@ -2877,19 +2971,21 @@ ExecModifyTable(PlanState *pstate)
 						else
 						{
 							insertRelInfo = resultRelInfo;
-							if (insertRelInfo != node->rootResultRelInfo &&
-								!inh_child_layout_matches_root(insertRelInfo,
-															   node->rootResultRelInfo))
-								ereport(ERROR,
-										(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										 errmsg("UPDATE of a distribution key column on inheritance parent \"%s\" is not supported because child table \"%s\" has a different column layout",
-												RelationGetRelationName(node->rootResultRelInfo->ri_RelationDesc),
-												RelationGetRelationName(insertRelInfo->ri_RelationDesc))));
+							rebuildFromOld =
+								(insertRelInfo != node->rootResultRelInfo &&
+								 !inh_child_layout_matches_root(insertRelInfo,
+																node->rootResultRelInfo));
 						}
 
-						if (unlikely(!insertRelInfo->ri_projectNewInfoValid))
-							ExecInitInsertProjection(node, insertRelInfo);
-						slot = ExecGetInsertNewTuple(insertRelInfo, planSlot);
+						if (rebuildFromOld)
+							slot = ExecInhRebuildNewTuple(node, insertRelInfo,
+														  planSlot);
+						else
+						{
+							if (unlikely(!insertRelInfo->ri_projectNewInfoValid))
+								ExecInitInsertProjection(node, insertRelInfo);
+							slot = ExecGetInsertNewTuple(insertRelInfo, planSlot);
+						}
 						estate->es_result_relation_info = insertRelInfo;
 						slot = ExecSplitUpdate_Insert(node, slot, planSlot,
 													  estate, node->canSetTag);
@@ -2936,10 +3032,42 @@ ExecModifyTable(PlanState *pstate)
 					 * by TID (appendonly_fetch_row_version is unsupported).
 					 * Their UPDATE plan supplies the full new tuple --
 					 * preprocess_targetlist() expanded the targetlist to every
-					 * column -- so no old-tuple merge is required.  Leave the
-					 * old slot empty; the update projection won't read it.
+					 * column -- so usually no old-tuple merge is required.
+					 *
+					 * The exception is an old-style inheritance child with
+					 * columns the (nominal) root doesn't have: those are not
+					 * in the expanded targetlist, so the update projection
+					 * reads them from the old tuple.  The planner ships the
+					 * old tuple in the "wholerow" junk column for AO
+					 * inheritance updates; restore it into the old slot.
 					 */
-					ExecClearTuple(oldSlot);
+					if (AttributeNumberIsValid(resultRelInfo->ri_wholerow_attno))
+					{
+						Datum		wrdatum;
+						bool		wrisnull;
+						HeapTupleHeader wrheader;
+						HeapTupleData wrtuple;
+
+						wrdatum = ExecGetJunkAttribute(planSlot,
+													   resultRelInfo->ri_wholerow_attno,
+													   &wrisnull);
+						if (wrisnull)
+							elog(ERROR, "wholerow is NULL");
+						wrheader = DatumGetHeapTupleHeader(wrdatum);
+						wrtuple.t_len = HeapTupleHeaderGetDatumLength(wrheader);
+						ItemPointerSetInvalid(&wrtuple.t_self);
+						wrtuple.t_tableOid = InvalidOid;
+						wrtuple.t_data = wrheader;
+
+						ExecClearTuple(oldSlot);
+						heap_deform_tuple(&wrtuple,
+										  RelationGetDescr(resultRelInfo->ri_RelationDesc),
+										  oldSlot->tts_values,
+										  oldSlot->tts_isnull);
+						ExecStoreVirtualTuple(oldSlot);
+					}
+					else
+						ExecClearTuple(oldSlot);
 				}
 				else
 				{
@@ -3317,6 +3445,15 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			resultRelInfo->ri_action_attno =
 				ExecFindJunkAttributeInTlist(subplan->targetlist,
 											 "DMLAction");
+
+			/*
+			 * "wholerow" carries the old child tuple for split updates on
+			 * old-style inheritance; see ExecInhRebuildNewTuple().  (For
+			 * foreign tables ri_RowIdAttNo found it above already.)
+			 */
+			resultRelInfo->ri_wholerow_attno =
+				ExecFindJunkAttributeInTlist(subplan->targetlist,
+											 "wholerow");
 		}
 	}
 
