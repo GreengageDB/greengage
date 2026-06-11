@@ -150,6 +150,8 @@ typedef struct
 	ResGroupCaps		caps;
 	ResGroupCaps		oldCaps;	/* last config value, alter operation need to
  										* check last config for recycling */
+	SubTransactionId	subXactId;	/* the subtransaction that queued this
+									 * ALTER callback */
 
 	List				*ioLimit;
 } ResourceGroupCallbackContext;

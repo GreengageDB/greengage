@@ -82,6 +82,10 @@ static void checkAuthIdForDrop(Oid groupId);
 static void createResgroupCallback(XactEvent event, void *arg);
 static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
+static void alterResgroupSubXactCallback(SubXactEvent event,
+										 SubTransactionId mySubid,
+										 SubTransactionId parentSubid,
+										 void *arg);
 static void checkCpusetSyntax(const char *cpuset);
 static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
 									const ResGroupCaps *caps);
@@ -599,6 +603,7 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
+		callbackCtx->subXactId = GetCurrentSubTransactionId();
 
 		/*
 		 * Collect ALTERs and apply them together at COMMIT after PRE_COMMIT
@@ -617,6 +622,7 @@ AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 			 * at PRE_COMMIT, where we need to validate final catalog state.
 			 */
 			RegisterXactCallback(alterResgroupCallback, NULL);
+			RegisterSubXactCallback(alterResgroupSubXactCallback, NULL);
 			alter_tran_callback_registered = true;
 		}
 	}
@@ -1346,6 +1352,54 @@ resgroupAlterCallbackFindPreparedDuplicate(List *prepared,
 	}
 
 	return NULL;
+}
+
+/*
+ * An aborted subtransaction rolls back its ALTER catalog changes, but the
+ * PRE_COMMIT value match alone could still keep its queued callback when the
+ * value coincides with the final catalog state. Drop such callbacks at
+ * subtransaction abort. Callbacks of a committed subtransaction move up to
+ * the parent.
+ */
+static void
+alterResgroupSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+							 SubTransactionId parentSubid, void *arg)
+{
+	ListCell   *cell;
+	ListCell   *prev;
+	ListCell   *next;
+
+	if (resgroup_alter_callbacks == NIL)
+		return;
+
+	if (event == SUBXACT_EVENT_COMMIT_SUB)
+	{
+		foreach (cell, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(cell);
+
+			if (ctx->subXactId == mySubid)
+				ctx->subXactId = parentSubid;
+		}
+	}
+	else if (event == SUBXACT_EVENT_ABORT_SUB)
+	{
+		prev = NULL;
+		for (cell = list_head(resgroup_alter_callbacks); cell != NULL; cell = next)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(cell);
+
+			next = lnext(cell);
+			if (ctx->subXactId == mySubid)
+			{
+				resgroup_alter_callbacks =
+					list_delete_cell(resgroup_alter_callbacks, cell, prev);
+				freeResgroupAlterCallback(ctx);
+			}
+			else
+				prev = cell;
+		}
+	}
 }
 
 /*
