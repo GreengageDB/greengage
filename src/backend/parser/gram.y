@@ -10038,7 +10038,7 @@ opt_nulls_order: NULLS_LA FIRST_P			{ $$ = SORTBY_NULLS_FIRST; }
 
 CreateFunctionStmt:
 			CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			RETURNS func_return opt_createfunc_opt_list opt_routine_body
+			RETURNS func_return opt_createfunc_opt_list opt_definition opt_routine_body
 				{
 					CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
 					n->is_procedure = false;
@@ -10047,11 +10047,13 @@ CreateFunctionStmt:
 					n->parameters = $5;
 					n->returnType = $7;
 					n->options = $8;
-					n->sql_body = $9;
+					/* GPDB: legacy WITH (describe=..., etc.) attribute list */
+					n->options = list_concat(n->options, $9);
+					n->sql_body = $10;
 					$$ = (Node *)n;
 				}
 			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			  RETURNS TABLE '(' table_func_column_list ')' opt_createfunc_opt_list opt_routine_body
+			  RETURNS TABLE '(' table_func_column_list ')' opt_createfunc_opt_list opt_definition opt_routine_body
 				{
 					CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
 					n->is_procedure = false;
@@ -10061,11 +10063,13 @@ CreateFunctionStmt:
 					n->returnType = TableFuncTypeName($9);
 					n->returnType->location = @7;
 					n->options = $11;
-					n->sql_body = $12;
+					/* GPDB: legacy WITH (describe=..., etc.) attribute list */
+					n->options = list_concat(n->options, $12);
+					n->sql_body = $13;
 					$$ = (Node *)n;
 				}
 			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
-			  opt_createfunc_opt_list opt_routine_body
+			  opt_createfunc_opt_list opt_definition opt_routine_body
 				{
 					CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
 					n->is_procedure = false;
@@ -10074,7 +10078,9 @@ CreateFunctionStmt:
 					n->parameters = $5;
 					n->returnType = NULL;
 					n->options = $6;
-					n->sql_body = $7;
+					/* GPDB: legacy WITH (describe=..., etc.) attribute list */
+					n->options = list_concat(n->options, $7);
+					n->sql_body = $8;
 					$$ = (Node *)n;
 				}
 			| CREATE opt_or_replace PROCEDURE func_name func_args_with_defaults
