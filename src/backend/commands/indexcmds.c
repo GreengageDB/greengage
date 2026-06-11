@@ -2985,6 +2985,12 @@ ReindexIndex(ReindexStmt *stmt, ReindexParams *params, bool isTopLevel)
 		Gp_role == GP_ROLE_DISPATCH &&
 		persistence != RELPERSISTENCE_TEMP)
 	{
+		/* keep upstream's refusal for system catalogs */
+		if (IsCatalogRelationOid(IndexGetRelation(indOid, false)))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot reindex system catalogs concurrently")));
+
 		ereport(NOTICE,
 				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
 						get_rel_name(indOid))));
@@ -3129,6 +3135,12 @@ ReindexTable(ReindexStmt *stmt, ReindexParams *params, bool isTopLevel)
 		Gp_role == GP_ROLE_DISPATCH &&
 		get_rel_persistence(heapOid) != RELPERSISTENCE_TEMP)
 	{
+		/* keep upstream's refusal for system catalogs */
+		if (IsCatalogRelationOid(heapOid))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot reindex system catalogs concurrently")));
+
 		ereport(NOTICE,
 				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
 						relation->relname)));
