@@ -85,7 +85,8 @@ static void alterResgroupCallback(XactEvent event, void *arg);
 static void checkCpusetSyntax(const char *cpuset);
 static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
 									const ResGroupCaps *caps);
-static bool resgroupAlterCallbackAlreadyPrepared(List *prepared,
+static ResourceGroupCallbackContext *resgroupAlterCallbackFindPreparedDuplicate(
+											List *prepared,
 											ResourceGroupCallbackContext *ctx);
 static void freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx);
 static bool resGroupIOLimitMatches(List *left, List *right);
@@ -1322,11 +1323,11 @@ resgroupHasLaterCpuCallbackMatchingFinal(List *callbacks,
 }
 
 /*
- * Check whether the same target ALTER callback is already prepared.
+ * Find an already prepared ALTER callback with the same target and value.
  */
-static bool
-resgroupAlterCallbackAlreadyPrepared(List *prepared,
-									 ResourceGroupCallbackContext *ctx)
+static ResourceGroupCallbackContext *
+resgroupAlterCallbackFindPreparedDuplicate(List *prepared,
+										   ResourceGroupCallbackContext *ctx)
 {
 	ListCell   *lc;
 
@@ -1341,10 +1342,10 @@ resgroupAlterCallbackAlreadyPrepared(List *prepared,
 			continue;
 
 		if (resGroupCapFieldMatches(ctx, &prev->caps))
-			return true;
+			return prev;
 	}
 
-	return false;
+	return NULL;
 }
 
 /*
@@ -1422,15 +1423,34 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 				GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-				if ((resGroupCapFieldMatches(ctx, &finalCaps) ||
-					 (ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
-					  resgroupHasLaterCpuCallbackMatchingFinal(
+				if (resGroupCapFieldMatches(ctx, &finalCaps) ||
+					(ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
+					 resgroupHasLaterCpuCallbackMatchingFinal(
 													resgroup_alter_callbacks,
 													ctx,
-													&finalCaps))) &&
-					!resgroupAlterCallbackAlreadyPrepared(prepared, ctx))
+													&finalCaps)))
 				{
-					MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+					MemoryContext oldcxt;
+
+					/*
+					 * COMMIT applies prepared callbacks in list order, so of
+					 * two callbacks with the same target and value the later
+					 * one must survive. Keeping the earlier one would let a
+					 * kept CPUSET callback sitting between them apply last
+					 * and override the final state.
+					 */
+					ResourceGroupCallbackContext *duplicate =
+						resgroupAlterCallbackFindPreparedDuplicate(prepared,
+																   ctx);
+
+					oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+
+					if (duplicate != NULL)
+					{
+						prepared = list_delete_ptr(prepared, duplicate);
+						rejected = lappend(rejected, duplicate);
+					}
+
 					prepared = lappend(prepared, ctx);
 					MemoryContextSwitchTo(oldcxt);
 				}
