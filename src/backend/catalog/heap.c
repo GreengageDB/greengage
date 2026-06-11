@@ -2807,14 +2807,16 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		if (rel->rd_rel->relkind == RELKIND_RELATION && add_column_mode &&
 			!attgenerated)
 		{
-			if (*cookedMissingVal)
+			if (*cookedMissingVal && Gp_role == GP_ROLE_EXECUTE)
 			{
 				/*
 				 * GPDB: a QE executing a dispatched ALTER ... ADD COLUMN
 				 * must reuse the missing value the QD evaluated (already
 				 * wrapped in a one-element array), not evaluate the
 				 * expression again: stable functions like now() would
-				 * yield a different attmissingval on every segment.
+				 * yield a different attmissingval on every segment.  The
+				 * QD itself always evaluates (per relation); the cooked
+				 * flag can be carried over from a sibling partition there.
 				 */
 				missingval = *missingval_p;
 				missingIsNull = *missingIsNull_p;
@@ -2858,9 +2860,21 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 			replacesAtt[Anum_pg_attribute_attmissingval - 1] = true;
 			nullsAtt[Anum_pg_attribute_attmissingval - 1] = missingIsNull;
 
-			*cookedMissingVal = true;
-			*missingval_p = missingval;
-			*missingIsNull_p = missingIsNull;
+			/*
+			 * GPDB: only claim a cooked value when the block above really
+			 * computed (or consumed) one.  For relkinds that store no
+			 * missing value (e.g. a partitioned root) missingval still
+			 * holds the "null" initializers; flagging those as cooked
+			 * poisons the ColumnDef written back for dispatch, and QEs
+			 * would skip evaluation and store no missing value for any
+			 * partition child (mixed-AM ADD COLUMN: heap child all-NULL).
+			 */
+			if (rel->rd_rel->relkind == RELKIND_RELATION)
+			{
+				*cookedMissingVal = true;
+				*missingval_p = missingval;
+				*missingIsNull_p = missingIsNull;
+			}
 		}
 		atttup = heap_modify_tuple(atttup, RelationGetDescr(attrrel),
 								   valuesAtt, nullsAtt, replacesAtt);

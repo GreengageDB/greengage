@@ -8274,10 +8274,26 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		AddRelationNewConstraints(rel, list_make1(rawEnt), NIL,
 								  false, true, false, NULL);
 
-		/* copy back the cooked attmissingval for dispatch */
+		/*
+		 * Copy back the cooked attmissingval for dispatch -- and for the
+		 * sibling partitions processed after this one, which seed their
+		 * rawEnt from the shared ColumnDef so that every relation stores
+		 * the same evaluated value (think DEFAULT now()).  The datum was
+		 * built in a per-child context, so make a durable copy; a dangling
+		 * pointer here gave the next sibling a garbage missing value
+		 * (mixed-AM partitioned ADD COLUMN in alter_table_aocs2).
+		 */
 		colDef->hasCookedMissingVal = rawEnt->hasCookedMissingVal;
-		colDef->missingVal = rawEnt->missingVal;
 		colDef->missingIsNull = rawEnt->missingIsNull;
+		if (rawEnt->hasCookedMissingVal && !rawEnt->missingIsNull)
+		{
+			MemoryContext oldcxt = MemoryContextSwitchTo(CurTransactionContext);
+
+			colDef->missingVal = datumCopy(rawEnt->missingVal, false, -1);
+			MemoryContextSwitchTo(oldcxt);
+		}
+		else
+			colDef->missingVal = rawEnt->missingVal;
 
 		/* Make the additional catalog changes visible */
 		CommandCounterIncrement();
