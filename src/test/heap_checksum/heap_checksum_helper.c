@@ -3,6 +3,7 @@
 #include "nodes/pg_list.h"
 #include "storage/buf_internals.h"
 #include "storage/bufmgr.h"
+#include "storage/smgr.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -24,7 +25,9 @@ invalidate_buffers(PG_FUNCTION_ARGS)
 
 	rnodebackend.backend = InvalidBackendId; /* not temporary/local */
 
-	DropRelFileNodeBuffers(rnodebackend, &fork, 1, &block);
+	DropRelFileNodeBuffers(smgropen(rnodebackend.node, rnodebackend.backend,
+									SMGR_MD),
+						   &fork, 1, &block);
 
 	PG_RETURN_BOOL(true);
 }
