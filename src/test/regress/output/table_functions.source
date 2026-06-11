@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/'short' => '(Sort|HashAggregate|Unique)'/
+-- s/'short' => '(Sort|HashAggregate|Unique)'/'short' => 'SORT_OR_HASH'/
+-- end_matchsubs
 -- =================== -*- mode: sql; -*- ===================
 -- table_functions.sql
 --

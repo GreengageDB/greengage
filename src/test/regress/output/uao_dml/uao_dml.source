@@ -942,7 +942,7 @@ SELECT reltuples FROM pg_class WHERE relname = 'mytab_@amname@';
 SELECT reltuples FROM pg_class WHERE relname = 'mytab_int_idx1_@amname@';
  reltuples 
 -----------
-         2
+         0
 (1 row)
 
 -- @Description Checks that deleting works with many AO blocks.

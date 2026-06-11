@@ -1,6 +1,6 @@
 -- start_matchsubs
--- m/^ foo\s+\|\s+-?[0-9.]+$/
--- s/^ foo\s+\|\s+-?[0-9.]+$/ foo | ROOTSTAT/
+-- m/^ foo\s+\|\s+-?[0-9.]+\s*$/
+-- s/^ foo\s+\|\s+-?[0-9.]+\s*$/ foo | ROOTSTAT/
 -- end_matchsubs
 -- start_matchsubs
 -- m/^LOG.*PartitionSelector/
