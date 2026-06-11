@@ -497,12 +497,24 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 	 * merge, and things seem to be working with this much simpler thing, but
 	 * I'm not sure if the logic is 100% correct now.
 	 */
-	if (CdbPathLocus_IsSegmentGeneral(lpath->locus))
+	if (CdbPathLocus_IsSegmentGeneral(lpath->locus) ||
+		CdbPathLocus_IsGeneral(lpath->locus) ||
+		!setOp->all)
 	{
+		/*
+		 * GPDB: also force General loci to one segment (otherwise every
+		 * segment would seed its own copy of the worktable and the gathered
+		 * result would be duplicated), and recursive UNION DISTINCT too:
+		 * the RecursiveUnion node deduplicates locally in one process, which
+		 * is only global when the whole recursion runs in one process.
+		 */
 		CdbPathLocus gather_locus;
 
-		CdbPathLocus_MakeSingleQE(&gather_locus, lpath->locus.numsegments);
+		CdbPathLocus_MakeSingleQE(&gather_locus,
+								  CdbPathLocus_NumSegments(lpath->locus));
 		lpath = cdbpath_create_motion_path(root, lpath, NIL, false, gather_locus);
+		if (!lpath)
+			elog(ERROR, "could not gather non-recursive term of recursive UNION");
 	}
 
 	/* The right path will want to look at the left one ... */
@@ -560,6 +572,22 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 	/*
 	 * And make the plan node.
 	 */
+	/*
+	 * GPDB: if the recursive term ended up in a single process but the
+	 * anchor is distributed, gather the anchor there too; the
+	 * RecursiveUnion node executes both inputs in one slice.  (A motion on
+	 * top of the recursive term itself would be wrong: that side is
+	 * re-executed for every iteration, and Motions cannot be rescanned.)
+	 */
+	if (CdbPathLocus_IsBottleneck(rpath->locus) &&
+		!CdbPathLocus_IsBottleneck(lpath->locus))
+	{
+		lpath = cdbpath_create_motion_path(root, lpath, NIL, false,
+										   rpath->locus);
+		if (!lpath)
+			elog(ERROR, "could not gather non-recursive term of recursive UNION");
+	}
+
 	path = (Path *) create_recursiveunion_path(root,
 											   result_rel,
 											   lpath,
@@ -568,6 +596,18 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 											   groupList,
 											   root->wt_param_id,
 											   dNumGroups);
+
+	/*
+	 * GPDB: label the result locus.  In one process it is just that locus;
+	 * otherwise the anchor rows sit on their hash segments while
+	 * recursively-produced rows sit wherever they were computed, so the
+	 * honest description is Strewn.
+	 */
+	if (CdbPathLocus_IsBottleneck(lpath->locus))
+		path->locus = lpath->locus;
+	else
+		CdbPathLocus_MakeStrewn(&path->locus,
+								CdbPathLocus_NumSegments(lpath->locus));
 	path->locus = rpath->locus;
 
 	add_path(result_rel, path);

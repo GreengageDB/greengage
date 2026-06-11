@@ -3197,8 +3197,31 @@ set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	required_outer = rel->lateral_relids;
 
-	/* Generate appropriate path */
-	add_path(rel, create_worktablescan_path(root, rel, ctepath->locus, required_outer));
+	/*
+	 * GPDB: pick a truthful locus for the worktable.
+	 *
+	 * The non-recursive term's locus only describes where the *anchor* rows
+	 * are placed.  Rows appended by the recursive term stay on whichever
+	 * segment produced them, so a hashed claim is wrong from the second
+	 * iteration on (joins would then colocate against the wrong segment and
+	 * silently lose rows).  Declare the worktable Strewn instead: joins
+	 * against it must broadcast or gather the other side, which is correct
+	 * for rows living anywhere.  Bottleneck loci (SingleQE/Entry) stay as
+	 * they are: there the whole recursion runs in one process.
+	 */
+	{
+		CdbPathLocus ctelocus;
+
+		if (CdbPathLocus_IsHashed(ctepath->locus) ||
+			CdbPathLocus_IsHashedOJ(ctepath->locus) ||
+			CdbPathLocus_IsStrewn(ctepath->locus))
+			CdbPathLocus_MakeStrewn(&ctelocus,
+									CdbPathLocus_NumSegments(ctepath->locus));
+		else
+			ctelocus = ctepath->locus;
+
+		add_path(rel, create_worktablescan_path(root, rel, ctelocus, required_outer));
+	}
 }
 
 /*
