@@ -45,19 +45,13 @@ SELECT 1 FROM pg_appendonly WHERE visimapidxid is not NULL AND visimapidxid is n
 create table uao_table_check_select_invisible (i int, j varchar(20), k int ) with (appendonly=true) DISTRIBUTED BY (i);
 insert into uao_table_check_select_invisible values(1,'test',4);
 select * from uao_table_check_select_invisible;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_select_invisible
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |  j   | k 
 ---+------+---
  1 | test | 4
 (1 row)
 
 update uao_table_check_select_invisible set j = 'test_update' where i = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_select_invisible
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from uao_table_check_select_invisible;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_select_invisible
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |      j      | k 
 ---+-------------+---
  1 | test_update | 4
@@ -65,8 +59,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 set gp_select_invisible = true;
 select * from uao_table_check_select_invisible;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_select_invisible
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |      j      | k 
 ---+-------------+---
  1 | test        | 4
@@ -77,8 +69,6 @@ set gp_select_invisible = false;
 -- Verify that the visimap changes when delete from uao table
 create table uao_table_check_visimap_changes_after_delete (i int, j varchar(20), k int ) with (appendonly=true) DISTRIBUTED BY (i);
 select * from uao_table_check_visimap_changes_after_delete;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_visimap_changes_after_delete
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | k 
 ---+---+---
 (0 rows)
@@ -91,17 +81,13 @@ select count(*) from gp_aovisimap_dist_random('uao_table_check_visimap_changes_a
 
 insert into uao_table_check_visimap_changes_after_delete select i,'aa'||i,i+10 from generate_series(1,5) as i;
 delete from uao_table_check_visimap_changes_after_delete where i=3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_visimap_changes_after_delete
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from uao_table_check_visimap_changes_after_delete;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_visimap_changes_after_delete
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |  j  | k  
 ---+-----+----
+ 1 | aa1 | 11
  2 | aa2 | 12
  4 | aa4 | 14
  5 | aa5 | 15
- 1 | aa1 | 11
 (4 rows)
 
 select count(*) from gp_aovisimap_dist_random('uao_table_check_visimap_changes_after_delete') as (segno integer, first_row_no bigint, visimap bytea);
@@ -113,8 +99,6 @@ select count(*) from gp_aovisimap_dist_random('uao_table_check_visimap_changes_a
 -- Verify that the visimap changes when delete and truncate from uao table
 create table uao_table_visimap_changes_after_trunc (i int, j varchar(20), k int ) with (appendonly=true) DISTRIBUTED BY (i);
 select * from uao_table_visimap_changes_after_trunc;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_visimap_changes_after_trunc
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | k 
 ---+---+---
 (0 rows)
@@ -127,17 +111,13 @@ select count(*) from gp_aovisimap_dist_random('uao_table_visimap_changes_after_t
 
 insert into uao_table_visimap_changes_after_trunc select i,'aa'||i,i+10 from generate_series(1,5) as i;
 delete from uao_table_visimap_changes_after_trunc where i=3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_visimap_changes_after_trunc
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from uao_table_visimap_changes_after_trunc;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_visimap_changes_after_trunc
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i |  j  | k  
 ---+-----+----
- 2 | aa2 | 12
  4 | aa4 | 14
- 1 | aa1 | 11
  5 | aa5 | 15
+ 1 | aa1 | 11
+ 2 | aa2 | 12
 (4 rows)
 
 select count(*) from gp_aovisimap_dist_random('uao_table_visimap_changes_after_trunc') as (segno integer, first_row_no bigint, visimap bytea);
@@ -148,8 +128,6 @@ select count(*) from gp_aovisimap_dist_random('uao_table_visimap_changes_after_t
 
 truncate table uao_table_visimap_changes_after_trunc;
 select * from uao_table_visimap_changes_after_trunc;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_visimap_changes_after_trunc
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | k 
 ---+---+---
 (0 rows)
@@ -176,8 +154,6 @@ select * from gp_aovisimap_count('uao_table_gp_aovisimap_after_delete');
 (1 row)
 
 delete from uao_table_gp_aovisimap_after_delete;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_gp_aovisimap_after_delete
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from gp_dist_random('uao_table_gp_aovisimap_after_delete');
  count 
 -------
@@ -206,8 +182,6 @@ select * from gp_aovisimap_count('uao_table_gp_aovisimap_after_update');
 (1 row)
 
 update uao_table_gp_aovisimap_after_update set j = j || '_9';
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_gp_aovisimap_after_update
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from gp_dist_random('uao_table_gp_aovisimap_after_update');
  count 
 -------
@@ -316,14 +290,12 @@ select * from gp_toolkit.__gp_aovisimap_hidden_info('uao_table_check_hidden_tup_
 (3 rows)
 
 delete from uao_table_check_hidden_tup_count_after_delete;
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_hidden_tup_count_after_delete
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uao_table_check_hidden_tup_count_after_delete'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
      1 |               5 |              5
-     1 |               4 |              4
      1 |               1 |              1
+     1 |               4 |              4
 (3 rows)
 
 vacuum full uao_table_check_hidden_tup_count_after_delete;
@@ -344,14 +316,12 @@ insert into uao_table_check_hidden_tup_count_after_update select i,'aa'||i,i+10 
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uao_table_check_hidden_tup_count_after_update'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
-     1 |               0 |              1
      1 |               0 |              4
      1 |               0 |              5
+     1 |               0 |              1
 (3 rows)
 
 update uao_table_check_hidden_tup_count_after_update set j = 'test21';
-NOTICE:  One or more columns in the following table(s) do not have statistics: uao_table_check_hidden_tup_count_after_update
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from gp_toolkit.__gp_aovisimap_hidden_info('uao_table_check_hidden_tup_count_after_update'::regclass);
  segno | hidden_tupcount | total_tupcount 
 -------+-----------------+----------------
@@ -367,9 +337,9 @@ select * from gp_toolkit.__gp_aovisimap_hidden_info('uao_table_check_hidden_tup_
      1 |               0 |              0
      2 |               0 |              5
      1 |               0 |              0
-     2 |               0 |              1
-     1 |               0 |              0
      2 |               0 |              4
+     1 |               0 |              0
+     2 |               0 |              1
 (6 rows)
 
 -- Verify that we can delete from the AO auxiliary tables when allow_system_table_mods is enabled
@@ -393,22 +363,22 @@ SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT segrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aoseg_133260" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoseg_133260"
+ERROR:  permission denied: "pg_ao_aux_table_xxxxx" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoseg_xxxxx"
 PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
 SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT blkdirrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aoblkdir_133260" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_133260"
+ERROR:  permission denied: "pg_ao_aux_table_xxxxx" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_xxxxx"
 PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
 SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT visimaprelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  permission denied: "pg_aovisimap_133260" is a system catalog
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_133260"
+ERROR:  permission denied: "pg_ao_aux_table_xxxxx" is a system catalog
+CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_xxxxx"
 PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
 SET allow_system_table_mods = on;
 SELECT insert_dummy_ao_aux_entry(s.interior_fqname)
@@ -442,23 +412,29 @@ SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT segrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoseg_133260"
-PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_ao_aux_entry 
+---------------------------
+ 
+(1 row)
+
 SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT blkdirrelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aoblkdir_133260"
-PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_ao_aux_entry 
+---------------------------
+ 
+(1 row)
+
 SELECT delete_dummy_ao_aux_entry(s.interior_fqname)
 FROM (
      SELECT visimaprelid::regclass::text AS interior_fqname FROM pg_appendonly WHERE relid = 'uao_catalog_delete_from'::regclass::oid
 ) s;
-ERROR:  could not find junk wholerow column
-CONTEXT:  SQL statement "DELETE FROM pg_aoseg.pg_aovisimap_133260"
-PL/pgSQL function delete_dummy_ao_aux_entry(text) line 3 at EXECUTE
+ delete_dummy_ao_aux_entry 
+---------------------------
+ 
+(1 row)
+
 SELECT count(*) FROM gp_toolkit.__gp_aoseg('uao_catalog_delete_from');
  count 
 -------
@@ -468,11 +444,15 @@ SELECT count(*) FROM gp_toolkit.__gp_aoseg('uao_catalog_delete_from');
 SELECT count(*) FROM gp_toolkit.__gp_aoblkdir('uao_catalog_delete_from');
  count 
 -------
-     1
+     0
 (1 row)
 
 SELECT count(*) FROM gp_toolkit.__gp_aovisimap('uao_catalog_delete_from');
-ERROR:  got invalid value: NULL
+ count 
+-------
+     0
+(1 row)
+
 SET allow_system_table_mods = off;
 DROP FUNCTION insert_dummy_ao_aux_entry(fqname text);
 DROP FUNCTION delete_dummy_ao_aux_entry(fqname text);
