@@ -2438,6 +2438,12 @@ readNodeBinary(void)
 			case T_WithClause:
 				return_value = _readWithClause();
 				break;
+			case T_CTESearchClause:
+				return_value = _readCTESearchClause();
+				break;
+			case T_CTECycleClause:
+				return_value = _readCTECycleClause();
+				break;
 			case T_CommonTableExpr:
 				return_value = _readCommonTableExpr();
 				break;

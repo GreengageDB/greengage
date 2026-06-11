@@ -1569,6 +1569,12 @@ _outNode(StringInfo str, void *obj)
 			case T_WithClause:
 				_outWithClause(str, obj);
 				break;
+			case T_CTESearchClause:
+				_outCTESearchClause(str, obj);
+				break;
+			case T_CTECycleClause:
+				_outCTECycleClause(str, obj);
+				break;
 			case T_CommonTableExpr:
 				_outCommonTableExpr(str, obj);
 				break;
