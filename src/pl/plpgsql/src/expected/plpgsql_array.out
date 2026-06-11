@@ -4,8 +4,10 @@
 -- We also check arrays of composites here, so this has some overlap
 -- with the plpgsql_record tests.
 --
-create type complex as (r float8, i float8);
-create type quadarray as (c1 complex[], c2 complex);
+-- GPDB: upstream calls this type "complex", which collides with the
+-- built-in pg_catalog.complex (pg_catalog wins unqualified lookup).
+create type gp_test_complex as (r float8, i float8);
+create type quadarray as (c1 gp_test_complex[], c2 gp_test_complex);
 do $$ declare a int[];
 begin a := array[1,2]; a[3] := 4; raise notice 'a = %', a; end$$;
 NOTICE:  a = {1,2,4}
@@ -32,16 +34,16 @@ begin a[1:2] := 4; raise notice 'a = %', a; end$$;  -- error
 ERROR:  malformed array literal: "4"
 DETAIL:  Array value must start with "{" or dimension information.
 CONTEXT:  PL/pgSQL function inline_code_block line 2 at assignment
-do $$ declare a complex[];
+do $$ declare a gp_test_complex[];
 begin a[1] := (1,2); a[1].i := 11; raise notice 'a = %', a; end$$;
 NOTICE:  a = {"(1,11)"}
-do $$ declare a complex[];
+do $$ declare a gp_test_complex[];
 begin a[1].i := 11; raise notice 'a = %, a[1].i = %', a, a[1].i; end$$;
 NOTICE:  a = {"(,11)"}, a[1].i = 11
 -- perhaps this ought to work, but for now it doesn't:
-do $$ declare a complex[];
+do $$ declare a gp_test_complex[];
 begin a[1:2].i := array[11,12]; raise notice 'a = %', a; end$$;
-ERROR:  cannot assign to field "i" of column "a" because its type complex[] is not a composite type
+ERROR:  cannot assign to field "i" of column "a" because its type gp_test_complex[] is not a composite type
 LINE 1: a[1:2].i := array[11,12]
         ^
 QUERY:  a[1:2].i := array[11,12]
@@ -85,7 +87,7 @@ LINE 1: a[1] := 2
         ^
 QUERY:  a[1] := 2
 CONTEXT:  PL/pgSQL function inline_code_block line 2 at assignment
-do $$ declare a complex;
+do $$ declare a gp_test_complex;
 begin a.r[1] := 2; raise notice 'a = %', a; end$$;
 ERROR:  cannot subscript type double precision because it does not support subscripting
 LINE 1: a.r[1] := 2
