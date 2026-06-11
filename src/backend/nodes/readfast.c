@@ -2414,6 +2414,9 @@ readNodeBinary(void)
 			case T_IndexElem:
 				return_value = _readIndexElem();
 				break;
+			case T_StatsElem:
+				return_value = _readStatsElem();
+				break;
 			case T_Query:
 				return_value = _readQuery();
 				break;

@@ -1548,6 +1548,9 @@ _outNode(StringInfo str, void *obj)
 			case T_IndexElem:
 				_outIndexElem(str, obj);
 				break;
+			case T_StatsElem:
+				_outStatsElem(str, obj);
+				break;
 			case T_Query:
 				_outQuery(str, obj);
 				break;

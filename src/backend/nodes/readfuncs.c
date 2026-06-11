@@ -854,6 +854,17 @@ _readIndexElem(void)
 	READ_DONE();
 }
 
+static StatsElem *
+_readStatsElem(void)
+{
+	READ_LOCALS(StatsElem);
+
+	READ_STRING_FIELD(name);
+	READ_NODE_FIELD(expr);
+
+	READ_DONE();
+}
+
 static ReindexStmt *
 _readReindexStmt(void)
 {
@@ -5039,6 +5050,8 @@ parseNodeString(void)
 		return_value = _readIndexElem();
 	else if (MATCHX("INDEXSTMT"))
 		return_value = _readIndexStmt();
+	else if (MATCHX("STATSELEM"))
+		return_value = _readStatsElem();
 	else if (MATCHX("LOCKSTMT"))
 		return_value = _readLockStmt();
 	else if (MATCHX("REINDEXSTMT"))
