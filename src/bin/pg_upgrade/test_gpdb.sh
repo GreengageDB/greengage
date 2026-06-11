@@ -429,7 +429,12 @@ main() {
 	export COORDINATOR_DATADIR=${temp_root}
 	cp ${OLD_DATADIR}/../lalshell .
 	
-	LANG=en_US.utf8 BLDWRAP_POSTGRES_CONF_ADDONS=fsync=off ${temp_root}/../../../../gpAux/gpdemo/demo_cluster.sh ${DEMOCLUSTER_OPTS}
+	# Note: do not force a locale (the upstream script pinned LANG=en_US.utf8
+	# here): the new cluster must be created with the same locale as the old
+	# one, or pg_upgrade aborts with "lc_collate values for database ... do
+	# not match".  Inheriting the environment guarantees that, since the old
+	# cluster was created in this same environment.
+	BLDWRAP_POSTGRES_CONF_ADDONS=fsync=off ${temp_root}/../../../../gpAux/gpdemo/demo_cluster.sh ${DEMOCLUSTER_OPTS}
 
 	export COORDINATOR_DATA_DIRECTORY="${NEW_DATADIR}/qddir/demoDataDir-1"
 	export PGPORT=17432
