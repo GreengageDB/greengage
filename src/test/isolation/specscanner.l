@@ -37,6 +37,10 @@ static void addlitchar(char c);
 %x qstr
 
 digit			[0123456789]
+ident_start		[A-Za-z\200-\377_]
+ident_cont		[A-Za-z\200-\377_0-9\$]
+
+identifier		{ident_start}{ident_cont}*
 
 self			[,()*]
 
@@ -69,6 +73,17 @@ teardown		{ return TEARDOWN; }
 [\n]			{ yyline++; }
 {comment}		{ /* ignore */ }
 {space}			{ /* ignore */ }
+
+ /*
+  * Plain identifiers: upstream (PG14+) spec files use unquoted session and
+  * step names.  The grammar keeps a single name token, so these are
+  * returned as string_literal just like quoted names.  Keywords above take
+  * precedence over this rule.
+  */
+{identifier}	{
+					yylval.str = pg_strdup(yytext);
+					return(string_literal);
+				}
 
  /* Quoted strings: "foo" */
 \"				{
