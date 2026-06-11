@@ -236,6 +236,18 @@ do { \
 	COMPLETE_WITH_LIST(list); \
 } while (0)
 
+#ifdef HAVE_RL_COMPLETION_APPEND_CHARACTER
+	#define COMPLETE_WITH_SUPPRESS_APPEND(...) \
+	do { \
+		rl_completion_append_character = '\0'; \
+\
+		static const char *const list[] = { __VA_ARGS__, NULL }; \
+		COMPLETE_WITH_LIST(list); \
+	} while (0)
+#else
+	#define COMPLETE_WITH_SUPPRESS_APPEND(...) COMPLETE_WITH(__VA_ARGS__)
+#endif
+
 #define COMPLETE_WITH_CS(...) \
 do { \
 	static const char *const list[] = { __VA_ARGS__, NULL }; \
@@ -1476,6 +1488,7 @@ psql_completion(const char *text, int start, int end)
 
 #ifdef HAVE_RL_COMPLETION_APPEND_CHARACTER
 	rl_completion_append_character = ' ';
+	rl_completion_suppress_append = 0;
 #endif
 
 	/* Clear a few things. */
@@ -2391,7 +2404,7 @@ psql_completion(const char *text, int start, int end)
 			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
-			COMPLETE_WITH("LOCATION ('", "EXECUTE");
+			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('", "EXECUTE '");
 		else if(TailMatches("EXECUTE", "'*'"))
 			COMPLETE_WITH("FORMAT", "ON");
 		else if(TailMatches("EXECUTE", "'*'", "ON"))
@@ -2414,7 +2427,7 @@ psql_completion(const char *text, int start, int end)
 			HeadMatches("CREATE", "READABLE", "EXTERNAL"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
-			COMPLETE_WITH("LOCATION ('");
+			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
 		else if(TailMatches("LOCATION", "(*)"))
 			COMPLETE_WITH("FORMAT");
 		else if(TailMatches("FORMAT", MatchAny) ||
@@ -2435,7 +2448,7 @@ psql_completion(const char *text, int start, int end)
 	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
-			COMPLETE_WITH("EXECUTE");
+			COMPLETE_WITH_SUPPRESS_APPEND("EXECUTE '");
 		else if(TailMatches("EXECUTE", "'*'"))
 			COMPLETE_WITH("FORMAT", "ON ALL");
 		else if(TailMatches("EXECUTE", "'*'", "ON", "ALL"))
@@ -2453,7 +2466,7 @@ psql_completion(const char *text, int start, int end)
 	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL"))
 	{
 		if(TailMatches("TABLE", MatchAny, "(*)"))
-			COMPLETE_WITH("LOCATION ('");
+			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
 		else if(TailMatches("LOCATION", "(*)"))
 			COMPLETE_WITH("FORMAT");
 		else if(TailMatches("FORMAT", MatchAny) ||
