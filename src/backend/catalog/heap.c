@@ -2807,32 +2807,47 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		if (rel->rd_rel->relkind == RELKIND_RELATION && add_column_mode &&
 			!attgenerated)
 		{
-			expr2 = expression_planner(expr2);
-			estate = CreateExecutorState();
-			exprState = ExecPrepareExpr(expr2, estate);
-			econtext = GetPerTupleExprContext(estate);
-
-			missingval = ExecEvalExpr(exprState, econtext,
-									  &missingIsNull);
-
-			FreeExecutorState(estate);
-
-			defAttStruct = TupleDescAttr(rel->rd_att, attnum - 1);
-
-			if (missingIsNull)
+			if (*cookedMissingVal)
 			{
-				/* if the default evaluates to NULL, just store a NULL array */
-				missingval = (Datum) 0;
+				/*
+				 * GPDB: a QE executing a dispatched ALTER ... ADD COLUMN
+				 * must reuse the missing value the QD evaluated (already
+				 * wrapped in a one-element array), not evaluate the
+				 * expression again: stable functions like now() would
+				 * yield a different attmissingval on every segment.
+				 */
+				missingval = *missingval_p;
+				missingIsNull = *missingIsNull_p;
 			}
 			else
 			{
-				/* otherwise make a one-element array of the value */
-				missingval = PointerGetDatum(construct_array(&missingval,
-															 1,
-															 defAttStruct->atttypid,
-															 defAttStruct->attlen,
-															 defAttStruct->attbyval,
-															 defAttStruct->attalign));
+				expr2 = expression_planner(expr2);
+				estate = CreateExecutorState();
+				exprState = ExecPrepareExpr(expr2, estate);
+				econtext = GetPerTupleExprContext(estate);
+
+				missingval = ExecEvalExpr(exprState, econtext,
+										  &missingIsNull);
+
+				FreeExecutorState(estate);
+
+				defAttStruct = TupleDescAttr(rel->rd_att, attnum - 1);
+
+				if (missingIsNull)
+				{
+					/* if the default evaluates to NULL, store a NULL array */
+					missingval = (Datum) 0;
+				}
+				else
+				{
+					/* otherwise make a one-element array of the value */
+					missingval = PointerGetDatum(construct_array(&missingval,
+																 1,
+																 defAttStruct->atttypid,
+																 defAttStruct->attlen,
+																 defAttStruct->attbyval,
+																 defAttStruct->attalign));
+				}
 			}
 		}
 		if (add_column_mode && !attgenerated)
