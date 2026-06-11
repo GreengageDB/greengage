@@ -2295,11 +2295,20 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 
 	/*
 	 * Check that it's of a vacuumable relkind.
+	 *
+	 * GPDB: append-optimized auxiliary relations (segment map, block
+	 * directory, visibility map) are heap-storage catalogs that must stay
+	 * vacuumable; the PG14 merge dropped them from this list, so VACUUM of
+	 * an AO table warned and skipped its aux tables, which then never
+	 * shrank under VACUUM FULL.
 	 */
 	if (rel->rd_rel->relkind != RELKIND_RELATION &&
 		rel->rd_rel->relkind != RELKIND_MATVIEW &&
 		rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+		rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE &&
+		rel->rd_rel->relkind != RELKIND_AOSEGMENTS &&
+		rel->rd_rel->relkind != RELKIND_AOBLOCKDIR &&
+		rel->rd_rel->relkind != RELKIND_AOVISIMAP)
 	{
 		ereport(WARNING,
 				(errmsg("skipping \"%s\" --- cannot vacuum non-tables or special system tables",
