@@ -207,10 +207,6 @@ NOTICE:  schema "no_such_schema" does not exist, skipping
 CREATE TRIGGER test_trigger_exists
     BEFORE UPDATE ON test_exists
     FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=83871)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=83873)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=83872)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 DROP TRIGGER test_trigger_exists ON test_exists;
 -- rule
 DROP RULE test_rule_exists ON test_exists;
@@ -289,9 +285,9 @@ DROP DOMAIN IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP FOREIGN TABLE IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
 DROP FUNCTION IF EXISTS no_such_schema.foo();
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP FUNCTION IF EXISTS foo(no_such_type);
@@ -300,14 +296,14 @@ DROP FUNCTION IF EXISTS foo(no_such_schema.no_such_type);
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP INDEX IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
 DROP MATERIALIZED VIEW IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
 DROP OPERATOR IF EXISTS no_such_schema.+ (int, int);
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP OPERATOR IF EXISTS + (no_such_type, no_such_type);
@@ -324,14 +320,14 @@ DROP RULE IF EXISTS foo ON no_such_schema.bar;
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP SEQUENCE IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
 DROP TABLE IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
 DROP TEXT SEARCH CONFIGURATION IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP TEXT SEARCH DICTIONARY IF EXISTS no_such_schema.foo;
@@ -346,9 +342,9 @@ DROP TYPE IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
 DROP VIEW IF EXISTS no_such_schema.foo;
 NOTICE:  schema "no_such_schema" does not exist, skipping
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=83873)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=83872)
-NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=83871)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg0 172.17.0.3:7002 pid=263390)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg2 172.17.0.3:7004 pid=263394)
+NOTICE:  schema "no_such_schema" does not exist, skipping  (seg1 172.17.0.3:7003 pid=263392)
 -- Check we receive an ambiguous function error when there are
 -- multiple matching functions.
 CREATE FUNCTION test_ambiguous_funcname(int) returns int as $$ select $1; $$ language sql;

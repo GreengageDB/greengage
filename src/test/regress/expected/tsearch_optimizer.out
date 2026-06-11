@@ -2354,10 +2354,6 @@ alter table test_tsvector set distributed by (distkey);
 CREATE TRIGGER tsvectorupdate
 BEFORE UPDATE OR INSERT ON test_tsvector
 FOR EACH ROW EXECUTE PROCEDURE tsvector_update_trigger(a, 'pg_catalog.english', t);
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89490)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89483)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89486)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
  count 
 -------
@@ -2436,8 +2432,8 @@ select * from pendtest where 'ipsa:*'::tsquery @@ ts;
 select * from pendtest where 'ips:*'::tsquery @@ ts;
          ts         
 --------------------
- 'ipsam':2 'lore':1
  'ipsum':2 'lore':1
+ 'ipsam':2 'lore':1
 (2 rows)
 
 select * from pendtest where 'ipt:*'::tsquery @@ ts;

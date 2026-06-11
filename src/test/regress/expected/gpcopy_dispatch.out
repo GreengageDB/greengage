@@ -168,10 +168,6 @@ END;
 $$;
 CREATE TRIGGER copydisttest_before_ins BEFORE INSERT ON copydisttest
 FOR EACH ROW EXECUTE PROCEDURE copydisttest_ignore_even();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=97682)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=97676)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=97677)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 \set QUIET off
 -- COPY on QD
 -- expect 'COPY 2'

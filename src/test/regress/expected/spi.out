@@ -16,10 +16,6 @@ end;
 ' language plpgsql NO SQL;
 create trigger tg_bu before update
    on test for each row execute procedure bu();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=95411)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=95410)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=95409)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 update test set a=200 where a=10;
 drop trigger tg_bu on test;
 drop function bu();
@@ -54,7 +50,7 @@ begin
 end
 $$ language plpgsql READS SQL DATA ROWS 10;
 select * from (select refcursor (1, 10)) t1, test;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.test"  (entry db 172.17.0.3:7000 pid=95587)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.test"  (entry db 172.17.0.3:7000 pid=275098)
 CONTEXT:  SQL statement "select * from test where a > param1 and b > param2"
 PL/pgSQL function refcursor(integer,integer) line 7 at OPEN
 drop function refcursor(int, int);

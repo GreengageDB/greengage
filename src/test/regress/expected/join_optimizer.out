@@ -58,10 +58,10 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 5 | 0 | five
-     | 6 | 6 | six
      | 1 | 4 | one
      | 0 |   | zero
+     | 5 | 0 | five
+     | 6 | 6 | six
 (11 rows)
 
 SELECT '' AS "xxx", *
@@ -70,10 +70,6 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   
 -----+---+---+-------
-     | 5 | 0 | five
-     | 6 | 6 | six
-     | 1 | 4 | one
-     | 0 |   | zero
      | 2 | 3 | two
      | 3 | 2 | three
      | 4 | 1 | four
@@ -81,6 +77,10 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
+     | 1 | 4 | one
+     | 0 |   | zero
+     | 5 | 0 | five
+     | 6 | 6 | six
 (11 rows)
 
 SELECT '' AS "xxx", *
@@ -91,6 +91,8 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -----+---+---+-------
      | 5 | 0 | five
      | 6 | 6 | six
+     | 1 | 4 | one
+     | 0 |   | zero
      | 2 | 3 | two
      | 3 | 2 | three
      | 4 | 1 | four
@@ -98,8 +100,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 1 | 4 | one
-     | 0 |   | zero
 (11 rows)
 
 SELECT '' AS "xxx", *
@@ -127,105 +127,105 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | a | b |   c   | d | e  
 -----+---+---+-------+---+----
-     | 2 | 3 | two   | 1 | -1
-     | 2 | 3 | two   | 0 |   
-     | 2 | 3 | two   | 5 | -5
-     | 2 | 3 | two   | 5 | -5
-     | 2 | 3 | two   | 2 |  2
-     | 2 | 3 | two   | 3 | -3
-     | 2 | 3 | two   | 2 |  4
-     | 2 | 3 | two   |   |   
-     | 2 | 3 | two   |   |  0
-     | 3 | 2 | three | 1 | -1
-     | 3 | 2 | three | 0 |   
-     | 3 | 2 | three | 5 | -5
-     | 3 | 2 | three | 5 | -5
-     | 3 | 2 | three | 2 |  2
-     | 3 | 2 | three | 3 | -3
-     | 3 | 2 | three | 2 |  4
-     | 3 | 2 | three |   |   
-     | 3 | 2 | three |   |  0
-     | 4 | 1 | four  | 1 | -1
-     | 4 | 1 | four  | 0 |   
-     | 4 | 1 | four  | 5 | -5
-     | 4 | 1 | four  | 5 | -5
-     | 4 | 1 | four  | 2 |  2
-     | 4 | 1 | four  | 3 | -3
-     | 4 | 1 | four  | 2 |  4
-     | 4 | 1 | four  |   |   
-     | 4 | 1 | four  |   |  0
-     | 7 | 7 | seven | 1 | -1
-     | 7 | 7 | seven | 0 |   
-     | 7 | 7 | seven | 5 | -5
-     | 7 | 7 | seven | 5 | -5
-     | 7 | 7 | seven | 2 |  2
-     | 7 | 7 | seven | 3 | -3
-     | 7 | 7 | seven | 2 |  4
-     | 7 | 7 | seven |   |   
-     | 7 | 7 | seven |   |  0
-     | 8 | 8 | eight | 1 | -1
-     | 8 | 8 | eight | 0 |   
-     | 8 | 8 | eight | 5 | -5
-     | 8 | 8 | eight | 5 | -5
-     | 8 | 8 | eight | 2 |  2
-     | 8 | 8 | eight | 3 | -3
-     | 8 | 8 | eight | 2 |  4
-     | 8 | 8 | eight |   |   
-     | 8 | 8 | eight |   |  0
-     |   |   | null  | 1 | -1
-     |   |   | null  | 0 |   
-     |   |   | null  | 5 | -5
-     |   |   | null  | 5 | -5
-     |   |   | null  | 2 |  2
-     |   |   | null  | 3 | -3
-     |   |   | null  | 2 |  4
-     |   |   | null  |   |   
-     |   |   | null  |   |  0
-     |   | 0 | zero  | 1 | -1
-     |   | 0 | zero  | 0 |   
-     |   | 0 | zero  | 5 | -5
-     |   | 0 | zero  | 5 | -5
-     |   | 0 | zero  | 2 |  2
-     |   | 0 | zero  | 3 | -3
-     |   | 0 | zero  | 2 |  4
-     |   | 0 | zero  |   |   
-     |   | 0 | zero  |   |  0
-     | 5 | 0 | five  | 1 | -1
-     | 5 | 0 | five  | 0 |   
-     | 5 | 0 | five  | 5 | -5
-     | 5 | 0 | five  | 5 | -5
-     | 5 | 0 | five  | 2 |  2
-     | 5 | 0 | five  | 3 | -3
-     | 5 | 0 | five  | 2 |  4
-     | 5 | 0 | five  |   |   
-     | 5 | 0 | five  |   |  0
-     | 6 | 6 | six   | 1 | -1
-     | 6 | 6 | six   | 0 |   
-     | 6 | 6 | six   | 5 | -5
-     | 6 | 6 | six   | 5 | -5
-     | 6 | 6 | six   | 2 |  2
-     | 6 | 6 | six   | 3 | -3
-     | 6 | 6 | six   | 2 |  4
-     | 6 | 6 | six   |   |   
-     | 6 | 6 | six   |   |  0
-     | 1 | 4 | one   | 1 | -1
-     | 1 | 4 | one   | 0 |   
-     | 1 | 4 | one   | 5 | -5
-     | 1 | 4 | one   | 5 | -5
      | 1 | 4 | one   | 2 |  2
      | 1 | 4 | one   | 3 | -3
      | 1 | 4 | one   | 2 |  4
      | 1 | 4 | one   |   |   
      | 1 | 4 | one   |   |  0
-     | 0 |   | zero  | 1 | -1
-     | 0 |   | zero  | 0 |   
-     | 0 |   | zero  | 5 | -5
-     | 0 |   | zero  | 5 | -5
+     | 1 | 4 | one   | 5 | -5
+     | 1 | 4 | one   | 5 | -5
+     | 1 | 4 | one   | 1 | -1
+     | 1 | 4 | one   | 0 |   
      | 0 |   | zero  | 2 |  2
      | 0 |   | zero  | 3 | -3
      | 0 |   | zero  | 2 |  4
      | 0 |   | zero  |   |   
      | 0 |   | zero  |   |  0
+     | 0 |   | zero  | 5 | -5
+     | 0 |   | zero  | 5 | -5
+     | 0 |   | zero  | 1 | -1
+     | 0 |   | zero  | 0 |   
+     | 2 | 3 | two   | 2 |  2
+     | 2 | 3 | two   | 3 | -3
+     | 2 | 3 | two   | 2 |  4
+     | 2 | 3 | two   |   |   
+     | 2 | 3 | two   |   |  0
+     | 2 | 3 | two   | 5 | -5
+     | 2 | 3 | two   | 5 | -5
+     | 2 | 3 | two   | 1 | -1
+     | 2 | 3 | two   | 0 |   
+     | 3 | 2 | three | 2 |  2
+     | 3 | 2 | three | 3 | -3
+     | 3 | 2 | three | 2 |  4
+     | 3 | 2 | three |   |   
+     | 3 | 2 | three |   |  0
+     | 3 | 2 | three | 5 | -5
+     | 3 | 2 | three | 5 | -5
+     | 3 | 2 | three | 1 | -1
+     | 3 | 2 | three | 0 |   
+     | 4 | 1 | four  | 2 |  2
+     | 4 | 1 | four  | 3 | -3
+     | 4 | 1 | four  | 2 |  4
+     | 4 | 1 | four  |   |   
+     | 4 | 1 | four  |   |  0
+     | 4 | 1 | four  | 5 | -5
+     | 4 | 1 | four  | 5 | -5
+     | 4 | 1 | four  | 1 | -1
+     | 4 | 1 | four  | 0 |   
+     | 7 | 7 | seven | 2 |  2
+     | 7 | 7 | seven | 3 | -3
+     | 7 | 7 | seven | 2 |  4
+     | 7 | 7 | seven |   |   
+     | 7 | 7 | seven |   |  0
+     | 7 | 7 | seven | 5 | -5
+     | 7 | 7 | seven | 5 | -5
+     | 7 | 7 | seven | 1 | -1
+     | 7 | 7 | seven | 0 |   
+     | 8 | 8 | eight | 2 |  2
+     | 8 | 8 | eight | 3 | -3
+     | 8 | 8 | eight | 2 |  4
+     | 8 | 8 | eight |   |   
+     | 8 | 8 | eight |   |  0
+     | 8 | 8 | eight | 5 | -5
+     | 8 | 8 | eight | 5 | -5
+     | 8 | 8 | eight | 1 | -1
+     | 8 | 8 | eight | 0 |   
+     |   |   | null  | 2 |  2
+     |   |   | null  | 3 | -3
+     |   |   | null  | 2 |  4
+     |   |   | null  |   |   
+     |   |   | null  |   |  0
+     |   |   | null  | 5 | -5
+     |   |   | null  | 5 | -5
+     |   |   | null  | 1 | -1
+     |   |   | null  | 0 |   
+     |   | 0 | zero  | 2 |  2
+     |   | 0 | zero  | 3 | -3
+     |   | 0 | zero  | 2 |  4
+     |   | 0 | zero  |   |   
+     |   | 0 | zero  |   |  0
+     |   | 0 | zero  | 5 | -5
+     |   | 0 | zero  | 5 | -5
+     |   | 0 | zero  | 1 | -1
+     |   | 0 | zero  | 0 |   
+     | 5 | 0 | five  | 2 |  2
+     | 5 | 0 | five  | 3 | -3
+     | 5 | 0 | five  | 2 |  4
+     | 5 | 0 | five  |   |   
+     | 5 | 0 | five  |   |  0
+     | 5 | 0 | five  | 5 | -5
+     | 5 | 0 | five  | 5 | -5
+     | 5 | 0 | five  | 1 | -1
+     | 5 | 0 | five  | 0 |   
+     | 6 | 6 | six   | 2 |  2
+     | 6 | 6 | six   | 3 | -3
+     | 6 | 6 | six   | 2 |  4
+     | 6 | 6 | six   |   |   
+     | 6 | 6 | six   |   |  0
+     | 6 | 6 | six   | 5 | -5
+     | 6 | 6 | six   | 5 | -5
+     | 6 | 6 | six   | 1 | -1
+     | 6 | 6 | six   | 0 |   
 (99 rows)
 
 SELECT '' AS "xxx", t1.a, t2.e
@@ -237,11 +237,11 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -----+---+----
      | 1 | -1
      | 0 |   
+     | 5 | -5
+     | 5 | -5
      | 2 |  2
      | 3 | -3
      | 2 |  4
-     | 5 | -5
-     | 5 | -5
 (7 rows)
 
 --
@@ -255,105 +255,105 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | i | k  
 -----+---+---+-------+---+----
-     | 2 | 3 | two   | 2 |  2
-     | 2 | 3 | two   | 3 | -3
-     | 2 | 3 | two   | 2 |  4
-     | 2 | 3 | two   |   |   
-     | 2 | 3 | two   |   |  0
-     | 2 | 3 | two   | 5 | -5
-     | 2 | 3 | two   | 5 | -5
-     | 2 | 3 | two   | 1 | -1
-     | 2 | 3 | two   | 0 |   
-     | 3 | 2 | three | 2 |  2
-     | 3 | 2 | three | 3 | -3
-     | 3 | 2 | three | 2 |  4
-     | 3 | 2 | three |   |   
-     | 3 | 2 | three |   |  0
-     | 3 | 2 | three | 5 | -5
-     | 3 | 2 | three | 5 | -5
-     | 3 | 2 | three | 1 | -1
-     | 3 | 2 | three | 0 |   
-     | 4 | 1 | four  | 2 |  2
-     | 4 | 1 | four  | 3 | -3
-     | 4 | 1 | four  | 2 |  4
-     | 4 | 1 | four  |   |   
-     | 4 | 1 | four  |   |  0
-     | 4 | 1 | four  | 5 | -5
-     | 4 | 1 | four  | 5 | -5
-     | 4 | 1 | four  | 1 | -1
-     | 4 | 1 | four  | 0 |   
-     | 7 | 7 | seven | 2 |  2
-     | 7 | 7 | seven | 3 | -3
-     | 7 | 7 | seven | 2 |  4
-     | 7 | 7 | seven |   |   
-     | 7 | 7 | seven |   |  0
-     | 7 | 7 | seven | 5 | -5
-     | 7 | 7 | seven | 5 | -5
-     | 7 | 7 | seven | 1 | -1
-     | 7 | 7 | seven | 0 |   
-     | 8 | 8 | eight | 2 |  2
-     | 8 | 8 | eight | 3 | -3
-     | 8 | 8 | eight | 2 |  4
-     | 8 | 8 | eight |   |   
-     | 8 | 8 | eight |   |  0
-     | 8 | 8 | eight | 5 | -5
-     | 8 | 8 | eight | 5 | -5
-     | 8 | 8 | eight | 1 | -1
-     | 8 | 8 | eight | 0 |   
-     |   |   | null  | 2 |  2
-     |   |   | null  | 3 | -3
-     |   |   | null  | 2 |  4
-     |   |   | null  |   |   
-     |   |   | null  |   |  0
-     |   |   | null  | 5 | -5
-     |   |   | null  | 5 | -5
-     |   |   | null  | 1 | -1
-     |   |   | null  | 0 |   
-     |   | 0 | zero  | 2 |  2
-     |   | 0 | zero  | 3 | -3
-     |   | 0 | zero  | 2 |  4
-     |   | 0 | zero  |   |   
-     |   | 0 | zero  |   |  0
-     |   | 0 | zero  | 5 | -5
-     |   | 0 | zero  | 5 | -5
-     |   | 0 | zero  | 1 | -1
-     |   | 0 | zero  | 0 |   
-     | 5 | 0 | five  | 2 |  2
-     | 5 | 0 | five  | 3 | -3
-     | 5 | 0 | five  | 2 |  4
-     | 5 | 0 | five  |   |   
-     | 5 | 0 | five  |   |  0
-     | 5 | 0 | five  | 5 | -5
-     | 5 | 0 | five  | 5 | -5
-     | 5 | 0 | five  | 1 | -1
-     | 5 | 0 | five  | 0 |   
-     | 6 | 6 | six   | 2 |  2
-     | 6 | 6 | six   | 3 | -3
-     | 6 | 6 | six   | 2 |  4
-     | 6 | 6 | six   |   |   
-     | 6 | 6 | six   |   |  0
-     | 6 | 6 | six   | 5 | -5
-     | 6 | 6 | six   | 5 | -5
-     | 6 | 6 | six   | 1 | -1
-     | 6 | 6 | six   | 0 |   
+     | 1 | 4 | one   | 1 | -1
+     | 1 | 4 | one   | 0 |   
+     | 1 | 4 | one   | 5 | -5
+     | 1 | 4 | one   | 5 | -5
      | 1 | 4 | one   | 2 |  2
      | 1 | 4 | one   | 3 | -3
      | 1 | 4 | one   | 2 |  4
      | 1 | 4 | one   |   |   
      | 1 | 4 | one   |   |  0
-     | 1 | 4 | one   | 5 | -5
-     | 1 | 4 | one   | 5 | -5
-     | 1 | 4 | one   | 1 | -1
-     | 1 | 4 | one   | 0 |   
+     | 0 |   | zero  | 1 | -1
+     | 0 |   | zero  | 0 |   
+     | 0 |   | zero  | 5 | -5
+     | 0 |   | zero  | 5 | -5
      | 0 |   | zero  | 2 |  2
      | 0 |   | zero  | 3 | -3
      | 0 |   | zero  | 2 |  4
      | 0 |   | zero  |   |   
      | 0 |   | zero  |   |  0
-     | 0 |   | zero  | 5 | -5
-     | 0 |   | zero  | 5 | -5
-     | 0 |   | zero  | 1 | -1
-     | 0 |   | zero  | 0 |   
+     | 2 | 3 | two   | 1 | -1
+     | 2 | 3 | two   | 0 |   
+     | 2 | 3 | two   | 5 | -5
+     | 2 | 3 | two   | 5 | -5
+     | 2 | 3 | two   | 2 |  2
+     | 2 | 3 | two   | 3 | -3
+     | 2 | 3 | two   | 2 |  4
+     | 2 | 3 | two   |   |   
+     | 2 | 3 | two   |   |  0
+     | 3 | 2 | three | 1 | -1
+     | 3 | 2 | three | 0 |   
+     | 3 | 2 | three | 5 | -5
+     | 3 | 2 | three | 5 | -5
+     | 3 | 2 | three | 2 |  2
+     | 3 | 2 | three | 3 | -3
+     | 3 | 2 | three | 2 |  4
+     | 3 | 2 | three |   |   
+     | 3 | 2 | three |   |  0
+     | 4 | 1 | four  | 1 | -1
+     | 4 | 1 | four  | 0 |   
+     | 4 | 1 | four  | 5 | -5
+     | 4 | 1 | four  | 5 | -5
+     | 4 | 1 | four  | 2 |  2
+     | 4 | 1 | four  | 3 | -3
+     | 4 | 1 | four  | 2 |  4
+     | 4 | 1 | four  |   |   
+     | 4 | 1 | four  |   |  0
+     | 7 | 7 | seven | 1 | -1
+     | 7 | 7 | seven | 0 |   
+     | 7 | 7 | seven | 5 | -5
+     | 7 | 7 | seven | 5 | -5
+     | 7 | 7 | seven | 2 |  2
+     | 7 | 7 | seven | 3 | -3
+     | 7 | 7 | seven | 2 |  4
+     | 7 | 7 | seven |   |   
+     | 7 | 7 | seven |   |  0
+     | 8 | 8 | eight | 1 | -1
+     | 8 | 8 | eight | 0 |   
+     | 8 | 8 | eight | 5 | -5
+     | 8 | 8 | eight | 5 | -5
+     | 8 | 8 | eight | 2 |  2
+     | 8 | 8 | eight | 3 | -3
+     | 8 | 8 | eight | 2 |  4
+     | 8 | 8 | eight |   |   
+     | 8 | 8 | eight |   |  0
+     |   |   | null  | 1 | -1
+     |   |   | null  | 0 |   
+     |   |   | null  | 5 | -5
+     |   |   | null  | 5 | -5
+     |   |   | null  | 2 |  2
+     |   |   | null  | 3 | -3
+     |   |   | null  | 2 |  4
+     |   |   | null  |   |   
+     |   |   | null  |   |  0
+     |   | 0 | zero  | 1 | -1
+     |   | 0 | zero  | 0 |   
+     |   | 0 | zero  | 5 | -5
+     |   | 0 | zero  | 5 | -5
+     |   | 0 | zero  | 2 |  2
+     |   | 0 | zero  | 3 | -3
+     |   | 0 | zero  | 2 |  4
+     |   | 0 | zero  |   |   
+     |   | 0 | zero  |   |  0
+     | 5 | 0 | five  | 1 | -1
+     | 5 | 0 | five  | 0 |   
+     | 5 | 0 | five  | 5 | -5
+     | 5 | 0 | five  | 5 | -5
+     | 5 | 0 | five  | 2 |  2
+     | 5 | 0 | five  | 3 | -3
+     | 5 | 0 | five  | 2 |  4
+     | 5 | 0 | five  |   |   
+     | 5 | 0 | five  |   |  0
+     | 6 | 6 | six   | 1 | -1
+     | 6 | 6 | six   | 0 |   
+     | 6 | 6 | six   | 5 | -5
+     | 6 | 6 | six   | 5 | -5
+     | 6 | 6 | six   | 2 |  2
+     | 6 | 6 | six   | 3 | -3
+     | 6 | 6 | six   | 2 |  4
+     | 6 | 6 | six   |   |   
+     | 6 | 6 | six   |   |  0
 (99 rows)
 
 -- ambiguous column
@@ -369,103 +369,103 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | k  |   t   
 -----+---+----+-------
+     | 1 | -5 | one
+     | 1 | -5 | one
      | 1 |  2 | one
      | 1 | -3 | one
      | 1 |  4 | one
      | 1 |    | one
      | 1 |  0 | one
-     | 1 | -5 | one
-     | 1 | -5 | one
      | 1 | -1 | one
      | 1 |    | one
+     | 0 | -5 | zero
+     | 0 | -5 | zero
      | 0 |  2 | zero
      | 0 | -3 | zero
      | 0 |  4 | zero
      | 0 |    | zero
      | 0 |  0 | zero
-     | 0 | -5 | zero
-     | 0 | -5 | zero
      | 0 | -1 | zero
      | 0 |    | zero
+     | 5 | -5 | five
+     | 5 | -5 | five
      | 5 |  2 | five
      | 5 | -3 | five
      | 5 |  4 | five
      | 5 |    | five
      | 5 |  0 | five
-     | 5 | -5 | five
-     | 5 | -5 | five
      | 5 | -1 | five
      | 5 |    | five
+     | 6 | -5 | six
+     | 6 | -5 | six
      | 6 |  2 | six
      | 6 | -3 | six
      | 6 |  4 | six
      | 6 |    | six
      | 6 |  0 | six
-     | 6 | -5 | six
-     | 6 | -5 | six
      | 6 | -1 | six
      | 6 |    | six
+     | 2 | -5 | two
+     | 2 | -5 | two
      | 2 |  2 | two
      | 2 | -3 | two
      | 2 |  4 | two
      | 2 |    | two
      | 2 |  0 | two
-     | 2 | -5 | two
-     | 2 | -5 | two
      | 2 | -1 | two
      | 2 |    | two
+     | 3 | -5 | three
+     | 3 | -5 | three
      | 3 |  2 | three
      | 3 | -3 | three
      | 3 |  4 | three
      | 3 |    | three
      | 3 |  0 | three
-     | 3 | -5 | three
-     | 3 | -5 | three
      | 3 | -1 | three
      | 3 |    | three
+     | 4 | -5 | four
+     | 4 | -5 | four
      | 4 |  2 | four
      | 4 | -3 | four
      | 4 |  4 | four
      | 4 |    | four
      | 4 |  0 | four
-     | 4 | -5 | four
-     | 4 | -5 | four
      | 4 | -1 | four
      | 4 |    | four
+     | 7 | -5 | seven
+     | 7 | -5 | seven
      | 7 |  2 | seven
      | 7 | -3 | seven
      | 7 |  4 | seven
      | 7 |    | seven
      | 7 |  0 | seven
-     | 7 | -5 | seven
-     | 7 | -5 | seven
      | 7 | -1 | seven
      | 7 |    | seven
+     | 8 | -5 | eight
+     | 8 | -5 | eight
      | 8 |  2 | eight
      | 8 | -3 | eight
      | 8 |  4 | eight
      | 8 |    | eight
      | 8 |  0 | eight
-     | 8 | -5 | eight
-     | 8 | -5 | eight
      | 8 | -1 | eight
      | 8 |    | eight
+     |   | -5 | null
+     |   | -5 | null
      |   |  2 | null
      |   | -3 | null
      |   |  4 | null
      |   |    | null
      |   |  0 | null
-     |   | -5 | null
-     |   | -5 | null
      |   | -1 | null
      |   |    | null
+     |   | -5 | zero
+     |   | -5 | zero
      |   |  2 | zero
      |   | -3 | zero
      |   |  4 | zero
      |   |    | zero
      |   |  0 | zero
-     |   | -5 | zero
-     |   | -5 | zero
      |   | -1 | zero
      |   |    | zero
 (99 rows)
@@ -477,24 +477,6 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | ii |  tt   | kk 
 -----+----+-------+----
-     |  5 | five  | -5
-     |  5 | five  | -5
-     |  5 | five  | -1
-     |  5 | five  |   
-     |  5 | five  |  2
-     |  5 | five  | -3
-     |  5 | five  |  4
-     |  5 | five  |   
-     |  5 | five  |  0
-     |  6 | six   | -5
-     |  6 | six   | -5
-     |  6 | six   | -1
-     |  6 | six   |   
-     |  6 | six   |  2
-     |  6 | six   | -3
-     |  6 | six   |  4
-     |  6 | six   |   
-     |  6 | six   |  0
      |  2 | two   | -1
      |  2 | two   |   
      |  2 | two   | -5
@@ -558,24 +540,42 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      |    | zero  |  4
      |    | zero  |   
      |    | zero  |  0
-     |  1 | one   | -5
-     |  1 | one   | -5
      |  1 | one   | -1
      |  1 | one   |   
+     |  1 | one   | -5
+     |  1 | one   | -5
      |  1 | one   |  2
      |  1 | one   | -3
      |  1 | one   |  4
      |  1 | one   |   
      |  1 | one   |  0
-     |  0 | zero  | -5
-     |  0 | zero  | -5
      |  0 | zero  | -1
      |  0 | zero  |   
+     |  0 | zero  | -5
+     |  0 | zero  | -5
      |  0 | zero  |  2
      |  0 | zero  | -3
      |  0 | zero  |  4
      |  0 | zero  |   
      |  0 | zero  |  0
+     |  5 | five  | -1
+     |  5 | five  |   
+     |  5 | five  | -5
+     |  5 | five  | -5
+     |  5 | five  |  2
+     |  5 | five  | -3
+     |  5 | five  |  4
+     |  5 | five  |   
+     |  5 | five  |  0
+     |  6 | six   | -1
+     |  6 | six   |   
+     |  6 | six   | -5
+     |  6 | six   | -5
+     |  6 | six   |  2
+     |  6 | six   | -3
+     |  6 | six   |  4
+     |  6 | six   |   
+     |  6 | six   |  0
 (99 rows)
 
 SELECT '' AS "xxx", tx.ii, tx.jj, tx.kk
@@ -585,89 +585,24 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | ii | jj | kk 
 -----+----+----+----
-     |  1 |  4 | -1
-     |  1 |  4 |   
+     |  1 |  4 | -5
+     |  1 |  4 | -5
      |  1 |  4 |  2
      |  1 |  4 | -3
      |  1 |  4 |  4
      |  1 |  4 |   
      |  1 |  4 |  0
-     |  1 |  4 | -5
-     |  1 |  4 | -5
-     |  0 |    | -1
-     |  0 |    |   
+     |  1 |  4 | -1
+     |  1 |  4 |   
+     |  0 |    | -5
+     |  0 |    | -5
      |  0 |    |  2
      |  0 |    | -3
      |  0 |    |  4
      |  0 |    |   
      |  0 |    |  0
-     |  0 |    | -5
-     |  0 |    | -5
-     |  2 |  3 | -1
-     |  2 |  3 |   
-     |  2 |  3 |  2
-     |  2 |  3 | -3
-     |  2 |  3 |  4
-     |  2 |  3 |   
-     |  2 |  3 |  0
-     |  2 |  3 | -5
-     |  2 |  3 | -5
-     |  3 |  2 | -1
-     |  3 |  2 |   
-     |  3 |  2 |  2
-     |  3 |  2 | -3
-     |  3 |  2 |  4
-     |  3 |  2 |   
-     |  3 |  2 |  0
-     |  3 |  2 | -5
-     |  3 |  2 | -5
-     |  4 |  1 | -1
-     |  4 |  1 |   
-     |  4 |  1 |  2
-     |  4 |  1 | -3
-     |  4 |  1 |  4
-     |  4 |  1 |   
-     |  4 |  1 |  0
-     |  4 |  1 | -5
-     |  4 |  1 | -5
-     |  7 |  7 | -1
-     |  7 |  7 |   
-     |  7 |  7 |  2
-     |  7 |  7 | -3
-     |  7 |  7 |  4
-     |  7 |  7 |   
-     |  7 |  7 |  0
-     |  7 |  7 | -5
-     |  7 |  7 | -5
-     |  8 |  8 | -1
-     |  8 |  8 |   
-     |  8 |  8 |  2
-     |  8 |  8 | -3
-     |  8 |  8 |  4
-     |  8 |  8 |   
-     |  8 |  8 |  0
-     |  8 |  8 | -5
-     |  8 |  8 | -5
-     |    |    | -1
-     |    |    |   
-     |    |    |  2
-     |    |    | -3
-     |    |    |  4
-     |    |    |   
-     |    |    |  0
-     |    |    | -5
-     |    |    | -5
-     |    |  0 | -1
-     |    |  0 |   
-     |    |  0 |  2
-     |    |  0 | -3
-     |    |  0 |  4
-     |    |  0 |   
-     |    |  0 |  0
-     |    |  0 | -5
-     |    |  0 | -5
-     |  5 |  0 | -1
-     |  5 |  0 |   
+     |  0 |    | -1
+     |  0 |    |   
      |  5 |  0 | -5
      |  5 |  0 | -5
      |  5 |  0 |  2
@@ -675,8 +610,8 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      |  5 |  0 |  4
      |  5 |  0 |   
      |  5 |  0 |  0
-     |  6 |  6 | -1
-     |  6 |  6 |   
+     |  5 |  0 | -1
+     |  5 |  0 |   
      |  6 |  6 | -5
      |  6 |  6 | -5
      |  6 |  6 |  2
@@ -684,6 +619,71 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      |  6 |  6 |  4
      |  6 |  6 |   
      |  6 |  6 |  0
+     |  6 |  6 | -1
+     |  6 |  6 |   
+     |  2 |  3 | -5
+     |  2 |  3 | -5
+     |  2 |  3 |  2
+     |  2 |  3 | -3
+     |  2 |  3 |  4
+     |  2 |  3 |   
+     |  2 |  3 |  0
+     |  2 |  3 | -1
+     |  2 |  3 |   
+     |  3 |  2 | -5
+     |  3 |  2 | -5
+     |  3 |  2 |  2
+     |  3 |  2 | -3
+     |  3 |  2 |  4
+     |  3 |  2 |   
+     |  3 |  2 |  0
+     |  3 |  2 | -1
+     |  3 |  2 |   
+     |  4 |  1 | -5
+     |  4 |  1 | -5
+     |  4 |  1 |  2
+     |  4 |  1 | -3
+     |  4 |  1 |  4
+     |  4 |  1 |   
+     |  4 |  1 |  0
+     |  4 |  1 | -1
+     |  4 |  1 |   
+     |  7 |  7 | -5
+     |  7 |  7 | -5
+     |  7 |  7 |  2
+     |  7 |  7 | -3
+     |  7 |  7 |  4
+     |  7 |  7 |   
+     |  7 |  7 |  0
+     |  7 |  7 | -1
+     |  7 |  7 |   
+     |  8 |  8 | -5
+     |  8 |  8 | -5
+     |  8 |  8 |  2
+     |  8 |  8 | -3
+     |  8 |  8 |  4
+     |  8 |  8 |   
+     |  8 |  8 |  0
+     |  8 |  8 | -1
+     |  8 |  8 |   
+     |    |    | -5
+     |    |    | -5
+     |    |    |  2
+     |    |    | -3
+     |    |    |  4
+     |    |    |   
+     |    |    |  0
+     |    |    | -1
+     |    |    |   
+     |    |  0 | -5
+     |    |  0 | -5
+     |    |  0 |  2
+     |    |  0 | -3
+     |    |  0 |  4
+     |    |  0 |   
+     |    |  0 |  0
+     |    |  0 | -1
+     |    |  0 |   
 (99 rows)
 
 SELECT '' AS "xxx", *
@@ -762,76 +762,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight | 0 |    |   |  0
      |   |   | null  | 0 |    |   |  0
      |   | 0 | zero  | 0 |    |   |  0
-     | 2 | 3 | two   | 5 | -5 | 2 |  2
-     | 3 | 2 | three | 5 | -5 | 2 |  2
-     | 4 | 1 | four  | 5 | -5 | 2 |  2
-     | 7 | 7 | seven | 5 | -5 | 2 |  2
-     | 8 | 8 | eight | 5 | -5 | 2 |  2
-     |   |   | null  | 5 | -5 | 2 |  2
-     |   | 0 | zero  | 5 | -5 | 2 |  2
-     | 2 | 3 | two   | 5 | -5 | 3 | -3
-     | 3 | 2 | three | 5 | -5 | 3 | -3
-     | 4 | 1 | four  | 5 | -5 | 3 | -3
-     | 7 | 7 | seven | 5 | -5 | 3 | -3
-     | 8 | 8 | eight | 5 | -5 | 3 | -3
-     |   |   | null  | 5 | -5 | 3 | -3
-     |   | 0 | zero  | 5 | -5 | 3 | -3
-     | 2 | 3 | two   | 5 | -5 | 2 |  4
-     | 3 | 2 | three | 5 | -5 | 2 |  4
-     | 4 | 1 | four  | 5 | -5 | 2 |  4
-     | 7 | 7 | seven | 5 | -5 | 2 |  4
-     | 8 | 8 | eight | 5 | -5 | 2 |  4
-     |   |   | null  | 5 | -5 | 2 |  4
-     |   | 0 | zero  | 5 | -5 | 2 |  4
-     | 2 | 3 | two   | 5 | -5 |   |   
-     | 3 | 2 | three | 5 | -5 |   |   
-     | 4 | 1 | four  | 5 | -5 |   |   
-     | 7 | 7 | seven | 5 | -5 |   |   
-     | 8 | 8 | eight | 5 | -5 |   |   
-     |   |   | null  | 5 | -5 |   |   
-     |   | 0 | zero  | 5 | -5 |   |   
-     | 2 | 3 | two   | 5 | -5 |   |  0
-     | 3 | 2 | three | 5 | -5 |   |  0
-     | 4 | 1 | four  | 5 | -5 |   |  0
-     | 7 | 7 | seven | 5 | -5 |   |  0
-     | 8 | 8 | eight | 5 | -5 |   |  0
-     |   |   | null  | 5 | -5 |   |  0
-     |   | 0 | zero  | 5 | -5 |   |  0
-     | 2 | 3 | two   | 5 | -5 | 2 |  2
-     | 3 | 2 | three | 5 | -5 | 2 |  2
-     | 4 | 1 | four  | 5 | -5 | 2 |  2
-     | 7 | 7 | seven | 5 | -5 | 2 |  2
-     | 8 | 8 | eight | 5 | -5 | 2 |  2
-     |   |   | null  | 5 | -5 | 2 |  2
-     |   | 0 | zero  | 5 | -5 | 2 |  2
-     | 2 | 3 | two   | 5 | -5 | 3 | -3
-     | 3 | 2 | three | 5 | -5 | 3 | -3
-     | 4 | 1 | four  | 5 | -5 | 3 | -3
-     | 7 | 7 | seven | 5 | -5 | 3 | -3
-     | 8 | 8 | eight | 5 | -5 | 3 | -3
-     |   |   | null  | 5 | -5 | 3 | -3
-     |   | 0 | zero  | 5 | -5 | 3 | -3
-     | 2 | 3 | two   | 5 | -5 | 2 |  4
-     | 3 | 2 | three | 5 | -5 | 2 |  4
-     | 4 | 1 | four  | 5 | -5 | 2 |  4
-     | 7 | 7 | seven | 5 | -5 | 2 |  4
-     | 8 | 8 | eight | 5 | -5 | 2 |  4
-     |   |   | null  | 5 | -5 | 2 |  4
-     |   | 0 | zero  | 5 | -5 | 2 |  4
-     | 2 | 3 | two   | 5 | -5 |   |   
-     | 3 | 2 | three | 5 | -5 |   |   
-     | 4 | 1 | four  | 5 | -5 |   |   
-     | 7 | 7 | seven | 5 | -5 |   |   
-     | 8 | 8 | eight | 5 | -5 |   |   
-     |   |   | null  | 5 | -5 |   |   
-     |   | 0 | zero  | 5 | -5 |   |   
-     | 2 | 3 | two   | 5 | -5 |   |  0
-     | 3 | 2 | three | 5 | -5 |   |  0
-     | 4 | 1 | four  | 5 | -5 |   |  0
-     | 7 | 7 | seven | 5 | -5 |   |  0
-     | 8 | 8 | eight | 5 | -5 |   |  0
-     |   |   | null  | 5 | -5 |   |  0
-     |   | 0 | zero  | 5 | -5 |   |  0
      | 2 | 3 | two   | 2 |  2 | 2 |  2
      | 3 | 2 | three | 2 |  2 | 2 |  2
      | 4 | 1 | four  | 2 |  2 | 2 |  2
@@ -968,6 +898,330 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 2 | 3 | two   |   |    |   |  0
      | 3 | 2 | three |   |    |   |  0
      | 4 | 1 | four  |   |    |   |  0
+     | 1 | 4 | one   | 1 | -1 | 2 |  2
+     | 0 |   | zero  | 1 | -1 | 2 |  2
+     | 1 | 4 | one   | 1 | -1 | 3 | -3
+     | 0 |   | zero  | 1 | -1 | 3 | -3
+     | 1 | 4 | one   | 1 | -1 | 2 |  4
+     | 0 |   | zero  | 1 | -1 | 2 |  4
+     | 1 | 4 | one   | 1 | -1 |   |   
+     | 0 |   | zero  | 1 | -1 |   |   
+     | 1 | 4 | one   | 1 | -1 |   |  0
+     | 0 |   | zero  | 1 | -1 |   |  0
+     | 1 | 4 | one   | 0 |    | 2 |  2
+     | 0 |   | zero  | 0 |    | 2 |  2
+     | 1 | 4 | one   | 0 |    | 3 | -3
+     | 0 |   | zero  | 0 |    | 3 | -3
+     | 1 | 4 | one   | 0 |    | 2 |  4
+     | 0 |   | zero  | 0 |    | 2 |  4
+     | 1 | 4 | one   | 0 |    |   |   
+     | 0 |   | zero  | 0 |    |   |   
+     | 1 | 4 | one   | 0 |    |   |  0
+     | 0 |   | zero  | 0 |    |   |  0
+     | 1 | 4 | one   | 2 |  2 | 2 |  2
+     | 0 |   | zero  | 2 |  2 | 2 |  2
+     | 1 | 4 | one   | 2 |  2 | 3 | -3
+     | 0 |   | zero  | 2 |  2 | 3 | -3
+     | 1 | 4 | one   | 2 |  2 | 2 |  4
+     | 0 |   | zero  | 2 |  2 | 2 |  4
+     | 1 | 4 | one   | 2 |  2 |   |   
+     | 0 |   | zero  | 2 |  2 |   |   
+     | 1 | 4 | one   | 2 |  2 |   |  0
+     | 0 |   | zero  | 2 |  2 |   |  0
+     | 1 | 4 | one   | 3 | -3 | 2 |  2
+     | 0 |   | zero  | 3 | -3 | 2 |  2
+     | 1 | 4 | one   | 3 | -3 | 3 | -3
+     | 0 |   | zero  | 3 | -3 | 3 | -3
+     | 1 | 4 | one   | 3 | -3 | 2 |  4
+     | 0 |   | zero  | 3 | -3 | 2 |  4
+     | 1 | 4 | one   | 3 | -3 |   |   
+     | 0 |   | zero  | 3 | -3 |   |   
+     | 1 | 4 | one   | 3 | -3 |   |  0
+     | 0 |   | zero  | 3 | -3 |   |  0
+     | 1 | 4 | one   | 2 |  4 | 2 |  2
+     | 0 |   | zero  | 2 |  4 | 2 |  2
+     | 1 | 4 | one   | 2 |  4 | 3 | -3
+     | 0 |   | zero  | 2 |  4 | 3 | -3
+     | 1 | 4 | one   | 2 |  4 | 2 |  4
+     | 0 |   | zero  | 2 |  4 | 2 |  4
+     | 1 | 4 | one   | 2 |  4 |   |   
+     | 0 |   | zero  | 2 |  4 |   |   
+     | 1 | 4 | one   | 2 |  4 |   |  0
+     | 0 |   | zero  | 2 |  4 |   |  0
+     | 1 | 4 | one   |   |    | 2 |  2
+     | 0 |   | zero  |   |    | 2 |  2
+     | 1 | 4 | one   |   |    | 3 | -3
+     | 0 |   | zero  |   |    | 3 | -3
+     | 1 | 4 | one   |   |    | 2 |  4
+     | 0 |   | zero  |   |    | 2 |  4
+     | 1 | 4 | one   |   |    |   |   
+     | 0 |   | zero  |   |    |   |   
+     | 1 | 4 | one   |   |    |   |  0
+     | 0 |   | zero  |   |    |   |  0
+     | 1 | 4 | one   |   |  0 | 2 |  2
+     | 0 |   | zero  |   |  0 | 2 |  2
+     | 1 | 4 | one   |   |  0 | 3 | -3
+     | 0 |   | zero  |   |  0 | 3 | -3
+     | 1 | 4 | one   |   |  0 | 2 |  4
+     | 0 |   | zero  |   |  0 | 2 |  4
+     | 1 | 4 | one   |   |  0 |   |   
+     | 0 |   | zero  |   |  0 |   |   
+     | 1 | 4 | one   |   |  0 |   |  0
+     | 0 |   | zero  |   |  0 |   |  0
+     | 1 | 4 | one   | 5 | -5 | 2 |  2
+     | 0 |   | zero  | 5 | -5 | 2 |  2
+     | 1 | 4 | one   | 5 | -5 | 3 | -3
+     | 0 |   | zero  | 5 | -5 | 3 | -3
+     | 1 | 4 | one   | 5 | -5 | 2 |  4
+     | 0 |   | zero  | 5 | -5 | 2 |  4
+     | 1 | 4 | one   | 5 | -5 |   |   
+     | 0 |   | zero  | 5 | -5 |   |   
+     | 1 | 4 | one   | 5 | -5 |   |  0
+     | 0 |   | zero  | 5 | -5 |   |  0
+     | 1 | 4 | one   | 5 | -5 | 2 |  2
+     | 0 |   | zero  | 5 | -5 | 2 |  2
+     | 1 | 4 | one   | 5 | -5 | 3 | -3
+     | 0 |   | zero  | 5 | -5 | 3 | -3
+     | 1 | 4 | one   | 5 | -5 | 2 |  4
+     | 0 |   | zero  | 5 | -5 | 2 |  4
+     | 1 | 4 | one   | 5 | -5 |   |   
+     | 0 |   | zero  | 5 | -5 |   |   
+     | 1 | 4 | one   | 5 | -5 |   |  0
+     | 0 |   | zero  | 5 | -5 |   |  0
+     | 1 | 4 | one   | 1 | -1 | 1 | -1
+     | 0 |   | zero  | 1 | -1 | 1 | -1
+     | 1 | 4 | one   | 1 | -1 | 0 |   
+     | 0 |   | zero  | 1 | -1 | 0 |   
+     | 1 | 4 | one   | 0 |    | 1 | -1
+     | 0 |   | zero  | 0 |    | 1 | -1
+     | 1 | 4 | one   | 0 |    | 0 |   
+     | 0 |   | zero  | 0 |    | 0 |   
+     | 1 | 4 | one   | 2 |  2 | 1 | -1
+     | 0 |   | zero  | 2 |  2 | 1 | -1
+     | 1 | 4 | one   | 2 |  2 | 0 |   
+     | 0 |   | zero  | 2 |  2 | 0 |   
+     | 1 | 4 | one   | 3 | -3 | 1 | -1
+     | 0 |   | zero  | 3 | -3 | 1 | -1
+     | 1 | 4 | one   | 3 | -3 | 0 |   
+     | 0 |   | zero  | 3 | -3 | 0 |   
+     | 1 | 4 | one   | 2 |  4 | 1 | -1
+     | 0 |   | zero  | 2 |  4 | 1 | -1
+     | 1 | 4 | one   | 2 |  4 | 0 |   
+     | 0 |   | zero  | 2 |  4 | 0 |   
+     | 1 | 4 | one   |   |    | 1 | -1
+     | 0 |   | zero  |   |    | 1 | -1
+     | 1 | 4 | one   |   |    | 0 |   
+     | 0 |   | zero  |   |    | 0 |   
+     | 1 | 4 | one   |   |  0 | 1 | -1
+     | 0 |   | zero  |   |  0 | 1 | -1
+     | 1 | 4 | one   |   |  0 | 0 |   
+     | 0 |   | zero  |   |  0 | 0 |   
+     | 1 | 4 | one   | 5 | -5 | 1 | -1
+     | 0 |   | zero  | 5 | -5 | 1 | -1
+     | 1 | 4 | one   | 5 | -5 | 0 |   
+     | 0 |   | zero  | 5 | -5 | 0 |   
+     | 1 | 4 | one   | 5 | -5 | 1 | -1
+     | 0 |   | zero  | 5 | -5 | 1 | -1
+     | 1 | 4 | one   | 5 | -5 | 0 |   
+     | 0 |   | zero  | 5 | -5 | 0 |   
+     | 1 | 4 | one   | 2 |  2 | 5 | -5
+     | 0 |   | zero  | 2 |  2 | 5 | -5
+     | 1 | 4 | one   | 2 |  2 | 5 | -5
+     | 0 |   | zero  | 2 |  2 | 5 | -5
+     | 1 | 4 | one   | 3 | -3 | 5 | -5
+     | 0 |   | zero  | 3 | -3 | 5 | -5
+     | 1 | 4 | one   | 3 | -3 | 5 | -5
+     | 0 |   | zero  | 3 | -3 | 5 | -5
+     | 1 | 4 | one   | 2 |  4 | 5 | -5
+     | 0 |   | zero  | 2 |  4 | 5 | -5
+     | 1 | 4 | one   | 2 |  4 | 5 | -5
+     | 0 |   | zero  | 2 |  4 | 5 | -5
+     | 1 | 4 | one   |   |    | 5 | -5
+     | 0 |   | zero  |   |    | 5 | -5
+     | 1 | 4 | one   |   |    | 5 | -5
+     | 0 |   | zero  |   |    | 5 | -5
+     | 1 | 4 | one   |   |  0 | 5 | -5
+     | 0 |   | zero  |   |  0 | 5 | -5
+     | 1 | 4 | one   |   |  0 | 5 | -5
+     | 0 |   | zero  |   |  0 | 5 | -5
+     | 1 | 4 | one   | 1 | -1 | 5 | -5
+     | 0 |   | zero  | 1 | -1 | 5 | -5
+     | 1 | 4 | one   | 1 | -1 | 5 | -5
+     | 0 |   | zero  | 1 | -1 | 5 | -5
+     | 1 | 4 | one   | 0 |    | 5 | -5
+     | 0 |   | zero  | 0 |    | 5 | -5
+     | 1 | 4 | one   | 0 |    | 5 | -5
+     | 0 |   | zero  | 0 |    | 5 | -5
+     | 1 | 4 | one   | 5 | -5 | 5 | -5
+     | 0 |   | zero  | 5 | -5 | 5 | -5
+     | 1 | 4 | one   | 5 | -5 | 5 | -5
+     | 0 |   | zero  | 5 | -5 | 5 | -5
+     | 1 | 4 | one   | 5 | -5 | 5 | -5
+     | 0 |   | zero  | 5 | -5 | 5 | -5
+     | 1 | 4 | one   | 5 | -5 | 5 | -5
+     | 0 |   | zero  | 5 | -5 | 5 | -5
+     | 5 | 0 | five  | 1 | -1 | 2 |  2
+     | 6 | 6 | six   | 1 | -1 | 2 |  2
+     | 5 | 0 | five  | 1 | -1 | 3 | -3
+     | 6 | 6 | six   | 1 | -1 | 3 | -3
+     | 5 | 0 | five  | 1 | -1 | 2 |  4
+     | 6 | 6 | six   | 1 | -1 | 2 |  4
+     | 5 | 0 | five  | 1 | -1 |   |   
+     | 6 | 6 | six   | 1 | -1 |   |   
+     | 5 | 0 | five  | 1 | -1 |   |  0
+     | 6 | 6 | six   | 1 | -1 |   |  0
+     | 5 | 0 | five  | 0 |    | 2 |  2
+     | 6 | 6 | six   | 0 |    | 2 |  2
+     | 5 | 0 | five  | 0 |    | 3 | -3
+     | 6 | 6 | six   | 0 |    | 3 | -3
+     | 5 | 0 | five  | 0 |    | 2 |  4
+     | 6 | 6 | six   | 0 |    | 2 |  4
+     | 5 | 0 | five  | 0 |    |   |   
+     | 6 | 6 | six   | 0 |    |   |   
+     | 5 | 0 | five  | 0 |    |   |  0
+     | 6 | 6 | six   | 0 |    |   |  0
+     | 5 | 0 | five  | 2 |  2 | 2 |  2
+     | 6 | 6 | six   | 2 |  2 | 2 |  2
+     | 5 | 0 | five  | 2 |  2 | 3 | -3
+     | 6 | 6 | six   | 2 |  2 | 3 | -3
+     | 5 | 0 | five  | 2 |  2 | 2 |  4
+     | 6 | 6 | six   | 2 |  2 | 2 |  4
+     | 5 | 0 | five  | 2 |  2 |   |   
+     | 6 | 6 | six   | 2 |  2 |   |   
+     | 5 | 0 | five  | 2 |  2 |   |  0
+     | 6 | 6 | six   | 2 |  2 |   |  0
+     | 5 | 0 | five  | 3 | -3 | 2 |  2
+     | 6 | 6 | six   | 3 | -3 | 2 |  2
+     | 5 | 0 | five  | 3 | -3 | 3 | -3
+     | 6 | 6 | six   | 3 | -3 | 3 | -3
+     | 5 | 0 | five  | 3 | -3 | 2 |  4
+     | 6 | 6 | six   | 3 | -3 | 2 |  4
+     | 5 | 0 | five  | 3 | -3 |   |   
+     | 6 | 6 | six   | 3 | -3 |   |   
+     | 5 | 0 | five  | 3 | -3 |   |  0
+     | 6 | 6 | six   | 3 | -3 |   |  0
+     | 5 | 0 | five  | 2 |  4 | 2 |  2
+     | 6 | 6 | six   | 2 |  4 | 2 |  2
+     | 5 | 0 | five  | 2 |  4 | 3 | -3
+     | 6 | 6 | six   | 2 |  4 | 3 | -3
+     | 5 | 0 | five  | 2 |  4 | 2 |  4
+     | 6 | 6 | six   | 2 |  4 | 2 |  4
+     | 5 | 0 | five  | 2 |  4 |   |   
+     | 6 | 6 | six   | 2 |  4 |   |   
+     | 5 | 0 | five  | 2 |  4 |   |  0
+     | 6 | 6 | six   | 2 |  4 |   |  0
+     | 5 | 0 | five  |   |    | 2 |  2
+     | 6 | 6 | six   |   |    | 2 |  2
+     | 5 | 0 | five  |   |    | 3 | -3
+     | 6 | 6 | six   |   |    | 3 | -3
+     | 5 | 0 | five  |   |    | 2 |  4
+     | 6 | 6 | six   |   |    | 2 |  4
+     | 5 | 0 | five  |   |    |   |   
+     | 6 | 6 | six   |   |    |   |   
+     | 5 | 0 | five  |   |    |   |  0
+     | 6 | 6 | six   |   |    |   |  0
+     | 5 | 0 | five  |   |  0 | 2 |  2
+     | 6 | 6 | six   |   |  0 | 2 |  2
+     | 5 | 0 | five  |   |  0 | 3 | -3
+     | 6 | 6 | six   |   |  0 | 3 | -3
+     | 5 | 0 | five  |   |  0 | 2 |  4
+     | 6 | 6 | six   |   |  0 | 2 |  4
+     | 5 | 0 | five  |   |  0 |   |   
+     | 6 | 6 | six   |   |  0 |   |   
+     | 5 | 0 | five  |   |  0 |   |  0
+     | 6 | 6 | six   |   |  0 |   |  0
+     | 5 | 0 | five  | 5 | -5 | 2 |  2
+     | 6 | 6 | six   | 5 | -5 | 2 |  2
+     | 5 | 0 | five  | 5 | -5 | 3 | -3
+     | 6 | 6 | six   | 5 | -5 | 3 | -3
+     | 5 | 0 | five  | 5 | -5 | 2 |  4
+     | 6 | 6 | six   | 5 | -5 | 2 |  4
+     | 5 | 0 | five  | 5 | -5 |   |   
+     | 6 | 6 | six   | 5 | -5 |   |   
+     | 5 | 0 | five  | 5 | -5 |   |  0
+     | 6 | 6 | six   | 5 | -5 |   |  0
+     | 5 | 0 | five  | 5 | -5 | 2 |  2
+     | 6 | 6 | six   | 5 | -5 | 2 |  2
+     | 5 | 0 | five  | 5 | -5 | 3 | -3
+     | 6 | 6 | six   | 5 | -5 | 3 | -3
+     | 5 | 0 | five  | 5 | -5 | 2 |  4
+     | 6 | 6 | six   | 5 | -5 | 2 |  4
+     | 5 | 0 | five  | 5 | -5 |   |   
+     | 6 | 6 | six   | 5 | -5 |   |   
+     | 5 | 0 | five  | 5 | -5 |   |  0
+     | 6 | 6 | six   | 5 | -5 |   |  0
+     | 5 | 0 | five  | 1 | -1 | 1 | -1
+     | 6 | 6 | six   | 1 | -1 | 1 | -1
+     | 5 | 0 | five  | 1 | -1 | 0 |   
+     | 6 | 6 | six   | 1 | -1 | 0 |   
+     | 5 | 0 | five  | 0 |    | 1 | -1
+     | 6 | 6 | six   | 0 |    | 1 | -1
+     | 5 | 0 | five  | 0 |    | 0 |   
+     | 6 | 6 | six   | 0 |    | 0 |   
+     | 5 | 0 | five  | 2 |  2 | 1 | -1
+     | 6 | 6 | six   | 2 |  2 | 1 | -1
+     | 5 | 0 | five  | 2 |  2 | 0 |   
+     | 6 | 6 | six   | 2 |  2 | 0 |   
+     | 5 | 0 | five  | 3 | -3 | 1 | -1
+     | 6 | 6 | six   | 3 | -3 | 1 | -1
+     | 5 | 0 | five  | 3 | -3 | 0 |   
+     | 6 | 6 | six   | 3 | -3 | 0 |   
+     | 5 | 0 | five  | 2 |  4 | 1 | -1
+     | 6 | 6 | six   | 2 |  4 | 1 | -1
+     | 5 | 0 | five  | 2 |  4 | 0 |   
+     | 6 | 6 | six   | 2 |  4 | 0 |   
+     | 5 | 0 | five  |   |    | 1 | -1
+     | 6 | 6 | six   |   |    | 1 | -1
+     | 5 | 0 | five  |   |    | 0 |   
+     | 6 | 6 | six   |   |    | 0 |   
+     | 5 | 0 | five  |   |  0 | 1 | -1
+     | 6 | 6 | six   |   |  0 | 1 | -1
+     | 5 | 0 | five  |   |  0 | 0 |   
+     | 6 | 6 | six   |   |  0 | 0 |   
+     | 5 | 0 | five  | 5 | -5 | 1 | -1
+     | 6 | 6 | six   | 5 | -5 | 1 | -1
+     | 5 | 0 | five  | 5 | -5 | 0 |   
+     | 6 | 6 | six   | 5 | -5 | 0 |   
+     | 5 | 0 | five  | 5 | -5 | 1 | -1
+     | 6 | 6 | six   | 5 | -5 | 1 | -1
+     | 5 | 0 | five  | 5 | -5 | 0 |   
+     | 6 | 6 | six   | 5 | -5 | 0 |   
+     | 5 | 0 | five  | 2 |  2 | 5 | -5
+     | 6 | 6 | six   | 2 |  2 | 5 | -5
+     | 5 | 0 | five  | 2 |  2 | 5 | -5
+     | 6 | 6 | six   | 2 |  2 | 5 | -5
+     | 5 | 0 | five  | 3 | -3 | 5 | -5
+     | 6 | 6 | six   | 3 | -3 | 5 | -5
+     | 5 | 0 | five  | 3 | -3 | 5 | -5
+     | 6 | 6 | six   | 3 | -3 | 5 | -5
+     | 5 | 0 | five  | 2 |  4 | 5 | -5
+     | 6 | 6 | six   | 2 |  4 | 5 | -5
+     | 5 | 0 | five  | 2 |  4 | 5 | -5
+     | 6 | 6 | six   | 2 |  4 | 5 | -5
+     | 5 | 0 | five  |   |    | 5 | -5
+     | 6 | 6 | six   |   |    | 5 | -5
+     | 5 | 0 | five  |   |    | 5 | -5
+     | 6 | 6 | six   |   |    | 5 | -5
+     | 5 | 0 | five  |   |  0 | 5 | -5
+     | 6 | 6 | six   |   |  0 | 5 | -5
+     | 5 | 0 | five  |   |  0 | 5 | -5
+     | 6 | 6 | six   |   |  0 | 5 | -5
+     | 5 | 0 | five  | 1 | -1 | 5 | -5
+     | 6 | 6 | six   | 1 | -1 | 5 | -5
+     | 5 | 0 | five  | 1 | -1 | 5 | -5
+     | 6 | 6 | six   | 1 | -1 | 5 | -5
+     | 5 | 0 | five  | 0 |    | 5 | -5
+     | 6 | 6 | six   | 0 |    | 5 | -5
+     | 5 | 0 | five  | 0 |    | 5 | -5
+     | 6 | 6 | six   | 0 |    | 5 | -5
+     | 5 | 0 | five  | 5 | -5 | 5 | -5
+     | 6 | 6 | six   | 5 | -5 | 5 | -5
+     | 5 | 0 | five  | 5 | -5 | 5 | -5
+     | 6 | 6 | six   | 5 | -5 | 5 | -5
+     | 5 | 0 | five  | 5 | -5 | 5 | -5
+     | 6 | 6 | six   | 5 | -5 | 5 | -5
+     | 5 | 0 | five  | 5 | -5 | 5 | -5
+     | 6 | 6 | six   | 5 | -5 | 5 | -5
      | 7 | 7 | seven |   |    |   |  0
      | 8 | 8 | eight |   |    |   |  0
      |   |   | null  |   |    |   |  0
@@ -1007,160 +1261,76 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight |   |  0 |   |  0
      |   |   | null  |   |  0 |   |  0
      |   | 0 | zero  |   |  0 |   |  0
-     | 2 | 3 | two   | 5 | -5 | 5 | -5
-     | 3 | 2 | three | 5 | -5 | 5 | -5
-     | 4 | 1 | four  | 5 | -5 | 5 | -5
-     | 7 | 7 | seven | 5 | -5 | 5 | -5
-     | 8 | 8 | eight | 5 | -5 | 5 | -5
-     |   |   | null  | 5 | -5 | 5 | -5
-     |   | 0 | zero  | 5 | -5 | 5 | -5
-     | 2 | 3 | two   | 5 | -5 | 5 | -5
-     | 3 | 2 | three | 5 | -5 | 5 | -5
-     | 4 | 1 | four  | 5 | -5 | 5 | -5
-     | 7 | 7 | seven | 5 | -5 | 5 | -5
-     | 8 | 8 | eight | 5 | -5 | 5 | -5
-     |   |   | null  | 5 | -5 | 5 | -5
-     |   | 0 | zero  | 5 | -5 | 5 | -5
-     | 2 | 3 | two   | 5 | -5 | 5 | -5
-     | 3 | 2 | three | 5 | -5 | 5 | -5
-     | 4 | 1 | four  | 5 | -5 | 5 | -5
-     | 7 | 7 | seven | 5 | -5 | 5 | -5
-     | 8 | 8 | eight | 5 | -5 | 5 | -5
-     |   |   | null  | 5 | -5 | 5 | -5
-     |   | 0 | zero  | 5 | -5 | 5 | -5
-     | 2 | 3 | two   | 5 | -5 | 5 | -5
-     | 3 | 2 | three | 5 | -5 | 5 | -5
-     | 4 | 1 | four  | 5 | -5 | 5 | -5
-     | 7 | 7 | seven | 5 | -5 | 5 | -5
-     | 8 | 8 | eight | 5 | -5 | 5 | -5
-     |   |   | null  | 5 | -5 | 5 | -5
-     |   | 0 | zero  | 5 | -5 | 5 | -5
-     | 2 | 3 | two   | 1 | -1 | 5 | -5
-     | 3 | 2 | three | 1 | -1 | 5 | -5
-     | 4 | 1 | four  | 1 | -1 | 5 | -5
-     | 7 | 7 | seven | 1 | -1 | 5 | -5
-     | 8 | 8 | eight | 1 | -1 | 5 | -5
-     |   |   | null  | 1 | -1 | 5 | -5
-     |   | 0 | zero  | 1 | -1 | 5 | -5
-     | 2 | 3 | two   | 1 | -1 | 5 | -5
-     | 3 | 2 | three | 1 | -1 | 5 | -5
-     | 4 | 1 | four  | 1 | -1 | 5 | -5
-     | 7 | 7 | seven | 1 | -1 | 5 | -5
-     | 8 | 8 | eight | 1 | -1 | 5 | -5
-     |   |   | null  | 1 | -1 | 5 | -5
-     |   | 0 | zero  | 1 | -1 | 5 | -5
-     | 2 | 3 | two   | 0 |    | 5 | -5
-     | 3 | 2 | three | 0 |    | 5 | -5
-     | 4 | 1 | four  | 0 |    | 5 | -5
-     | 7 | 7 | seven | 0 |    | 5 | -5
-     | 8 | 8 | eight | 0 |    | 5 | -5
-     |   |   | null  | 0 |    | 5 | -5
-     |   | 0 | zero  | 0 |    | 5 | -5
-     | 2 | 3 | two   | 0 |    | 5 | -5
-     | 3 | 2 | three | 0 |    | 5 | -5
-     | 4 | 1 | four  | 0 |    | 5 | -5
-     | 7 | 7 | seven | 0 |    | 5 | -5
-     | 8 | 8 | eight | 0 |    | 5 | -5
-     |   |   | null  | 0 |    | 5 | -5
-     |   | 0 | zero  | 0 |    | 5 | -5
-     | 2 | 3 | two   | 2 |  2 | 5 | -5
-     | 3 | 2 | three | 2 |  2 | 5 | -5
-     | 4 | 1 | four  | 2 |  2 | 5 | -5
-     | 7 | 7 | seven | 2 |  2 | 5 | -5
-     | 8 | 8 | eight | 2 |  2 | 5 | -5
-     |   |   | null  | 2 |  2 | 5 | -5
-     |   | 0 | zero  | 2 |  2 | 5 | -5
-     | 2 | 3 | two   | 2 |  2 | 5 | -5
-     | 3 | 2 | three | 2 |  2 | 5 | -5
-     | 4 | 1 | four  | 2 |  2 | 5 | -5
-     | 7 | 7 | seven | 2 |  2 | 5 | -5
-     | 8 | 8 | eight | 2 |  2 | 5 | -5
-     |   |   | null  | 2 |  2 | 5 | -5
-     |   | 0 | zero  | 2 |  2 | 5 | -5
-     | 2 | 3 | two   | 3 | -3 | 5 | -5
-     | 3 | 2 | three | 3 | -3 | 5 | -5
-     | 4 | 1 | four  | 3 | -3 | 5 | -5
-     | 7 | 7 | seven | 3 | -3 | 5 | -5
-     | 8 | 8 | eight | 3 | -3 | 5 | -5
-     |   |   | null  | 3 | -3 | 5 | -5
-     |   | 0 | zero  | 3 | -3 | 5 | -5
-     | 2 | 3 | two   | 3 | -3 | 5 | -5
-     | 3 | 2 | three | 3 | -3 | 5 | -5
-     | 4 | 1 | four  | 3 | -3 | 5 | -5
-     | 7 | 7 | seven | 3 | -3 | 5 | -5
-     | 8 | 8 | eight | 3 | -3 | 5 | -5
-     |   |   | null  | 3 | -3 | 5 | -5
-     |   | 0 | zero  | 3 | -3 | 5 | -5
-     | 2 | 3 | two   | 2 |  4 | 5 | -5
-     | 3 | 2 | three | 2 |  4 | 5 | -5
-     | 4 | 1 | four  | 2 |  4 | 5 | -5
-     | 7 | 7 | seven | 2 |  4 | 5 | -5
-     | 8 | 8 | eight | 2 |  4 | 5 | -5
-     |   |   | null  | 2 |  4 | 5 | -5
-     |   | 0 | zero  | 2 |  4 | 5 | -5
-     | 2 | 3 | two   | 2 |  4 | 5 | -5
-     | 3 | 2 | three | 2 |  4 | 5 | -5
-     | 4 | 1 | four  | 2 |  4 | 5 | -5
-     | 7 | 7 | seven | 2 |  4 | 5 | -5
-     | 8 | 8 | eight | 2 |  4 | 5 | -5
-     |   |   | null  | 2 |  4 | 5 | -5
-     |   | 0 | zero  | 2 |  4 | 5 | -5
-     | 2 | 3 | two   |   |    | 5 | -5
-     | 3 | 2 | three |   |    | 5 | -5
-     | 4 | 1 | four  |   |    | 5 | -5
-     | 7 | 7 | seven |   |    | 5 | -5
-     | 8 | 8 | eight |   |    | 5 | -5
-     |   |   | null  |   |    | 5 | -5
-     |   | 0 | zero  |   |    | 5 | -5
-     | 2 | 3 | two   |   |    | 5 | -5
-     | 3 | 2 | three |   |    | 5 | -5
-     | 4 | 1 | four  |   |    | 5 | -5
-     | 7 | 7 | seven |   |    | 5 | -5
-     | 8 | 8 | eight |   |    | 5 | -5
-     |   |   | null  |   |    | 5 | -5
-     |   | 0 | zero  |   |    | 5 | -5
-     | 2 | 3 | two   |   |  0 | 5 | -5
-     | 3 | 2 | three |   |  0 | 5 | -5
-     | 4 | 1 | four  |   |  0 | 5 | -5
-     | 7 | 7 | seven |   |  0 | 5 | -5
-     | 8 | 8 | eight |   |  0 | 5 | -5
-     |   |   | null  |   |  0 | 5 | -5
-     |   | 0 | zero  |   |  0 | 5 | -5
-     | 2 | 3 | two   |   |  0 | 5 | -5
-     | 3 | 2 | three |   |  0 | 5 | -5
-     | 4 | 1 | four  |   |  0 | 5 | -5
-     | 7 | 7 | seven |   |  0 | 5 | -5
-     | 8 | 8 | eight |   |  0 | 5 | -5
-     |   |   | null  |   |  0 | 5 | -5
-     |   | 0 | zero  |   |  0 | 5 | -5
-     | 2 | 3 | two   | 5 | -5 | 1 | -1
-     | 3 | 2 | three | 5 | -5 | 1 | -1
-     | 4 | 1 | four  | 5 | -5 | 1 | -1
-     | 7 | 7 | seven | 5 | -5 | 1 | -1
-     | 8 | 8 | eight | 5 | -5 | 1 | -1
-     |   |   | null  | 5 | -5 | 1 | -1
-     |   | 0 | zero  | 5 | -5 | 1 | -1
-     | 2 | 3 | two   | 5 | -5 | 0 |   
-     | 3 | 2 | three | 5 | -5 | 0 |   
-     | 4 | 1 | four  | 5 | -5 | 0 |   
-     | 7 | 7 | seven | 5 | -5 | 0 |   
-     | 8 | 8 | eight | 5 | -5 | 0 |   
-     |   |   | null  | 5 | -5 | 0 |   
-     |   | 0 | zero  | 5 | -5 | 0 |   
-     | 2 | 3 | two   | 5 | -5 | 1 | -1
-     | 3 | 2 | three | 5 | -5 | 1 | -1
-     | 4 | 1 | four  | 5 | -5 | 1 | -1
-     | 7 | 7 | seven | 5 | -5 | 1 | -1
-     | 8 | 8 | eight | 5 | -5 | 1 | -1
-     |   |   | null  | 5 | -5 | 1 | -1
-     |   | 0 | zero  | 5 | -5 | 1 | -1
-     | 2 | 3 | two   | 5 | -5 | 0 |   
-     | 3 | 2 | three | 5 | -5 | 0 |   
-     | 4 | 1 | four  | 5 | -5 | 0 |   
-     | 7 | 7 | seven | 5 | -5 | 0 |   
-     | 8 | 8 | eight | 5 | -5 | 0 |   
-     |   |   | null  | 5 | -5 | 0 |   
-     |   | 0 | zero  | 5 | -5 | 0 |   
+     | 2 | 3 | two   | 5 | -5 | 2 |  2
+     | 3 | 2 | three | 5 | -5 | 2 |  2
+     | 4 | 1 | four  | 5 | -5 | 2 |  2
+     | 7 | 7 | seven | 5 | -5 | 2 |  2
+     | 8 | 8 | eight | 5 | -5 | 2 |  2
+     |   |   | null  | 5 | -5 | 2 |  2
+     |   | 0 | zero  | 5 | -5 | 2 |  2
+     | 2 | 3 | two   | 5 | -5 | 3 | -3
+     | 3 | 2 | three | 5 | -5 | 3 | -3
+     | 4 | 1 | four  | 5 | -5 | 3 | -3
+     | 7 | 7 | seven | 5 | -5 | 3 | -3
+     | 8 | 8 | eight | 5 | -5 | 3 | -3
+     |   |   | null  | 5 | -5 | 3 | -3
+     |   | 0 | zero  | 5 | -5 | 3 | -3
+     | 2 | 3 | two   | 5 | -5 | 2 |  4
+     | 3 | 2 | three | 5 | -5 | 2 |  4
+     | 4 | 1 | four  | 5 | -5 | 2 |  4
+     | 7 | 7 | seven | 5 | -5 | 2 |  4
+     | 8 | 8 | eight | 5 | -5 | 2 |  4
+     |   |   | null  | 5 | -5 | 2 |  4
+     |   | 0 | zero  | 5 | -5 | 2 |  4
+     | 2 | 3 | two   | 5 | -5 |   |   
+     | 3 | 2 | three | 5 | -5 |   |   
+     | 4 | 1 | four  | 5 | -5 |   |   
+     | 7 | 7 | seven | 5 | -5 |   |   
+     | 8 | 8 | eight | 5 | -5 |   |   
+     |   |   | null  | 5 | -5 |   |   
+     |   | 0 | zero  | 5 | -5 |   |   
+     | 2 | 3 | two   | 5 | -5 |   |  0
+     | 3 | 2 | three | 5 | -5 |   |  0
+     | 4 | 1 | four  | 5 | -5 |   |  0
+     | 7 | 7 | seven | 5 | -5 |   |  0
+     | 8 | 8 | eight | 5 | -5 |   |  0
+     |   |   | null  | 5 | -5 |   |  0
+     |   | 0 | zero  | 5 | -5 |   |  0
+     | 2 | 3 | two   | 5 | -5 | 2 |  2
+     | 3 | 2 | three | 5 | -5 | 2 |  2
+     | 4 | 1 | four  | 5 | -5 | 2 |  2
+     | 7 | 7 | seven | 5 | -5 | 2 |  2
+     | 8 | 8 | eight | 5 | -5 | 2 |  2
+     |   |   | null  | 5 | -5 | 2 |  2
+     |   | 0 | zero  | 5 | -5 | 2 |  2
+     | 2 | 3 | two   | 5 | -5 | 3 | -3
+     | 3 | 2 | three | 5 | -5 | 3 | -3
+     | 4 | 1 | four  | 5 | -5 | 3 | -3
+     | 7 | 7 | seven | 5 | -5 | 3 | -3
+     | 8 | 8 | eight | 5 | -5 | 3 | -3
+     |   |   | null  | 5 | -5 | 3 | -3
+     |   | 0 | zero  | 5 | -5 | 3 | -3
+     | 2 | 3 | two   | 5 | -5 | 2 |  4
+     | 3 | 2 | three | 5 | -5 | 2 |  4
+     | 4 | 1 | four  | 5 | -5 | 2 |  4
+     | 7 | 7 | seven | 5 | -5 | 2 |  4
+     | 8 | 8 | eight | 5 | -5 | 2 |  4
+     |   |   | null  | 5 | -5 | 2 |  4
+     |   | 0 | zero  | 5 | -5 | 2 |  4
+     | 2 | 3 | two   | 5 | -5 |   |   
+     | 3 | 2 | three | 5 | -5 |   |   
+     | 4 | 1 | four  | 5 | -5 |   |   
+     | 7 | 7 | seven | 5 | -5 |   |   
+     | 8 | 8 | eight | 5 | -5 |   |   
+     |   |   | null  | 5 | -5 |   |   
+     |   | 0 | zero  | 5 | -5 |   |   
+     | 2 | 3 | two   | 5 | -5 |   |  0
+     | 3 | 2 | three | 5 | -5 |   |  0
+     | 4 | 1 | four  | 5 | -5 |   |  0
+     | 7 | 7 | seven | 5 | -5 |   |  0
+     | 8 | 8 | eight | 5 | -5 |   |  0
+     |   |   | null  | 5 | -5 |   |  0
+     |   | 0 | zero  | 5 | -5 |   |  0
      | 2 | 3 | two   | 1 | -1 | 1 | -1
      | 3 | 2 | three | 1 | -1 | 1 | -1
      | 4 | 1 | four  | 1 | -1 | 1 | -1
@@ -1259,330 +1429,160 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 8 | 8 | eight |   |  0 | 0 |   
      |   |   | null  |   |  0 | 0 |   
      |   | 0 | zero  |   |  0 | 0 |   
-     | 1 | 4 | one   | 1 | -1 | 2 |  2
-     | 0 |   | zero  | 1 | -1 | 2 |  2
-     | 1 | 4 | one   | 1 | -1 | 3 | -3
-     | 0 |   | zero  | 1 | -1 | 3 | -3
-     | 1 | 4 | one   | 1 | -1 | 2 |  4
-     | 0 |   | zero  | 1 | -1 | 2 |  4
-     | 1 | 4 | one   | 1 | -1 |   |   
-     | 0 |   | zero  | 1 | -1 |   |   
-     | 1 | 4 | one   | 1 | -1 |   |  0
-     | 0 |   | zero  | 1 | -1 |   |  0
-     | 1 | 4 | one   | 0 |    | 2 |  2
-     | 0 |   | zero  | 0 |    | 2 |  2
-     | 1 | 4 | one   | 0 |    | 3 | -3
-     | 0 |   | zero  | 0 |    | 3 | -3
-     | 1 | 4 | one   | 0 |    | 2 |  4
-     | 0 |   | zero  | 0 |    | 2 |  4
-     | 1 | 4 | one   | 0 |    |   |   
-     | 0 |   | zero  | 0 |    |   |   
-     | 1 | 4 | one   | 0 |    |   |  0
-     | 0 |   | zero  | 0 |    |   |  0
-     | 1 | 4 | one   | 5 | -5 | 2 |  2
-     | 0 |   | zero  | 5 | -5 | 2 |  2
-     | 1 | 4 | one   | 5 | -5 | 3 | -3
-     | 0 |   | zero  | 5 | -5 | 3 | -3
-     | 1 | 4 | one   | 5 | -5 | 2 |  4
-     | 0 |   | zero  | 5 | -5 | 2 |  4
-     | 1 | 4 | one   | 5 | -5 |   |   
-     | 0 |   | zero  | 5 | -5 |   |   
-     | 1 | 4 | one   | 5 | -5 |   |  0
-     | 0 |   | zero  | 5 | -5 |   |  0
-     | 1 | 4 | one   | 5 | -5 | 2 |  2
-     | 0 |   | zero  | 5 | -5 | 2 |  2
-     | 1 | 4 | one   | 5 | -5 | 3 | -3
-     | 0 |   | zero  | 5 | -5 | 3 | -3
-     | 1 | 4 | one   | 5 | -5 | 2 |  4
-     | 0 |   | zero  | 5 | -5 | 2 |  4
-     | 1 | 4 | one   | 5 | -5 |   |   
-     | 0 |   | zero  | 5 | -5 |   |   
-     | 1 | 4 | one   | 5 | -5 |   |  0
-     | 0 |   | zero  | 5 | -5 |   |  0
-     | 1 | 4 | one   | 2 |  2 | 2 |  2
-     | 0 |   | zero  | 2 |  2 | 2 |  2
-     | 1 | 4 | one   | 2 |  2 | 3 | -3
-     | 0 |   | zero  | 2 |  2 | 3 | -3
-     | 1 | 4 | one   | 2 |  2 | 2 |  4
-     | 0 |   | zero  | 2 |  2 | 2 |  4
-     | 1 | 4 | one   | 2 |  2 |   |   
-     | 0 |   | zero  | 2 |  2 |   |   
-     | 1 | 4 | one   | 2 |  2 |   |  0
-     | 0 |   | zero  | 2 |  2 |   |  0
-     | 1 | 4 | one   | 3 | -3 | 2 |  2
-     | 0 |   | zero  | 3 | -3 | 2 |  2
-     | 1 | 4 | one   | 3 | -3 | 3 | -3
-     | 0 |   | zero  | 3 | -3 | 3 | -3
-     | 1 | 4 | one   | 3 | -3 | 2 |  4
-     | 0 |   | zero  | 3 | -3 | 2 |  4
-     | 1 | 4 | one   | 3 | -3 |   |   
-     | 0 |   | zero  | 3 | -3 |   |   
-     | 1 | 4 | one   | 3 | -3 |   |  0
-     | 0 |   | zero  | 3 | -3 |   |  0
-     | 1 | 4 | one   | 2 |  4 | 2 |  2
-     | 0 |   | zero  | 2 |  4 | 2 |  2
-     | 1 | 4 | one   | 2 |  4 | 3 | -3
-     | 0 |   | zero  | 2 |  4 | 3 | -3
-     | 1 | 4 | one   | 2 |  4 | 2 |  4
-     | 0 |   | zero  | 2 |  4 | 2 |  4
-     | 1 | 4 | one   | 2 |  4 |   |   
-     | 0 |   | zero  | 2 |  4 |   |   
-     | 1 | 4 | one   | 2 |  4 |   |  0
-     | 0 |   | zero  | 2 |  4 |   |  0
-     | 1 | 4 | one   |   |    | 2 |  2
-     | 0 |   | zero  |   |    | 2 |  2
-     | 1 | 4 | one   |   |    | 3 | -3
-     | 0 |   | zero  |   |    | 3 | -3
-     | 1 | 4 | one   |   |    | 2 |  4
-     | 0 |   | zero  |   |    | 2 |  4
-     | 1 | 4 | one   |   |    |   |   
-     | 0 |   | zero  |   |    |   |   
-     | 1 | 4 | one   |   |    |   |  0
-     | 0 |   | zero  |   |    |   |  0
-     | 1 | 4 | one   |   |  0 | 2 |  2
-     | 0 |   | zero  |   |  0 | 2 |  2
-     | 1 | 4 | one   |   |  0 | 3 | -3
-     | 0 |   | zero  |   |  0 | 3 | -3
-     | 1 | 4 | one   |   |  0 | 2 |  4
-     | 0 |   | zero  |   |  0 | 2 |  4
-     | 1 | 4 | one   |   |  0 |   |   
-     | 0 |   | zero  |   |  0 |   |   
-     | 1 | 4 | one   |   |  0 |   |  0
-     | 0 |   | zero  |   |  0 |   |  0
-     | 1 | 4 | one   | 5 | -5 | 5 | -5
-     | 0 |   | zero  | 5 | -5 | 5 | -5
-     | 1 | 4 | one   | 5 | -5 | 5 | -5
-     | 0 |   | zero  | 5 | -5 | 5 | -5
-     | 1 | 4 | one   | 5 | -5 | 5 | -5
-     | 0 |   | zero  | 5 | -5 | 5 | -5
-     | 1 | 4 | one   | 5 | -5 | 5 | -5
-     | 0 |   | zero  | 5 | -5 | 5 | -5
-     | 1 | 4 | one   | 1 | -1 | 5 | -5
-     | 0 |   | zero  | 1 | -1 | 5 | -5
-     | 1 | 4 | one   | 1 | -1 | 5 | -5
-     | 0 |   | zero  | 1 | -1 | 5 | -5
-     | 1 | 4 | one   | 0 |    | 5 | -5
-     | 0 |   | zero  | 0 |    | 5 | -5
-     | 1 | 4 | one   | 0 |    | 5 | -5
-     | 0 |   | zero  | 0 |    | 5 | -5
-     | 1 | 4 | one   | 2 |  2 | 5 | -5
-     | 0 |   | zero  | 2 |  2 | 5 | -5
-     | 1 | 4 | one   | 2 |  2 | 5 | -5
-     | 0 |   | zero  | 2 |  2 | 5 | -5
-     | 1 | 4 | one   | 3 | -3 | 5 | -5
-     | 0 |   | zero  | 3 | -3 | 5 | -5
-     | 1 | 4 | one   | 3 | -3 | 5 | -5
-     | 0 |   | zero  | 3 | -3 | 5 | -5
-     | 1 | 4 | one   | 2 |  4 | 5 | -5
-     | 0 |   | zero  | 2 |  4 | 5 | -5
-     | 1 | 4 | one   | 2 |  4 | 5 | -5
-     | 0 |   | zero  | 2 |  4 | 5 | -5
-     | 1 | 4 | one   |   |    | 5 | -5
-     | 0 |   | zero  |   |    | 5 | -5
-     | 1 | 4 | one   |   |    | 5 | -5
-     | 0 |   | zero  |   |    | 5 | -5
-     | 1 | 4 | one   |   |  0 | 5 | -5
-     | 0 |   | zero  |   |  0 | 5 | -5
-     | 1 | 4 | one   |   |  0 | 5 | -5
-     | 0 |   | zero  |   |  0 | 5 | -5
-     | 1 | 4 | one   | 5 | -5 | 1 | -1
-     | 0 |   | zero  | 5 | -5 | 1 | -1
-     | 1 | 4 | one   | 5 | -5 | 0 |   
-     | 0 |   | zero  | 5 | -5 | 0 |   
-     | 1 | 4 | one   | 5 | -5 | 1 | -1
-     | 0 |   | zero  | 5 | -5 | 1 | -1
-     | 1 | 4 | one   | 5 | -5 | 0 |   
-     | 0 |   | zero  | 5 | -5 | 0 |   
-     | 1 | 4 | one   | 1 | -1 | 1 | -1
-     | 0 |   | zero  | 1 | -1 | 1 | -1
-     | 1 | 4 | one   | 1 | -1 | 0 |   
-     | 0 |   | zero  | 1 | -1 | 0 |   
-     | 1 | 4 | one   | 0 |    | 1 | -1
-     | 0 |   | zero  | 0 |    | 1 | -1
-     | 1 | 4 | one   | 0 |    | 0 |   
-     | 0 |   | zero  | 0 |    | 0 |   
-     | 1 | 4 | one   | 2 |  2 | 1 | -1
-     | 0 |   | zero  | 2 |  2 | 1 | -1
-     | 1 | 4 | one   | 2 |  2 | 0 |   
-     | 0 |   | zero  | 2 |  2 | 0 |   
-     | 1 | 4 | one   | 3 | -3 | 1 | -1
-     | 0 |   | zero  | 3 | -3 | 1 | -1
-     | 1 | 4 | one   | 3 | -3 | 0 |   
-     | 0 |   | zero  | 3 | -3 | 0 |   
-     | 1 | 4 | one   | 2 |  4 | 1 | -1
-     | 0 |   | zero  | 2 |  4 | 1 | -1
-     | 1 | 4 | one   | 2 |  4 | 0 |   
-     | 0 |   | zero  | 2 |  4 | 0 |   
-     | 1 | 4 | one   |   |    | 1 | -1
-     | 0 |   | zero  |   |    | 1 | -1
-     | 1 | 4 | one   |   |    | 0 |   
-     | 0 |   | zero  |   |    | 0 |   
-     | 1 | 4 | one   |   |  0 | 1 | -1
-     | 0 |   | zero  |   |  0 | 1 | -1
-     | 1 | 4 | one   |   |  0 | 0 |   
-     | 0 |   | zero  |   |  0 | 0 |   
-     | 5 | 0 | five  | 1 | -1 | 2 |  2
-     | 6 | 6 | six   | 1 | -1 | 2 |  2
-     | 5 | 0 | five  | 1 | -1 | 3 | -3
-     | 6 | 6 | six   | 1 | -1 | 3 | -3
-     | 5 | 0 | five  | 1 | -1 | 2 |  4
-     | 6 | 6 | six   | 1 | -1 | 2 |  4
-     | 5 | 0 | five  | 1 | -1 |   |   
-     | 6 | 6 | six   | 1 | -1 |   |   
-     | 5 | 0 | five  | 1 | -1 |   |  0
-     | 6 | 6 | six   | 1 | -1 |   |  0
-     | 5 | 0 | five  | 0 |    | 2 |  2
-     | 6 | 6 | six   | 0 |    | 2 |  2
-     | 5 | 0 | five  | 0 |    | 3 | -3
-     | 6 | 6 | six   | 0 |    | 3 | -3
-     | 5 | 0 | five  | 0 |    | 2 |  4
-     | 6 | 6 | six   | 0 |    | 2 |  4
-     | 5 | 0 | five  | 0 |    |   |   
-     | 6 | 6 | six   | 0 |    |   |   
-     | 5 | 0 | five  | 0 |    |   |  0
-     | 6 | 6 | six   | 0 |    |   |  0
-     | 5 | 0 | five  | 5 | -5 | 2 |  2
-     | 6 | 6 | six   | 5 | -5 | 2 |  2
-     | 5 | 0 | five  | 5 | -5 | 3 | -3
-     | 6 | 6 | six   | 5 | -5 | 3 | -3
-     | 5 | 0 | five  | 5 | -5 | 2 |  4
-     | 6 | 6 | six   | 5 | -5 | 2 |  4
-     | 5 | 0 | five  | 5 | -5 |   |   
-     | 6 | 6 | six   | 5 | -5 |   |   
-     | 5 | 0 | five  | 5 | -5 |   |  0
-     | 6 | 6 | six   | 5 | -5 |   |  0
-     | 5 | 0 | five  | 5 | -5 | 2 |  2
-     | 6 | 6 | six   | 5 | -5 | 2 |  2
-     | 5 | 0 | five  | 5 | -5 | 3 | -3
-     | 6 | 6 | six   | 5 | -5 | 3 | -3
-     | 5 | 0 | five  | 5 | -5 | 2 |  4
-     | 6 | 6 | six   | 5 | -5 | 2 |  4
-     | 5 | 0 | five  | 5 | -5 |   |   
-     | 6 | 6 | six   | 5 | -5 |   |   
-     | 5 | 0 | five  | 5 | -5 |   |  0
-     | 6 | 6 | six   | 5 | -5 |   |  0
-     | 5 | 0 | five  | 2 |  2 | 2 |  2
-     | 6 | 6 | six   | 2 |  2 | 2 |  2
-     | 5 | 0 | five  | 2 |  2 | 3 | -3
-     | 6 | 6 | six   | 2 |  2 | 3 | -3
-     | 5 | 0 | five  | 2 |  2 | 2 |  4
-     | 6 | 6 | six   | 2 |  2 | 2 |  4
-     | 5 | 0 | five  | 2 |  2 |   |   
-     | 6 | 6 | six   | 2 |  2 |   |   
-     | 5 | 0 | five  | 2 |  2 |   |  0
-     | 6 | 6 | six   | 2 |  2 |   |  0
-     | 5 | 0 | five  | 3 | -3 | 2 |  2
-     | 6 | 6 | six   | 3 | -3 | 2 |  2
-     | 5 | 0 | five  | 3 | -3 | 3 | -3
-     | 6 | 6 | six   | 3 | -3 | 3 | -3
-     | 5 | 0 | five  | 3 | -3 | 2 |  4
-     | 6 | 6 | six   | 3 | -3 | 2 |  4
-     | 5 | 0 | five  | 3 | -3 |   |   
-     | 6 | 6 | six   | 3 | -3 |   |   
-     | 5 | 0 | five  | 3 | -3 |   |  0
-     | 6 | 6 | six   | 3 | -3 |   |  0
-     | 5 | 0 | five  | 2 |  4 | 2 |  2
-     | 6 | 6 | six   | 2 |  4 | 2 |  2
-     | 5 | 0 | five  | 2 |  4 | 3 | -3
-     | 6 | 6 | six   | 2 |  4 | 3 | -3
-     | 5 | 0 | five  | 2 |  4 | 2 |  4
-     | 6 | 6 | six   | 2 |  4 | 2 |  4
-     | 5 | 0 | five  | 2 |  4 |   |   
-     | 6 | 6 | six   | 2 |  4 |   |   
-     | 5 | 0 | five  | 2 |  4 |   |  0
-     | 6 | 6 | six   | 2 |  4 |   |  0
-     | 5 | 0 | five  |   |    | 2 |  2
-     | 6 | 6 | six   |   |    | 2 |  2
-     | 5 | 0 | five  |   |    | 3 | -3
-     | 6 | 6 | six   |   |    | 3 | -3
-     | 5 | 0 | five  |   |    | 2 |  4
-     | 6 | 6 | six   |   |    | 2 |  4
-     | 5 | 0 | five  |   |    |   |   
-     | 6 | 6 | six   |   |    |   |   
-     | 5 | 0 | five  |   |    |   |  0
-     | 6 | 6 | six   |   |    |   |  0
-     | 5 | 0 | five  |   |  0 | 2 |  2
-     | 6 | 6 | six   |   |  0 | 2 |  2
-     | 5 | 0 | five  |   |  0 | 3 | -3
-     | 6 | 6 | six   |   |  0 | 3 | -3
-     | 5 | 0 | five  |   |  0 | 2 |  4
-     | 6 | 6 | six   |   |  0 | 2 |  4
-     | 5 | 0 | five  |   |  0 |   |   
-     | 6 | 6 | six   |   |  0 |   |   
-     | 5 | 0 | five  |   |  0 |   |  0
-     | 6 | 6 | six   |   |  0 |   |  0
-     | 5 | 0 | five  | 5 | -5 | 1 | -1
-     | 6 | 6 | six   | 5 | -5 | 1 | -1
-     | 5 | 0 | five  | 5 | -5 | 0 |   
-     | 6 | 6 | six   | 5 | -5 | 0 |   
-     | 5 | 0 | five  | 5 | -5 | 1 | -1
-     | 6 | 6 | six   | 5 | -5 | 1 | -1
-     | 5 | 0 | five  | 5 | -5 | 0 |   
-     | 6 | 6 | six   | 5 | -5 | 0 |   
-     | 5 | 0 | five  | 1 | -1 | 1 | -1
-     | 6 | 6 | six   | 1 | -1 | 1 | -1
-     | 5 | 0 | five  | 1 | -1 | 0 |   
-     | 6 | 6 | six   | 1 | -1 | 0 |   
-     | 5 | 0 | five  | 0 |    | 1 | -1
-     | 6 | 6 | six   | 0 |    | 1 | -1
-     | 5 | 0 | five  | 0 |    | 0 |   
-     | 6 | 6 | six   | 0 |    | 0 |   
-     | 5 | 0 | five  | 2 |  2 | 1 | -1
-     | 6 | 6 | six   | 2 |  2 | 1 | -1
-     | 5 | 0 | five  | 2 |  2 | 0 |   
-     | 6 | 6 | six   | 2 |  2 | 0 |   
-     | 5 | 0 | five  | 3 | -3 | 1 | -1
-     | 6 | 6 | six   | 3 | -3 | 1 | -1
-     | 5 | 0 | five  | 3 | -3 | 0 |   
-     | 6 | 6 | six   | 3 | -3 | 0 |   
-     | 5 | 0 | five  | 2 |  4 | 1 | -1
-     | 6 | 6 | six   | 2 |  4 | 1 | -1
-     | 5 | 0 | five  | 2 |  4 | 0 |   
-     | 6 | 6 | six   | 2 |  4 | 0 |   
-     | 5 | 0 | five  |   |    | 1 | -1
-     | 6 | 6 | six   |   |    | 1 | -1
-     | 5 | 0 | five  |   |    | 0 |   
-     | 6 | 6 | six   |   |    | 0 |   
-     | 5 | 0 | five  |   |  0 | 1 | -1
-     | 6 | 6 | six   |   |  0 | 1 | -1
-     | 5 | 0 | five  |   |  0 | 0 |   
-     | 6 | 6 | six   |   |  0 | 0 |   
-     | 5 | 0 | five  | 5 | -5 | 5 | -5
-     | 6 | 6 | six   | 5 | -5 | 5 | -5
-     | 5 | 0 | five  | 5 | -5 | 5 | -5
-     | 6 | 6 | six   | 5 | -5 | 5 | -5
-     | 5 | 0 | five  | 5 | -5 | 5 | -5
-     | 6 | 6 | six   | 5 | -5 | 5 | -5
-     | 5 | 0 | five  | 5 | -5 | 5 | -5
-     | 6 | 6 | six   | 5 | -5 | 5 | -5
-     | 5 | 0 | five  | 1 | -1 | 5 | -5
-     | 6 | 6 | six   | 1 | -1 | 5 | -5
-     | 5 | 0 | five  | 1 | -1 | 5 | -5
-     | 6 | 6 | six   | 1 | -1 | 5 | -5
-     | 5 | 0 | five  | 0 |    | 5 | -5
-     | 6 | 6 | six   | 0 |    | 5 | -5
-     | 5 | 0 | five  | 0 |    | 5 | -5
-     | 6 | 6 | six   | 0 |    | 5 | -5
-     | 5 | 0 | five  | 2 |  2 | 5 | -5
-     | 6 | 6 | six   | 2 |  2 | 5 | -5
-     | 5 | 0 | five  | 2 |  2 | 5 | -5
-     | 6 | 6 | six   | 2 |  2 | 5 | -5
-     | 5 | 0 | five  | 3 | -3 | 5 | -5
-     | 6 | 6 | six   | 3 | -3 | 5 | -5
-     | 5 | 0 | five  | 3 | -3 | 5 | -5
-     | 6 | 6 | six   | 3 | -3 | 5 | -5
-     | 5 | 0 | five  | 2 |  4 | 5 | -5
-     | 6 | 6 | six   | 2 |  4 | 5 | -5
-     | 5 | 0 | five  | 2 |  4 | 5 | -5
-     | 6 | 6 | six   | 2 |  4 | 5 | -5
-     | 5 | 0 | five  |   |    | 5 | -5
-     | 6 | 6 | six   |   |    | 5 | -5
-     | 5 | 0 | five  |   |    | 5 | -5
-     | 6 | 6 | six   |   |    | 5 | -5
-     | 5 | 0 | five  |   |  0 | 5 | -5
-     | 6 | 6 | six   |   |  0 | 5 | -5
-     | 5 | 0 | five  |   |  0 | 5 | -5
-     | 6 | 6 | six   |   |  0 | 5 | -5
+     | 2 | 3 | two   | 5 | -5 | 1 | -1
+     | 3 | 2 | three | 5 | -5 | 1 | -1
+     | 4 | 1 | four  | 5 | -5 | 1 | -1
+     | 7 | 7 | seven | 5 | -5 | 1 | -1
+     | 8 | 8 | eight | 5 | -5 | 1 | -1
+     |   |   | null  | 5 | -5 | 1 | -1
+     |   | 0 | zero  | 5 | -5 | 1 | -1
+     | 2 | 3 | two   | 5 | -5 | 0 |   
+     | 3 | 2 | three | 5 | -5 | 0 |   
+     | 4 | 1 | four  | 5 | -5 | 0 |   
+     | 7 | 7 | seven | 5 | -5 | 0 |   
+     | 8 | 8 | eight | 5 | -5 | 0 |   
+     |   |   | null  | 5 | -5 | 0 |   
+     |   | 0 | zero  | 5 | -5 | 0 |   
+     | 2 | 3 | two   | 5 | -5 | 1 | -1
+     | 3 | 2 | three | 5 | -5 | 1 | -1
+     | 4 | 1 | four  | 5 | -5 | 1 | -1
+     | 7 | 7 | seven | 5 | -5 | 1 | -1
+     | 8 | 8 | eight | 5 | -5 | 1 | -1
+     |   |   | null  | 5 | -5 | 1 | -1
+     |   | 0 | zero  | 5 | -5 | 1 | -1
+     | 2 | 3 | two   | 5 | -5 | 0 |   
+     | 3 | 2 | three | 5 | -5 | 0 |   
+     | 4 | 1 | four  | 5 | -5 | 0 |   
+     | 7 | 7 | seven | 5 | -5 | 0 |   
+     | 8 | 8 | eight | 5 | -5 | 0 |   
+     |   |   | null  | 5 | -5 | 0 |   
+     |   | 0 | zero  | 5 | -5 | 0 |   
+     | 2 | 3 | two   | 2 |  2 | 5 | -5
+     | 3 | 2 | three | 2 |  2 | 5 | -5
+     | 4 | 1 | four  | 2 |  2 | 5 | -5
+     | 7 | 7 | seven | 2 |  2 | 5 | -5
+     | 8 | 8 | eight | 2 |  2 | 5 | -5
+     |   |   | null  | 2 |  2 | 5 | -5
+     |   | 0 | zero  | 2 |  2 | 5 | -5
+     | 2 | 3 | two   | 2 |  2 | 5 | -5
+     | 3 | 2 | three | 2 |  2 | 5 | -5
+     | 4 | 1 | four  | 2 |  2 | 5 | -5
+     | 7 | 7 | seven | 2 |  2 | 5 | -5
+     | 8 | 8 | eight | 2 |  2 | 5 | -5
+     |   |   | null  | 2 |  2 | 5 | -5
+     |   | 0 | zero  | 2 |  2 | 5 | -5
+     | 2 | 3 | two   | 3 | -3 | 5 | -5
+     | 3 | 2 | three | 3 | -3 | 5 | -5
+     | 4 | 1 | four  | 3 | -3 | 5 | -5
+     | 7 | 7 | seven | 3 | -3 | 5 | -5
+     | 8 | 8 | eight | 3 | -3 | 5 | -5
+     |   |   | null  | 3 | -3 | 5 | -5
+     |   | 0 | zero  | 3 | -3 | 5 | -5
+     | 2 | 3 | two   | 3 | -3 | 5 | -5
+     | 3 | 2 | three | 3 | -3 | 5 | -5
+     | 4 | 1 | four  | 3 | -3 | 5 | -5
+     | 7 | 7 | seven | 3 | -3 | 5 | -5
+     | 8 | 8 | eight | 3 | -3 | 5 | -5
+     |   |   | null  | 3 | -3 | 5 | -5
+     |   | 0 | zero  | 3 | -3 | 5 | -5
+     | 2 | 3 | two   | 2 |  4 | 5 | -5
+     | 3 | 2 | three | 2 |  4 | 5 | -5
+     | 4 | 1 | four  | 2 |  4 | 5 | -5
+     | 7 | 7 | seven | 2 |  4 | 5 | -5
+     | 8 | 8 | eight | 2 |  4 | 5 | -5
+     |   |   | null  | 2 |  4 | 5 | -5
+     |   | 0 | zero  | 2 |  4 | 5 | -5
+     | 2 | 3 | two   | 2 |  4 | 5 | -5
+     | 3 | 2 | three | 2 |  4 | 5 | -5
+     | 4 | 1 | four  | 2 |  4 | 5 | -5
+     | 7 | 7 | seven | 2 |  4 | 5 | -5
+     | 8 | 8 | eight | 2 |  4 | 5 | -5
+     |   |   | null  | 2 |  4 | 5 | -5
+     |   | 0 | zero  | 2 |  4 | 5 | -5
+     | 2 | 3 | two   |   |    | 5 | -5
+     | 3 | 2 | three |   |    | 5 | -5
+     | 4 | 1 | four  |   |    | 5 | -5
+     | 7 | 7 | seven |   |    | 5 | -5
+     | 8 | 8 | eight |   |    | 5 | -5
+     |   |   | null  |   |    | 5 | -5
+     |   | 0 | zero  |   |    | 5 | -5
+     | 2 | 3 | two   |   |    | 5 | -5
+     | 3 | 2 | three |   |    | 5 | -5
+     | 4 | 1 | four  |   |    | 5 | -5
+     | 7 | 7 | seven |   |    | 5 | -5
+     | 8 | 8 | eight |   |    | 5 | -5
+     |   |   | null  |   |    | 5 | -5
+     |   | 0 | zero  |   |    | 5 | -5
+     | 2 | 3 | two   |   |  0 | 5 | -5
+     | 3 | 2 | three |   |  0 | 5 | -5
+     | 4 | 1 | four  |   |  0 | 5 | -5
+     | 7 | 7 | seven |   |  0 | 5 | -5
+     | 8 | 8 | eight |   |  0 | 5 | -5
+     |   |   | null  |   |  0 | 5 | -5
+     |   | 0 | zero  |   |  0 | 5 | -5
+     | 2 | 3 | two   |   |  0 | 5 | -5
+     | 3 | 2 | three |   |  0 | 5 | -5
+     | 4 | 1 | four  |   |  0 | 5 | -5
+     | 7 | 7 | seven |   |  0 | 5 | -5
+     | 8 | 8 | eight |   |  0 | 5 | -5
+     |   |   | null  |   |  0 | 5 | -5
+     |   | 0 | zero  |   |  0 | 5 | -5
+     | 2 | 3 | two   | 1 | -1 | 5 | -5
+     | 3 | 2 | three | 1 | -1 | 5 | -5
+     | 4 | 1 | four  | 1 | -1 | 5 | -5
+     | 7 | 7 | seven | 1 | -1 | 5 | -5
+     | 8 | 8 | eight | 1 | -1 | 5 | -5
+     |   |   | null  | 1 | -1 | 5 | -5
+     |   | 0 | zero  | 1 | -1 | 5 | -5
+     | 2 | 3 | two   | 1 | -1 | 5 | -5
+     | 3 | 2 | three | 1 | -1 | 5 | -5
+     | 4 | 1 | four  | 1 | -1 | 5 | -5
+     | 7 | 7 | seven | 1 | -1 | 5 | -5
+     | 8 | 8 | eight | 1 | -1 | 5 | -5
+     |   |   | null  | 1 | -1 | 5 | -5
+     |   | 0 | zero  | 1 | -1 | 5 | -5
+     | 2 | 3 | two   | 0 |    | 5 | -5
+     | 3 | 2 | three | 0 |    | 5 | -5
+     | 4 | 1 | four  | 0 |    | 5 | -5
+     | 7 | 7 | seven | 0 |    | 5 | -5
+     | 8 | 8 | eight | 0 |    | 5 | -5
+     |   |   | null  | 0 |    | 5 | -5
+     |   | 0 | zero  | 0 |    | 5 | -5
+     | 2 | 3 | two   | 0 |    | 5 | -5
+     | 3 | 2 | three | 0 |    | 5 | -5
+     | 4 | 1 | four  | 0 |    | 5 | -5
+     | 7 | 7 | seven | 0 |    | 5 | -5
+     | 8 | 8 | eight | 0 |    | 5 | -5
+     |   |   | null  | 0 |    | 5 | -5
+     |   | 0 | zero  | 0 |    | 5 | -5
+     | 2 | 3 | two   | 5 | -5 | 5 | -5
+     | 3 | 2 | three | 5 | -5 | 5 | -5
+     | 4 | 1 | four  | 5 | -5 | 5 | -5
+     | 7 | 7 | seven | 5 | -5 | 5 | -5
+     | 8 | 8 | eight | 5 | -5 | 5 | -5
+     |   |   | null  | 5 | -5 | 5 | -5
+     |   | 0 | zero  | 5 | -5 | 5 | -5
+     | 2 | 3 | two   | 5 | -5 | 5 | -5
+     | 3 | 2 | three | 5 | -5 | 5 | -5
+     | 4 | 1 | four  | 5 | -5 | 5 | -5
+     | 7 | 7 | seven | 5 | -5 | 5 | -5
+     | 8 | 8 | eight | 5 | -5 | 5 | -5
+     |   |   | null  | 5 | -5 | 5 | -5
+     |   | 0 | zero  | 5 | -5 | 5 | -5
+     | 2 | 3 | two   | 5 | -5 | 5 | -5
+     | 3 | 2 | three | 5 | -5 | 5 | -5
+     | 4 | 1 | four  | 5 | -5 | 5 | -5
+     | 7 | 7 | seven | 5 | -5 | 5 | -5
+     | 8 | 8 | eight | 5 | -5 | 5 | -5
+     |   |   | null  | 5 | -5 | 5 | -5
+     |   | 0 | zero  | 5 | -5 | 5 | -5
+     | 2 | 3 | two   | 5 | -5 | 5 | -5
+     | 3 | 2 | three | 5 | -5 | 5 | -5
+     | 4 | 1 | four  | 5 | -5 | 5 | -5
+     | 7 | 7 | seven | 5 | -5 | 5 | -5
+     | 8 | 8 | eight | 5 | -5 | 5 | -5
+     |   |   | null  | 5 | -5 | 5 | -5
+     |   | 0 | zero  | 5 | -5 | 5 | -5
 (891 rows)
 
 --
@@ -1602,13 +1602,13 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | k  
 -----+---+---+-------+----
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
      | 2 | 3 | two   |  4
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
      | 1 | 4 | one   | -1
      | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
 (7 rows)
 
 -- Same as above, slightly different syntax
@@ -1618,13 +1618,13 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | k  
 -----+---+---+-------+----
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
+     | 1 | 4 | one   | -1
+     | 0 |   | zero  |   
      | 2 | 3 | two   |  4
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
-     | 1 | 4 | one   | -1
-     | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
 (7 rows)
 
 SELECT '' AS "xxx", *
@@ -1669,10 +1669,10 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
      | 2 | 3 | two   |  4
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
      | 1 | 4 | one   | -1
      | 0 |   | zero  |   
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
 (7 rows)
 
 SELECT '' AS "xxx", *
@@ -1683,11 +1683,11 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -----+---+---+-------+----
      | 1 | 4 | one   | -1
      | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
      | 2 | 3 | two   |  4
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
 (7 rows)
 
 SELECT '' AS "xxx", *
@@ -1711,11 +1711,11 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -----+---+---+-------+----
      | 1 | 4 | one   | -1
      | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
      | 2 | 3 | two   |  4
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
 (7 rows)
 
 --
@@ -1727,13 +1727,13 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | i | k  
 -----+---+---+-------+---+----
+     | 5 | 0 | five  | 5 | -5
+     | 5 | 0 | five  | 5 | -5
+     | 1 | 4 | one   | 1 | -1
+     | 0 |   | zero  | 0 |   
      | 2 | 3 | two   | 2 |  4
      | 2 | 3 | two   | 2 |  2
      | 3 | 2 | three | 3 | -3
-     | 1 | 4 | one   | 1 | -1
-     | 0 |   | zero  | 0 |   
-     | 5 | 0 | five  | 5 | -5
-     | 5 | 0 | five  | 5 | -5
 (7 rows)
 
 SELECT '' AS "xxx", *
@@ -1742,9 +1742,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |  t   | i | k 
 -----+---+---+------+---+---
-     | 0 |   | zero |   | 0
      | 2 | 3 | two  | 2 | 2
      | 4 | 1 | four | 2 | 4
+     | 0 |   | zero |   | 0
 (3 rows)
 
 --
@@ -1756,15 +1756,15 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | i | k 
 -----+---+---+-------+---+---
+     | 2 | 3 | two   | 2 | 2
+     | 2 | 3 | two   | 2 | 4
+     | 3 | 2 | three | 2 | 4
+     | 4 | 1 | four  | 2 | 4
      | 1 | 4 | one   | 2 | 2
      | 0 |   | zero  | 2 | 2
      | 1 | 4 | one   | 2 | 4
      | 0 |   | zero  | 2 | 4
      | 0 |   | zero  |   | 0
-     | 2 | 3 | two   | 2 | 2
-     | 2 | 3 | two   | 2 | 4
-     | 3 | 2 | three | 2 | 4
-     | 4 | 1 | four  | 2 | 4
 (9 rows)
 
 --
@@ -1821,15 +1821,15 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | k  
 -----+---+---+-------+----
+     | 1 | 4 | one   | -1
+     | 0 |   | zero  |   
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
      | 2 | 3 | two   |  4
      |   |   |       |   
      |   |   |       |  0
-     | 1 | 4 | one   | -1
-     | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
 (9 rows)
 
 SELECT '' AS "xxx", *
@@ -1838,15 +1838,15 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  xxx | i | j |   t   | k  
 -----+---+---+-------+----
-     | 1 | 4 | one   | -1
-     | 0 |   | zero  |   
-     | 5 | 0 | five  | -5
-     | 5 | 0 | five  | -5
      | 2 | 3 | two   |  2
      | 3 | 2 | three | -3
      | 2 | 3 | two   |  4
      |   |   |       |   
      |   |   |       |  0
+     | 5 | 0 | five  | -5
+     | 5 | 0 | five  | -5
+     | 1 | 4 | one   | -1
+     | 0 |   | zero  |   
 (9 rows)
 
 SELECT '' AS "xxx", *
@@ -1997,8 +1997,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | n  | n  
 ------+----+----
- bb   | 12 | 13
  cc   | 22 | 23
+ bb   | 12 | 13
 (2 rows)
 
 SELECT * FROM
@@ -2010,9 +2010,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | n  | n  
 ------+----+----
- ee   | 42 |   
- cc   | 22 | 23
  bb   | 12 | 13
+ cc   | 22 | 23
+ ee   | 42 |   
 (3 rows)
 
 SELECT * FROM
@@ -2024,10 +2024,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | n  | n  
 ------+----+----
- ee   | 42 |   
- cc   | 22 | 23
  bb   | 12 | 13
  dd   |    | 33
+ ee   | 42 |   
+ cc   | 22 | 23
 (4 rows)
 
 -- Cases with non-nullable expressions in subquery results;
@@ -2053,8 +2053,8 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
  name | s2_n | s2_2 | s3_n | s3_2 
 ------+------+------+------+------
  bb   |   12 |    2 |   13 |    3
- ee   |   42 |    2 |      |     
  cc   |   22 |    2 |   23 |    3
+ ee   |   42 |    2 |      |     
 (3 rows)
 
 SELECT * FROM
@@ -2065,10 +2065,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | s2_n | s2_2 | s3_n | s3_2 
 ------+------+------+------+------
+ ee   |   42 |    2 |      |     
+ cc   |   22 |    2 |   23 |    3
  bb   |   12 |    2 |   13 |    3
  dd   |      |      |   33 |    3
- cc   |   22 |    2 |   23 |    3
- ee   |   42 |    2 |      |     
 (4 rows)
 
 SELECT * FROM
@@ -2112,10 +2112,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | s1_n | s2_n | s3_n 
 ------+------+------+------
- cc   |      |   22 |   23
- ee   |      |   42 |     
  bb   |   11 |   12 |   13
  dd   |      |      |   33
+ ee   |      |   42 |     
+ cc   |      |   22 |   23
 (4 rows)
 
 SELECT * FROM
@@ -2130,8 +2130,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | s1_n | s2_n | s2_2 | s3_n 
 ------+------+------+------+------
- cc   |      |   22 |    2 |   23
  ee   |      |   42 |    2 |     
+ cc   |      |   22 |    2 |   23
  bb   |   11 |   12 |    2 |   13
  dd   |      |      |      |   33
 (4 rows)
@@ -2146,8 +2146,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  name | s1_n | name | s2_n 
 ------+------+------+------
-      |      | bb   |    2
       |      | ee   |    2
+      |      | bb   |    2
       |      | cc   |    2
  bb   |   11 |      |     
 (4 rows)
@@ -2173,11 +2173,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 
 ----+----
+  1 | 11
+  5 |   
   2 | 22
   3 |   
   4 | 44
-  1 | 11
-  5 |   
 (5 rows)
 
 select * from y;
@@ -2185,10 +2185,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: y
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  y1 | y2  
 ----+-----
-  1 | 111
   2 | 222
   3 | 333
   4 |    
+  1 | 111
 (4 rows)
 
 select * from x left join y on (x1 = y1 and x2 is not null);
@@ -2199,8 +2199,8 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
   2 | 22 |  2 | 222
   3 |    |    |    
   4 | 44 |  4 |    
-  1 | 11 |  1 | 111
   5 |    |    |    
+  1 | 11 |  1 | 111
 (5 rows)
 
 select * from x left join y on (x1 = y1 and y2 is not null);
@@ -2208,10 +2208,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  
 ----+----+----+-----
+  1 | 11 |  1 | 111
   2 | 22 |  2 | 222
   3 |    |  3 | 333
   4 | 44 |    |    
-  1 | 11 |  1 | 111
   5 |    |    |    
 (5 rows)
 
@@ -2221,10 +2221,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   3 |    |  3 | 333 |   3 |    
   4 | 44 |  4 |     |   4 |  44
+  1 | 11 |  1 | 111 |   1 |  11
   5 |    |    |     |   5 |    
 (5 rows)
 
@@ -2234,11 +2234,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  5 |    |    |     |     |    
+  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   3 |    |  3 | 333 |     |    
   4 | 44 |  4 |     |   4 |  44
-  1 | 11 |  1 | 111 |   1 |  11
+  5 |    |    |     |     |    
 (5 rows)
 
 select * from (x left join y on (x1 = y1)) left join x xx(xx1,xx2)
@@ -2247,11 +2247,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  5 |    |    |     |     |    
+  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   3 |    |  3 | 333 |   3 |    
   4 | 44 |  4 |     |     |    
-  1 | 11 |  1 | 111 |   1 |  11
+  5 |    |    |     |     |    
 (5 rows)
 
 select * from (x left join y on (x1 = y1)) left join x xx(xx1,xx2)
@@ -2260,11 +2260,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  1 | 11 |  1 | 111 |   1 |  11
+  5 |    |    |     |     |    
   2 | 22 |  2 | 222 |   2 |  22
   3 |    |  3 | 333 |     |    
   4 | 44 |  4 |     |   4 |  44
-  5 |    |    |     |     |    
+  1 | 11 |  1 | 111 |   1 |  11
 (5 rows)
 
 -- these should NOT give the same answers as above
@@ -2274,9 +2274,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   4 | 44 |  4 |     |   4 |  44
+  1 | 11 |  1 | 111 |   1 |  11
 (3 rows)
 
 select * from (x left join y on (x1 = y1)) left join x xx(xx1,xx2)
@@ -2285,9 +2285,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   3 |    |  3 | 333 |   3 |    
+  1 | 11 |  1 | 111 |   1 |  11
 (3 rows)
 
 select * from (x left join y on (x1 = y1)) left join x xx(xx1,xx2)
@@ -2296,9 +2296,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: x
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x1 | x2 | y1 | y2  | xx1 | xx2 
 ----+----+----+-----+-----+-----
-  1 | 11 |  1 | 111 |   1 |  11
   2 | 22 |  2 | 222 |   2 |  22
   4 | 44 |  4 |     |   4 |  44
+  1 | 11 |  1 | 111 |   1 |  11
 (3 rows)
 
 --
@@ -2508,10 +2508,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: j
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j |   t   | i | k  
 ---+---+-------+---+----
-   |   |       | 0 |   
- 0 |   | zero  |   |   
-   |   |       | 1 | -1
- 1 | 4 | one   |   |   
+   |   |       | 5 | -5
+   |   |       | 5 | -5
+ 5 | 0 | five  |   |   
+ 6 | 6 | six   |   |   
  2 | 3 | two   | 2 |  2
    |   |       | 2 |  4
    |   |       | 3 | -3
@@ -2523,10 +2523,10 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
  8 | 8 | eight |   |   
    |   | null  |   |   
    | 0 | zero  |   |   
-   |   |       | 5 | -5
-   |   |       | 5 | -5
- 5 | 0 | five  |   |   
- 6 | 6 | six   |   |   
+   |   |       | 0 |   
+ 0 |   | zero  |   |   
+   |   |       | 1 | -1
+ 1 | 4 | one   |   |   
 (19 rows)
 
 reset enable_mergejoin;
@@ -2613,9 +2613,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   x  |  y  
 -----+-----
-   6 |   7
    7 |   8
  500 | 100
+   6 |   7
 (3 rows)
 
 DELETE FROM t4 USING t1 JOIN t2 USING (a) WHERE t4.x > t1.a;
@@ -2626,9 +2626,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x | y  
 ---+----
- 7 |  8
  5 | 20
  6 |  7
+ 7 |  8
 (3 rows)
 
 DELETE FROM t3 USING t3 t3_other WHERE t3.x = t3_other.x AND t3.y = t3_other.y;
@@ -2683,8 +2683,8 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
  tt1_id | joincol | tt2_id | joincol 
 --------+---------+--------+---------
       2 |         |        |        
-      1 |      11 |     21 |      11
       1 |      11 |     22 |      11
+      1 |      11 |     21 |      11
 (3 rows)
 
 select tt1.*, tt2.* from tt2 right join tt1 on tt1.joincol = tt2.joincol;
@@ -2855,9 +2855,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: y
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  yy_pkyy | yy_pkxx | yya_pkyy | xxa_pkxx | xxb_pkxx 
 ---------+---------+----------+----------+----------
+     201 |       2 |          |          |        1
      101 |       1 |      101 |        1 |        1
      301 |         |          |          |        1
-     201 |       2 |          |          |        1
 (3 rows)
 
 --
@@ -3189,22 +3189,6 @@ create temp table nt2 (
   foreign key (nt1_id) references nt1(id)
 );
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 create temp table nt3 (
   id int primary key,
   nt2_id int,
@@ -3212,22 +3196,6 @@ create temp table nt3 (
   foreign key (nt2_id) references nt2(id)
 );
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 insert into nt1 values (1,true,true);
 ANALYZE nt1;
 insert into nt1 values (2,true,false);
@@ -4533,8 +4501,8 @@ select t1.* from
   on (i8.q2 = i4.f1);
         f1         
 -------------------
- doh!
  hi de ho neighbor
+ doh!
 (2 rows)
 
 explain (verbose, costs off)
@@ -4620,8 +4588,8 @@ select t1.* from
   on (i8.q2 = i4.f1);
         f1         
 -------------------
- doh!
  hi de ho neighbor
+ doh!
 (2 rows)
 
 explain (verbose, costs off)
@@ -4681,8 +4649,8 @@ select * from
   on i8.q1 = i4.f1;
   f1  | q1  | q2  |        f1         | f1 
 ------+-----+-----+-------------------+----
- doh! | 123 | 456 | hi de ho neighbor |   
  doh! | 123 | 456 | doh!              |   
+ doh! | 123 | 456 | hi de ho neighbor |   
 (2 rows)
 
 --
@@ -4936,6 +4904,8 @@ select a.q2, b.q1
   where coalesce(b.q1, 1) > 0;
         q2         |        q1        
 -------------------+------------------
+               123 |              123
+               123 |              123
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
@@ -4944,8 +4914,6 @@ select a.q2, b.q1
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
-               123 |              123
-               123 |              123
 (10 rows)
 
 reset enable_hashjoin;
@@ -5182,9 +5150,9 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: p
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  k | pd 
 ---+----
- 1 | 10
  2 | 20
  3 | 30
+ 1 | 10
 (3 rows)
 
 explain (costs off)
@@ -5306,11 +5274,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: i
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  x |        q1        |        q2         |        y         
 ---+------------------+-------------------+------------------
- 1 | 4567890123456789 |               123 |               42
- 1 | 4567890123456789 |  4567890123456789 | 4567890123456789
- 1 | 4567890123456789 | -4567890123456789 | 4567890123456789
  1 |              123 |               456 |              123
  1 |              123 |  4567890123456789 |              123
+ 1 | 4567890123456789 |  4567890123456789 | 4567890123456789
+ 1 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 1 | 4567890123456789 |               123 |               42
 (5 rows)
 
 rollback;
@@ -5513,11 +5481,11 @@ select unique2, x.*
 from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true;
  unique2 |     f1      
 ---------+-------------
+         |      123456
+         |     -123456
     9998 |           0
          | -2147483647
          |  2147483647
-         |      123456
-         |     -123456
 (5 rows)
 
 explain (costs off)
@@ -5539,11 +5507,11 @@ explain (costs off)
 select *, (select r from (select q1 as q2) x, (select q2 as r) y) from int8_tbl;
         q1        |        q2         |         r         
 ------------------+-------------------+-------------------
+              123 |               456 |               456
+              123 |  4567890123456789 |  4567890123456789
  4567890123456789 |               123 |               123
  4567890123456789 |  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789 | -4567890123456789
-              123 |               456 |               456
-              123 |  4567890123456789 |  4567890123456789
 (5 rows)
 
 select *, (select r from (select q1 as q2) x, lateral (select q2 as r) y) from int8_tbl;
@@ -5806,14 +5774,14 @@ select * from
 ------------------+-------------------+------------------+-------------------+------------------+------------------+-------------------
  4567890123456789 |               123 |              123 |  4567890123456789 | 4567890123456789 |              123 |  4567890123456789
  4567890123456789 |               123 |              123 |               456 | 4567890123456789 |              123 |               456
- 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789 | 4567890123456789 |               123
- 4567890123456789 | -4567890123456789 |                  |                   | 4567890123456789 |                  |                  
               123 |               456 |                  |                   |              123 |                  |                  
               123 |  4567890123456789 | 4567890123456789 | -4567890123456789 |              123 | 4567890123456789 | -4567890123456789
               123 |  4567890123456789 | 4567890123456789 |  4567890123456789 |              123 | 4567890123456789 |  4567890123456789
               123 |  4567890123456789 | 4567890123456789 |               123 |              123 | 4567890123456789 |               123
+ 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789 | 4567890123456789 |               123
+ 4567890123456789 | -4567890123456789 |                  |                   | 4567890123456789 |                  |                  
 (10 rows)
 
 select * from
@@ -5823,14 +5791,14 @@ select * from
 ------------------+-------------------+------------------+-------------------+------------------+------------------+-------------------
  4567890123456789 |               123 |              123 |  4567890123456789 | 4567890123456789 |              123 |  4567890123456789
  4567890123456789 |               123 |              123 |               456 | 4567890123456789 |              123 |               456
- 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789 | 4567890123456789 |               123
- 4567890123456789 | -4567890123456789 |                  |                   | 4567890123456789 |                  |                  
               123 |               456 |                  |                   |              123 |                  |                  
               123 |  4567890123456789 | 4567890123456789 | -4567890123456789 |              123 | 4567890123456789 | -4567890123456789
               123 |  4567890123456789 | 4567890123456789 |  4567890123456789 |              123 | 4567890123456789 |  4567890123456789
               123 |  4567890123456789 | 4567890123456789 |               123 |              123 | 4567890123456789 |               123
+ 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789 | 4567890123456789 |               123
+ 4567890123456789 | -4567890123456789 |                  |                   | 4567890123456789 |                  |                  
 (10 rows)
 
 select x.* from
@@ -5856,14 +5824,6 @@ select v.* from
   lateral (select x.q1,y.q1 union all select x.q2,y.q2) v(vx,vy);
         vx         |        vy         
 -------------------+-------------------
-               123 |                  
-               456 |                  
-               123 |  4567890123456789
-  4567890123456789 | -4567890123456789
-               123 |  4567890123456789
-  4567890123456789 |  4567890123456789
-               123 |  4567890123456789
-  4567890123456789 |               123
   4567890123456789 |  4567890123456789
   4567890123456789 | -4567890123456789
   4567890123456789 |  4567890123456789
@@ -5872,6 +5832,14 @@ select v.* from
   4567890123456789 |               123
   4567890123456789 |                  
  -4567890123456789 |                  
+               123 |                  
+               456 |                  
+               123 |  4567890123456789
+  4567890123456789 | -4567890123456789
+               123 |  4567890123456789
+  4567890123456789 |  4567890123456789
+               123 |  4567890123456789
+  4567890123456789 |               123
   4567890123456789 |               123
                123 |  4567890123456789
   4567890123456789 |               123
@@ -5912,10 +5880,6 @@ select v.* from
   lateral (select x.q1,y.q1 from onerow union all select x.q2,y.q2 from onerow) v(vx,vy);
         vx         |        vy         
 -------------------+-------------------
-  4567890123456789 |               123
-               123 |  4567890123456789
-  4567890123456789 |               123
-               123 |               456
   4567890123456789 |  4567890123456789
   4567890123456789 | -4567890123456789
   4567890123456789 |  4567890123456789
@@ -5932,6 +5896,10 @@ select v.* from
   4567890123456789 |  4567890123456789
                123 |  4567890123456789
   4567890123456789 |               123
+  4567890123456789 |               123
+               123 |  4567890123456789
+  4567890123456789 |               123
+               123 |               456
 (20 rows)
 
 explain (verbose, costs off)
@@ -5960,16 +5928,16 @@ select * from
   lateral (select *, a.q2 as x from int8_tbl b) ss on a.q2 = ss.q1;
         q1        |        q2         |        q1        |        q2         |        x         
 ------------------+-------------------+------------------+-------------------+------------------
- 4567890123456789 |               123 |              123 |               456 |              123
- 4567890123456789 |               123 |              123 |  4567890123456789 |              123
- 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
- 4567890123456789 | -4567890123456789 |                  |                   |                 
               123 |               456 |                  |                   |                 
               123 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
               123 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
               123 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 4567890123456789 | -4567890123456789 |                  |                   |                 
+ 4567890123456789 |               123 |              123 |               456 |              123
+ 4567890123456789 |               123 |              123 |  4567890123456789 |              123
 (10 rows)
 
 explain (verbose, costs off)
@@ -6000,14 +5968,14 @@ select * from
 ------------------+-------------------+------------------+-------------------+------------------
  4567890123456789 |               123 |              123 |               456 |              123
  4567890123456789 |               123 |              123 |  4567890123456789 |              123
- 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
- 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
- 4567890123456789 | -4567890123456789 |                  |                   |                 
               123 |               456 |                  |                   |                 
               123 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
               123 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
               123 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |               123 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 |  4567890123456789 | 4567890123456789
+ 4567890123456789 |  4567890123456789 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 4567890123456789 | -4567890123456789 |                  |                   |                 
 (10 rows)
 
 -- lateral can result in join conditions appearing below their
@@ -6557,22 +6525,6 @@ insert into fkest1 select x/10, x%10 from generate_series(1,1000*10) x;
 alter table fkest1
   add constraint fkest1_a_b_fkey foreign key (a,b) references fkest;
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=84764)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=84767)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=84776)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 analyze fkest;
 analyze fkest1;
 explain (costs off)

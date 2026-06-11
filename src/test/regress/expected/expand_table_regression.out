@@ -44,25 +44,21 @@ select gp_segment_id, * from b;
 
 truncate b;
 create trigger b_t before insert on b for each row execute procedure trig345();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=121560)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=121568)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=121566)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- however with the trigger it is inserted on seg1
 insert into b select i from generate_series(1, 10) i;
 select gp_segment_id, * from b;
  gp_segment_id | data 
 ---------------+------
+             0 |  345
+             0 |  345
+             0 |  345
+             0 |  345
+             0 |  345
+             0 |  345
+             0 |  345
+             0 |  345
              1 |  345
              1 |  345
-             0 |  345
-             0 |  345
-             0 |  345
-             0 |  345
-             0 |  345
-             0 |  345
-             0 |  345
-             0 |  345
 (10 rows)
 
 -- data expansion should tolerant it

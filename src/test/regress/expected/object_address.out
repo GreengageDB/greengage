@@ -35,10 +35,6 @@ CREATE AGGREGATE addr_nsp.genaggr(int4) (sfunc = int4pl, stype = int4);
 CREATE DOMAIN addr_nsp.gendomain AS int4 CONSTRAINT domconstr CHECK (value > 0);
 CREATE FUNCTION addr_nsp.trig() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN END; $$;
 CREATE TRIGGER t BEFORE INSERT ON addr_nsp.gentable FOR EACH ROW EXECUTE PROCEDURE addr_nsp.trig();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=86939)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=86929)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=86930)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE POLICY genpol ON addr_nsp.gentable;
 CREATE PROCEDURE addr_nsp.proc(int4) LANGUAGE SQL AS $$ $$;
 CREATE SERVER "integer" FOREIGN DATA WRAPPER addr_fdw;
@@ -56,9 +52,9 @@ CREATE PUBLICATION addr_pub FOR TABLE addr_nsp.gentable;
 RESET client_min_messages;
 CREATE SUBSCRIPTION regress_addr_sub CONNECTION '' PUBLICATION bar WITH (connect = false, slot_name = NONE);
 WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg2 172.17.0.3:7004 pid=86930)
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg1 172.17.0.3:7003 pid=86939)
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg0 172.17.0.3:7002 pid=86929)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg0 172.17.0.3:7002 pid=266481)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg1 172.17.0.3:7003 pid=266477)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg2 172.17.0.3:7004 pid=266474)
 CREATE STATISTICS addr_nsp.gentable_stat ON a, b FROM addr_nsp.gentable;
 -- test some error cases
 SELECT pg_get_object_address('stone', '{}', '{}');

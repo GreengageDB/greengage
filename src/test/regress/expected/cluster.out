@@ -10,22 +10,6 @@ CREATE TABLE clstr_tst (a SERIAL PRIMARY KEY,
 	CONSTRAINT clstr_tst_con FOREIGN KEY (b) REFERENCES clstr_tst_s)
 	DISTRIBUTED BY (a);
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=89548)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=89521)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=89520)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE INDEX clstr_tst_b ON clstr_tst (b);
 CREATE INDEX clstr_tst_c ON clstr_tst (c);
 CREATE INDEX clstr_tst_c_b ON clstr_tst (c,b);
@@ -235,15 +219,6 @@ INSERT INTO clstr_tst_inh VALUES (0, 100, 'in child table');
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  |  b  |       c        |           substring            | length 
 ----+-----+----------------+--------------------------------+--------
- 26 |  19 | diecinueve     |                                |       
- 12 |  18 | dieciocho      |                                |       
- 30 |  16 | dieciseis      |                                |       
- 23 |  12 | doce           |                                |       
- 31 |   8 | ocho           |                                |       
-  1 |  11 | once           |                                |       
- 15 |  13 | trece          |                                |       
- 20 |   1 | uno            |                                |       
-  0 | 100 | in child table |                                |       
  18 |   5 | cinco          |                                |       
  24 |  17 | diecisiete     |                                |       
   2 |  10 | diez           |                                |       
@@ -256,6 +231,15 @@ SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  27 |  26 | veintiseis     |                                |       
   7 |  23 | veintitres     |                                |       
   8 |  21 | veintiuno      |                                |       
+ 26 |  19 | diecinueve     |                                |       
+ 12 |  18 | dieciocho      |                                |       
+ 30 |  16 | dieciseis      |                                |       
+ 23 |  12 | doce           |                                |       
+ 31 |   8 | ocho           |                                |       
+  1 |  11 | once           |                                |       
+ 15 |  13 | trece          |                                |       
+ 20 |   1 | uno            |                                |       
+  0 | 100 | in child table |                                |       
  10 |  14 | catorce        |                                |       
   9 |   4 | cuatro         |                                |       
  11 |   2 | dos            |                                |       
@@ -444,33 +428,33 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: c
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  key 
 -----
-  30
- 100
   20
   35
   80
+  30
+ 100
 (5 rows)
 
 CLUSTER clustertest_pkey ON clustertest;
 SELECT key FROM clustertest;
  key 
 -----
+  30
+ 100
   20
   35
   80
-  30
- 100
 (5 rows)
 
 COMMIT;
 SELECT key FROM clustertest;
  key 
 -----
+  30
+ 100
   20
   35
   80
-  30
- 100
 (5 rows)
 
 -- check that temp tables can be clustered
@@ -480,8 +464,8 @@ cluster clstr_temp using clstr_temp_pkey;
 select * from clstr_temp;
  col1 | col2 
 ------+------
-    1 | one
     2 | two
+    1 | one
 (2 rows)
 
 drop table clstr_temp;

@@ -7,8 +7,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-    2
     1
+    2
 (2 rows)
 
 -- Roll truncate back
@@ -20,8 +20,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 
 ------
-    2
     1
+    2
 (2 rows)
 
 -- Commit the truncate this time
@@ -40,80 +40,16 @@ CREATE TABLE trunc_b (a int REFERENCES truncate_a);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE trunc_c (a serial PRIMARY KEY) DISTRIBUTED BY (a);
 CREATE TABLE trunc_d (a int REFERENCES trunc_c);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE trunc_e (a int REFERENCES truncate_a, b int REFERENCES trunc_c);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 TRUNCATE TABLE truncate_a;		-- fail
 TRUNCATE TABLE truncate_a,trunc_b;		-- fail
 TRUNCATE TABLE truncate_a,trunc_b,trunc_e;	-- ok
@@ -127,31 +63,15 @@ TRUNCATE TABLE truncate_a RESTRICT; -- fail
 TRUNCATE TABLE truncate_a CASCADE;  -- ok
 NOTICE:  truncate cascades to table "trunc_b"
 NOTICE:  truncate cascades to table "trunc_e"
-NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=269789)
 -- circular references
 ALTER TABLE truncate_a ADD FOREIGN KEY (col1) REFERENCES trunc_c;
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- Add some data to verify that truncating actually works ...
 INSERT INTO trunc_c VALUES (1);
 INSERT INTO truncate_a VALUES (1);
@@ -195,18 +115,18 @@ NOTICE:  truncate cascades to table "truncate_a"
 NOTICE:  truncate cascades to table "trunc_d"
 NOTICE:  truncate cascades to table "trunc_e"
 NOTICE:  truncate cascades to table "trunc_b"
-NOTICE:  truncate cascades to table "truncate_a"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "trunc_d"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncate_a"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "trunc_d"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "truncate_a"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "trunc_d"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "truncate_a"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncate_a"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "truncate_a"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_d"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "trunc_d"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "trunc_e"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "trunc_b"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "trunc_d"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_e"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_b"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "trunc_e"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "trunc_b"  (seg0 172.17.0.3:7002 pid=269789)
 SELECT * FROM truncate_a
    UNION ALL
  SELECT * FROM trunc_c
@@ -245,11 +165,11 @@ BEGIN;
 SELECT * FROM trunc_f;
  col1 
 ------
+    1
+    5
     2
     3
     4
-    5
-    1
 (5 rows)
 
 TRUNCATE trunc_f;
@@ -264,10 +184,10 @@ SELECT * FROM trunc_f;
  col1 
 ------
     1
+    5
     2
     3
     4
-    5
 (5 rows)
 
 TRUNCATE ONLY trunc_f;
@@ -285,17 +205,17 @@ SELECT * FROM trunc_f;
  col1 
 ------
     1
+    5
     2
     3
     4
-    5
 (5 rows)
 
 SELECT * FROM trunc_fa;
  col1 | col2a 
 ------+-------
-    5 | five
     3 | three
+    5 | five
 (2 rows)
 
 SELECT * FROM trunc_faa;
@@ -310,9 +230,9 @@ TRUNCATE ONLY trunc_fb, ONLY trunc_fa;
 SELECT * FROM trunc_f;
  col1 
 ------
+    2
     1
     5
-    2
 (3 rows)
 
 SELECT * FROM trunc_fa;
@@ -334,11 +254,11 @@ BEGIN;
 SELECT * FROM trunc_f;
  col1 
 ------
-    1
-    5
     2
     3
     4
+    5
+    1
 (5 rows)
 
 SELECT * FROM trunc_fa;
@@ -495,8 +415,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
-  1 |  33
   2 |  34
+  1 |  33
 (2 rows)
 
 TRUNCATE truncate_a;
@@ -519,8 +439,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
-  1 |  33
   2 |  34
+  1 |  33
 (2 rows)
 
 CREATE TABLE truncate_b (id int GENERATED ALWAYS AS IDENTITY (START WITH 44));
@@ -581,10 +501,10 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | id1 
 ----+-----
+  1 |  33
   2 |  34
   3 |  35
   4 |  36
-  1 |  33
 (4 rows)
 
 DROP TABLE truncate_a;
@@ -632,47 +552,15 @@ CREATE TABLE truncpart (a int REFERENCES truncprim)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_1 PARTITION OF truncpart FOR VALUES FROM (0) TO (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_2 PARTITION OF truncpart FOR VALUES FROM (100) TO (200)
   PARTITION BY RANGE (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE truncpart_2_1 PARTITION OF truncpart_2 FOR VALUES FROM (100) TO (150);
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE truncpart_2_d PARTITION OF truncpart_2 DEFAULT;
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 -- GPDB: this doesn't fail in GPDB, because GPDB doesn't enforce primary keys.
 TRUNCATE TABLE truncprim;	-- should fail
 select tp_ins_data();
@@ -701,21 +589,21 @@ NOTICE:  truncate cascades to table "truncpart_1"
 NOTICE:  truncate cascades to table "truncpart_2"
 NOTICE:  truncate cascades to table "truncpart_2_1"
 NOTICE:  truncate cascades to table "truncpart_2_d"
-NOTICE:  truncate cascades to table "truncpart"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncpart_1"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncpart"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "truncpart"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "truncpart_1"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "truncpart_2"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncpart_1"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "truncpart_2_1"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncpart_2"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "truncpart_2"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "truncpart_2_d"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "truncpart_2_1"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "truncpart_2_1"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "truncpart_2_d"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "truncpart_2_d"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "truncpart"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncpart"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "truncpart"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "truncpart_1"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "truncpart_2"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "truncpart_2_1"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "truncpart_2_d"  (seg0 172.17.0.3:7002 pid=269789)
 SELECT * FROM tp_chk_data();
  pktb | pkval | fktb | fkval 
 ------+-------+------+-------
@@ -765,60 +653,12 @@ WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in G
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO ref_b VALUES (10, 0), (50, 5), (100, 10), (150, 15);
 TRUNCATE TABLE trunc_a1 CASCADE;
 NOTICE:  truncate cascades to table "ref_b"
-NOTICE:  truncate cascades to table "ref_b"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "ref_b"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "ref_b"  (seg2 172.17.0.3:7004 pid=90290)
+NOTICE:  truncate cascades to table "ref_b"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "ref_b"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "ref_b"  (seg2 172.17.0.3:7004 pid=269791)
 SELECT a FROM ref_b;
 NOTICE:  One or more columns in the following table(s) do not have statistics: ref_b
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
@@ -837,80 +677,24 @@ WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in G
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE ref_c1 PARTITION OF ref_c FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TABLE ref_c2 PARTITION OF ref_c FOR VALUES FROM (200) TO (300);
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=90278)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=90286)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=90290)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 INSERT INTO ref_c VALUES (100, 10), (150, 15), (200, 20), (250, 25);
 TRUNCATE TABLE trunc_a21 CASCADE;
 NOTICE:  truncate cascades to table "ref_c"
 NOTICE:  truncate cascades to table "ref_c1"
 NOTICE:  truncate cascades to table "ref_c2"
-NOTICE:  truncate cascades to table "ref_c"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "ref_c1"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "ref_c2"  (seg0 172.17.0.3:7002 pid=90286)
-NOTICE:  truncate cascades to table "ref_c"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "ref_c1"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "ref_c2"  (seg2 172.17.0.3:7004 pid=90290)
-NOTICE:  truncate cascades to table "ref_c"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "ref_c1"  (seg1 172.17.0.3:7003 pid=90278)
-NOTICE:  truncate cascades to table "ref_c2"  (seg1 172.17.0.3:7003 pid=90278)
+NOTICE:  truncate cascades to table "ref_c"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "ref_c"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "ref_c1"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "ref_c2"  (seg2 172.17.0.3:7004 pid=269791)
+NOTICE:  truncate cascades to table "ref_c1"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "ref_c"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "ref_c2"  (seg0 172.17.0.3:7002 pid=269789)
+NOTICE:  truncate cascades to table "ref_c1"  (seg1 172.17.0.3:7003 pid=269795)
+NOTICE:  truncate cascades to table "ref_c2"  (seg1 172.17.0.3:7003 pid=269795)
 SELECT a as "from table ref_c" FROM ref_c;
 NOTICE:  One or more columns in the following table(s) do not have statistics: ref_c
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.

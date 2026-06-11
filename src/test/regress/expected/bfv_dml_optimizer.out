@@ -158,7 +158,7 @@ insert into zzz select a,b from m;
 \set VERBOSITY terse
 update zzz set a=m.b from m where m.a=zzz.b;
 NOTICE:  One or more columns in the following table(s) do not have statistics: zzz, m
-ERROR:  duplicate key value violates unique constraint "zzz_pkey"  (seg1 172.17.0.3:7003 pid=128392)
+ERROR:  duplicate key value violates unique constraint "zzz_pkey"  (seg1 172.17.0.3:7003 pid=308090)
 select * from zzz order by 1, 2;
 NOTICE:  One or more columns in the following table(s) do not have statistics: zzz
  a  | b 
@@ -287,17 +287,9 @@ $$ LANGUAGE 'plpgsql';
 CREATE TRIGGER before_trigger BEFORE INSERT or DELETE ON bfv_dml_trigger_test
 FOR EACH ROW
 EXECUTE PROCEDURE bfv_dml_error_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=128392)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=128390)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=128391)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 CREATE TRIGGER after_trigger AFTER INSERT or DELETE ON bfv_dml_trigger_test
 FOR EACH ROW
 EXECUTE PROCEDURE bfv_dml_error_func();
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg0 172.17.0.3:7002 pid=128390)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg1 172.17.0.3:7003 pid=128392)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed  (seg2 172.17.0.3:7004 pid=128391)
-WARNING:  relcache reference leak: relation "pg_trigger" not closed
 UPDATE bfv_dml_trigger_test SET t = 'bar';
 NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_dml_trigger_test
 UPDATE bfv_dml_trigger_test SET id = id + 1;
@@ -645,8 +637,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: b
 select * from foo;
  a | b 
 ---+---
- 1 |  
  1 | 2
+ 1 |  
 (2 rows)
 
 drop table foo;
