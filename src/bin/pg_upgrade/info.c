@@ -29,6 +29,18 @@ static void free_rel_infos(RelInfoArr *rel_arr);
 static void print_db_infos(DbInfoArr *dbinfo);
 static void print_rel_infos(RelInfoArr *rel_arr);
 
+/*
+ * compare_oids()
+ *
+ * comparison function for bsearch() over "old_db" or "new_db"
+ */
+static int
+compare_oids(const void *v1, const void *v2)
+{
+	Oid oid1 = *((Oid*) v1);
+	Oid oid2 = ((RelInfo*) v2)->reloid;
+	return (oid1 > oid2) - (oid1 < oid2);
+}
 
 /*
  * gen_db_file_maps()
@@ -74,8 +86,44 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 			 * old_rel is unmatched.  This should never happen, because we
 			 * force new rels to have TOAST tables if the old one did.
 			 */
-			report_unmatched_relation(old_rel, old_db, false);
-			all_matched = false;
+
+			/*
+			 * ...except that when upgrading from Greengage 6 to Greengage 7,
+			 * old cluster might have TOAST tables for relations that are
+			 * considered partitioned in the new cluster, and we can't
+			 * filter them out during get_rel_infos().
+			 */
+			if (strcmp(old_rel->nspname, "pg_toast") != 0)
+			{
+				report_unmatched_relation(old_rel, old_db, false);
+				all_matched = false;
+				old_relnum++;
+				continue;
+			}
+
+			Oid toastheap_oid = old_rel->toastheap;
+			if (old_rel->relkind == RELKIND_INDEX)
+			{
+				/* For an index over a TOAST table, first find the info of the table itself */
+				Oid toast_oid = old_rel->indtable;
+				RelInfo *toast = bsearch(&toast_oid, old_db->rel_arr.rels, old_db->rel_arr.nrels, sizeof(RelInfo), compare_oids);
+
+				Assert(toast);
+				Assert(toast->toastheap);
+
+				toastheap_oid = toast->toastheap;
+			}
+
+			RelInfo *res = bsearch(&toastheap_oid, new_db->rel_arr.rels, new_db->rel_arr.nrels, sizeof(RelInfo), compare_oids);
+			if (!res || res->relkind != RELKIND_PARTITIONED_TABLE)
+			{
+				report_unmatched_relation(old_rel, old_db, false);
+				all_matched = false;
+				old_relnum++;
+				continue;
+			}
+
+			/* This table is indeed a TOAST over a partitioned table, skip it */
 			old_relnum++;
 			continue;
 		}
@@ -100,8 +148,37 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		if (old_rel->reloid < new_rel->reloid)
 		{
 			/* old_rel is unmatched, see comment above */
-			report_unmatched_relation(old_rel, old_db, false);
-			all_matched = false;
+			if (strcmp(old_rel->nspname, "pg_toast") != 0)
+			{
+				report_unmatched_relation(old_rel, old_db, false);
+				all_matched = false;
+				old_relnum++;
+				continue;
+			}
+
+			Oid toastheap_oid = old_rel->toastheap;
+			if (old_rel->relkind == RELKIND_INDEX)
+			{
+				/* For an index over a TOAST table, first find the info of the table itself */
+				Oid toast_oid = old_rel->indtable;
+				RelInfo *toast = bsearch(&toast_oid, old_db->rel_arr.rels, old_db->rel_arr.nrels, sizeof(RelInfo), compare_oids);
+
+				Assert(toast);
+				Assert(toast->toastheap);
+
+				toastheap_oid = toast->toastheap;
+			}
+
+			RelInfo *res = bsearch(&toastheap_oid, new_db->rel_arr.rels, new_db->rel_arr.nrels, sizeof(RelInfo), compare_oids);
+			if (!res || res->relkind != RELKIND_PARTITIONED_TABLE)
+			{
+				report_unmatched_relation(old_rel, old_db, false);
+				all_matched = false;
+				old_relnum++;
+				continue;
+			}
+
+			/* This table is indeed a TOAST over a partitioned table, skip it */
 			old_relnum++;
 			continue;
 		}
@@ -480,9 +557,17 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * pg_largeobject contains user data that does not appear in pg_dump
 	 * output, so we have to copy that system table.  It's easiest to do that
 	 * by treating it as a user table.
-	 * 
-	 * We ignore partitioned tables, as they do not need to transfer files and indexes, 
+	 *
+	 * Upstream ignores partitioned tables, as they do not need to transfer files and indexes,
 	 * as well as create toast tables starting from version 12.
+	 *
+	 * However, we diverge from this logic by dumping partitioned tables
+	 * (both from Greengage 6 and Greengage 7), because it is impossible
+	 * to determine whether a table from Greengage 6 would be considered
+	 * partitioned or not without accessing relkind of the same
+	 * table in the target cluster. The reason for this being that
+	 * pg_partition and pg_partition_rule relations are absent on
+	 * the segments.
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "WITH regular_heap (reloid, indtable, toastheap) AS ( "
