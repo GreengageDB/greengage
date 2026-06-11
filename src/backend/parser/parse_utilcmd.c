@@ -1120,6 +1120,41 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	tupleDesc = RelationGetDescr(relation);
 
 	/*
+	 * GPDB: LIKE ... INCLUDING STORAGE (and ALL) also carries over the
+	 * source table's access method and reloptions (appendonly orientation,
+	 * blocksize, compression, ...), unless the new table specifies its
+	 * own.  This must happen at parse time, before DefineRelation creates
+	 * the table; the PG14 deferred-LIKE rework had dropped it.
+	 */
+	if (stmt != NULL &&
+		(table_like_clause->options & CREATE_TABLE_LIKE_STORAGE) &&
+		relation->rd_rel->relkind == RELKIND_RELATION)
+	{
+		if (stmt->accessMethod == NULL &&
+			OidIsValid(relation->rd_rel->relam))
+			stmt->accessMethod = get_am_name(relation->rd_rel->relam);
+
+		if (stmt->options == NIL)
+		{
+			Datum		reloptions;
+			bool		isnull;
+			HeapTuple	tuple;
+
+			tuple = SearchSysCache1(RELOID,
+									ObjectIdGetDatum(RelationGetRelid(relation)));
+			if (HeapTupleIsValid(tuple))
+			{
+				reloptions = SysCacheGetAttr(RELOID, tuple,
+											 Anum_pg_class_reloptions,
+											 &isnull);
+				if (!isnull)
+					stmt->options = untransformRelOptions(reloptions);
+				ReleaseSysCache(tuple);
+			}
+		}
+	}
+
+	/*
 	 * Insert the copied attributes into the cxt for the new table definition.
 	 * We must do this now so that they appear in the table in the relative
 	 * position where the LIKE clause is, as required by SQL99.
