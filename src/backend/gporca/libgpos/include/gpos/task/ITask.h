@@ -22,10 +22,10 @@
 // coordinator SIGSEGV (see CMDTypeInt4GPDB's GPOS_FTRACE uses).
 #define GPOS_FTRACE(x) \
 	(NULL != gpos::ITask::Self() && gpos::ITask::Self()->IsTraceSet(x))
-#define GPOS_SET_TRACE(x) \
+#define GPOS_SET_TRACE(x)                   \
 	((void) (NULL != gpos::ITask::Self() && \
 			 (gpos::ITask::Self()->SetTrace(x, true /*value*/), true)))
-#define GPOS_UNSET_TRACE(x) \
+#define GPOS_UNSET_TRACE(x)                 \
 	((void) (NULL != gpos::ITask::Self() && \
 			 (gpos::ITask::Self()->SetTrace(x, false /*value*/), true)))
 

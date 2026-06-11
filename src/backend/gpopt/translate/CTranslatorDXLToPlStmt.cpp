@@ -4387,9 +4387,9 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	// Postgres planner, which handles it correctly.
 	if (CMD_UPDATE == m_cmd_type && isSplit && md_rel->HasDroppedColumns())
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT(
-					   "split UPDATE on a table with dropped columns"));
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+			GPOS_WSZ_LIT("split UPDATE on a table with dropped columns"));
 	}
 
 	// Pad the child plan's target list with NULLs for dropped columns.  An
@@ -4467,7 +4467,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 		// dropped columns when the target list was not padded for them
 		// (plain update), keeping them when it was (split update; the
 		// projection is never built there).  One entry per result relation.
-		List	   *update_colnos = NIL;
+		List *update_colnos = NIL;
 		const ULONG num_of_rel_cols = md_rel->ColumnCount();
 
 		for (ULONG ul = 0; ul < num_of_rel_cols; ul++)
@@ -4482,8 +4482,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 			{
 				continue;
 			}
-			update_colnos =
-				gpdb::LAppendInt(update_colnos, md_col->AttrNum());
+			update_colnos = gpdb::LAppendInt(update_colnos, md_col->AttrNum());
 		}
 		dml->updateColnosLists = ListMake1(update_colnos);
 	}
