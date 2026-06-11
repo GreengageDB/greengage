@@ -1259,23 +1259,21 @@ check_execute_on_master_functions()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
-	int   dbnum;
-	int   i_proname;
-	int   i_args;
-	int   i_nspname;
-
 	prep_status("Checking EXECUTE ON MASTER functions");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
 			 log_opts.basedir, "execute_on_master_functions_not_returning_setof_rows.txt");
 
-	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	for (int dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
-		PGresult   *res;
-		int			ntups;
-		int			rowno;
-		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
-		PGconn	   *conn;
+		PGresult *res;
+		int		 ntups;
+		int		 rowno;
+		DbInfo	 *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	 *conn;
+		int		 i_proname;
+		int		 i_args;
+		int		 i_nspname;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 
