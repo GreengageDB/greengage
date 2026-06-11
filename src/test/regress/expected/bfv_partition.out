@@ -37,24 +37,18 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- Middle of a middle range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (1, '2000-07-16');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2000-07-16';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_TIMESTAMP('2000-07-16', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-07-16', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
@@ -63,24 +57,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- Beginning of the first range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (2, '2000-01-01');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2000-01-01';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   2 | Sat Jan 01 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_TIMESTAMP('2000-01-01', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   2 | Sat Jan 01 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-01-01', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   2 | Sat Jan 01 00:00:00 2000
@@ -88,24 +76,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (3, '2000-01-02');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2000-01-02';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_TIMESTAMP('2000-01-02', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-01-02', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
@@ -114,31 +96,25 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- End of the last range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (4, '2000-12-31');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2000-12-31';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_TIMESTAMP('2000-12-31', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-12-31', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startincl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
 (1 row)
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (5, '2001-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.3:7004 pid=206550)
+ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.3:7004 pid=3145187)
 DETAIL:  Partition key of the failing row contains (f2) = (Mon Jan 01 00:00:00 2001).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2001-01-01';
  i1 | f2 
@@ -159,24 +135,18 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2001-01-01', 
 -- Middle of a middle range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (1, '2000-07-16');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-07-16';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_TIMESTAMP('2000-07-16', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-07-16', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Sun Jul 16 00:00:00 2000
@@ -184,7 +154,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- Beginning of the first range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (2, '2000-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.3:7002 pid=206549)
+ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.3:7002 pid=3145185)
 DETAIL:  Partition key of the failing row contains (f2) = (Sat Jan 01 00:00:00 2000).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-01-01';
  i1 | f2 
@@ -203,24 +173,18 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-01-01', 
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (3, '2000-01-02');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-01-02';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_TIMESTAMP('2000-01-02', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-01-02', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   3 | Sun Jan 02 00:00:00 2000
@@ -229,24 +193,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- End of the last range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (4, '2000-12-31');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-12-31';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_TIMESTAMP('2000-12-31', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-12-31', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   4 | Sun Dec 31 00:00:00 2000
@@ -254,24 +212,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (5, '2001-01-01');
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2001-01-01';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   5 | Mon Jan 01 00:00:00 2001
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_TIMESTAMP('2001-01-01', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   5 | Mon Jan 01 00:00:00 2001
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2001-01-01', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_rangep_startexcl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   5 | Mon Jan 01 00:00:00 2001
@@ -280,24 +232,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- List partitioning
 INSERT INTO TIMESTAMP_MONTH_listp values (1, '2000-01-03');
 SELECT * FROM TIMESTAMP_MONTH_listp WHERE f2 = '2000-01-03';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_listp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Mon Jan 03 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_listp WHERE f2 = TO_TIMESTAMP('2000-01-03', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_listp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Mon Jan 03 00:00:00 2000
 (1 row)
 
 SELECT * FROM TIMESTAMP_MONTH_listp WHERE f2 = TO_DATE('2000-01-03', 'YYYY-MM-DD');
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_month_listp
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i1 |            f2            
 ----+--------------------------
   1 | Mon Jan 03 00:00:00 2000
@@ -460,6 +406,8 @@ SELECT COUNT(*) FROM pt, t WHERE pt.a = t.a and pt.c=4;
 select a, count(*) from pt group by a; 
  a | count 
 ---+-------
+ 0 |     2
+ 1 |     3
  5 |     2
  6 |     2
  9 |     2
@@ -468,15 +416,13 @@ select a, count(*) from pt group by a;
  4 |     2
  7 |     2
  8 |     2
- 0 |     2
- 1 |     3
 (10 rows)
 
 select b, count(*) from pt group by b;
  b | count 
 ---+-------
- 1 |    11
  2 |    10
+ 1 |    11
 (2 rows)
 
 select a, count(*) from pt where a<2 group by a;
@@ -542,8 +488,8 @@ INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
- 1 |   |  
    | 2 | 3
+ 1 |   |  
 (2 rows)
 
 -- CLEANUP
@@ -573,8 +519,8 @@ INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
-   | 2 | 3
  1 |   |  
+   | 2 | 3
 (2 rows)
 
 CREATE TABLE mpp3263 (
@@ -839,8 +785,6 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3671 select i from generate_series(1, 10) i;
 alter table mpp3671 split partition for(1) at (1,2) into (partition f1a, partition f1b);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103690
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table mpp3671;
 create table mpp3639 (i int) partition by range(i) (start(1) end(100) inclusive every(10));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -849,8 +793,6 @@ insert into mpp3639 select i from generate_series(1, 100) i;
 insert into mpp3639 select i from generate_series(1, 100) i;
 insert into mpp3639 select i from generate_series(1, 100) i;
 select * from mpp3639 order by i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3639
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   i  
 -----
    1
@@ -1162,8 +1104,6 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3588 select i from generate_series(1, 8) i;
 alter table mpp3588 split partition for(1) at (1,2) into (partition fa, partition fb);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103738
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3588 split partition for(1) at (1,2) into (partition f1a, partition f1b); -- This has partition rules that overlaps
 ERROR:  AT clause cannot contain all values in the partition to be split
 alter table mpp3588 split partition for(1) at (1,2) into (partition f2a, partition f2b); -- 5,6 are not within the boundary of first partition
@@ -1183,8 +1123,6 @@ drop table mpp3588;
 create table mpp3681 (id int, date date, amt decimal(10,2)) distributed by (id) partition by range(date) (start (date '2008-01-01') inclusive end ('2008-04-01') exclusive every (interval '1 month')); 
 alter table mpp3681 add default partition def;
 alter table mpp3681 split default partition start('2008-04-01') inclusive end('2008-05-01') exclusive into (partition apr08, default partition);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103762
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table mpp3681;
 -- MPP-3593
 create table mpp3593 (i int) partition by range(i) (start(1) end(100) every(10));
@@ -1192,23 +1130,11 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3593 select i from generate_series(1, 99) i;
 alter table mpp3593 split partition for(1) at (5) into (partition aa, partition bb);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103774
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3593 split partition for(15) at (20) into (partition a1, partition b1);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103777
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3593 split partition for(25) at (30) into (partition a2, partition b2);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103780
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3593 split partition for(35) at (40) into (partition a3, partition b3);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103783
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3593 split partition for(55) at (60) into (partition a4, partition b4);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103789
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table mpp3593 split partition for(45) at (50) into (partition a5, partition b5);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103786
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table mpp3593;
 CREATE TABLE mpp3742 (
 c_id varchar(36),
@@ -1222,8 +1148,6 @@ PRIMARY KEY (c_id,ss_id,c_ts)) partition by range (c_ts)
   default partition default_part
 );
 alter table mpp3742 split default partition start ('2009-01-01') end ('2009-02-01') into (partition a3, default partition);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103845
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table mpp3742;
 create table mpp3597 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
@@ -1232,8 +1156,6 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into mpp3597 select i from generate_series(1, 100) i;
 insert into mpp3597 values (NULL);
 alter table mpp3597 split default partition at (NULL);
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_103893
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into mpp3597 values (NULL);
 select * from mpp3597_1_prt_default_part where i=NULL; -- No NULL values
  i 
@@ -1278,8 +1200,8 @@ Distributed by: (id)
 select relid,parentrelid,isleaf,level, pg_catalog.pg_get_expr(relpartbound, oid) from pg_partition_tree('mpp3512_part'), pg_class where relid = oid;
         relid         | parentrelid  | isleaf | level |           pg_get_expr            
 ----------------------+--------------+--------+-------+----------------------------------
- mpp3512_part         |              | f      |     0 | 
  mpp3512_part_1_prt_1 | mpp3512_part | t      |     1 | FOR VALUES FROM (2001) TO (2002)
+ mpp3512_part         |              | f      |     0 | 
  mpp3512_part_1_prt_2 | mpp3512_part | t      |     1 | FOR VALUES FROM (2002) TO (2003)
  mpp3512_part_1_prt_3 | mpp3512_part | t      |     1 | FOR VALUES FROM (2003) TO (2004)
  mpp3512_part_1_prt_4 | mpp3512_part | t      |     1 | FOR VALUES FROM (2004) TO (2005)
@@ -1652,8 +1574,6 @@ create table rgs.mpp4604(
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE rgs.mpp4604 SPLIT PARTITION p2 AT( '2008-10-20' ) INTO( PARTITION p2_tmp, PARTITION p3 );
-NOTICE:  One or more columns in the following table(s) do not have statistics: pg_temp_104629
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table rgs.mpp4604 drop partition p3;
 drop schema rgs cascade;
 NOTICE:  drop cascades to table rgs.mpp4604
@@ -2191,9 +2111,9 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into mpp3487 select i from generate_series(1, 9) i;
 vacuum analyze mpp3487;
 select  schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_freqs, histogram_bounds from pg_stats where tablename like 'mpp3487%' order by 2;
-  schemaname   |    tablename    | attname | null_frac | avg_width | n_distinct | most_common_freqs |  histogram_bounds   
----------------+-----------------+---------+-----------+-----------+------------+-------------------+---------------------
- bfv_partition | mpp3487         | i       |         0 |         4 |         -1 |                   | {1,2,3,4,5,6,7,8,9}
+  schemaname   |    tablename    | attname | null_frac | avg_width | n_distinct | most_common_freqs | histogram_bounds 
+---------------+-----------------+---------+-----------+-----------+------------+-------------------+------------------
+ bfv_partition | mpp3487         | i       |         0 |         4 |         -1 |                   | 
  bfv_partition | mpp3487_1_prt_1 | i       |         0 |         4 |         -1 |                   | 
  bfv_partition | mpp3487_1_prt_2 | i       |         0 |         4 |         -1 |                   | 
  bfv_partition | mpp3487_1_prt_3 | i       |         0 |         4 |         -1 |                   | 
@@ -3048,26 +2968,24 @@ select 1 as foobar;
 create table mpp6724 ( c1 int, dt DATE, c2 varchar, PRIMARY KEY ( c1,dt ) ) distributed by (c1) partition by range ( dt ) ( start ( date '2009-01-01' ) inclusive end ( date '2009-01-03' ) EXCLUSIVE EVERY ( INTERVAL '1 day' ) );
 insert into mpp6724 values ( 1,'2009-01-01','One'), (2,'2009-01-02','Two'),(3,'2009-01-01','three'), (3,'2009-01-02', 'three`');
 insert into mpp6724 values ( 1,'2009-01-01','One'); -- This violate the primary key, expected to fail
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.3:7003 pid=206551)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.3:7003 pid=3145186)
 DETAIL:  Key (c1, dt)=(1, 01-01-2009) already exists.
 alter table mpp6724 add partition start ( date '2009-01-03' ) inclusive end ( date '2009-01-04' ) ;
 insert into mpp6724 values ( 4,'2009-01-03','Four');
 -- Should fail because violates the primary key
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=206549)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=206549)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=206549)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=206549)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 select c1, dt, count(*) from mpp6724 group by 1,2 having count(*) > 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: mpp6724
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1 | dt | count 
 ----+----+-------
 (0 rows)
