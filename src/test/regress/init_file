@@ -194,4 +194,9 @@ s/connection to server at "[^"]+"( \([^)]+\))?, port \d+ failed:\s*//
 m/connection to server on socket "[^"]+" failed:\s*/
 s/connection to server on socket "[^"]+" failed:\s*//
 
+# temp schemas and temp tables get session/oid-specific names; matview's
+# REFRESH ... WITH NO DATA error context exposes them
+m/pg_temp_\d+/
+s/pg_temp_\d+/pg_temp_NNN/g
+
 -- end_matchsubs
