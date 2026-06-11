@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/^ foo\s+\|\s+-?[0-9.]+\s*$/
 -- s/^ foo\s+\|\s+-?[0-9.]+\s*$/ foo | ROOTSTAT/
+-- m/^ foo\s+\| c63_inc_analyze_composite_array\s+\|\s+0 \|\s+\d+ \|/
+-- s/(^ foo\s+\| c63_inc_analyze_composite_array\s+\|\s+0 \|\s+)\d+( \|)/${1}NN${2}/
 -- end_matchsubs
 -- start_matchsubs
 -- m/^LOG.*PartitionSelector/
