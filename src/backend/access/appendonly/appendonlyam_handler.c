@@ -2089,6 +2089,8 @@ appendonly_scan_bitmap_next_tuple(TableScanDesc scan,
 		if(appendonly_fetch(aoscan->aofetch, &aoTid, slot))
 		{
 			/* OK to return this tuple */
+			/* GPDB: see aoco_scan_bitmap_next_tuple -- keep tableOid valid */
+			slot->tts_tableOid = RelationGetRelid(aoscan->aos_rd);
 			pgstat_count_heap_fetch(aoscan->aos_rd);
 
 			return true;

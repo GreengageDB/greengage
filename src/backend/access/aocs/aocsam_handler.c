@@ -2065,6 +2065,13 @@ aoco_scan_bitmap_next_tuple(TableScanDesc scan,
 		{
 			/* OK to return this tuple */
 			ExecStoreVirtualTuple(slot);
+			/*
+			 * GPDB: the fetch fills the data columns but not tableOid; the
+			 * tableoid junk column of multi-relation UPDATE/DELETE reads it,
+			 * and a zero there made the per-row result-relation lookup fall
+			 * through to the wrong table (heap_delete with an AO TID).
+			 */
+			slot->tts_tableOid = RelationGetRelid(aocsBitmapScan->rs_base.rs_rd);
 			pgstat_count_heap_fetch(aocsBitmapScan->rs_base.rs_rd);
 
 			return true;
