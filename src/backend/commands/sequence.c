@@ -687,6 +687,14 @@ nextval_qd(Oid relid, int64 *plast, int64 *pcached, int64  *pincrement, bool *po
 	*pcached = last_used_seq->cached;
 	*pincrement = last_used_seq->increment;
 	*poverflow = !last_used_seq->last_valid;
+
+	/*
+	 * The whole window [last, cached] now belongs to the requesting QE.
+	 * Mark the QD's local cache exhausted, or a subsequent local nextval()
+	 * would hand out values from inside the granted range and produce
+	 * duplicate sequence values (sequence_gp's check_no_duplicates case).
+	 */
+	last_used_seq->last = last_used_seq->cached;
 }
 
 int64
