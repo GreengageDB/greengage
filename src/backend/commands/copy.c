@@ -4573,6 +4573,14 @@ CopyFrom(CopyState cstate)
 
 	FreeDistributionData(distData);
 
+	/*
+	 * Close any relations opened by ExecGetTriggerResultRel() while firing
+	 * the queued AFTER triggers above.  (PG14 dropped the implicit close
+	 * that ExecCleanUpTriggerState() used to do; copyfrom.c does the same.)
+	 */
+	ExecCloseResultRelations(estate);
+	ExecCloseRangeTableRelations(estate);
+
 	FreeExecutorState(estate);
 
 	return processed;
