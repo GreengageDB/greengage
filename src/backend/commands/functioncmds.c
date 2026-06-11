@@ -1628,6 +1628,17 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 						pstate->p_sourcetext);
 
 	/*
+	 * GPDB: handle the WITH (describe = ...) callback, if any.  The PG14
+	 * merge kept the option parsing and the pg_proc_callback machinery but
+	 * lost this call, so the callback was silently never registered and
+	 * dynamically-typed table functions demanded explicit column lists.
+	 */
+	if (describeQualName != NIL)
+		describeFuncOid = validate_describe_callback(describeQualName,
+													 prorettype,
+													 parameterModes);
+
+	/*
 	 * Set default values for COST and ROWS depending on other parameters;
 	 * reject ROWS if it's not returnsSet.  NB: pg_dump knows these default
 	 * values, keep it in sync if you change them.
