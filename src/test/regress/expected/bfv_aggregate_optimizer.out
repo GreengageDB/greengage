@@ -1632,8 +1632,8 @@ insert into int2vectortab values
 select distinct t from int2vectortab group by distkey, t;
    t   
 -------
- 22
  1
+ 22
  1 2
  1 2 3
 (4 rows)
@@ -1643,8 +1643,8 @@ select t from int2vectortab union select t from int2vectortab;
 -------
  1 2
  1 2 3
- 1
  22
+ 1
 (4 rows)
 
 select count(*) over (partition by t) from int2vectortab;
@@ -1666,7 +1666,7 @@ select count(distinct t) from int2vectortab;
 select count(distinct t), count(distinct t2) from int2vectortab;
  count | count 
 -------+-------
-     0 |     0
+     4 |     5
 (1 row)
 
 --
@@ -1754,6 +1754,12 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
 SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, b.y;
  x  | y  | count 
 ----+----+-------
+  4 |    |    10
+  8 |    |    10
+    | 15 |    10
+ 28 |    |    10
+ 26 |    |    10
+  6 |  6 |   100
  14 |    |    10
     |  9 |    10
   0 |  0 |   100
@@ -1761,12 +1767,6 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
  10 |    |    10
  22 |    |    10
   2 |    |    10
-  4 |    |    10
-  8 |    |    10
-    | 15 |    10
- 28 |    |    10
- 26 |    |    10
-  6 |  6 |   100
  16 |    |    10
  12 | 12 |   100
  24 | 24 |   100
