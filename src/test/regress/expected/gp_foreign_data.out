@@ -35,3 +35,11 @@ SELECT srvoptions FROM pg_foreign_server WHERE srvname = 's1';
  {num_segments=5}
 (1 row)
 
+-- cleanup: fast_default, later in the schedule, creates wrapper "dummy"
+-- and server "s0" itself and would collide with leftovers
+DROP FOREIGN TABLE ft2;
+DROP FOREIGN TABLE ft3;
+DROP FOREIGN TABLE ft4;
+DROP SERVER s1;
+DROP SERVER s0;
+DROP FOREIGN DATA WRAPPER dummy;

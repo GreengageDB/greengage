@@ -32,3 +32,12 @@ CREATE SERVER s1 FOREIGN DATA WRAPPER dummy OPTIONS (num_segments '5');
 
 -- CHECK FOREIGN SERVER's OPTIONS
 SELECT srvoptions FROM pg_foreign_server WHERE srvname = 's1';
+
+-- cleanup: fast_default, later in the schedule, creates wrapper "dummy"
+-- and server "s0" itself and would collide with leftovers
+DROP FOREIGN TABLE ft2;
+DROP FOREIGN TABLE ft3;
+DROP FOREIGN TABLE ft4;
+DROP SERVER s1;
+DROP SERVER s0;
+DROP FOREIGN DATA WRAPPER dummy;
