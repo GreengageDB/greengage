@@ -1186,6 +1186,14 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
+
+		/*
+		 * GPDB: this call was lost in the PG14 merge; without it the input
+		 * file descriptor (and the copy context) leaked on every COPY FROM
+		 * '<file>', drawing "N temporary files and directories not closed
+		 * at end-of-transaction" warnings at commit.
+		 */
+		EndCopyFrom(cstate);
 	}
 	else
 	{
