@@ -195,8 +195,29 @@ preprocess_targetlist(PlannerInfo *root)
 					extract_update_targetlist_colnos(tlist, true);
 			}
 			else
-				root->update_colnos =
-					extract_update_targetlist_colnos(tlist, false);
+			{
+				/*
+				 * GPDB: like the branch above, but a Split Update's expanded
+				 * tlist keeps NULL placeholders for dropped columns (its
+				 * INSERT half wants resno == attno).  Leave those attnos out
+				 * of update_colnos: translating them to an inheritance child
+				 * has no Var to map to ("attribute N of relation does not
+				 * exist"), and nothing stores dropped columns anyway.
+				 */
+				TupleDesc	tupdesc = RelationGetDescr(target_relation);
+				ListCell   *lc2;
+
+				root->update_colnos = NIL;
+				foreach(lc2, tlist)
+				{
+					TargetEntry *tle = (TargetEntry *) lfirst(lc2);
+
+					if (!tle->resjunk &&
+						!TupleDescAttr(tupdesc, tle->resno - 1)->attisdropped)
+						root->update_colnos =
+							lappend_int(root->update_colnos, tle->resno);
+				}
+			}
 		}
 		else
 			root->update_colnos = extract_update_targetlist_colnos(tlist, true);
