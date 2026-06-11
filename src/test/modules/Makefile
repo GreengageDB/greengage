@@ -30,7 +30,7 @@ SUBDIRS = \
 # GPDB subdirs
 SUBDIRS += test_planner
 
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 SUBDIRS += ssl_passphrase_callback
 else
 ALWAYS_SUBDIRS += ssl_passphrase_callback

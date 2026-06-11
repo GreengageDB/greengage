@@ -83,12 +83,11 @@ OBJS_COMMON = \
 	wait_error.o \
 	wchar.o
 
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 OBJS_COMMON += \
 	cryptohash_openssl.o \
 	hmac_openssl.o \
-	protocol_openssl.o \
-	sha2_openssl.o
+	protocol_openssl.o
 else
 OBJS_COMMON += \
 	cryptohash.o \

@@ -186,7 +186,7 @@ clean distclean maintainer-clean:
 
 # Doesn't depend on $(SSLFILES) because we don't rebuild them by default
 check:
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 	$(prove_check)
 else
 	@echo "SSL is disabled for this build"
