@@ -16050,10 +16050,6 @@ static void
 ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 {
 	Relation	rel;
-	Relation	pg_class;
-	HeapTuple	tuple;
-	Form_pg_class rd_rel;
-	Oid			oldTableSpace;
 	Oid			reltoastrelid;
 	Oid			relaosegrelid = InvalidOid;
 	Oid			relaoblkdirrelid = InvalidOid;
@@ -16101,14 +16097,6 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 	/* Get the bitmap sub objects */
 	if (RelationIsBitmapIndex(rel))
 		GetBitmapIndexAuxOids(rel, &relbmrelid, &relbmidxid);
-
-	/* Get a modifiable copy of the relation's pg_class row */
-	pg_class = table_open(RelationRelationId, RowExclusiveLock);
-
-	tuple = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(tableOid));
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "cache lookup failed for relation %u", tableOid);
-	rd_rel = (Form_pg_class) GETSTRUCT(tuple);
 
 	/*
 	 * Relfilenodes are not unique in databases across tablespaces, so we need
