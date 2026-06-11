@@ -589,7 +589,20 @@ group by ten order by ten;
 
 select ten, count(four), sum(DISTINCT four) from onek
 group by ten order by ten;
-ERROR:  aggregate 2108 needs to have compatible input type and transition type
+ ten | count | sum 
+-----+-------+-----
+   0 |   100 |   2
+   1 |   100 |   4
+   2 |   100 |   2
+   3 |   100 |   4
+   4 |   100 |   2
+   5 |   100 |   4
+   6 |   100 |   2
+   7 |   100 |   4
+   8 |   100 |   2
+   9 |   100 |   4
+(10 rows)
+
 -- user-defined aggregates
 SELECT newavg(four) AS avg_1 FROM onek;
        avg_1        
@@ -636,11 +649,11 @@ group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
-   0 |   2
-   6 |   2
    4 |   2
    2 |   2
    8 |   2
+   0 |   2
+   6 |   2
 (5 rows)
 
 -- this should fail because subquery has an agg of its own in WHERE
@@ -1864,16 +1877,16 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
  ten | sum 
 -----+-----
-   0 |    
-   1 |    
-   9 |    
-   6 |    
-   5 |    
    4 |    
    2 |    
    8 |    
    7 |    
    3 |    
+   0 |    
+   1 |    
+   9 |    
+   6 |    
+   5 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
@@ -1883,8 +1896,8 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
  ten | sum 
 -----+-----
-   6 |    
    0 |    
+   6 |    
    4 |    
    2 |    
    8 |    
@@ -2340,11 +2353,11 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
  ten | sum 
 -----+-----
+   0 |    
+   6 |    
    4 |    
    2 |    
    8 |    
-   6 |    
-   0 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -2545,11 +2558,11 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Non-default collation
  ten |  mode  
 -----+--------
-   0 | HHHHxx
-   1 | OOOOxx
    5 | HHHHxx
    6 | OOOOxx
    9 | VVVVxx
+   0 | HHHHxx
+   1 | OOOOxx
    2 | VVVVxx
    3 | OOOOxx
    4 | HHHHxx
@@ -3527,15 +3540,15 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
                                                        QUERY PLAN                                                       
 ------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000107.05..10000000107.06 rows=1 width=8) (actual time=0.240..0.241 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000099.16 rows=3156 width=0) (actual time=0.014..0.215 rows=920 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.008..0.008 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.002 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..67.56 rows=3156 width=0) (actual time=0.006..0.163 rows=920 loops=1)
+ Aggregate  (cost=10000000110.03..10000000110.04 rows=1 width=8) (actual time=0.325..0.326 rows=1 loops=1)
+   ->  Nested Loop  (cost=10000000000.02..10000000101.92 rows=3244 width=0) (actual time=0.011..0.294 rows=965 loops=1)
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.004 rows=1 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..69.44 rows=3244 width=0) (actual time=0.006..0.238 rows=965 loops=1)
  Optimizer: Postgres query optimizer
- Planning Time: 0.840 ms
+ Planning Time: 1.127 ms
    (slice0)    Executor memory: 35K bytes.
  Memory used:  128000kB
- Execution Time: 0.268 ms
+ Execution Time: 0.352 ms
 (10 rows)
 
