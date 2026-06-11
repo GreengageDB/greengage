@@ -1406,7 +1406,7 @@ finalize_aggregates(AggState *aggstate,
 
 		pergroupstate = &pergroup[transno];
 
-		if (DO_AGGSPLIT_SKIPFINAL(aggstate->aggsplit))
+		if (DO_AGGSPLIT_SKIPFINAL(peragg->aggref->aggsplit))
 			finalize_partialaggregate(aggstate, peragg, pergroupstate,
 									  &aggvalues[aggno], &aggnulls[aggno]);
 		else
@@ -4126,9 +4126,17 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 			/*
 			 * If this aggregation is performing state combines, then instead
 			 * of using the transition function, we'll use the combine
-			 * function
+			 * function.
+			 *
+			 * GPDB: check the aggref, not the node.  ORCA can put aggregates
+			 * of different stages into one Agg node (e.g. a finalize-stage
+			 * sum next to a single-stage count over deduplicated input); the
+			 * serial/deserial/final function choices above are already
+			 * per-aggref, and picking the plain transition function for a
+			 * combining aggregate feeds it the serialized state of the
+			 * stage below (the CTE-sharing DQA queries summed raw datums).
 			 */
-			if (DO_AGGSPLIT_COMBINE(aggstate->aggsplit))
+			if (DO_AGGSPLIT_COMBINE(aggref->aggsplit))
 			{
 				transfn_oid = aggform->aggcombinefn;
 
