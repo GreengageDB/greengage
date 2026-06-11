@@ -551,6 +551,72 @@ def is_keyword(tab):
 def escape_string(string):
     return psycopg2.extensions.QuotedString(string).getquoted()[1:-1].decode()
 
+
+class _PGResultAdapter:
+    """Result shim mimicking the bits of PyGreSQL's query result gpload uses."""
+    def __init__(self, rows, description):
+        self._rows = rows
+        self._description = description
+
+    def getresult(self):
+        return self._rows
+
+    def dictresult(self):
+        cols = [d[0] for d in self._description]
+        return [dict(zip(cols, row)) for row in self._rows]
+
+
+class _Notice:
+    def __init__(self, message):
+        self.message = message
+
+
+class _PGDBAdapter:
+    """
+    Connection shim mimicking the bits of PyGreSQL's pg.DB that gpload uses,
+    implemented on psycopg2 (gpload was ported off PyGreSQL but the
+    connection object never was).
+    """
+    def __init__(self, dbname=None, host=None, port=None, user=None, passwd=None):
+        self._conn = psycopg2.connect(dbname=dbname, host=host, port=port,
+                                      user=user, password=passwd)
+        # pg.DB.query() commits each statement on its own
+        self._conn.autocommit = True
+        self._notice_receiver = None
+
+    def _drain_notices(self):
+        notices = [str(n) for n in self._conn.notices]
+        del self._conn.notices[:]
+        return notices
+
+    def query(self, sql):
+        if isinstance(sql, bytes):
+            sql = sql.decode('utf-8')
+        cur = self._conn.cursor()
+        try:
+            cur.execute(sql)
+            if self._notice_receiver is not None:
+                for n in self._drain_notices():
+                    self._notice_receiver(_Notice(n))
+            if cur.description is not None:
+                return _PGResultAdapter(cur.fetchall(), cur.description)
+            # DML: PyGreSQL returns the affected row count (as a string)
+            if cur.rowcount >= 0:
+                return str(cur.rowcount)
+            return None
+        finally:
+            cur.close()
+
+    def notices(self):
+        return self._drain_notices()
+
+    def set_notice_receiver(self, receiver):
+        self._notice_receiver = receiver
+
+    def close(self):
+        self._conn.close()
+
+
 def caseInsensitiveDictLookup(key, dictionary):
     """
     Do a case insensitive dictionary lookup. Return the dictionary value if found,
@@ -1843,7 +1909,7 @@ class gpload:
                      " host=" + str(self.options.h) +
                      " port=" + str(self.options.p) +
                      " database=" + str(self.options.d))
-            self.db = pg.DB( dbname=self.options.d
+            self.db = _PGDBAdapter( dbname=self.options.d
                            , host=self.options.h
                            , port=self.options.p
                            , user=self.options.U
@@ -2644,11 +2710,11 @@ class gpload:
         if self.log_errors and not self.options.D:
             # make sure we only get errors for our own instance
             if not self.reuse_tables:
-                queryStr = "select count(*) from gp_read_error_log('%s')" % pg.escape_string(self.extSchemaTable)
+                queryStr = "select count(*) from gp_read_error_log('%s')" % escape_string(self.extSchemaTable)
                 results = self.db.query(queryStr).getresult()
                 return (results[0])[0]
             else: # reuse_tables
-                queryStr = "select count(*) from gp_read_error_log('%s') where cmdtime > to_timestamp(%s)" % (pg.escape_string(self.extSchemaTable), self.startTimestamp)
+                queryStr = "select count(*) from gp_read_error_log('%s') where cmdtime > to_timestamp(%s)" % (escape_string(self.extSchemaTable), self.startTimestamp)
                 results = self.db.query(queryStr).getresult()
                 global NUM_WARN_ROWS
                 NUM_WARN_ROWS = (results[0])[0]
@@ -2666,7 +2732,7 @@ class gpload:
         # if reuse_table is set, error message is not deleted.
         if errors and self.log_errors and self.reuse_tables:
             self.log(self.WARN, "Please use following query to access the detailed error")
-            self.log(self.WARN, "select * from gp_read_error_log('{0}') where cmdtime > to_timestamp('{1}')".format(pg.escape_string(self.extSchemaTable), self.startTimestamp))
+            self.log(self.WARN, "select * from gp_read_error_log('{0}') where cmdtime > to_timestamp('{1}')".format(escape_string(self.extSchemaTable), self.startTimestamp))
         self.exitValue = 1 if errors else 0
 
 
