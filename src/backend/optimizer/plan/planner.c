@@ -5437,6 +5437,30 @@ create_one_window_path(PlannerInfo *root,
 												path->pathkeys,
 												&presorted_keys);
 
+		/*
+		 * GPDB: unless the PARTITION BY happens to match the current
+		 * distribution, we need a motion: each window partition must be
+		 * evaluated within one process, and with no PARTITION BY the whole
+		 * input forms a single partition that must be gathered (a presorted
+		 * per-segment input otherwise computes row_number() etc. per
+		 * segment).  This helper adds the required motion *and* the sort
+		 * (merge-receiving presorted streams where possible), the same
+		 * logic used for sorted aggregates; the upstream-only sort logic
+		 * below then sees the input as sorted.
+		 */
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
+		is_sorted = pathkeys_count_contained_in(window_pathkeys,
+												path->pathkeys,
+												&presorted_keys);
+
 		/* Sort if necessary */
 		if (!is_sorted)
 		{
