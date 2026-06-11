@@ -585,7 +585,7 @@ FORMAT 'text'
 CREATE INDEX index ON ext_lineitem (L_ORDERKEY);
 ERROR:  cannot create index on foreign table "ext_lineitem"
 TRUNCATE ext_lineitem;
-ERROR:  "ext_lineitem" is not a table
+ERROR:  cannot truncate foreign table "ext_lineitem"
 DELETE FROM ext_lineitem where L_ORDERKEY > 10;
 ERROR:  cannot delete from foreign table "ext_lineitem"
 UPDATE ext_lineitem SET L_ORDERKEY = 10 where L_ORDERKEY > 10;
