@@ -2102,6 +2102,40 @@ lreplace:;
 }
 
 /*
+ * Does an inheritance child's column layout match the root's?
+ *
+ * The SplitUpdate subplan emits new tuples in the root relation's layout;
+ * re-inserting one into a child without tuple routing is only sound when
+ * the child's attributes line up one-to-one with the root's.
+ */
+static bool
+inh_child_layout_matches_root(ResultRelInfo *childInfo, ResultRelInfo *rootInfo)
+{
+	TupleDesc	cdesc = RelationGetDescr(childInfo->ri_RelationDesc);
+	TupleDesc	rdesc = RelationGetDescr(rootInfo->ri_RelationDesc);
+
+	if (cdesc->natts != rdesc->natts)
+		return false;
+
+	for (int i = 0; i < cdesc->natts; i++)
+	{
+		Form_pg_attribute catt = TupleDescAttr(cdesc, i);
+		Form_pg_attribute ratt = TupleDescAttr(rdesc, i);
+
+		if (catt->attisdropped != ratt->attisdropped)
+			return false;
+		if (catt->attisdropped)
+			continue;
+		if (strcmp(NameStr(catt->attname), NameStr(ratt->attname)) != 0 ||
+			catt->atttypid != ratt->atttypid ||
+			catt->atttypmod != ratt->atttypmod)
+			return false;
+	}
+
+	return true;
+}
+
+/*
  * Insert the new tuple version of a Split Update
  *
  * We have to check if this UPDATE also moves the row to
@@ -2818,15 +2852,40 @@ ExecModifyTable(PlanState *pstate)
 						 * GPDB: the SplitUpdate produces the new tuple in the
 						 * root (nominal) target relation's column layout, which
 						 * can differ from the source leaf partition's physical
-						 * column order.  Project and insert via the root result
-						 * relation so the projection matches the subplan output;
-						 * ExecInsert() then routes the row to the correct leaf
-						 * (converting the layout as needed) and enforces the
-						 * partition constraint.  For a non-partitioned target
-						 * rootResultRelInfo is the result relation itself, so
-						 * this is unchanged there.
+						 * column order.  For a partitioned target, project and
+						 * insert via the root result relation so the projection
+						 * matches the subplan output; ExecInsert() then routes
+						 * the row to the correct leaf (converting the layout as
+						 * needed) and enforces the partition constraint.
+						 *
+						 * For old-style inheritance there is no tuple routing:
+						 * the new tuple version must go back into the relation
+						 * the row came from -- the per-row result relation
+						 * selected by the tableoid junk column.  That only
+						 * works when the child's column layout matches the
+						 * root's; child columns that don't exist in the root
+						 * are not carried in the Motion stream at all, so we
+						 * must error out rather than insert a mangled row.
+						 * For a plain (non-inherited) target rootResultRelInfo
+						 * is the result relation itself.
 						 */
-						ResultRelInfo *insertRelInfo = node->rootResultRelInfo;
+						ResultRelInfo *insertRelInfo;
+
+						if (node->rootResultRelInfo->ri_RelationDesc->rd_rel->relkind ==
+							RELKIND_PARTITIONED_TABLE)
+							insertRelInfo = node->rootResultRelInfo;
+						else
+						{
+							insertRelInfo = resultRelInfo;
+							if (insertRelInfo != node->rootResultRelInfo &&
+								!inh_child_layout_matches_root(insertRelInfo,
+															   node->rootResultRelInfo))
+								ereport(ERROR,
+										(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										 errmsg("UPDATE of a distribution key column on inheritance parent \"%s\" is not supported because child table \"%s\" has a different column layout",
+												RelationGetRelationName(node->rootResultRelInfo->ri_RelationDesc),
+												RelationGetRelationName(insertRelInfo->ri_RelationDesc))));
+						}
 
 						if (unlikely(!insertRelInfo->ri_projectNewInfoValid))
 							ExecInitInsertProjection(node, insertRelInfo);
