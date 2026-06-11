@@ -560,6 +560,8 @@ errstart(int elevel, const char *domain)
 	if (elevel >= ERROR)
 	{
 		edata->sqlerrcode = ERRCODE_INTERNAL_ERROR;
+		/* GPDB: internal errors report their source location */
+		edata->omit_location = false;
 	}
 	else if (elevel >= WARNING)
 		edata->sqlerrcode = ERRCODE_WARNING;
