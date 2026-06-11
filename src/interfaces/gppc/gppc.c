@@ -1330,6 +1330,73 @@ GppcTFInputDesc(GppcFcinfo info, int argno, bool *iserror)
 }
 
 /*
+ * The GppcReportLevel values are a published ABI and equal the elog levels
+ * of pre-14 servers.  PG 14 renumbered ERROR (WARNING_CLIENT_ONLY took its
+ * old value 20), so the levels must be translated explicitly in both
+ * directions rather than passed through numerically — otherwise
+ * GppcReport(GPPC_ERROR) demotes to a client-only warning and execution
+ * continues.
+ */
+static int
+gppc_report_to_elevel(GppcReportLevel elevel)
+{
+	switch (elevel)
+	{
+		case GPPC_DEBUG1:
+			return DEBUG5;
+		case GPPC_DEBUG2:
+			return DEBUG4;
+		case GPPC_DEBUG3:
+			return DEBUG3;
+		case GPPC_DEBUG4:
+			return DEBUG2;
+		case GPPC_DEBUG:
+			return DEBUG1;
+		case GPPC_LOG:
+			return LOG;
+		case GPPC_INFO:
+			return INFO;
+		case GPPC_NOTICE:
+			return NOTICE;
+		case GPPC_WARNING:
+			return WARNING;
+		case GPPC_ERROR:
+			return ERROR;
+	}
+	return ERROR;
+}
+
+static GppcReportLevel
+gppc_elevel_to_report(int elevel)
+{
+	switch (elevel)
+	{
+		case DEBUG5:
+			return GPPC_DEBUG1;
+		case DEBUG4:
+			return GPPC_DEBUG2;
+		case DEBUG3:
+			return GPPC_DEBUG3;
+		case DEBUG2:
+			return GPPC_DEBUG4;
+		case DEBUG1:
+			return GPPC_DEBUG;
+		case LOG:
+			return GPPC_LOG;
+		case INFO:
+			return GPPC_INFO;
+		case NOTICE:
+			return GPPC_NOTICE;
+		case WARNING:
+		case WARNING_CLIENT_ONLY:
+			return GPPC_WARNING;
+		default:
+			/* ERROR and above */
+			return GPPC_ERROR;
+	}
+}
+
+/*
  * elog
  */
 void
@@ -1342,7 +1409,7 @@ GppcReport(GppcReportLevel elevel, const char *fmt, ...)
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	elog(elevel, "%s", (const char *) buf);
+	elog(gppc_report_to_elevel(elevel), "%s", (const char *) buf);
 }
 
 /*
@@ -1442,7 +1509,7 @@ GppcUninstallReportCallback(GppcReportCallbackState cbstate)
 GppcReportLevel
 GppcGetReportLevel(GppcReportInfo info)
 {
-	return ((ErrorData *) info)->elevel;
+	return gppc_elevel_to_report(((ErrorData *) info)->elevel);
 }
 
 const char *
