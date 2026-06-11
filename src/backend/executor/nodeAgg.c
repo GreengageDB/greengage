@@ -3344,6 +3344,89 @@ hashagg_reset_spill_state(AggState *aggstate)
  *
  * -----------------
  */
+typedef struct
+{
+	List	   *aggno_map;		/* i-th member: old aggno that became i */
+	List	   *transno_map;
+} AggRenumberContext;
+
+static bool
+agg_renumber_walker(Node *node, AggRenumberContext *cxt)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Aggref))
+	{
+		Aggref	   *aggref = (Aggref *) node;
+		int			newno;
+		ListCell   *lc;
+
+		newno = 0;
+		foreach(lc, cxt->aggno_map)
+		{
+			if (lfirst_int(lc) == aggref->aggno)
+				break;
+			newno++;
+		}
+		if (lc == NULL)
+			cxt->aggno_map = lappend_int(cxt->aggno_map, aggref->aggno);
+		aggref->aggno = newno;
+
+		newno = 0;
+		foreach(lc, cxt->transno_map)
+		{
+			if (lfirst_int(lc) == aggref->aggtransno)
+				break;
+			newno++;
+		}
+		if (lc == NULL)
+			cxt->transno_map = lappend_int(cxt->transno_map, aggref->aggtransno);
+		aggref->aggtransno = newno;
+
+		/* aggregates can't be nested; no need to recurse into args */
+		return false;
+	}
+	return expression_tree_walker(node, agg_renumber_walker, (void *) cxt);
+}
+
+/*
+ * GPDB: renumber this Agg node's aggregates densely from zero.
+ *
+ * preprocess_aggrefs() numbers aggregates across the whole query, but
+ * multi-stage and DQA plans (and ORCA translations) can place a subset of
+ * them in a given Agg node.  ExecInitAgg sizes its per-agg and per-trans
+ * arrays as max(aggno)+1 and the expression compiler bakes the numbers
+ * into EEOP_AGG_* steps, so a sparse numbering leaves uninitialized slots
+ * that ExecBuildAggTrans dereferences.  Renumbering keeps equal numbers
+ * equal (preserving transition-state sharing) and is idempotent, so
+ * re-initializing a cached plan is safe.  It must run before any
+ * expression of this node is compiled.
+ */
+static void
+agg_renumber_aggrefs(Agg *node)
+{
+	AggRenumberContext cxt;
+	ListCell   *lc;
+
+	cxt.aggno_map = NIL;
+	cxt.transno_map = NIL;
+
+	agg_renumber_walker((Node *) node->plan.targetlist, &cxt);
+	agg_renumber_walker((Node *) node->plan.qual, &cxt);
+
+	/* grouping-sets chain nodes share this node's numbering space */
+	foreach(lc, node->chain)
+	{
+		Agg		   *chainnode = lfirst_node(Agg, lc);
+
+		agg_renumber_walker((Node *) chainnode->plan.targetlist, &cxt);
+		agg_renumber_walker((Node *) chainnode->plan.qual, &cxt);
+	}
+
+	list_free(cxt.aggno_map);
+	list_free(cxt.transno_map);
+}
+
 AggState *
 ExecInitAgg(Agg *node, EState *estate, int eflags)
 {
@@ -3374,6 +3457,9 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 
 	/* check for unsupported flags */
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK)));
+
+	/* GPDB: compact aggno/aggtransno before any expression is compiled */
+	agg_renumber_aggrefs(node);
 
 	/*
 	 * create state structure
