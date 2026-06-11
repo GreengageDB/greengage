@@ -1714,6 +1714,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "USER|ROLE", MatchAny) &&
 			 !TailMatches("USER", "MAPPING"))
 		COMPLETE_WITH("BYPASSRLS", "CONNECTION LIMIT", "CREATEDB", "CREATEROLE",
+					  "DENY", "DROP DENY FOR",
 					  "ENCRYPTED PASSWORD", "INHERIT", "LOGIN", "NOBYPASSRLS",
 					  "NOCREATEDB", "NOCREATEROLE", "NOINHERIT",
 					  "NOLOGIN", "NOREPLICATION", "NOSUPERUSER", "PASSWORD",
@@ -1724,11 +1725,19 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "USER|ROLE", MatchAny, "WITH"))
 		/* Similar to the above, but don't complete "WITH" again. */
 		COMPLETE_WITH("BYPASSRLS", "CONNECTION LIMIT", "CREATEDB", "CREATEROLE",
+					  "DENY", "DENY BETWEEN", "DROP DENY FOR",
 					  "ENCRYPTED PASSWORD", "INHERIT", "LOGIN", "NOBYPASSRLS",
 					  "NOCREATEDB", "NOCREATEROLE", "NOINHERIT",
 					  "NOLOGIN", "NOREPLICATION", "NOSUPERUSER", "PASSWORD",
 					  "RENAME TO", "REPLICATION", "RESET", "SET", "SUPERUSER",
 					  "VALID UNTIL");
+
+	else if(TailMatches("DENY") && !TailMatches("DROP", "DENY"))
+		COMPLETE_WITH("DAY", "BETWEEN DAY");
+	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny) ||
+			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
+			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*", "PM'|AM'"))
+		COMPLETE_WITH("AND DAY");
 
 	/* ALTER DEFAULT PRIVILEGES */
 	else if (Matches("ALTER", "DEFAULT", "PRIVILEGES"))
