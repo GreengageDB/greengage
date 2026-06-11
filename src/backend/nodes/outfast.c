@@ -1551,6 +1551,18 @@ _outNode(StringInfo str, void *obj)
 			case T_StatsElem:
 				_outStatsElem(str, obj);
 				break;
+			case T_WindowDef:
+				_outWindowDef(str, obj);
+				break;
+			case T_RangeSubselect:
+				_outRangeSubselect(str, obj);
+				break;
+			case T_InferClause:
+				_outInferClause(str, obj);
+				break;
+			case T_OnConflictClause:
+				_outOnConflictClause(str, obj);
+				break;
 			case T_Query:
 				_outQuery(str, obj);
 				break;

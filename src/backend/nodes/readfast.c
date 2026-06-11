@@ -419,8 +419,10 @@ _readInsertStmt(void)
 	READ_NODE_FIELD(relation);
 	READ_NODE_FIELD(cols);
 	READ_NODE_FIELD(selectStmt);
+	READ_NODE_FIELD(onConflictClause);
 	READ_NODE_FIELD(returningList);
 	READ_NODE_FIELD(withClause);
+	READ_ENUM_FIELD(override, OverridingKind);
 	READ_DONE();
 }
 
@@ -2665,6 +2667,15 @@ readNodeBinary(void)
 				break;
 			case T_WindowDef:
 				return_value = _readWindowDef();
+				break;
+			case T_RangeSubselect:
+				return_value = _readRangeSubselect();
+				break;
+			case T_InferClause:
+				return_value = _readInferClause();
+				break;
+			case T_OnConflictClause:
+				return_value = _readOnConflictClause();
 				break;
 			case T_RangeFunction:
 				return_value = _readRangeFunction();

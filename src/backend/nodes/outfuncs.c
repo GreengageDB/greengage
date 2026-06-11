@@ -4188,8 +4188,10 @@ _outInsertStmt(StringInfo str, const InsertStmt *node)
 	WRITE_NODE_FIELD(relation);
 	WRITE_NODE_FIELD(cols);
 	WRITE_NODE_FIELD(selectStmt);
+	WRITE_NODE_FIELD(onConflictClause);
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(withClause);
+	WRITE_ENUM_FIELD(override, OverridingKind);
 }
 
 static void
@@ -5046,7 +5048,6 @@ _outSortBy(StringInfo str, const SortBy *node)
 	WRITE_LOCATION_FIELD(location);
 }
 
-#ifndef COMPILING_BINARY_FUNCS
 static void
 _outWindowDef(StringInfo str, const WindowDef *node)
 {
@@ -5072,6 +5073,30 @@ _outRangeSubselect(StringInfo str, const RangeSubselect *node)
 	WRITE_NODE_FIELD(alias);
 }
 
+static void
+_outInferClause(StringInfo str, const InferClause *node)
+{
+	WRITE_NODE_TYPE("INFERCLAUSE");
+
+	WRITE_NODE_FIELD(indexElems);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_STRING_FIELD(conname);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outOnConflictClause(StringInfo str, const OnConflictClause *node)
+{
+	WRITE_NODE_TYPE("ONCONFLICTCLAUSE");
+
+	WRITE_ENUM_FIELD(action, OnConflictAction);
+	WRITE_NODE_FIELD(infer);
+	WRITE_NODE_FIELD(targetList);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_LOCATION_FIELD(location);
+}
+
+#ifndef COMPILING_BINARY_FUNCS
 static void
 _outRangeFunction(StringInfo str, const RangeFunction *node)
 {
@@ -6584,6 +6609,12 @@ outNode(StringInfo str, const void *obj)
 			case T_RangeSubselect:
 				_outRangeSubselect(str, obj);
 
+				break;
+			case T_InferClause:
+				_outInferClause(str, obj);
+				break;
+			case T_OnConflictClause:
+				_outOnConflictClause(str, obj);
 				break;
 			case T_RangeFunction:
 				_outRangeFunction(str, obj);

@@ -865,6 +865,45 @@ _readStatsElem(void)
 	READ_DONE();
 }
 
+static RangeSubselect *
+_readRangeSubselect(void)
+{
+	READ_LOCALS(RangeSubselect);
+
+	READ_BOOL_FIELD(lateral);
+	READ_NODE_FIELD(subquery);
+	READ_NODE_FIELD(alias);
+
+	READ_DONE();
+}
+
+static InferClause *
+_readInferClause(void)
+{
+	READ_LOCALS(InferClause);
+
+	READ_NODE_FIELD(indexElems);
+	READ_NODE_FIELD(whereClause);
+	READ_STRING_FIELD(conname);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static OnConflictClause *
+_readOnConflictClause(void)
+{
+	READ_LOCALS(OnConflictClause);
+
+	READ_ENUM_FIELD(action, OnConflictAction);
+	READ_NODE_FIELD(infer);
+	READ_NODE_FIELD(targetList);
+	READ_NODE_FIELD(whereClause);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
 static ReindexStmt *
 _readReindexStmt(void)
 {
@@ -5052,6 +5091,12 @@ parseNodeString(void)
 		return_value = _readIndexStmt();
 	else if (MATCHX("STATSELEM"))
 		return_value = _readStatsElem();
+	else if (MATCHX("RANGESUBSELECT"))
+		return_value = _readRangeSubselect();
+	else if (MATCHX("INFERCLAUSE"))
+		return_value = _readInferClause();
+	else if (MATCHX("ONCONFLICTCLAUSE"))
+		return_value = _readOnConflictClause();
 	else if (MATCHX("LOCKSTMT"))
 		return_value = _readLockStmt();
 	else if (MATCHX("REINDEXSTMT"))
