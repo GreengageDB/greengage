@@ -5517,6 +5517,15 @@ _outAlterTypeStmtSetDefaultEnc(StringInfo str, const AlterTypeStmtSetDefaultEnc 
 }
 
 static void
+_outAlterTypeStmt(StringInfo str, const AlterTypeStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERTYPESTMT");
+
+	WRITE_NODE_FIELD(typeName);
+	WRITE_NODE_FIELD(options);
+}
+
+static void
 _outAlterExtensionStmt(StringInfo str, const AlterExtensionStmt *node)
 {
 	WRITE_NODE_TYPE("ALTEREXTENSIONSTMT");
@@ -6754,6 +6763,9 @@ outNode(StringInfo str, const void *obj)
 
 			case T_AlterTypeStmtSetDefaultEnc:
 				_outAlterTypeStmtSetDefaultEnc(str, obj);
+				break;
+			case T_AlterTypeStmt:
+				_outAlterTypeStmt(str, obj);
 				break;
 			case T_AlterExtensionStmt:
 				_outAlterExtensionStmt(str, obj);

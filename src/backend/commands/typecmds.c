@@ -4524,6 +4524,18 @@ AlterType(AlterTypeStmt *stmt)
 
 	table_close(catalog, RowExclusiveLock);
 
+	/*
+	 * The pg_type changes (e.g. typsubscript) are consulted directly by the
+	 * QEs at executor startup, so the segments' copies must be updated too.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH)
+		CdbDispatchUtilityStatement((Node *) stmt,
+									DF_CANCEL_ON_ERROR|
+									DF_WITH_SNAPSHOT|
+									DF_NEED_TWO_PHASE,
+									NIL,
+									NULL);
+
 	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;

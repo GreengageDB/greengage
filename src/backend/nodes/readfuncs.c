@@ -4515,6 +4515,17 @@ _readAlterTypeStmtSetDefaultEnc(void)
 	READ_DONE();
 }
 
+static AlterTypeStmt *
+_readAlterTypeStmt(void)
+{
+	READ_LOCALS(AlterTypeStmt);
+
+	READ_NODE_FIELD(typeName);
+	READ_NODE_FIELD(options);
+
+	READ_DONE();
+}
+
 static PartitionElem *
 _readPartitionElem(void)
 {
@@ -5013,6 +5024,8 @@ parseNodeString(void)
 		return_value = _readAlterTableStmt();
 	else if (MATCHX("ALTERTYPESTMTSETDEFAULTENC"))
 		return_value = _readAlterTypeStmtSetDefaultEnc();
+	else if (MATCHX("ALTERTYPESTMT"))
+		return_value = _readAlterTypeStmt();
 	else if (MATCHX("CDBPROCESS"))
 		return_value = _readCdbProcess();
 	else if (MATCHX("CLUSTERSTMT"))

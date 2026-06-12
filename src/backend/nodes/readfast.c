@@ -2575,6 +2575,9 @@ readNodeBinary(void)
 			case T_AlterTypeStmtSetDefaultEnc:
 				return_value = _readAlterTypeStmtSetDefaultEnc();
 				break;
+			case T_AlterTypeStmt:
+				return_value = _readAlterTypeStmt();
+				break;
 			case T_AlterExtensionStmt:
 				return_value = _readAlterExtensionStmt();
 				break;
