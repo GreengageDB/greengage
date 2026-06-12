@@ -4,8 +4,6 @@ create table xyz_ctas2 as (select "B B" "B+1", "C" "_%A", "D+1" "D" from xyz) DI
 CREATE TEMP TABLE disttable (f1 integer) DISTRIBUTED RANDOMLY;
 INSERT INTO DISTTABLE VALUES (1), (2), (3), (NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 AS "not 2" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not 2 
 ----+-------
   1 | t
@@ -15,8 +13,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM 2 "not 2" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not 2 
 ----+-------
   1 | t
@@ -26,8 +22,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL AS "not null" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not null 
 ----+----------
   1 | t
@@ -37,8 +31,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL "not null" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not null 
 ----+----------
   1 | t
@@ -48,8 +40,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1 AS "false" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | false 
 ----+-------
   1 | f
@@ -59,8 +49,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1 "false" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | false 
 ----+-------
   1 | f
@@ -70,8 +58,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 AS "not null" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not null 
 ----+----------
   1 | t
@@ -81,8 +67,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 "not null" FROM disttable ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: disttable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | not null 
 ----+----------
   1 | t
@@ -176,21 +160,17 @@ SELECT 1 "one_%^" FROM test_having WHERE 1/a = 1 HAVING 1 < 2;
 (1 row)
 
 SELECT c AS "C+1", max(a) AS MAX FROM test_having GROUP BY c HAVING count(*) > 2 OR min(a) = max(a)  ORDER BY c;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_having
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    C+1    | max 
 ----------+-----
- XXXX     |   0
  bbbb     |   5
+ XXXX     |   0
 (2 rows)
 
 SELECT c "C+1", max(a) AS MAX FROM test_having GROUP BY c HAVING count(*) > 2 OR min(a) = max(a)  ORDER BY c;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_having
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    C+1    | max 
 ----------+-----
- XXXX     |   0
  bbbb     |   5
+ XXXX     |   0
 (2 rows)
 
 SELECT 1 AS one WHERE 1 IN (SELECT 1);
@@ -266,8 +246,6 @@ SELECT '' eight, * FROM SUBSELECT_TBL_AS_TEST ORDER BY 2,3,4;
 (8 rows)
 
 SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL_AS_TEST  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST) ORDER BY 2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Uncorrelated Field 
 -----+--------------------
      |                  1
@@ -279,8 +257,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (6 rows)
 
 SELECT '' six, f1 "Uncorrelated Field" FROM SUBSELECT_TBL_AS_TEST  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST) ORDER BY 2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Uncorrelated Field 
 -----+--------------------
      |                  1
@@ -292,8 +268,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (6 rows)
 
 SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL_AS_TEST  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST WHERE f2 IN (SELECT f1 FROM SUBSELECT_TBL_AS_TEST)) ORDER BY 2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Uncorrelated Field 
 -----+--------------------
      |                  1
@@ -305,8 +279,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (6 rows)
 
 SELECT '' six, f1 "Uncorrelated Field" FROM SUBSELECT_TBL_AS_TEST  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST WHERE f2 IN (SELECT f1 FROM SUBSELECT_TBL_AS_TEST)) ORDER BY 2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Uncorrelated Field 
 -----+--------------------
      |                  1
@@ -318,8 +290,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (6 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"  FROM SUBSELECT_TBL_AS_TEST upper  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST WHERE f1 = upper.f1) ORDER BY 2,3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Correlated Field | Second Field 
 -----+------------------+--------------
      |                1 |            1
@@ -332,8 +302,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 SELECT '' six, f1 "Correlated Field", f2 "Second Field"  FROM SUBSELECT_TBL_AS_TEST upper  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL_AS_TEST WHERE f1 = upper.f1) ORDER
  BY 2,3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: subselect_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  six | Correlated Field | Second Field 
 -----+------------------+--------------
      |                1 |            1
@@ -350,64 +318,48 @@ CREATE TEMP TABLE bar (id1 integer, id2 integer) DISTRIBUTED RANDOMLY;
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (1, 1), (2, 2), (3, 1);
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT DISTINCT id1, id2 FROM bar) AS s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT DISTINCT id1, id2 FROM bar) s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT id1, id2 FROM bar UNION SELECT id1, id2 FROM bar) AS s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT id1, id2 FROM bar UNION SELECT id1, id2 FROM bar) s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN  (SELECT id2 FROM (SELECT id2 FROM bar GROUP BY id2) AS s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN  (SELECT id2 FROM (SELECT id2 FROM bar GROUP BY id2) s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT id2 FROM bar UNION SELECT id2 FROM bar) AS s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
 (1 row)
 
 SELECT * FROM foo WHERE id IN (SELECT id2 FROM (SELECT id2 FROM bar UNION SELECT id2 FROM bar) s) ORDER BY 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo, bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id 
 ----
   1
@@ -426,9 +378,9 @@ select "B B" AS "%_B B","C" AS _c, "D+1" AS "D" from xyz2;
 select "B B" "%_B B","C" _c, "D+1" "D" from xyz2;
  %_B B | _c | D 
 -------+----+---
+     2 |  5 | 8
      1 |  4 | 7
      3 |  6 | 9
-     2 |  5 | 8
 (3 rows)
 
 select "B B" AS "%_B()","C" AS "_c&--", "D+1" AS "D+1" from xyz2;
@@ -442,33 +394,33 @@ select "B B" AS "%_B()","C" AS "_c&--", "D+1" AS "D+1" from xyz2;
 select "B B" "%_B()","C" "_c&--", "D+1" "D+1" from xyz2;
  %_B() | _c&-- | D+1 
 -------+-------+-----
+     2 |     5 |   8
      1 |     4 |   7
      3 |     6 |   9
-     2 |     5 |   8
 (3 rows)
 
 select "B B" AS "## B B ##","C" AS "##_C_##", "D+1" AS "## D+1 ##" from xyz2;
  ## B B ## | ##_C_## | ## D+1 ## 
 -----------+---------+-----------
+         2 |       5 |         8
          1 |       4 |         7
          3 |       6 |         9
-         2 |       5 |         8
 (3 rows)
 
 select "B B" "## B B ##","C" "##_C_##", "D+1" "## D+1 ##" from xyz2;
  ## B B ## | ##_C_## | ## D+1 ## 
 -----------+---------+-----------
+         2 |       5 |         8
          1 |       4 |         7
          3 |       6 |         9
-         2 |       5 |         8
 (3 rows)
 
 select "B B" AS "!@ B @!","C" AS "&* C *&", "D+1" AS "^~ D ~^" from xyz2;
  !@ B @! | &* C *& | ^~ D ~^ 
 ---------+---------+---------
+       2 |       5 |       8
        1 |       4 |       7
        3 |       6 |       9
-       2 |       5 |       8
 (3 rows)
 
 select "B B" "!@ B @!","C" "&* C *&", "D+1" "^~ D ~^" from xyz2;
@@ -480,8 +432,6 @@ select "B B" "!@ B @!","C" "&* C *&", "D+1" "^~ D ~^" from xyz2;
 (3 rows)
 
 select "B B"+1 "(B B)","C" "[C]", "D+1" "{D+1}" from xyz2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  (B B) | [C] | {D+1} 
 -------+-----+-------
      3 |   5 |     8
@@ -490,13 +440,11 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select "B B"+1 "(B B)","C" "[C]", "D+1" "{D+1}" from xyz2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  (B B) | [C] | {D+1} 
 -------+-----+-------
+     3 |   5 |     8
      2 |   4 |     7
      4 |   6 |     9
-     3 |   5 |     8
 (3 rows)
 
 CREATE TABLE TIMESTAMP_TBL_AS_TEST (d1 timestamp(2) without time zone) DISTRIBUTED RANDOMLY;
@@ -509,64 +457,48 @@ INSERT INTO TIMESTAMP_TBL_AS_TEST VALUES
   ('tomorrow EST'),
   ('tomorrow zulu');
 SELECT count(*) AS One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'today';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    1
 (1 row)
 
 SELECT count(*) One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'today';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    1
 (1 row)
 
 SELECT count(*) AS Three FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'tomorrow';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  three 
 -------
      3
 (1 row)
 
 SELECT count(*) Three FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'tomorrow';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  three 
 -------
      3
 (1 row)
 
 SELECT count(*) AS One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'yesterday';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    1
 (1 row)
 
 SELECT count(*) One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp without time zone 'yesterday';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    1
 (1 row)
 
 SELECT count(*) AS One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp(2) without time zone 'now' + '2 seconds';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    0
 (1 row)
 
 SELECT count(*) One FROM TIMESTAMP_TBL_AS_TEST WHERE d1 = timestamp(2) without time zone 'now' + '2 seconds';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  one 
 -----
    0
@@ -580,49 +512,41 @@ INSERT INTO TIMESTAMP_TBL_AS_TEST VALUES
   ('2010-05-15'),
   ('Mon Feb 10 17:32:01 1997 PST');
 SELECT '' AS "day", date_trunc('day',d1) AS date_trunc  FROM TIMESTAMP_TBL_AS_TEST WHERE d1 > timestamp without time zone '2009-03-27';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  day |        date_trunc        
 -----+--------------------------
+     | Fri Mar 27 00:00:00 2009
+     | Sat Mar 28 00:00:00 2009
      | Wed Sep 09 00:00:00 2009
      | Sat May 15 00:00:00 2010
-     | Sat Mar 28 00:00:00 2009
-     | Fri Mar 27 00:00:00 2009
 (4 rows)
 
 SELECT '' "day", date_trunc('day',d1) date_trunc  FROM TIMESTAMP_TBL_AS_TEST WHERE d1 > timestamp without time zone '2009-03-27';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  day |        date_trunc        
 -----+--------------------------
+     | Fri Mar 27 00:00:00 2009
+     | Sat Mar 28 00:00:00 2009
      | Wed Sep 09 00:00:00 2009
      | Sat May 15 00:00:00 2010
-     | Sat Mar 28 00:00:00 2009
-     | Fri Mar 27 00:00:00 2009
 (4 rows)
 
 SELECT '' AS "5", d1 FROM TIMESTAMP_TBL_AS_TEST  WHERE d1 <= timestamp without time zone '2010-05-15';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  5 |             d1              
 ---+-----------------------------
-   | Sat Mar 28 01:09:00 2009
-   | Fri Mar 27 15:31:50.06 2009
    | Wed Sep 09 00:16:07 2009
    | Sat May 15 00:00:00 2010
+   | Fri Mar 27 15:31:50.06 2009
+   | Sat Mar 28 01:09:00 2009
    | Mon Feb 10 17:32:01 1997
 (5 rows)
 
 SELECT '' "5", d1 FROM TIMESTAMP_TBL_AS_TEST  WHERE d1 <= timestamp without time zone '2010-05-15';
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  5 |             d1              
 ---+-----------------------------
+   | Fri Mar 27 15:31:50.06 2009
    | Wed Sep 09 00:16:07 2009
    | Sat May 15 00:00:00 2010
-   | Mon Feb 10 17:32:01 1997
    | Sat Mar 28 01:09:00 2009
-   | Fri Mar 27 15:31:50.06 2009
+   | Mon Feb 10 17:32:01 1997
 (5 rows)
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71393' ) AS week_trunc;
@@ -638,27 +562,23 @@ SELECT '' date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71
 (1 row)
 
 SELECT '' AS to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM MON Mon mon')  FROM TIMESTAMP_TBL_AS_TEST;
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  to_char_1 |                                         to_char                                          
 -----------+------------------------------------------------------------------------------------------
+           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
+           | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
            | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
            | SATURDAY  Saturday  saturday  SAT Sat sat MAY       May       may       V    MAY May may
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
-           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
 (5 rows)
 
 SELECT '' to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM MON Mon mon')  FROM TIMESTAMP_TBL_AS_TEST;
-NOTICE:  One or more columns in the following table(s) do not have statistics: timestamp_tbl_as_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  to_char_1 |                                         to_char                                          
 -----------+------------------------------------------------------------------------------------------
            | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
            | SATURDAY  Saturday  saturday  SAT Sat sat MAY       May       may       V    MAY May may
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
            | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
+           | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
 (5 rows)
 
 create table xyz1 ("B B" text, "C" text, "D+1" text) DISTRIBUTED RANDOMLY;
@@ -667,28 +587,22 @@ insert into xyz1 values
   ('3_three','4_four','5_five'),
   ('6_six','7_seven','8_eight');
 select upper("B B") AS "B_B", upper ("C") AS C, substr("D+1",1,1) AS "D" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D 
 ---------+---------+---
+ 0_ZERO  | 1_ONE   | 2
  6_SIX   | 7_SEVEN | 8
  3_THREE | 4_FOUR  | 5
- 0_ZERO  | 1_ONE   | 2
 (3 rows)
 
 select upper("B B") "B_B", upper ("C") C, substr("D+1",1,1) "D" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D 
 ---------+---------+---
- 0_ZERO  | 1_ONE   | 2
  3_THREE | 4_FOUR  | 5
+ 0_ZERO  | 1_ONE   | 2
  6_SIX   | 7_SEVEN | 8
 (3 rows)
 
 select lower("B B") AS "B_B", lower ("C") AS C, substr("D+1",1,1) AS "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D+1 
 ---------+---------+-----
  3_three | 4_four  | 5
@@ -697,8 +611,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select lower("B B") "B_B", lower ("C") C, substr("D+1",1,1) "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D+1 
 ---------+---------+-----
  3_three | 4_four  | 5
@@ -707,8 +619,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select upper("B B") AS "B_B", lower ("C") AS C, substr("D+1",1,1) AS "D+1%" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D+1% 
 ---------+---------+------
  3_THREE | 4_four  | 5
@@ -717,8 +627,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select upper("B B") "B_B", lower ("C") C, substr("D+1",1,1) "D+1%" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    | D+1% 
 ---------+---------+------
  0_ZERO  | 1_one   | 2
@@ -727,18 +635,14 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select lower("B B") AS "B_B", upper ("C") AS C, ("D+1") AS "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    |   D+1   
 ---------+---------+---------
- 6_six   | 7_SEVEN | 8_eight
  3_three | 4_FOUR  | 5_five
  0_zero  | 1_ONE   | 2_two
+ 6_six   | 7_SEVEN | 8_eight
 (3 rows)
 
 select lower("B B") "B_B", upper ("C") C, ("D+1") "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    |   D+1   
 ---------+---------+---------
  3_three | 4_FOUR  | 5_five
@@ -747,28 +651,22 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select upper("C") AS "C", lower ("B B") AS "%B_B%", "D+1" AS "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     C    |  %B_B%  |   D+1   
 ---------+---------+---------
+ 1_ONE   | 0_zero  | 2_two
  7_SEVEN | 6_six   | 8_eight
  4_FOUR  | 3_three | 5_five
- 1_ONE   | 0_zero  | 2_two
 (3 rows)
 
 select upper("C") "C", lower ("B B") "%B_B%", "D+1" "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     C    |  %B_B%  |   D+1   
 ---------+---------+---------
- 7_SEVEN | 6_six   | 8_eight
  1_ONE   | 0_zero  | 2_two
+ 7_SEVEN | 6_six   | 8_eight
  4_FOUR  | 3_three | 5_five
 (3 rows)
 
 select lower("C") AS "%C%", upper ("B B") AS "BB", "D+1"||'9_nine' AS "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    %C%   |   BB    |      D+1      
 ---------+---------+---------------
  1_one   | 0_ZERO  | 2_two9_nine
@@ -777,33 +675,27 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select lower("C") "%C%", upper ("B B") "BB", "D+1"||'9_nine' "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    %C%   |   BB    |      D+1      
 ---------+---------+---------------
  1_one   | 0_ZERO  | 2_two9_nine
- 4_four  | 3_THREE | 5_five9_nine
  7_seven | 6_SIX   | 8_eight9_nine
+ 4_four  | 3_THREE | 5_five9_nine
 (3 rows)
 
 select upper("B B") AS "B_B", lower ("C") AS C, ("D+1"||'9_nine') AS "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    |      D+1      
 ---------+---------+---------------
  0_ZERO  | 1_one   | 2_two9_nine
- 3_THREE | 4_four  | 5_five9_nine
  6_SIX   | 7_seven | 8_eight9_nine
+ 3_THREE | 4_four  | 5_five9_nine
 (3 rows)
 
 select upper("B B") "B_B", lower ("C") C, ("D+1"||'9_nine') "D+1" from xyz1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: xyz1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    B_B   |    c    |      D+1      
 ---------+---------+---------------
- 6_SIX   | 7_seven | 8_eight9_nine
- 0_ZERO  | 1_one   | 2_two9_nine
  3_THREE | 4_four  | 5_five9_nine
+ 0_ZERO  | 1_one   | 2_two9_nine
+ 6_SIX   | 7_seven | 8_eight9_nine
 (3 rows)
 
 CREATE TABLE test_as_alias (a integer, b integer) DISTRIBUTED RANDOMLY;
@@ -837,11 +729,7 @@ CREATE TABLE colalias_dml_decimal_candidate
 ) DISTRIBUTED by (col2);
 INSERT INTO colalias_dml_decimal_candidate VALUES(2.00,1.00,'a',2.00,1.00);
 INSERT INTO colalias_dml_decimal(col2,col1,col3,col5,col4) SELECT col1,col2,col3,col5,col4 FROM (SELECT col1,col1 as col2,col3,col5 as col4,col5  FROM colalias_dml_decimal_candidate)foo;
-NOTICE:  One or more columns in the following table(s) do not have statistics: colalias_dml_decimal_candidate
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT * FROM colalias_dml_decimal ORDER BY 1,2,3,4;
-NOTICE:  One or more columns in the following table(s) do not have statistics: colalias_dml_decimal
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 | col4 | col5 
 ------+------+------+------+------
  2.00 | 2.00 | a    | 1.00 | 1.00
@@ -849,8 +737,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 UPDATE colalias_dml_decimal SET col1 = (select col2 as col1 FROM colalias_dml_decimal_candidate);
 SELECT * FROM colalias_dml_decimal ORDER BY 1,2,3,4;
-NOTICE:  One or more columns in the following table(s) do not have statistics: colalias_dml_decimal
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 | col4 | col5 
 ------+------+------+------+------
  1.00 | 2.00 | a    | 1.00 | 1.00
@@ -858,8 +744,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 UPDATE colalias_dml_decimal SET col1 =colalias_dml_decimal_candidate.col2 FROM colalias_dml_decimal_candidate;
 SELECT * FROM colalias_dml_decimal ORDER BY 1,2,3,4;
-NOTICE:  One or more columns in the following table(s) do not have statistics: colalias_dml_decimal
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 | col4 | col5 
 ------+------+------+------+------
  1.00 | 2.00 | a    | 1.00 | 1.00
