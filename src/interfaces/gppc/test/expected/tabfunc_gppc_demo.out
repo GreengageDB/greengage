@@ -1,6 +1,7 @@
 set timezone=UTC;
 -- Create test tables which will be used for table function testing
 DROP TABLE IF EXISTS t1 CASCADE;
+NOTICE:  table "t1" does not exist, skipping
 CREATE TABLE t1 (a int, b int, c int, d int, e text)
 DISTRIBUTED BY (a);
 INSERT INTO t1 SELECT i, i/3, i%2, 100-i, 'text'||i 
@@ -12,16 +13,27 @@ select count(*) from t1;
 (1 row)
 
 DROP FUNCTION IF EXISTS sessionize(anytable, interval);
+NOTICE:  function sessionize(anytable,pg_catalog.interval) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_project(anytable, text);
+NOTICE:  function ud_project(anytable,text) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_project(anytable);
+NOTICE:  function ud_project(anytable) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_project2(anytable, text);
+NOTICE:  function ud_project2(anytable,text) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_project2(anytable);
+NOTICE:  function ud_project2(anytable) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_describe(internal);
+NOTICE:  function ud_describe(internal) does not exist, skipping
 DROP FUNCTION IF EXISTS ud_describe2(internal);
+NOTICE:  function ud_describe2(internal) does not exist, skipping
 DROP TYPE IF EXISTS outcomp CASCADE;
+NOTICE:  type "outcomp" does not exist, skipping
 DROP TABLE IF EXISTS outtable CASCADE;
+NOTICE:  table "outtable" does not exist, skipping
 DROP TABLE IF EXISTS intable CASCADE;
+NOTICE:  table "intable" does not exist, skipping
 DROP TABLE IF EXISTS randtable;
+NOTICE:  table "randtable" does not exist, skipping
 CREATE TABLE intable(id int, value text) distributed by (id);
 CREATE TABLE outtable(a text, b int) distributed randomly;
 CREATE TABLE randtable(id int, value text) distributed randomly;
@@ -67,6 +79,7 @@ select * from intable order by id,value;
 (10 rows)
 
 DROP TABLE IF EXISTS history CASCADE;
+NOTICE:  table "history" does not exist, skipping
 CREATE TABLE history(id integer, time timestamp) DISTRIBUTED BY (id);
 INSERT INTO history values 
 (1,'2011/08/21 10:15:02am'),
@@ -114,6 +127,7 @@ SELECT * FROM history order  by id, time;
     -- CREATE FUNCTION tabfunc(t anytable) RETURNS ...
     -- MPP-16614, the SELECT query would fail
     DROP FUNCTION IF EXISTS transform(anytable);
+NOTICE:  function transform(anytable) does not exist, skipping
     CREATE OR REPLACE FUNCTION transform(a anytable)
     RETURNS SETOF outtable
     AS '$libdir/gppc_test', 'mytransform'
@@ -128,7 +142,7 @@ SELECT * FROM history order  by id, time;
     SELECT * FROM transform( 
         TABLE( SELECT * FROM randtable ORDER BY id, value SCATTER BY id) 
     ) order by b;
-ERROR:  invalid tuple returned from table function  (seg0 slice2 172.17.0.4:25432 pid=35333)
+ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
 DETAIL:  Returned tuple does not match output tuple descriptor.
     -- The 1st workaround of MPP-16614
     DROP FUNCTION IF EXISTS transform(anytable);
@@ -266,7 +280,7 @@ ERROR:  type outtable_nonexist does not exist
       LANGUAGE C;
 -- Verify ETF can be called successfully
 select * from transform(TABLE(select * from intable where id<3));
-ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.4:25432 pid=35333)
+ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
 DETAIL:  Returned tuple does not match output tuple descriptor.
 -- Add a new column to output table, then drop the new added column.
 alter table outtable add column newcol int;
@@ -282,7 +296,7 @@ Distributed randomly
 -- Calling ETF again, get ERROR: invalid output tuple
 -- MPP-14231
 select * from transform(TABLE(select * from intable where id<3));
-ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.4:25432 pid=35333)
+ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
 DETAIL:  Returned tuple does not match output tuple descriptor.
 -- Recreate outtable
 DROP TABLE IF EXISTS outtable cascade;
@@ -303,8 +317,8 @@ CREATE OR REPLACE FUNCTION transform (a anytable)
     select * from transform3(TABLE(select * from intable where id<3));
     b    | a 
 ---------+---
- value_1 | 1
  value_2 | 2
+ value_1 | 1
 (2 rows)
 
 -- Currently ETF can take one only one anytable type input.
@@ -318,6 +332,7 @@ ERROR:  functions cannot have multiple "anytable" arguments
 -- The result is one row of record is returned per each segment.
 -- For a cluster of 2 segments, total 2 rows will be returned.
 DROP FUNCTION IF EXISTS transform_outtable(anytable);
+NOTICE:  function transform_outtable(anytable) does not exist, skipping
 CREATE OR REPLACE FUNCTION transform_outtable(a anytable)
 RETURNS TABLE (a text, b int)
 AS '$libdir/gppc_test', 'mytransform'
@@ -407,7 +422,7 @@ ERROR:  invalid use of TABLE value expression
 ERROR:  operator does not exist: anytable + integer
 LINE 1: SELECT TABLE(select a from t1) + 1;
                                        ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: anytable + integer
     -- TVE in FROM clause
     SELECT * FROM TABLE(select a from t1);
@@ -430,7 +445,7 @@ LINE 2:         transform( TABLE(select a,e from t1 where a < 5) )
 ERROR:  operator does not exist: integer = anytable
 LINE 1: SELECT * FROM t1 WHERE a IN ( 
                                  ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: integer = anytable
     -- TVE in  NOT IN clause
     SELECT * FROM t1 WHERE a NOT IN ( 
@@ -439,7 +454,7 @@ HINT:  No operator matches the given name and argument type(s). You might need t
 ERROR:  operator does not exist: integer <> anytable
 LINE 1: SELECT * FROM t1 WHERE a NOT IN ( 
                                  ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: integer <> anytable
     -- TVE in EXIST clause
     SELECT * FROM t1 WHERE EXISTS ( 
@@ -484,7 +499,7 @@ LINE 1: SELECT avg(a) FROM t1 GROUP BY TABLE(select c from t1);
 ERROR:  operator does not exist: anytable > integer
 LINE 1: ...LECT avg(a) FROM t1 GROUP BY c HAVING TABLE(select 51) > 50;
                                                                   ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: anytable > integer
     -- TVE in window function
     select a, c, TABLE (SELECT a from t1) over(partition by c) from t1 where a < 10;
@@ -497,7 +512,6 @@ LINE 1: select a, c, TABLE (SELECT a from t1) over(partition by c) f...
 ERROR:  could not identify an equality operator for type anytable
 LINE 1: select a, c, avg(a) over(partition by TABLE (SELECT a from t...
                                               ^
-HINT:  Use an explicit ordering operator or modify the query.
     -- ERROR:  could not identify an ordering operator for type anytable
     -- TVE in ORDER BY clause
     SELECT a FROM t1 ORDER BY TABLE(select a from t1);
@@ -523,7 +537,7 @@ LINE 1: SELECT a FROM TABLE(TABLE(select 4,'haha'::text));
 ERROR:  operator does not exist: anytable + integer
 LINE 1: SELECT TABLE(select a from t1) + 1;
                                        ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: anytable + integer
     SELECT * FROM t1 WHERE a IN ( 
         TABLE(select a from t1 where a < 5) * 2
@@ -531,11 +545,12 @@ HINT:  No operator matches the given name and argument type(s). You might need t
 ERROR:  operator does not exist: anytable * integer
 LINE 2:         TABLE(select a from t1 where a < 5) * 2
                                                     ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
     -- ERROR:  operator does not exist: anytable * integer
 -- Negative: test cases of using anytable as output of function in create time
     -- Create output table outComp
     drop table if exists outComp cascade;
+NOTICE:  table "outcomp" does not exist, skipping
     create table outComp (b1 int, b2 text);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -785,19 +800,19 @@ LINE 2:     SCATTER BY (a,b);
     a     | b  
 ----------+----
  value_1  |  1
+ value_5  |  5
+ value_6  |  6
+ value_9  |  9
+ value_10 | 10
  value_2  |  2
  value_3  |  3
  value_4  |  4
- value_5  |  5
- value_6  |  6
  value_7  |  7
  value_8  |  8
- value_9  |  9
- value_10 | 10
 (10 rows)
 
     SELECT * FROM transform( TABLE(select distinct b,c from t1) );
-ERROR:  invalid input tuple for function mytransform (gppc.c:1345)  (seg0 slice2 127.0.0.1:40000 pid=13043) (cdbdisp.c:256)
+ERROR:  invalid input tuple for function mytransform (gppc.c:1412)  (seg1 slice1 172.17.0.3:7003 pid=3308512) (gppc.c:1412)
     -- CONSTANT input
     SELECT * FROM transform( TABLE( SELECT 2 as id,'haha'::text as value FROM intable) );
   a   | b 
@@ -1599,6 +1614,7 @@ FROM generate_series(200,210) i;
     DELETE FROM t1 where a is null;
 -- ETF sub-query using view
     DROP VIEW IF EXISTS t1_view;
+NOTICE:  view "t1_view" does not exist, skipping
     CREATE VIEW t1_view as (
         SELECT a, b, c, d ,e from t1 
         WHERE a <10 ORDER BY d);
@@ -1945,6 +1961,7 @@ SELECT * FROM ARRAY_APPEND(array['value0','value1'],
 -- ETF sub-query contains join table / view
     -- Create another table t2 so to test join tables t1 and t2.
     DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
     CREATE TABLE t2 (a int, b int, c int, d int, e text)
     DISTRIBUTED BY (a);
     INSERT INTO t2 SELECT i, i/3, i%2, 100-i, 'text'||i 
@@ -2267,6 +2284,7 @@ HINT:  No function matches the given name and argument types. You might need to 
 ERROR:  column "id" does not exist
 LINE 1: SELECT * FROM tabfunc( (select id, value from t1) );
                                        ^
+HINT:  Perhaps you meant to reference the column "t1.d".
 -- Negative: ETF function call missing or extra parentheses
     SELECT * FROM tabfunc( TABLE select * from t1 );
 ERROR:  syntax error at or near "select"
@@ -2806,11 +2824,13 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- Table t3 is distributed by columns a and e
 -- Table t4 is distributed randomly
     DROP TABLE IF EXISTS t3;
+NOTICE:  table "t3" does not exist, skipping
     CREATE TABLE t3 (a int, b int, c int, d int, e text)
     DISTRIBUTED BY (a, e);
     INSERT INTO t3 SELECT i, i/3, i%2, 100-i, 'text'||i
     FROM generate_series(1,100) i;
     DROP TABLE IF EXISTS t4;
+NOTICE:  table "t4" does not exist, skipping
     CREATE TABLE t4 (a int, b int, c int, d int, e text)
     DISTRIBUTED RANDOMLY;
     INSERT INTO t4 SELECT i, i/3, i%2, 100-i, 'text'||i 
@@ -2842,8 +2862,11 @@ language plpython3u;
 -- Table t3, t5 are distributed by columns a and e
 -- Table t4, t6 are distributed randomly
     DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
     DROP TABLE IF EXISTS t5;
+NOTICE:  table "t5" does not exist, skipping
     DROP TABLE IF EXISTS t6;
+NOTICE:  table "t6" does not exist, skipping
     DROP TABLE IF EXISTS t4;
     DROP TABLE IF EXISTS t3;
     CREATE TABLE t3 (a int, b int, c int, d int, e text)
@@ -2853,6 +2876,7 @@ language plpython3u;
     INSERT INTO t2 SELECT i, i/3, i%2, 100-i, 'text'||i
     FROM generate_series(1,100) i;
     DROP TABLE IF EXISTS t4;
+NOTICE:  table "t4" does not exist, skipping
     CREATE TABLE t4 (a int, b int, c int, d int, e text)
     DISTRIBUTED RANDOMLY;
     CREATE TABLE t5 (a int, b int, c int, d int, e text)
@@ -2998,6 +3022,7 @@ typispreferred | f
 typisdefined   | t
 typdelim       | ,
 typrelid       | 0
+typsubscript   | -
 typelem        | 0
 typarray       | 0
 typinput       | anytable_in
@@ -3058,6 +3083,7 @@ proargnames |
 \x
 -- After ETF is created and executed, verified regular table function can be created and executed (no regression)
     DROP TYPE IF EXISTS outComp cascade;
+NOTICE:  type "outcomp" does not exist, skipping
     CREATE TYPE outComp AS (b1 varchar(10), b2 varchar(10));
     CREATE OR REPLACE FUNCTION tf_int2char(max integer) 
     RETURNS SETOF outComp AS $$
@@ -3310,16 +3336,16 @@ ERROR:  DESCRIBE is not supported for functions with OUT parameters
 
     -- extract function, which takes timestamp type as input
     SELECT extract(day from "time") FROM project( TABLE( SELECT * FROM history where time >'2011-08-21'), 2) order by 1;
- date_part 
------------
-        21
-        21
-        21
-        21
-        21
-        21
-        22
-        22
+ extract 
+---------
+      21
+      21
+      21
+      21
+      21
+      21
+      22
+      22
 (8 rows)
 
     -- create describe (callback) function
@@ -3364,6 +3390,7 @@ ERROR:  DESCRIBE is not supported for functions with OUT parameters
     WITH (describe = project_desc);
     -- ETF subquery using view
     drop view if exists history_v;
+NOTICE:  view "history_v" does not exist, skipping
     create view history_v as (
     select * from history order by id);
     SELECT * FROM project( 
@@ -3555,15 +3582,15 @@ LINE 1: SELECT id FROM project( TABLE( SELECT time,id FROM history )...
     WITH (describe = project_desc);
 -- Invalid projection position 
     SELECT * FROM project( TABLE( SELECT * FROM history ), NULL);
-ERROR:  the 2nd argument must be an integer
+ERROR:  the 2nd argument must be an integer (gppc.c:1412)
     SELECT * FROM project( TABLE( SELECT * FROM history ), -1);
-ERROR:  invalid column position -1
+ERROR:  invalid column position -1 (gppc.c:1412)
     SELECT * FROM project( TABLE( SELECT * FROM history ), 0);
-ERROR:  invalid column position 0
+ERROR:  invalid column position 0 (gppc.c:1412)
     SELECT * FROM project( TABLE( SELECT * FROM history ), 25);
-ERROR:  invalid column position 25
+ERROR:  invalid column position 25 (gppc.c:1412)
     SELECT * FROM project( TABLE( SELECT time FROM history ), 2);
-ERROR:  invalid column position 2
+ERROR:  invalid column position 2 (gppc.c:1412)
     SELECT * FROM project( TABLE( SELECT * FROM t1 ), (ARRAY[2,3])[1]);
 ERROR:  unable to resolve function argument
 LINE 1: SELECT * FROM project( TABLE( SELECT * FROM t1 ), (ARRAY[2,3...
@@ -3837,6 +3864,7 @@ HINT:  Use DROP ... CASCADE to drop the dependent objects too.
    -- when no other function is using it
     -- Create Dynamic Return Type test table drt_test
     DROP TABLE IF EXISTS drt_test;
+NOTICE:  table "drt_test" does not exist, skipping
     CREATE TABLE drt_test (a int, b int, c int, d int)
     DISTRIBUTED BY (a);
     --
@@ -4852,8 +4880,8 @@ ERROR:  CREATE VIEW statements cannot include calls to dynamically typed functio
 -- Calling the error callback function (tfcallback()) from table function (project_errorcallback())
 CREATE OR REPLACE FUNCTION project_errorcallback(anytable, OUT int, OUT int) RETURNS SETOF record AS '$libdir/gppc_test' LANGUAGE c;
 SELECT * FROM project_errorcallback(TABLE(SELECT CASE WHEN a < 10 THEN a END, a FROM generate_series(1, 10)a SCATTER BY a));
-INFO:  message: Hello, world!  (seg2 slice2 172.17.0.4:25434 pid=36338)
-ERROR:  first attribute is NULL (gppc.c:1345)  (seg2 slice2 127.0.0.1:40002 pid=13045) (cdbdisp.c:256)
+INFO:  message: Hello, world!  (seg2 slice1 172.17.0.3:7004 pid=3308513)
+ERROR:  first attribute is NULL (gppc.c:1412)  (seg2 slice1 172.17.0.3:7004 pid=3308513) (gppc.c:1412)
 SELECT * FROM project_errorcallback(TABLE(SELECT a, a FROM generate_series(1, 5)a SCATTER BY a)) ORDER BY 1;
  column1 | column2 
 ---------+---------

@@ -22,3 +22,9 @@
 -- m/cmdtime/
 -- s/cmdtime.*$/CONDITION/
 -- end_matchsubs
+-- start_matchsubs
+-- m/connection to server at/
+-- s/connection to server at "[^"]*",/connection to server at "HOST",/
+-- m/no pg_hba.conf entry for host/
+-- s/no pg_hba\.conf entry for host "[^"]*",/no pg_hba.conf entry for host "HOST",/
+-- end_matchsubs

@@ -32,6 +32,10 @@ endif
 REGRESS_OPTS = --init-file=init_file
 
 installcheck: watchdog ipv4v6_ports
+	# gpfdist appends to writable external table output files, so files left
+	# by a previous installcheck inflate the row counts the tests read back.
+	# Start each run from a clean slate.
+	rm -f data/gpfdist2/lineitem.tbl.w data/gpfdist2/lineitem.tbl.out.zst data/wet.out
 ifeq ($(enable_gpfdist),yes)
 ifeq ($(with_ssl),openssl)
 	rm -rf data/gpfdist_ssl/certs_server_no_verify

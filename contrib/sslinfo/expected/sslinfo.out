@@ -2,6 +2,32 @@
 Enable SSL in postgresql.conf with master only...
 preparing CRTs and KEYs
 -- start_ignore
+\! gpstop -arf
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Starting gpstop with args: -arf
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Stopping coordinator standby host 3a76691f25e1 mode=fast
+20260612:00:33:38:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Successfully shutdown standby process on 3a76691f25e1
+20260612:00:33:38:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20260612:00:33:38:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20260612:00:33:38:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-0.00% of jobs completed
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-100.00% of jobs completed
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-0.00% of jobs completed
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-100.00% of jobs completed
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-----------------------------------------------------
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-----------------------------------------------------
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20260612:00:33:39:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Restarting System...
 -- end_ignore
 \! echo "gpstop begin ret = $?"
 gpstop begin ret = 0
@@ -38,15 +64,15 @@ SELECT ssl_client_serial();
 (1 row)
 
 SELECT ssl_client_dn();
-                                   ssl_client_dn                                    
-------------------------------------------------------------------------------------
- /CN=client.example.com/C=CN/ST=Qingdao/L=ClientLocality/O=SSLINFO-Client/OU=Client
+                          ssl_client_dn                          
+-----------------------------------------------------------------
+ /CN=client.example.com/C=CN/ST=Qingdao/L=ClientLocality/O=SSLIN
 (1 row)
 
 SELECT ssl_issuer_dn();
-                               ssl_issuer_dn                               
----------------------------------------------------------------------------
- /CN=root.example.com/C=CN/ST=Beijing/L=RootLocality/O=SSLINFO-dev/OU=Test
+                          ssl_issuer_dn                          
+-----------------------------------------------------------------
+ /CN=root.example.com/C=CN/ST=Beijing/L=RootLocality/O=SSLINFO-d
 (1 row)
 
 SELECT ssl_client_dn_field('CN') AS client_dn_CN;
@@ -125,6 +151,32 @@ DROP EXTENSION sslinfo;
 \! bash config.bash clean
 restore SSL in postgresql.conf with master only
 -- start_ignore
+\! gpstop -arf
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Starting gpstop with args: -arf
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Stopping coordinator standby host 3a76691f25e1 mode=fast
+20260612:00:33:48:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Successfully shutdown standby process on 3a76691f25e1
+20260612:00:33:48:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20260612:00:33:48:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20260612:00:33:48:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-0.00% of jobs completed
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-100.00% of jobs completed
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-0.00% of jobs completed
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-100.00% of jobs completed
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-----------------------------------------------------
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-----------------------------------------------------
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20260612:00:33:49:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Restarting System...
 -- end_ignore
 \! echo "gpstop end ret = $?"
 gpstop end ret = 0
