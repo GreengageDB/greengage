@@ -3648,10 +3648,15 @@ ReindexMultipleInternal(List *relids, ReindexParams *params)
 			reindex_index(relid, false, relpersistence, &newparams);
 			PopActiveSnapshot();
 			/* reindex_index() does the verbose output */
+
+			/*
+			 * The existence re-check after locking above guarantees the index
+			 * was still there, so it has been rebuilt and the QEs must follow.
+			 */
+			result = true;
 		}
 		else
 		{
-			bool		result;
 			ReindexParams newparams = *params;
 
 			newparams.options |=
