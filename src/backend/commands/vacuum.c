@@ -2226,7 +2226,9 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		 * xmin doesn't become visible ahead of setting the flag.)
 		 */
 		LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
+#if 0 /* Upstream code not applicable to GPDB, see comment above */
 		MyProc->statusFlags |= PROC_IN_VACUUM;
+#endif
 		if (params->is_wraparound)
 			MyProc->statusFlags |= PROC_VACUUM_FOR_WRAPAROUND;
 		ProcGlobal->statusFlags[MyProc->pgxactoff] = MyProc->statusFlags;
