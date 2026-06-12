@@ -33,6 +33,17 @@ GP_IGNORE: defined new match expression
 -- end_matchsubs
 GP_IGNORE: defined new match expression
 
+-- The minimal-WAL phase below would permanently break the standby
+-- coordinator: since PostgreSQL 14, recovery refuses to continue across WAL
+-- generated with wal_level=minimal ("WAL was generated with
+-- wal_level=minimal, cannot continue recovering").  Remove the standby (if
+-- any) for the duration of the test and recreate it from a fresh basebackup
+-- at the end.  The commands are silenced so the output is identical with and
+-- without a configured standby (the mirrorless variant shares this file).
+! (psql -At -c "select hostname ||' '|| datadir ||' '|| port from gp_segment_configuration where content=-1 and role='m'" postgres > /tmp/prevent_ao_wal_standby; [ -s /tmp/prevent_ao_wal_standby ] && gpinitstandby -ar) >/dev/null 2>&1; echo standby_remove_step_done;
+standby_remove_step_done
+
+
 -- Create tables (AO, AOCO)
 -1U: CREATE TABLE ao_foo (n int) WITH (appendonly=true);
 CREATE
@@ -74,7 +85,10 @@ VACUUM
 !\retcode gpconfig -c max_wal_senders -v 0 --masteronly;
 (exited with code 0)
 -- Restart QD
-!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast;
+!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast > /dev/null 2>&1;
+-- start_ignore
+
+-- end_ignore
 (exited with code 0)
 
 -- Switch WAL file
@@ -116,5 +130,14 @@ DROP
 !\retcode gpconfig -r max_wal_senders --masteronly;
 (exited with code 0)
 -- Restart QD
-!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast;
+!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast > /dev/null 2>&1;
+-- start_ignore
+
+-- end_ignore
 (exited with code 0)
+
+-- Recreate the standby coordinator from a fresh basebackup, if one was
+-- removed at the start of this test.
+! ([ -s /tmp/prevent_ao_wal_standby ] && gpinitstandby -a -s $(cut -d" " -f1 /tmp/prevent_ao_wal_standby) -S $(cut -d" " -f2 /tmp/prevent_ao_wal_standby) -P $(cut -d" " -f3 /tmp/prevent_ao_wal_standby)) >/dev/null 2>&1; rm -f /tmp/prevent_ao_wal_standby; echo standby_recreate_step_done;
+standby_recreate_step_done
+

@@ -13,13 +13,11 @@
 -- we connect to coordinator in utility mode for AO/AOCO operations and
 -- validate WAL records on the coordinator.
 
-GP_IGNORE: formatted by atmsort.pm
 -- start_matchignore
 -- m/pg_waldump: fatal: error in WAL record at */
 -- m/.*The 'DISTRIBUTED BY' clause determines the distribution of data*/
 -- m/.*Table doesn't have 'DISTRIBUTED BY' clause*/
 -- end_matchignore
-GP_IGNORE: defined new match expression
 
 -- start_matchsubs
 -- m/tx:\s+\d+/
@@ -31,7 +29,17 @@ GP_IGNORE: defined new match expression
 -- m/rel \d+\/\d+\/\d+/
 -- s/rel \d+\/\d+\/\d+/rel ####\/######\/######/
 -- end_matchsubs
-GP_IGNORE: defined new match expression
+
+-- The minimal-WAL phase below would permanently break the standby
+-- coordinator: since PostgreSQL 14, recovery refuses to continue across WAL
+-- generated with wal_level=minimal ("WAL was generated with
+-- wal_level=minimal, cannot continue recovering").  Remove the standby (if
+-- any) for the duration of the test and recreate it from a fresh basebackup
+-- at the end.  The commands are silenced so the output is identical with and
+-- without a configured standby (the mirrorless variant shares this file).
+! (psql -At -c "select hostname ||' '|| datadir ||' '|| port from gp_segment_configuration where content=-1 and role='m'" postgres > /tmp/prevent_ao_wal_standby; [ -s /tmp/prevent_ao_wal_standby ] && gpinitstandby -ar) >/dev/null 2>&1; echo standby_remove_step_done;
+standby_remove_step_done
+
 
 -- Create tables (AO, AOCO)
 -1U: CREATE TABLE ao_foo (n int) WITH (appendonly=true);
@@ -65,33 +73,44 @@ VACUUM
 
 -- Validate wal records (mirrorless setting has alternative answer file for this since wal_level is already minimal)
 ! last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn())" postgres) && pg_waldump ${last_wal_file} -p ${COORDINATOR_DATA_DIRECTORY}/pg_wal -r appendonly;
-rmgr: Appendonly  len (rec/tot):    186/   186, tx:        554, lsn: 0/10000160, prev 0/10000118, desc: APPENDONLY_INSERT insert: rel 1663/16429/16384 seg/offset:0/0 len:136
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        555, lsn: 0/100003C8, prev 0/10000390, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:128/0 len:0
-rmgr: Appendonly  len (rec/tot):    130/   130, tx:        555, lsn: 0/10000448, prev 0/10000400, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:0/0 len:80
-rmgr: Appendonly  len (rec/tot):    130/   130, tx:        555, lsn: 0/100004D0, prev 0/10000448, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:128/0 len:80
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 0/100007C0, prev 0/10000790, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16384 seg/offset:0/136
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        557, lsn: 0/10000970, prev 0/10000938, desc: APPENDONLY_INSERT insert: rel 1663/16429/16384 seg/offset:1/0 len:0
-rmgr: Appendonly  len (rec/tot):    138/   138, tx:        557, lsn: 0/10000A70, prev 0/10000A38, desc: APPENDONLY_INSERT insert: rel 1663/16429/16384 seg/offset:1/0 len:88
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        558, lsn: 0/10000BC0, prev 0/10000B90, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16384 seg/offset:0/0
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 0/100413F8, prev 0/100413C8, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16388 seg/offset:0/80
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 0/10041430, prev 0/100413F8, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16388 seg/offset:128/80
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        561, lsn: 0/10041600, prev 0/100415C8, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:1/0 len:0
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        561, lsn: 0/10041638, prev 0/10041600, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:129/0 len:0
-rmgr: Appendonly  len (rec/tot):    114/   114, tx:        561, lsn: 0/10041738, prev 0/10041700, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:1/0 len:64
-rmgr: Appendonly  len (rec/tot):    114/   114, tx:        561, lsn: 0/100417B0, prev 0/10041738, desc: APPENDONLY_INSERT insert: rel 1663/16429/16388 seg/offset:129/0 len:64
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        562, lsn: 0/10041908, prev 0/100418D8, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16388 seg/offset:0/0
-rmgr: Appendonly  len (rec/tot):     50/    50, tx:        562, lsn: 0/10041940, prev 0/10041908, desc: APPENDONLY_TRUNCATE truncate: rel 1663/16429/16388 seg/offset:128/0
-pg_waldump: fatal: error in WAL record at 0/10081FB8: invalid record length at 0/10081FE8: wanted 24, got 0
+rmgr: Appendonly  len (rec/tot):    186/   186, tx:  210057230, lsn: 1/60000118, prev 1/600000D0, desc: APPENDONLY_INSERT insert: rel 1663/330343/312228 seg/offset:0/0 len:136
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:  210057231, lsn: 1/60000338, prev 1/60000300, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:128/0 len:0
+rmgr: Appendonly  len (rec/tot):    130/   130, tx:  210057231, lsn: 1/600003B8, prev 1/60000370, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:0/0 len:80
+rmgr: Appendonly  len (rec/tot):    130/   130, tx:  210057231, lsn: 1/60000440, prev 1/600003B8, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:128/0 len:80
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/60000730, prev 1/60000700, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312228 seg/offset:0/136
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:  210057233, lsn: 1/60000848, prev 1/60000810, desc: APPENDONLY_INSERT insert: rel 1663/330343/312228 seg/offset:1/0 len:0
+rmgr: Appendonly  len (rec/tot):    138/   138, tx:  210057233, lsn: 1/60000998, prev 1/60000960, desc: APPENDONLY_INSERT insert: rel 1663/330343/312228 seg/offset:1/0 len:88
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/60000AB8, prev 1/60000A88, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312228 seg/offset:0/0
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/60041270, prev 1/60041240, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312232 seg/offset:0/80
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/600412A8, prev 1/60041270, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312232 seg/offset:128/80
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:  210057237, lsn: 1/600413E0, prev 1/600413A8, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:1/0 len:0
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:  210057237, lsn: 1/60041418, prev 1/600413E0, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:129/0 len:0
+rmgr: Appendonly  len (rec/tot):    114/   114, tx:  210057237, lsn: 1/60041568, prev 1/60041530, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:1/0 len:64
+rmgr: Appendonly  len (rec/tot):    114/   114, tx:  210057237, lsn: 1/600415E0, prev 1/60041568, desc: APPENDONLY_INSERT insert: rel 1663/330343/312232 seg/offset:129/0 len:64
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/60041708, prev 1/600416D8, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312232 seg/offset:0/0
+rmgr: Appendonly  len (rec/tot):     50/    50, tx:          0, lsn: 1/60041740, prev 1/60041708, desc: APPENDONLY_TRUNCATE truncate: rel 1663/330343/312232 seg/offset:128/0
+pg_waldump: fatal: error in WAL record at 1/60081D38: invalid record length at 1/60081D68: wanted 24, got 0
 
 
 -- *********** Set wal_level=minimal **************
 !\retcode gpconfig -c wal_level -v minimal --masteronly;
+-- start_ignore
+20260612:06:29:24:081048 gpconfig:3a76691f25e1:gpadmin-[INFO]:-completed successfully with parameters '-c wal_level -v minimal --masteronly'
+
+-- end_ignore
 (exited with code 0)
 -- Set max_wal_senders to 0 because a non-zero value requires wal_level >= 'archive'
 !\retcode gpconfig -c max_wal_senders -v 0 --masteronly;
+-- start_ignore
+20260612:06:29:25:081118 gpconfig:3a76691f25e1:gpadmin-[INFO]:-completed successfully with parameters '-c max_wal_senders -v 0 --masteronly'
+
+-- end_ignore
 (exited with code 0)
 -- Restart QD
-!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast;
+!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast > /dev/null 2>&1;
+-- start_ignore
+
+-- end_ignore
 (exited with code 0)
 
 -- Switch WAL file
@@ -119,6 +138,7 @@ VACUUM
 
 -- Validate wal records
 ! last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn())" postgres) && pg_waldump ${last_wal_file} -p ${COORDINATOR_DATA_DIRECTORY}/pg_wal -r appendonly;
+pg_waldump: fatal: error in WAL record at 1/64081758: invalid record length at 1/64081788: wanted 24, got 0
 
 
 -1U: DROP TABLE ao_foo;
@@ -128,10 +148,27 @@ DROP
 
 -- Reset wal_level
 !\retcode gpconfig -r wal_level --masteronly;
+-- start_ignore
+20260612:06:29:26:081236 gpconfig:3a76691f25e1:gpadmin-[INFO]:-completed successfully with parameters '-r wal_level --masteronly'
+
+-- end_ignore
 (exited with code 0)
 -- Reset max_wal_senders
 !\retcode gpconfig -r max_wal_senders --masteronly;
+-- start_ignore
+20260612:06:29:26:081309 gpconfig:3a76691f25e1:gpadmin-[INFO]:-completed successfully with parameters '-r max_wal_senders --masteronly'
+
+-- end_ignore
 (exited with code 0)
 -- Restart QD
-!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast;
+!\retcode pg_ctl -l /dev/null -D $COORDINATOR_DATA_DIRECTORY restart -w -t 600 -m fast > /dev/null 2>&1;
+-- start_ignore
+
+-- end_ignore
 (exited with code 0)
+
+-- Recreate the standby coordinator from a fresh basebackup, if one was
+-- removed at the start of this test.
+! ([ -s /tmp/prevent_ao_wal_standby ] && gpinitstandby -a -s $(cut -d" " -f1 /tmp/prevent_ao_wal_standby) -S $(cut -d" " -f2 /tmp/prevent_ao_wal_standby) -P $(cut -d" " -f3 /tmp/prevent_ao_wal_standby)) >/dev/null 2>&1; rm -f /tmp/prevent_ao_wal_standby; echo standby_recreate_step_done;
+standby_recreate_step_done
+
