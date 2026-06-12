@@ -198,5 +198,7 @@ install:
 HOSTNAME=$(shell hostname)
 installcheck: install
 	$(prove_installcheck)
-	$(top_builddir)/src/test/regress/pg_regress $(EXTRA_REGRESS_OPTS) --init-file=./init_file_ssl_connection --inputdir=$(srcdir) --dbname=test_sslconnection --schedule=$(srcdir)/ssl_connection_schedule --user=ssltestuser --host=$(HOSTNAME) --sslmode=verify-full
-	./clear_ssl.sh
+	# Always run clear_ssl.sh, even when pg_regress fails: leaving the
+	# cluster SSL-enabled with cert-only authentication breaks every
+	# suite that runs after this one.
+	rc=0; $(top_builddir)/src/test/regress/pg_regress $(EXTRA_REGRESS_OPTS) --init-file=./init_file_ssl_connection --inputdir=$(srcdir) --dbname=test_sslconnection --schedule=$(srcdir)/ssl_connection_schedule --user=ssltestuser --host=$(HOSTNAME) --sslmode=verify-full || rc=$$?; ./clear_ssl.sh; exit $$rc

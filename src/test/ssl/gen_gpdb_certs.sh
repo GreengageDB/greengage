@@ -36,7 +36,11 @@ openssl x509 -req -in $1.csr -CA $1ca.crt -CAkey $1ca.key \
 
 function generate_gpdb_certs() {
     pushd ${CERTS_PATH}
-    #rm -f *.crt *.key *.csr *.srl
+    # Remove any leftovers from previous runs (possibly other suites'): a
+    # stale read-only key (e.g. contrib/sslinfo installs one with mode 400)
+    # makes openssl's -keyout fail silently, leaving a cert/key pair from
+    # different generations ("key values mismatch" at connect time).
+    rm -f server.crt server.key server.csr serverca.* serverroot.* *.srl
     gencert server $HOST_NAME
     cat serverca.crt >> serverroot.crt
 
@@ -46,7 +50,8 @@ function generate_gpdb_certs() {
 }
 function generate_client_certs() {
     pushd ${CLIENT_CERTS_PATH}
-    #rm -f *.crt *.key *.csr *.srl
+    # See generate_gpdb_certs about removing leftovers.
+    rm -f postgresql.crt postgresql.key postgresql.csr postgresqlca.* postgresqlroot.* *.srl
     gencert postgresql $GP_USER
     cat postgresqlca.crt >> postgresqlroot.crt
 
