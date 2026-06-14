@@ -333,6 +333,15 @@ perform_base_backup(basebackup_options *opt)
 								  tblspc_map_file);
 
 	/*
+	 * GPDB: do_pg_start_backup() has just created the backup checkpoint.  This
+	 * fault point lets tests (e.g. segwalrep/master_wal_switch) suspend the
+	 * base backup right after the checkpoint, while the backup is in progress,
+	 * to exercise concurrent WAL activity.  The PG14 base backup refactor
+	 * dropped it; restore it in the equivalent spot.
+	 */
+	SIMPLE_FAULT_INJECTOR("base_backup_post_create_checkpoint");
+
+	/*
 	 * Once do_pg_start_backup has been called, ensure that any failure causes
 	 * us to abort the backup so we don't "leak" a backup counter. For this
 	 * reason, *all* functionality between do_pg_start_backup() and the end of
