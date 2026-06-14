@@ -179,9 +179,18 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * rep queue atomically. This is necessary to avoid the race condition
 	 * described in SyncRepUpdateSyncStandbysDefined(). On the other hand, if
 	 * it's false, the lock is not necessary because we don't touch the queue.
+	 *
+	 * GPDB: the coordinator's synchronous standby is not configured through
+	 * synchronous_standby_names (so sync_standbys_defined is false for it);
+	 * instead the QD decides synchronously below by looking for an active
+	 * gp_walreceiver (see the IS_QUERY_DISPATCHER block).  Therefore the QD
+	 * must not take this sync_standbys_defined fast path -- doing so made
+	 * coordinator commits never block on the standby.  Segments keep the
+	 * upstream behavior.  (Mirrors the IS_QUERY_DISPATCHER guard further down.)
 	 */
 	if (!SyncRepRequested() ||
-		!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
+		(!IS_QUERY_DISPATCHER() &&
+		 !((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined))
 		return;
 
 	/* Cap the level for anything other than commit to remote flush only. */
