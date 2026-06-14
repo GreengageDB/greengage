@@ -107,7 +107,15 @@ BackgroundWriterMain(void)
 	pqsignal(SIGHUP, SignalHandlerForConfigReload);
 	pqsignal(SIGINT, SIG_IGN);
 	pqsignal(SIGTERM, SignalHandlerForShutdownRequest);
-	/* SIGQUIT handler was already set up by InitPostmasterChild */
+	/*
+	 * GPDB: PG14's InitPostmasterChild set up SignalHandlerForCrashExit as the
+	 * SIGQUIT handler.  Override it with bg_quickdie, which wraps the same crash
+	 * exit with a fault injection point (fault_in_background_writer_quickdie)
+	 * that tests such as fts_segment_reset use to delay the bgwriter's death
+	 * (and thus the segment's reset).  Without this the GPDB handler is dead
+	 * code and the fault never fires.
+	 */
+	pqsignal(SIGQUIT, bg_quickdie);
 	pqsignal(SIGALRM, SIG_IGN);
 	pqsignal(SIGPIPE, SIG_IGN);
 	pqsignal(SIGUSR1, procsignal_sigusr1_handler);
