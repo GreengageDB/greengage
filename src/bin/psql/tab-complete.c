@@ -2569,39 +2569,10 @@ psql_completion(const char *text, int start, int end)
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(" ,"(*") &&
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
 	{
-		/* Find options that were used and complete with ones that hadn't */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-		{
-			const char* create_protocol_options_list[] = {"readfunc =",
-								"writefunc =", "validatorfunc =", NULL};
-
-			int i = 0;
-
-			while(i < previous_words_count &&
-				  !ends_with(previous_words[i], '('))
-			{
-				int cur_prev_wd_len = strlen(previous_words[i]);
-				if(pg_strncasecmp(previous_words[i], "readfunc",
-								  cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[0] = "";
-				}
-				else if(pg_strncasecmp(previous_words[i], "writefunc",
-									   cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[1] = "";
-				}
-				else if(pg_strncasecmp(previous_words[i], "validatorfunc",
-									   cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[2] = "";
-				}
-
-				i += 1;
-			}
-
-			COMPLETE_WITH_LIST(create_protocol_options_list);
-		}
+			COMPLETE_WITH_UNUSED_OPTIONS("readfunc", "writefunc", "validatorfunc");
+		else if(TailMatches("readfunc|writefunc|validatorfunc"))
+			COMPLETE_WITH("=");
 		else if(TailMatches("readfunc", "="))
 			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
 		else if(TailMatches("writefunc", "="))
