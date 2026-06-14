@@ -45,6 +45,8 @@
 
 #include "catalog/pg_am_d.h"
 #include "catalog/pg_class_d.h"
+#include "catalog/pg_language_d.h"
+#include "catalog/pg_proc_d.h"
 
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
@@ -876,6 +878,31 @@ static const SchemaQuery Query_for_list_of_statistics = {
 "SELECT pg_catalog.quote_ident(tmplname) FROM pg_catalog.pg_ts_template "\
 " WHERE substring(pg_catalog.quote_ident(tmplname),1,%d)='%s'"
 
+#define Query_for_list_of_extprotocols \
+" SELECT pg_catalog.quote_ident(ptcname) " \
+"   FROM pg_catalog.pg_extprotocol" \
+"  WHERE substring(pg_catalog.quote_ident(ptcname),1,%d)='%s'"
+
+#define Query_for_list_of_extprotocol_readfuncs \
+" SELECT pg_catalog.quote_ident(proname)" \
+"   FROM pg_catalog.pg_proc as p" \
+"  WHERE p.prorettype = 'integer'::regtype" \
+"  AND p.provolatile IN (" CppAsString2(PROVOLATILE_STABLE) ", " CppAsString2(PROVOLATILE_VOLATILE) ")" \
+"  AND p.prolang = " CppAsString2(ClanguageId) \
+"  AND p.pronargs = 0" \
+"  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
+
+#define Query_for_list_of_extprotocol_writefuncs Query_for_list_of_extprotocol_readfuncs
+
+#define Query_for_list_of_extprotocol_validatorfuncs \
+" SELECT pg_catalog.quote_ident(proname)" \
+"   FROM pg_catalog.pg_proc as p" \
+"  WHERE p.prorettype = 'void'::regtype" \
+"  AND p.provolatile IN (" CppAsString2(PROVOLATILE_STABLE) ", " CppAsString2(PROVOLATILE_VOLATILE) ")" \
+"  AND p.prolang = " CppAsString2(ClanguageId) \
+"  AND p.pronargs = 0"\
+"  AND substring(pg_catalog.quote_ident(proname),1,%d)='%s'"
+
 #define Query_for_list_of_fdws \
 " SELECT pg_catalog.quote_ident(fdwname) "\
 "   FROM pg_catalog.pg_foreign_data_wrapper "\
@@ -1080,6 +1107,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"PARSER", Query_for_list_of_ts_parsers, NULL, NULL, THING_NO_SHOW},
 	{"POLICY", NULL, NULL, NULL},
 	{"PROCEDURE", NULL, NULL, Query_for_list_of_procedures},
+	{"PROTOCOL", Query_for_list_of_extprotocols, NULL},
 	{"PUBLICATION", NULL, Query_for_list_of_publications},
 	{"RESOURCE", NULL},
 	{"ROLE", Query_for_list_of_roles},
@@ -1101,6 +1129,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"TEXT SEARCH", NULL, NULL, NULL},
 	{"TRANSFORM", NULL, NULL, NULL},
 	{"TRIGGER", "SELECT pg_catalog.quote_ident(tgname) FROM pg_catalog.pg_trigger WHERE substring(pg_catalog.quote_ident(tgname),1,%d)='%s' AND NOT tgisinternal"},
+	{"TRUSTED", NULL},
 	{"TYPE", NULL, NULL, &Query_for_list_of_datatypes},
 	{"UNIQUE", NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},	/* for CREATE UNIQUE
 																	 * INDEX ... */
@@ -1601,6 +1630,9 @@ psql_completion(const char *text, int start, int end)
 		else
 			COMPLETE_WITH_FUNCTION_ARG(prev2_wd);
 	}
+	/* ALTER PROTOCOL */
+	else if(Matches("ALTER", "PROTOCOL", MatchAny))
+		COMPLETE_WITH("OWNER TO", "RENAME TO");
 	/* ALTER PUBLICATION <name> */
 	else if (Matches("ALTER", "PUBLICATION", MatchAny))
 		COMPLETE_WITH("ADD TABLE", "DROP TABLE", "OWNER TO", "RENAME TO", "SET");
@@ -2521,6 +2553,64 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "POLICY", MatchAny, "ON", MatchAny, "AS", MatchAny, "USING"))
 		COMPLETE_WITH("(");
 
+/* CREATE PROTOCOL*/
+	else if(Matches("CREATE", "TRUSTED"))
+		COMPLETE_WITH("PROTOCOL");
+	else if(TailMatches("CREATE", "PROTOCOL") ||
+			TailMatches("CREATE", "TRUSTED", "PROTOCOL"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_extprotocols);
+	else if(TailMatches("CREATE", "PROTOCOL", MatchAny) ||
+			TailMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny))
+		COMPLETE_WITH("(");
+	else if((HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*") &&
+			!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(", "(*") &&
+			!HeadMatches("CREATE", "PROTOCOL", MatchAny, "(*)")) ||
+			(HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*") &&
+			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(" ,"(*") &&
+			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
+	{
+		/* Find options that were used and complete with ones that hadn't */
+		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+		{
+			const char* create_protocol_options_list[] = {"readfunc =",
+								"writefunc =", "validatorfunc =", NULL};
+
+			int i = 0;
+
+			while(i < previous_words_count &&
+				  !ends_with(previous_words[i], '('))
+			{
+				int cur_prev_wd_len = strlen(previous_words[i]);
+				if(pg_strncasecmp(previous_words[i], "readfunc",
+								  cur_prev_wd_len) == 0)
+				{
+					create_protocol_options_list[0] = "";
+				}
+				else if(pg_strncasecmp(previous_words[i], "writefunc",
+									   cur_prev_wd_len) == 0)
+				{
+					create_protocol_options_list[1] = "";
+				}
+				else if(pg_strncasecmp(previous_words[i], "validatorfunc",
+									   cur_prev_wd_len) == 0)
+				{
+					create_protocol_options_list[2] = "";
+				}
+
+				i += 1;
+			}
+
+			COMPLETE_WITH_LIST(create_protocol_options_list);
+		}
+		else if(TailMatches("readfunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
+		else if(TailMatches("writefunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_writefuncs);
+		else if(TailMatches("validatorfunc", "="))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_validatorfuncs);
+		else if(TailMatches("readfunc|writefunc|validatorfunc", "=", MatchAny))
+			COMPLETE_WITH(",", ")");
+	}
 
 /* CREATE PUBLICATION */
 	else if (Matches("CREATE", "PUBLICATION", MatchAny))
@@ -3187,6 +3277,7 @@ psql_completion(const char *text, int start, int end)
 									   " UNION SELECT 'LANGUAGE'"
 									   " UNION SELECT 'LARGE OBJECT'"
 									   " UNION SELECT 'PROCEDURE'"
+									   " UNION SELECT 'PROTOCOL'"
 									   " UNION SELECT 'ROUTINE'"
 									   " UNION SELECT 'SCHEMA'"
 									   " UNION SELECT 'SEQUENCE'"
@@ -3221,6 +3312,8 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH_QUERY(Query_for_list_of_languages);
 		else if (TailMatches("PROCEDURE"))
 			COMPLETE_WITH_VERSIONED_SCHEMA_QUERY(Query_for_list_of_procedures, NULL);
+		else if(TailMatches("PROTOCOL"))
+			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocols);
 		else if (TailMatches("ROUTINE"))
 			COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_routines, NULL);
 		else if (TailMatches("SCHEMA"))
