@@ -36,3 +36,9 @@ source3 =
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         $GPHOME/lib/python/gppylib
+
+source4 =
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        $GPHOME/bin
+        $GPHOME/sbin

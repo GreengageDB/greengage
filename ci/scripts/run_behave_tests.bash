@@ -74,10 +74,11 @@ run_feature() {
     -e FEATURE="$feature" -e PROJECT="$project" \
     cdw bash -eux <<'EOF'
       set -ex
+      source /usr/local/greengage-db-devel/greengage_path.sh
       cd /tmp/coverage-data
 
       if [ "$(ls "$PROJECT"-coverage-data/ | wc -l)" -gt 0 ]; then
-          coverage combine --append \
+          coverage combine --debug=pathmap,sys,config --append \
             --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_behave \
             "$PROJECT"-coverage-data/coverage-data*
           mv "$PROJECT"-coverage-data/coverage-data /tmp/coverage-data/coverage-data-"$PROJECT"
@@ -86,10 +87,10 @@ run_feature() {
 
       LOCK_FILE=/tmp/coverage-data/coverage.lock
 			flock "$LOCK_FILE" -c "
-        coverage combine --append \
+        coverage combine --debug=pathmap,sys,config --append \
           --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
           coverage-data*
-        coverage html \
+        coverage html --debug=pathmap,sys,config \
           --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
           --show-contexts -d ./coverage-html
       "

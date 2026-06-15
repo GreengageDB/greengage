@@ -19,9 +19,8 @@ source3 =
         $GPHOME/lib/python/gppylib
 
 source4 =
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        $GPHOME/bin/gp_replica_check.py
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        $GPHOME/bin
 
 [report]
 omit =
