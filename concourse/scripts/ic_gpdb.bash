@@ -36,7 +36,7 @@ function gen_env(){
 		make -s ${MAKE_TEST_COMMAND}
 
         cd /tmp/coverage-data
-        if [ "$(ls coverage-data* 2>/dev/null | wc -l)" -gt 0 ]; then
+        if [ "\$(ls coverage-data* 2>/dev/null | wc -l)" -gt 0 ]; then
           coverage combine --append \
             --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
             coverage-data*
@@ -45,6 +45,7 @@ function gen_env(){
             --show-contexts -d ./coverage-html
         else
           echo "No coverage-data files found, skipping coverage report"
+        fi
 	EOF
 
 	chmod a+x /opt/run_test.sh
