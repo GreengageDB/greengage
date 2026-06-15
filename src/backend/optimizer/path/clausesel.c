@@ -393,9 +393,14 @@ clauselist_selectivity_ext(PlannerInfo *root,
 		}
 	}
 
-	/* make sure nobody touched s1 yet */
-	Assert(s1 == 1.0);
-
+	/*
+	 * s1 starts at 1.0, but PG14's extended (multivariate) statistics may have
+	 * already folded the selectivity of some clauses into it above. Those
+	 * clauses are excluded from rgsel[] (and deliberately not damped, since
+	 * extended stats already capture their correlation), so the product below
+	 * correctly combines the extended-stats selectivity with the damped
+	 * single-clause selectivities. Hence s1 is no longer necessarily 1.0 here.
+	 */
 	for (i = 0; i < pos; i++)
 	{
 		s1 *= rgsel[i];
