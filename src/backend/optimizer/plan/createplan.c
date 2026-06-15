@@ -3078,7 +3078,25 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 	subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
 
 	/* Transfer resname/resjunk labeling, too, to keep executor happy */
-	apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
+	if (root->is_split_update &&
+		list_length(subplan->targetlist) > list_length(root->processed_tlist))
+	{
+		/*
+		 * GPDB: a Split Update appends a junk DMLAction column to the subplan's
+		 * targetlist, but root->processed_tlist was built by expand_targetlist()
+		 * before the SplitUpdate node was added and so does not include it. Label
+		 * only the columns processed_tlist describes (the SplitUpdate already
+		 * labels its own DMLAction column); apply_tlist_labeling() otherwise
+		 * asserts the two lists have equal length.
+		 */
+		List	   *labelcols = list_truncate(list_copy(subplan->targetlist),
+											  list_length(root->processed_tlist));
+
+		apply_tlist_labeling(labelcols, root->processed_tlist);
+		list_free(labelcols);
+	}
+	else
+		apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
 
 	plan = make_modifytable(root,
 							subplan,
