@@ -54,6 +54,7 @@
 
 #include "cdb/cdbpath.h"
 #include "cdb/cdbsetop.h"
+#include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "commands/tablecmds.h"
 
@@ -509,9 +510,22 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 		 * is only global when the whole recursion runs in one process.
 		 */
 		CdbPathLocus gather_locus;
+		int			gather_numsegments;
 
-		CdbPathLocus_MakeSingleQE(&gather_locus,
-								  CdbPathLocus_NumSegments(lpath->locus));
+		/*
+		 * A General (or Entry/OuterQuery) locus carries numsegments == -1
+		 * ("any number of segments"); a SingleQE needs a concrete segment
+		 * count, so resolve -1 to the cluster size, as every other
+		 * MakeSingleQE caller does. Otherwise the gather locus is invalid and
+		 * trips the assert in cdbpath_create_motion_path() under an
+		 * assert-enabled build -- e.g. a WITH RECURSIVE whose non-recursive
+		 * term is a constant SELECT (General locus).
+		 */
+		gather_numsegments = CdbPathLocus_NumSegments(lpath->locus);
+		if (gather_numsegments < 0)
+			gather_numsegments = getgpsegmentCount();
+
+		CdbPathLocus_MakeSingleQE(&gather_locus, gather_numsegments);
 		lpath = cdbpath_create_motion_path(root, lpath, NIL, false, gather_locus);
 		if (!lpath)
 			elog(ERROR, "could not gather non-recursive term of recursive UNION");
