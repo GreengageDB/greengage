@@ -66,7 +66,14 @@ GetTableAmRoutine(Oid amhandler)
 	Assert(routine->tuple_tid_valid != NULL);
 	Assert(routine->tuple_get_latest_tid != NULL);
 	Assert(routine->tuple_satisfies_snapshot != NULL);
-	Assert(routine->index_delete_tuples != NULL);
+	/*
+	 * GPDB: index_delete_tuples (bottom-up index deletion, PG14) is optional.
+	 * The append-only and AOCO table AMs intentionally leave it NULL, and the
+	 * index AMs already guard on it (e.g. _bt_simpledel_pass /
+	 * table_index_delete_tuples callers test rd_tableam->index_delete_tuples
+	 * != NULL), so a NULL callback is a valid "not supported" value rather than
+	 * an incomplete AM. Hence no Assert here, unlike upstream.
+	 */
 
 	Assert(routine->tuple_insert != NULL);
 
