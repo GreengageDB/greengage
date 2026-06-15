@@ -194,6 +194,60 @@ select *, (gp_segment_id < 2) as correct_segment_id from part_list_table_distr_r
 
 select *, gp_segment_id from multi_part_table_distr_hashed order by a, b, c;
 
+-- Check vacuum on the tables
+vacuum table_distr_hashed;
+vacuum table_distr_hashed_ao_row;
+vacuum table_distr_hashed_ao_col;
+
+vacuum table_distr_random;
+vacuum table_distr_random_ao_row;
+vacuum table_distr_random_ao_col;
+
+vacuum table_distr_replicated;
+vacuum table_distr_replicated_ao_row;
+vacuum table_distr_replicated_ao_col;
+
+vacuum part_range_table_distr_hashed;
+vacuum part_range_table_distr_random;
+
+vacuum part_list_table_distr_hashed;
+vacuum part_list_table_distr_random;
+
+vacuum multi_part_table_distr_hashed;
+
+-- Check reltuples statistics after vacuum
+select reltuples from pg_class where oid = 'table_distr_hashed'::regclass;
+select reltuples from pg_class where oid = 'table_distr_hashed_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_hashed_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'table_distr_random'::regclass;
+select reltuples from pg_class where oid = 'table_distr_random_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_random_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'table_distr_replicated'::regclass;
+select reltuples from pg_class where oid = 'table_distr_replicated_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_replicated_ao_col'::regclass;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_range_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_range_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_list_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_list_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('multi_part_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
 -- And do some cleanup
 drop table table_distr_hashed;
 drop table table_distr_hashed_ao_row;
@@ -389,6 +443,60 @@ select *, gp_segment_id from new_part_list_table_distr_hashed order by a, b;
 select *, (gp_segment_id < 2) as correct_segment_id from new_part_list_table_distr_random order by a, b;
 
 select *, gp_segment_id from new_multi_part_table_distr_hashed order by a, b, c;
+
+-- Check vacuum on the tables
+vacuum new_table_distr_hashed;
+vacuum new_table_distr_hashed_ao_row;
+vacuum new_table_distr_hashed_ao_col;
+
+vacuum new_table_distr_random;
+vacuum new_table_distr_random_ao_row;
+vacuum new_table_distr_random_ao_col;
+
+vacuum new_table_distr_replicated;
+vacuum new_table_distr_replicated_ao_row;
+vacuum new_table_distr_replicated_ao_col;
+
+vacuum new_part_range_table_distr_hashed;
+vacuum new_part_range_table_distr_random;
+
+vacuum new_part_list_table_distr_hashed;
+vacuum new_part_list_table_distr_random;
+
+vacuum new_multi_part_table_distr_hashed;
+
+-- Check reltuples statistics after vacuum
+select reltuples from pg_class where oid = 'new_table_distr_hashed'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_hashed_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_hashed_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'new_table_distr_random'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_random_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_random_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'new_table_distr_replicated'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_replicated_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_replicated_ao_col'::regclass;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_range_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_range_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_list_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_list_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_multi_part_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
 
 -- And do some cleanup
 drop table new_table_distr_hashed;
