@@ -242,8 +242,13 @@ static void set_plan_references_input_asserts(PlannerInfo *root, Plan *plan)
 		/*
          * GPDB_92_MERGE_FIXME: In PG 9.2, there is a new varno 'INDEX_VAR'.
          * GPDB codes should revise to work with the new varno.
+         *
+         * PG14 added ROWID_VAR, used for the nonce row-identity variables of an
+         * UPDATE/DELETE before set_plan_references() resolves them, so accept it
+         * here too (otherwise distributed UPDATE/DELETE plans trip this assert).
          */
 		Assert((var->varno == OUTER_VAR || var->varno == INDEX_VAR
+				|| var->varno == ROWID_VAR
 				|| (var->varno > 0 && var->varno <= list_length(rtable) + list_length(glob->finalrtable))
 				|| (var->varno >= 0 && var->varno < root->simple_rel_array_size))
 				&& "Plan contains var that refer outside the rtable.");
