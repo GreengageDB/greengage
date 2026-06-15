@@ -41,12 +41,15 @@ apt-get install -y \
   libyaml-dev \
   libzstd-dev \
   locales \
+  lsof \
   net-tools \
   openssh-client \
   openssh-server \
   pkg-config \
   protobuf-compiler \
   python3-dev \
+  python3-installer \
+  python3-psutil \
   rsync \
   sudo \
   zlib1g-dev
