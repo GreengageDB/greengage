@@ -13741,8 +13741,19 @@ wait_to_avoid_large_repl_lag(void)
 	if (rep_lag_avoidance_threshold &&
 		wal_bytes_written > (rep_lag_avoidance_threshold * 1024))
 	{
+		/*
+		 * Unlike SyncRepWaitForLSN()'s usual commit-time callers (which hold
+		 * interrupts so the post-wait shared-memory queue cleanup can't be cut
+		 * short by a cancel/die), this throttle runs mid-statement in a
+		 * normally-interruptible context. SyncRepWaitForLSN() asserts that
+		 * interrupts are held on entry, so establish the holdoff here. (The
+		 * wait itself is already uninterruptible via the HOLD_INTERRUPTS()
+		 * inside SyncRepWaitForLSN once we are queued.)
+		 */
+		HOLD_INTERRUPTS();
 		/* we use local cached copy of LogwrtResult here */
 		SyncRepWaitForLSN(LogwrtResult.Flush, false);
+		RESUME_INTERRUPTS();
 		wal_bytes_written = 0;
 	}
 }
