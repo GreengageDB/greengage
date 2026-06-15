@@ -1280,13 +1280,21 @@ LogicalTapeTell(LogicalTapeSet *lts, int tapenum,
 long
 LogicalTapeSetBlocks(LogicalTapeSet *lts)
 {
-#ifdef USE_ASSERT_CHECKING
-	for (int i = 0; i < lts->nTapes; i++)
-	{
-		LogicalTape *lt = &lts->tapes[i];
-
-		Assert(!lt->writing || lt->buffer == NULL);
-	}
-#endif
+	/*
+	 * GPDB: upstream asserts here that no tape still has an open write buffer,
+	 * because the returned count does not include data that is buffered but not
+	 * yet flushed to a block.  That precondition holds for upstream's callers,
+	 * which only ask once the tapes have been frozen by tuplesort_performsort().
+	 *
+	 * GPDB additionally reports sort/hashagg disk usage for EXPLAIN ANALYZE when
+	 * a node is squelched or its query is finished early (QueryFinishPending)
+	 * while still spilling -- e.g. a tuplesort interrupted during mergeruns,
+	 * which advances state->status but leaves a run tape in writing state with a
+	 * live buffer (see ExecSortExplainEnd/ExecEagerFreeSort ->
+	 * tuplesort_finalize_stats).  The block count is still valid in that case
+	 * (it merely omits at most one not-yet-written buffer per tape, which is
+	 * immaterial for instrumentation), so we drop the upstream assert rather
+	 * than crash an assert-enabled build on a legitimate GPDB code path.
+	 */
 	return lts->nBlocksWritten - lts->nHoleBlocks;
 }
