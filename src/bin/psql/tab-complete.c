@@ -1171,7 +1171,7 @@ static PGresult *exec_query(const char *query);
 
 static char **get_previous_words(int point, char **buffer, int *nwords);
 
-static int remove_used_options_from_list(const char** list,
+static void remove_used_options_from_list(const char** list,
 										 const char* const* previous_words,
 										 const int previous_words_count);
 
@@ -4758,12 +4758,11 @@ get_previous_words(int point, char **buffer, int *nwords)
 /* Looks through all tokens in open bracket clause, */
 /* removing used options from suggestion list */
 /* and clearing up list from empty strings. */
-int
+void
 remove_used_options_from_list(const char** list,
 							  const char* const* previous_words,
 							  const int previous_words_count)
 {
-	int removed_count = 0;
 	int i = 0;
 	int j = 0;
 
@@ -4778,8 +4777,6 @@ remove_used_options_from_list(const char** list,
 							  cur_prev_wd_len) == 0)
 			{
 				list[j] = "";
-
-				removed_count++;
 			}
 
 			j++;
@@ -4808,8 +4805,6 @@ remove_used_options_from_list(const char** list,
 	}
 
 	list[i] = NULL;
-
-	return removed_count;
 }
 
 /*
