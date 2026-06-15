@@ -154,12 +154,14 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
+	//(void)err;
 
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
 	if (unlikely(scan == NULL))
 		return;
 
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
@@ -168,15 +170,11 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
-		if (attno < slot->tts_nvalid)
+		if (unlikely(attno < slot->tts_nvalid))
 			continue;
-		if (attno >= natts)
+		if (unlikely(attno >= natts))
 			break;
 
-		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
-		Assert(ds);
-
-		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
 		if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 								attno,
 								curseginfo->segno,
@@ -186,25 +184,11 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			continue;
 		}
 
+		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+		Assert(ds);
 
-
-
-		while (true)
+		if (unlikely(ds->noBlocksRead || rowNum > ds->blockFirstRowNum + ds->blockRowCount - 1))
 		{
-			if (!ds->noBlocksRead)
-			{
-				/*
-				 * We've read some valid block. Check if we need to
-				 * stay within this block.
-				*/
-
-				Assert(rowNum >= ds->blockFirstRowNum);
-				Assert(ds->blockFirstRowNum != InvalidAORowNum);
-				int64 lastRowNumInBlock = ds->blockFirstRowNum + ds->blockRowCount - 1;
-				if (rowNum <= lastRowNumInBlock)
-					break;
-			}
-
 			if (!scan->blockDirectory && scan->aocsfetch)
 			{
 				AppendOnlyBlockDirectoryEntry dirEntry;
@@ -213,8 +197,9 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 									  &scan->aocsfetch->blockDirectory,
 									  tid,
 									  attno,
-									  &dirEntry, // &dirEntries[i],
+									  &dirEntry,
 									  scan->columnScanInfo.attnum_to_rownum);
+				//(void)res;
 				Assert(res);
 
 				Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
@@ -223,39 +208,43 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 														dirEntry.range.afterFileOffset);
 			}
 
-			bool read_ok PG_USED_FOR_ASSERTS_ONLY;
-			read_ok = datumstreamread_block_info(ds);
-			Assert(read_ok);
-
-			if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
+			while (true)
 			{
-				int64 blocksRead;
-				/* read a new buffer to consume */
-				datumstreamread_block_content(ds);
+				bool read_ok PG_USED_FOR_ASSERTS_ONLY;
+				read_ok = datumstreamread_block_info(ds);
+				//(void)read_ok;
+				Assert(read_ok);
 
-				if (scan->blockDirectory)
+				if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
 				{
-					AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
-														 attno,
-														 ds->blockFirstRowNum,
-														 ds->blockFileOffset,
-														 ds->blockRowCount);
+					int64 blocksRead;
+					/* read a new buffer to consume */
+					datumstreamread_block_content(ds);
+
+					if (scan->blockDirectory)
+					{
+						AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
+															 attno,
+															 ds->blockFirstRowNum,
+															 ds->blockFileOffset,
+															 ds->blockRowCount);
+					}
+
+					AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+					blocksRead =
+						RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
+					pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+												blocksRead);
+
+					break;
 				}
-
-				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-				blocksRead =
-					RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
-				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-											blocksRead);
-
-				break;
-			}
-			else
-			{
-				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
-				gp_appendonly_verify_block_checksums = false;
-				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
-				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+				else
+				{
+					bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+					gp_appendonly_verify_block_checksums = false;
+					AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+					gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+				}
 			}
 		}
 
