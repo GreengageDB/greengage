@@ -37,7 +37,7 @@ function gen_env(){
 
         cd /tmp/coverage-data
         if [ "\$(ls coverage-data* 2>/dev/null | wc -l)" -gt 0 ]; then
-          coverage combine --append \
+          coverage combine --append --keep \
             --rcfile=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_combine_report \
             coverage-data*
           coverage html \
