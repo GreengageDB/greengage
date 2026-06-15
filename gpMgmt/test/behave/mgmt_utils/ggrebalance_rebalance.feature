@@ -123,8 +123,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
-         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
-         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should print "Rolled back steps:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled steps:\s*0" regex to logfile
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 1 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -177,8 +177,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
-         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
-         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should print "Rolled back steps:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled steps:\s*0" regex to logfile
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -497,8 +497,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Plan to rollback step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
-         And ggrebalance should print "Rolled back moves:\s*\d+" regex to logfile
-         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should print "Rolled back steps:\s*\d+" regex to logfile
+         And ggrebalance should print "Cancelled steps:\s*0" regex to logfile
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
          And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
@@ -556,8 +556,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance should print "Segments moved:\s*\d+" regex to logfile
-         And ggrebalance should print "Rolled back moves:\s*0" regex to logfile
-         And ggrebalance should print "Cancelled moves:\s*\d+" regex to logfile
+         And ggrebalance should print "Rolled back steps:\s*0" regex to logfile
+         And ggrebalance should print "Cancelled steps:\s*\d+" regex to logfile
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
          And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
@@ -663,8 +663,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Plan to rollback step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
@@ -769,8 +769,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
          And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
@@ -828,8 +828,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
          And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
          And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
@@ -1445,8 +1445,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should print "Segments moved:\s*0" regex to logfile
-         And ggrebalance should print "Rolled back moves:\s*\d+" regex to logfile
-         And ggrebalance should print "Cancelled moves:\s*0" regex to logfile
+         And ggrebalance should print "Rolled back steps:\s*\d+" regex to logfile
+         And ggrebalance should print "Cancelled steps:\s*0" regex to logfile
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100

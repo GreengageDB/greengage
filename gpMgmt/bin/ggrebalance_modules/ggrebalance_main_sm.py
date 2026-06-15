@@ -16,7 +16,7 @@ try:
     from gppylib.fault_injection import *
     from ggrebalance_modules.shrink import GGShrink
     from ggrebalance_modules.ggrebalance_sm import RebalanceSM
-    from ggrebalance_modules.rebalance_step import RebalanceStep
+    from ggrebalance_modules.rebalance_step import RebalanceStep, RebalanceStepMoveMirror
     from ggrebalance_modules.rebalance_commons import is_gparray_balanced
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
@@ -219,17 +219,17 @@ class GGRebalanceMainSM:
             return
 
         segments_moved = 0
-        rolled_back_moves = []
-        cancelled_moves = []
+        rolled_back_steps = []
+        cancelled_steps = []
 
         for step in summary.executed_rebalance_steps:
             status = step.getStatus()
             if status == RebalanceStep.Status.CANCELLED:
-                cancelled_moves.append(step.getMove())
+                cancelled_steps.append(step)
             elif status == RebalanceStep.Status.DONE:
                 if step.isRollback():
-                    rolled_back_moves.append(step.getMove())
-                else:
+                    rolled_back_steps.append(step)
+                elif isinstance(step, RebalanceStepMoveMirror):
                     segments_moved += 1
             else:
                 raise Exception(f'Unexpected status for executed step: {str(step)}')
@@ -241,8 +241,8 @@ class GGRebalanceMainSM:
             self.logger.info('                                   REBALANCE                                   ')
             self.logger.info(self.summary_separator_str)
             self.logger.info(f'Segments moved:\t\t{segments_moved}')
-            self.logger.info(f'Rolled back moves:\t\t{len(rolled_back_moves)}')
-            self.logger.info(f'Cancelled moves:\t\t{len(cancelled_moves)}')
+            self.logger.info(f'Rolled back steps:\t\t{len(rolled_back_steps)}')
+            self.logger.info(f'Cancelled steps:\t\t{len(cancelled_steps)}')
 
         segments_down = []
         gp_array = configurationInterface.getConfigurationProvider().loadSystemConfig(useUtilityMode=False, verbose=False)
@@ -253,16 +253,16 @@ class GGRebalanceMainSM:
         balanced = is_gparray_balanced(gp_array)
 
         # we show warnings regardless the progress type set by user
-        show_warnings = len(segments_down) > 0 or len(cancelled_moves) > 0 or not balanced
+        show_warnings = len(segments_down) > 0 or len(cancelled_steps) > 0 or not balanced
         if show_warnings:
             self.logger.warning(self.summary_separator_str)
             self.logger.warning('                                   WARNINGS                                    ')
             self.logger.warning(self.summary_separator_str)
 
-            if len(cancelled_moves) > 0:
-                self.logger.warning('------------------------------- Cancelled moves  -------------------------------')
-                for move in cancelled_moves:
-                    self.logger.warning(str(move))
+            if len(cancelled_steps) > 0:
+                self.logger.warning('------------------------------- Cancelled steps  -------------------------------')
+                for step in cancelled_steps:
+                    self.logger.warning(str(str(step).partition("type: ")[2]))
 
             if len(segments_down) > 0:
                 self.logger.warning('Cluster might be not in fault tolerance mode!')
@@ -272,10 +272,10 @@ class GGRebalanceMainSM:
 
             if not balanced:
                 self.logger.warning('Cluster is left in unbalanced state')
-                if len(rolled_back_moves) > 0:
-                    self.logger.warning('------------------------------ Rolled back moves ---------------------------------')
-                    for move in rolled_back_moves:
-                        self.logger.warning(str(move))
+                if len(rolled_back_steps) > 0:
+                    self.logger.warning('------------------------------ Rolled back steps ---------------------------------')
+                    for step in rolled_back_steps:
+                        self.logger.warning(str(step).partition("type: ")[2])
                     self.logger.warning('You can review why segments were rolled back and retry rebalance later.')
 
     def print_full_summary(self) -> None:
