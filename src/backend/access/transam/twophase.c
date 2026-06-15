@@ -1532,7 +1532,18 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 		 * record anyways.
 		 */
 		if (isCommit)
+		{
+			/*
+			 * wait_for_mirror() reaches SyncRepWaitForLSN(), which asserts that
+			 * interrupts are held so its shared-memory queue cleanup cannot be
+			 * interrupted (see syncrep.c).  The main path below does so via
+			 * HOLD_INTERRUPTS(); this early-return path (gxact already gone,
+			 * e.g. during DTX recovery's commit-prepared) must do the same.
+			 */
+			HOLD_INTERRUPTS();
 			wait_for_mirror();
+			RESUME_INTERRUPTS();
+		}
 
 		return false;
 	}
