@@ -1931,6 +1931,38 @@ SubPlanFinderWalker(Node *node, void *context)
 }
 
 /*
+ * Like SubPlanFinderWalker(), but does NOT stop at Motion nodes.
+ *
+ * This is used to close the set of locally-executable subplans (see
+ * getLocallyExecutableSubplans()). Once a subplan is going to be initialized
+ * in this slice, ExecInitNode() walks its whole plan tree, descending through
+ * the subplan's own internal Motions. Any subplans referenced below those
+ * Motions must therefore also have a SubPlanState initialized in this slice,
+ * or ExecInitSubPlan() raises "subplan was not initialized". This happens with
+ * three or more levels of nested Init Plans, where the innermost Init Plan is
+ * referenced below a Motion inside an enclosing Init Plan's plan.
+ */
+static bool
+SubPlanNestedFinderWalker(Node *node, void *context)
+{
+	SubPlanFinderContext *ctx = (SubPlanFinderContext *) context;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, SubPlan))
+	{
+		SubPlan    *subplan = (SubPlan *) node;
+
+		ctx->bms_subplans = bms_add_member(ctx->bms_subplans, subplan->plan_id);
+		/* fall through: keep walking to reach more deeply nested subplans */
+	}
+
+	/* Continue walking, crossing Motion boundaries this time. */
+	return plan_tree_walker(node, SubPlanNestedFinderWalker, ctx, true);
+}
+
+/*
  * Given a plan and a root motion node find all the subplans
  * between 'root' and the next motion node in the tree
  */
@@ -1938,6 +1970,7 @@ Bitmapset *
 getLocallyExecutableSubplans(PlannedStmt *plannedstmt, Plan *root_plan)
 {
 	SubPlanFinderContext ctx;
+	Bitmapset  *toprocess;
 
 	ctx.base.node = (Node *) plannedstmt;
 	ctx.bms_subplans = NULL;
@@ -1951,6 +1984,31 @@ getLocallyExecutableSubplans(PlannedStmt *plannedstmt, Plan *root_plan)
 	 * are all considered part of the sending slice.
 	 */
 	(void) plan_tree_walker((Node *) root_plan, SubPlanFinderWalker, &ctx, true);
+
+	/*
+	 * The walk above stops at Motions, which is correct for the top-level
+	 * slice traversal. But each subplan we collected will be initialized in
+	 * full by ExecInitNode(), descending through that subplan's own internal
+	 * Motions, and the nodes below them may reference further subplans. Close
+	 * the set over those nested subplans (this time crossing Motions), so that
+	 * every subplan whose SubPlanState may be touched in this slice is present.
+	 */
+	toprocess = bms_copy(ctx.bms_subplans);
+	while (!bms_is_empty(toprocess))
+	{
+		int			plan_id = bms_first_member(toprocess);
+		Plan	   *subplan = (Plan *) list_nth(plannedstmt->subplans, plan_id - 1);
+		Bitmapset  *before = bms_copy(ctx.bms_subplans);
+		Bitmapset  *added;
+
+		(void) plan_tree_walker((Node *) subplan, SubPlanNestedFinderWalker, &ctx, true);
+
+		/* Newly discovered subplans must be processed as well. */
+		added = bms_difference(ctx.bms_subplans, before);
+		toprocess = bms_add_members(toprocess, added);
+		bms_free(added);
+		bms_free(before);
+	}
 
 	return ctx.bms_subplans;
 }
