@@ -15,9 +15,12 @@ function gen_env(){
 
 		if [[ ${FEATURE} == "gpexpand" ]]; then
 			mkdir -p /home/gpadmin/sqldump
-			wget -nv https://downloads.adsw.io/misc/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
-
-			xz -d /home/gpadmin/sqldump/dump.sql.xz
+			# Use a locally-provided dump if one is already present (e.g. an
+			# offline environment); otherwise fetch it from the mirror.
+			if [ ! -f /home/gpadmin/sqldump/dump.sql ] && [ ! -f /home/gpadmin/sqldump/dump.sql.xz ]; then
+				wget -nv https://downloads.adsw.io/misc/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
+			fi
+			[ -f /home/gpadmin/sqldump/dump.sql.xz ] && xz -d -f /home/gpadmin/sqldump/dump.sql.xz
 		fi
 
 		cd "\${1}/gpdb_src/gpMgmt/"
