@@ -2357,31 +2357,33 @@ psql_completion(const char *text, int start, int end)
 								   " UNION SELECT 'TABLE ('");
 	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
-		COMPLETE_WITH("AS", "LANGUAGE", "TRANSFORM", "WINDOW", "IMMUTABLE",
-					  "STABLE", "VOLATILE", "NOT LEAKPROOF", "LEAKPROOF",
-					  "CALLED ON NULL INPUT", "RETURNS NULL ON NULL INPUT",
-					  "STRICT", "EXTERNAL", "SECURITY", "EXECUTE ON",
-					  "PARALLEL", "COST", "ROWS", "SUPPORT", "SET", "WITH (");
+		COMPLETE_WITH("AS", "LANGUAGE", "TRANSFORM FOR TYPE", "WINDOW",
+					  "IMMUTABLE", "STABLE", "VOLATILE", "NOT LEAKPROOF",
+					  "LEAKPROOF", "CALLED ON NULL INPUT",
+					  "RETURNS NULL ON NULL INPUT", "STRICT",
+					  "EXTERNAL SECURITY", "SECURITY", "EXECUTE ON", "PARALLEL",
+					  "COST", "ROWS", "SUPPORT", "SET", "WITH (DESCRIBE =");
 
-	else if(HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
-			HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
-	{
-		if(TailMatches("EXTERNAL"))
-			COMPLETE_WITH("SECURITY");
-		else if(TailMatches("SECURITY"))
-			COMPLETE_WITH("INVOKER", "DEFINER");
-		else if(TailMatches("TRANSFORM"))
-			COMPLETE_WITH("FOR TYPE");
-		else if(TailMatches("FOR", "TYPE"))
-			COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes, NULL);
-		else if(TailMatches("EXECUTE", "ON"))
-			COMPLETE_WITH("ANY", "COORDINATOR", "ALL SEGMENTS", "INITPLAN");
-		else if(TailMatches("PARALLEL"))
-			COMPLETE_WITH("UNSAFE", "RESTRICTED", "SAFE");
-		else if(TailMatches("LANGUAGE"))
-			COMPLETE_WITH_QUERY(Query_for_list_of_languages
-								" UNION SELECT 'internal'");
-	}
+	/* Completing individual options */
+	/* They're this big to avoid false completions by function code */
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "TRANSFORM", "FOR", "TYPE") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "TRANSFORM", "FOR", "TYPE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes, NULL);
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "PARALLEL") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "PARALLEL"))
+		COMPLETE_WITH("UNSAFE", "RESTRICTED", "SAFE");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXECUTE", "ON") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXECUTE", "ON"))
+		COMPLETE_WITH("ANY", "COORDINATOR", "ALL SEGMENTS", "INITPLAN");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "LANGUAGE") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "LANGUAGE"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_languages
+							" UNION SELECT 'internal'");
+	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "SECURITY") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "SECURITY") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXTERNAL", "SECURITY") ||
+			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXTERNAL", "SECURITY"))
+		COMPLETE_WITH("INVOKER", "DEFINER");
 
 
 	/* CREATE FOREIGN */
