@@ -320,55 +320,11 @@ do { \
 } while (0)
 
 /* Macro to suggest unused options in bracket clause. */
-/* Looks through all tokens until it finds an opening bracket, */
-/* removing used options from suggestion list */
-/* and clearing up list from empty strings. */
 #define COMPLETE_WITH_UNUSED_OPTIONS(...) \
 do { \
 	const char* list[] = { __VA_ARGS__, NULL }; \
-\
-	int i = 0; \
-\
-	while(i < previous_words_count && \
-			!ends_with(previous_words[i], '(')) \
-	{ \
-		int cur_prev_wd_len = strlen(previous_words[i]); \
-		int j = 0; \
-\
-		while(list[j] != NULL) \
-		{ \
-			if(pg_strncasecmp(previous_words[i], list[j], \
-							  cur_prev_wd_len) == 0) \
-			{ \
-				list[j] = ""; \
-			} \
-\
-			j += 1; \
-		} \
-\
-		i += 1; \
-	} \
-\
-	i = 0; \
-	int j = 0; \
-\
-	while(list[j] != NULL) \
-	{ \
-		if(list[j][0] != '\0') \
-		{ \
-			list[i] = list[j]; \
-			if(i != j) \
-			{ \
-				list[j] = ""; \
-			} \
-\
-			i += 1; \
-		} \
-\
-		j += 1; \
-	} \
-\
-	list[i] = NULL; \
+	remove_used_options_from_list(list, (const char* const*)previous_words, \
+								  previous_words_count); \
 \
 	COMPLETE_WITH_LIST(list); \
 } while(0)
@@ -1214,6 +1170,10 @@ static char *escape_string(const char *text);
 static PGresult *exec_query(const char *query);
 
 static char **get_previous_words(int point, char **buffer, int *nwords);
+
+static int remove_used_options_from_list(const char** list,
+										 const char* const* previous_words,
+										 const int previous_words_count);
 
 static char *get_guctype(const char *varname);
 
@@ -4793,6 +4753,63 @@ get_previous_words(int point, char **buffer, int *nwords)
 
 	*nwords = words_found;
 	return previous_words;
+}
+
+/* Looks through all tokens in open bracket clause, */
+/* removing used options from suggestion list */
+/* and clearing up list from empty strings. */
+int
+remove_used_options_from_list(const char** list,
+							  const char* const* previous_words,
+							  const int previous_words_count)
+{
+	int removed_count = 0;
+	int i = 0;
+	int j = 0;
+
+	while(i < previous_words_count && !ends_with(previous_words[i], '('))
+	{
+		int cur_prev_wd_len = strlen(previous_words[i]);
+		j = 0;
+
+		while(list[j] != NULL)
+		{
+			if(pg_strncasecmp(previous_words[i], list[j],
+							  cur_prev_wd_len) == 0)
+			{
+				list[j] = "";
+
+				removed_count++;
+			}
+
+			j++;
+		}
+
+		i++;
+	}
+
+	i = 0;
+	j = 0;
+
+	const char* tmp;
+
+	while(list[j] != NULL)
+	{
+		if(list[j][0] != '\0')
+		{
+			tmp = list[i];
+			list[i] = list[j];
+			list[j] = tmp;
+
+			i++;
+		}
+
+		j++;
+	}
+
+	list[i] = NULL;
+
+	return removed_count;
 }
 
 /*
