@@ -1657,28 +1657,28 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* ALTER EXTERNAL TABLE */
-	else if(Matches("ALTER", "EXTERNAL"))
+	else if (Matches("ALTER", "EXTERNAL"))
 		COMPLETE_WITH("TABLE");
-	else if(Matches("ALTER", "EXTERNAL", "TABLE"))
+	else if (Matches("ALTER", "EXTERNAL", "TABLE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny))
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny))
 		COMPLETE_WITH("ADD", "DROP", "ALTER", "OWNER TO");
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ADD"))
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ADD"))
 		COMPLETE_WITH("COLUMN");
 
 	/* ALTER EXTERNAL TABLE <name> ALTER|DROP */
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP"))
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP"))
 		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN'");
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP", "COLUMN"))
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER|DROP", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
 
 	/* ALTER EXTERNAL TABLE <name> ALTER <colname> TYPE */
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER", MatchAny) ||
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER", MatchAny) ||
 			Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny))
 		COMPLETE_WITH("TYPE");
 
 	/* ALTER EXTERNAL TABLE <name> DROP <colname> */
-	else if(Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "DROP", MatchAny) ||
+	else if (Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "DROP", MatchAny) ||
 			Matches("ALTER", "EXTERNAL", "TABLE", MatchAny, "DROP", "COLUMN", MatchAny))
 		COMPLETE_WITH("RESTRICT", "CASCADE");
 
@@ -2354,91 +2354,91 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* CREATE ... EXTERNAL ... TABLE */
-	else if(TailMatches("CREATE", "READABLE|WRITABLE"))
+	else if (TailMatches("CREATE", "READABLE|WRITABLE"))
 		COMPLETE_WITH("EXTERNAL");
-	else if(TailMatches("CREATE", "EXTERNAL") ||
+	else if (TailMatches("CREATE", "EXTERNAL") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL"))
 		COMPLETE_WITH("WEB", "TEMP", "TEMPORARY", "TABLE");
-	else if(TailMatches("CREATE", "EXTERNAL", "WEB") ||
+	else if (TailMatches("CREATE", "EXTERNAL", "WEB") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB"))
 		COMPLETE_WITH("TEMP", "TEMPORARY", "TABLE");
-	else if(TailMatches("CREATE", "EXTERNAL", "TEMP|TEMPORARY") ||
+	else if (TailMatches("CREATE", "EXTERNAL", "TEMP|TEMPORARY") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "TEMP|TEMPORARY") ||
 			TailMatches("CREATE", "EXTERNAL", "WEB", "TEMP|TEMPORARY") ||
 			TailMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY"))
 		COMPLETE_WITH("TABLE");
 
 	/* CREATE ... EXTERNAL ... TABLE */
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
 			TailMatches("TABLE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
 	/* CREATE ... EXTERNAL ... TABLE ... */
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
 			TailMatches("TABLE", MatchAny))
 		COMPLETE_WITH("(");
 	/* CREATE ... EXTERNAL ... FORMAT */
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE|WRITABLE", "EXTERNAL")) &&
 			TailMatches("FORMAT"))
 		COMPLETE_WITH("'TEXT'", "'CSV'", "'CUSTOM'");
 
 	/* CREATE [READABLE] EXTERNAL ... LOG ERRORS */
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
 			TailMatches("LOG", "ERRORS"))
 		COMPLETE_WITH("PERSISTENTLY", "SEGMENT REJECT LIMIT");
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
 			TailMatches("PERSISTENTLY"))
 		COMPLETE_WITH("SEGMENT REJECT LIMIT");
-	else if((HeadMatches("CREATE", "EXTERNAL") ||
+	else if ((HeadMatches("CREATE", "EXTERNAL") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL")) &&
 			TailMatches("SEGMENT", "REJECT", "LIMIT", MatchAny))
 		COMPLETE_WITH("ROWS", "PERCENT");
 
 	/* CREATE [READABLE] EXTERNAL WEB ... */
-	else if(HeadMatches("CREATE", "EXTERNAL", "WEB", "TABLE") ||
+	else if (HeadMatches("CREATE", "EXTERNAL", "WEB", "TABLE") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB", "TABLE") ||
 			HeadMatches("CREATE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE"))
 	{
-		if(TailMatches("TABLE", MatchAny, "(*)"))
+		if (TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('", "EXECUTE '");
-		else if(TailMatches("EXECUTE", "'*'"))
+		else if (TailMatches("EXECUTE", "'*'"))
 			COMPLETE_WITH("FORMAT", "ON");
-		else if(TailMatches("EXECUTE", "'*'", "ON"))
+		else if (TailMatches("EXECUTE", "'*'", "ON"))
 			COMPLETE_WITH("ALL", "COORDINATOR", "HOST", "SEGMENT");
-		else if(TailMatches("LOCATION", "(*)") ||
+		else if (TailMatches("LOCATION", "(*)") ||
 				TailMatches("EXECUTE", "'*'", "ON", MatchAnyExcept("HOST|SEGMENT")) ||
 				TailMatches("EXECUTE", "'*'", "ON", MatchAny, MatchAnyExcept("FORMAT")))
 			COMPLETE_WITH("FORMAT");
-		else if(TailMatches("FORMAT", MatchAny) ||
+		else if (TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
 			COMPLETE_WITH("OPTIONS (", "ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
-		else if(TailMatches("OPTIONS", "(*)"))
+		else if (TailMatches("OPTIONS", "(*)"))
 			COMPLETE_WITH("ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
-		else if(TailMatches("ENCODING", "'*'"))
+		else if (TailMatches("ENCODING", "'*'"))
 			COMPLETE_WITH("LOG ERRORS", "SEGMENT REJECT LIMIT");
 	}
 
 	/* CREATE [READABLE] EXTERNAL ... */
-	else if(HeadMatches("CREATE", "EXTERNAL", "TABLE") ||
+	else if (HeadMatches("CREATE", "EXTERNAL", "TABLE") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL", "TABLE") ||
 			HeadMatches("CREATE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE") ||
 			HeadMatches("CREATE", "READABLE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE"))
 	{
-		if(TailMatches("TABLE", MatchAny, "(*)"))
+		if (TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
-		else if(TailMatches("LOCATION", "(*)"))
+		else if (TailMatches("LOCATION", "(*)"))
 			COMPLETE_WITH("FORMAT");
-		else if(TailMatches("FORMAT", MatchAny) ||
+		else if (TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
 			COMPLETE_WITH("OPTIONS (", "ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
-		else if(TailMatches("OPTIONS", "(*)"))
+		else if (TailMatches("OPTIONS", "(*)"))
 			COMPLETE_WITH("ENCODING '", "LOG ERRORS", "SEGMENT REJECT LIMIT");
-		else if(TailMatches("ENCODING", "'*'"))
+		else if (TailMatches("ENCODING", "'*'"))
 			COMPLETE_WITH("LOG ERRORS", "SEGMENT REJECT LIMIT");
 	}
 
@@ -2448,38 +2448,38 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("BY (", "RANDOMLY");
 
 	/* CREATE WRITABLE EXTERNAL WEB ... */
-	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TABLE") ||
+	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TABLE") ||
 			HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE"))
 	{
-		if(TailMatches("TABLE", MatchAny, "(*)"))
+		if (TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("EXECUTE '");
-		else if(TailMatches("EXECUTE", "'*'"))
+		else if (TailMatches("EXECUTE", "'*'"))
 			COMPLETE_WITH("FORMAT", "ON ALL");
-		else if(TailMatches("EXECUTE", "'*'", "ON", "ALL"))
+		else if (TailMatches("EXECUTE", "'*'", "ON", "ALL"))
 			COMPLETE_WITH("FORMAT");
-		else if(TailMatches("FORMAT", MatchAny) ||
+		else if (TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
 			COMPLETE_WITH("OPTIONS (", "ENCODING '", "DISTRIBUTED");
-		else if(TailMatches("OPTIONS", "(*)"))
+		else if (TailMatches("OPTIONS", "(*)"))
 			COMPLETE_WITH("ENCODING '", "DISTRIBUTED");
-		else if(TailMatches("ENCODING", "'*'"))
+		else if (TailMatches("ENCODING", "'*'"))
 			COMPLETE_WITH("DISTRIBUTED");
 	}
 
 	/* CREATE WRITABLE EXTERNAL ... */
-	else if(HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "TABLE") ||
+	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "TABLE") ||
 			HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "TEMP|TEMPORARY", "TABLE"))
 	{
-		if(TailMatches("TABLE", MatchAny, "(*)"))
+		if (TailMatches("TABLE", MatchAny, "(*)"))
 			COMPLETE_WITH_SUPPRESS_APPEND("LOCATION ('");
-		else if(TailMatches("LOCATION", "(*)"))
+		else if (TailMatches("LOCATION", "(*)"))
 			COMPLETE_WITH("FORMAT");
-		else if(TailMatches("FORMAT", MatchAny) ||
+		else if (TailMatches("FORMAT", MatchAny) ||
 				TailMatches("FORMAT", MatchAny, "(*)"))
 			COMPLETE_WITH("OPTIONS (", "ENCODING '", "DISTRIBUTED");
-		else if(TailMatches("OPTIONS", "(*)"))
+		else if (TailMatches("OPTIONS", "(*)"))
 			COMPLETE_WITH("ENCODING '", "DISTRIBUTED");
-		else if(TailMatches("ENCODING", "'*'"))
+		else if (TailMatches("ENCODING", "'*'"))
 			COMPLETE_WITH("DISTRIBUTED");
 	}
 
@@ -3027,14 +3027,14 @@ psql_completion(const char *text, int start, int end)
 			 Matches("DROP", "TEXT", "SEARCH", "CONFIGURATION|DICTIONARY|PARSER|TEMPLATE", MatchAny))
 		COMPLETE_WITH("CASCADE", "RESTRICT");
 
-	else if(Matches("DROP", "EXTERNAL"))
+	else if (Matches("DROP", "EXTERNAL"))
 		COMPLETE_WITH("WEB", "TABLE");
-	else if(Matches("DROP", "EXTERNAL", "WEB"))
+	else if (Matches("DROP", "EXTERNAL", "WEB"))
 		COMPLETE_WITH("TABLE");
-	else if(Matches("DROP", "EXTERNAL", "TABLE") ||
-			Matches("DROP", "EXTERNAL", "TABLE", "IF", "EXISTS") ||
-			Matches("DROP", "EXTERNAL", "WEB", "TABLE") ||
-			Matches("DROP", "EXTERNAL", "WEB", "TABLE", "IF", "EXISTS"))
+	else if (Matches("DROP", "EXTERNAL", "TABLE") ||
+			 Matches("DROP", "EXTERNAL", "TABLE", "IF", "EXISTS") ||
+			 Matches("DROP", "EXTERNAL", "WEB", "TABLE") ||
+			 Matches("DROP", "EXTERNAL", "WEB", "TABLE", "IF", "EXISTS"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_external_tables, NULL);
 
 	/* help completing some of the variants */
