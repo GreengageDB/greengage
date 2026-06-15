@@ -3067,7 +3067,18 @@ ExecModifyTable(PlanState *pstate)
 						ExecStoreVirtualTuple(oldSlot);
 					}
 					else
-						ExecClearTuple(oldSlot);
+					{
+						/*
+						 * GPDB: no old tuple is available or needed -- the
+						 * expanded targetlist supplies every column from the
+						 * subplan, so the update projection (ExecGetUpdateNewTuple
+						 * below) reads only planSlot, never oldSlot.  Store a
+						 * valid all-NULL tuple rather than leaving the slot empty
+						 * so that ExecGetUpdateNewTuple's !TTS_EMPTY(oldSlot)
+						 * assert holds; these NULL values are never read.
+						 */
+						ExecStoreAllNullTuple(oldSlot);
+					}
 				}
 				else
 				{
