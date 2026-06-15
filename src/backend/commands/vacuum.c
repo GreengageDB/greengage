@@ -3156,7 +3156,12 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 
 		if (GpPolicyIsReplicated(rel->rd_cdbpolicy))
 		{
-			Assert(stats->count == rel->rd_cdbpolicy->numsegments);
+			Assert(stats->count >= rel->rd_cdbpolicy->numsegments);
+			elogif(stats->count > rel->rd_cdbpolicy->numsegments, WARNING,
+				   "Numsegments for relation \"%s\".\"%s\" is less than stats "
+				   "dispatch results count. Valid situation only during cluster shrink.",
+				   get_namespace_name(get_rel_namespace(stats->relid)),
+				   get_rel_name(stats->relid));
 
 			stats->rel_pages = stats->rel_pages / rel->rd_cdbpolicy->numsegments;
 			stats->rel_tuples = stats->rel_tuples / rel->rd_cdbpolicy->numsegments;
