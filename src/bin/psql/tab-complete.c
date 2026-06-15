@@ -2903,10 +2903,10 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("WITH (");
 	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny))
 		COMPLETE_WITH("WITH (", "WITHOUT (");
-	else if((HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*") &&
-			!HeadMatches("CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*)")) || 
-			(HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*") &&
-			!HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH|WITHOUT", "(*)")))
+	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH"))
+		COMPLETE_WITH("(");
+	else if(HeadMatches("ALTER|CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*") &&
+		   !HeadMatches("ALTER|CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*)"))
 	{
 		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
 			COMPLETE_WITH_UNUSED_OPTIONS("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
@@ -2917,6 +2917,14 @@ psql_completion(const char *text, int start, int end)
 		else if(TailMatches("PRIORITY", "="))
 			COMPLETE_WITH("MIN", "LOW", "MEDIUM", "HIGH", "MAX");
 		else if(TailMatches(MatchAny, "=", MatchAny))
+			COMPLETE_WITH(",", ")");
+	}
+	else if(HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITHOUT", "(*") &&
+		   !HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITHOUT", "(*)"))
+	{
+		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+			COMPLETE_WITH_UNUSED_OPTIONS("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
+		else if(TailMatches("ACTIVE_STATEMENTS|MEMORY_LIMIT|MAX_COST|COST_OVERCOMMIT|MIN_COST|PRIORITY"))
 			COMPLETE_WITH(",", ")");
 	}
 
