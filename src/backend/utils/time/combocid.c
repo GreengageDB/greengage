@@ -54,6 +54,7 @@
 #include "utils/memutils.h"
 
 #include "cdb/cdbvars.h"
+#include "cdb/cdbdtxcontextinfo.h"
 #include "storage/proc.h"
 #include "storage/dsm.h"
 #include "utils/resowner.h"
@@ -131,7 +132,22 @@ HeapTupleHeaderGetCmin(HeapTupleHeader tup)
 	CommandId	cid = HeapTupleHeaderGetRawCommandId(tup);
 
 	Assert(!(tup->t_infomask & HEAP_MOVED));
-	Assert(TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(tup)));
+
+	/*
+	 * MPP-8317: a QE reader executing a cursor cannot always tell that the
+	 * inserting transaction is "current".  A cursor reader scans with the
+	 * declare-time snapshot it received from the writer (see
+	 * readerFillLocalSnapshot / readSharedLocalSnapshot_forCursor), while the
+	 * writer gang advances independently -- its subtransactions may have
+	 * committed or aborted since.  IsCurrentTransactionIdForReader() consults
+	 * the writer's *live* PGPROC, so it can legitimately return false for an
+	 * xid that was current when the cursor was opened.  Commit 471653e76e42
+	 * re-added the strict upstream assert on the assumption that readers always
+	 * have a correct view of their current transactions; that does not hold for
+	 * cursors, so exempt the cursor context here as GPDB did historically.
+	 */
+	Assert(QEDtxContextInfo.cursorContext ||
+		   TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(tup)));
 
 	if (tup->t_infomask & HEAP_COMBOCID)
 		return GetRealCmin(cid);
@@ -152,7 +168,8 @@ HeapTupleHeaderGetCmax(HeapTupleHeader tup)
 	 * weakens the check, but not using GetCmax() inside one would complicate
 	 * things too much.
 	 */
-	Assert(CritSectionCount > 0 ||
+	/* MPP-8317: see HeapTupleHeaderGetCmin -- a cursor reader can't always tell */
+	Assert(QEDtxContextInfo.cursorContext || CritSectionCount > 0 ||
 	  TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetUpdateXid(tup)));
 
 	if (tup->t_infomask & HEAP_COMBOCID)
