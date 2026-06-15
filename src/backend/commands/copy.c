@@ -4529,11 +4529,14 @@ CopyFrom(CopyState cstate)
 	}
 
 	/*
-	 * In the old protocol, tell pqcomm that we can process normal protocol
-	 * messages again.
+	 * PG14 removed the pre-3.0 ("old") FE/BE protocol, so COPY_OLD_FE is now
+	 * just an alias for COPY_FRONTEND. The COPY_FRONTEND data path above reads
+	 * one CopyData message at a time via pq_startmsgread()/pq_getmessage(),
+	 * which already balances every pq_startmsgread() with a pq_endmsgread().
+	 * The trailing pq_endmsgread() that the old protocol used here would now
+	 * fire for every COPY FROM STDIN with PqCommReadingMsg already cleared,
+	 * tripping its assertion, so it has been removed (matching upstream).
 	 */
-	if (cstate->copy_dest == COPY_OLD_FE)
-		pq_endmsgread();
 
 	/* Execute AFTER STATEMENT insertion triggers */
 	ExecASInsertTriggers(estate, target_resultRelInfo, cstate->transition_capture);
