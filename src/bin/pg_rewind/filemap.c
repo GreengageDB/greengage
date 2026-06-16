@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "catalog/catalog.h"
 #include "catalog/pg_tablespace_d.h"
 #include "common/hashfn.h"
 #include "common/relpath.h"
@@ -647,6 +648,18 @@ decide_file_action(file_entry_t *entry)
 	 * all the other files.
 	 */
 	if (strcmp(path, "global/pg_control") == 0)
+		return FILE_ACTION_NONE;
+
+	/*
+	 * GPDB: internal.auto.conf holds this segment's identity (gp_dbid). It must
+	 * be neither copied from the source (that would give the rewound target the
+	 * source segment's dbid -- FTS then rejects its probes with "received
+	 * dbid:N doesn't match this segments configured dbid", breaking promotion
+	 * and rebalance) nor removed (the target needs its own to start). Leave the
+	 * target's copy untouched. Pre-PG14 pg_rewind special-cased this; it was
+	 * dropped when upstream filemap.c was adopted wholesale (commit 46f49ad3500).
+	 */
+	if (strcmp(path, GP_INTERNAL_AUTO_CONF_FILE_NAME) == 0)
 		return FILE_ACTION_NONE;
 
 	/*
