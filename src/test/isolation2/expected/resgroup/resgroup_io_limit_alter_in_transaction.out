@@ -164,9 +164,89 @@ SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segme
 (1 row)
 
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault 
+ gp_inject_fault
 -----------------
- Success:        
+ Success:
+(1 row)
+
+-- 5 Subtransaction rollback followed by the same io_limit value.
+-- The rolled back callback and the real callback carry the same value, the
+-- stored value compare keeps one and only one apply should matter.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+BEGIN;
+BEGIN
+SAVEPOINT s1;
+SAVEPOINT
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'pg_default:rbps=5000,wbps=5000';
+ALTER RESOURCE GROUP
+ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'pg_default:rbps=5000,wbps=5000';
+ALTER RESOURCE GROUP
+COMMIT;
+COMMIT
+
+SELECT * FROM rg_alter_tran_status_io_limit;
+ groupname       | io_limit
+-----------------+----------------------------------------------
+ rg_alter_tran   | 1663:rbps=5000,wbps=5000,riops=max,wiops=max
+ rg_alter_tran_b | 1663:rbps=2000,wbps=2000,riops=max,wiops=max
+(2 rows)
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default', 'rbps=5242880000 wbps=5242880000 riops=max wiops=max');
+ check_cgroup_io_max
+---------------------
+ t
+(1 row)
+
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1'
+
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+-- 6 ALTER changes io_limit and then changes it back in one transaction.
+-- The stored value compare keeps the callback whose value matches the final
+-- catalog state, so the committed value is the prior one.
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'pg_default:rbps=6000,wbps=6000';
+ALTER RESOURCE GROUP
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'pg_default:rbps=5000,wbps=5000';
+ALTER RESOURCE GROUP
+COMMIT;
+COMMIT
+
+SELECT * FROM rg_alter_tran_status_io_limit;
+ groupname       | io_limit
+-----------------+----------------------------------------------
+ rg_alter_tran   | 1663:rbps=5000,wbps=5000,riops=max,wiops=max
+ rg_alter_tran_b | 1663:rbps=2000,wbps=2000,riops=max,wiops=max
+(2 rows)
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default', 'rbps=5242880000 wbps=5242880000 riops=max wiops=max');
+ check_cgroup_io_max
+---------------------
+ t
 (1 row)
 
 -- clean

@@ -135,6 +135,56 @@ SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
 FROM gp_segment_configuration
 WHERE content = -1 AND role = 'p';
 
+-- 5 Subtransaction rollback followed by the same io_limit value.
+-- The rolled back callback and the real callback carry the same value, the
+-- stored value compare keeps one and only one apply should matter.
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit',
+                       'skip', '', '', '', 1, 100, 0, dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+BEGIN;
+SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran
+  SET io_limit 'pg_default:rbps=5000,wbps=5000';
+ROLLBACK TO SAVEPOINT s1;
+ALTER RESOURCE GROUP rg_alter_tran
+  SET io_limit 'pg_default:rbps=5000,wbps=5000';
+COMMIT;
+
+SELECT * FROM rg_alter_tran_status_io_limit;
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default',
+    'rbps=5242880000 wbps=5242880000 riops=max wiops=max');
+
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid)
+FROM gp_segment_configuration
+WHERE content = -1 AND role = 'p';
+
+-- 6 ALTER changes io_limit and then changes it back in one transaction.
+-- The stored value compare keeps the callback whose value matches the final
+-- catalog state, so the committed value is the prior one.
+BEGIN;
+ALTER RESOURCE GROUP rg_alter_tran
+  SET io_limit 'pg_default:rbps=6000,wbps=6000';
+ALTER RESOURCE GROUP rg_alter_tran
+  SET io_limit 'pg_default:rbps=5000,wbps=5000';
+COMMIT;
+
+SELECT * FROM rg_alter_tran_status_io_limit;
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default',
+    'rbps=5242880000 wbps=5242880000 riops=max wiops=max');
+
 -- clean
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;

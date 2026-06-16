@@ -13,6 +13,7 @@ DROP FUNCTION IF EXISTS rg_alter_tran_func();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_sub_fail();
 DROP FUNCTION IF EXISTS rg_alter_tran_func_own_group();
+DROP ROLE IF EXISTS role_alter_tran_b;
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP rg_alter_tran_b;
 CREATE EXTENSION gp_inject_fault;
@@ -634,6 +635,43 @@ SELECT * FROM rg_alter_tran_status;
 
 1: ALTER RESOURCE GROUP rg_alter_tran SET CONCURRENCY 9;
 1: SELECT * FROM rg_alter_tran_status;
+
+-- 34 Duplicate CPU_MAX_PERCENT with a CPUSET callback between the two.
+-- The later duplicate must survive so CPUSET applies before it and the group
+-- stays in CPU_MAX_PERCENT mode. Keeping the earlier duplicate would let CPUSET
+-- apply last and switch the group to CPUSET mode.
+1: ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 110;
+
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 30;
+1: ALTER RESOURCE GROUP rg_alter_tran SET CPUSET '0';
+1: ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 30;
+1: COMMIT;
+1: SELECT * FROM rg_alter_tran_status;
+
+-- Should be two in `num times hit`, the earlier duplicate is rejected.
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+-- 35 A no-op move into the session's own group succeeds while that group is
+-- being edited. A move to a different group or the system group still errors.
+1: CREATE ROLE role_alter_tran_b RESOURCE GROUP rg_alter_tran_b;
+3: SET ROLE role_alter_tran_b;
+3: BEGIN;
+3: SELECT 1 a FROM pg_class LIMIT 1;
+1: BEGIN;
+1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
+2: SELECT pg_resgroup_move_query(pid, 'rg_alter_tran_b') FROM pg_stat_activity WHERE rsgname = 'rg_alter_tran_b' AND state = 'idle in transaction';
+2: SELECT pg_resgroup_move_query(pid, 'rg_alter_tran') FROM pg_stat_activity WHERE rsgname = 'rg_alter_tran_b' AND state = 'idle in transaction';
+2: SELECT pg_resgroup_move_query(pid, 'system_group') FROM pg_stat_activity WHERE rsgname = 'rg_alter_tran_b' AND state = 'idle in transaction';
+1: ROLLBACK;
+3: END;
+2q:
+3q:
+1: DROP ROLE role_alter_tran_b;
 
 -- cleanup
 1: DROP VIEW rg_alter_tran_status;
