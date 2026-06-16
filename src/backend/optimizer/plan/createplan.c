@@ -3362,6 +3362,20 @@ create_motion_plan(PlannerInfo *root, CdbMotionPath *path, int flags)
 			elog(ERROR, "unknown locus type %d", subpath->locus.locustype);
 	}
 
+	/*
+	 * make_motion() forbids a Motion directly atop another Motion.  That can
+	 * happen when a path that itself plans to a Motion is redistributed again
+	 * -- e.g. CREATE TABLE ... AS SELECT <agg> ... DISTRIBUTED BY (<agg>),
+	 * where the single-row aggregate result (already behind a gather/
+	 * redistribute Motion) is redistributed by the new table's policy.
+	 * Interpose a pass-through Result so the two Motions occupy adjacent
+	 * slices; setrefs will rewire the Result's targetlist to reference the
+	 * lower Motion's output.
+	 */
+	if (IsA(subplan, Motion))
+		subplan = (Plan *) make_result(copyObject(subplan->targetlist),
+									   NULL, subplan);
+
 	/* Add motion operator. */
 	motion = cdbpathtoplan_create_motion_plan(root, path, subplan);
 	motion->senderSliceInfo = sendSlice;
