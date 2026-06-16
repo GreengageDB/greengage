@@ -830,11 +830,11 @@ Feature: expand the cluster by adding more segments
         And database "gptest" exists
         And the user creates an event trigger test_trigger
         And verify that event trigger test_trigger exists
-        And verify that event trigger not exists in segment 1
+        And verify that event trigger not exists on segments
         When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
         Then gpexpand should return a return code of 0
         And verify that the cluster has 1 new segments
-        And verify that event trigger not exists in segment 2
+        And verify that event trigger not exists on segments
 

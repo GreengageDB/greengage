@@ -4702,12 +4702,10 @@ def impl(context, trigger_name):
         cursor = dbconn.execSQL(conn, sql)
         assert cursor.rowcount == 1
 
-@given('verify that event trigger not exists in segment {segment}')
-@then('verify that event trigger not exists in segment {segment}')
-def impl(context, segment):
-    host, port = get_primary_segment_host_port_for_content(segment)
-    dburl = dbconn.DbURL(hostname=host, port=port)
-    with dbconn.connect(dburl, unsetSearchPath=False, utility=True) as conn:
-        sql = "SELECT * FROM pg_event_trigger;"
+@given('verify that event trigger not exists on segments')
+@then('verify that event trigger not exists on segments')
+def impl(context):
+    with dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False) as conn:
+        sql = "SELECT * FROM gp_dist_random('pg_event_trigger');"
         cursor = dbconn.execSQL(conn, sql)
         assert cursor.rowcount == 0
