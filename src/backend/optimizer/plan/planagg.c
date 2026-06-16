@@ -124,6 +124,20 @@ preprocess_minmax_aggregates(PlannerInfo *root)
 		return;
 
 	/*
+	 * Reject if planner state that build_minmaxagg_path()'s cloned subroot
+	 * asserts (and requires) to be empty has already been built.  In GPDB a
+	 * CREATE TABLE / MATERIALIZED VIEW AS ... DISTRIBUTED BY (<col>) records
+	 * the result distribution as an equivalence class before grouping_planner
+	 * reaches here; the shallow-copied subroot would then share, and the
+	 * subquery's query_planner() corrupt, root's lists.  The MIN/MAX indexscan
+	 * rewrite is only an optimization, so fall back to regular aggregation.
+	 */
+	if (root->eq_classes != NIL ||
+		root->join_info_list != NIL ||
+		root->placeholder_list != NIL)
+		return;
+
+	/*
 	 * We also restrict the query to reference exactly one table, since join
 	 * conditions can't be handled reasonably.  (We could perhaps handle a
 	 * query containing cartesian-product joins, but it hardly seems worth the
