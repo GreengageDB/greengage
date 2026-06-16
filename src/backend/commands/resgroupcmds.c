@@ -1316,6 +1316,10 @@ resGroupIOLimitMatchesStoredValue(Relation rel,
 /*
  * Check whether the field changed by this callback has the same value in
  * the given capability snapshot.
+ *
+ * The set of fields compared per limit type must stay equal to the set
+ * resGroupCapFieldApply in resgroup.c installs at COMMIT, otherwise a kept
+ * callback writes a field that was never validated against the final state.
  */
 static bool
 resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,

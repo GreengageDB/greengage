@@ -767,6 +767,11 @@ ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 /*
  * Apply only the field changed by callbackCtx->limittype to the target
  * capability snapshot.
+ *
+ * The set of fields installed per limit type must stay equal to the set
+ * resGroupCapFieldMatches in resgroupcmds.c compares at PRE_COMMIT, otherwise
+ * a kept callback writes a field that was never validated against the final
+ * state.
  */
 static void
 resGroupCapFieldApply(ResGroupCaps *dst,
