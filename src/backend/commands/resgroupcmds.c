@@ -1530,7 +1530,8 @@ alterResgroupCallback(XactEvent event, void *arg)
 	}
 	else if (event == XACT_EVENT_PRE_COMMIT)
 	{
-		List	   *prepared = NIL;
+		List *volatile prepared = NIL;
+		List *volatile finalIoLimit = NIL;
 		List	   *rejected = NIL;
 		Relation	rel;
 		ResGroupCaps finalCaps;
@@ -1543,13 +1544,13 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 		/*
 		 * GetResGroupCapabilities can raise on a malformed stored value, which
-		 * would turn this commit into an abort. Release the relation and the
-		 * TopMemoryContext lists on that path so they do not leak, then let the
-		 * abort proceed. The contexts themselves stay owned by
-		 * resgroup_alter_callbacks, which the abort callback frees.
+		 * would turn this commit into an abort. Release the relation, the
+		 * TopMemoryContext list and the parsed io_limit on that path so they
+		 * do not leak, then let the abort proceed. The variables read after
+		 * the longjmp are volatile. The rejected list lives in transaction
+		 * memory and needs no cleanup here. The contexts themselves stay
+		 * owned by resgroup_alter_callbacks, which the abort callback frees.
 		 */
-		finalCaps.io_limit = NIL;
-
 		PG_TRY();
 		{
 			foreach (lc, resgroup_alter_callbacks)
@@ -1560,6 +1561,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 				SIMPLE_FAULT_INJECTOR("resgroup_alter_pre_commit");
 
 				GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+				finalIoLimit = finalCaps.io_limit;
 
 				if (ctx->limittype == RESGROUP_LIMIT_TYPE_IO_LIMIT)
 					matchesFinal = resGroupIOLimitMatchesStoredValue(rel, ctx);
@@ -1586,39 +1588,33 @@ alterResgroupCallback(XactEvent event, void *arg)
 						resgroupAlterCallbackFindPreparedDuplicate(prepared,
 																   ctx);
 
-					oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-
 					if (duplicate != NULL)
 					{
 						prepared = list_delete_ptr(prepared, duplicate);
 						rejected = lappend(rejected, duplicate);
 					}
 
+					oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 					prepared = lappend(prepared, ctx);
 					MemoryContextSwitchTo(oldcxt);
 				}
 				else
-				{
-					MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 					rejected = lappend(rejected, ctx);
-					MemoryContextSwitchTo(oldcxt);
-				}
 
-				if (finalCaps.io_limit != NIL)
+				if (finalIoLimit != NIL)
 				{
-					cgroupOpsRoutine->freeio(finalCaps.io_limit);
-					finalCaps.io_limit = NIL;
+					cgroupOpsRoutine->freeio(finalIoLimit);
+					finalIoLimit = NIL;
 				}
 			}
 		}
 		PG_CATCH();
 		{
-			if (finalCaps.io_limit != NIL)
-				cgroupOpsRoutine->freeio(finalCaps.io_limit);
+			if (finalIoLimit != NIL)
+				cgroupOpsRoutine->freeio(finalIoLimit);
 
 			heap_close(rel, AccessShareLock);
 			list_free(prepared);
-			list_free(rejected);
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
