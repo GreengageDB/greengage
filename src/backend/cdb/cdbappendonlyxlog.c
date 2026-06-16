@@ -20,7 +20,6 @@
 #include <sys/file.h>
 
 #include "access/aomd.h"
-#include "access/xlog.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "cdb/cdbappendonlyxlog.h"
@@ -158,21 +157,8 @@ ao_truncate_replay(XLogReaderState *record)
 		 * the entry to invalid hash table for truncate at offset zero
 		 * (EOF=0).  This avoids mirror PANIC, as anyways truncate to zero is
 		 * same as file not present.
-		 *
-		 * The same "file missing on the mirror" situation can also produce a
-		 * truncate record with a non-zero offset (e.g. VACUUM compaction
-		 * truncating a segfile down to its minimal header). Registering an
-		 * invalid-page entry only makes sense while recovery has not yet
-		 * reached a consistent state: log_invalid_page() defers the check then
-		 * and forgets it if the relfilenode is later dropped. Once the mirror
-		 * is consistent (streaming replay), log_invalid_page() escalates a
-		 * missing reference straight to PANIC. Truncating a segfile that is
-		 * absent on the mirror is a no-op there, so after consistency we must
-		 * not register it -- doing so PANICs the mirror. Genuine WAL gaps are
-		 * still caught by ao_insert_replay(), which creates/registers the
-		 * segfile as needed.
 		 */
-		if (xlrec->target.offset != 0 && !reachedConsistency)
+		if (xlrec->target.offset != 0)
 			XLogAOSegmentFile(xlrec->target.node, xlrec->target.segment_filenum);
 		return;
 	}
