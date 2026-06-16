@@ -485,13 +485,25 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		 * Fail if any resource group is being edited.
 		 * ALTER holds ExclusiveLock until end of transaction.
 		 * RowShareLock allows concurrent moves but conflicts with it.
+		 * A move into the group the session already occupies reads no
+		 * capability values, so it succeeds without the lock.
 		 */
 		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
 										RowShareLock))
 		{
-			ereport(ERROR,
-					(errcode(ERRCODE_OBJECT_IN_USE),
-					(errmsg("cannot move query while a resource group is being edited"))));
+			groupId = get_resgroup_oid(groupName, true);
+			sessionId = GetSessionIdByPid(pid);
+
+			if (groupId == InvalidOid ||
+				groupId == SYSTEMRESGROUP_OID ||
+				sessionId == -1 ||
+				IsResGroupBypassedBySessionId(sessionId) ||
+				ResGroupGetGroupIdBySessionId(sessionId) != groupId)
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_IN_USE),
+						(errmsg("cannot move query while a resource group is being edited"))));
+
+			PG_RETURN_BOOL(true);
 		}
 
 		groupId = get_resgroup_oid(groupName, false);
