@@ -2108,51 +2108,51 @@ insert into dqa_f2 select i % 13, i % 5 , i % 11 from generate_series(1,1000) i;
 select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by b;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by c;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 select sum(distinct a) filter (where a in (select x from dqa_f2 where x = a)), sum(distinct b) filter (where a > 0) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 select sum(distinct a) filter (where a in (select x from dqa_f2 where x = a)), sum(distinct b) filter (where a > 0) from dqa_f1 group by c;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 select count(distinct a) filter (where a > 3),count( distinct b) filter (where a > 4), sum(distinct b) filter( where a > 4) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by b;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by c;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select sum(distinct a) filter (where a in (select x from dqa_f2 where x = a)), sum(distinct b) filter (where a > 0) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select sum(distinct a) filter (where a in (select x from dqa_f2 where x = a)), sum(distinct b) filter (where a > 0) from dqa_f1 group by c;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 explain select count(distinct a) filter (where a > 3),count( distinct b) filter (where a > 4), sum(distinct b) filter( where a > 4) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-ERROR:  variable not found in subplan target list (setrefs.c:3375)
+ERROR:  variable not found in subplan target list (setrefs.c:3380)
 -- single DQA with agg
 -- the following SQL should use two stage agg
 explain select count(distinct a), sum(b), sum(c) from dqa_f1;

@@ -292,7 +292,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_tvmm;
 ERROR:  cannot refresh materialized view "public.mvtest_tvmm" concurrently
 HINT:  Create a unique index with no WHERE clause on one or more columns of the materialized view.
 REFRESH MATERIALIZED VIEW mvtest_tvmm;
-ERROR:  could not find hash distribution key expressions in target list (createplan.c:8615)
+ERROR:  could not find hash distribution key expressions in target list (createplan.c:8633)
 REFRESH MATERIALIZED VIEW mvtest_tvvm;
 EXPLAIN (costs off)
   SELECT * FROM mvtest_tmm;
