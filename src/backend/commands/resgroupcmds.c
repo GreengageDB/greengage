@@ -1535,6 +1535,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 		List	   *rejected = NIL;
 		Relation	rel;
 		ResGroupCaps finalCaps;
+		Oid			cachedGroupId = InvalidOid;
 
 		/*
 		 * Keep final, non-duplicate callbacks, plus CPUSET callbacks whose
@@ -1560,8 +1561,23 @@ alterResgroupCallback(XactEvent event, void *arg)
 
 				SIMPLE_FAULT_INJECTOR("resgroup_alter_pre_commit");
 
-				GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
-				finalIoLimit = finalCaps.io_limit;
+				/*
+				 * The catalog cannot change inside the loop because the ALTER
+				 * statements hold ExclusiveLock on the relation until commit,
+				 * so one snapshot per group suffices.
+				 */
+				if (ctx->groupid != cachedGroupId)
+				{
+					if (finalIoLimit != NIL)
+					{
+						cgroupOpsRoutine->freeio(finalIoLimit);
+						finalIoLimit = NIL;
+					}
+
+					GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+					finalIoLimit = finalCaps.io_limit;
+					cachedGroupId = ctx->groupid;
+				}
 
 				if (ctx->limittype == RESGROUP_LIMIT_TYPE_IO_LIMIT)
 					matchesFinal = resGroupIOLimitMatchesStoredValue(rel, ctx);
@@ -1600,12 +1616,12 @@ alterResgroupCallback(XactEvent event, void *arg)
 				}
 				else
 					rejected = lappend(rejected, ctx);
+			}
 
-				if (finalIoLimit != NIL)
-				{
-					cgroupOpsRoutine->freeio(finalIoLimit);
-					finalIoLimit = NIL;
-				}
+			if (finalIoLimit != NIL)
+			{
+				cgroupOpsRoutine->freeio(finalIoLimit);
+				finalIoLimit = NIL;
 			}
 		}
 		PG_CATCH();
