@@ -208,6 +208,17 @@ ExecTupleSplit(PlanState *pstate)
 			}
 
 		}
+		else
+		{
+			/*
+			 * A DQA without a FILTER never filters its tuple out.  Reset the
+			 * flag explicitly: otherwise a filtered-out earlier DQA in this
+			 * same call leaves filter_out=true, and since this branch neither
+			 * clears it nor advances currentExprId, the do/while spins forever
+			 * (an uninterruptible hang once the split feeds a Motion).
+			 */
+			filter_out = false;
+		}
 	} while(filter_out);
 
 	/* reset the isnull array to the original state */
