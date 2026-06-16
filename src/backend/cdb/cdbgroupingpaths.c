@@ -2190,40 +2190,69 @@ fetch_multi_dqas_info(PlannerInfo *root,
 	info->dqa_group_clause = list_concat(info->dqa_group_clause,
 										 list_copy(ctx->groupClause));
 
-	info->partial_target= ctx->partial_grouping_target;
-	info->final_target = ctx->target;
-
 	/*
-	 * The loop above stamped agg_expr_id on the Aggref instances of the
-	 * cost lists, but the partial stage's targetlist holds separate
-	 * flat-copies made by make_partial_grouping_target() before any ids
-	 * existed.  The guarded (TupleSplit-consuming) stage is built from
-	 * exactly those copies, so without this propagation every guard
-	 * compared the AggExprId column against -1 and all multi-DQA
-	 * aggregates returned NULL/0.  Propagate by aggno, which is shared
-	 * across stage instances of the same aggregate.
+	 * The partial and final stage targetlists carry their own flat-copies of
+	 * the DISTINCT Aggrefs (made by make_partial_grouping_target() and the
+	 * query's grouping target), distinct from the cost-list copies mutated by
+	 * the loop above.  Two adjustments made there on the cost-list copies must
+	 * also reach these plan copies, matched by aggno (shared across stage
+	 * instances of the same aggregate):
+	 *
+	 *  - agg_expr_id (partial stage only): the guarded, TupleSplit-consuming
+	 *    stage reads it to match split tuples against its transition.  Without
+	 *    it every guard compared the AggExprId column against -1 and all
+	 *    multi-DQA aggregates returned NULL/0.
+	 *
+	 *  - aggfilter removal (both stages): a DISTINCT aggregate's FILTER is
+	 *    enforced down in TupleSplit via DQAExpr.agg_filter (the fetch loop
+	 *    above moved it there and cleared it on the cost-list copies).  Leaving
+	 *    it on the plan Aggref makes setrefs try to resolve the raw filter
+	 *    columns against a subplan that no longer exposes them, failing with
+	 *    "variable not found in subplan target list".
+	 *
+	 * copy_pathtarget() only shallow-copies the expr list, so mutate private
+	 * copies of the Aggrefs to avoid disturbing the ones other (non-TupleSplit)
+	 * candidate paths for this rel still share.
 	 */
+	info->partial_target = copy_pathtarget(ctx->partial_grouping_target);
+	info->final_target = copy_pathtarget(ctx->target);
 	{
-		ListCell   *lc_t;
+		PathTarget *plan_targets[2];
+		bool		stamp_expr_id[2];
 
-		foreach(lc_t, info->partial_target->exprs)
+		plan_targets[0] = info->partial_target;
+		stamp_expr_id[0] = true;
+		plan_targets[1] = info->final_target;
+		stamp_expr_id[1] = false;
+
+		for (int ti = 0; ti < 2; ti++)
 		{
-			Expr	   *expr = (Expr *) lfirst(lc_t);
-			ListCell   *lc_a;
+			ListCell   *lc_t;
 
-			if (!IsA(expr, Aggref))
-				continue;
-			forboth(lc_a, ctx->agg_partial_costs->distinctAggrefs,
-					lc, ctx->agg_final_costs->distinctAggrefs)
+			foreach(lc_t, plan_targets[ti]->exprs)
 			{
-				Aggref	   *stamped = (Aggref *) lfirst(lc_a);
-				Aggref	   *stamped_final = (Aggref *) lfirst(lc);
+				Expr	   *expr = (Expr *) lfirst(lc_t);
+				ListCell   *lc_a;
 
-				if (stamped->aggno == ((Aggref *) expr)->aggno)
+				if (!IsA(expr, Aggref))
+					continue;
+				forboth(lc_a, ctx->agg_partial_costs->distinctAggrefs,
+						lc, ctx->agg_final_costs->distinctAggrefs)
 				{
-					((Aggref *) expr)->agg_expr_id =
-						Max(stamped->agg_expr_id, stamped_final->agg_expr_id);
-					break;
+					Aggref	   *stamped = (Aggref *) lfirst(lc_a);
+					Aggref	   *stamped_final = (Aggref *) lfirst(lc);
+
+					if (stamped->aggno == ((Aggref *) expr)->aggno)
+					{
+						Aggref	   *plan_agg = copyObject((Aggref *) expr);
+
+						if (stamp_expr_id[ti])
+							plan_agg->agg_expr_id =
+								Max(stamped->agg_expr_id, stamped_final->agg_expr_id);
+						plan_agg->aggfilter = NULL;
+						lfirst(lc_t) = plan_agg;
+						break;
+					}
 				}
 			}
 		}
