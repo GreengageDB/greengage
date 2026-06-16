@@ -500,10 +500,10 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Rolled back steps:\s*\d+" regex to logfile
          And ggrebalance should print "Cancelled steps:\s*0" regex to logfile
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should not print " Cancelled steps " to logfile with latest timestamp
          And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
-         And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
+         And ggrebalance should print " Rolled back steps " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -559,7 +559,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Rolled back steps:\s*0" regex to logfile
          And ggrebalance should print "Cancelled steps:\s*\d+" regex to logfile
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled steps " to logfile with latest timestamp
          And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance should print "These segments should be started manually in order cluster to become fault tolerant:" to logfile with latest timestamp
          And clear user's answers
@@ -666,9 +666,9 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
          And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance should not print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should not print " Cancelled steps " to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
-         And ggrebalance should print " Rolled back moves " to logfile with latest timestamp
+         And ggrebalance should print " Rolled back steps " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -772,10 +772,10 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
          And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled steps " to logfile with latest timestamp
          And ggrebalance should not print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
-         And ggrebalance should not print " Rolled back moves " to logfile with latest timestamp
+         And ggrebalance should not print " Rolled back steps " to logfile with latest timestamp
          And clear user's answers
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
@@ -831,11 +831,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
          And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance should print " Cancelled moves " to logfile with latest timestamp
+         And ggrebalance should print " Cancelled steps " to logfile with latest timestamp
          And ggrebalance should print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance should print "These segments should be started manually in order cluster to become fault tolerant:" to logfile with latest timestamp
          And ggrebalance should print "Cluster is left in unbalanced state" to logfile with latest timestamp
-         And ggrebalance should not print " Rolled back moves " to logfile with latest timestamp
+         And ggrebalance should not print " Rolled back steps " to logfile with latest timestamp
          And clear user's answers
          # some mirrors are definitely down, so do not check them
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
