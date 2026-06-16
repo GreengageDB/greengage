@@ -848,6 +848,13 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 
 		group->caps = newCaps;
 
+		/*
+		 * Remove local pointers, as createGroup does. The io_limit list
+		 * lives in this backend's TopMemoryContext and is freed right after
+		 * the apply, so the shared copy must not keep it.
+		 */
+		group->caps.io_limit = NIL;
+
 		if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
 		{
 			cgroupOpsRoutine->setcpulimit(callbackCtx->groupid,
