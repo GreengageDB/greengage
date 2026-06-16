@@ -807,10 +807,10 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "SELECT _$newdata FROM %s _$newdata "
-					 "WHERE _$newdata IS NOT NULL AND EXISTS "
-					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
-					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
+					 "SELECT _$newdata.* FROM %s _$newdata "
+					 "WHERE _$newdata.* IS NOT NULL AND EXISTS "
+					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2.* IS NOT NULL "
+					 "AND _$newdata2.* OPERATOR(pg_catalog.*=) _$newdata.* "
 					 "AND (_$newdata2.ctid OPERATOR(pg_catalog.<>) "
 					 "_$newdata.ctid OR _$newdata2.gp_segment_id "
 					 "OPERATOR(pg_catalog.<>) _$newdata.gp_segment_id))",
@@ -983,8 +983,8 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 
 	appendStringInfoString(&querybuf,
-						   " AND _$newdata OPERATOR(pg_catalog.*=) _$mv) "
-						   "WHERE _$newdata IS NULL OR _$mv IS NULL "
+						   " AND _$newdata.* OPERATOR(pg_catalog.*=) _$mv.*) "
+						   "WHERE _$newdata.* IS NULL OR _$mv.* IS NULL "
 						   "ORDER BY tid");
 
 	/* Create the temporary "diff" table. */
