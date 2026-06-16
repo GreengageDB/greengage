@@ -764,6 +764,56 @@ GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
 }
 
 /*
+ * Get the stored value string of one capability type for a group.
+ */
+static char *
+getResgroupCapabilityValueString(Relation rel, Oid groupId,
+								 ResGroupLimitType limitType)
+{
+	SysScanDesc	sscan;
+	ScanKeyData	key;
+	HeapTuple	tuple;
+	char	   *value = NULL;
+	bool		isNull;
+
+	ScanKeyInit(&key,
+				Anum_pg_resgroupcapability_resgroupid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(groupId));
+
+	sscan = systable_beginscan(rel,
+							   ResGroupCapabilityResgroupidIndexId,
+							   true,
+							   NULL, 1, &key);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
+	{
+		Datum		typeDatum;
+		Datum		valueDatum;
+
+		typeDatum = heap_getattr(tuple, Anum_pg_resgroupcapability_reslimittype,
+								 rel->rd_att, &isNull);
+		if ((ResGroupLimitType) DatumGetInt16(typeDatum) != limitType)
+			continue;
+
+		valueDatum = heap_getattr(tuple, Anum_pg_resgroupcapability_value,
+								  rel->rd_att, &isNull);
+		value = TextDatumGetCString(valueDatum);
+		break;
+	}
+
+	systable_endscan(sscan);
+
+	if (value == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("cannot find %s capability for resource group: %d",
+						getResgroupOptionName(limitType), groupId)));
+
+	return value;
+}
+
+/*
  * Get resource group id for a role in pg_authid.
  *
  * An exception is thrown if the current role is invalid. This can happen if,
@@ -1231,6 +1281,39 @@ resGroupIOLimitMatches(List *left, List *right)
 }
 
 /*
+ * Compare the callback io_limit with the stored catalog value as strings.
+ *
+ * The stored value is the dumpio output of the ALTER that wrote it, so the
+ * strings are equal exactly when this callback wrote the final state.
+ * Re-parsing the stored value can fail and be demoted to a WARNING when a
+ * tablespace path disappears, and such a failure must not silently drop a
+ * committed ALTER, so the comparison avoids parseio entirely.
+ */
+static bool
+resGroupIOLimitMatchesStoredValue(Relation rel,
+								  const ResourceGroupCallbackContext *ctx)
+{
+	char	   *storedValue;
+	char	   *ctxValue;
+	bool		is_match;
+
+	storedValue = getResgroupCapabilityValueString(rel, ctx->groupid,
+												   RESGROUP_LIMIT_TYPE_IO_LIMIT);
+
+	if (ctx->caps.io_limit == NIL)
+		ctxValue = pstrdup(DefaultIOLimit);
+	else
+		ctxValue = cgroupOpsRoutine->dumpio(ctx->caps.io_limit);
+
+	is_match = strcmp(storedValue, ctxValue) == 0;
+
+	pfree(storedValue);
+	pfree(ctxValue);
+
+	return is_match;
+}
+
+/*
  * Check whether the field changed by this callback has the same value in
  * the given capability snapshot.
  */
@@ -1472,17 +1555,23 @@ alterResgroupCallback(XactEvent event, void *arg)
 			foreach (lc, resgroup_alter_callbacks)
 			{
 				ResourceGroupCallbackContext *ctx = lfirst(lc);
+				bool		matchesFinal;
 
 				SIMPLE_FAULT_INJECTOR("resgroup_alter_pre_commit");
 
 				GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
 
-				if (resGroupCapFieldMatches(ctx, &finalCaps) ||
-					(ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
-					 resgroupHasLaterCpuCallbackMatchingFinal(
+				if (ctx->limittype == RESGROUP_LIMIT_TYPE_IO_LIMIT)
+					matchesFinal = resGroupIOLimitMatchesStoredValue(rel, ctx);
+				else
+					matchesFinal = resGroupCapFieldMatches(ctx, &finalCaps) ||
+						(ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
+						 resgroupHasLaterCpuCallbackMatchingFinal(
 													resgroup_alter_callbacks,
 													ctx,
-													&finalCaps)))
+													&finalCaps));
+
+				if (matchesFinal)
 				{
 					MemoryContext oldcxt;
 
