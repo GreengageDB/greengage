@@ -61,8 +61,8 @@ FETCH 5 in foo5;
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
     8800 |       0 |   0 |    0 |   0 |      0 |       0 |      800 |         800 |      3800 |     8800 |   0 |    1 | MAAAAA   | AAAAAA   | AAAAxx
     1891 |       1 |   1 |    3 |   1 |     11 |      91 |      891 |        1891 |      1891 |     1891 | 182 |  183 | TUAAAA   | BAAAAA   | HHHHxx
-    9850 |       3 |   0 |    2 |   0 |     10 |      50 |      850 |        1850 |      4850 |     9850 | 100 |  101 | WOAAAA   | DAAAAA   | VVVVxx
     3420 |       2 |   0 |    0 |   0 |      0 |      20 |      420 |        1420 |      3420 |     3420 |  40 |   41 | OBAAAA   | CAAAAA   | OOOOxx
+    9850 |       3 |   0 |    2 |   0 |     10 |      50 |      850 |        1850 |      4850 |     9850 | 100 |  101 | WOAAAA   | DAAAAA   | VVVVxx
     7164 |       4 |   0 |    0 |   4 |      4 |      64 |      164 |        1164 |      2164 |     7164 | 128 |  129 | OPAAAA   | EAAAAA   | AAAAxx
 (5 rows)
 
@@ -556,8 +556,6 @@ ROLLBACK;
 -- cursor
 --
 create temp table tt1(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function count_tt1_v() returns int8 as
 'select count(*) from tt1' language sql volatile READS SQL DATA;
 create function count_tt1_s() returns int8 as
@@ -567,12 +565,6 @@ insert into tt1 values(1);
 declare c1 cursor for select count_tt1_v(), count_tt1_s();
 insert into tt1 values(2);
 -- fetch all from c1; -- DISABLED: see open JIRA MPP-835
--- start_ignore
- count_tt1_v | count_tt1_s 
--------------+-------------
-           2 |           1
-(1 row)
--- end_ignore
 rollback;
 begin;
 insert into tt1 values(1);
@@ -581,12 +573,6 @@ insert into tt1 values(2);
 commit;
 delete from tt1;
 -- fetch all from c2; -- DISABLED: see open JIRA MPP-835
--- start_ignore
- count_tt1_v | count_tt1_s 
--------------+-------------
-           2 |           1
-(1 row)
--- end_ignore
 drop function count_tt1_v();
 drop function count_tt1_s();
 -- Create a cursor with the BINARY option and check the pg_cursors view
@@ -827,7 +813,7 @@ SELECT f1, f2 FROM uctest;
   8 | one
 (1 row)
 
---- FOR UPDATE cursors can't currently scroll back, so this is an error:
+--- sensitive cursors can't currently scroll back, so this is an error:
 FETCH RELATIVE 0 FROM c1;
 ERROR:  cursor can only scan forward
 HINT:  Declare it with SCROLL option to enable backward scan.
@@ -839,41 +825,6 @@ SELECT f1, f2 FROM uctest;
   8 | one
 (2 rows)
 
--- Check insensitive cursor with INSERT
--- (The above tests don't test the SQL notion of an insensitive cursor
--- correctly, because per SQL standard, changes from WHERE CURRENT OF
--- commands should be visible in the cursor.  So here we make the
--- changes with a command that is independent of the cursor.)
-BEGIN;
-DECLARE c1 INSENSITIVE CURSOR FOR SELECT * FROM uctest;
-INSERT INTO uctest VALUES (10, 'ten');
-FETCH NEXT FROM c1;
- f1 |  f2   
-----+-------
-  3 | three
-(1 row)
-
-FETCH NEXT FROM c1;
- f1 | f2  
-----+-----
-  8 | one
-(1 row)
-
-FETCH NEXT FROM c1;  -- insert not visible
- f1 | f2 
-----+----
-(0 rows)
-
-COMMIT;
-SELECT * FROM uctest;
- f1 |  f2   
-----+-------
-  3 | three
-  8 | one
- 10 | ten
-(3 rows)
-
-DELETE FROM uctest WHERE f1 = 10;  -- restore test table state
 -- Check inheritance cases
 CREATE TEMP TABLE ucchild () inherits (uctest);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1053,7 +1004,9 @@ ROLLBACK;
 BEGIN;
 CREATE TABLE current_check (currentid int, payload text);
 CREATE TABLE current_check_1 () INHERITS (current_check);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE current_check_2 () INHERITS (current_check);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO current_check_1 SELECT i, 'p' || i FROM generate_series(1,9) i;
 INSERT INTO current_check_2 SELECT i, 'P' || i FROM generate_series(10,19) i;
 DECLARE c1 SCROLL CURSOR FOR SELECT * FROM current_check;
@@ -1061,62 +1014,23 @@ DECLARE c1 SCROLL CURSOR FOR SELECT * FROM current_check;
 FETCH ABSOLUTE 12 FROM c1;
  currentid | payload 
 -----------+---------
-        12 | P12
+         5 | p5
 (1 row)
 
 FETCH ABSOLUTE 8 FROM c1;
- currentid | payload 
------------+---------
-         8 | p8
-(1 row)
-
+ERROR:  cursor can only scan forward
+HINT:  Declare it with SCROLL option to enable backward scan.
 DELETE FROM current_check WHERE CURRENT OF c1 RETURNING *;
- currentid | payload 
------------+---------
-         8 | p8
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- This tests the ExecutorRewind code path
 FETCH ABSOLUTE 13 FROM c1;
- currentid | payload 
------------+---------
-        13 | P13
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 FETCH ABSOLUTE 1 FROM c1;
- currentid | payload 
------------+---------
-         1 | p1
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 DELETE FROM current_check WHERE CURRENT OF c1 RETURNING *;
- currentid | payload 
------------+---------
-         1 | p1
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT * FROM current_check;
- currentid | payload 
------------+---------
-         2 | p2
-         3 | p3
-         4 | p4
-         5 | p5
-         6 | p6
-         7 | p7
-         9 | p9
-        10 | P10
-        11 | P11
-        12 | P12
-        13 | P13
-        14 | P14
-        15 | P15
-        16 | P16
-        17 | P17
-        18 | P18
-        19 | P19
-(17 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- end_ignore
 -- Make sure snapshot management works okay, per bug report in
@@ -1163,11 +1077,11 @@ create function nochange(int) returns int
 declare c cursor for select * from int8_tbl limit nochange(3);
 -- start_ignore
 fetch all from c;
-        q1        |        q2        
-------------------+------------------
-              123 |              456
-              123 | 4567890123456789
- 4567890123456789 |              123
+        q1        |        q2         
+------------------+-------------------
+ 4567890123456789 |               123
+ 4567890123456789 |  4567890123456789
+ 4567890123456789 | -4567890123456789
 (3 rows)
 
 -- end_ignore
@@ -1179,12 +1093,13 @@ rollback;
 -- Check handling of non-backwards-scan-capable plans with scroll cursors
 begin;
 explain (costs off) declare c1 cursor for select (select 42) as x;
-        QUERY PLAN         
----------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    InitPlan 1 (returns $0)
      ->  Result
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 explain (costs off) declare c1 scroll cursor for select (select 42) as x;
              QUERY PLAN              
@@ -1207,11 +1122,12 @@ ERROR:  backward scan is not supported in this version of Greenplum Database
 rollback;
 begin;
 explain (costs off) declare c2 cursor for select generate_series(1,3) as g;
-  QUERY PLAN  
---------------
+             QUERY PLAN              
+-------------------------------------
  ProjectSet
    ->  Result
-(2 rows)
+ Optimizer: Postgres query optimizer
+(3 rows)
 
 explain (costs off) declare c2 scroll cursor for select generate_series(1,3) as g;
              QUERY PLAN              
@@ -1239,8 +1155,6 @@ rollback;
 -- Assert failure:
 -- DETAIL:  FailedAssertion("!(!((heap)->bh_size == 0) && heap->bh_has_heap_property)", File: "binaryheap.c", Line: 161)
 CREATE TABLE foo1_tbl (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo1_tbl values(2);
 BEGIN;
 DECLARE foo1 CURSOR WITH HOLD FOR SELECT * FROM foo1_tbl ORDER BY a;
