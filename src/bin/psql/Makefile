@@ -65,3 +65,9 @@ clean distclean:
 # so do not clean them in the clean/distclean rules
 maintainer-clean: distclean
 	rm -f sql_help.h sql_help.c psqlscanslash.c
+
+check:
+	$(prove_check)
+
+installcheck:
+	$(prove_installcheck)
