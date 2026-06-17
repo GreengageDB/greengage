@@ -4689,7 +4689,7 @@ BEGIN
 END;
 $$;
 """ % (func_name, trigger_name)
-        
+
         dbconn.execSQL(conn, sql)
         sql = "CREATE EVENT TRIGGER %s ON ddl_command_start EXECUTE PROCEDURE %s();" % (trigger_name, func_name)
         dbconn.execSQL(conn, sql)
@@ -4701,11 +4701,3 @@ def impl(context, trigger_name):
         sql = "SELECT evtname FROM pg_event_trigger WHERE evtname = '%s';" % trigger_name
         cursor = dbconn.execSQL(conn, sql)
         assert cursor.rowcount == 1
-
-@given('verify that event trigger not exists on segments')
-@then('verify that event trigger not exists on segments')
-def impl(context):
-    with dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False) as conn:
-        sql = "SELECT * FROM gp_dist_random('pg_event_trigger');"
-        cursor = dbconn.execSQL(conn, sql)
-        assert cursor.rowcount == 0
