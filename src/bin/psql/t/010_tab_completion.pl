@@ -7,10 +7,10 @@ use Test::More;
 use Data::Dumper;
 
 # Do nothing unless Makefile has told us that the build is --with-readline.
-# if (!defined($ENV{with_readline}) || $ENV{with_readline} ne 'yes')
-# {
-# 	plan skip_all => 'readline is not supported by this build';
-# }
+if (!defined($ENV{with_readline}) || $ENV{with_readline} ne 'yes')
+{
+	plan skip_all => 'readline is not supported by this build';
+}
 
 # Also, skip if user has set environment variable to command that.
 # This is mainly intended to allow working around some of the more broken
