@@ -32,8 +32,8 @@ class GGRebalanceMainSM:
         'STATE_PLANNING_STARTED',
         'STATE_PLANNING_DONE',
         'STATE_CHECK_PREVIOUS_RUN',
-        'STATE_END',
-        'STATE_ERROR'
+        'STATE_ERROR',
+        'STATE_END_DUMMY'
     ]
 
     states_logged = [
@@ -46,6 +46,7 @@ class GGRebalanceMainSM:
         'STATE_SHRINK_DONE',
         'STATE_REBALANCE_STARTED',
         'STATE_REBALANCE_DONE',
+        'STATE_END'
     ]
 
     transitions = [
@@ -121,8 +122,13 @@ class GGRebalanceMainSM:
         },
         {
             'trigger': 'move_to_STATE_END',
-            'source': ['STATE_EXECUTOR_DONE', 'STATE_CHECK_PREVIOUS_RUN', 'STATE_CLEANUP', 'STATE_ROLLBACK', 'STATE_PLANNING_STARTED'],
+            'source': ['STATE_EXECUTOR_DONE', 'STATE_CHECK_PREVIOUS_RUN', 'STATE_CLEANUP', 'STATE_ROLLBACK', 'STATE_PLANNING_STARTED', 'STATE_CHECK_PREVIOUS_RUN'],
             'dest': 'STATE_END'
+        },
+        {
+            'trigger': 'move_to_STATE_END_DUMMY',
+            'source': 'STATE_END',
+            'dest': 'STATE_END_DUMMY'
         },
         {
             'trigger': 'move_to_STATE_ERROR',
@@ -365,8 +371,9 @@ class GGRebalanceMainSM:
             # In this case we already have a plan saved in the schema,
             # and we'll continue (or rollback) according to it.
             # Or, if everything is complete, just exit.
-            if self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE':
+            if self.main_state_from_prev_run == 'STATE_END':
                 self.logger.info('Previous run was completed successfully. Please execute cleanup before a new run.')
+                self.trigger('move_to_STATE_END')
                 return
 
             if self.plan != None:
@@ -436,6 +443,7 @@ class GGRebalanceMainSM:
     @wrap_func_with_faults
     def on_enter_STATE_END(self) -> None:
         self.print_full_summary()
+        self.trigger('move_to_STATE_END_DUMMY')
 
     @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
