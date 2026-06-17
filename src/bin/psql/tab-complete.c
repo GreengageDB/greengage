@@ -331,6 +331,16 @@ do { \
 	matches = completion_matches(text, complete_from_query); \
 } while (0)
 
+/* Macro to suggest unused options in bracket clause. */
+#define COMPLETE_WITH_UNUSED_OPTIONS(...) \
+do { \
+	const char* list[] = { __VA_ARGS__, NULL }; \
+	remove_used_options_from_list(list, (const char* const*)previous_words, \
+								  previous_words_count); \
+\
+	COMPLETE_WITH_LIST(list); \
+} while(0)
+
 /*
  * Assembly instructions for schema queries
  */
@@ -735,6 +745,11 @@ static const SchemaQuery Query_for_list_of_statistics = {
 " SELECT pg_catalog.quote_ident(rsgname) "\
 "   FROM pg_catalog.pg_resgroup "\
 "  WHERE substring(pg_catalog.quote_ident(rsgname),1,%d)='%s'"
+
+#define Query_for_list_of_resqueues \
+" SELECT pg_catalog.quote_ident(rsqname) "\
+"   FROM pg_catalog.pg_resqueue "\
+"  WHERE substring(pg_catalog.quote_ident(rsqname),1,%d)='%s'"
 
 #define Query_for_list_of_roles \
 " SELECT pg_catalog.quote_ident(rolname) "\
@@ -1177,6 +1192,10 @@ static char *escape_string(const char *text);
 static PGresult *exec_query(const char *query);
 
 static char **get_previous_words(int point, char **buffer, int *nwords);
+
+static void remove_used_options_from_list(const char** list,
+										 const char* const* previous_words,
+										 const int previous_words_count);
 
 static char *get_guctype(const char *varname);
 
@@ -2681,39 +2700,10 @@ psql_completion(const char *text, int start, int end)
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(" ,"(*") &&
 			!HeadMatches("CREATE", "TRUSTED", "PROTOCOL", MatchAny, "(*)")))
 	{
-		/* Find options that were used and complete with ones that hadn't */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-		{
-			const char* create_protocol_options_list[] = {"readfunc =",
-								"writefunc =", "validatorfunc =", NULL};
-
-			int i = 0;
-
-			while(i < previous_words_count &&
-				  !ends_with(previous_words[i], '('))
-			{
-				int cur_prev_wd_len = strlen(previous_words[i]);
-				if(pg_strncasecmp(previous_words[i], "readfunc",
-								  cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[0] = "";
-				}
-				else if(pg_strncasecmp(previous_words[i], "writefunc",
-									   cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[1] = "";
-				}
-				else if(pg_strncasecmp(previous_words[i], "validatorfunc",
-									   cur_prev_wd_len) == 0)
-				{
-					create_protocol_options_list[2] = "";
-				}
-
-				i += 1;
-			}
-
-			COMPLETE_WITH_LIST(create_protocol_options_list);
-		}
+			COMPLETE_WITH_UNUSED_OPTIONS("readfunc", "writefunc", "validatorfunc");
+		else if(TailMatches("readfunc|writefunc|validatorfunc"))
+			COMPLETE_WITH("=");
 		else if(TailMatches("readfunc", "="))
 			COMPLETE_WITH_QUERY(Query_for_list_of_extprotocol_readfuncs);
 		else if(TailMatches("writefunc", "="))
@@ -3035,6 +3025,39 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("=");
 	else if(TailMatches("wbps|rbps|wiops|riops", "="))
 		COMPLETE_WITH("max");
+
+/* ALTER/CREATE/DROP RESOURCE QUEUE */
+	else if(TailMatches("ALTER|DROP", "RESOURCE", "QUEUE"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
+
+	else if(TailMatches("CREATE", "RESOURCE", "QUEUE", MatchAny))
+		COMPLETE_WITH("WITH (");
+	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny))
+		COMPLETE_WITH("WITH (", "WITHOUT (");
+	else if(TailMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITH"))
+		COMPLETE_WITH("(");
+	else if(HeadMatches("ALTER|CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*") &&
+		   !HeadMatches("ALTER|CREATE", "RESOURCE", "QUEUE", MatchAny, "WITH", "(*)"))
+	{
+		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+			COMPLETE_WITH_UNUSED_OPTIONS("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
+		else if(TailMatches("ACTIVE_STATEMENTS|MEMORY_LIMIT|MAX_COST|COST_OVERCOMMIT|MIN_COST|PRIORITY"))
+			COMPLETE_WITH("=");
+		else if(TailMatches("COST_OVERCOMMIT", "="))
+			COMPLETE_WITH("TRUE", "FALSE");
+		else if(TailMatches("PRIORITY", "="))
+			COMPLETE_WITH("MIN", "LOW", "MEDIUM", "HIGH", "MAX");
+		else if(TailMatches(MatchAny, "=", MatchAny))
+			COMPLETE_WITH(",", ")");
+	}
+	else if(HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITHOUT", "(*") &&
+		   !HeadMatches("ALTER", "RESOURCE", "QUEUE", MatchAny, "WITHOUT", "(*)"))
+	{
+		if(ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
+			COMPLETE_WITH_UNUSED_OPTIONS("ACTIVE_STATEMENTS", "MEMORY_LIMIT", "MAX_COST", "COST_OVERCOMMIT", "MIN_COST", "PRIORITY");
+		else if(TailMatches("ACTIVE_STATEMENTS|MEMORY_LIMIT|MAX_COST|COST_OVERCOMMIT|MIN_COST|PRIORITY"))
+			COMPLETE_WITH(",", ")");
+	}
 
 /* CREATE VIEW --- is allowed inside CREATE SCHEMA, so use TailMatches */
 	/* Complete CREATE VIEW <name> with AS */
@@ -4913,6 +4936,58 @@ get_previous_words(int point, char **buffer, int *nwords)
 
 	*nwords = words_found;
 	return previous_words;
+}
+
+/* Looks through all tokens in open bracket clause, */
+/* removing used options from suggestion list */
+/* and clearing up list from empty strings. */
+void
+remove_used_options_from_list(const char** list,
+							  const char* const* previous_words,
+							  const int previous_words_count)
+{
+	int i = 0;
+	int j = 0;
+
+	while(i < previous_words_count && !ends_with(previous_words[i], '('))
+	{
+		int cur_prev_wd_len = strlen(previous_words[i]);
+		j = 0;
+
+		while(list[j] != NULL)
+		{
+			if(pg_strncasecmp(previous_words[i], list[j],
+							  cur_prev_wd_len) == 0)
+			{
+				list[j] = "";
+			}
+
+			j++;
+		}
+
+		i++;
+	}
+
+	i = 0;
+	j = 0;
+
+	const char* tmp;
+
+	while(list[j] != NULL)
+	{
+		if(list[j][0] != '\0')
+		{
+			tmp = list[i];
+			list[i] = list[j];
+			list[j] = tmp;
+
+			i++;
+		}
+
+		j++;
+	}
+
+	list[i] = NULL;
 }
 
 /*
