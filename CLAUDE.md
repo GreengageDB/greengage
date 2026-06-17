@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This is **ArenaDatabaseDB (ADB)** — an MPP (Massively Parallel Processing) database fork of Greenplum Database (GPDB), itself built on PostgreSQL. The repo tracks upstream PostgreSQL and periodically merges new major PostgreSQL versions into GPDB-specific branches.
+This is **ArenaDatabaseDB (ADB)** — an MPP (Massively Parallel Processing) database fork of Greenplum Database (GPDB), itself built on PostgreSQL. The repo tracks upstream PostgreSQL and periodically merges new major PostgreSQL versions into GGDB-specific branches.
 
 **Key branches:**
 - `adb-6.x` — production ADB 6.x line (main branch for PRs)
-- `ai-merge-stage1` — staging branch for the current PG 8.0.0-alpha.0 → GPDB merge
+- `ai-merge-stage1` — staging branch for the current PG 8.0.0-alpha.0 → GGDB merge
 - `gg_upgrade` — tracks upstream PostgreSQL code
 
 ## Build
@@ -87,7 +87,7 @@ src/test/            Test suites: regress, isolation, authentication, subscripti
 contrib/             Optional extensions (pg_stat_statements, pageinspect, postgres_fdw, etc.)
 ```
 
-GPDB/ADB-specific distributed execution concepts used throughout the codebase:
+GGDB/ADB-specific distributed execution concepts used throughout the codebase:
 - **Motion nodes** — data movement operators between MPP segments
 - **Slices** — independent units of parallel execution
 - **ORCA** — the Greenplum cost-based optimizer (referenced in optimizer/ and JIT-related code)
@@ -95,12 +95,12 @@ GPDB/ADB-specific distributed execution concepts used throughout the codebase:
 
 ## PostgreSQL major-version merge workflow
 
-The primary ongoing task on `ai-merge-stage1` is merging upstream PostgreSQL into GPDB. The merge re-graft methodology, MPP internals, and recurring bug classes are documented in the [`greengage-internals`](./.claude/skills/greengage-internals/SKILL.md) skill; see also the build/test/debug/regen/cluster skills under [`.claude/skills/`](./.claude/skills/). Key points:
+The primary ongoing task on `ai-merge-stage1` is merging upstream PostgreSQL into GGDB. The merge re-graft methodology, MPP internals, and recurring bug classes are documented in the [`greengage-internals`](./.claude/skills/greengage-internals/SKILL.md) skill; see also the build/test/debug/regen/cluster skills under [`.claude/skills/`](./.claude/skills/). Key points:
 
 1. `git merge --no-commit --no-ff <upstream-tag>`
 2. Record conflicts: `git diff --name-only --diff-filter=U`
 3. Resolve semantically — never blindly take `ours` or `theirs`
-4. Adopt upstream API shapes first; re-graft GPDB-specific logic into the new shape
+4. Adopt upstream API shapes first; re-graft GGDB-specific logic into the new shape
 5. Verify: `rg "^(<<<<<<<|=======|>>>>>>>)"` must return nothing
 6. Build and run targeted regression tests before finalizing
 

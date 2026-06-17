@@ -1,9 +1,9 @@
 ---
 name: greengage-regress-tests
-description: Run Greengage/GPDB regression tests (src/test/regress and isolation2) against the running gpdemo cluster, select the optimizer=on/off path and the right expected file, satisfy setup dependencies, and avoid false passes. Use to reproduce or validate a single test or a schedule under optimizer=off or ORCA.
+description: Run GGDB regression tests (src/test/regress and isolation2) against the running gpdemo cluster, select the optimizer=on/off path and the right expected file, satisfy setup dependencies, and avoid false passes. Use to reproduce or validate a single test or a schedule under optimizer=off or ORCA.
 ---
 
-# Running Greengage/GPDB regression tests
+# Running GGDB regression tests
 
 Tests run against the already-running gpdemo (`PGPORT=7000`) via `pg_regress`
 with `--use-existing`. `gpdiff.pl`/`atmsort.pl` normalize output at diff time

@@ -1,11 +1,11 @@
 ---
 name: greengage-internals
-description: Architectural knowledge for making CORRECT changes in the Greengage/GPDB (MPP) fork of PostgreSQL - the merge re-graft methodology, the MPP planner/executor (motion, locus, distribution keys, multi-stage and multi-DQA aggregation), matview refresh, and recurring PG14-merge bug classes. Use when writing or reviewing a backend fix, especially planner/executor/catalog changes after an upstream merge.
+description: Architectural knowledge for making CORRECT changes in the GGDB (MPP) fork of PostgreSQL - the merge re-graft methodology, the MPP planner/executor (motion, locus, distribution keys, multi-stage and multi-DQA aggregation), matview refresh, and recurring PG14-merge bug classes. Use when writing or reviewing a backend fix, especially planner/executor/catalog changes after an upstream merge.
 ---
 
-# Greengage/GPDB internals for correct fixes
+# GGDB internals for correct fixes
 
-GPDB/ADB is an MPP fork: data is hash/random-distributed across segments; the
+GGDB/ADB is an MPP fork: data is hash/random-distributed across segments; the
 planner inserts **Motion** nodes to move tuples; **ORCA** (optimizer=on) and the
 **Postgres planner** (optimizer=off) are two separate planning paths. ADB
 primarily uses ORCA, so optimizer=off bugs are real but secondary.
@@ -13,13 +13,13 @@ primarily uses ORCA, so optimizer=off bugs are real but secondary.
 ## Merge re-graft methodology (the #1 source of merge bugs)
 
 When resolving a merge conflict in a function upstream rewrote: **adopt the
-upstream API shape first, then re-graft the GPDB-specific logic into the new
+upstream API shape first, then re-graft the GGDB-specific logic into the new
 shape** — never blindly take `ours`/`theirs`. The classic regression is taking
-upstream's line verbatim and dropping the GPDB graft. Tell-tales of an incomplete
-graft: a **declared-but-unused variable** (the GPDB graft computed it, but the
+upstream's line verbatim and dropping the GGDB graft. Tell-tales of an incomplete
+graft: a **declared-but-unused variable** (the GGDB graft computed it, but the
 re-grafted line still uses the upstream variable), e.g. matview's `newattr` was
 computed but the leftop reverted to upstream's `attr`. Always `git blame` a
-suspicious line — if it blames to an upstream commit inside GPDB-specific code,
+suspicious line — if it blames to an upstream commit inside GGDB-specific code,
 the graft is probably wrong. Reference resolutions:
 1e11aaff762, f2b03841, 1fa092913d2, 3e9744465db, ed7a5095716ee, 4dbcb3f844ec,
 a91e2fa94180, 55a1954da16, 80831bcdbe, eb57bd9c1.
@@ -68,7 +68,7 @@ normalize/ignore aggno/aggtransno (and remember `aggsplit` differs across stages
 
 ## Materialized view refresh (`matview.c refresh_by_match_merge`)
 
-Builds a "diff" via SQL over a transient "newdata" heap. GPDB created that heap
+Builds a "diff" via SQL over a transient "newdata" heap. GGDB created that heap
 with a `_$` column prefix (c654c503faf) to avoid colliding with the matview's own
 column names, and writes whole-row references as `alias.*` (not bare `alias`) so an
 alias can't be mistaken for a same-named column. The PG14 merge reintroduced both
@@ -78,7 +78,7 @@ mutates the matview relcache descriptor in place (a relcache-timing heisenbug).
 ## Test-level expected-behavior markers
 
 `--start_ignore`/`--end_ignore` in `.sql` (and `GP_IGNORE:` in `.out`) mark output
-gpdiff must ignore — GPDB uses them to **document accepted limitations** (e.g. a
+gpdiff must ignore — GGDB uses them to **document accepted limitations** (e.g. a
 LATERAL join that yields "could not devise a query plan", "backward scan is not
 supported", forward-only cursors). A `-- FAIL with ERROR: ...` comment documents an
 expected failure. Don't mistake these for regressions.

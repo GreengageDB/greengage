@@ -1,9 +1,9 @@
 ---
 name: greengage-debug
-description: Diagnose Greengage/GPDB crashes, asserts, and wrong-results - find the crash in the segment/QD logs, reproduce reliably (base64 SQL, forced heisenbug conditions), instrument with temporary elog, and read structs live with gdb on a no-DWARF binary. Use when a query crashes a backend, hits a FailedAssertion, hangs, or returns wrong data.
+description: Diagnose GGDB crashes, asserts, and wrong-results - find the crash in the segment/QD logs, reproduce reliably (base64 SQL, forced heisenbug conditions), instrument with temporary elog, and read structs live with gdb on a no-DWARF binary. Use when a query crashes a backend, hits a FailedAssertion, hangs, or returns wrong data.
 ---
 
-# Debugging Greengage/GPDB
+# Debugging GGDB
 
 ## Find the crash in the logs
 

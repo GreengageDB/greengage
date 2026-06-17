@@ -1,6 +1,6 @@
 # Project skills
 
-Reusable skills distilled from the PG14 → Greengage/GPDB merge, fix, and
+Reusable skills distilled from the PG14 → GGDB merge, fix, and
 regression-reconciliation work. Each is a Claude Code skill
 (`.claude/skills/<name>/SKILL.md`, auto-discovered); a human can also just read it.
 

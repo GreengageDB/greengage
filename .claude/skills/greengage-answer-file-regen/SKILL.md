@@ -1,6 +1,6 @@
 ---
 name: greengage-answer-file-regen
-description: Regenerate optimizer=off (and other) regression answer files for cosmetic PG14/GPDB drift WITHOUT masking a real bug. Use when a failing test's diff is deparse/plan-shape/psql-format/error-message drift rather than a behavior change. Includes the success->error safety gate, noise stripping, and verification.
+description: Regenerate optimizer=off (and other) regression answer files for cosmetic PG14/GGDB drift WITHOUT masking a real bug. Use when a failing test's diff is deparse/plan-shape/psql-format/error-message drift rather than a behavior change. Includes the success->error safety gate, noise stripping, and verification.
 ---
 
 # Regenerating answer files safely
@@ -25,7 +25,7 @@ The signature of a real bug hiding in a "cosmetic" pass is a removed result row 
   aren't always individually `GP_IGNORE:`-prefixed) and row-reordering context
   shifts a `(N rows)` next to an unrelated `+ERROR`. This burned an entire pass —
   join/portals/subselect were flagged but were actually cosmetic (errors inside
-  `--start_ignore` blocks documenting accepted GPDB limits + `error->error`
+  `--start_ignore` blocks documenting accepted GGDB limits + `error->error`
   stale-line drift like `pathnode.c:485 -> :275`).
 - **A clean re-run that reports `ok` is the definitive proof** there is no
   non-ignored success->error (it would otherwise FAIL the test).

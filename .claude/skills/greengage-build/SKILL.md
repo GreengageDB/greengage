@@ -1,9 +1,9 @@
 ---
 name: greengage-build
-description: Build and install the Greengage/GPDB backend (and ORCA) inside the docker test container, and avoid the stale-binary trap where committed source fixes silently don't take effect. Use whenever a C/C++ source change needs to become a running binary, before re-testing.
+description: Build and install the GGDB backend (and ORCA) inside the docker test container, and avoid the stale-binary trap where committed source fixes silently don't take effect. Use whenever a C/C++ source change needs to become a running binary, before re-testing.
 ---
 
-# Building Greengage/GPDB in the container
+# Building GGDB in the container
 
 Builds run in the `gpdb_clean` docker container (not natively), as `gpadmin`,
 with `sudo`. The source tree the build compiles is `/home/gpadmin/gpdb_src`
