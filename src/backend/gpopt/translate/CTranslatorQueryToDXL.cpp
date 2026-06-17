@@ -322,6 +322,16 @@ CTranslatorQueryToDXL::CheckUnsupportedNodeTypes(Query *query)
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("Non-default collation"));
 	}
+
+	// GROUP BY DISTINCT (PG14) asks for deduplication of the generated grouping
+	// sets. ORCA does not implement that dedup; silently ignoring the flag emits
+	// the full (duplicated) set of grouping sets and hence wrong results, so fall
+	// back to the Postgres planner.
+	if (query->groupDistinct)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("GROUP BY DISTINCT"));
+	}
 }
 
 //---------------------------------------------------------------------------
