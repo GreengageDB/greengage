@@ -420,11 +420,15 @@ SELECT pg_get_functiondef('functest_S_15'::regproc);
 
 -- test with views
 CREATE TABLE functest3 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO functest3 VALUES (1), (2);
 CREATE VIEW functestv3 AS SELECT * FROM functest3;
 CREATE FUNCTION functest_S_14() RETURNS bigint
     RETURN (SELECT count(*) FROM functestv3);
 SELECT functest_S_14();
+NOTICE:  One or more columns in the following table(s) do not have statistics: functest3
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  functest_s_14 
 ---------------
              2
@@ -476,6 +480,8 @@ CREATE FUNCTION functest_IS_6()
     LANGUAGE SQL
     RETURN nextval('functest1');
 CREATE TABLE functest2 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION functest_IS_7()
     RETURNS int
     LANGUAGE SQL
@@ -559,12 +565,12 @@ SELECT * FROM functest_sri1();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri1();
-             QUERY PLAN              
--------------------------------------
- Values Scan on "*VALUES*"
-   Output: "*VALUES*".column1
- Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on temp_func_test.functest_sri1
+   Output: functest_sri1
+   Function Call: functest_sri1()
+ Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 CREATE FUNCTION functest_sri2() RETURNS SETOF int
@@ -582,12 +588,12 @@ SELECT * FROM functest_sri2();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
-             QUERY PLAN              
--------------------------------------
- Values Scan on "*VALUES*"
-   Output: "*VALUES*".column1
- Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on temp_func_test.functest_sri2
+   Output: functest_sri2
+   Function Call: functest_sri2()
+ Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 -- Check behavior of VOID-returning SQL functions
@@ -614,10 +620,11 @@ EXPLAIN (verbose, costs off) SELECT voidtest2(11,22);
  Result
    Output: voidtest1(33)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(4 rows)
+(3 rows)
 
 CREATE TEMP TABLE sometable(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION voidtest3(a int) RETURNS VOID LANGUAGE SQL AS
 $$ INSERT INTO sometable VALUES(a + 1) $$;
 SELECT voidtest3(17);
@@ -635,6 +642,8 @@ SELECT voidtest4(39);
 (1 row)
 
 TABLE sometable;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sometable
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 
 ----
  18
