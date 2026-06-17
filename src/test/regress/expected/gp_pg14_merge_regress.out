@@ -1,0 +1,196 @@
+-- Regression guards for bugs fixed during the PostgreSQL 14 -> Greengage merge.
+-- Each section is a minimal reproducer for an MPP/ORCA-path defect that the merge
+-- introduced and we fixed; reverting a fix re-introduces a crash, a dispatch
+-- deserialize error, or a wrong result here. The test is intentionally data-only
+-- (no EXPLAIN) so the output is stable across the optimizer x JIT CI matrix, and
+-- it is meant to run under BOTH optimizer=off and optimizer=on (ORCA).
+create schema merge_pg14;
+set search_path = merge_pg14, public;
+-- ============================================================
+-- 1. ORCA UPDATE updateColnosLists (UPDATE SIGSEGV) and the
+--    partitioned UPDATE/DELETE planner fallback.
+-- ============================================================
+create table upd_dist (a int, b int, c text) distributed by (a);
+insert into upd_dist select i, i * 10, 'v' || i from generate_series(1, 20) i;
+update upd_dist set b = b + 1, c = c || '!' where a <= 5;
+select a, b, c from upd_dist where a <= 5 order by a;
+ a | b  |  c  
+---+----+-----
+ 1 | 11 | v1!
+ 2 | 21 | v2!
+ 3 | 31 | v3!
+ 4 | 41 | v4!
+ 5 | 51 | v5!
+(5 rows)
+
+create table upd_part (a int, b int)
+  distributed by (a)
+  partition by range (a) (start (0) end (30) every (10));
+insert into upd_part select i, i from generate_series(0, 29) i;
+update upd_part set b = b * 2 where a >= 20;
+delete from upd_part where a < 5;
+select a, b from upd_part order by a;
+ a  | b  
+----+----
+  5 |  5
+  6 |  6
+  7 |  7
+  8 |  8
+  9 |  9
+ 10 | 10
+ 11 | 11
+ 12 | 12
+ 13 | 13
+ 14 | 14
+ 15 | 15
+ 16 | 16
+ 17 | 17
+ 18 | 18
+ 19 | 19
+ 20 | 40
+ 21 | 42
+ 22 | 44
+ 23 | 46
+ 24 | 48
+ 25 | 50
+ 26 | 52
+ 27 | 54
+ 28 | 56
+ 29 | 58
+(25 rows)
+
+-- ============================================================
+-- 2. ORCA Aggref aggno/aggtransno: several different aggregates in one
+--    query (the bug returned the first aggregate's value for all of them).
+-- ============================================================
+select count(*) as cnt, sum(b) as s, avg(b)::numeric(10,2) as a, min(b) as mn, max(b) as mx
+from upd_dist;
+ cnt |  s   |   a    | mn | mx  
+-----+------+--------+----+-----
+  20 | 2105 | 105.25 | 11 | 200
+(1 row)
+
+-- ============================================================
+-- 3. Correlated EXISTS and a correlated scalar subquery in the SELECT
+--    list (AlternativeSubPlan cdbllize crash + lost correlation -> wrong rows).
+-- ============================================================
+create table corr_outer (id int, grp int) distributed by (id);
+create table corr_inner (id int, ref int) distributed by (id);
+insert into corr_outer select i, i % 3 from generate_series(1, 6) i;
+insert into corr_inner select i, i * 100 from generate_series(1, 4) i;
+select id,
+       exists (select 1 from corr_inner ci where ci.id = co.id) as has_match,
+       (select max(ref) from corr_inner ci where ci.id = co.id) as max_ref
+from corr_outer co
+order by id;
+ id | has_match | max_ref 
+----+-----------+---------
+  1 | t         |     100
+  2 | t         |     200
+  3 | t         |     300
+  4 | t         |     400
+  5 | f         |        
+  6 | f         |        
+(6 rows)
+
+-- ============================================================
+-- 4. CTAS / matview DISTRIBUTED BY (<aggregate>): Motion-on-Motion Result
+--    interpose + the MIN/MAX planagg eq_classes guard. The matview with a
+--    text column also exercises refresh_by_match_merge (alias.* / _$ prefix /
+--    text = text comparison).
+-- ============================================================
+create table agg_src (g int, v int) distributed by (g);
+insert into agg_src select i % 4, i from generate_series(1, 40) i;
+create table ctas_sum as select sum(v) as total from agg_src distributed by (total);
+select total from ctas_sum;
+ total 
+-------
+   820
+(1 row)
+
+create table ctas_min as select min(v) as mn from agg_src distributed by (mn);
+select mn from ctas_min;
+ mn 
+----
+  1
+(1 row)
+
+create table mv_src (g int, label text, v int) distributed by (g);
+insert into mv_src select i % 3, 'lbl' || (i % 3), i from generate_series(1, 30) i;
+create materialized view mv_mm as
+  select g, label, sum(v) as total from mv_src group by g, label distributed by (g);
+create unique index mv_mm_uidx on mv_mm (g, label);
+-- change one group so the concurrent refresh actually merges a diff
+insert into mv_src values (0, 'lbl0', 1000);
+refresh materialized view concurrently mv_mm;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select g, label, total from mv_mm order by g, label;
+ g | label | total 
+---+-------+-------
+ 0 | lbl0  |  1165
+ 1 | lbl1  |   145
+ 2 | lbl2  |   155
+(3 rows)
+
+-- ============================================================
+-- 5. CREATE VIEW / CTAS over JOIN USING (binary-dispatch JoinExpr
+--    join_using_alias -> "could not deserialize unrecognized node type").
+-- ============================================================
+create table j_left (k int, x int) distributed by (k);
+create table j_right (k int, y int) distributed by (k);
+insert into j_left select i, i * 10 from generate_series(1, 5) i;
+insert into j_right select i, i * 100 from generate_series(1, 5) i;
+create view v_using as select k, x, y from j_left join j_right using (k);
+select k, x, y from v_using order by k;
+ k | x  |  y  
+---+----+-----
+ 1 | 10 | 100
+ 2 | 20 | 200
+ 3 | 30 | 300
+ 4 | 40 | 400
+ 5 | 50 | 500
+(5 rows)
+
+create table ctas_using as select k, x, y from j_left join j_right using (k) distributed by (k);
+select k, x, y from ctas_using order by k;
+ k | x  |  y  
+---+----+-----
+ 1 | 10 | 100
+ 2 | 20 | 200
+ 3 | 30 | 300
+ 4 | 40 | 400
+ 5 | 50 | 500
+(5 rows)
+
+-- ============================================================
+-- 6. Subscripting assignment (ORCA SubscriptingRef.refrestype ->
+--    "cache lookup failed for type 0").
+-- ============================================================
+create table sub_t (id int, j jsonb, arr int[]) distributed by (id);
+insert into sub_t values (1, '{"a": 1}'::jsonb, array[10, 20, 30]);
+update sub_t set j['b'] = '2'::jsonb, arr[2] = 99 where id = 1;
+select id, j, arr from sub_t order by id;
+ id |        j         |    arr     
+----+------------------+------------
+  1 | {"a": 1, "b": 2} | {10,99,30}
+(1 row)
+
+-- cleanup
+set search_path = public;
+drop schema merge_pg14 cascade;
+NOTICE:  drop cascades to 14 other objects
+DETAIL:  drop cascades to table merge_pg14.upd_dist
+drop cascades to table merge_pg14.upd_part
+drop cascades to table merge_pg14.corr_outer
+drop cascades to table merge_pg14.corr_inner
+drop cascades to table merge_pg14.agg_src
+drop cascades to table merge_pg14.ctas_sum
+drop cascades to table merge_pg14.ctas_min
+drop cascades to table merge_pg14.mv_src
+drop cascades to materialized view merge_pg14.mv_mm
+drop cascades to table merge_pg14.j_left
+drop cascades to table merge_pg14.j_right
+drop cascades to view merge_pg14.v_using
+drop cascades to table merge_pg14.ctas_using
+drop cascades to table merge_pg14.sub_t
