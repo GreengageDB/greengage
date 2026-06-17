@@ -2501,8 +2501,8 @@ psql_completion(const char *text, int start, int end)
 	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL") &&
 		TailMatches("DISTRIBUTED"))
 		COMPLETE_WITH("BY (", "RANDOMLY");
-  
-  	/* CREATE WRITABLE EXTERNAL WEB ... */
+
+	/* CREATE WRITABLE EXTERNAL WEB ... */
 	else if (HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TABLE") ||
 			HeadMatches("CREATE", "WRITABLE", "EXTERNAL", "WEB", "TEMP|TEMPORARY", "TABLE"))
 	{
