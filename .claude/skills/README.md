@@ -12,6 +12,7 @@ regression-reconciliation work. Each is a Claude Code skill
 | [greengage-cluster-ops](greengage-cluster-ops/SKILL.md) | Monitoring a long run, disk/health/OOM, recovering a degraded/crashed cluster |
 | [greengage-debug](greengage-debug/SKILL.md) | A crash/assert/hang/wrong-result — logs, repro, instrumentation, gdb |
 | [greengage-internals](greengage-internals/SKILL.md) | Writing/reviewing a backend fix — MPP planner/executor, merge re-graft method |
+| [greengage-pg-merge](greengage-pg-merge/SKILL.md) | Merging an upstream PG major version — conflict resolution + phased bring-up (compile → unit-test → initdb → regress) |
 
 These complement `CLAUDE.md` (build/test/style) and the
 major-version-merge workflow it references.
