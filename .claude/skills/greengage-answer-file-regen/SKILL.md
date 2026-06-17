@@ -53,6 +53,14 @@ break another. Three rules learned by breaking them:
 - **A shared base `<t>.out` (no `<t>_optimizer.out`) is used by ORCA too** (ORCA
   falls back to base). Regenerating it to the Postgres-planner output BREAKS the
   ORCA jobs. Only regen a base file if a separate `_optimizer.out` exists.
+- **`_optimizer.out` coverage is self-balancing — do NOT "backfill" it.** A test
+  without one passes under ORCA only because its *non-ignored* output already
+  matches the base (data-only, ORCA-falls-back, or the plans are in `--start_ignore`
+  blocks). Any test whose asserted output genuinely diverges under ORCA already has
+  an `_optimizer.out` or it would be red. Adding one to a passing shared-base test
+  asserts nothing new (verified for delete/insert_conflict/with). Real ORCA gaps are
+  *untested features* (find them by exercising the feature under both optimizers, cf.
+  the GROUP BY DISTINCT bug 4dd440a4e69), not missing `_optimizer.out` files.
 - **Never bake JIT-only output into a file a non-JIT job compares.** Under jit,
   EXPLAIN adds a ` Settings: jit = ...` line (init_file-ignored) and inflated
   `Executor memory:` (atmsort-normalized) — so they don't diff — but the wide
