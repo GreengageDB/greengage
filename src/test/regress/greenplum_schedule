@@ -120,6 +120,10 @@ test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_grou
 # parallel-group contention from its partition DDL + concurrent matview refresh.
 test: gp_pg14_merge_regress
 
+# PG14 feature coverage over MPP (GROUP BY DISTINCT, recursive CTE SEARCH/CYCLE,
+# multirange types).
+test: gp_pg14_features
+
 # 'partition' runs for a long time, so try to keep it together with other
 # long-running tests.
 test: partition partition1 partition_indexing partition_storage partition_ddl partition_with_user_defined_function partition_unlogged partition_subquery partition_with_user_defined_function_that_truncates gp_partition_template
