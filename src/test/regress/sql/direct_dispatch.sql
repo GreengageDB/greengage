@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/Hash Key: '\d\d-\d\d-\d\d\d\d'::date/
+-- s/Hash Key: '\d\d-\d\d-\d\d\d\d'::date/Hash Key: 'MM-DD-YYYY'::date/
+-- end_matchsubs
 -- turn off autostats so we don't have to worry about the logging of the autostat queries
 set gp_autostats_mode = None;
 
