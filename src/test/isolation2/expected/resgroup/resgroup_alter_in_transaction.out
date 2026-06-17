@@ -898,8 +898,8 @@ ALTER RESOURCE GROUP
 1: SELECT * FROM rg_alter_tran_status;
  groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit 
 -----------------+-------------+-----------------+------------+--------+--------------+----------+----------
- rg_alter_tran   | 9           | 32              | 125        | -1     | 10           | 10       | -1
- rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1
+ rg_alter_tran   | 9           | 32              | 125        | -1     | 10           | 10       | -1       
+ rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1       
 (2 rows)
 
 -- 34 Duplicate CPU_MAX_PERCENT with a CPUSET callback between the two.
@@ -908,16 +908,18 @@ ALTER RESOURCE GROUP
 -- apply last and switch the group to CPUSET mode.
 1: ALTER RESOURCE GROUP rg_alter_tran SET CPU_WEIGHT 110;
 ALTER RESOURCE GROUP
+
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault
+ gp_inject_fault 
 -----------------
- Success:
+ Success:        
 (1 row)
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault
+ gp_inject_fault 
 -----------------
- Success:
+ Success:        
 (1 row)
+
 1: BEGIN;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran SET CPU_MAX_PERCENT 30;
@@ -929,23 +931,25 @@ ALTER RESOURCE GROUP
 1: COMMIT;
 COMMIT
 1: SELECT * FROM rg_alter_tran_status;
- groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit
+ groupname       | concurrency | cpu_max_percent | cpu_weight | cpuset | memory_limit | min_cost | io_limit 
 -----------------+-------------+-----------------+------------+--------+--------------+----------+----------
- rg_alter_tran   | 9           | 30              | 100        | -1     | 10           | 10       | -1
- rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1
+ rg_alter_tran   | 9           | 30              | 100        | -1     | 10           | 10       | -1       
+ rg_alter_tran_b | 6           | 10              | 100        | -1     | 10           | 0        | -1       
 (2 rows)
+
 -- Should be two in `num times hit`, the earlier duplicate is rejected.
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault
+ gp_inject_fault                                                                                                                                                                                                                 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'2'
-
+ Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'2' 
+ 
 (1 row)
 1: SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault
+ gp_inject_fault 
 -----------------
- Success:
+ Success:        
 (1 row)
+
 -- 35 A no-op move into the session's own group succeeds while that group is
 -- being edited. A move to a different group or the system group still errors.
 1: CREATE ROLE role_alter_tran_b RESOURCE GROUP rg_alter_tran_b;
@@ -955,18 +959,18 @@ SET
 3: BEGIN;
 BEGIN
 3: SELECT 1 a FROM pg_class LIMIT 1;
- a
+ a 
 ---
- 1
+ 1 
 (1 row)
 1: BEGIN;
 BEGIN
 1: ALTER RESOURCE GROUP rg_alter_tran_b SET CONCURRENCY 16;
 ALTER RESOURCE GROUP
 2: SELECT pg_resgroup_move_query(pid, 'rg_alter_tran_b') FROM pg_stat_activity WHERE rsgname = 'rg_alter_tran_b' AND state = 'idle in transaction';
- pg_resgroup_move_query
+ pg_resgroup_move_query 
 ------------------------
- t
+ t                      
 (1 row)
 2: SELECT pg_resgroup_move_query(pid, 'rg_alter_tran') FROM pg_stat_activity WHERE rsgname = 'rg_alter_tran_b' AND state = 'idle in transaction';
 ERROR:  cannot move query while a resource group is being edited
@@ -975,7 +979,7 @@ ERROR:  cannot move query while a resource group is being edited
 1: ROLLBACK;
 ROLLBACK
 3: END;
-END
+COMMIT
 2q: ... <quitting>
 3q: ... <quitting>
 1: DROP ROLE role_alter_tran_b;
