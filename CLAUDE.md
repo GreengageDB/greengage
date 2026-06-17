@@ -95,7 +95,7 @@ GPDB/ADB-specific distributed execution concepts used throughout the codebase:
 
 ## PostgreSQL major-version merge workflow
 
-The primary ongoing task on `ai-merge-stage1` is merging upstream PostgreSQL into GPDB. The full decision matrix and workflow are documented in [`GG_PG_MERGE_SKILL.md`](./GG_PG_MERGE_SKILL.md). Key points:
+The primary ongoing task on `ai-merge-stage1` is merging upstream PostgreSQL into GPDB. The merge re-graft methodology, MPP internals, and recurring bug classes are documented in the [`greengage-internals`](./.claude/skills/greengage-internals/SKILL.md) skill; see also the build/test/debug/regen/cluster skills under [`.claude/skills/`](./.claude/skills/). Key points:
 
 1. `git merge --no-commit --no-ff <upstream-tag>`
 2. Record conflicts: `git diff --name-only --diff-filter=U`
