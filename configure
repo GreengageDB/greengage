@@ -731,6 +731,7 @@ XML2_CONFIG
 with_libxml
 UUID_EXTRA_OBJS
 with_uuid
+with_readline
 with_systemd
 with_selinux
 with_openssl

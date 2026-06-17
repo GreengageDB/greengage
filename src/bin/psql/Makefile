@@ -16,6 +16,8 @@ subdir = src/bin/psql
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
+export with_readline
+
 REFDOCDIR= $(top_srcdir)/doc/src/sgml/ref
 
 override CPPFLAGS := -I. -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
@@ -60,6 +62,7 @@ uninstall:
 
 clean distclean:
 	rm -f psql$(X) $(OBJS) lex.backup
+	rm -rf tmp_check
 
 # files removed here are supposed to be in the distribution tarball,
 # so do not clean them in the clean/distclean rules
