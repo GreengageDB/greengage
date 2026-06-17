@@ -3248,8 +3248,13 @@ _doSetFixedOutputState(ArchiveHandle *AH)
 	/*
 	 * Ensure that the setting is on, so that we don't error out while trying
 	 * to restore TRIGGERS from GP6 to GP7.
+	 *
+	 * This is done for the pg_restore connection itself, meaning that this
+	 * setting is set implicitly and it wouldn't appear in sql dumps
+	 * or archives. This is not ideal, but changing this code means
+	 * breaking already existing dumps/archives from GP6.
 	 */
-	if (AH->public.remoteVersion >= GPDB7_MAJOR_PGVERSION)
+	if (RestoringToDB(AH) && AH->public.remoteVersion >= GPDB7_MAJOR_PGVERSION)
 		ahprintf(AH, "SET gp_enable_statement_trigger = on;\n");
 
 	ahprintf(AH, "\n");

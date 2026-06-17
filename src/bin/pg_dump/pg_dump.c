@@ -319,7 +319,8 @@ static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 bool force_array_type);
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
-													const TableInfo *tblinfo);
+													const TableInfo *tblinfo,
+													bool force_array_type);
 static void binary_upgrade_set_pg_class_oids(Archive *fout,
 											 PQExpBuffer upgrade_buffer,
 											 Oid pg_class_oid, bool is_index);
@@ -4937,11 +4938,12 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 static void
 binary_upgrade_set_type_oids_by_rel(Archive *fout,
 										PQExpBuffer upgrade_buffer,
-										const TableInfo *tblinfo)
+										const TableInfo *tblinfo,
+										bool force_array_type)
 {
 	TypeInfo *typinfo = findTypeByOid(tblinfo->reltype);
 	binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-											 typinfo, false);
+											 typinfo, force_array_type);
 }
 
 static void
@@ -4949,6 +4951,11 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 								 PQExpBuffer upgrade_buffer, Oid pg_class_oid,
 								 bool is_index)
 {
+	PGresult *res;
+	PQExpBuffer gpdb6_partition_query;
+	bool gpdb6_partitioned_table;
+	bool aoco;
+
 	if (!is_index)
 	{
 		TableInfo *tblinfo = findTableByOid(pg_class_oid);
@@ -4963,10 +4970,38 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 		 * Starting GPDB7 CO tables no longer have TOAST tables. Hence, ignore
 		 * toast OIDs for CO tables to avoid upgrade failures.
 		 */
-		if ((OidIsValid(tblinfo->toast_oid) && !tblinfo->aotbl) ||
-					(OidIsValid(tblinfo->toast_oid) &&
-					tblinfo->aotbl &&
-					strncmp(tblinfo->amname, "ao_row", 6) == 0))
+		aoco = tblinfo->aotbl && strncmp(tblinfo->amname, "ao_column", 6) == 0;
+
+		/* Starting from Greengage 7, only leafs of a partition hierarchy
+		 * have TOAST tables.
+		 */
+		gpdb6_partitioned_table = false;
+		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+		{
+			gpdb6_partition_query = createPQExpBuffer();
+			appendPQExpBuffer(gpdb6_partition_query,
+				"WITH gpdb6_partitioned_tables (oid) AS ("
+				"	SELECT oid FROM pg_catalog.pg_class c WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition p WHERE c.oid = p.parrelid"
+				"	)"
+				"	UNION ALL"
+				"	SELECT parchildrelid FROM pg_catalog.pg_partition_rule parent WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition_rule child WHERE child.parparentrule = parent.oid"
+				"	)"
+				")"
+				"SELECT EXISTS ("
+				"	SELECT 1 FROM gpdb6_partitioned_tables p"
+				"		WHERE p.oid = %u::pg_catalog.oid );",
+				tblinfo->dobj.catId.oid);
+
+			res = ExecuteSqlQueryForSingleRow(fout, gpdb6_partition_query->data);
+			if (strcmp(PQgetvalue(res, 0, 0), "t") == 0)
+				gpdb6_partitioned_table = true;
+
+			destroyPQExpBuffer(gpdb6_partition_query);
+		}
+
+		if (OidIsValid(tblinfo->toast_oid) && !aoco && !gpdb6_partitioned_table)
 			binary_upgrade_set_toast_oids_by_rel(fout, upgrade_buffer, tblinfo);
 
 		/* Set up any AO auxiliary tables with preallocated OIDs as well. */
@@ -16906,7 +16941,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					   qrelname);
 
 	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo);
+		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo, false);
 
 	/* Is it a table or a view? */
 	if (tbinfo->relkind == RELKIND_VIEW)
@@ -17067,12 +17102,26 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					{
 						Oid part_oid = atooid(PQgetvalue(partres, i, 0));
 						TableInfo *tbinfo = findTableByOid(part_oid);
+						bool force_array_type = false;
 
 						if (tbinfo->relstorage == 'x')
 							hasExternalPartitions = true;
 
+						if (!tbinfo->aotbl)
+						{
+							/*
+							 * Array types for children of a partitioned table are created
+							 * only starting from Greengage 7, so pick unused OIDs for
+							 * them.
+							 *
+							 * Also, don't do it for AO tables, array types are not created
+							 * for them.
+							 */
+							force_array_type = true;
+						}
+
 						binary_upgrade_set_pg_class_oids(fout, q, part_oid, false);
-						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo);
+						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo, force_array_type);
 					}
 				}
 

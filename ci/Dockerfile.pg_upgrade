@@ -1,0 +1,38 @@
+# Copied from ggupgrade/new/ci/Dockerfile
+
+ARG GGDB6_IMAGE=ghcr.io/greengagedb/greengage/ggdb6_ubuntu:latest
+ARG GGDB7_IMAGE=ghcr.io/greengagedb/greengage/ggdb7_ubuntu:latest
+
+FROM $GGDB6_IMAGE AS ggdb6
+
+RUN set -eux; \
+    source gpdb_src/concourse/scripts/common.bash; \
+    install_and_configure_gpdb
+
+FROM $GGDB7_IMAGE
+
+ENV GREENGAGE6_SRC=/home/gpadmin/ggdb6_src \
+    GREENGAGE7_SRC=/home/gpadmin/gpdb_src \
+    GREENGAGE6_INSTALLATION=/usr/local/greengage-db-6X \
+    GREENGAGE7_INSTALLATION=/usr/local/greengage-db-devel
+
+COPY --from=ggdb6 --chown=1000:1000 /home/gpadmin/gpdb_src $GREENGAGE6_SRC
+COPY --from=ggdb6 --chown=1000:1000 /usr/local/greengage-db-devel $GREENGAGE6_INSTALLATION
+
+RUN set -eux; \
+    . /etc/os-release; \
+    apt update; \
+    if [ "$VERSION_ID" = "22.04" ]; then \
+      apt install python2 python2-dev python-pip -y; \
+      ln -sf /bin/python2 /bin/python; \
+      python -m pip install future==0.16; \
+    else \
+      apt install python-is-python3; \
+      python -m pip install future==1.0.0; \
+    fi
+
+RUN set -eux; \
+    export CONFIGURE_FLAGS=; \
+    source gpdb_src/concourse/scripts/common.bash; \
+    install_and_configure_gpdb; \
+    chown -R 1000:1000 $GREENGAGE7_INSTALLATION
