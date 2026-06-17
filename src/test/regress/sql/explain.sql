@@ -55,6 +55,16 @@ begin
 end;
 $$;
 
+-- GGDB: the JIT regression jobs run with jit enabled and lowered jit cost
+-- thresholds, so EXPLAIN (VERBOSE) emits a "Settings: jit = ..." line. That line
+-- is ignored by init_file, but its width still perturbs the explain_filter output
+-- column and breaks the otherwise-identical non-jit jobs. Pin the jit GUCs to
+-- their boot defaults so EXPLAIN output is the same under both job types (the JSON
+-- cases below already strip jit for the same "varies in test environment" reason).
+set jit = off;
+set jit_above_cost = 100000;
+set optimizer_jit_above_cost = 7500;
+
 -- Simple cases
 
 select explain_filter('explain select * from int8_tbl i8');
