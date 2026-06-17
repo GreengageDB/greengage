@@ -41,4 +41,5 @@ source3 =
 
 source4 =
         /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
         $GPHOME/bin

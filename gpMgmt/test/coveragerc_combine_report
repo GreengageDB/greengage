@@ -23,6 +23,12 @@ source4 =
         /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
         $GPHOME/bin
 
+source5 =
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        $GPHOME/bin
+        $GPHOME/sbin
+
 [report]
 omit =
         */__init__.py*
