@@ -7,6 +7,8 @@
 
 create schema pg14_feat;
 set search_path = pg14_feat, public;
+set timezone = 'UTC';            -- keep extract()/date_bin output deterministic
+set datestyle = 'ISO, MDY';      -- portable timestamptz rendering
 
 -- ============================================================
 -- GROUP BY DISTINCT (PG14): dedup of overlapping grouping sets, over MPP
@@ -73,6 +75,45 @@ select id, r * int4multirange(int4range(2, 12)) as isect from mr order by id;
 -- carried into this branch, so the constituent-range operators above provide the
 -- multirange coverage instead.
 
+-- ============================================================
+-- Subscripting (PG14 SubscriptingRef) in projection / filter / join key over
+-- distributed data (the refrestype class, beyond the UPDATE path).
+-- ============================================================
+create table sub2 (id int, arr int[], j jsonb) distributed by (id);
+insert into sub2 values
+  (1, array[10,20,30],    '{"a": 1, "b": {"c": 2}}'),
+  (2, array[40,50],       '{"a": 9}'),
+  (3, array[60,70,80,90], '{"x": [1,2,3]}');
+select id, arr[2] as a2, j['a'] as ja, j['b']['c'] as jbc from sub2 order by id;
+select id from sub2 where arr[1] = 40 order by id;
+create table sub2k (id int, k int) distributed by (id);
+insert into sub2k values (1, 20), (2, 40), (3, 999);
+select s.id, k.k from sub2 s join sub2k k on s.arr[2] = k.k order by s.id;
+
+-- ============================================================
+-- extract() (PG14 numeric return) + date_bin (PG14) over distributed data.
+-- ============================================================
+create table tsd (id int, ts timestamptz) distributed by (id);
+insert into tsd values
+  (1, '2021-03-15 10:30:00+00'), (2, '2022-07-04 22:00:00+00'), (3, '2023-12-31 23:59:59+00');
+select id, extract(year from ts) as yr, extract(epoch from ts)::bigint as ep from tsd order by id;
+select extract(year from ts) as yr, count(*) from tsd group by extract(year from ts) order by yr;
+select id, date_bin('1 hour', ts, timestamptz '2021-01-01') as binned from tsd order by id;
+
+-- ============================================================
+-- range_agg (PG14, returns anymultirange): ORCA can't resolve the polymorphic
+-- multirange result type, so it falls back to the planner -> correct multirange.
+-- ============================================================
+select range_agg(int4range(id, id + 5)) as ra from tsd;
+
+-- ============================================================
+-- WITH ... NOT MATERIALIZED inlining over distributed CTEs.
+-- ============================================================
+with cte as not materialized (select id, arr[1] as a1 from sub2)
+select c1.id from cte c1 join cte c2 on c1.a1 = c2.a1 where c1.id <= c2.id order by c1.id;
+
 -- cleanup
+reset timezone;
+reset datestyle;
 set search_path = public;
 drop schema pg14_feat cascade;
