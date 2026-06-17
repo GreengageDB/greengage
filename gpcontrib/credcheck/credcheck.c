@@ -54,6 +54,9 @@
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
 #include "tcop/utility.h"
+#if PG_VERSION_NUM >= 190000
+#include "storage/fd.h"
+#endif
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
@@ -65,6 +68,9 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+#if PG_VERSION_NUM >= 190000
+#include "utils/tuplestore.h"
+#endif
 #include "utils/varlena.h"
 
 #define NOT_IN_PARALLEL_WORKER (ParallelWorkerNumber < 0)
@@ -798,7 +804,7 @@ static void password_check(const char *username, const char *password)
 }
 
 static void
-username_guc()
+username_guc(void)
 {
 	DefineCustomIntVariable("credcheck.username_min_length",
 				gettext_noop("minimum username length"), NULL,
@@ -852,7 +858,7 @@ username_guc()
 }
 
 static void
-password_guc()
+password_guc(void)
 {
 	DefineCustomIntVariable("credcheck.password_min_length",
 				gettext_noop("minimum password length"), NULL,
@@ -2382,7 +2388,11 @@ pgph_shmem_startup(void)
 	info.keysize = sizeof(pgphHashKey);
 	info.entrysize = sizeof(pgphEntry);
 	pgph_hash = ShmemInitHash("pg_password_history hash",
+#if PG_VERSION_NUM < 190000
 							  pgph_max, pgph_max,
+#else
+							  pgph_max,
+#endif
 							  &info,
 							  HASH_ELEM | HASH_BLOBS);
 
@@ -2634,7 +2644,11 @@ pgaf_shmem_startup(void)
 	info.keysize = sizeof(pgafHashKey);
 	info.entrysize = sizeof(pgafEntry);
 	pgaf_hash = ShmemInitHash("pg_auth_failure_history hash",
+#if PG_VERSION_NUM < 190000
 							  pgaf_max, pgaf_max,
+#else
+							  pgaf_max,
+#endif
 							  &info,
 							  HASH_ELEM | HASH_BLOBS);
 
@@ -3170,7 +3184,11 @@ pg_banned_role_internal(FunctionCallInfo fcinfo)
 		memset(nulls, 0, sizeof(nulls));
 
 		values[i++] = ObjectIdGetDatum(entry->key.roleid);
+#if PG_VERSION_NUM >= 190000
+		values[i++] = UInt8GetDatum(entry->failure_count);
+#else
 		values[i++] = Int8GetDatum(entry->failure_count);
+#endif
 		if (entry->banned_date)
 			values[i++] = TimestampTzGetDatum(entry->banned_date);
 		else
