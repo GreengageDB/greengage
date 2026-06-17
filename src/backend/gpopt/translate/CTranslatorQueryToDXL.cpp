@@ -332,6 +332,24 @@ CTranslatorQueryToDXL::CheckUnsupportedNodeTypes(Query *query)
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("GROUP BY DISTINCT"));
 	}
+
+	// ORCA does not resolve the polymorphic PG14 anymultirange result type of range
+	// aggregates (e.g. range_agg), so the anymultirange pseudo-type reaches execution
+	// and errors with "type N is not a multirange type". Fall back to the planner for
+	// any aggregate whose result type is a multirange.
+	List *agg_list = gpdb::ExtractNodesExpression(
+		(Node *) query, T_Aggref, true /*descendIntoSubqueries*/);
+	ListCell *lc = nullptr;
+	ForEach(lc, agg_list)
+	{
+		if (gpdb::IsMultirangeType(((Aggref *) lfirst(lc))->aggtype))
+		{
+			gpdb::ListFree(agg_list);
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("multirange-returning aggregate"));
+		}
+	}
+	gpdb::ListFree(agg_list);
 }
 
 //---------------------------------------------------------------------------

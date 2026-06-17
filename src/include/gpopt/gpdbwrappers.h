@@ -540,6 +540,8 @@ bool Equals(void *p1, void *p2);
 // check whether a type is composite
 bool IsCompositeType(Oid typid);
 
+bool IsMultirangeType(Oid typid);
+
 bool IsTextRelatedType(Oid typid);
 
 // get integer value from an Integer value node
