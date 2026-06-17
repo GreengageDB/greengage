@@ -1,3 +1,25 @@
+2026-06-17 - Version 5.0
+
+This major release adds compatibility with PostgreSQL v19 and makes password
+history replication-aware.
+
+  - Add compatibility with PG19. Thank to Devrim Gunduz for the report.
+  - Assign stable custom WAL RMgr ID 150 to credcheck. Thanks to Aidar Imamov
+    for the patch.
+  - Make password history replication-aware via a custom WAL-rmgr. Thanks to
+    Aidar Imamov for the patch.
+  - Add PG19 to CI workflow
+  - Fix workflow action to main
+  - TAP test: skip gracefully on PostgreSQL < 15, thanks to Aidar Imamov
+    for the patch.
+  - Add information about credcheck.disallow_change_password and
+    credcheck.superuser_nocheck use.
+  - Disable any CREATE/ALTER ROLE checks for superusers when credcheck.superuser_nocheck
+    is enabled. Thanks to sergei shkavrov for the report.
+  - Add install of IPC::Run module in CI workflow
+  - Fix parameter name is credcheck.disallow_change_password (not disallow_password_change).
+    Thanks to Arindam Guha for the report.
+
 2026-04-18 - Version 4.7.0
 
 This release fixes issues reported by users since last release and adds
