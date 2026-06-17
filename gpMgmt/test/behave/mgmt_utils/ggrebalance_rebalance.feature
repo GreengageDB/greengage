@@ -458,6 +458,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -517,6 +525,15 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
+
 
     Examples:
         | fault_name                                                                    |
@@ -575,6 +592,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -623,6 +648,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -682,6 +715,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
 
     Examples:
         | fault_name                                                                    |
@@ -732,6 +773,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
 
     Examples:
         | fault_name                                                                    |
@@ -789,6 +838,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -847,6 +904,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -898,6 +963,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
 
     Examples:
         | fault_name                                                                    |
@@ -945,6 +1018,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -997,6 +1078,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -1050,6 +1139,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
 
     Examples:
         | fault_name                                                                    |
@@ -1101,6 +1198,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | f             |
 
     Examples:
         | fault_name                                                                    |
@@ -1166,6 +1271,14 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 6, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
+        When execute following sql in db "postgres" and store result in the context
+            """
+            select false as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where not is_rollback union select true as is_rollback, count(1) > 0 as value_exists from ggrebalance.segment_move_steps where is_rollback;
+            """
+        Then validate that following rows are in the stored rows
+          |  is_rollback | value_exists  |
+          |  f           | t             |
+          |  t           | t             |
 
     Examples:
         | fault_name                                                                    |
