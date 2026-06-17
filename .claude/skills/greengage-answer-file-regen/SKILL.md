@@ -35,10 +35,34 @@ Real bugs this gate caught (do NOT regen — fix them): gp_dqa multi-DQA+FILTER
 aggregate `could not find hash distribution key expressions`; matview REFRESH
 CONCURRENTLY `text *= text`.
 
+## Source of truth: the CI result tarball, not a local run
+
+The CI matrix runs the SAME `expected/*.out` across FOUR jobs — {JIT, non-JIT} ×
+{ORCA `optimizer=on`, Postgres `optimizer=off`} — so a regen that greens one can
+break another. Three rules learned by breaking them:
+
+- **Regenerate from the failing job's CI result tarball** (`*_results.tar.gz` →
+  `gpdb_src/src/test/regress/results/<t>.out`), NOT a local gpdemo run — *unless*
+  the test's output is fully normalized by `explain_filter`/atmsort. A local run
+  bakes environment-specific text that CI then rejects: a fresh db name folded into
+  `current_database()` literals (e.g. `'jps2'` vs `'regression'`), `1 segment`
+  instead of the normalized `n segments`, local row-ordering. (Fully-normalized
+  tests like `explain`, where numbers map to `N`, ARE safe to regen locally.)
+  Correctness check for a big reorder diff: the sorted DATA-ROW SET must equal the
+  known-good `_optimizer.out` set (e.g. qp_misc_jiras opt=off == ORCA, 0 set diff).
+- **A shared base `<t>.out` (no `<t>_optimizer.out`) is used by ORCA too** (ORCA
+  falls back to base). Regenerating it to the Postgres-planner output BREAKS the
+  ORCA jobs. Only regen a base file if a separate `_optimizer.out` exists.
+- **Never bake JIT-only output into a file a non-JIT job compares.** Under jit,
+  EXPLAIN adds a ` Settings: jit = ...` line (init_file-ignored) and inflated
+  `Executor memory:` (atmsort-normalized) — so they don't diff — but the wide
+  Settings row still perturbs `explain_filter`'s column width. See "What NOT" below.
+
 ## Procedure
 
-1. Run the test(s) under `optimizer=off` in a FRESH db with full setup (see
-   [greengage-regress-tests]). The polluted `regression` db gives
+1. **Prefer the CI result tarball** (above). Only when regenerating locally is
+   appropriate, run the test(s) under `optimizer=off` in a FRESH db with full setup
+   (see [greengage-regress-tests]); the polluted `regression` db gives
    `already exists` cascades.
 2. Scan `regression.diffs` for success->error. Investigate any hit (is the new
    ERROR inside a `--start_ignore` block? is it `error->error` with only a line
@@ -58,9 +82,13 @@ CONCURRENTLY `text *= text`.
 
 ## What NOT to regen
 
-- **Flaky** tests: `explain` (memory width the explain_filter regex misses),
-  `truncate_gp` (AO segfile-stats vary 3 rows vs 0). Regenerating captures one
-  run and flakes on the next.
+- **Flaky** tests: `truncate_gp` (AO segfile-stats vary 3 rows vs 0). Regenerating
+  captures one run and flakes on the next. (`explain` LOOKS jit-flaky but is NOT —
+  the jit `Settings:` line widens the `explain_filter` output column, which atmsort
+  doesn't normalize; the real fix is to pin the jit GUCs to their boot defaults at
+  the top of explain.sql — `set jit=off; set jit_above_cost=100000; set
+  optimizer_jit_above_cost=7500;` — so EXPLAIN(SETTINGS), which reports only
+  modified-from-boot-default GUCs, drops them. Then regen both expected files.)
 - **OOM victims**: the gpdemo is too small for the full concurrent schedule;
   qp_olap_window/qp_with_clause/etc. hit `Out of memory`/`failed to acquire
   resources` and their results are corrupt — they pass on CI's bigger runner.
