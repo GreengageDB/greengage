@@ -31,6 +31,7 @@ jobs:
           - 16
           - 17
           - 18
+          - 19
 
     env:
       PGVERSION: ${{ matrix.pgversion }}
@@ -54,10 +55,13 @@ jobs:
         make PROFILE="-Werror"
         sudo -E make install
 
-    - name: test
+    - name: config
       run: |
         sudo pg_conftool $PGVERSION main set shared_preload_libraries credcheck
         sudo service postgresql restart
+
+    - name: test
+      run: |
         make installcheck
 
     - name: show regression diffs
