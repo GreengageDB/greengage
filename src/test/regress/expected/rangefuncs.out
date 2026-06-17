@@ -256,15 +256,15 @@ HINT:  likely caused by a function that reads or modifies data in a distributed 
 CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg0 slice1 172.17.0.2:7002 pid=771223)
 CONTEXT:  SQL function "rngfunct" during startup
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(1) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.2:7000 pid=771422)
 CONTEXT:  SQL function "rngfunct" during startup
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = 1) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg1 slice1 172.17.0.2:7003 pid=771225)
 CONTEXT:  SQL function "rngfunct" during startup
 -- nested functions
 select rngfunct.rngfuncid, rngfunct.f2 from rngfunct(sin(pi()/2)::int) ORDER BY 1,2;
@@ -1403,9 +1403,9 @@ AS $$select $1-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, rngfuncr(f1) FROM int4_tbl;
      f1      |          rngfuncr          
 -------------+----------------------------
-           0 | (-1,0z)
       123456 | (123455,123456z)
      -123456 | (-123457,-123456z)
+           0 | (-1,0z)
   2147483647 | (2147483646,2147483647z)
  -2147483647 | (-2147483648,-2147483647z)
 (5 rows)
@@ -1427,9 +1427,9 @@ AS $$select $2-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, rngfuncb(f1, f1/2) FROM int4_tbl;
      f1      |          rngfuncb          
 -------------+----------------------------
-           0 | (-1,0z)
       123456 | (61727,123456z)
      -123456 | (-61729,-123456z)
+           0 | (-1,0z)
   2147483647 | (1073741822,2147483647z)
  -2147483647 | (-1073741824,-2147483647z)
 (5 rows)
@@ -1652,8 +1652,8 @@ select * from tt;
 ----+----------
   1 | foo
   2 | bar
-  3 | fool
   4 | foolfool
+  3 | fool
 (4 rows)
 
 -- setof does what's expected
@@ -1677,14 +1677,14 @@ select * from insert_tt2('baz','quux');
 select * from tt;
  f1 |   data   
 ----+----------
-  1 | foo
-  2 | bar
-  3 | fool
   4 | foolfool
   5 | foolish
-  6 | barrish
+  1 | foo
+  2 | bar
   7 | baz
   8 | quux
+  3 | fool
+  6 | barrish
 (8 rows)
 
 -- limit doesn't prevent execution to completion
@@ -1697,16 +1697,16 @@ select insert_tt2('foolish','barrish') limit 1;
 select * from tt;
  f1 |   data   
 ----+----------
+  3 | fool
+  6 | barrish
   1 | foo
   2 | bar
-  3 | fool
-  4 | foolfool
-  5 | foolish
-  6 | barrish
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
+  4 | foolfool
+  5 | foolish
 (10 rows)
 
 -- triggers will fire, too
@@ -1718,8 +1718,8 @@ end $$ language plpgsql;
 create trigger tnoticetrigger after insert on tt for each row
 execute procedure noticetrigger();
 select insert_tt2('foolme','barme') limit 1;
-NOTICE:  noticetrigger 11 foolme
-NOTICE:  noticetrigger 12 barme
+NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.2:7002 pid=771223)
+NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.2:7002 pid=771223)
  insert_tt2 
 ------------
          11
@@ -1730,16 +1730,16 @@ select * from tt;
 ----+----------
   1 | foo
   2 | bar
-  3 | fool
-  4 | foolfool
-  5 | foolish
-  6 | barrish
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
  11 | foolme
  12 | barme
+  4 | foolfool
+  5 | foolish
+  3 | fool
+  6 | barrish
 (12 rows)
 
 -- and rules work
@@ -1747,8 +1747,8 @@ create temp table tt_log(f1 int, data text);
 create rule insert_tt_rule as on insert to tt do also
   insert into tt_log values(new.*);
 select insert_tt2('foollog','barlog') limit 1;
-NOTICE:  noticetrigger 13 foollog
-NOTICE:  noticetrigger 14 barlog
+NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.2:7002 pid=771223)
+NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.2:7002 pid=771223)
  insert_tt2 
 ------------
          13
@@ -1757,12 +1757,12 @@ NOTICE:  noticetrigger 14 barlog
 select * from tt;
  f1 |   data   
 ----+----------
-  1 | foo
-  2 | bar
   3 | fool
+  6 | barrish
   4 | foolfool
   5 | foolish
-  6 | barrish
+  1 | foo
+  2 | bar
   7 | baz
   8 | quux
   9 | foolish
@@ -1778,8 +1778,8 @@ select * from tt;
 select * from tt_log;
  f1 |  data   
 ----+---------
- 15 | foollog
  16 | barlog
+ 15 | foollog
 (2 rows)
 
 -- test case for a whole-row-variable bug
@@ -1849,7 +1849,9 @@ explain (verbose, costs off)
  Function Scan on public.array_to_set t
    Output: f1, f2
    Function Call: array_to_set('{one,two}'::text[])
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 -- but without, it can be:
 create or replace function array_to_set(anyarray) returns setof record as $$
@@ -1887,7 +1889,9 @@ explain (verbose, costs off)
  Function Scan on pg_catalog.generate_subscripts i
    Output: i.i, ('{one,two}'::text[])[i.i]
    Function Call: generate_subscripts('{one,two}'::text[], 1)
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 create temp table rngfunc(f1 int8, f2 int8);
 create function testrngfunc() returns record as $$
@@ -1943,7 +1947,9 @@ select testrngfunc();
 -------------------------------------------
  Result
    Output: '(7.136178,7.14)'::rngfunc_type
-(2 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(4 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -1958,7 +1964,9 @@ select * from testrngfunc();
  Function Scan on testrngfunc
    Output: f1, f2
    Function Call: '(7.136178,7.14)'::rngfunc_type
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -1971,11 +1979,13 @@ create or replace function testrngfunc() returns rngfunc_type as $$
 $$ language sql volatile;
 explain (verbose, costs off)
 select testrngfunc();
-       QUERY PLAN        
--------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    Output: testrngfunc()
-(2 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(4 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -1995,7 +2005,8 @@ select * from testrngfunc();
            ->  Result
                  Output: testrngfunc()
  Optimizer: Postgres query optimizer
-(8 rows)
+ Settings: optimizer = 'off'
+(9 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2009,12 +2020,14 @@ create function testrngfunc() returns setof rngfunc_type as $$
 $$ language sql immutable;
 explain (verbose, costs off)
 select testrngfunc();
-       QUERY PLAN        
--------------------------
+             QUERY PLAN              
+-------------------------------------
  ProjectSet
    Output: testrngfunc()
    ->  Result
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2028,7 +2041,9 @@ select * from testrngfunc();
 --------------------------------------------------------
  Result
    Output: 7.136178::numeric(35,6), 7.14::numeric(35,2)
-(2 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(4 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2041,12 +2056,14 @@ create or replace function testrngfunc() returns setof rngfunc_type as $$
 $$ language sql volatile;
 explain (verbose, costs off)
 select testrngfunc();
-       QUERY PLAN        
--------------------------
+             QUERY PLAN              
+-------------------------------------
  ProjectSet
    Output: testrngfunc()
    ->  Result
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2061,7 +2078,9 @@ select * from testrngfunc();
  Function Scan on public.testrngfunc
    Output: f1, f2
    Function Call: testrngfunc()
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2074,12 +2093,14 @@ create or replace function testrngfunc() returns setof rngfunc_type as $$
 $$ language sql immutable;
 explain (verbose, costs off)
 select testrngfunc();
-       QUERY PLAN        
--------------------------
+             QUERY PLAN              
+-------------------------------------
  ProjectSet
    Output: testrngfunc()
    ->  Result
-(3 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(5 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2094,17 +2115,20 @@ select * from testrngfunc();
 ----------------------------------------------------------
  Subquery Scan on "*SELECT*"
    Output: "*SELECT*"."?column?", "*SELECT*"."?column?_1"
-   ->  Unique
+   ->  Sort
          Output: (1), (2)
-         ->  Sort
+         Sort Key: (1)
+         ->  HashAggregate
                Output: (1), (2)
-               Sort Key: (1), (2)
+               Group Key: (1), (2)
                ->  Append
                      ->  Result
                            Output: 1, 2
                      ->  Result
                            Output: 3, 4
-(12 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(15 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2163,8 +2187,8 @@ SELECT get_users();
 SELECT * FROM get_users();
  userid | seq | email  | moredrop | enabled 
 --------+-----+--------+----------+---------
- id     |   1 | email  |       11 | t
  id2    |   2 | email2 |       12 | t
+ id     |   1 | email  |       11 | t
 (2 rows)
 
 SELECT * FROM get_users() WITH ORDINALITY;   -- make sure ordinality copes
@@ -2249,7 +2273,9 @@ explain (verbose, costs off) select * from rngfuncbar();
                Output: 'foo'::character varying
          ->  Result
                Output: 'bar'::character varying
-(7 rows)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(9 rows)
 
 drop function rngfuncbar();
 -- check handling of a SQL function with multiple OUT params (bug #5777)
@@ -2290,7 +2316,8 @@ select x from int8_tbl, extractq2(int8_tbl) f(x);
                Output: f.x
                Function Call: int8_tbl.q2
  Optimizer: Postgres query optimizer
-(10 rows)
+ Settings: optimizer = 'off'
+(11 rows)
 
 select x from int8_tbl, extractq2(int8_tbl) f(x);
          x         
@@ -2320,17 +2347,17 @@ select x from int8_tbl, extractq2_2(int8_tbl) f(x);
                ->  Result
                      Output: (int8_tbl.*).q2
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: optimizer = 'off'
 (12 rows)
 
 select x from int8_tbl, extractq2_2(int8_tbl) f(x);
          x         
 -------------------
-               456
-  4567890123456789
                123
   4567890123456789
  -4567890123456789
+               456
+  4567890123456789
 (5 rows)
 
 -- without the "offset 0", this function gets optimized quite differently
@@ -2346,7 +2373,8 @@ select x from int8_tbl, extractq2_2_opt(int8_tbl) f(x);
    ->  Seq Scan on public.int8_tbl
          Output: int8_tbl.q2
  Optimizer: Postgres query optimizer
-(5 rows)
+ Settings: optimizer = 'off'
+(6 rows)
 
 select x from int8_tbl, extractq2_2_opt(int8_tbl) f(x);
          x         
@@ -2389,7 +2417,7 @@ select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extract
                ->  Result
                      Output: int8_tbl.q2
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: optimizer = 'off'
 (23 rows)
 
 select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extractq2_append(int8_tbl) f(x);
@@ -2421,7 +2449,8 @@ explain (verbose, costs off) select x from int8_tbl, extractq2_wapper(int8_tbl) 
            ->  Result
                  Output: (int8_tbl.*).q2
  Optimizer: Postgres query optimizer
-(8 rows)
+ Settings: optimizer = 'off'
+(9 rows)
 
 select x from int8_tbl, extractq2_wapper(int8_tbl) f(x);
          x         

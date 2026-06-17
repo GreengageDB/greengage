@@ -54,9 +54,9 @@ COPY basictest (testvarchar) FROM stdin;
 select * from basictest;
  testint4 | testtext | testvarchar | testnumeric 
 ----------+----------+-------------+-------------
-       88 | haha     | short       |      123.12
-       88 | haha     | short       |      123.12
           |          | short       |            
+       88 | haha     | short       |      123.12
+       88 | haha     | short       |      123.12
 (3 rows)
 
 -- check that domains inherit operations from base types
@@ -105,34 +105,34 @@ INSERT INTO domarrtest (testint4arr[1], testint4arr[3]) values (11,22);
 select * from domarrtest;
   testint4arr  |    testchar4arr     
 ---------------+---------------------
- {2,2}         | {{a,b},{c,d}}
+ {11,NULL,22}  | 
  {{2,2},{2,2}} | {{a,b}}
+ {2,2}         | {{a,b},{c,d}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
- {11,NULL,22}  | 
 (6 rows)
 
 select testint4arr[1], testchar4arr[2:2] from domarrtest;
  testint4arr | testchar4arr 
 -------------+--------------
            2 | {{c,d}}
-             | {}
            2 | {{c,d}}
            2 | {{c}}
              | {{d,e,f}}
+             | {}
           11 | 
 (6 rows)
 
 select array_dims(testint4arr), array_dims(testchar4arr) from domarrtest;
  array_dims | array_dims 
 ------------+------------
- [1:2]      | [1:2][1:2]
+ [1:3]      | 
  [1:2][1:2] | [1:1][1:2]
+ [1:2]      | [1:2][1:2]
  [1:2]      | [1:3][1:2]
  [1:2]      | [1:2][1:1]
             | [1:2][1:3]
- [1:3]      | 
 (6 rows)
 
 COPY domarrtest FROM stdin;
@@ -142,13 +142,13 @@ CONTEXT:  COPY domarrtest, line 1, column testchar4arr: "{qwerty,w,e}"
 select * from domarrtest;
   testint4arr  |    testchar4arr     
 ---------------+---------------------
- {2,2}         | {{a,b},{c,d}}
  {{2,2},{2,2}} | {{a,b}}
+ {3,4}         | {q,w,e}
+ {11,NULL,22}  | 
+ {2,2}         | {{a,b},{c,d}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
- {11,NULL,22}  | 
- {3,4}         | {q,w,e}
                | 
 (8 rows)
 
@@ -202,7 +202,7 @@ create table dcomptable (d1 dcomptype unique) distributed replicated;
 insert into dcomptable values (row(1,2)::dcomptype);
 insert into dcomptable values (row(3,4)::comptype);
 insert into dcomptable values (row(1,2)::dcomptype);  -- fail on uniqueness
-ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"
+ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"  (seg2 172.17.0.2:7004 pid=771263)
 DETAIL:  Key (d1)=((1,2)) already exists.
 insert into dcomptable (d1.r) values(11);
 select * from dcomptable;
@@ -232,18 +232,18 @@ select * from dcomptable;
 
 alter domain dcomptype add constraint c1 check ((value).r <= (value).i);
 alter domain dcomptype add constraint c2 check ((value).r > (value).i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg1 172.17.0.2:7003 pid=771242)
 select row(2,1)::dcomptype;  -- fail
 ERROR:  value for domain dcomptype violates check constraint "c1"
 insert into dcomptable values (row(1,2)::comptype);
 insert into dcomptable values (row(2,1)::comptype);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.2:7003 pid=771242)
 insert into dcomptable (d1.r) values(99);
 insert into dcomptable (d1.r, d1.i) values(99, 100);
 insert into dcomptable (d1.r, d1.i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.2:7003 pid=771242)
 update dcomptable set d1.r = (d1).r + 1 where (d1).i > 0;  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg2 172.17.0.2:7004 pid=771263)
 update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 select * from dcomptable;
     d1    
@@ -265,16 +265,16 @@ explain (verbose, costs off)
          Output: ROW(((d1).r - '1'::double precision), ((d1).i + '1'::double precision)), ctid, gp_segment_id
          Filter: ((dcomptable.d1).i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: optimizer = 'off'
 (6 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 \d+ dcomptable
-                                  Table "public.dcomptable"
- Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+--------------+-------------
- d1     | dcomptype |           |          |         | extended |              | 
+                                         Table "public.dcomptable"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
+ d1     | dcomptype |           |          |         | extended |             |              | 
 Indexes:
     "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
@@ -315,12 +315,11 @@ NOTICE:  drop cascades to type dcomptype
 create type comptype as (r float8, i float8);
 create domain dcomptypea as comptype[];
 create table dcomptable (d1 dcomptypea unique);
-ERROR:  data type dcomptypea has no default operator class for access method "hash"
-HINT:  You must specify an operator class or define a default operator class for the data type.
 -- GPDB: marking the column as 'unique' fails, because a unique column needs
 -- to be part of the distribution key, and composite types can't be used as
 -- distribution keys because they have no hash opclasses.
 create table dcomptable (d1 dcomptypea /*unique*/);
+ERROR:  relation "dcomptable" already exists
 create index on dcomptable (d1);
 insert into dcomptable values (array[row(1,2)]::dcomptypea);
 insert into dcomptable values (array[row(3,4), row(5,6)]::comptype[]);
@@ -331,9 +330,9 @@ insert into dcomptable (d1[1].r) values(11);
 select * from dcomptable;
          d1         
 --------------------
- {"(1,2)"}
  {"(3,4)","(5,6)"}
  {"(7,8)","(9,10)"}
+ {"(1,2)"}
  {"(9,10)"}
  {"(11,)"}
 (5 rows)
@@ -341,92 +340,96 @@ select * from dcomptable;
 select d1[2], d1[1].r, d1[1].i from dcomptable;
    d1   | r  | i  
 --------+----+----
-        |  1 |  2
  (5,6)  |  3 |  4
- (9,10) |  7 |  8
+        |  1 |  2
         |  9 | 10
         | 11 |   
+ (9,10) |  7 |  8
 (5 rows)
 
 update dcomptable set d1[2] = row(d1[2].i, d1[2].r);
 select * from dcomptable;
          d1         
 --------------------
- {"(1,2)","(,)"}
- {"(3,4)","(6,5)"}
- {"(7,8)","(10,9)"}
  {"(9,10)","(,)"}
+ {"(3,4)","(6,5)"}
  {"(11,)","(,)"}
+ {"(7,8)","(10,9)"}
+ {"(1,2)","(,)"}
 (5 rows)
 
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;
 select * from dcomptable;
          d1         
 --------------------
+ {"(8,8)","(10,9)"}
+ {"(10,10)","(,)"}
  {"(11,)","(,)"}
  {"(2,2)","(,)"}
  {"(4,4)","(6,5)"}
- {"(8,8)","(10,9)"}
- {"(10,10)","(,)"}
 (5 rows)
 
 alter domain dcomptypea add constraint c1 check (value[1].r <= value[1].i);
 alter domain dcomptypea add constraint c2 check (value[1].r > value[1].i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
 select array[row(2,1)]::dcomptypea;  -- fail
 ERROR:  value for domain dcomptypea violates check constraint "c1"
 insert into dcomptable values (array[row(1,2)]::comptype[]);
 insert into dcomptable values (array[row(2,1)]::comptype[]);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
 insert into dcomptable (d1[1].r) values(99);
 insert into dcomptable (d1[1].r, d1[1].i) values(99, 100);
 insert into dcomptable (d1[1].r, d1[1].i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
 update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
   where d1[1].i > 0;
 select * from dcomptable;
          d1         
 --------------------
- {"(11,)","(,)"}
- {"(99,)"}
- {"(1,3)","(,)"}
- {"(3,5)","(6,5)"}
- {"(7,9)","(10,9)"}
  {"(9,11)","(,)"}
- {"(0,3)"}
  {"(98,101)"}
+ {"(1,3)","(,)"}
+ {"(11,)","(,)"}
+ {"(0,3)"}
+ {"(3,5)","(6,5)"}
+ {"(99,)"}
+ {"(7,9)","(10,9)"}
 (8 rows)
 
 explain (verbose, costs off)
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
     where d1[1].i > 0;
-                                                          QUERY PLAN                                                           
--------------------------------------------------------------------------------------------------------------------------------
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.dcomptable
-   ->  Seq Scan on public.dcomptable
-         Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
-         Filter: (dcomptable.d1[1].i > '0'::double precision)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, (DMLAction)
+         ->  Split
+               Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, DMLAction
+               ->  Seq Scan on public.dcomptable
+                     Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
+                     Filter: (dcomptable.d1[1].i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(6 rows)
+ Settings: optimizer = 'off'
+(10 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
     where d1[1].i > 0;
 \d+ dcomptable
-                                  Table "public.dcomptable"
- Column |    Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------------+-----------+----------+---------+----------+--------------+-------------
- d1     | dcomptypea |           |          |         | extended |              | 
+                                         Table "public.dcomptable"
+ Column |    Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------------+-----------+----------+---------+----------+-------------+--------------+-------------
+ d1     | dcomptypea |           |          |         | extended |             |              | 
 Indexes:
     "dcomptable_d1_idx" btree (d1)
+    "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
     silly AS
     ON DELETE TO dcomptable DO INSTEAD  UPDATE dcomptable SET d1[1].r = dcomptable.d1[1].r - 1::double precision, d1[1].i = dcomptable.d1[1].i + 1::double precision
   WHERE dcomptable.d1[1].i > 0::double precision
-Distributed randomly
 
 drop table dcomptable;
 drop type comptype cascade;
@@ -436,14 +439,14 @@ create domain posint as int check (value > 0);
 create table pitable (f1 posint[]);
 insert into pitable values(array[42]);
 insert into pitable values(array[-1]);  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg1 slice1 172.17.0.2:7003 pid=771930)
 insert into pitable values('{0}');  -- fail
 ERROR:  value for domain posint violates check constraint "posint_check"
 LINE 1: insert into pitable values('{0}');
                                    ^
 update pitable set f1[1] = f1[1] + 1;
 update pitable set f1[1] = 0;  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg0 slice1 172.17.0.2:7002 pid=772002)
 select * from pitable;
   f1  
 ------
@@ -517,7 +520,7 @@ select f1, f1[1], (f1[2])[1] from dposintatable;
 
 -- it'd be nice if you could do something like this, but for now you can't:
 update dposintatable set f1[2][1] = array[97];
-ERROR:  wrong number of array subscripts
+ERROR:  wrong number of array subscripts  (seg0 slice1 172.17.0.2:7002 pid=772074)
 -- maybe someday we can make this syntax work:
 update dposintatable set (f1[2])[1] = array[98];
 ERROR:  syntax error at or near "["
@@ -538,19 +541,19 @@ create table nulltest
            , col5 dcheck CHECK (col5 IN ('c', 'd'))
            );
 INSERT INTO nulltest DEFAULT VALUES;
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
 INSERT INTO nulltest values ('a', 'b', 'c', 'd', 'c');  -- Good
 insert into nulltest values ('a', 'b', 'c', 'd', NULL);
-ERROR:  domain dcheck does not allow null values
+ERROR:  domain dcheck does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
 insert into nulltest values ('a', 'b', 'c', 'd', 'a');
-ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"
+ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"  (seg2 172.17.0.2:7004 pid=771263)
 DETAIL:  Failing row contains (a, b, c, d, a).
 INSERT INTO nulltest values (NULL, 'b', 'c', 'd', 'd');
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
 INSERT INTO nulltest values ('a', NULL, 'c', 'd', 'c');
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
 INSERT INTO nulltest values ('a', 'b', NULL, 'd', 'c');
-ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint
+ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint  (seg2 172.17.0.2:7004 pid=771263)
 DETAIL:  Failing row contains (a, b, null, d, c).
 INSERT INTO nulltest values ('a', 'b', 'c', NULL, 'd'); -- Good
 -- Test copy
@@ -585,7 +588,7 @@ ERROR:  domain dnotnull does not allow null values
 SELECT cast(cast(NULL as dnull) as dnotnull); -- fail
 ERROR:  domain dnotnull does not allow null values
 SELECT cast(col4 as dnotnull) from nulltest; -- fail
-ERROR:  domain dnotnull does not allow null values
+ERROR:  domain dnotnull does not allow null values  (seg2 slice1 172.17.0.2:7004 pid=771263)
 -- cleanup
 drop table nulltest;
 drop domain dnotnull restrict;
@@ -609,14 +612,14 @@ create table defaulttest
             , col8 ddef5
             );
 insert into defaulttest(col4) values(0); -- fails, col5 defaults to null
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.2:7003 pid=771242)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values; -- succeeds, inserts domain default
 -- We used to treat SET DEFAULT NULL as equivalent to DROP DEFAULT; wrong
 alter table defaulttest alter column col5 set default null;
 insert into defaulttest(col4) values(0); -- fails
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.2:7003 pid=771242)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values;
@@ -626,10 +629,10 @@ COPY defaulttest(col5) FROM stdin;
 select * from defaulttest;
  col1 | col2 | col3 | col4 | col5 | col6 | col7 | col8  
 ------+------+------+------+------+------+------+-------
-    3 |   12 | 5    |    1 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    2 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    3 |    3 |   88 | 8000 | 12.12
     3 |   12 | 5    |    4 |   42 |   88 | 8000 | 12.12
+    3 |   12 | 5    |    1 |    3 |   88 | 8000 | 12.12
 (4 rows)
 
 drop table defaulttest cascade;
@@ -642,14 +645,14 @@ create table domnotnull
 ) distributed by (id);
 insert into domnotnull default values;
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col1" of table "domnotnull" contains null values
+ERROR:  column "col1" of table "domnotnull" contains null values  (seg0 172.17.0.2:7002 pid=771237)
 update domnotnull set col1 = 5;
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col2" of table "domnotnull" contains null values
+ERROR:  column "col2" of table "domnotnull" contains null values  (seg0 172.17.0.2:7002 pid=771237)
 update domnotnull set col2 = 6;
 alter domain dnotnulltest set not null;
 update domnotnull set col1 = null; -- fails
-ERROR:  domain dnotnulltest does not allow null values
+ERROR:  domain dnotnulltest does not allow null values  (seg0 172.17.0.2:7002 pid=771237)
 alter domain dnotnulltest drop not null;
 update domnotnull set col1 = null;
 drop domain dnotnulltest cascade;
@@ -691,33 +694,34 @@ create table domcontest (col1 con);
 insert into domcontest values (1);
 insert into domcontest values (2);
 alter domain con add constraint t check (VALUE < 1); -- fails
-ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint
+ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint  (seg1 172.17.0.2:7003 pid=771242)
 alter domain con add constraint t check (VALUE < 34);
 alter domain con add check (VALUE > 0);
 insert into domcontest values (-5); -- fails
-ERROR:  value for domain con violates check constraint "con_check"
+ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.2:7003 pid=772249)
 insert into domcontest values (42); -- fails
-ERROR:  value for domain con violates check constraint "t"
+ERROR:  value for domain con violates check constraint "t"  (seg1 slice1 172.17.0.2:7003 pid=772249)
 insert into domcontest values (5);
 alter domain con drop constraint t;
 insert into domcontest values (-5); --fails
-ERROR:  value for domain con violates check constraint "con_check"
+ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.2:7003 pid=772290)
 insert into domcontest values (42);
 alter domain con drop constraint nonexistent;
 ERROR:  constraint "nonexistent" of domain "con" does not exist
 alter domain con drop constraint if exists nonexistent;
 NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg0 172.17.0.2:7002 pid=771237)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg2 172.17.0.2:7004 pid=771263)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg1 172.17.0.2:7003 pid=771242)
 -- Test ALTER DOMAIN .. CONSTRAINT .. NOT VALID
 create domain things AS INT;
 CREATE TABLE thethings (id int, stuff things);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO thethings (stuff) VALUES (55);
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11);
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11) NOT VALID;
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
 UPDATE thethings SET stuff = 10;
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
 -- Confirm ALTER DOMAIN with RULES.
@@ -735,7 +739,7 @@ select * from domview;
 
 alter domain dom set not null;
 select * from domview; -- fail
-ERROR:  domain dom does not allow null values
+ERROR:  domain dom does not allow null values  (seg0 slice1 172.17.0.2:7002 pid=771237)
 alter domain dom drop not null;
 select * from domview;
  col1 
@@ -746,7 +750,7 @@ select * from domview;
 
 alter domain dom add constraint domchkgt6 check(value > 6);
 select * from domview; --fail
-ERROR:  value for domain dom violates check constraint "domchkgt6"
+ERROR:  value for domain dom violates check constraint "domchkgt6"  (seg2 slice1 172.17.0.2:7004 pid=771263)
 alter domain dom drop constraint domchkgt6 restrict;
 select * from domview;
  col1 
@@ -793,11 +797,11 @@ ERROR:  value too long for type character varying(4)
 insert into dtest values('y1234'); -- fail, implicit coercion
 ERROR:  value too long for type character varying(4)
 insert into dtest values('y123'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
 insert into dtest values('yz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
 insert into dtest values('xz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dtop_check"
+ERROR:  value for domain dtop violates check constraint "dtop_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
 drop table dtest;
 drop domain vchar4 cascade;
 NOTICE:  drop cascades to 2 other objects
@@ -812,11 +816,11 @@ insert into domain_test values (1, 2);
 insert into domain_test values (1, 2);
 -- should fail
 alter table domain_test add column c str_domain;
-ERROR:  domain str_domain does not allow null values
+ERROR:  domain str_domain does not allow null values  (seg1 172.17.0.2:7003 pid=771242)
 create domain str_domain2 as text check (value <> 'foo') default 'foo';
 -- should fail
 alter table domain_test add column d str_domain2;
-ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"
+ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"  (seg1 172.17.0.2:7003 pid=771242)
 -- Check that domain constraints on prepared statement parameters of
 -- unknown type are enforced correctly.
 create domain pos_int as int4 check (value > 0) not null;
@@ -914,12 +918,12 @@ alter domain posint add constraint c1 check(value >= 0);
 create domain posint2 as posint check (value % 2 = 0);
 create table ddtest2(f1 posint2);
 insert into ddtest2 values(11); -- fail
-ERROR:  value for domain posint2 violates check constraint "posint2_check"
+ERROR:  value for domain posint2 violates check constraint "posint2_check"  (seg1 slice1 172.17.0.2:7003 pid=772388)
 insert into ddtest2 values(-2); -- fail
-ERROR:  value for domain posint2 violates check constraint "c1"
+ERROR:  value for domain posint2 violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=772388)
 insert into ddtest2 values(2);
 alter domain posint add constraint c2 check(value >= 10); -- fail
-ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint
+ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
 alter domain posint add constraint c2 check(value > 0); -- OK
 drop table ddtest2;
 drop type ddtest1;
@@ -997,10 +1001,10 @@ ERROR:  value for domain orderedpair violates check constraint "orderedpair_chec
 create temp table op (f1 orderedpair);
 insert into op values (array[1,2]);
 insert into op values (array[2,1]);  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg1 slice1 172.17.0.2:7003 pid=772413)
 update op set f1[2] = 3;
 update op set f1[2] = 0;  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg0 slice1 172.17.0.2:7002 pid=772420)
 select * from op;
   f1   
 -------
@@ -1100,7 +1104,7 @@ create table dom_table (x inotnull);
 insert into dom_table values ('1');
 insert into dom_table values (1);
 insert into dom_table values (null);
-ERROR:  value for domain inotnull violates check constraint "inotnull_check"
+ERROR:  value for domain inotnull violates check constraint "inotnull_check"  (seg1 slice1 172.17.0.2:7003 pid=772440)
 drop table dom_table;
 drop domain inotnull;
 drop function sql_is_distinct_from(anyelement, anyelement);
@@ -1146,8 +1150,6 @@ from
 -- github issue: https://github.com/greenplum-db/gpdb/issues/14155
 --
 create table test_table_14155(txtime timestamptz default now(), user_role text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtime' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create domain domainname as name;
 create function test_func_name(
     i_msg text,

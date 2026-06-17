@@ -10,6 +10,16 @@
 -- m/^LOG.*Feature not supported/
 -- s/^LOG.*Feature not supported/Feature not supported/
 -- end_matchsubs
+-- start_ignore
+DROP DATABASE IF EXISTS incrementalanalyze;
+NOTICE:  database "incrementalanalyze" does not exist, skipping
+CREATE DATABASE incrementalanalyze;
+ALTER DATABASE incrementalanalyze SET lc_monetary TO 'C';
+\c incrementalanalyze
+DROP SCHEMA IF EXISTS incremental_analyze;
+NOTICE:  schema "incremental_analyze" does not exist, skipping
+CREATE SCHEMA incremental_analyze;
+-- end_ignore
 -- Test ANALYZE for different data types
 -- Case 1: Partitions have MCVs but after merge, none of the partition MCVs 
 -- qualify as a global MCV for the root and they are used to create the
@@ -85,8 +95,6 @@ CREATE TABLE foo (
     c62_circlearray circle[],
     c63_inc_analyze_composite_array inc_analyze_composite[]
 ) PARTITION BY RANGE (b) (START (0) END(6) EVERY(3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TYPE input_fields AS
 (
     varchararray character varying(2)[],
@@ -379,7 +387,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo         | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                             |                       | 
  foo_1_prt_1 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                             |                       | 
  foo_1_prt_2 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                             |                       | 
- foo         | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                           | {0.17,0.17,0.17,0.17} | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
+ foo         | c63_inc_analyze_composite_array |         0 |          6 |                                                                                                                                                                                                                                             |                       | {"{\"(0,1)\",\"(0,1)\"}","{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(4,5)\",\"(4,5)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_1 | c63_inc_analyze_composite_array |         0 |          3 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(0,1)\",\"(0,1)\"}"}                                                                                                                                                                   | {0.34,0.34,0.32}      | 
  foo_1_prt_2 | c63_inc_analyze_composite_array |         0 |          3 | {"{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}","{\"(5,0)\",\"(5,0)\"}"}                                                                                                                                                                   | {0.34,0.34,0.32}      | 
 (180 rows)
@@ -667,7 +675,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo         | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                               | 
  foo_1_prt_1 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                               | 
  foo_1_prt_2 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                               | 
- foo         | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.1675,0.1675}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
+ foo         | c63_inc_analyze_composite_array |         0 |          6 |                                                                                                                                                                                                                                                                                                                           |                               | {"{\"(0,1)\",\"(0,1)\"}","{\"(1,2)\",\"(1,2)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_1 | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.17,0.17}         | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_2 | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(0,1)\",\"(0,1)\"}","{\"(3,4)\",\"(3,4)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.165,0.165}       | {"{\"(4,5)\",\"(4,5)\"}","{\"(5,0)\",\"(5,0)\"}"}
 (183 rows)
@@ -955,7 +963,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo         | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                           | 
  foo_1_prt_1 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                           | 
  foo_1_prt_2 | c62_circlearray                 |         0 |          0 |                                                                                                                                                                                                                                                                                                                           |                           | 
- foo         | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.17,0.17}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
+ foo         | c63_inc_analyze_composite_array |         0 |          6 |                                                                                                                                                                                                                                                                                                                           |                           | {"{\"(0,1)\",\"(0,1)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_1 | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.17,0.17}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_2 | c63_inc_analyze_composite_array |         0 |          6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.17,0.17}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
 (183 rows)
@@ -1240,7 +1248,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo         | c62_circlearray                 |         0 |           0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
  foo_1_prt_1 | c62_circlearray                 |         0 |           0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
  foo_1_prt_2 | c62_circlearray                 |         0 |           0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
- foo         | c63_inc_analyze_composite_array |         0 |           6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17261904,0.17261904,0.16666667,0.16666667}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
+ foo         | c63_inc_analyze_composite_array |         0 |           6 |                                                                                                                                                                                                                                                                                                                           |                                                   | {"{\"(0,1)\",\"(0,1)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_1 | c63_inc_analyze_composite_array |         0 |           6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17,0.17,0.17,0.17}                             | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_2 | c63_inc_analyze_composite_array |         0 |           6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(0,1)\",\"(0,1)\"}","{\"(3,4)\",\"(3,4)\"}"}                                                                                                                                                                                                                         | {0.1764706,0.1764706,0.16176471,0.16176471}       | {"{\"(4,5)\",\"(4,5)\"}","{\"(5,0)\",\"(5,0)\"}"}
 (180 rows)
@@ -1525,7 +1533,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
  foo         | c62_circlearray                 |         0 |            0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
  foo_1_prt_1 | c62_circlearray                 |         0 |            0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
  foo_1_prt_2 | c62_circlearray                 |         0 |            0 |                                                                                                                                                                                                                                                                                                                           |                                                   | 
- foo         | c63_inc_analyze_composite_array |         0 |            6 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.17948718,0.17948718,0.16666667,0.16666667}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
+ foo         | c63_inc_analyze_composite_array |         0 |            6 |                                                                                                                                                                                                                                                                                                                           |                                                   | {"{\"(0,1)\",\"(0,1)\"}","{\"(1,2)\",\"(1,2)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_1 | c63_inc_analyze_composite_array |         0 |            6 | {"{\"(0,1)\",\"(0,1)\"}","{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}"}                                                                                                                                                                                                                         | {0.16666667,0.16666667,0.16666667,0.16666667}     | {"{\"(4,5)\",\"(4,5)\"}","{\"(5,0)\",\"(5,0)\"}"}
  foo_1_prt_2 | c63_inc_analyze_composite_array |         0 |  -0.33333334 | {"{\"(1,2)\",\"(1,2)\"}","{\"(2,3)\",\"(2,3)\"}","{\"(3,4)\",\"(3,4)\"}","{\"(4,5)\",\"(4,5)\"}"}                                                                                                                                                                                                                         | {0.22222222,0.22222222,0.16666667,0.16666667}     | {"{\"(0,1)\",\"(0,1)\"}","{\"(5,0)\",\"(5,0)\"}"}
 (180 rows)
@@ -1533,8 +1541,6 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Test merging leaf stats where HLL is empty
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo select i, i%6, repeat('aaaa', 100000) FROM generate_series(1, 100)i;
 ANALYZE foo;
 SELECT * FROM pg_stats WHERE tablename like 'foo%' and attname = 'c' ORDER BY attname,tablename;
@@ -1548,8 +1554,6 @@ SELECT * FROM pg_stats WHERE tablename like 'foo%' and attname = 'c' ORDER BY at
 -- Test ANALYZE full scan HLL
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%3, 'text_'||i%100 FROM generate_series(1,1000)i; 
 INSERT INTO foo SELECT i, i%3+3, 'text_'||i%200 FROM generate_series(1,1000)i; 
 SET default_statistics_target to 3;
@@ -1572,8 +1576,6 @@ SELECT tablename, n_distinct FROM pg_stats WHERE tablename like 'foo%' ORDER BY 
 -- Do not merge stats from only one partition while other partitions have not been analyzed yet
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
@@ -1587,8 +1589,6 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from both partitions
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
@@ -1609,8 +1609,6 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- No stats after merging 
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
@@ -1621,8 +1619,6 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from only one partition
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 SET allow_system_table_mods=true;
 UPDATE pg_attribute SET attstattarget=0 WHERE attrelid = 'foo_1_prt_1'::regclass and ATTNAME in ('a','b','c');
@@ -1639,8 +1635,6 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from only one partition one column
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1(c);
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
@@ -1653,19 +1647,15 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- FULL SCAN HLL and the other has HLL from sample
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 ANALYZE foo_1_prt_1;
 ANALYZE FULLSCAN foo_1_prt_2;
-ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4005)
+ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4455)
 HINT:  Re-run ANALYZE or ANALYZE FULLSCAN
 -- Test merging of stats for a newly added partition
 -- Do not collect samples while merging stats
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 SET default_statistics_target = 4;
 ANALYZE foo;
@@ -1687,7 +1677,7 @@ INSERT INTO foo SELECT i, i%9, i%100 FROM generate_series(1,500)i;
 ANALYZE VERBOSE rootpartition foo;
 INFO:  analyzing "public.foo" inheritance tree
 INFO:  column c of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(17861, 400, 't')
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230005, 400, 't');
 -- Testing auto merging root statistics for all columns
 -- where column attnums are differents due to dropped columns
 -- and split partitions.
@@ -1788,8 +1778,6 @@ DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text)
 	PARTITION BY RANGE (b) 
 		(START (0) END (8) EVERY (4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
 set optimizer_analyze_root_partition=off;
 set client_min_messages to 'log';
@@ -1815,13 +1803,13 @@ reset optimizer_analyze_root_partition;
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals |     most_common_freqs     |                          histogram_bounds                          
 -------------+---------+-----------+------------+------------------+---------------------------+--------------------------------------------------------------------
- foo         | a       |         0 |     -0.131 |                  |                           | {0,34,64,95,129}
+ foo         | a       |         0 |      -0.13 | {1,2,3,4}        | {0.008,0.008,0.008,0.008} | {0,34,64,95,129}
  foo_1_prt_1 | a       |         0 |      -0.26 | {1,2,3,4}        | {0.008,0.008,0.008,0.008} | {0,34,64,95,129}
  foo_1_prt_2 | a       |         0 |      -0.26 | {0,1,2,3}        | {0.008,0.008,0.008,0.008} | {4,34,64,94,129}
- foo         | b       |         0 |          8 |                  |                           | {0,1,3,5,7}
+ foo         | b       |         0 |          8 | {0,1,2,3}        | {0.125,0.125,0.125,0.125} | {4,5,6,7}
  foo_1_prt_1 | b       |         0 |          4 | {0,1,2,3}        | {0.25,0.25,0.25,0.25}     | 
  foo_1_prt_2 | b       |         0 |          4 | {4,5,6,7}        | {0.25,0.25,0.25,0.25}     | 
- foo         | c       |         0 |         -1 |                  |                           | {something1,something324,something548,something776,something999}
+ foo         | c       |         0 |         -1 |                  |                           | {something1,something322,something548,something773,something999}
  foo_1_prt_1 | c       |         0 |         -1 |                  |                           | {something1,something321,something547,something776,something995}
  foo_1_prt_2 | c       |         0 |         -1 |                  |                           | {something100,something324,something548,something772,something999}
 (9 rows)
@@ -1832,8 +1820,6 @@ DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text)
 	PARTITION BY RANGE (b) 
 		(START (0) END (8) EVERY (4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
 set optimizer_analyze_root_partition=off;
 ANALYZE foo_1_prt_1;
@@ -1899,7 +1885,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 SELECT relname, relpages, reltuples FROM pg_class WHERE relname LIKE 'incr_analyze_test%' ORDER BY relname;
           relname          | relpages | reltuples 
 ---------------------------+----------+-----------
- incr_analyze_test         |        0 |         0
+ incr_analyze_test         |       -1 |         0
  incr_analyze_test_1_prt_1 |        1 |         1
  incr_analyze_test_1_prt_2 |        2 |      1000
  incr_analyze_test_1_prt_3 |        1 |         0
@@ -1959,14 +1945,12 @@ FROM pg_statistic WHERE starelid = 'simple_table_no_hll'::regclass;
 set optimizer_analyze_root_partition to off;
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo(a int) PARTITION BY RANGE(a) (start (0) INCLUSIVE END (20) EVERY (10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo values (5),(15);
 ANALYZE (verbose, rootpartition off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230191, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230188, 400, 'f');
 -- root should not have stats
 SELECT count(*) from pg_statistic where starelid='foo'::regclass;
  count 
@@ -1988,33 +1972,31 @@ ANALYZE (verbose, fullscan on) foo;
 INFO:  analyzing "public.foo_1_prt_2"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_2 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230191, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_1 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230188, 400, 'f');
 ANALYZE (verbose, fullscan off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230191, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230188, 400, 'f');
 reset optimizer_analyze_root_partition;
 -- Test merging of stats after the last partition is analyzed. Merging should
 -- be done for root without taking a sample from root if one of the column
 -- statistics collection is turned off
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c gp_hyperloglog_estimator) PARTITION BY RANGE (b) (START (1) END (3) EVERY (1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET gp_autostats_mode=none;
 ALTER TABLE foo ALTER COLUMN c SET STATISTICS 0;
 INSERT INTO foo SELECT i,i%2+1, NULL FROM generate_series(1,100)i;
 ANALYZE VERBOSE foo_1_prt_1;
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24965, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230197, 400, 'f');
 ANALYZE VERBOSE foo_1_prt_2;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24971, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230202, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
@@ -2034,11 +2016,11 @@ create table foo (a int, b date) distributed by (a) partition by range(b) (parti
 insert into foo select a, '20210101'::date+a from (select generate_series(1,80) a) t1;
 analyze verbose foo;
 INFO:  analyzing "public.foo_1_prt_20210301"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65906, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230216, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65903, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230213, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210101"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65900, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230210, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 -- we should see "analyzing "public.foo" inheritance tree" in the output below
 begin;
@@ -2046,7 +2028,7 @@ truncate foo_1_prt_20210201;
 insert into foo select a, '20210101'::date+a from (select generate_series(31,40) a) t1;
 analyze verbose foo_1_prt_20210201;
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65903, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(230213, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 rollback;
 -- test behavior of "analyze_hll_non_part_table" create table option

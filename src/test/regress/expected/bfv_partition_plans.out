@@ -22,7 +22,7 @@ SET optimizer_trace_fallback=on;
 --
 -- start_ignore
 create language plpython3u;
-ERROR:  language "plpython3u" already exists
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -52,8 +52,6 @@ language plpython3u;
 -- Test UPDATE that moves row from one partition to another. The partitioning
 -- key is also the distribution key in this case.
 create table mpp3061 (i int) partition by range(i) (start(1) end(5) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3061 values(1);
 update mpp3061 set i = 2 where i = 1;
 select tableoid::regclass, * from mpp3061 where i = 2;
@@ -96,10 +94,10 @@ insert into mpp7980 values('2009-03-03','xyz','zyz','4',1,3,'1');
 select cust_type, subscription_status,count(distinct subscription_id),sum(voice_call_min),sum(minute_per_call) from mpp7980 where month_id ='2009-04-01' group by rollup(1,2);
  cust_type | subscription_status | count | sum  | sum  
 -----------+---------------------+-------+------+------
-           |                     |     1 | 3.00 | 2.00
- zyz       |                     |     1 | 3.00 | 2.00
  zyz       | 1                   |     1 | 1.00 | 1.00
  zyz       | 2                   |     1 | 2.00 | 1.00
+ zyz       |                     |     1 | 3.00 | 2.00
+           |                     |     1 | 3.00 | 2.00
 (4 rows)
 
 -- CLEANUP
@@ -118,12 +116,8 @@ drop table if exists mpp23195_t2;
 NOTICE:  table "mpp23195_t2" does not exist, skipping
 -- end_ignore
 create table mpp23195_t1 (i int) partition by range(i) (partition pt1 start(1) end(10), partition pt2 start(10) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index index_mpp23195_t1_i on mpp23195_t1(i);
 create table mpp23195_t2(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp23195_t1 values (generate_series(1,19));
 insert into mpp23195_t2 values (1);
 -- TEST
@@ -156,13 +150,9 @@ drop table if exists mpp21834_t2;
 NOTICE:  table "mpp21834_t2" does not exist, skipping
 -- end_ignore
 create table mpp21834_t1 (i int, j int) partition by range(i) (partition pp1 start(1) end(10), partition pp2 start(10) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index index_1 on mpp21834_t1(i);
 create index index_2 on mpp21834_t1(j);
 create table mpp21834_t2(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- TEST
 set optimizer_enable_hashjoin = off;
 select find_operator('analyze select * from mpp21834_t2,mpp21834_t1 where mpp21834_t2.i < mpp21834_t1.i;','Dynamic Index Scan');
@@ -199,8 +189,6 @@ create table mpp23288(a int, b int)
       PARTITION pinter  START(6) END (10) INCLUSIVE,
       PARTITION plast   START (11)
   );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp23288(a) select generate_series(1,20);
 analyze mpp23288;
 -- TEST
@@ -472,20 +460,10 @@ drop table if exists p;
 NOTICE:  table "p" does not exist, skipping
 -- end_ignore
 create table p1 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p3 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select g, g*10 from generate_series(1,100) g;
 insert into p1 select g, g%99 +1 from generate_series(1,10000) g;
 insert into p2 select g, g%99 +1 from generate_series(1,10000) g;
@@ -578,15 +556,9 @@ drop table if exists dbs;
 NOTICE:  table "dbs" does not exist, skipping
 -- end_ignore
 create table dts(c1 int, c2 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table dis(c1 int, c2 int, c3 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index dis_index on dis(c3);
 CREATE TABLE dbs(c1 int, c2 int, c3 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index dbs_index on dbs using bitmap(c3);
 -- TEST
 select find_operator('(select * from dts where c2 = 1) union (select * from dts where c2 = 2) union (select * from dts where c2 = 3) union (select * from dts where c2 = 4) union (select * from dts where c2 = 5) union (select * from dts where c2 = 6) union (select * from dts where c2 = 7) union (select * from dts where c2 = 8) union (select * from dts where c2 = 9) union (select * from dts where c2 = 10);', 'Dynamic Seq Scan');
@@ -665,8 +637,6 @@ set optimizer_segments=2;
 set optimizer_partition_selection_log=on;
 -- end_ignore
 create table pp(a int, b int, c int) partition by range(b) (start(1) end(15) every(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pp values (1,1,2),(2,6,2), (3,11,2);
 -- Heterogeneous Index on the partition table
 create index pp_1_prt_1_idx on pp_1_prt_1(c);
@@ -777,6 +747,7 @@ reset optimizer_segments;
 -- SETUP
 -- start_ignore
 DROP TABLE IF EXISTS bar;
+NOTICE:  table "bar" does not exist, skipping
 -- end_ignore
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
@@ -784,33 +755,31 @@ PARTITION BY RANGE (b)
   START (0) END (10),
   START (10) END (20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bar SELECT g % 20, g % 20 from generate_series(1, 1000) g;
 ANALYZE bar;
 SELECT b FROM bar GROUP BY b;
  b  
 ----
-  7
-  4
- 19
-  3
-  5
- 18
-  6
- 11
-  9
   8
- 12
- 10
- 17
-  1
-  0
+ 19
+  7
+ 18
+  4
   2
  16
+  3
  15
- 14
+  0
+  1
+ 12
+ 17
+ 11
  13
+ 10
+  9
+  5
+  6
+ 14
 (20 rows)
 
 EXPLAIN SELECT b FROM bar GROUP BY b;
@@ -827,6 +796,7 @@ EXPLAIN SELECT b FROM bar GROUP BY b;
 
 -- CLEANUP
 DROP TABLE IF EXISTS foo;
+NOTICE:  table "foo" does not exist, skipping
 DROP TABLE IF EXISTS bar;
 -- Test EXPLAIN ANALYZE on a partitioned table. There used to be a bug, where
 -- you got an internal error with this, because the EXPLAIN ANALYZE sends the
@@ -844,18 +814,16 @@ START ('2005-07-01 00:00:00'::timestamp without time zone)
 END ('2006-01-01 00:00:00'::timestamp without time zone)
 EVERY ('2 mons'::interval)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
                                                                 QUERY PLAN                                                                
 ------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=0.520..0.521 rows=0 loops=1)
-   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (actual time=0.000..0.031 rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=0.449..0.450 rows=0 loops=1)
+   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (actual time=0.000..0.032 rows=0 loops=1)
          Hash Cond: (a.oid = b.oid)
-         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (actual time=0.000..0.027 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.010 rows=0 loops=1)
+         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (actual time=0.000..0.029 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.013 rows=0 loops=1)
                ->  Seq Scan on mpp8031_1_prt_2 a_2  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.005 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.004 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.005 rows=0 loops=1)
                ->  Seq Scan on mpp8031_1_prt_4 a_4  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.000..0.005 rows=0 loops=1)
          ->  Hash  (cost=1558.00..1558.00 rows=94800 width=4) (never executed)
                ->  Append  (cost=0.00..1558.00 rows=94800 width=4) (never executed)
@@ -864,12 +832,11 @@ explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
                      ->  Seq Scan on mpp8031_1_prt_3 b_3  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_4 b_4  (cost=0.00..271.00 rows=23700 width=4) (never executed)
  Optimizer: Postgres query optimizer
- Planning Time: 1.438 ms
-   (slice0)    Executor memory: 57K bytes.
-   (slice1)    Executor memory: 56K bytes avg x 3 workers, 56K bytes max (seg0).
+ Planning Time: 2.513 ms
+   (slice0)    Executor memory: 124K bytes.
+   (slice1)    Executor memory: 124K bytes avg x 3 workers, 124K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Postgres query optimizer
- Execution Time: 1.481 ms
+ Execution Time: 1.125 ms
 (20 rows)
 
 drop table mpp8031;
@@ -898,6 +865,9 @@ INSERT INTO part_tbl VALUES (2015111000, 479534741, 99999999);
 INSERT INTO part_tbl VALUES (2015111000, 479534742, 99999999);
 CREATE INDEX part_tbl_idx 
 ON part_tbl(profile_key);
+-- start_ignore
+analyze part_tbl;
+-- end_ignore
 EXPLAIN SELECT * FROM part_tbl WHERE profile_key = 99999999;
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
@@ -935,11 +905,7 @@ deallocate f3;
 ERROR:  prepared statement "f3" does not exist
 -- end_ignore
 create table r_part(a int, b int) partition by range(a) (start (1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table r_co(a int, b int) with (orientation=column, appendonly=true) partition by range(a) (start (1) end(10) every(1)) ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into r_part values (1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8);
 -- following tests rely on the data distribution, verify them
 select gp_segment_id, * from r_part order by a,b;
@@ -1012,12 +978,12 @@ execute f2(2);
 (1 row)
 
 explain select * from r_part where a = 1 order by a,b; -- should eliminate partitions
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.05 rows=1 width=8)
-   Merge Key: r_part_1_prt_1.b
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.07 rows=3 width=8)
+   Merge Key: r_part.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
-         Sort Key: r_part_1_prt_1.b
+         Sort Key: r_part.b
          ->  Seq Scan on r_part_1_prt_1 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
@@ -1025,12 +991,12 @@ explain select * from r_part where a = 1 order by a,b; -- should eliminate parti
 
 --force_explain
 explain execute f1(1); -- should eliminate partitions 
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.05 rows=1 width=8)
-   Merge Key: r_part_1_prt_1.b
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.07 rows=3 width=8)
+   Merge Key: r_part.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
-         Sort Key: r_part_1_prt_1.b
+         Sort Key: r_part.b
          ->  Seq Scan on r_part_1_prt_1 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
@@ -1038,12 +1004,12 @@ explain execute f1(1); -- should eliminate partitions
 
 --force_explain
 explain execute f2(2); -- should eliminate partitions
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.05 rows=1 width=8)
-   Merge Key: r_part_1_prt_2.b
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.07 rows=3 width=8)
+   Merge Key: r_part.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
-         Sort Key: r_part_1_prt_2.b
+         Sort Key: r_part.b
          ->  Seq Scan on r_part_1_prt_2 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 2)
  Optimizer: Postgres query optimizer
@@ -1065,9 +1031,9 @@ explain select * from r_co where a=2; -- should eliminate partitions
 prepare f3(int) as select * from r_co where a = $1 order by a,b; 
 --force_explain
 explain execute f3(2); -- should eliminate partitions
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.05 rows=1 width=8)
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.07 rows=3 width=8)
    Merge Key: r_co.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
          Sort Key: r_co.b
@@ -1103,8 +1069,8 @@ select '2009-01-02'::date = to_date('2009-01-02','YYYY-MM-DD'); -- ensure that b
 explain select * from fact where dd < '2009-01-02'::date; -- partitions eliminated
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1112,8 +1078,8 @@ explain select * from fact where dd < '2009-01-02'::date; -- partitions eliminat
 explain select * from fact where dd < to_date('2009-01-02','YYYY-MM-DD'); -- partitions eliminated
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1123,9 +1089,9 @@ explain select * from fact where dd < current_date; --partitions eliminated
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
    ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
-         Filter: (dd < '03-12-2021'::date)
+         Filter: (dd < '06-16-2026'::date)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 -- Test partition elimination in prepared statements
 prepare f1(date) as select * from fact where dd < $1;
@@ -1133,8 +1099,8 @@ prepare f1(date) as select * from fact where dd < $1;
 explain execute f1('2009-01-02'::date); -- should eliminate partitions
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1143,8 +1109,8 @@ explain execute f1('2009-01-02'::date); -- should eliminate partitions
 explain execute f1(to_date('2009-01-02', 'YYYY-MM-DD')); -- should eliminate partitions
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1157,7 +1123,6 @@ deallocate f1;
 -- Delete Using on partitioned table causes repetitive scans on using table	
 create table mpp6247_foo ( c1 int, dt date ) distributed by ( c1 ) partition by range (dt) ( start ( date '2009-05-01' ) end ( date '2009-05-11' ) every ( interval '1 day' ) );
 create table mpp6247_bar (like mpp6247_foo);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- EXPECT: Single HJ after partition elimination instead of sequence of HJ under Append
 select count_operator('delete from mpp6247_foo using mpp6247_bar where mpp6247_foo.c1 = mpp6247_bar.c1 and mpp6247_foo.dt = ''2009-05-03''', 'Hash Join');
  count_operator 
@@ -1169,13 +1134,11 @@ drop table mpp6247_bar;
 drop table mpp6247_foo;
 -- Validate that basic DELETE on partition table with index functions properly
 CREATE TABLE delete_from_indexed_pt (a int, b int) PARTITION BY RANGE(b) (START (0) END (7) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_delete_from_indexed_pt ON delete_from_indexed_pt USING bitmap(b);
 INSERT INTO delete_from_indexed_pt SELECT i, i%6 FROM generate_series(1, 10)i;
 EXPLAIN (COSTS OFF) DELETE FROM delete_from_indexed_pt WHERE b=1;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
  Delete on delete_from_indexed_pt
    Delete on delete_from_indexed_pt_1_prt_1 delete_from_indexed_pt_1
    ->  Bitmap Heap Scan on delete_from_indexed_pt_1_prt_1 delete_from_indexed_pt_1
@@ -1201,11 +1164,7 @@ SELECT * FROM delete_from_indexed_pt;
 
 -- Validate that basic DELETE on partition table using DPE functions properly
 CREATE TABLE delete_from_pt (a int, b int) PARTITION BY RANGE(b) (START (0) END (7) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO delete_from_pt SELECT i, i%6 FROM generate_series(1, 10)i;
 INSERT INTO t VALUES (1);
 ANALYZE delete_from_pt, t;
@@ -1216,78 +1175,33 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
    Delete on delete_from_pt_1_prt_1 delete_from_pt_2
    Delete on delete_from_pt_1_prt_2 delete_from_pt_3
    Delete on delete_from_pt_1_prt_3 delete_from_pt_4
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=1 loops=1)
-         ->  Hash Semi Join (actual rows=2 loops=1)
-               Hash Cond: (delete_from_pt_2.b = t.a)
-               Extra Text: (seg1)   Hash chain length 2.0 avg, 2 max, using 1 of 65536 buckets.
-               ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
-                     Hash Key: delete_from_pt_2.b
-                     ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Hash (actual rows=2 loops=1)
-                     Buckets: 65536  Batches: 1  Memory Usage: 513kB
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
-                           Hash Key: t.a
+   ->  Hash Semi Join (actual rows=1 loops=1)
+         Hash Cond: (delete_from_pt.b = t.a)
+         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
+         ->  Append (actual rows=3 loops=1)
+               Partition Selectors: $1
+               ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
+               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
+               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: 131072  Batches: 1  Memory Usage: 1025kB
+               ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
                            ->  Hash Join (actual rows=1 loops=1)
                                  Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
-                                 ->  Append (actual rows=3 loops=1)
-                                       Partition Selectors: $1
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
-                                 ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 65536  Batches: 1  Memory Usage: 513kB
-                                       ->  Partition Selector (selector id: $1) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=1 loops=1)
-                                                   ->  Seq Scan on t (actual rows=1 loops=1)
-   ->  Explicit Redistribute Motion 3:3  (slice5; segments: 3) (actual rows=0 loops=1)
-         ->  Hash Semi Join (actual rows=0 loops=1)
-               Hash Cond: (delete_from_pt_3.b = t.a)
-               ->  Redistribute Motion 3:3  (slice6; segments: 3) (actual rows=0 loops=1)
-                     Hash Key: delete_from_pt_3.b
-                     ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
-               ->  Hash (actual rows=2 loops=1)
-                     Buckets: 65536  Batches: 1  Memory Usage: 513kB
-                     ->  Redistribute Motion 3:3  (slice7; segments: 3) (actual rows=2 loops=1)
-                           Hash Key: t.a
-                           ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
+                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
                                  ->  Append (actual rows=3 loops=1)
                                        Partition Selectors: $2
                                        ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
                                        ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
                                        ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
                                  ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 65536  Batches: 1  Memory Usage: 513kB
+                                       Buckets: 262144  Batches: 1  Memory Usage: 2049kB
                                        ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice8; segments: 3) (actual rows=1 loops=1)
-                                                   ->  Seq Scan on t (actual rows=1 loops=1)
-   ->  Explicit Redistribute Motion 3:3  (slice9; segments: 3) (actual rows=0 loops=1)
-         ->  Hash Semi Join (actual rows=0 loops=1)
-               Hash Cond: (delete_from_pt_4.b = t.a)
-               ->  Redistribute Motion 3:3  (slice10; segments: 3) (actual rows=0 loops=1)
-                     Hash Key: delete_from_pt_4.b
-                     ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
-               ->  Hash (actual rows=2 loops=1)
-                     Buckets: 65536  Batches: 1  Memory Usage: 513kB
-                     ->  Redistribute Motion 3:3  (slice11; segments: 3) (actual rows=2 loops=1)
-                           Hash Key: t.a
-                           ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
-                                 ->  Append (actual rows=3 loops=1)
-                                       Partition Selectors: $3
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
-                                 ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 65536  Batches: 1  Memory Usage: 513kB
-                                       ->  Partition Selector (selector id: $3) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice12; segments: 3) (actual rows=1 loops=1)
+                                             ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
                                                    ->  Seq Scan on t (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
-(75 rows)
+(30 rows)
 
 SELECT * FROM delete_from_pt order by a;
  a  | b 
@@ -1306,7 +1220,10 @@ RESET optimizer_trace_fallback;
 -- CLEANUP
 -- start_ignore
 drop schema if exists bfv_partition_plans cascade;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function count_operator(text,text)
 drop cascades to function find_operator(text,text)
+drop cascades to table delete_from_indexed_pt
+drop cascades to table delete_from_pt
+drop cascades to table t
 -- end_ignore

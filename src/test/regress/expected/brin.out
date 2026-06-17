@@ -438,9 +438,11 @@ UPDATE brintest SET int8col = int8col * int4col;
 UPDATE brintest SET textcol = '' WHERE textcol IS NOT NULL;
 -- Tests for brin_summarize_new_values
 SELECT brin_summarize_new_values('brintest'); -- error, not an index
-ERROR:  "brintest" is not an index
+ERROR:  "brintest" is not an index  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_new_values" statement 1
 SELECT brin_summarize_new_values('tenk1_unique1'); -- error, not a BRIN index
-ERROR:  "tenk1_unique1" is not a BRIN index
+ERROR:  "tenk1_unique1" is not a BRIN index  (seg2 slice1 172.17.0.2:7004 pid=768370)
+CONTEXT:  SQL function "brin_summarize_new_values" statement 1
 SELECT brin_summarize_new_values('brinidx'); -- ok, no change expected
  brin_summarize_new_values 
 ---------------------------
@@ -485,13 +487,16 @@ END;
 $$;
 -- summarize one range
 SELECT brin_summarize_range('brin_summarize_idx', 0);
-ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 127.0.0.1:7002 pid=11998)
+ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_range" statement 1
 -- nothing: already summarized
 SELECT brin_summarize_range('brin_summarize_idx', 1);
-ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 127.0.0.1:7002 pid=11998)
+ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_range" statement 1
 -- summarize one range
 SELECT brin_summarize_range('brin_summarize_idx', 2);
-ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 127.0.0.1:7002 pid=11998)
+ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_range" statement 1
 -- summarize all pages
 SELECT brin_summarize_range('brin_summarize_idx', 4294967295);
  brin_summarize_range 
@@ -508,9 +513,11 @@ SELECT brin_summarize_range('brin_summarize_idx', 4294967295);
 
 -- invalid block number values
 SELECT brin_summarize_range('brin_summarize_idx', -1);
-ERROR:  block number out of range: -1  (seg0 slice1 127.0.0.1:7002 pid=11998)
+ERROR:  block number out of range: -1  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_range" statement 1
 SELECT brin_summarize_range('brin_summarize_idx', 4294967296);
-ERROR:  block number out of range: 4294967296  (seg0 slice1 127.0.0.1:7002 pid=11998)
+ERROR:  block number out of range: 4294967296  (seg0 slice1 172.17.0.2:7002 pid=768329)
+CONTEXT:  SQL function "brin_summarize_range" statement 1
 -- test value merging in add_value
 CREATE TABLE brintest_2 (n numrange);
 CREATE INDEX brinidx_2 ON brintest_2 USING brin (n);
@@ -524,7 +531,7 @@ SELECT brin_desummarize_range('brinidx', 0);
 (1 row)
 
 SELECT brin_summarize_range('brinidx', 0);
-ERROR:  Greenplum could not summarize indicated page range
+ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=768329)
 CONTEXT:  SQL function "brin_summarize_range" statement 1
 DROP TABLE brintest_2;
 -- test brin cost estimates behave sanely based on correlation of values
@@ -572,7 +579,9 @@ DELETE FROM brintest_3;
 -- vacuum actually removes the TOAST rows. Creating an index concurrently
 -- is a one way to achieve that, because it does exactly such wait.
 CREATE INDEX CONCURRENTLY brin_test_temp_idx ON brintest_3(a);
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
 DROP INDEX brin_test_temp_idx;
+ERROR:  index "brin_test_temp_idx" does not exist
 -- vacuum the table, to discard TOAST data
 VACUUM brintest_3;
 -- retry insert with a different random-looking (but deterministic) value
@@ -585,13 +594,15 @@ SELECT val, val, val, val FROM rand_value;
 SET enable_seqscan = off;
 EXPLAIN (COSTS OFF)
 SELECT * FROM brintest_3 WHERE b < '0';
-                   QUERY PLAN                   
-------------------------------------------------
- Bitmap Heap Scan on brintest_3
-   Recheck Cond: (b < '0'::text)
-   ->  Bitmap Index Scan on brin_test_toast_idx
-         Index Cond: (b < '0'::text)
-(4 rows)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on brintest_3
+         Recheck Cond: (b < '0'::text)
+         ->  Bitmap Index Scan on brin_test_toast_idx
+               Index Cond: (b < '0'::text)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 SELECT * FROM brintest_3 WHERE b < '0';
  a | b | c | d 
