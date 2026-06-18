@@ -164,6 +164,11 @@ class GGRebalanceMainSM:
             self.rebalance_schema.storeMainState(self.state)
 
     def run(self) -> None:
+        # Do some early checks here before we store any state in the rebalance schema,
+        # in order not to spoil the last state if it was the final one.
+        if not (self.options.clean_required or self.options.rollback_required) and self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE':
+            self.logger.info('Previous run was completed successfully. Please execute cleanup before a new run.')
+            return
         self.trigger('start')
 
     def set_hard_shutdown(self, hard_shutdown: bool) -> None:
@@ -364,11 +369,6 @@ class GGRebalanceMainSM:
             # Schema already exists from the previous run.
             # In this case we already have a plan saved in the schema,
             # and we'll continue (or rollback) according to it.
-            # Or, if everything is complete, just exit.
-            if self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE':
-                self.logger.info('Previous run was completed successfully. Please execute cleanup before a new run.')
-                return
-
             if self.plan != None:
                 self.logger.error("Can't start a new operation, because the previous one was interrupted. "
                                   "Please try to launch again without a plan to continue from the interrupted state, "
