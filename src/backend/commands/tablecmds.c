@@ -17817,7 +17817,8 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		gp_segment_number_for_table_shrink = 0;
 		optimizer = saveOptimizerGucValue;
 	}
-	else if (Gp_role == GP_ROLE_EXECUTE && GpPolicyIsPartitioned(policy) &&
+	else if (Gp_role == GP_ROLE_EXECUTE &&
+		   (GpPolicyIsPartitioned(policy) || GpPolicyIsReplicated(policy)) &&
 		   GpIdentity.segindex >= policy->numsegments)
 	{
 		/*

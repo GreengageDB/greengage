@@ -282,8 +282,13 @@ def remove_pid_file(coordinator_data_directory: str):
     """
     Removes ggrebalance pid file
     """
+    pid_filename = f'{coordinator_data_directory}/ggrebalance.pid'
     try:
-        os.unlink(coordinator_data_directory + '/ggrebalance.pid')
+        with open(pid_filename, 'r') as fp:
+            pid = int(fp.readline().strip())
+            if os.getpid() != pid:
+                return
+        os.unlink(pid_filename)
     except IOError:
         pass
 
