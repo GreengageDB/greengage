@@ -3618,7 +3618,8 @@ psql_completion(const char *text, int start, int end)
 					  "ROW SHARE MODE", "ROW EXCLUSIVE MODE",
 					  "SHARE UPDATE EXCLUSIVE MODE", "SHARE MODE",
 					  "SHARE ROW EXCLUSIVE MODE",
-					  "EXCLUSIVE MODE", "ACCESS EXCLUSIVE MODE");
+					  "EXCLUSIVE MODE", "ACCESS EXCLUSIVE MODE",
+					  "NOWAIT");
 
 	/* Complete LOCK [TABLE] <table> IN ACCESS|ROW with rest of lock mode */
 	else if (Matches("LOCK", MatchAny, "IN", "ACCESS|ROW") ||
@@ -3634,7 +3635,19 @@ psql_completion(const char *text, int start, int end)
 	/* Complete LOCK [TABLE] <table> IN ACESS SHARE MODE with "NOWAIT", "MASTER ONLY", "COORDINATOR ONLY" */
 	else if (Matches("LOCK", MatchAny, "IN", "ACCESS", "SHARE", "MODE") ||
 			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS", "SHARE", "MODE"))
-		COMPLETE_WITH("NOWAIT", "MASTER ONLY", "COORDINATOR ONLY");
+		COMPLETE_WITH("NOWAIT", "COORDINATOR ONLY");
+
+	else if (Matches("LOCK", MatchAny, "IN", "ACCESS", "SHARE", "MODE", "NOWAIT") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS", "SHARE", "MODE", "NOWAIT"))
+		COMPLETE_WITH("COORDINATOR ONLY");
+
+	else if (Matches("LOCK", MatchAny, "IN", "SHARE|EXCLUSIVE", "MODE") ||
+			 Matches("LOCK", MatchAny, "IN", "ACCESS|ROW", "SHARE|EXCLUSIVE", "MODE") ||
+			 Matches("LOCK", MatchAny, "IN", "SHARE", "ROW|UPDATE", "EXCLUSIVE", "MODE") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "SHARE|EXCLUSIVE", "MODE") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS|ROW", "SHARE|EXCLUSIVE", "MODE") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "SHARE", "ROW|UPDATE", "EXCLUSIVE", "MODE"))
+		COMPLETE_WITH("NOWAIT");
 
 /* NOTIFY --- can be inside EXPLAIN, RULE, etc */
 	else if (TailMatches("NOTIFY"))
