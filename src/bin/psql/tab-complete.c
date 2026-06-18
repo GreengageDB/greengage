@@ -1079,6 +1079,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews},
 	{"OPERATOR", NULL, NULL, NULL}, /* Querying for this is probably not such
 									 * a good idea. */
+	{"OR REPLACE", NULL}, /* for CREATE OR REPLACE FUNCTION ... */
 	{"OWNED", NULL, NULL, NULL, THING_NO_CREATE | THING_NO_ALTER},	/* for DROP OWNED BY ... */
 	{"PARSER", Query_for_list_of_ts_parsers, NULL, NULL, THING_NO_SHOW},
 	{"POLICY", NULL, NULL, NULL},
@@ -2538,17 +2539,25 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH("DISTRIBUTED");
 	}
 
-	else if (Matches("CREATE", "FUNCTION", MatchAny))
+	else if (Matches("CREATE", "OR", "REPLACE"))
+		COMPLETE_WITH("FUNCTION");
+	else if (Matches("CREATE", "FUNCTION", MatchAny) ||
+			 Matches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny))
 		COMPLETE_WITH("(");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)"))
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)") ||
+			 Matches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)"))
 		COMPLETE_WITH("RETURNS");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS"))
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			 Matches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes,
 								   " UNION SELECT 'TABLE ('");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE"))
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE") ||
+			 Matches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE"))
 		COMPLETE_WITH("(");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE")) ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE")) ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)")))
 		COMPLETE_WITH("AS", "LANGUAGE", "TRANSFORM FOR TYPE", "WINDOW",
 					  "IMMUTABLE", "STABLE", "VOLATILE", "NOT LEAKPROOF",
 					  "LEAKPROOF", "CALLED ON NULL INPUT",
@@ -2558,23 +2567,33 @@ psql_completion(const char *text, int start, int end)
 
 	/* Completing individual options */
 	/* They're this big to avoid false completions by function code */
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "TRANSFORM", "FOR", "TYPE") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "TRANSFORM", "FOR", "TYPE"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "TRANSFORM", "FOR", "TYPE") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "TRANSFORM", "FOR", "TYPE")))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes, NULL);
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "PARALLEL") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "PARALLEL"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "PARALLEL") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "PARALLEL")))
 		COMPLETE_WITH("UNSAFE", "RESTRICTED", "SAFE");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXECUTE", "ON") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXECUTE", "ON"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "EXECUTE", "ON") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXECUTE", "ON")))
 		COMPLETE_WITH("ANY", "COORDINATOR", "ALL SEGMENTS", "INITPLAN");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "LANGUAGE") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "LANGUAGE"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "LANGUAGE") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "LANGUAGE")))
 		COMPLETE_WITH_QUERY(Query_for_list_of_languages
 							" UNION SELECT 'internal'");
-	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "SECURITY") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "SECURITY") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXTERNAL", "SECURITY") ||
-			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXTERNAL", "SECURITY"))
+	else if ((HeadMatches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS") ||
+			  HeadMatches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny, "(*)", "RETURNS")) &&
+			 (TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "SECURITY") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "SECURITY") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE"), "EXTERNAL", "SECURITY") ||
+			  TailMatches("FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXTERNAL", "SECURITY")))
 		COMPLETE_WITH("INVOKER", "DEFINER");
 
 	/* CREATE FOREIGN */
