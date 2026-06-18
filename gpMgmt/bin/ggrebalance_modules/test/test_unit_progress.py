@@ -85,15 +85,14 @@ class TestPrintRebalanceSummary(GpTestCase):
      7.  cancelled_steps --> CANCELLED status
      8.  Unexpected status --> Exception raised before any output
      9.  Mixed statuses --> all three buckets filled simultaneously
-    10.  No warnings --> balanced cluster, nothing down, nothing cancelled
-    11.  Warning: cancelled steps --> section header + each step line
+    10.  No warnings --> two segments explicitly up, cluster balanced; summary table still printed
+    11.  Warning: cancelled steps --> per-step line logged in warnings section
     12.  Warning: segments down --> fault-tolerance message + each segment
     13.  Warning: unbalanced, no rolled-back steps
     14.  Warning: unbalanced WITH rolled-back steps --> retry message printed
     15.  All three warning branches fired in one call
     16.  PROGRESS_NO still fires warnings (warnings are independent of mode)
-    17.  loadSystemConfig called with exact keyword arguments
-    18.  Multiple down segments --> each one logged individually
+    17.  Multiple down segments --> each one logged individually and in order
     """
 
     # 1
@@ -135,19 +134,18 @@ class TestPrintRebalanceSummary(GpTestCase):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
-        mock_cfg.getConfigurationProvider.return_value \
-            .loadSystemConfig.return_value = _make_gp_array()
-
+        load_mock = mock_cfg.getConfigurationProvider.return_value.loadSystemConfig
+        load_mock.return_value = _make_gp_array()
         steps = [_mirror(RebalanceStep.Status.DONE),
                  _mirror(RebalanceStep.Status.DONE)]
         _call(sm, _make_summary(steps))
-
         sm.logger.info.assert_any_call(GGRebalanceMainSM.summary_separator_str)
         sm.logger.info.assert_any_call(
             '                                   REBALANCE                                   ')
         sm.logger.info.assert_any_call('Segments moved:\t\t2')
         sm.logger.info.assert_any_call('Rolled back steps:\t\t0')
         sm.logger.info.assert_any_call('Cancelled steps:\t\t0')
+        load_mock.assert_called_once_with(useUtilityMode=False, verbose=False)
 
     # 4
     @patch(f'{_MOD}.configurationInterface')
@@ -175,17 +173,17 @@ class TestPrintRebalanceSummary(GpTestCase):
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = _make_gp_array()
-
         steps = [
-            _mirror(RebalanceStep.Status.DONE, is_rollback=False),   # 1 moved
-            _mirror(RebalanceStep.Status.DONE, is_rollback=False),   # 1 moved
-            _mirror(RebalanceStep.Status.DONE, is_rollback=True),    # rollback --> NOT moved
-            _switchover1(RebalanceStep.Status.DONE, is_rollback=False),  # switchover --> NOT moved
-            _switchover2(RebalanceStep.Status.DONE, is_rollback=False),
+            _mirror(RebalanceStep.Status.DONE, is_rollback=False),  # counted as moved
+            _mirror(RebalanceStep.Status.DONE, is_rollback=False),  # counted as moved
+            _mirror(RebalanceStep.Status.DONE, is_rollback=True),   # NOT moved; rolled back
+            _switchover1(RebalanceStep.Status.DONE, is_rollback=False),  # NOT moved
+            _switchover2(RebalanceStep.Status.DONE, is_rollback=False),  # NOT moved
         ]
         _call(sm, _make_summary(steps))
-
         sm.logger.info.assert_any_call('Segments moved:\t\t2')
+        # The rolled-back mirror step must land in its own bucket, not disappear
+        sm.logger.info.assert_any_call('Rolled back steps:\t\t1')
 
     # 6
     @patch(f'{_MOD}.configurationInterface')
@@ -264,12 +262,13 @@ class TestPrintRebalanceSummary(GpTestCase):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
-        # Two segments, both up
+        # Two segments explicitly UP.
+        # This proves that segments being UP suppresses the
+        # fault-tolerance warning while the summary table is still emitted.
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = _make_gp_array(down_flags=[False, False])
-
         _call(sm, _make_summary([_mirror(RebalanceStep.Status.DONE)]))
-
+        sm.logger.info.assert_any_call('Segments moved:\t\t1')
         sm.logger.warning.assert_not_called()
 
     # 11
@@ -281,20 +280,11 @@ class TestPrintRebalanceSummary(GpTestCase):
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = _make_gp_array()
-
         c_step = _mirror(
             RebalanceStep.Status.CANCELLED,
             str_repr="Rebalance step, move_order=3 type: mirror move, content=1")
-
         _call(sm, _make_summary([c_step]))
-
-        sm.logger.warning.assert_any_call(GGRebalanceMainSM.summary_separator_str)
-        sm.logger.warning.assert_any_call(
-            '                                   WARNINGS                                    ')
-        sm.logger.warning.assert_any_call(
-            '------------------------------- Cancelled steps  -------------------------------')
-
-        expected_line = str(str(c_step).partition("type: ")[2])
+        expected_line = str(c_step).partition("type: ")[2]
         sm.logger.warning.assert_any_call(expected_line)
 
     # 12
@@ -304,7 +294,6 @@ class TestPrintRebalanceSummary(GpTestCase):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
-
         down_seg = MagicMock()
         down_seg.isSegmentDown.return_value = True
         down_seg.__str__.return_value = 'sdw2|content=1|role=m|status=d'
@@ -312,9 +301,7 @@ class TestPrintRebalanceSummary(GpTestCase):
         gp_array.getSegDbList.return_value = [down_seg]
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = gp_array
-
         _call(sm, _make_summary([_mirror(RebalanceStep.Status.DONE)]))
-
         sm.logger.warning.assert_any_call(
             'Cluster might be not in fault tolerance mode!')
         sm.logger.warning.assert_any_call(
@@ -375,7 +362,6 @@ class TestPrintRebalanceSummary(GpTestCase):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_DETAILED)
-
         down_seg = MagicMock()
         down_seg.isSegmentDown.return_value = True
         down_seg.__str__.return_value = 'Segment(down=True)'
@@ -383,17 +369,20 @@ class TestPrintRebalanceSummary(GpTestCase):
         gp_array.getSegDbList.return_value = [down_seg]
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = gp_array
-
         rb = _mirror(RebalanceStep.Status.DONE, is_rollback=True,
                      str_repr="info type: rb detail")
         c = _mirror(RebalanceStep.Status.CANCELLED,
                     str_repr="info type: cancelled detail")
-
         _call(sm, _make_summary([rb, c]))
-
+        # Structural headers of the WARNINGS block — asserted only here
+        sm.logger.warning.assert_any_call(GGRebalanceMainSM.summary_separator_str)
+        sm.logger.warning.assert_any_call('                                   WARNINGS                                    ')
+        # Branch 1: fault tolerance (down segment)
         sm.logger.warning.assert_any_call('Cluster might be not in fault tolerance mode!')
+        # Branch 2: cancelled steps sub-header — asserted only here, not in #11
         sm.logger.warning.assert_any_call(
             '------------------------------- Cancelled steps  -------------------------------')
+        # Branch 3: unbalanced cluster + rolled-back steps sub-header
         sm.logger.warning.assert_any_call('Cluster is left in unbalanced state')
         sm.logger.warning.assert_any_call(
             '------------------------------ Rolled back steps ---------------------------------')
@@ -407,39 +396,37 @@ class TestPrintRebalanceSummary(GpTestCase):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_NO)
+        # Down segment triggers the fault-tolerance branch
+        down_seg = MagicMock()
+        down_seg.isSegmentDown.return_value = True
+        down_seg.__str__.return_value = 'Segment(down=True)'
+        gp_array = MagicMock()
+        gp_array.getSegDbList.return_value = [down_seg]
         mock_cfg.getConfigurationProvider.return_value \
-            .loadSystemConfig.return_value = _make_gp_array()
-
-        _call(sm, _make_summary([_mirror(RebalanceStep.Status.DONE)]))
-
+            .loadSystemConfig.return_value = gp_array
+        # Cancelled step triggers the cancelled-steps branch
+        c_step = _mirror(
+            RebalanceStep.Status.CANCELLED,
+            str_repr="Rebalance step, move_order=1 type: mirror move, content=0")
+        _call(sm, _make_summary([c_step]))
+        # Info table suppressed
         sm.logger.info.assert_any_call(
             'Skip final rebalance summary report '
             '(specify "--simple-progress" or "--detailed-progress" to enable it).')
-
+        # All three warning branches still fire despite PROGRESS_NO
         sm.logger.warning.assert_any_call('Cluster is left in unbalanced state')
+        sm.logger.warning.assert_any_call('Cluster might be not in fault tolerance mode!')
+        sm.logger.warning.assert_any_call(str(down_seg))
+        expected_cancelled_line = str(c_step).partition("type: ")[2]
+        sm.logger.warning.assert_any_call(expected_cancelled_line)
 
     # 17
-    @patch(f'{_MOD}.configurationInterface')
-    @patch(f'{_MOD}.is_gparray_balanced', return_value=True)
-    def test_load_system_config_called_with_correct_kwargs(self, _bal, mock_cfg):
-        sm = _make_sm()
-        sm.rebalance_schema.getProgressType.return_value = (
-            RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
-        load_mock = mock_cfg.getConfigurationProvider.return_value.loadSystemConfig
-        load_mock.return_value = _make_gp_array()
-
-        _call(sm, _make_summary([_mirror(RebalanceStep.Status.DONE)]))
-
-        load_mock.assert_called_once_with(useUtilityMode=False, verbose=False)
-
-    # 18
     @patch(f'{_MOD}.configurationInterface')
     @patch(f'{_MOD}.is_gparray_balanced', return_value=True)
     def test_multiple_down_segments_each_logged(self, _bal, mock_cfg):
         sm = _make_sm()
         sm.rebalance_schema.getProgressType.return_value = (
             RebalanceSchema.ProgressType.PROGRESS_SIMPLE)
-
         down_segs = []
         for i in range(3):
             seg = MagicMock()
@@ -450,11 +437,9 @@ class TestPrintRebalanceSummary(GpTestCase):
         gp_array.getSegDbList.return_value = down_segs
         mock_cfg.getConfigurationProvider.return_value \
             .loadSystemConfig.return_value = gp_array
-
         _call(sm, _make_summary([_mirror(RebalanceStep.Status.DONE)]))
-
-        for seg in down_segs:
-            sm.logger.warning.assert_any_call(str(seg))
+        sm.logger.warning.assert_has_calls(
+            [call(str(s)) for s in down_segs], any_order=False)
 
 
 if __name__ == '__main__':
