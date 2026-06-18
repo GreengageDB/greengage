@@ -2538,14 +2538,16 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH("DISTRIBUTED");
 	}
 
-	else if(Matches("CREATE", "FUNCTION", MatchAny))
+	else if (Matches("CREATE", "FUNCTION", MatchAny))
 		COMPLETE_WITH("(");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)"))
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)"))
 		COMPLETE_WITH("RETURNS");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS"))
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes,
 								   " UNION SELECT 'TABLE ('");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny) ||
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE"))
+		COMPLETE_WITH("(");
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAnyExcept("TABLE")) ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)"))
 		COMPLETE_WITH("AS", "LANGUAGE", "TRANSFORM FOR TYPE", "WINDOW",
 					  "IMMUTABLE", "STABLE", "VOLATILE", "NOT LEAKPROOF",
@@ -2556,20 +2558,20 @@ psql_completion(const char *text, int start, int end)
 
 	/* Completing individual options */
 	/* They're this big to avoid false completions by function code */
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "TRANSFORM", "FOR", "TYPE") ||
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "TRANSFORM", "FOR", "TYPE") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "TRANSFORM", "FOR", "TYPE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_datatypes, NULL);
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "PARALLEL") ||
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "PARALLEL") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "PARALLEL"))
 		COMPLETE_WITH("UNSAFE", "RESTRICTED", "SAFE");
 	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXECUTE", "ON") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXECUTE", "ON"))
 		COMPLETE_WITH("ANY", "COORDINATOR", "ALL SEGMENTS", "INITPLAN");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "LANGUAGE") ||
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "LANGUAGE") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "LANGUAGE"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_languages
 							" UNION SELECT 'internal'");
-	else if(Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "SECURITY") ||
+	else if (Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "SECURITY") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "SECURITY") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", MatchAny, "EXTERNAL", "SECURITY") ||
 			Matches("CREATE", "FUNCTION", MatchAny, "(*)", "RETURNS", "TABLE", "(*)", "EXTERNAL", "SECURITY"))
