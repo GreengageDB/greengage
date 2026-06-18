@@ -12,6 +12,7 @@ try:
     from gppylib.gplog import *
     from gppylib.commands.gp import GpMoveMirrors, SegmentStatus, GpConfigHelper
     from gppylib.system.environment import *
+    from gppylib.system import configurationInterface
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
     from ggrebalance_modules.rebalance_step import *
@@ -475,6 +476,9 @@ class RebalanceSM:
     def process_error_execution_steps_switchovers(self, error_steps: List[RebalanceStep]) -> None:
         self.logger.info('Process failed switchovers...')
         steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+        gp_array = configurationInterface.getConfigurationProvider().loadSystemConfig(useUtilityMode=False, verbose=False)
+        # could be only mirrors, down primaries are validated at ggrebalance main
+        down_segs = [seg for seg in gp_array.getSegDbList() if seg.isSegmentDown()]
         for step in error_steps:
             self.logger.info(f'Processing error status for switchover step: {str(step)}')
             if interactive_check_yesno(self.options.interactive, None, 'Retry step?', default = 'Y'):
@@ -488,6 +492,18 @@ class RebalanceSM:
                 continue
 
             if not step.isRollback() and interactive_check_yesno(self.options.interactive, None, 'Rollback step?', default = 'Y'):
+                # we are not able to properly rollback switchover if one of the segs has down status,
+                # since gprecoverseg -r does not work with down segs.
+                if down_segs:
+                    seg = next((ds for ds in down_segs if ds.getSegmentDbId() == step.getMove().seg.getSegmentDbId()), None)
+                    if not seg:
+                        seg = next((pair.mirrorDB for pair in gp_array.getSegmentList() \
+                                    if pair.primaryDB.getSegmentDbId() == step.getMove().seg.getSegmentDbId()))
+                    self.logger.error(f"Cannot perform rollback of this step. Some segment is down: {str(seg)}")
+                    self.logger.error("Manually recover the segments via gprecoverseg or cancel the step. " \
+                                      "Cancellation will allow to launch full rollback after rebalance completion")
+                    raise Exception("Some mirrors are down")
+                    
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
 
