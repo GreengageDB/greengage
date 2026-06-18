@@ -2400,24 +2400,18 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny) ||
 			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
-					  "ENCODING", "FREEZE", "HEADER", "QUOTE", "ESCAPE",
-					  "FORCE QUOTE", "FORCE NULL", "FILL MISSING FILEDS",
-					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS",
-					  "IGNORE FOREIGN PARTITIONS");
-
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "IGNORE") ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "IGNORE"))
-		COMPLETE_WITH("EXTERNAL PARTITIONS", "FOREIGN PARTITIONS");
-
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "FORCE") ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "FORCE"))
-		COMPLETE_WITH("QUOTE", "NULL");
+					  "ENCODING", "FREEZE", "FILL MISSING FILEDS", "NEWLINE",
+					  "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename CSV */
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV") ||
 			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "CSV"))
-		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE",
+		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE", "FORCE NULL",
 					  "FORCE NOT NULL");
+
+	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV", "FORCE") ||
+			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "CSV", "FORCE"))
+		COMPLETE_WITH("QUOTE", "NULL", "NOT NULL");
 
 	/* CREATE ACCESS METHOD */
 	/* Complete "CREATE ACCESS METHOD <name>" */
