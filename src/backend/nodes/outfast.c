@@ -616,28 +616,35 @@ _outAExpr(StringInfo str, A_Expr *node)
 }
 
 static void
-_outValue(StringInfo str, Value *value)
+_outValue(StringInfo str, const Node *value)
 {
-
 	int16 vt = value->type;
 	appendBinaryStringInfo(str, (const char *)&vt, sizeof(int16));
-	switch (value->type)
+	switch (nodeTag(value))
 	{
 		case T_Integer:
-			appendBinaryStringInfo(str, (const char *)&value->val.ival, sizeof(long));
+			{
+				long ival = ((const Integer *) value)->ival;
+				appendBinaryStringInfo(str, (const char *)&ival, sizeof(long));
+			}
 			break;
 		case T_Float:
 		case T_String:
 		case T_BitString:
 			{
-				int slen = (value->val.str != NULL ? strlen(value->val.str) : 0);
+				/* Float.fval / String.sval / BitString.bsval all alias a char * */
+				const char *sval = ((const String *) value)->sval;
+				int slen = (sval != NULL ? strlen(sval) : 0);
 				appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
 				if (slen > 0)
-					appendBinaryStringInfo(str, value->val.str, slen);
+					appendBinaryStringInfo(str, sval, slen);
 			}
 			break;
-		case T_Null:
-			/* nothing to do */
+		case T_Boolean:
+			{
+				bool bval = ((const Boolean *) value)->boolval;
+				appendBinaryStringInfo(str, (const char *)&bval, sizeof(bool));
+			}
 			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) value->type);
@@ -648,11 +655,13 @@ _outValue(StringInfo str, Value *value)
 static void
 _outAConst(StringInfo str, A_Const *node)
 {
+	bool isnull = node->isnull;
+
 	WRITE_NODE_TYPE("A_CONST");
-
-	_outValue(str, &(node->val));
+	appendBinaryStringInfo(str, (const char *)&isnull, sizeof(bool));
+	if (!node->isnull)
+		_outValue(str, (const Node *) &node->val);
 	WRITE_LOCATION_FIELD(location);  /*CDB*/
-
 }
 
 static void
@@ -927,7 +936,7 @@ _outNode(StringInfo str, void *obj)
 	else if (IsA(obj, Integer) ||
 			 IsA(obj, Float) ||
 			 IsA(obj, String) ||
-			 IsA(obj, Null) ||
+			 IsA(obj, Boolean) ||
 			 IsA(obj, BitString))
 	{
 		_outValue(str, obj);
@@ -1865,6 +1874,45 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AppendRelInfo:
 				_outAppendRelInfo(str, obj);
+				break;
+
+			/*
+			 * GPDB: PG15 SQL/JSON nodes — needed to dispatch JSON_TABLE /
+			 * JSON_VALUE / JSON_QUERY / IS JSON / JSON constructors over
+			 * distributed tables. The _out* bodies come from outfuncs.c.
+			 */
+			case T_JsonFormat:
+				_outJsonFormat(str, obj);
+				break;
+			case T_JsonReturning:
+				_outJsonReturning(str, obj);
+				break;
+			case T_JsonValueExpr:
+				_outJsonValueExpr(str, obj);
+				break;
+			case T_JsonConstructorExpr:
+				_outJsonConstructorExpr(str, obj);
+				break;
+			case T_JsonBehavior:
+				_outJsonBehavior(str, obj);
+				break;
+			case T_JsonExpr:
+				_outJsonExpr(str, obj);
+				break;
+			case T_JsonCoercion:
+				_outJsonCoercion(str, obj);
+				break;
+			case T_JsonItemCoercions:
+				_outJsonItemCoercions(str, obj);
+				break;
+			case T_JsonTableParent:
+				_outJsonTableParent(str, obj);
+				break;
+			case T_JsonTableSibling:
+				_outJsonTableSibling(str, obj);
+				break;
+			case T_JsonIsPredicate:
+				_outJsonIsPredicate(str, obj);
 				break;
 
 			default:
