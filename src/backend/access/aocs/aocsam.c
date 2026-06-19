@@ -1387,6 +1387,68 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
+	if (gp_aocs_scan_shortpass &&
+		scan->columnScanInfo.projKind == AOCS_PROJ_ANY)
+	{
+		/* short pass via visibility map */
+		while(1)
+		{
+			if (likely(scan->cur_seg >= 0))
+			{
+				AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+				if (likely(scan->segrowsprocessed < curseginfo->total_tupcount))
+				{
+					scan->segrowsprocessed++;
+					AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
+					if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
+					{
+						/* The tuple is invisible */
+						continue;
+					}
+					slot->tts_nvalid = 0;
+					slot->tts_tid = *((ItemPointer) &aoTupleId); // scan->cdb_fake_ctid;
+					return true;
+				}
+			}
+
+			while (++scan->cur_seg < scan->total_seg)
+			{
+				AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+
+				if (curseginfo->total_tupcount > 0)
+				{
+					if (curseginfo->state == AOSEG_STATE_AWAITING_DROP)
+						continue;
+					else
+					{
+						AOCSVPInfoEntry *e;
+
+						e = getAOCSVPEntry(curseginfo, scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]);
+						if (e->eof == 0)
+							elog(ERROR, "inconsistent segment state for relation %s, segment %d, tuple count " INT64_FORMAT,
+								 RelationGetRelationName(scan->rs_base.rs_rd),
+								 curseginfo->segno,
+								 curseginfo->total_tupcount);
+					}
+
+					scan->segrowsprocessed = 0;
+					break;
+				}
+			}
+
+			if (scan->cur_seg >= scan->total_seg)
+			{
+				/* No more seg, we are at the end */
+				ExecClearTuple(slot);
+				scan->cur_seg = -1;
+				slotAocs->current_scan = NULL;
+				return false;
+			}
+		}
+	}
+	else
+	{
+
 	while (1)
 	{
 		AOCSFileSegInfo *curseginfo;
@@ -1531,6 +1593,7 @@ ReadNext:
 
 		slotAocs->current_scan = (void*)scan;
 		return true;
+	}
 	}
 
 	Assert(!"Never here");
