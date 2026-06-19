@@ -2359,6 +2359,89 @@ _readJsonValueExpr(void)
 }
 
 /*
+ * GPDB: readers for the untransformed SQL/JSON and publication parse nodes
+ * that GPDB dispatches to the segments. See the matching _out* functions in
+ * outfuncs.c for why these exist.
+ */
+static JsonFuncExpr *
+_readJsonFuncExpr(void)
+{
+	READ_LOCALS(JsonFuncExpr);
+
+	READ_ENUM_FIELD(op, JsonExprOp);
+	READ_NODE_FIELD(common);
+	READ_NODE_FIELD(output);
+	READ_NODE_FIELD(on_empty);
+	READ_NODE_FIELD(on_error);
+	READ_ENUM_FIELD(wrapper, JsonWrapper);
+	READ_BOOL_FIELD(omit_quotes);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonCommon *
+_readJsonCommon(void)
+{
+	READ_LOCALS(JsonCommon);
+
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(pathspec);
+	READ_STRING_FIELD(pathname);
+	READ_NODE_FIELD(passing);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonOutput *
+_readJsonOutput(void)
+{
+	READ_LOCALS(JsonOutput);
+
+	READ_NODE_FIELD(typeName);
+	READ_NODE_FIELD(returning);
+
+	READ_DONE();
+}
+
+static JsonArgument *
+_readJsonArgument(void)
+{
+	READ_LOCALS(JsonArgument);
+
+	READ_NODE_FIELD(val);
+	READ_STRING_FIELD(name);
+
+	READ_DONE();
+}
+
+static PublicationObjSpec *
+_readPublicationObjSpec(void)
+{
+	READ_LOCALS(PublicationObjSpec);
+
+	READ_ENUM_FIELD(pubobjtype, PublicationObjSpecType);
+	READ_STRING_FIELD(name);
+	READ_NODE_FIELD(pubtable);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static PublicationTable *
+_readPublicationTable(void)
+{
+	READ_LOCALS(PublicationTable);
+
+	READ_NODE_FIELD(relation);
+	READ_NODE_FIELD(whereClause);
+	READ_NODE_FIELD(columns);
+
+	READ_DONE();
+}
+
+/*
  * _readJsonConstructorExpr
  */
 static JsonConstructorExpr *
@@ -5444,6 +5527,18 @@ parseNodeString(void)
 		return_value = _readJsonTableParent();
 	else if (MATCH("JSONTABLESIBLING", 16))
 		return_value = _readJsonTableSibling();
+	else if (MATCH("JSONFUNCEXPR", 12))
+		return_value = _readJsonFuncExpr();
+	else if (MATCH("JSONCOMMON", 10))
+		return_value = _readJsonCommon();
+	else if (MATCH("JSONOUTPUT", 10))
+		return_value = _readJsonOutput();
+	else if (MATCH("JSONARGUMENT", 12))
+		return_value = _readJsonArgument();
+	else if (MATCH("PUBLICATIONOBJSPEC", 18))
+		return_value = _readPublicationObjSpec();
+	else if (MATCH("PUBLICATIONTABLE", 16))
+		return_value = _readPublicationTable();
 	else
 	{
         ereport(ERROR,

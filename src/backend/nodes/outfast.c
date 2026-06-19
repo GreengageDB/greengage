@@ -1914,6 +1914,24 @@ _outNode(StringInfo str, void *obj)
 			case T_JsonIsPredicate:
 				_outJsonIsPredicate(str, obj);
 				break;
+			case T_JsonFuncExpr:
+				_outJsonFuncExpr(str, obj);
+				break;
+			case T_JsonCommon:
+				_outJsonCommon(str, obj);
+				break;
+			case T_JsonOutput:
+				_outJsonOutput(str, obj);
+				break;
+			case T_JsonArgument:
+				_outJsonArgument(str, obj);
+				break;
+			case T_PublicationObjSpec:
+				_outPublicationObjSpec(str, obj);
+				break;
+			case T_PublicationTable:
+				_outPublicationTable(str, obj);
+				break;
 
 			default:
 				elog(ERROR, "could not serialize unrecognized node type: %d",

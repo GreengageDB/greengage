@@ -2270,6 +2270,83 @@ _outJsonValueExpr(StringInfo str, const JsonValueExpr *node)
 	WRITE_NODE_FIELD(format);
 }
 
+/*
+ * GPDB: the untransformed SQL/JSON parse nodes below have no upstream
+ * out/read support (upstream never serializes raw parse trees), but GPDB
+ * must dispatch them when they survive in a DDL statement that is sent to
+ * the segments verbatim -- e.g. a column DEFAULT or CHECK constraint that
+ * uses JSON_QUERY/JSON_VALUE/JSON_EXISTS.
+ */
+static void
+_outJsonFuncExpr(StringInfo str, const JsonFuncExpr *node)
+{
+	WRITE_NODE_TYPE("JSONFUNCEXPR");
+
+	WRITE_ENUM_FIELD(op, JsonExprOp);
+	WRITE_NODE_FIELD(common);
+	WRITE_NODE_FIELD(output);
+	WRITE_NODE_FIELD(on_empty);
+	WRITE_NODE_FIELD(on_error);
+	WRITE_ENUM_FIELD(wrapper, JsonWrapper);
+	WRITE_BOOL_FIELD(omit_quotes);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonCommon(StringInfo str, const JsonCommon *node)
+{
+	WRITE_NODE_TYPE("JSONCOMMON");
+
+	WRITE_NODE_FIELD(expr);
+	WRITE_NODE_FIELD(pathspec);
+	WRITE_STRING_FIELD(pathname);
+	WRITE_NODE_FIELD(passing);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonOutput(StringInfo str, const JsonOutput *node)
+{
+	WRITE_NODE_TYPE("JSONOUTPUT");
+
+	WRITE_NODE_FIELD(typeName);
+	WRITE_NODE_FIELD(returning);
+}
+
+static void
+_outJsonArgument(StringInfo str, const JsonArgument *node)
+{
+	WRITE_NODE_TYPE("JSONARGUMENT");
+
+	WRITE_NODE_FIELD(val);
+	WRITE_STRING_FIELD(name);
+}
+
+/*
+ * GPDB: CREATE/ALTER PUBLICATION is dispatched to the segments as a parsed
+ * statement, so its publication-object specifications must be serializable.
+ */
+static void
+_outPublicationObjSpec(StringInfo str, const PublicationObjSpec *node)
+{
+	WRITE_NODE_TYPE("PUBLICATIONOBJSPEC");
+
+	WRITE_ENUM_FIELD(pubobjtype, PublicationObjSpecType);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(pubtable);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outPublicationTable(StringInfo str, const PublicationTable *node)
+{
+	WRITE_NODE_TYPE("PUBLICATIONTABLE");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_NODE_FIELD(columns);
+}
+
 static void
 _outJsonConstructorExpr(StringInfo str, const JsonConstructorExpr *node)
 {
@@ -3725,7 +3802,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = (String *) lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);
@@ -5124,13 +5201,6 @@ _outBitString(StringInfo str, const BitString *node)
 }
 #endif /* COMPILING_BINARY_FUNCS */
 
-#ifndef COMPILING_BINARY_FUNCS
-static void
-_outNull(StringInfo str, const Node *n pg_attribute_unused())
-{
-	WRITE_NODE_TYPE("NULL");
-}
-#endif /* COMPILING_BINARY_FUNCS */
 
 static void
 _outColumnRef(StringInfo str, const ColumnRef *node)
@@ -5778,7 +5848,7 @@ _outCreatePublicationStmt(StringInfo str, const CreatePublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
 }
 
@@ -5789,9 +5859,9 @@ _outAlterPublicationStmt(StringInfo str, const AlterPublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
-	WRITE_ENUM_FIELD(tableAction, DefElemAction);
+	WRITE_ENUM_FIELD(action, AlterPublicationAction);
 }
 
 static void
@@ -6719,9 +6789,6 @@ outNode(StringInfo str, const void *obj)
 			case T_UpdateStmt:
 				_outUpdateStmt(str, obj);
 				break;
-			case T_Null:
-				_outNull(str, obj);
-				break;
 			case T_ColumnDef:
 				_outColumnDef(str, obj);
 				break;
@@ -7068,6 +7135,24 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_JsonTableSibling:
 				_outJsonTableSibling(str, obj);
+				break;
+			case T_JsonFuncExpr:
+				_outJsonFuncExpr(str, obj);
+				break;
+			case T_JsonCommon:
+				_outJsonCommon(str, obj);
+				break;
+			case T_JsonOutput:
+				_outJsonOutput(str, obj);
+				break;
+			case T_JsonArgument:
+				_outJsonArgument(str, obj);
+				break;
+			case T_PublicationObjSpec:
+				_outPublicationObjSpec(str, obj);
+				break;
+			case T_PublicationTable:
+				_outPublicationTable(str, obj);
 				break;
 
 			default:

@@ -2223,6 +2223,24 @@ readNodeBinary(void)
 			case T_JsonIsPredicate:
 				return_value = _readJsonIsPredicate();
 				break;
+			case T_JsonFuncExpr:
+				return_value = _readJsonFuncExpr();
+				break;
+			case T_JsonCommon:
+				return_value = _readJsonCommon();
+				break;
+			case T_JsonOutput:
+				return_value = _readJsonOutput();
+				break;
+			case T_JsonArgument:
+				return_value = _readJsonArgument();
+				break;
+			case T_PublicationObjSpec:
+				return_value = _readPublicationObjSpec();
+				break;
+			case T_PublicationTable:
+				return_value = _readPublicationTable();
+				break;
 
 			case T_ExtensibleNode:
 				return_value = _readExtensibleNode();
