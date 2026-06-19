@@ -111,8 +111,6 @@ char	   *default_tablespace = NULL;
 char	   *temp_tablespaces = NULL;
 bool		allow_in_place_tablespaces = false;
 
-Oid			binary_upgrade_next_pg_tablespace_oid = InvalidOid;
-
 static void create_tablespace_directories(const char *location,
 										  const Oid tablespaceoid);
 static bool destroy_tablespace_directories(Oid tablespaceoid, bool redo);
@@ -300,7 +298,7 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 			if (strlen(defel->defname) > strlen("content") &&
 				strncmp(defel->defname, "content", strlen("content")) == 0)
 			{
-				int contentId = pg_atoi(defel->defname + strlen("content"), sizeof(int16), 0);
+				int contentId = pg_strtoint16(defel->defname + strlen("content"));
 
 				/*
 				 * The master validates the content ids are in [0, segCount)
@@ -325,7 +323,15 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	}
 
 	if (!location)
-		location = pstrdup(stmt->location);
+	{
+		/*
+		 * GPDB: an in-place tablespace (LOCATION '') has an empty location
+		 * string, which the binary dispatch from the QD delivers to the QE as
+		 * NULL. Treat that as the empty string so the in_place path below works
+		 * instead of crashing in pstrdup/canonicalize_path.
+		 */
+		location = pstrdup(stmt->location ? stmt->location : "");
+	}
 
 	/* Unix-ify the offered path, and strip any trailing slashes */
 	canonicalize_path(location);
