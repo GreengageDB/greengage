@@ -3328,7 +3328,7 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("ANALYZE", "VERBOSE", "DXL", "COSTS", "SETTINGS",
+			COMPLETE_WITH_UNUSED_OPTIONS("ANALYZE", "VERBOSE", "DXL", "COSTS", "SETTINGS",
 						  "BUFFERS", "TIMING", "SUMMARY", "FORMAT");
 		else if (TailMatches("ANALYZE|VERBOSE|DXL|COSTS|SETTINGS|BUFFERS|TIMING|SUMMARY"))
 			COMPLETE_WITH("ON", "OFF");
@@ -3976,7 +3976,7 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("FULL", "FREEZE", "ANALYZE", "VERBOSE", "AO_AUX_ONLY",
+			COMPLETE_WITH_UNUSED_OPTIONS("FULL", "FREEZE", "ANALYZE", "VERBOSE", "AO_AUX_ONLY",
 						  "DISABLE_PAGE_SKIPPING", "SKIP_LOCKED",
 						  "INDEX_CLEANUP", "TRUNCATE", "PARALLEL", "SKIP_DATABASE_STATS",
 						  "ONLY_DATABASE_STATS");
