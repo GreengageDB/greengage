@@ -868,6 +868,7 @@ _readIndexStmt(void)
 	READ_UINT_FIELD(oldCreateSubid);
 	READ_UINT_FIELD(oldFirstRelfilenodeSubid);
 	READ_BOOL_FIELD(unique);
+	READ_BOOL_FIELD(nulls_not_distinct);
 	READ_BOOL_FIELD(primary);
 	READ_BOOL_FIELD(isconstraint);
 	READ_BOOL_FIELD(deferrable);
@@ -1102,7 +1103,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = (String *) lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);
@@ -1338,20 +1339,20 @@ _readAConst(void)
 
 	token = pg_strtok(&length);
 	token = debackslash(token,length);
-	local_node->val.type = T_String;
+	local_node->val.node.type = T_String;
 
 	if (token[0] == '"')
 	{
-		local_node->val.val.str = palloc(length - 1);
-		strncpy(local_node->val.val.str , token+1, strlen(token)-2);
-		local_node->val.val.str[strlen(token)-2] = '\0';
+		local_node->val.sval.sval = palloc(length - 1);
+		strncpy(local_node->val.sval.sval , token+1, strlen(token)-2);
+		local_node->val.sval.sval[strlen(token)-2] = '\0';
 	}
 	else if (length > 2 && (token[0] == 'b'|| token[0] == 'B') && (token[1] == '\'' || token[1] == '"'))
 	{
-		local_node->val.type = T_BitString;
-		local_node->val.val.str = palloc(length+1);
-		strncpy(local_node->val.val.str , token, length);
-		local_node->val.val.str[length] = '\0';
+		local_node->val.node.type = T_BitString;
+		local_node->val.sval.sval = palloc(length+1);
+		strncpy(local_node->val.sval.sval , token, length);
+		local_node->val.sval.sval[length] = '\0';
 	}
 	else
 	{
@@ -1371,20 +1372,20 @@ _readAConst(void)
 	 	   }
 	 	if (isInt)
 		{
-			local_node->val.type = T_Integer;
-			local_node->val.val.ival = atol(token);
+			local_node->val.node.type = T_Integer;
+			local_node->val.ival.ival = atol(token);
 		}
 		else if (isFloat)
 		{
-			local_node->val.type = T_Float;
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
+			local_node->val.node.type = T_Float;
+			local_node->val.sval.sval = palloc(length + 1);
+			strcpy(local_node->val.sval.sval , token);
 		}
 		else
 		{
 			elog(ERROR,"Deserialization problem:  A_Const not string, bitstring, float, or int");
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
+			local_node->val.sval.sval = palloc(length + 1);
+			strcpy(local_node->val.sval.sval , token);
 		}
 	}
 
@@ -4071,7 +4072,8 @@ _readRestrictInfo(void)
 	READ_NODE_FIELD(right_em);
 	READ_BOOL_FIELD(outer_is_left);
 	READ_OID_FIELD(hashjoinoperator);
-	READ_OID_FIELD(hasheqoperator);
+	READ_OID_FIELD(left_hasheqoperator);
+	READ_OID_FIELD(right_hasheqoperator);
 
 	READ_DONE();
 }
@@ -4552,7 +4554,7 @@ _readCreatePublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
 
 	READ_DONE();
@@ -4565,9 +4567,9 @@ _readAlterPublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
-	READ_ENUM_FIELD(tableAction, DefElemAction);
+	READ_ENUM_FIELD(action, AlterPublicationAction);
 
 	READ_DONE();
 }
