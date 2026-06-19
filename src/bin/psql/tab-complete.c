@@ -2539,8 +2539,14 @@ psql_completion(const char *text, int start, int end)
 			COMPLETE_WITH("DISTRIBUTED");
 	}
 
+	/* CREATE OR REPLACE ... */
+	else if (Matches("CREATE", "OR"))
+		COMPLETE_WITH("REPLACE");
 	else if (Matches("CREATE", "OR", "REPLACE"))
-		COMPLETE_WITH("FUNCTION");
+		COMPLETE_WITH("FUNCTION", "AGGREGATE", "LANGUAGE", "PROCEDURE", "RULE",
+					  "TRANSFORM FOR", "VIEW");
+
+	/* CREATE FUNCTION ... */
 	else if (Matches("CREATE", "FUNCTION", MatchAny) ||
 			 Matches("CREATE", "OR", "REPLACE", "FUNCTION", MatchAny))
 		COMPLETE_WITH("(");
