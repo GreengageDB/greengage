@@ -226,7 +226,6 @@ static bool check_client_connection_check_interval(int *newval, void **extra, Gu
 static bool check_maintenance_io_concurrency(int *newval, void **extra, GucSource source);
 static bool check_huge_page_size(int *newval, void **extra, GucSource source);
 static void assign_pgstat_temp_directory(const char *newval, void *extra);
-static bool check_client_connection_check_interval(int *newval, void **extra, GucSource source);
 static void assign_maintenance_io_concurrency(int newval, void *extra);
 static bool check_application_name(char **newval, void **extra, GucSource source);
 static void assign_application_name(const char *newval, void *extra);
@@ -1292,17 +1291,6 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_group_by_reordering,
-		true,
-		NULL, NULL, NULL
-	},
-	{
-		{"geqo", PGC_USERSET, QUERY_TUNING_GEQO,
-			gettext_noop("Enables genetic query optimization."),
-			gettext_noop("This algorithm attempts to do planning without "
-						 "exhaustive searching."),
-			GUC_EXPLAIN
-		},
-		&enable_geqo,
 		true,
 		NULL, NULL, NULL
 	},
@@ -3735,17 +3723,6 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
-		{"client_connection_check_interval", PGC_USERSET, CONN_AUTH_SETTINGS,
-			gettext_noop("Sets the time interval between checks for disconnection while running queries."),
-			NULL,
-			GUC_UNIT_MS
-		},
-		&client_connection_check_interval,
-		0, 0, INT_MAX,
-		check_client_connection_check_interval, NULL, NULL
-	},
-
-	{
 		{"log_startup_progress_interval", PGC_SIGHUP, LOGGING_WHEN,
 			gettext_noop("Time between progress updates for "
 						 "long-running startup operations."),
@@ -4692,7 +4669,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"stats_temp_directory", PGC_SIGHUP, STATS_COLLECTOR,
+		{"stats_temp_directory", PGC_SIGHUP, STATS_CUMULATIVE,
 			gettext_noop("Writes temporary statistics files to the specified directory."),
 			NULL,
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -9598,7 +9575,7 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 						break;
 					case T_Float:
 						/* represented as a string, so just copy it */
-						appendStringInfoString(&buffer, strVal(&con->val));
+						appendStringInfoString(&buffer, castNode(Float, &con->val)->fval);
 						break;
 					case T_String:
 						val = strVal(&con->val);
@@ -12932,20 +12909,6 @@ check_maintenance_io_concurrency(int *newval, void **extra, GucSource source)
 }
 
 static bool
-check_client_connection_check_interval(int *newval, void **extra, GucSource source)
-{
-#if !(defined(POLLRDHUP) || defined(__darwin__))
-	/* Linux and OSX only, for now.  See pq_check_connection(). */
-	if (*newval != 0)
-	{
-		GUC_check_errdetail("client_connection_check_interval must be set to 0 on platforms that lack POLLRDHUP and not OSX.");
-		return false;
-	}
-#endif
-	return true;
-}
-
-static bool
 check_huge_page_size(int *newval, void **extra, GucSource source)
 {
 #if !(defined(MAP_HUGE_MASK) && defined(MAP_HUGE_SHIFT))
@@ -12982,6 +12945,16 @@ assign_maintenance_io_concurrency(int newval, void *extra)
 	if (AmStartupProcess())
 		XLogPrefetchReconfigure();
 #endif
+}
+
+/*
+ * GPDB: stats_temp_directory is retained as a GUC for backward compatibility,
+ * but PG15 replaced the file-based statistics collector with shared-memory
+ * stats, so the assign hook no longer has anything to do.
+ */
+static void
+assign_pgstat_temp_directory(const char *newval, void *extra)
+{
 }
 
 static bool
