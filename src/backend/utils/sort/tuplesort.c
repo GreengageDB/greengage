@@ -3463,9 +3463,6 @@ dumptuples(Tuplesortstate *state, bool alltuples)
 	{
 		state->spilledBytes += state->availMem - prevAvailMem;
 	}
-
-	if (!alltuples)
-		selectnewtape(state);
 }
 
 /*
