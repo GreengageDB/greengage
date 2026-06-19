@@ -2345,7 +2345,11 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("COMMENT", "ON", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
 	else if(Matches("COMMENT", "ON", "RESOURCE"))
-			COMPLETE_WITH("GROUP", "QUEUE");
+		COMPLETE_WITH("GROUP", "QUEUE");
+	else if (Matches("COMMENT", "ON", "RESOURCE", "GROUP"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
+	else if (Matches("COMMENT", "ON", "RESOURCE", "QUEUE"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
 	else if (Matches("COMMENT", "ON", "TEXT", "SEARCH"))
 		COMPLETE_WITH("CONFIGURATION", "DICTIONARY", "PARSER", "TEMPLATE");
 	else if (Matches("COMMENT", "ON", "CONSTRAINT"))
@@ -3945,7 +3949,7 @@ psql_completion(const char *text, int start, int end)
 			 Matches("VACUUM", "FULL|FREEZE|VERBOSE", "ANALYZE") ||
 			 Matches("VACUUM", "FULL|FREEZE", "FREEZE|VERBOSE", "ANALYZE") ||
 			 Matches("VACUUM", "FULL", "FREEZE", "VERBOSE", "ANALYZE"))
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables, "");
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables, NULL);
 	else if (HeadMatches("VACUUM", "(*") &&
 			 !HeadMatches("VACUUM", "(*)"))
 	{
