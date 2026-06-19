@@ -2284,7 +2284,7 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("VERBOSE", "SKIP_LOCKED", "FULLSCAN", "ROOTPARTITION");
+			COMPLETE_WITH_UNUSED_OPTIONS("VERBOSE", "SKIP_LOCKED", "FULLSCAN", "ROOTPARTITION");
 		else if (TailMatches("VERBOSE|SKIP_LOCKED|FULLSCAN|ROOTPARTITION"))
 			COMPLETE_WITH("ON", "OFF");
 	}
