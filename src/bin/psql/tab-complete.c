@@ -1844,7 +1844,8 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("'Monday'", "'Tuesday'", "'Wednesday'", "'Thursday'",
 					  "'Friday'", "'Saturday'", "'Sunday'");
 	else if(TailMatches("DENY", "DAY", MatchAny) ||
-			TailMatches("AND", "DAY", MatchAny))
+			TailMatches("AND", "DAY", MatchAny) ||
+			TailMatches("FOR", "DAY", MatchAny))
 		COMPLETE_WITH("TIME");
 	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny))
 		COMPLETE_WITH("AND DAY", "TIME");
