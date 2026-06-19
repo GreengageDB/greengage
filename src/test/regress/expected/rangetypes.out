@@ -1,4 +1,11 @@
 -- Tests for range data types.
+-- start_matchsubs
+-- m/NOTICE:  One or more columns in the following table\(s\) do not have statistics: /
+-- s/.//gs
+-- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
+-- s/.//gs
+-- end_matchsubs
+-- NB: type "textrange" is created in test_setup.sql (shared by several tests).
 --
 -- test input parser
 -- (type textrange was already made in test_setup.sql)
@@ -179,6 +186,8 @@ select '(a,a)'::textrange;
 -- create some test data and test the operators
 --
 CREATE TABLE numrange_test (nr NUMRANGE);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test_btree on numrange_test(nr);
 INSERT INTO numrange_test VALUES('[,)');
 INSERT INTO numrange_test VALUES('[3,]');
@@ -189,10 +198,10 @@ INSERT INTO numrange_test VALUES(numrange(1.7, 1.7, '[]'));
 SELECT nr, isempty(nr), lower(nr), upper(nr) FROM numrange_test;
     nr     | isempty | lower | upper 
 -----------+---------+-------+-------
- [3,)      | f       |     3 |      
- empty     | t       |       |      
  (,)       | f       |       |      
  (,5)      | f       |       |     5
+ [3,)      | f       |     3 |      
+ empty     | t       |       |      
  [1.1,2.2) | f       |   1.1 |   2.2
  [1.7,1.7] | f       |   1.7 |   1.7
 (6 rows)
@@ -202,18 +211,18 @@ SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numra
 -----------+-----------+-----------+-----------+-----------
  [3,)      | t         | f         | f         | t
  empty     | f         | f         | f         | f
- (,)       | f         | t         | f         | t
- (,5)      | f         | t         | f         | f
  [1.1,2.2) | t         | f         | f         | f
  [1.7,1.7] | t         | f         | t         | f
+ (,)       | f         | t         | f         | t
+ (,5)      | f         | t         | f         | f
 (6 rows)
 
 SELECT * FROM numrange_test WHERE range_contains(nr, numrange(1.9,1.91));
     nr     
 -----------
+ [1.1,2.2)
  (,)
  (,5)
- [1.1,2.2)
 (3 rows)
 
 SELECT * FROM numrange_test WHERE nr @> numrange(1.0,10000.1);
@@ -278,12 +287,12 @@ select * from numrange_test where nr < numrange(0.0, 1.0,'[]');
 select * from numrange_test where nr < numrange(1000.0, 1001.0,'[]');
     nr     
 -----------
- [1.1,2.2)
- [1.7,1.7]
- [3,)
- empty
  (,)
  (,5)
+ [3,)
+ empty
+ [1.1,2.2)
+ [1.7,1.7]
 (6 rows)
 
 select * from numrange_test where nr <= 'empty';
@@ -295,38 +304,38 @@ select * from numrange_test where nr <= 'empty';
 select * from numrange_test where nr >= 'empty';
     nr     
 -----------
- [1.1,2.2)
- [1.7,1.7]
  (,)
  (,5)
  [3,)
  empty
+ [1.1,2.2)
+ [1.7,1.7]
 (6 rows)
 
 select * from numrange_test where nr > 'empty';
     nr     
 -----------
+ (,)
+ (,5)
  [3,)
  [1.1,2.2)
  [1.7,1.7]
- (,)
- (,5)
 (5 rows)
 
 select * from numrange_test where nr > numrange(-1001.0, -1000.0,'[]');
     nr     
 -----------
- [3,)
  [1.1,2.2)
  [1.7,1.7]
+ [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(0.0, 1.0,'[]');
     nr     
 -----------
- [3,)
  [1.1,2.2)
  [1.7,1.7]
+ [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(1000.0, 1000.0,'[]');
@@ -532,6 +541,8 @@ select range_intersect_agg(nr) from numrange_test where nr @> 4.0;
 
 analyze numrange_test;
 create table numrange_test2(nr numrange);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test2_hash_idx on numrange_test2 using hash (nr);
 INSERT INTO numrange_test2 VALUES('[, 5)');
 INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2));
@@ -601,6 +612,8 @@ DROP TABLE numrange_test2;
 -- Apply a subset of the above tests on a collatable type, too
 --
 CREATE TABLE textrange_test (tr textrange);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index textrange_test_btree on textrange_test(tr);
 INSERT INTO textrange_test VALUES('[,)');
 INSERT INTO textrange_test VALUES('["a",]');
@@ -622,28 +635,28 @@ SELECT tr, isempty(tr), lower(tr), upper(tr) FROM textrange_test;
 SELECT tr, lower_inc(tr), lower_inf(tr), upper_inc(tr), upper_inf(tr) FROM textrange_test;
   tr   | lower_inc | lower_inf | upper_inc | upper_inf 
 -------+-----------+-----------+-----------+-----------
- (,)   | f         | t         | f         | t
- (,q)  | f         | t         | f         | f
+ empty | f         | f         | f         | f
  [a,)  | t         | f         | f         | t
  [b,g) | t         | f         | f         | f
  [d,d] | t         | f         | t         | f
- empty | f         | f         | f         | f
+ (,)   | f         | t         | f         | t
+ (,q)  | f         | t         | f         | f
 (6 rows)
 
 SELECT * FROM textrange_test WHERE range_contains(tr, textrange('f', 'fx'));
   tr   
 -------
- (,)
- (,q)
  [a,)
  [b,g)
+ (,)
+ (,q)
 (4 rows)
 
 SELECT * FROM textrange_test WHERE tr @> textrange('a', 'z');
   tr  
 ------
- (,)
  [a,)
+ (,)
 (2 rows)
 
 SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
@@ -656,10 +669,10 @@ SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
 SELECT * FROM textrange_test WHERE 'e'::text <@ tr;
   tr   
 -------
- [a,)
- [b,g)
  (,)
  (,q)
+ [a,)
+ [b,g)
 (4 rows)
 
 select * from textrange_test where tr = 'empty';
@@ -778,6 +791,8 @@ select daterange('2000-01-01'::date, 'infinity'::date, '[]');
 
 -- test GiST index that's been built incrementally
 create table test_range_gist(ir int4range);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_gist_idx on test_range_gist using gist (ir);
 insert into test_range_gist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_gist select 'empty'::int4range from generate_series(1,500) g;
@@ -1164,6 +1179,8 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 
 -- test SP-GiST index that's been built incrementally
 create table test_range_spgist(ir int4range);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
 insert into test_range_spgist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_spgist select 'empty'::int4range from generate_series(1,500) g;
@@ -1408,6 +1425,8 @@ RESET enable_indexscan;
 RESET enable_bitmapscan;
 -- test elem <@ range operator
 create table test_range_elem(i int4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_elem_idx on test_range_elem (i);
 insert into test_range_elem select i from generate_series(1,100) i;
 SET enable_seqscan    = f;
@@ -1460,13 +1479,13 @@ insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg2 172.17.0.2:7004 pid=762910)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg1 172.17.0.3:7003 pid=296703)
 DETAIL:  Key (room, during)=([123,124), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (room, during)=([123,124), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 insert into test_range_excl
   values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
 insert into test_range_excl
   values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg2 172.17.0.2:7004 pid=762910)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg2 172.17.0.3:7004 pid=296705)
 DETAIL:  Key (speaker, during)=([1,2), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (speaker, during)=([1,2), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
@@ -1503,6 +1522,8 @@ select '[123.001, 5.e9)'::float8range @> 888.882::float8;
 (1 row)
 
 create table float8range_test(f8r float8range, i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f8r' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into float8range_test values(float8range(-100.00007, '1.111113e9'), 42);
 select * from float8range_test;
            f8r           | i  
@@ -1648,6 +1669,8 @@ select ARRAY[numrange(1.1, 1.2), numrange(12.3, 155.5)];
 (1 row)
 
 create table i8r_array (f1 int, f2 int8range[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i8r_array values (42, array[int8range(1,10), int8range(2,20)]);
 select * from i8r_array;
  f1 |         f2          

@@ -6,7 +6,7 @@
 -- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
 -- s/.//gs
 -- end_matchsubs
-create type textrange as range (subtype=text, collation="C");
+-- NB: type "textrange" is created in test_setup.sql (shared by several tests).
 
 --
 -- test input parser
