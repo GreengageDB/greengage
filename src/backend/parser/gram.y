@@ -2071,8 +2071,8 @@ deny_day_specifier: Sconst { $$ = (Node *)makeString($1); }
 deny_point: DAY_P deny_day_specifier opt_time
 				{
 					DenyLoginPoint *n = makeNode(DenyLoginPoint);
-					n->day = (Value *)$2;
-					n->time = (Value *)$3;
+					n->day = (Node *)$2;
+					n->time = (Node *)$3;
 					$$ = (Node *)n;
 				}
 		;
@@ -4176,7 +4176,7 @@ alter_table_partition_id_spec:
            | FOR '(' func_name '(' func_arg_list opt_sort_clause ')' ')'
 				{
 					Node		   *arg;
-					Value		   *val;
+					Node		   *val;
 					Node		   *fname;
 
                     /* allow RANK only */
@@ -4193,7 +4193,7 @@ alter_table_partition_id_spec:
 					arg = linitial($5);
 					if (!IsA(arg, A_Const))
 						parser_yyerror("syntax error");
-					val = &((A_Const *) arg)->val;
+					val = (Node *) &((A_Const *) arg)->val;
 					if (!IsA(val, Integer) && !IsA(val, Float))
 						parser_yyerror("syntax error");
 

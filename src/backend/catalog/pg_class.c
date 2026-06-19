@@ -23,30 +23,46 @@
 int
 errdetail_relkind_not_supported(char relkind)
 {
+	/*
+	 * GPDB: errdetail() returns void in this tree, so call it as a statement
+	 * and return the conventional 0 (matching upstream's int signature).
+	 */
 	switch (relkind)
 	{
 		case RELKIND_RELATION:
-			return errdetail("This operation is not supported for tables.");
+			errdetail("This operation is not supported for tables.");
+			break;
 		case RELKIND_INDEX:
-			return errdetail("This operation is not supported for indexes.");
+			errdetail("This operation is not supported for indexes.");
+			break;
 		case RELKIND_SEQUENCE:
-			return errdetail("This operation is not supported for sequences.");
+			errdetail("This operation is not supported for sequences.");
+			break;
 		case RELKIND_TOASTVALUE:
-			return errdetail("This operation is not supported for TOAST tables.");
+			errdetail("This operation is not supported for TOAST tables.");
+			break;
 		case RELKIND_VIEW:
-			return errdetail("This operation is not supported for views.");
+			errdetail("This operation is not supported for views.");
+			break;
 		case RELKIND_MATVIEW:
-			return errdetail("This operation is not supported for materialized views.");
+			errdetail("This operation is not supported for materialized views.");
+			break;
 		case RELKIND_COMPOSITE_TYPE:
-			return errdetail("This operation is not supported for composite types.");
+			errdetail("This operation is not supported for composite types.");
+			break;
 		case RELKIND_FOREIGN_TABLE:
-			return errdetail("This operation is not supported for foreign tables.");
+			errdetail("This operation is not supported for foreign tables.");
+			break;
 		case RELKIND_PARTITIONED_TABLE:
-			return errdetail("This operation is not supported for partitioned tables.");
+			errdetail("This operation is not supported for partitioned tables.");
+			break;
 		case RELKIND_PARTITIONED_INDEX:
-			return errdetail("This operation is not supported for partitioned indexes.");
+			errdetail("This operation is not supported for partitioned indexes.");
+			break;
 		default:
 			elog(ERROR, "unrecognized relkind: '%c'", relkind);
-			return 0;
+			break;
 	}
+
+	return 0;
 }

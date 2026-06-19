@@ -23,6 +23,7 @@
 #include "access/bitmap_xlog.h"
 #include "access/heapam.h"
 #include "access/reloptions.h"
+#include "access/xloginsert.h"
 #include "access/relscan.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"

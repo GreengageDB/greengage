@@ -247,10 +247,11 @@ TimeLineID	ThisTimeLineID = 0;
  * process you're running in, use RecoveryInProgress() but only after shared
  * memory startup and lock initialization.
  */
-bool		InRecovery = false;
-
-/* Are we in Hot Standby mode? Only valid in startup process, see xlog.h */
-HotStandbyState standbyState = STANDBY_DISABLED;
+/*
+ * InRecovery and standbyState ("Are we in Hot Standby mode?") are defined in
+ * xlogutils.c in PG15 (declared in xlogutils.h, which we include); don't
+ * redefine them here.
+ */
 
 static XLogRecPtr LastRec;
 
@@ -4975,6 +4976,9 @@ GetCurrentDBState(void)
 	return ControlFile->state;
 }
 
+/* Defined in utils/gp/segadmin.c */
+extern bool gp_activate_standby(void);
+
 static void
 UpdateCatalogForStandbyPromotion(void)
 {
@@ -5026,7 +5030,7 @@ UpdateCatalogForStandbyPromotion(void)
 	/*
 	 * bufmgr needs another initialization call too
 	 */
-	InitBufferPoolBackend();
+	InitBufferPoolAccess();
 
 	/* Start transaction locally */
 	old_role = Gp_role;
@@ -7194,53 +7198,6 @@ CreateOverwriteContrecordRecord(XLogRecPtr aborted_lsn, XLogRecPtr pagePtr,
 }
 
 /*
- * Write an OVERWRITE_CONTRECORD message.
- *
- * When on WAL replay we expect a continuation record at the start of a page
- * that is not there, recovery ends and WAL writing resumes at that point.
- * But it's wrong to resume writing new WAL back at the start of the record
- * that was broken, because downstream consumers of that WAL (physical
- * replicas) are not prepared to "rewind".  So the first action after
- * finishing replay of all valid WAL must be to write a record of this type
- * at the point where the contrecord was missing; to support xlogreader
- * detecting the special case, XLP_FIRST_IS_OVERWRITE_CONTRECORD is also added
- * to the page header where the record occurs.  xlogreader has an ad-hoc
- * mechanism to report metadata about the broken record, which is what we
- * use here.
- *
- * At replay time, XLP_FIRST_IS_OVERWRITE_CONTRECORD instructs xlogreader to
- * skip the record it was reading, and pass back the LSN of the skipped
- * record, so that its caller can verify (on "replay" of that record) that the
- * XLOG_OVERWRITE_CONTRECORD matches what was effectively overwritten.
- */
-static XLogRecPtr
-CreateOverwriteContrecordRecord(XLogRecPtr aborted_lsn)
-{
-	xl_overwrite_contrecord xlrec;
-	XLogRecPtr	recptr;
-
-	/* sanity check */
-	if (!RecoveryInProgress())
-		elog(ERROR, "can only be used at end of recovery");
-
-	xlrec.overwritten_lsn = aborted_lsn;
-	xlrec.overwrite_time = GetCurrentTimestamp();
-
-	START_CRIT_SECTION();
-
-	XLogBeginInsert();
-	XLogRegisterData((char *) &xlrec, sizeof(xl_overwrite_contrecord));
-
-	recptr = XLogInsert(RM_XLOG_ID, XLOG_OVERWRITE_CONTRECORD);
-
-	XLogFlush(recptr);
-
-	END_CRIT_SECTION();
-
-	return recptr;
-}
-
-/*
  * Flush all data in shared memory to disk, and fsync
  *
  * This is the common code shared between regular checkpoints and
@@ -8917,92 +8874,6 @@ do_pg_backup_start(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 
 		elogif(debug_basebackup, LOG, "basebackup label file --\n%s", labelfile->data);
 
-		/*
-		 * Okay, write the file, or return its contents to caller.
-		 */
-		if (exclusive)
-		{
-			/*
-			 * Check for existing backup label --- implies a backup is already
-			 * running.  (XXX given that we checked exclusiveBackupState
-			 * above, maybe it would be OK to just unlink any such label
-			 * file?)
-			 */
-			if (stat(BACKUP_LABEL_FILE, &stat_buf) != 0)
-			{
-				if (errno != ENOENT)
-					ereport(ERROR,
-							(errcode_for_file_access(),
-							 errmsg("could not stat file \"%s\": %m",
-									BACKUP_LABEL_FILE)));
-			}
-			else
-				ereport(ERROR,
-						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						 errmsg("a backup is already in progress"),
-						 errhint("If you're sure there is no backup in progress, remove file \"%s\" and try again.",
-								 BACKUP_LABEL_FILE)));
-
-			fp = AllocateFile(BACKUP_LABEL_FILE, "w");
-
-			if (!fp)
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not create file \"%s\": %m",
-								BACKUP_LABEL_FILE)));
-			if (fwrite(labelfile->data, labelfile->len, 1, fp) != 1 ||
-				fflush(fp) != 0 ||
-				pg_fsync(fileno(fp)) != 0 ||
-				ferror(fp) ||
-				FreeFile(fp))
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not write file \"%s\": %m",
-								BACKUP_LABEL_FILE)));
-			/* Allocated locally for exclusive backups, so free separately */
-			pfree(labelfile->data);
-			pfree(labelfile);
-
-			/* Write backup tablespace_map file. */
-			if (tblspcmapfile->len > 0)
-			{
-				if (stat(TABLESPACE_MAP, &stat_buf) != 0)
-				{
-					if (errno != ENOENT)
-						ereport(ERROR,
-								(errcode_for_file_access(),
-								 errmsg("could not stat file \"%s\": %m",
-										TABLESPACE_MAP)));
-				}
-				else
-					ereport(ERROR,
-							(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							 errmsg("a backup is already in progress"),
-							 errhint("If you're sure there is no backup in progress, remove file \"%s\" and try again.",
-									 TABLESPACE_MAP)));
-
-				fp = AllocateFile(TABLESPACE_MAP, "w");
-
-				if (!fp)
-					ereport(ERROR,
-							(errcode_for_file_access(),
-							 errmsg("could not create file \"%s\": %m",
-									TABLESPACE_MAP)));
-				if (fwrite(tblspcmapfile->data, tblspcmapfile->len, 1, fp) != 1 ||
-					fflush(fp) != 0 ||
-					pg_fsync(fileno(fp)) != 0 ||
-					ferror(fp) ||
-					FreeFile(fp))
-					ereport(ERROR,
-							(errcode_for_file_access(),
-							 errmsg("could not write file \"%s\": %m",
-									TABLESPACE_MAP)));
-			}
-
-			/* Allocated locally for exclusive backups, so free separately */
-			pfree(tblspcmapfile->data);
-			pfree(tblspcmapfile);
-		}
 	}
 	PG_END_ENSURE_ERROR_CLEANUP(pg_backup_start_callback, (Datum) 0);
 
@@ -9515,7 +9386,13 @@ SetWalWriterSleeping(bool sleeping)
 bool
 IsCrashRecoveryOnly(void)
 {
-	return !ArchiveRecoveryRequested && !StandbyModeRequested;
+	/*
+	 * StandbyModeRequested is private to xlogrecovery.c in PG15; since
+	 * requesting standby mode always also requests archive recovery,
+	 * !ArchiveRecoveryRequested is equivalent to the old
+	 * "!ArchiveRecoveryRequested && !StandbyModeRequested" test.
+	 */
+	return !ArchiveRecoveryRequested;
 }
 
 /*
@@ -9524,16 +9401,12 @@ IsCrashRecoveryOnly(void)
 XLogRecPtr
 last_xlog_replay_location()
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-	Assert(xlogctl != NULL);
-	XLogRecPtr	recptr;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	recptr = xlogctl->lastReplayedEndRecPtr;
-	SpinLockRelease(&xlogctl->info_lck);
-
-	return recptr;
+	/*
+	 * lastReplayedEndRecPtr moved from XLogCtlData to xlogrecovery.c's private
+	 * XLogRecoveryCtl in PG15; GetXLogReplayRecPtr() reads it under the proper
+	 * lock.
+	 */
+	return GetXLogReplayRecPtr(NULL);
 }
 
 void

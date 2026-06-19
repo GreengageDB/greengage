@@ -28,7 +28,7 @@
  *		typedef struct FormData_pg_attribute_encoding
  * ----------------
  */
-CATALOG(pg_attribute_encoding,6231,AttributeEncodingRelationId)
+CATALOG(pg_attribute_encoding,7033,AttributeEncodingRelationId)
 {
 	Oid		attrelid;		
 	int16	attnum;			
@@ -58,5 +58,10 @@ extern void CloneAttributeEncodings(Oid oldrelid, Oid newrelid, AttrNumber max_a
 extern void UpdateAttributeEncodings(Oid relid, List *new_attr_encodings);
 extern Datum *get_rel_attoptions(Oid relid, AttrNumber max_attno);
 extern List * rel_get_column_encodings(Relation rel);
+
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 7039, AttributeEncodingAttrelidIndexId, on pg_attribute_encoding using btree(attrelid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_attnum_index, 7040, AttributeEncodingAttrelidAttnumIndexId, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
 
 #endif   /* PG_ATTRIBUTE_ENCODING_H */

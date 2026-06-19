@@ -26,6 +26,17 @@
 #include "utils/rel.h"
 #include "utils/timestamp.h"
 
+/* GPDB: for the QD/QE tabstat combine functions at the end of this file */
+#include "catalog/gp_distribution_policy.h"
+#include "cdb/cdbconn.h"
+#include "cdb/cdbdispatchresult.h"
+#include "cdb/cdbvars.h"
+#include "libpq/libpq.h"
+#include "libpq/pqformat.h"
+#include "utils/faultinjector.h"
+#include "utils/lsyscache.h"
+#include "libpq-int.h"
+
 
 /* Record that's written to 2PC state file when pgstat state is persisted */
 typedef struct TwoPhasePgStatRecord
@@ -41,6 +52,16 @@ typedef struct TwoPhasePgStatRecord
 	bool		t_shared;		/* is it a shared catalog? */
 	bool		t_truncdropped; /* was the relation truncated/dropped? */
 } TwoPhasePgStatRecord;
+
+/*
+ * GPDB: one table's transactional counts as serialized from a QE to the QD.
+ * The QD combines these into its own tabstat (see pgstat_combine_one_qe_result).
+ */
+typedef struct PgStatTabRecordFromQE
+{
+	TwoPhasePgStatRecord table_stat;
+	int			nest_level;
+} PgStatTabRecordFromQE;
 
 
 static PgStat_TableStatus *pgstat_prep_relation_pending(Oid rel_id, bool isshared);
@@ -934,5 +955,224 @@ restore_truncdrop_counters(PgStat_TableXactStatus *trans)
 		trans->tuples_inserted = trans->inserted_pre_truncdrop;
 		trans->tuples_updated = trans->updated_pre_truncdrop;
 		trans->tuples_deleted = trans->deleted_pre_truncdrop;
+	}
+}
+
+
+/*
+ * GPDB: QD/QE table-statistics combine support.
+ *
+ * The writer QE serializes its per-table transactional counts and ships them
+ * to the QD over libpq; the QD folds them into its own tabstat so that
+ * pg_stat_*_tables reflects rows actually changed on the segments.
+ */
+
+/*
+ * pgstat_send_qd_tabstats() -
+ *
+ * Send the writer QE's tables' pgstat for the current xact nest level to the
+ * QD through libpq at the end of a statement.
+ */
+void
+pgstat_send_qd_tabstats(void)
+{
+	int			nest_level;
+	StringInfoData buf;
+	StringInfoData stat_data;
+	PgStat_TableXactStatus *trans;
+
+	if (!pgstat_track_counts || !pgStatXactStack)
+		return;
+
+	nest_level = GetCurrentTransactionNestLevel();
+	if (nest_level != pgStatXactStack->nest_level)
+		return;
+
+	trans = pgStatXactStack->first;
+	initStringInfo(&stat_data);
+
+	for (; trans != NULL; trans = trans->next)
+	{
+		PgStatTabRecordFromQE record;
+		PgStat_TableStatus *tabstat = trans->parent;
+		GpPolicy   *gppolicy = GpPolicyFetch(tabstat->t_id);
+
+		switch (gppolicy->ptype)
+		{
+			case POLICYTYPE_ENTRY:
+				/*
+				 * No need to send catalog table's pgstat to QD since if the
+				 * catalog table gets updated on QE, QD should have the same
+				 * update.
+				 */
+				continue;
+			case POLICYTYPE_REPLICATED:
+				/*
+				 * gppolicy->numsegments has the same value on all segments
+				 * even when we are doing expand.
+				 */
+				if (GpIdentity.segindex != tabstat->t_id % gppolicy->numsegments)
+					continue;
+				break;
+			case POLICYTYPE_PARTITIONED:
+				break;
+			default:
+				elog(ERROR, "unrecognized policy type %d", gppolicy->ptype);
+		}
+
+		record.table_stat.tuples_inserted = trans->tuples_inserted;
+		record.table_stat.tuples_updated = trans->tuples_updated;
+		record.table_stat.tuples_deleted = trans->tuples_deleted;
+		record.table_stat.inserted_pre_truncdrop = trans->inserted_pre_truncdrop;
+		record.table_stat.updated_pre_truncdrop = trans->updated_pre_truncdrop;
+		record.table_stat.deleted_pre_truncdrop = trans->deleted_pre_truncdrop;
+		record.table_stat.t_id = tabstat->t_id;
+		record.table_stat.t_shared = tabstat->t_shared;
+		record.table_stat.t_truncdropped = trans->truncdropped;
+		record.nest_level = trans->nest_level;
+
+		appendBinaryStringInfo(&stat_data, (char *) &record,
+							   sizeof(PgStatTabRecordFromQE));
+	}
+
+	if (stat_data.len > 0)
+	{
+		pq_beginmessage(&buf, 'y');
+		pq_sendstring(&buf, "PGSTAT");
+
+		/*
+		 * Don't mark the pgresult PGASYNC_READY when this message is received
+		 * on the QD.  Otherwise, the QD may think the result is complete and
+		 * start to process it, but there may still be messages belonging to
+		 * the same pgresult not received yet.
+		 */
+		pq_sendbyte(&buf, false);
+
+		pq_sendint(&buf, PGExtraTypeTableStats, sizeof(PGExtraType));
+		pq_sendint(&buf, stat_data.len, sizeof(int));
+		pq_sendbytes(&buf, stat_data.data, stat_data.len);
+		pq_endmessage(&buf);
+	}
+}
+
+/*
+ * pgstat_combine_one_qe_result() -
+ *
+ * Combine one pg_result's table stats from a QE into the QD's tabstat.
+ */
+void
+pgstat_combine_one_qe_result(List **oidList, struct pg_result *pgresult,
+							 int nest_level, int32 segindex)
+{
+	int			arrayLen;
+	PgStatTabRecordFromQE *records;
+	PgStat_TableStatus *pgstat_info;
+	PgStat_TableXactStatus *trans;
+
+	if (!pgresult || pgresult->extraslen < 1 ||
+		pgresult->extraType != PGExtraTypeTableStats)
+		return;
+
+	/*
+	 * If this is the first rel to be modified at the current nest level, we
+	 * first have to push a transaction stack entry.
+	 */
+	(void) pgstat_get_xact_stack_level(nest_level);
+
+	arrayLen = pgresult->extraslen / sizeof(PgStatTabRecordFromQE);
+	records = (PgStatTabRecordFromQE *) pgresult->extras;
+	for (int i = 0; i < arrayLen; i++)
+	{
+		char	   *relname;
+
+		relname = get_rel_name(records[i].table_stat.t_id);
+		if (!relname)
+			continue;
+
+		/* Find or create a tabstat entry for the rel */
+		pgstat_info = pgstat_prep_relation_pending(records[i].table_stat.t_id,
+												   records[i].table_stat.t_shared);
+
+		if (pgstat_info->trans == NULL ||
+			pgstat_info->trans->nest_level != nest_level)
+			add_tabstat_xact_level(pgstat_info, nest_level);
+		trans = pgstat_info->trans;
+		if (list_member_oid(*oidList, records[i].table_stat.t_id))
+		{
+			/* Same table pgstat from a different QE; accumulate. */
+			trans->tuples_inserted += records[i].table_stat.tuples_inserted;
+			trans->tuples_updated += records[i].table_stat.tuples_updated;
+			trans->tuples_deleted += records[i].table_stat.tuples_deleted;
+			trans->truncdropped = (trans->truncdropped ||
+								   records[i].table_stat.t_truncdropped) ? true : false;
+			trans->inserted_pre_truncdrop += records[i].table_stat.inserted_pre_truncdrop;
+			trans->updated_pre_truncdrop += records[i].table_stat.updated_pre_truncdrop;
+			trans->deleted_pre_truncdrop += records[i].table_stat.deleted_pre_truncdrop;
+		}
+		else
+		{
+			/*
+			 * First time we see the table from a QE; overwrite existing
+			 * records, since the results could belong to the same transaction
+			 * nest level and already contain counts collected from a previous
+			 * statement.
+			 */
+			*oidList = lappend_oid(*oidList, records[i].table_stat.t_id);
+			trans->tuples_inserted = records[i].table_stat.tuples_inserted;
+			trans->tuples_updated = records[i].table_stat.tuples_updated;
+			trans->tuples_deleted = records[i].table_stat.tuples_deleted;
+			trans->truncdropped = records[i].table_stat.t_truncdropped;
+			trans->inserted_pre_truncdrop = records[i].table_stat.inserted_pre_truncdrop;
+			trans->updated_pre_truncdrop = records[i].table_stat.updated_pre_truncdrop;
+			trans->deleted_pre_truncdrop = records[i].table_stat.deleted_pre_truncdrop;
+
+#ifdef FAULT_INJECTOR
+			FaultInjector_InjectFaultIfSet(
+				"gp_pgstat_report_on_master", DDLNotSpecified,
+				"", relname);
+#endif
+		}
+
+		ereport(DEBUG3,
+				(errmsg("Update pgstat from segment %d for current xact nest_level: %d, "
+						"relation name: %s, relation oid: %d. "
+						"Sum of inserted: %ld, updated: %ld, deleted: %ld.",
+						segindex, nest_level, relname, pgstat_info->t_id,
+						trans->tuples_inserted, trans->tuples_updated,
+						trans->tuples_deleted)));
+		pfree(relname);
+	}
+}
+
+/*
+ * pgstat_combine_from_qe() -
+ *
+ * Combine the table stats on the QD from the dispatch result for each QE.
+ */
+void
+pgstat_combine_from_qe(struct CdbDispatchResults *results, int writerSliceIndex)
+{
+	CdbDispatchResult *dispatchResult;
+	CdbDispatchResult *resultEnd;
+	struct pg_result *pgresult;
+	List	   *oidList = NIL;
+	int			nest_level;
+
+	if (!pgstat_track_counts)
+		return;
+
+	resultEnd = cdbdisp_resultEnd(results, writerSliceIndex);
+	nest_level = GetCurrentTransactionNestLevel();
+
+	for (dispatchResult = cdbdisp_resultBegin(results, writerSliceIndex);
+		 dispatchResult < resultEnd; ++dispatchResult)
+	{
+		pgresult = cdbdisp_getPGresult(dispatchResult, dispatchResult->okindex);
+		if (pgresult && !dispatchResult->errcode && pgresult->extraslen > 0 &&
+			pgresult->extraType == PGExtraTypeTableStats)
+		{
+			pgstat_combine_one_qe_result(&oidList, pgresult, nest_level,
+										 dispatchResult->segdbDesc->segindex);
+		}
 	}
 }

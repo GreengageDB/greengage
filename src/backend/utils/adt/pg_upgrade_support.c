@@ -39,17 +39,6 @@ do {															\
 } while (0)
 
 Datum
-binary_upgrade_set_next_pg_tablespace_oid(PG_FUNCTION_ARGS)
-{
-	Oid			tbspoid = PG_GETARG_OID(0);
-
-	CHECK_IS_BINARY_UPGRADE;
-	binary_upgrade_next_pg_tablespace_oid = tbspoid;
-
-	PG_RETURN_VOID();
-}
-
-Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {
 	Oid			typoid = PG_GETARG_OID(0);

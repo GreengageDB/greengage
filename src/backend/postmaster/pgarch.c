@@ -524,6 +524,10 @@ pgarch_archiveXlog(char *xlog)
 	bool		ret;
 
 	char		contentid[12];	/* sign, 10 digits and '\0' */
+	char		xlogarchcmd[MAXPGPATH];
+	char	   *dp;
+	char	   *endp;
+	const char *sp;
 
 	snprintf(pathname, MAXPGPATH, XLOGDIR "/%s", xlog);
 

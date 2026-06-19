@@ -450,7 +450,7 @@ heap_create(const char *relname,
 
 			case RELKIND_INDEX:
 			case RELKIND_SEQUENCE:
-				RelationCreateStorage(rel->rd_node, relpersistence, SMGR_MD);
+				RelationCreateStorage(rel->rd_node, relpersistence, SMGR_MD, true);
 				break;
 
 			case RELKIND_RELATION:
@@ -1327,13 +1327,7 @@ AddNewRelationTuple(Relation pg_class_desc,
 	 */
 	new_rel_reltup = new_rel_desc->rd_rel;
 
-	/* The relation is empty */
-	new_rel_reltup->relpages = 0;
-	new_rel_reltup->reltuples = -1;
-	new_rel_reltup->relallvisible = 0;
-
-	/* Sequences always have a known size */
-	if (relkind == RELKIND_SEQUENCE)
+	switch (relkind)
 	{
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
@@ -1605,7 +1599,7 @@ heap_create_with_catalog(const char *relname,
 							   relnamespace,
 							   reltablespace,
 							   relid,
-							   relfilenode,
+							   InvalidOid,	/* GPDB merge: heap_create_with_catalog lost the relfilenode param; assign from relid */
 							   accessmtd,
 							   tupdesc,
 							   relkind,

@@ -20,6 +20,7 @@
 #include <sys/file.h>
 
 #include "access/aomd.h"
+#include "access/xloginsert.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "cdb/cdbappendonlyxlog.h"

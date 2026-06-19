@@ -630,7 +630,7 @@ static inline SMgrRelation
 RelationGetSmgr(Relation rel)
 {
 	if (unlikely(rel->rd_smgr == NULL))
-		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend));
+		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend, RelationIsAppendOptimized(rel) ? SMGR_AO : SMGR_MD));
 	return rel->rd_smgr;
 }
 

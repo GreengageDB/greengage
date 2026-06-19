@@ -24,6 +24,7 @@
 #include "access/bitmap_private.h"
 #include "access/heapam.h"
 #include "access/heapam_xlog.h"
+#include "access/xloginsert.h"
 #include "access/multixact.h"
 #include "access/nbtree.h"
 #include "access/xact.h"

@@ -31,6 +31,9 @@ extern ResultRelInfo *ExecFindPartition(ModifyTableState *mtstate,
 										EState *estate);
 extern void ExecCleanupTupleRouting(ModifyTableState *mtstate,
 									PartitionTupleRouting *proute);
+/* GPDB: exported for tablecmds_gp.c (partition split/exchange) */
+extern int	get_partition_for_tuple(PartitionKey key, PartitionDesc partdesc,
+									Datum *values, bool *isnull);
 
 
 /*

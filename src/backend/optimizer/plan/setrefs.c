@@ -714,8 +714,8 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				splan->plan.targetlist =
 					fix_scan_list(root, splan->plan.targetlist,
 								  rtoffset, NUM_EXEC_TLIST(plan));
-				splan->scan.plan.qual =
-					fix_scan_list(root, splan->scan.plan.qual,
+				splan->plan.qual =
+					fix_scan_list(root, splan->plan.qual,
 								  rtoffset, NUM_EXEC_QUAL(plan));
 			}
 			break;

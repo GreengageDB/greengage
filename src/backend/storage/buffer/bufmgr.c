@@ -3974,7 +3974,7 @@ CreateAndCopyRelationData(RelFileNode src_rnode, RelFileNode dst_rnode,
 	 * directory.  Therefore, each individual relation doesn't need to be
 	 * registered for cleanup.
 	 */
-	RelationCreateStorage(dst_rnode, relpersistence, false);
+	RelationCreateStorage(dst_rnode, relpersistence, SMGR_MD, false);
 
 	/* copy main fork. */
 	RelationCopyStorageUsingBuffer(src_rel, dst_rel, MAIN_FORKNUM, permanent);
@@ -3992,7 +3992,7 @@ CreateAndCopyRelationData(RelFileNode src_rnode, RelFileNode dst_rnode,
 			 * init fork of an unlogged relation.
 			 */
 			if (permanent || forkNum == INIT_FORKNUM)
-				log_smgrcreate(&dst_rnode, forkNum);
+				log_smgrcreate(&dst_rnode, forkNum, SMGR_MD);
 
 			/* Copy a fork's data, block by block. */
 			RelationCopyStorageUsingBuffer(src_rel, dst_rel, forkNum,

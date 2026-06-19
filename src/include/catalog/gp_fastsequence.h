@@ -72,4 +72,8 @@ extern int64 ReadLastSequence(Oid objid, int64 objmod);
  */
 extern void RemoveFastSequenceEntry(Oid objid);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(gp_fastsequence_objid_objmod_index, 6067, FastSequenceObjidObjmodIndexId, on gp_fastsequence using btree(objid oid_ops, objmod  int8_ops));
+
 #endif

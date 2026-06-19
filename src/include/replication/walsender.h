@@ -36,6 +36,8 @@ extern PGDLLIMPORT bool wake_wal_senders;
 extern PGDLLIMPORT int max_wal_senders;
 extern PGDLLIMPORT int wal_sender_timeout;
 extern PGDLLIMPORT bool log_replication_commands;
+/* GPDB: catchup-range GUC, defined in walsender.c */
+extern int	repl_catchup_within_range;
 
 extern void InitWalSender(void);
 extern bool exec_replication_command(const char *query_string);

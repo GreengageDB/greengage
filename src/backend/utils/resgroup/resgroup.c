@@ -4795,8 +4795,8 @@ moveQueryCheck(int sessionId, Oid groupId)
 		i_available_mem = PQfnumber(pgresult, "available_mem");
 		Assert(!PQgetisnull(pgresult, 0, i_session_mem));
 		Assert(!PQgetisnull(pgresult, 0, i_available_mem));
-		sessionMem = pg_atoi(PQgetvalue(pgresult, 0, i_session_mem), sizeof(int32), 0);
-		availMem = pg_atoi(PQgetvalue(pgresult, 0, i_available_mem), sizeof(int32), 0);
+		sessionMem = pg_strtoint32(PQgetvalue(pgresult, 0, i_session_mem));
+		availMem = pg_strtoint32(PQgetvalue(pgresult, 0, i_available_mem));
 		if (sessionMem <= 0)
 			continue;
 		if (!hasEnoughMemory(sessionMem, availMem))

@@ -54,4 +54,9 @@ FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_statlastshop *Form_pg_statlastshop;
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_INDEX(pg_statlastshop_classid_objid_index, 6057, StatLastShOpClassidObjidIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_statlastshop_classid_objid_staactionname_index, 6058, StatLastShOpClassidObjidStaactionnameIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
+
 #endif   /* PG_STAT_LAST_SHOPERATION_H */

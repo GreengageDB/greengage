@@ -168,4 +168,8 @@ RemoveAppendonlyEntry(Oid relid);
 
 extern void ATAOEntries(Form_pg_class relform1, Form_pg_class relform2);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_appendonly_relid_index, 7141, AppendOnlyRelidIndexId, on pg_appendonly using btree(relid oid_ops));
+
 #endif   /* PG_APPENDONLY_H */

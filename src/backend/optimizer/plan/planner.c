@@ -2242,6 +2242,7 @@ inheritance_planner(PlannerInfo *root)
 									 is_split_updates,
 									 rowMarks,
 									 NULL,
+									 NIL,
 									 assign_special_exec_param(root)));
 }
 
@@ -5621,11 +5622,6 @@ static RelOptInfo *
 create_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel)
 {
 	RelOptInfo *distinct_rel;
-	double		numDistinctRowsTotal;
-	double		numInputRowsTotal;
-	bool		allow_hash;
-	Path	   *path;
-	ListCell   *lc;
 
 	/* For now, do all work in the (DISTINCT, NULL) upperrel */
 	distinct_rel = fetch_upper_rel(root, UPPERREL_DISTINCT, NULL);
@@ -5647,11 +5643,6 @@ create_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel)
 	distinct_rel->useridiscurrent = input_rel->useridiscurrent;
 	distinct_rel->fdwroutine = input_rel->fdwroutine;
 	distinct_rel->exec_location = input_rel->exec_location;
-
-	if (CdbPathLocus_IsPartitioned(cheapest_input_path->locus))
-		numInputRowsTotal = cheapest_input_path->rows * CdbPathLocus_NumSegments(cheapest_input_path->locus);
-	else
-		numInputRowsTotal = cheapest_input_path->rows;
 
 	/* build distinct paths based on input_rel's pathlist */
 	create_final_distinct_paths(root, input_rel, distinct_rel);
@@ -5775,6 +5766,7 @@ create_partial_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										 cheapest_partial_path->pathtarget,
 										 AGG_HASHED,
 										 AGGSPLIT_SIMPLE,
+										 false, /* streaming */
 										 parse->distinctClause,
 										 NIL,
 										 NULL,
@@ -5827,9 +5819,20 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	Query	   *parse = root->parse;
 	Path	   *cheapest_input_path = input_rel->cheapest_total_path;
 	double		numDistinctRows;
+	double		numDistinctRowsTotal;
+	double		numInputRowsTotal;
 	bool		allow_hash;
 	Path	   *path;
 	ListCell   *lc;
+
+	/*
+	 * GPDB: compute the total number of input rows across all segments, used
+	 * below to derive per-segment distinct-row estimates.
+	 */
+	if (CdbPathLocus_IsPartitioned(cheapest_input_path->locus))
+		numInputRowsTotal = cheapest_input_path->rows * CdbPathLocus_NumSegments(cheapest_input_path->locus);
+	else
+		numInputRowsTotal = cheapest_input_path->rows;
 
 	/* Estimate number of distinct rows there will be */
 	if (parse->groupClause || parse->groupingSets || parse->hasAggs ||
@@ -8503,9 +8506,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 		{
 			ListCell   *lc2;
 			Path	   *path = (Path *) lfirst(lc);
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			Path	   *path_original = path;
-#endif
 			bool		is_sorted;
 			int			presorted_keys;
 
@@ -8550,26 +8551,22 @@ create_partial_grouping_paths(PlannerInfo *root,
 														 -1.0);
 					}
 
-					if (parse->hasAggs)
-						add_partial_path(partially_grouped_rel, (Path *)
-										 create_agg_path(root,
-														 partially_grouped_rel,
-														 path,
-														 partially_grouped_rel->reltarget,
-														 info->clauses ? AGG_SORTED : AGG_PLAIN,
-														 AGGSPLIT_INITIAL_SERIAL,
-														 info->clauses,
-														 NIL,
-														 agg_partial_costs,
-														 dNumPartialPartialGroups));
-					else
-						add_partial_path(partially_grouped_rel, (Path *)
-										 create_group_path(root,
-														   partially_grouped_rel,
-														   path,
-														   info->clauses,
-														   NIL,
-														   dNumPartialPartialGroups));
+					/*
+					 * Group nodes are not used in GPDB, so always build a
+					 * partial Agg (even for plain GROUP BY without aggregates).
+					 */
+					add_partial_path(partially_grouped_rel, (Path *)
+									 create_agg_path(root,
+													 partially_grouped_rel,
+													 path,
+													 partially_grouped_rel->reltarget,
+													 info->clauses ? AGG_SORTED : AGG_PLAIN,
+													 AGGSPLIT_INITIAL_SERIAL,
+													 false,
+													 info->clauses,
+													 NIL,
+													 agg_partial_costs,
+													 dNumPartialPartialGroups));
 				}
 
 				/*

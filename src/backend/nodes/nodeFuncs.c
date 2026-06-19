@@ -3024,8 +3024,11 @@ expression_tree_mutator(Node *node,
 		case T_CurrentOfExpr:
 		case T_NextValueExpr:
 		case T_RangeTblRef:
+		case T_Integer:
+		case T_Float:
+		case T_Boolean:
 		case T_String:
-		case T_Null:
+		case T_BitString:
 		case T_SortGroupClause:
 		case T_CTESearchClause:
 		case T_JsonFormat:

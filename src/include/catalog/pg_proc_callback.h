@@ -53,4 +53,8 @@ extern void deleteProcCallbacks(Oid profnoid);
 extern void addProcCallback(Oid profnoid, Oid procallback, char promethod);
 extern Oid lookupProcCallback(Oid profnoid, char promethod);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_proc_callback_profnoid_promethod_index, 9926, ProcCallbackProfnoidPromethodIndexId, on pg_proc_callback using btree(profnoid oid_ops, promethod char_ops));
+
 #endif

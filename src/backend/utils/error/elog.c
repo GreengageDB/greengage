@@ -225,7 +225,6 @@ static const char *process_log_prefix_padding(const char *p, int *padding);
 static void log_line_prefix(StringInfo buf, ErrorData *edata);
 static void send_message_to_server_log(ErrorData *edata);
 static void send_message_to_frontend(ErrorData *edata);
-static const char *error_severity(int elevel);
 static void elog_debug_linger(ErrorData *edata);
 static inline void
 ignore_returned_result(long long int result)

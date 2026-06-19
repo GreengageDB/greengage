@@ -39,4 +39,9 @@ FOREIGN_KEY(resgroupid REFERENCES pg_resgroup(oid));
  */
 typedef FormData_pg_resgroupcapability *Form_pg_resgroupcapability;
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_resgroupcapability_resgroupid_reslimittype_index, 6445, ResGroupCapabilityResgroupidResLimittypeIndexId, on pg_resgroupcapability using btree(resgroupid oid_ops, reslimittype int2_ops));
+DECLARE_INDEX(pg_resgroupcapability_resgroupid_index, 6446, ResGroupCapabilityResgroupidIndexId, on pg_resgroupcapability using btree(resgroupid oid_ops));
+
 #endif   /* PG_RESGROUPCAPABILITY_H */

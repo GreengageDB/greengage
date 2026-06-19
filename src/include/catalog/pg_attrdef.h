@@ -58,7 +58,11 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_attrdef_oid_index, 2657, AttrDefaultOidIndexId, on 
 
 
 extern Oid	StoreAttrDefault(Relation rel, AttrNumber attnum,
-							 Node *expr, bool is_internal,
+							 Node *expr,
+							 bool *cookedMissingVal,
+							 Datum *missingval_p,
+							 bool *missingIsNull_p,
+							 bool is_internal,
 							 bool add_column_mode);
 extern void RemoveAttrDefault(Oid relid, AttrNumber attnum,
 							  DropBehavior behavior,

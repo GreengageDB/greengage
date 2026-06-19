@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "access/table.h"
 #include "catalog/partition.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_inherits.h"
 #include "partitioning/partbounds.h"
 #include "partitioning/partdesc.h"

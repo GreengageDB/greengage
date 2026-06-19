@@ -11946,7 +11946,7 @@
 { oid => 7135, descr => 'implementation of / operator',
    proname => 'interval_interval_div', prorettype => 'float8', proargtypes => 'interval interval', prosrc => 'interval_interval_div' },
 
-{ oid => 6116, descr => 'implementation of % operator',
+{ oid => 7014, descr => 'implementation of % operator',
    proname => 'interval_interval_mod', prorettype => 'interval', proargtypes => 'interval interval', prosrc => 'interval_interval_mod' },
 
 { oid => 6997, descr => 'decrement by one',
@@ -12079,59 +12079,59 @@
    prosrc => 'aggregate_dummy' },
 
 # Greenplum Analytic functions
-{ oid => 6212, descr => 'perform matrix addition on two conformable matrices',
+{ oid => 7015, descr => 'perform matrix addition on two conformable matrices',
    proname => 'int2_matrix_accum', proisstrict => 'f', prorettype => '_int8', proargtypes => '_int8 _int2', prosrc => 'matrix_add' },
 
-{ oid => 6213, descr => 'perform matrix addition on two conformable matrices',
+{ oid => 7016, descr => 'perform matrix addition on two conformable matrices',
    proname => 'int4_matrix_accum', proisstrict => 'f', prorettype => '_int8', proargtypes => '_int8 _int4', prosrc => 'matrix_add' },
 
-{ oid => 6214, descr => 'perform matrix addition on two conformable matrices',
+{ oid => 7017, descr => 'perform matrix addition on two conformable matrices',
    proname => 'int8_matrix_accum', prorettype => '_int8', proargtypes => '_int8 _int8', prosrc => 'matrix_add' },
 
-{ oid => 6215, descr => 'perform matrix addition on two conformable matrices',
+{ oid => 7018, descr => 'perform matrix addition on two conformable matrices',
    proname => 'float8_matrix_accum', prorettype => '_float8', proargtypes => '_float8 _float8', prosrc => 'matrix_add' },
 
-{ oid => 6216, descr => 'sum of matrixes',
+{ oid => 7019, descr => 'sum of matrixes',
    proname => 'sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_int8', proargtypes => '_int2',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6217, descr => 'sum of matrixes',
+{ oid => 7020, descr => 'sum of matrixes',
    proname => 'sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_int8', proargtypes => '_int4',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6218, descr => 'sum of matrixes',
+{ oid => 7021, descr => 'sum of matrixes',
    proname => 'sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_int8', proargtypes => '_int8',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6219, descr => 'sum of matrixes',
+{ oid => 7022, descr => 'sum of matrixes',
    proname => 'sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_float8', proargtypes => '_float8',
    prosrc => 'aggregate_dummy' },
 
 # 3220 - reserved for sum(numeric[]) 
-{ oid => 6225, descr => 'aggregate transition function',
+{ oid => 7023, descr => 'aggregate transition function',
    proname => 'int4_pivot_accum', proisstrict => 'f', prorettype => '_int8', proargtypes => '_int8 _text text int4', prosrc => 'int4_pivot_accum' },
 
-{ oid => 6226, descr => 'pivot sum aggregate',
+{ oid => 7024, descr => 'pivot sum aggregate',
    proname => 'pivot_sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_int8', proargtypes => '_text text int4',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6227, descr => 'aggregate transition function',
+{ oid => 7025, descr => 'aggregate transition function',
    proname => 'int8_pivot_accum', proisstrict => 'f', prorettype => '_int8', proargtypes => '_int8 _text text int8', prosrc => 'int8_pivot_accum' },
 
-{ oid => 6228, descr => 'pivot sum aggregate',
+{ oid => 7026, descr => 'pivot sum aggregate',
    proname => 'pivot_sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_int8', proargtypes => '_text text int8',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6229, descr => 'aggregate transition function',
+{ oid => 7027, descr => 'aggregate transition function',
    proname => 'float8_pivot_accum', proisstrict => 'f', prorettype => '_float8', proargtypes => '_float8 _text text float8', prosrc => 'float8_pivot_accum' },
 
-{ oid => 6230, descr => 'pivot sum aggregate',
+{ oid => 7028, descr => 'pivot sum aggregate',
    proname => 'pivot_sum', prokind => 'a', proisstrict => 'f',
    prorettype => '_float8', proargtypes => '_text text float8',
    prosrc => 'aggregate_dummy' },
@@ -12591,7 +12591,7 @@
    prorettype => 'gp_hyperloglog_estimator', proargtypes => 'anyelement',
    prosrc => 'aggregate_dummy' },
 
-{ oid => 6232, descr => 'deparse DISTRIBUTED BY clause for a given relation',
+{ oid => 7029, descr => 'deparse DISTRIBUTED BY clause for a given relation',
    proname => 'pg_get_table_distributedby', provolatile => 's', prorettype => 'text', proargtypes => 'oid', prosrc => 'pg_get_table_distributedby' },
 
 

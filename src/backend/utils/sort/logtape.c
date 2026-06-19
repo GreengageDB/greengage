@@ -600,7 +600,7 @@ LogicalTapeSetCreate(bool preallocate, SharedFileSet *fileset, int worker)
 		lts->pfile = BufFileCreateFileSet(&fileset->fs, filename, work_set);
 	}
 	else
-		lts->pfile = BufFileCreateTemp(false);
+		lts->pfile = BufFileCreateTemp("Logical Tape", false);
 
 	return lts;
 }

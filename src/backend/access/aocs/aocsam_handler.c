@@ -1172,7 +1172,7 @@ aoco_relation_set_new_filenode(Relation rel,
 	 *
 	 * Segment files will be created when / if needed.
 	 */
-	srel = RelationCreateStorage(*newrnode, persistence, SMGR_AO);
+	srel = RelationCreateStorage(*newrnode, persistence, SMGR_AO, true);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -1248,7 +1248,7 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * NOTE: any conflict in relfilenode value will be caught in
 	 * RelationCreateStorage().
 	 */
-	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO);
+	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO, true);
 
 	copy_append_only_data(rel->rd_node, *newrnode, rel->rd_backend, rel->rd_rel->relpersistence);
 
@@ -1304,6 +1304,7 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Datum	   *values;
 	bool	   *isnull;
 	TransactionId FreezeXid;
+	MultiXactId OldestMxact;
 	MultiXactId MultiXactCutoff;
 	Tuplesortstate *tuplesort;
 	PGRUsage	ru0;
@@ -1368,8 +1369,8 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 * VACUUM machinery to avoidconfising existing CLUSTER code.
 	 */
 	vacuum_set_xid_limits(OldHeap, 0, 0, 0, 0,
-						  &OldestXmin, &FreezeXid, NULL, &MultiXactCutoff,
-						  NULL);
+						  &OldestXmin, &OldestMxact, &FreezeXid,
+						  &MultiXactCutoff);
 
 	/*
 	 * FreezeXid will become the table's new relfrozenxid, and that mustn't go

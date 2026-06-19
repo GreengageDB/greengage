@@ -99,7 +99,7 @@ static void ComputeIndexAttrs(IndexInfo *indexInfo,
 							  Oid ddl_userid,
 							  int ddl_sec_context,
 							  int *ddl_save_nestlevel);
-static char *ChooseIndexName(const char *tabname, Oid namespaceId,
+char *ChooseIndexName(const char *tabname, Oid namespaceId,
 							 List *colnames, List *exclusionOpNames,
 							 bool primary, bool isconstraint);
 static char *ChooseIndexNameAddition(List *colnames);

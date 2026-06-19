@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 
 #include "access/xlog.h"
+#include "access/xlogutils.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/copydir.h"

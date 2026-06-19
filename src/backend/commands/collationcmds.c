@@ -541,8 +541,8 @@ DispatchCollationCreate(char *alias, char *locale, Oid nspid, int encoding)
 	Assert(Gp_role == GP_ROLE_DISPATCH);
 
 	List *names = NIL;
-	Value *schemaname = makeString(get_namespace_name(nspid));
-	Value *relname = makeString(alias);
+	String *schemaname = makeString(get_namespace_name(nspid));
+	String *relname = makeString(alias);
 
 	names = lappend(names, schemaname);
 	names = lappend(names, relname);

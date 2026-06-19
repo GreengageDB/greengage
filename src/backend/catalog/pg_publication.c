@@ -390,10 +390,10 @@ publication_add_relation(Oid pubid, PublicationRelInfo *pri,
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-	prrelid = GetNewOidForPublicationRel(rel, PublicationRelObjectIndexId,
+	pubreloid = GetNewOidForPublicationRel(rel, PublicationRelObjectIndexId,
 										 Anum_pg_publication_rel_oid,
 										 relid, pubid);
-	values[Anum_pg_publication_rel_oid - 1] = ObjectIdGetDatum(prrelid);
+	values[Anum_pg_publication_rel_oid - 1] = ObjectIdGetDatum(pubreloid);
 	values[Anum_pg_publication_rel_prpubid - 1] =
 		ObjectIdGetDatum(pubid);
 	values[Anum_pg_publication_rel_prrelid - 1] =

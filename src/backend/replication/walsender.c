@@ -443,7 +443,7 @@ IdentifySystem(void)
 			"SysId = %s, "
 			"ThisTimelineID = %u, "
 			"XLog InsertRecPtr = %s will be sent.",
-			sysid, ThisTimeLineID, xloc);
+			sysid, currTLI, xloc);
 
 	if (MyDatabaseId != InvalidOid)
 	{

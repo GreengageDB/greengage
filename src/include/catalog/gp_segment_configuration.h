@@ -69,4 +69,9 @@ typedef FormData_gp_segment_configuration *Form_gp_segment_configuration;
 
 extern bool gp_segment_config_has_mirrors(void);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(gp_segment_config_content_preferred_role_index, 7139, GpSegmentConfigContentPreferred_roleIndexId, on gp_segment_configuration using btree(content int2_ops, preferred_role char_ops));
+DECLARE_UNIQUE_INDEX(gp_segment_config_dbid_index, 7140, GpSegmentConfigDbidIndexId, on gp_segment_configuration using btree(dbid int2_ops));
+
 #endif /*_GP_SEGMENT_CONFIGURATION_H_*/

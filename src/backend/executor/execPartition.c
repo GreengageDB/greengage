@@ -184,6 +184,7 @@ static char *ExecBuildSlotPartitionKeyDescription(Relation rel,
 												  bool *isnull,
 												  int maxfieldlen);
 static List *adjust_partition_colnos(List *colnos, ResultRelInfo *leaf_part_rri);
+int get_partition_for_tuple(PartitionKey key, PartitionDesc partdesc, Datum *values, bool *isnull);
 static List *adjust_partition_colnos_using_map(List *colnos, AttrMap *attrMap);
 static PartitionPruneState *CreatePartitionPruneState(PlanState *planstate,
 													  PartitionPruneInfo *pruneinfo);

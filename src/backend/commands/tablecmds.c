@@ -183,61 +183,6 @@ static List *on_commits = NIL;
 #define AT_PASS_MISC			10	/* other stuff */
 #define AT_NUM_PASSES			11
 
-typedef struct AlteredTableInfo
-{
-	/* Information saved before any work commences: */
-	Oid			relid;			/* Relation to work on */
-	char		relkind;		/* Its relkind */
-	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
-
-	/*
-	 * Transiently set during Phase 2, normally set to NULL.
-	 *
-	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
-	 * returns control.  This can be exploited by ATExecCmd subroutines to
-	 * close/reopen across transaction boundaries.
-	 */
-	Relation	rel;
-
-	/* Information saved by Phase 1 for Phase 2: */
-	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
-	/* Information saved by Phases 1/2 for Phase 3: */
-	List	   *constraints;	/* List of NewConstraint */
-	List	   *newvals;		/* List of NewColumnValue */
-	List	   *afterStmts;		/* List of utility command parsetrees */
-	bool		verify_new_notnull; /* T if we should recheck NOT NULL */
-	int			rewrite;		/* Reason for forced rewrite, if any */
-	Oid			newAccessMethod;	/* new access method; 0 means no change */
-	Oid			newTableSpace;	/* new tablespace; 0 means no change */
-	bool		chgPersistence; /* T if SET LOGGED/UNLOGGED is used */
-	char		newrelpersistence;	/* if above is true */
-	Expr	   *partition_constraint;	/* for attach partition validation */
-	/* true, if validating default due to some other attach/detach */
-	bool		validate_default;
-	/* Objects to rebuild after completing ALTER TYPE operations */
-	List	   *changedConstraintOids;	/* OIDs of constraints to rebuild */
-	List	   *changedConstraintDefs;	/* string definitions of same */
-	List	   *changedIndexOids;	/* OIDs of indexes to rebuild */
-	List	   *changedIndexDefs;	/* string definitions of same */
-	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
-	char	   *clusterOnIndex; /* index to use for CLUSTER */
-	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
-	List	   *changedStatisticsDefs;	/* string definitions of same */
-} AlteredTableInfo;
-
-/* Struct describing one new constraint to check in Phase 3 scan */
-/* Note: new NOT NULL constraints are handled elsewhere */
-typedef struct NewConstraint
-{
-	char	   *name;			/* Constraint name, or NULL if none */
-	ConstrType	contype;		/* CHECK or FOREIGN */
-	Oid			refrelid;		/* PK rel, if FOREIGN */
-	Oid			refindid;		/* OID of PK's index, if FOREIGN */
-	Oid			conid;			/* OID of pg_constraint entry, if FOREIGN */
-	Node	   *qual;			/* Check expr or CONSTR_FOREIGN Constraint */
-	ExprState  *qualstate;		/* Execution state for CHECK expr */
-} NewConstraint;
-
 /*
  * In GPDB, AlteredTableInfo, NewConstraint, and NewColumnValue are defined
  * in nodes/altertablenodes.h (included above) because they need to be
@@ -16340,28 +16285,6 @@ ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 }
 
 /*
- * Preparation phase for SET ACCESS METHOD
- *
- * Check that access method exists.  If it is the same as the table's current
- * access method, it is a no-op.  Otherwise, a table rewrite is necessary.
- */
-static void
-ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
-{
-	Oid			amoid;
-
-	/* Check that the table access method exists */
-	amoid = get_table_am_oid(amname, false);
-
-	if (rel->rd_rel->relam == amoid)
-		return;
-
-	/* Save info for Phase 3 to do the real work */
-	tab->rewrite |= AT_REWRITE_ACCESS_METHOD;
-	tab->newAccessMethod = amoid;
-}
-
-/*
  * ALTER TABLE SET TABLESPACE
  */
 static void
@@ -18272,7 +18195,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 		rawstmt->stmt_location = -1;
 		rawstmt->stmt_len = 0;
 
-		q_list = pg_analyze_and_rewrite(rawstmt, synthetic_sql, NULL, 0, NULL);
+		q_list = pg_analyze_and_rewrite_fixedparams(rawstmt, synthetic_sql, NULL, 0, NULL);
 		p_list = pg_plan_queries(q_list, NULL, 0, NULL);
 		pstmt = linitial_node(PlannedStmt, p_list);
 		ctas = castNode(CreateTableAsStmt, pstmt->utilityStmt);
@@ -18288,7 +18211,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 		rawstmt->stmt_location = -1;
 		rawstmt->stmt_len = 0;
 
-		q = parse_analyze(rawstmt, synthetic_sql, NULL, 0, NULL);
+		q = parse_analyze_fixedparams(rawstmt, synthetic_sql, NULL, 0, NULL);
 	}
 	else
 		q = (Query *) n;
@@ -18574,7 +18497,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro,
 		rawstmt->stmt_location = -1;
 		rawstmt->stmt_len = 0;
 
-		q = parse_analyze(rawstmt, synthetic_sql, NULL, 0, NULL);
+		q = parse_analyze_fixedparams(rawstmt, synthetic_sql, NULL, 0, NULL);
 
 		/* No planning needed, just make a wrapper PlannedStmt */
 		PlannedStmt *pstmt = makeNode(PlannedStmt);

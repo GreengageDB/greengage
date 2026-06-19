@@ -23,7 +23,7 @@
  *		typedef struct FormData_pg_type_encoding
  * ----------------
  */
-CATALOG(pg_type_encoding,6220,TypeEncodingRelationId)
+CATALOG(pg_type_encoding,7032,TypeEncodingRelationId)
 {
 	Oid		typid;			
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
@@ -40,5 +40,9 @@ FOREIGN_KEY(typid REFERENCES pg_type(oid));
  * ----------------
  */
 typedef FormData_pg_type_encoding *Form_pg_type_encoding;
+
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_type_encoding_typid_index, 7038, TypeEncodingTypidIndexId, on pg_type_encoding using btree(typid oid_ops));
 
 #endif   /* PG_TYPE_ENCODING_H */

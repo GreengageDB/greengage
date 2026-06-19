@@ -62,7 +62,6 @@ static List *expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *range_table,
 													List *tlist);
-static List *expand_insert_targetlist(List *tlist, Relation rel);
 static bool check_splitupdate(List *tlist, Index result_relation, Relation rel);
 static bool rel_has_appendoptimized_partition(Relation rel);
 
@@ -269,11 +268,12 @@ preprocess_targetlist(PlannerInfo *root)
 			ListCell   *l2;
 
 			if (action->commandType == CMD_INSERT)
-				action->targetList = expand_insert_targetlist(action->targetList,
-															  target_relation);
+				action->targetList = expand_targetlist(root, action->targetList,
+													   CMD_INSERT, result_relation,
+													   target_relation);
 			else if (action->commandType == CMD_UPDATE)
 				action->updateColnos =
-					extract_update_targetlist_colnos(action->targetList);
+					extract_update_targetlist_colnos(action->targetList, true);
 
 			/*
 			 * Add resjunk entries for any Vars used in each action's

@@ -1037,11 +1037,8 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			filenames = lappend(filenames, makeString(segdb_file_map[i]));
 		else
 		{
-			/* no file for this segdb. add a null entry */
-			Value	   *n = makeNode(Value);
-
-			n->type = T_Null;
-			filenames = lappend(filenames, n);
+			/* no file for this segdb; PG15 removed T_Null, use a NULL entry (round-trips) */
+			filenames = lappend(filenames, NULL);
 		}
 	}
 

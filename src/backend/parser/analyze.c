@@ -2694,7 +2694,7 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 				 * support.
 				 */
 				op->groupClauses = lappend(op->groupClauses,
-										   makeSortGroupClauseForSetOp(rescoltype, recursive));
+										   makeSortGroupClauseForSetOp(rescoltype, (pstate->p_parent_cte && pstate->p_parent_cte->cterecursive)));
 
 				cancel_parser_errposition_callback(&pcbstate);
 			}

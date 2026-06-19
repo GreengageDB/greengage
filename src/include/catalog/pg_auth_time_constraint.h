@@ -58,4 +58,8 @@ FOREIGN_KEY(authid REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_auth_time_constraint *Form_pg_auth_time_constraint;
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_INDEX(pg_auth_time_constraint_authid_index, 6449, AuthTimeConstraintAuthIdIndexId, on pg_auth_time_constraint using btree(authid oid_ops));
+
 #endif   /* PG_AUTH_TIME_CONSTRAINT_H */

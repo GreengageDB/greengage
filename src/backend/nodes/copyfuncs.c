@@ -6387,6 +6387,9 @@ _copyPublicationTable(const PublicationTable *from)
 	COPY_NODE_FIELD(whereClause);
 	COPY_NODE_FIELD(columns);
 
+	return newnode;
+}
+
 static CreatePublicationStmt *
 _copyCreatePublicationStmt(const CreatePublicationStmt *from)
 {

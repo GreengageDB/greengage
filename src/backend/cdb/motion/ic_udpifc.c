@@ -2122,7 +2122,7 @@ setUDPSocketBufferSize(int ic_socket, int buffer_type)
 {
 	int 				expected_size;
 	int 				curr_size;
-	ACCEPT_TYPE_ARG3 	option_len = 0;
+	socklen_t 			option_len = 0;
 
 	Assert(buffer_type == SO_SNDBUF || buffer_type == SO_RCVBUF);
 

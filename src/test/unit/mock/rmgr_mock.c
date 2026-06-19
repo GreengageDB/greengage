@@ -9,4 +9,24 @@
 #include "access/rmgr.h"
 #include "access/xlog_internal.h"
 
-const RmgrData RmgrTable[RM_MAX_ID + 1];
+RmgrData RmgrTable[RM_MAX_ID + 1];
+
+/*
+ * GPDB: PG15 added these helpers to rmgr.c.  The mock omits rmgr.c, so stub
+ * them here to satisfy the linker for unit tests.
+ */
+void
+RmgrStartup(void)
+{
+}
+
+void
+RmgrCleanup(void)
+{
+}
+
+void
+RmgrNotFound(RmgrId rmid)
+{
+	elog(ERROR, "resource manager with ID %d not registered", rmid);
+}

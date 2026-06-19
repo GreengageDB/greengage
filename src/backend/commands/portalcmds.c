@@ -567,6 +567,7 @@ PersistHoldablePortal(Portal portal)
 			else
 			{
 				tuplestore_rescan(portal->holdStore);
+			}
 
 			/*
 			 * In the no-scroll case, the start of the tuplestore is exactly

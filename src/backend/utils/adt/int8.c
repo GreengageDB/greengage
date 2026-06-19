@@ -35,6 +35,86 @@ typedef struct
 } generate_series_fctx;
 
 
+/*
+ * scanint8 --- try to parse a string into an int8.
+ *
+ * GPDB: PG15 removed the core scanint8(); it is kept here as a Greenplum
+ * helper because several MPP call sites rely on the "soft" (errorOK) behaviour
+ * that pg_strtoint64() does not provide.
+ *
+ * If errorOK is false, ereport a useful error message if the string is bad.
+ * If errorOK is true, just return "false" for bad input.
+ */
+bool
+scanint8(const char *str, bool errorOK, int64 *result)
+{
+	const char *ptr = str;
+	int64		tmp = 0;
+	bool		neg = false;
+
+	/* skip leading spaces */
+	while (*ptr && isspace((unsigned char) *ptr))
+		ptr++;
+
+	/* handle sign */
+	if (*ptr == '-')
+	{
+		ptr++;
+		neg = true;
+	}
+	else if (*ptr == '+')
+		ptr++;
+
+	/* require at least one digit */
+	if (unlikely(!isdigit((unsigned char) *ptr)))
+		goto invalid_syntax;
+
+	/* process digits */
+	while (*ptr && isdigit((unsigned char) *ptr))
+	{
+		int8		digit = (*ptr++ - '0');
+
+		if (unlikely(pg_mul_s64_overflow(tmp, 10, &tmp)) ||
+			unlikely(pg_sub_s64_overflow(tmp, digit, &tmp)))
+			goto out_of_range;
+	}
+
+	/* allow trailing whitespace, but not other trailing chars */
+	while (*ptr != '\0' && isspace((unsigned char) *ptr))
+		ptr++;
+
+	if (unlikely(*ptr != '\0'))
+		goto invalid_syntax;
+
+	if (!neg)
+	{
+		/* could fail if input is most negative number */
+		if (unlikely(tmp == PG_INT64_MIN))
+			goto out_of_range;
+		tmp = -tmp;
+	}
+
+	*result = tmp;
+	return true;
+
+out_of_range:
+	if (!errorOK)
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("value \"%s\" is out of range for type %s",
+						str, "bigint")));
+	return false;
+
+invalid_syntax:
+	if (!errorOK)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"bigint", str)));
+	return false;
+}
+
+
 /***********************************************************************
  **
  **		Routines for 64-bit integers.

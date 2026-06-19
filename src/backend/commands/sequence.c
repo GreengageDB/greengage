@@ -410,9 +410,9 @@ fill_seq_with_data(Relation rel, HeapTuple tuple)
 	{
 		SMgrRelation srel;
 
-		srel = smgropen(rel->rd_node, InvalidBackendId);
+		srel = smgropen(rel->rd_node, InvalidBackendId, SMGR_MD);
 		smgrcreate(srel, INIT_FORKNUM, false);
-		log_smgrcreate(&rel->rd_node, INIT_FORKNUM);
+		log_smgrcreate(&rel->rd_node, INIT_FORKNUM, SMGR_MD);
 		fill_seq_fork_with_data(rel, tuple, INIT_FORKNUM);
 		FlushRelationBuffers(rel);
 		smgrclose(srel);

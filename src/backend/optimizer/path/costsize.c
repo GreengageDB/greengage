@@ -1582,7 +1582,8 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 														   qpquals,
 														   0,
 														   JOIN_INNER,
-														   NULL));
+														   NULL,
+                                       false /* no damping */));
 
 	/*
 	 * Cost of path is cost of evaluating the subplan, plus cost of evaluating
@@ -3613,8 +3614,8 @@ final_cost_nestloop(PlannerInfo *root, NestPath *path,
 	if (inner_path_rows <= 0)
 		inner_path_rows = 1;
 
-	if (CdbPathLocus_IsPartitioned(path->path.locus))
-		numsegments = CdbPathLocus_NumSegments(path->path.locus);
+	if (CdbPathLocus_IsPartitioned(path->jpath.path.locus))
+		numsegments = CdbPathLocus_NumSegments(path->jpath.path.locus);
 	else
 		numsegments = 1;
 

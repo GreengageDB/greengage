@@ -13,6 +13,9 @@ subdir = src/backend/utils/activity
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
+# GPDB: pgstat_relation.c includes libpq-int.h for the QD/QE tabstat combine code
+override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
+
 OBJS = \
 	backend_progress.o \
 	backend_status.o \
@@ -22,6 +25,7 @@ OBJS = \
 	pgstat_checkpointer.o \
 	pgstat_database.o \
 	pgstat_function.o \
+	pgstat_gp.o \
 	pgstat_relation.o \
 	pgstat_replslot.o \
 	pgstat_shmem.o \

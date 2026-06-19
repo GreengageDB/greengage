@@ -3261,6 +3261,7 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 								rel->rd_rel->relhasindex,
 								InvalidTransactionId,
 								InvalidMultiXactId,
+								NULL, NULL,
 								false,
 								false /* isvacuum */);
 		}

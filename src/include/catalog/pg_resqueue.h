@@ -53,4 +53,9 @@ CATALOG(pg_resqueue,6026,ResQueueRelationId) BKI_SHARED_RELATION
  */
 typedef FormData_pg_resqueue *Form_pg_resqueue;
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_resqueue_oid_index, 6027, ResQueueOidIndexId, on pg_resqueue using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resqueue_rsqname_index, 6028, ResQueueRsqnameIndexId, on pg_resqueue using btree(rsqname name_ops));
+
 #endif   /* PG_RESQUEUE_H */

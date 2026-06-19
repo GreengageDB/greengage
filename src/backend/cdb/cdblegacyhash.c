@@ -18,6 +18,8 @@
  */
 #include "postgres.h"
 
+#include <sys/socket.h>
+
 #include "cdb/cdbhash.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"

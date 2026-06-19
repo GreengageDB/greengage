@@ -2105,14 +2105,14 @@ int64 ResourceQueueGetMemoryLimitInCatalog(Oid queueId)
 	foreach(le, capabilitiesList)
 	{
 		List *entry = NULL;
-		Value *key = NULL;
+		Node *key = NULL;
 		entry = (List *) lfirst(le);
 		Assert(entry);
-		key = (Value *) linitial(entry);
+		key = (Node *) linitial(entry);
 		Assert(key->type == T_Integer); /* This is resource type id */
 		if (intVal(key) == PG_RESRCTYPE_MEMORY_LIMIT)
 		{
-			Value *val = lsecond(entry);
+			Node *val = lsecond(entry);
 			Assert(val->type == T_String);
 
 #ifdef USE_ASSERT_CHECKING

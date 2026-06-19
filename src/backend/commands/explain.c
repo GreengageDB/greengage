@@ -2418,7 +2418,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				char *buf;
 				Oid relid;
 				relid = rt_fetch(((DynamicSeqScan *)plan)
-							->seqscan.scanrelid,
+							->seqscan.scan.scanrelid,
 							es->rtable)->relid;
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(

@@ -85,4 +85,9 @@ DECLARE_TOAST_WITH_MACRO(pg_authid, 4175, 4176, PgAuthidToastTable, PgAuthidToas
 DECLARE_UNIQUE_INDEX(pg_authid_rolname_index, 2676, AuthIdRolnameIndexId, on pg_authid using btree(rolname name_ops));
 DECLARE_UNIQUE_INDEX_PKEY(pg_authid_oid_index, 2677, AuthIdOidIndexId, on pg_authid using btree(oid oid_ops));
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_INDEX(pg_authid_rolresqueue_index, 6029, AuthIdRolResQueueIndexId, on pg_authid using btree(rolresqueue oid_ops));
+DECLARE_INDEX(pg_authid_rolresgroup_index, 6440, AuthIdRolResGroupIndexId, on pg_authid using btree(rolresgroup oid_ops));
+
 #endif							/* PG_AUTHID_H */

@@ -438,6 +438,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 												   eflags);
 			break;
 
+#if 0 /* GPDB: Group plan node is not used (Agg is used instead) */
 		case T_Group:
 			result = (PlanState *) ExecInitGroup((Group *) node,
 												 estate, eflags);
@@ -979,6 +980,7 @@ ExecEndNode(PlanState *node)
 			ExecEndMemoize((MemoizeState *) node);
 			break;
 
+#if 0 /* GPDB: Group plan node is not used (Agg is used instead) */
 		case T_GroupState:
 			ExecEndGroup((GroupState *) node);
 			break;

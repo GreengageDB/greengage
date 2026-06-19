@@ -667,6 +667,13 @@ compute_common_attribute(ParseState *pstate,
 	/* Recognized an option */
 	return true;
 
+duplicate_error:
+	ereport(ERROR,
+			(errcode(ERRCODE_SYNTAX_ERROR),
+			 errmsg("conflicting or redundant options"),
+			 parser_errposition(pstate, defel->location)));
+	return false;
+
 procedure_error:
 	ereport(ERROR,
 			(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),

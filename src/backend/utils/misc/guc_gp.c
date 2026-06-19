@@ -2799,7 +2799,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
+		{"stats_queue_level", PGC_SUSET, STATS_CUMULATIVE,
 			gettext_noop("Collects resource queue-level statistics on database activity."),
 			NULL
 		},
@@ -5079,7 +5079,7 @@ assign_gp_default_storage_options(const char *newval, void *extra)
 void
 set_gp_replication_config(const char *name, const char *value)
 {
-	A_Const aconst = {.type = T_A_Const, .val = {.type = T_String, .val.str = pstrdup(value)}};
+	A_Const aconst = {.type = T_A_Const, .val = {.sval = {.type = T_String, .sval = pstrdup(value)}}};
 	List *args = list_make1(&aconst);
 	VariableSetStmt setstmt = {.type = T_VariableSetStmt, .kind = VAR_SET_VALUE, .name = pstrdup(name), .args = args};
 	AlterSystemStmt alterSystemStmt = {.type = T_AlterSystemStmt, .setstmt = &setstmt};

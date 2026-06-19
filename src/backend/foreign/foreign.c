@@ -89,7 +89,7 @@ SeparateOutNumSegments(List **options)
 		if (strcmp(def->defname, "num_segments") == 0)
 		{
 			num_segments_str = defGetString(def);
-			num_segments = pg_atoi(num_segments_str, sizeof(int32), 0);
+			num_segments = pg_strtoint32(num_segments_str);
 
 			if (num_segments <= 0)
 			{

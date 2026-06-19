@@ -719,7 +719,7 @@ XLogPrefetcherNextBlock(uintptr_t pgsr_private, XLogRecPtr *lsn)
 			 * same relation (with some scheme to handle invalidations
 			 * safely), but for now we'll call smgropen() every time.
 			 */
-			reln = smgropen(block->rnode, InvalidBackendId);
+			reln = smgropen(block->rnode, InvalidBackendId, SMGR_MD);
 
 			/*
 			 * If the relation file doesn't exist on disk, for example because

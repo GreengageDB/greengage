@@ -167,4 +167,8 @@ extern GpPolicy *createHashPartitionedPolicy(List *keys, List *opclasses, int nu
 
 extern bool IsReplicatedTable(Oid relid);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 8103, GpPolicyLocalOidIndexId, on gp_distribution_policy using btree(localoid oid_ops));
+
 #endif			/* GP_DISTRIBUTION_POLICY_H */

@@ -81,7 +81,7 @@ static void SetCreateExtTableForRole(List* allow,
 
 static char *daysofweek[] = {"Sunday", "Monday", "Tuesday", "Wednesday",
 							 "Thursday", "Friday", "Saturday"};
-static int16 ExtractAuthInterpretDay(Value * day);
+static int16 ExtractAuthInterpretDay(Node * day);
 static void ExtractAuthIntervalClause(DefElem *defel,
 			authInterval *authInterval);
 static void AddRoleDenials(const char *rolename, Oid roleid,
@@ -921,8 +921,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 		resqueue = strVal(linitial((List *) dresqueue->arg));
 	if (dresgroup)
 		resgroup = strVal(linitial((List *) dresgroup->arg));
-	if (dbypassRLS)
-		bypassrls = intVal(dbypassRLS->arg);
 
 	/*
 	 * Scan the pg_authid relation to be certain the user exists.
@@ -1016,8 +1014,9 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	{
 		bool isNull;
 		Oid roleResgroup;
+		int issuper = boolVal(dissuper->arg);
 
-		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(boolVal(dissuper->arg));
+		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(issuper);
 		new_record_repl[Anum_pg_authid_rolsuper - 1] = true;
 
 		roleResgroup = heap_getattr(tuple, Anum_pg_authid_rolresgroup,
@@ -2558,7 +2557,7 @@ ExtractAuthIntervalClause(DefElem *defel, authInterval *interval)
  *		or a string giving name of day in English
  */
 static int16
-ExtractAuthInterpretDay(Value * day)
+ExtractAuthInterpretDay(Node * day)
 {
 	int16   ret;
 	if (day->type == T_Integer)

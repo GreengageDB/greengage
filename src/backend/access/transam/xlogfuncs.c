@@ -98,58 +98,6 @@ pg_backup_start(PG_FUNCTION_ARGS)
 }
 
 /*
- * pg_stop_backup: finish taking an on-line backup dump
- *
- * We write an end-of-backup WAL record, and remove the backup label file
- * created by pg_start_backup, creating a backup history file in pg_wal
- * instead (whence it will immediately be archived). The backup history file
- * contains the same info found in the label file, plus the backup-end time
- * and WAL location. Before 9.0, the backup-end time was read from the backup
- * history file at the beginning of archive recovery, but we now use the WAL
- * record for that and the file is for informational and debug purposes only.
- *
- * Note: different from CancelBackup which just cancels online backup mode.
- *
- * Note: this version is only called to stop an exclusive backup. The function
- *		 pg_stop_backup_v2 (overloaded as pg_stop_backup in SQL) is called to
- *		 stop non-exclusive backups.
- *
- * Permission checking for this function is managed through the normal
- * GRANT system.
- *
- * **Note :- Currently this functionality is not supported.**
- */
-Datum
-pg_stop_backup(PG_FUNCTION_ARGS)
-{
-	XLogRecPtr	stoppoint = InvalidXLogRecPtr;
-	SessionBackupState status = get_backup_status();
-
-	ereport(NOTICE,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("pg_stop_backup() is not supported in Greenplum Database"),
-			 errhint("Contact support to get more information and resolve the issue")));
-
-	if (status == SESSION_BACKUP_NON_EXCLUSIVE)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("non-exclusive backup in progress"),
-				 errhint("Did you mean to use pg_stop_backup('f')?")));
-
-	/*
-	 * Exclusive backups were typically started in a different connection, so
-	 * don't try to verify that status of backup is set to
-	 * SESSION_BACKUP_EXCLUSIVE in this function. Actual verification that an
-	 * exclusive backup is in fact running is handled inside
-	 * do_pg_stop_backup.
-	 */
-	stoppoint = do_pg_stop_backup(NULL, true, NULL);
-
-	PG_RETURN_LSN(stoppoint);
-}
-
-
-/*
  * pg_backup_stop: finish taking an on-line backup.
  *
  * The first parameter (variable 'waitforarchive'), which is optional,

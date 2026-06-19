@@ -139,14 +139,6 @@ extern List *AddRelationConstraints(Relation rel,
 extern void RelationClearMissing(Relation rel);
 extern void SetAttrMissing(Oid relid, char *attname, char *value);
 
-extern Oid	StoreAttrDefault(Relation rel, AttrNumber attnum,
-							 Node *expr,
-							 bool *cookedMissingVal,
-							 Datum *missingval_p,
-							 bool *missingIsNull_p,
-							 bool is_internal,
-							 bool add_column_mode);
-
 extern Node *cookDefault(ParseState *pstate,
 						 Node *raw_default,
 						 Oid atttypid,

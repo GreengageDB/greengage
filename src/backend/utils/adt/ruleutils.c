@@ -9274,6 +9274,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 				appendStringInfo(buf, "TABLE(");
 				get_query_def(subquery, buf, context->namespaces, NULL,
+							  true,
 							  context->prettyFlags, context->wrapColumn,
 							  context->indentLevel);
 				appendStringInfoChar(buf, ')');

@@ -100,4 +100,8 @@ extern void callCompressionValidator(PGFunction func, char *comptype,
 extern bool compresstype_is_valid(char *compresstype);
 extern PGFunction *GetCompressionImplementation(char *comptype);
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, CompressionCompnameIndexId, on pg_compression using btree(compname name_ops));
+
 #endif   /* PG_COMPRESSION */

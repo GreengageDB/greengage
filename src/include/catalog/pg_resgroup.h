@@ -62,4 +62,9 @@ typedef enum ResGroupLimitType
 	RESGROUP_LIMIT_TYPE_COUNT,
 } ResGroupLimitType;
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_resgroup_oid_index, 6447, ResGroupOidIndexId, on pg_resgroup using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resgroup_rsgname_index, 6444, ResGroupRsgnameIndexId, on pg_resgroup using btree(rsgname name_ops));
+
 #endif   /* PG_RESGROUP_H */

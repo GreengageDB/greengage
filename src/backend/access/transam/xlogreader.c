@@ -1464,6 +1464,8 @@ err:
 	return InvalidXLogRecPtr;
 }
 
+#endif							/* FRONTEND */
+
 /*
  * Helper function to ease writing of XLogRoutine->page_read callbacks.
  * If this function is used, caller must supply a segment_open callback in

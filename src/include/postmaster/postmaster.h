@@ -31,6 +31,9 @@ extern PGDLLIMPORT char *bonjour_name;
 extern PGDLLIMPORT bool restart_after_crash;
 extern PGDLLIMPORT bool remove_temp_files_after_crash;
 
+/* GPDB: local address used for the interconnect (set in cdbutil.c) */
+extern PGDLLIMPORT char *interconnect_address;
+
 #ifdef WIN32
 extern PGDLLIMPORT HANDLE PostmasterHandle;
 #else

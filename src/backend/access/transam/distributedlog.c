@@ -32,6 +32,7 @@
 #include "access/slru.h"
 #include "access/transam.h"
 #include "access/xact.h"
+#include "access/xloginsert.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "port/atomics.h"

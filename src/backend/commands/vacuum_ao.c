@@ -208,10 +208,9 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	int			elevel;
 	int			options = params->options;
 	TransactionId OldestXmin;
+	MultiXactId OldestMxact;
 	TransactionId FreezeLimit;
 	MultiXactId MultiXactCutoff;
-	TransactionId xidFullScanLimit;
-	MultiXactId mxactFullScanLimit;
 
 	if (options & VACOPT_VERBOSE)
 		elevel = INFO;
@@ -249,8 +248,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						  params->freeze_table_age,
 						  params->multixact_freeze_min_age,
 						  params->multixact_freeze_table_age,
-						  &OldestXmin, &FreezeLimit, &xidFullScanLimit,
-						  &MultiXactCutoff, &mxactFullScanLimit);
+						  &OldestXmin, &OldestMxact, &FreezeLimit,
+						  &MultiXactCutoff);
 
 	vac_update_relstats(onerel,
 						relpages,
@@ -260,6 +259,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						relhasindex,
 						FreezeLimit,
 						MultiXactCutoff,
+						NULL, NULL,
 						false,
 						true /* isvacuum */);
 }
@@ -558,6 +558,7 @@ vacuum_appendonly_index(Relation indexRelation,
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL, NULL,
 							false,
 							true /* isvacuum */);
 
@@ -710,6 +711,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL, NULL,
 							false,
 							true /* isvacuum */);
 

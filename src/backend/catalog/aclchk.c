@@ -280,6 +280,7 @@ restrict_and_check_grant(bool is_grant, AclMode avail_goptions, bool all_privs,
 			break;
 		case OBJECT_EXTPROTOCOL:
 			whole_mask = ACL_ALL_RIGHTS_EXTPROTOCOL;
+			break;
 		case OBJECT_PARAMETER_ACL:
 			whole_mask = ACL_ALL_RIGHTS_PARAMETER_ACL;
 			break;
@@ -535,6 +536,7 @@ ExecuteGrantStmt(GrantStmt *stmt)
 		case OBJECT_EXTPROTOCOL:
 			all_privileges = ACL_ALL_RIGHTS_EXTPROTOCOL;
 			errormsg = gettext_noop("invalid privilege type %s for external protocol");
+			break;
 		case OBJECT_PARAMETER_ACL:
 			all_privileges = ACL_ALL_RIGHTS_PARAMETER_ACL;
 			errormsg = gettext_noop("invalid privilege type %s for parameter");
@@ -684,6 +686,7 @@ ExecGrantStmt_oids(InternalGrant *istmt)
 			break;
 		case OBJECT_EXTPROTOCOL:
 			ExecGrant_ExtProtocol(istmt);
+			break;
 		case OBJECT_PARAMETER_ACL:
 			ExecGrant_Parameter(istmt);
 			break;
@@ -884,6 +887,8 @@ objectNamesToOids(ObjectType objtype, List *objnames, bool is_grant)
 				Oid			ptcid = get_extprotocol_oid(ptcname, false);
 
 				objects = lappend_oid(objects, ptcid);
+			}
+			break;
 		case OBJECT_PARAMETER_ACL:
 			foreach(cell, objnames)
 			{
@@ -1663,6 +1668,7 @@ RemoveRoleFromObjectACL(Oid roleid, Oid classid, Oid objid)
 				break;
 			case ExtprotocolRelationId:
 				istmt.objtype = OBJECT_EXTPROTOCOL;
+				break;
 			case ParameterAclRelationId:
 				istmt.objtype = OBJECT_PARAMETER_ACL;
 				break;
@@ -3610,6 +3616,8 @@ ExecGrant_ExtProtocol(InternalGrant *istmt)
 
     table_close(relation, RowExclusiveLock);
 }
+
+static void
 ExecGrant_Parameter(InternalGrant *istmt)
 {
 	Relation	relation;

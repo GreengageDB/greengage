@@ -108,4 +108,10 @@ typedef FormData_pg_resourcetype *Form_pg_resourcetype;
 #define PG_RESRCTYPE_PRIORITY			5	/* backoff.c: priority queue */
 #define PG_RESRCTYPE_MEMORY_LIMIT		6	/* memquota.c: memory quota */
 
+
+/* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
+DECLARE_UNIQUE_INDEX(pg_resourcetype_oid_index, 6061, ResourceTypeOidIndexId, on pg_resourcetype using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_restypid_index, 6062, ResourceTypeRestypidIndexId, on pg_resourcetype using btree(restypid int2_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_resname_index, 6063, ResourceTypeResnameIndexId, on pg_resourcetype using btree(resname name_ops));
+
 #endif   /* PG_RESOURCETYPE_H */
