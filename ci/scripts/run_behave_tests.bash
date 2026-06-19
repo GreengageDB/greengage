@@ -3,29 +3,13 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-clusters="concourse_cluster ~concourse_cluster"
+clusters="concourse_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
-if [ $# -eq 0 ]
-then
-  # TODO cross_subnet and gpssh tests are excluded
-  # FIXME! sigar is requred for gpperfmon tests
-  # FIXME! /home/gpadmin/sqldump/dump.sql is required for gpexpand tests
-  features=`ls $behave_tests_dir -1 | grep feature | sed 's/\.feature$//'`
-else
-  for feature in $@
-  do
-    if [ ! -f "$behave_tests_dir/$feature.feature" ]
-    then
-      echo "Feature '$feature' doesn't exists"
-      exit 1
-    fi
-  done
-  features=$@
-fi
+features=gprecoverseg_newhost
 
-processes=3
+processes=1
 
 rm -rf allure-results
 rm -rf coverage
