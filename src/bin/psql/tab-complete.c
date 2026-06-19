@@ -2217,7 +2217,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TYPE", MatchAny, "ADD"))
 		COMPLETE_WITH("ATTRIBUTE", "VALUE");
 	else if(Matches("ALTER", "TYPE", MatchAny, "SET"))
-		COMPLETE_WITH("SCHEMA", "DEFAULT ENCODING (");
+		COMPLETE_WITH_SUPPRESS_APPEND("SCHEMA ", "DEFAULT ENCODING (");
 	/* ALTER TYPE <foo> RENAME	*/
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME"))
 		COMPLETE_WITH("ATTRIBUTE", "TO", "VALUE");
@@ -2408,21 +2408,28 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename */
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny) ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
+	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
 					  "ENCODING", "FREEZE", "FILL MISSING FILEDS", "NEWLINE",
 					  "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
+	else if(Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
+		COMPLETE_WITH("CSV", "ENCODING", "FREEZE", "FILL MISSING FILEDS",
+					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
 
-	/* Handle COPY [BINARY] <sth> FROM|TO filename CSV */
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV") ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "CSV"))
-		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE", "FORCE NULL",
+	/* Handle COPY [BINARY] <sth> FROM filename CSV */
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV") ||
+			 Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny, "CSV"))
+		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE NULL",
 					  "FORCE NOT NULL");
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV", "FORCE") ||
+			 Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny, "CSV", "FORCE"))
+		COMPLETE_WITH("NULL", "NOT NULL");
 
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV", "FORCE") ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "CSV", "FORCE"))
-		COMPLETE_WITH("QUOTE", "NULL", "NOT NULL");
+	/* Handle COPY [BINARY] <sth> TO filename CSV */
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "CSV") ||
+			 Matches("COPY", "BINARY", MatchAny, "TO", MatchAny, "CSV"))
+		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE");
+
 
 	/* CREATE ACCESS METHOD */
 	/* Complete "CREATE ACCESS METHOD <name>" */
