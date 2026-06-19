@@ -4048,6 +4048,18 @@ CommitTransactionCommand(void)
 			s->blockState = TBLOCK_DEFAULT;
 			if (s->chain)
 			{
+				/*
+				 * GPDB: a chained transaction (COMMIT/ROLLBACK AND CHAIN)
+				 * restarts via StartTransaction() directly, bypassing
+				 * StartTransactionCommand() which would have re-established the
+				 * QD distributed-transaction context. Without it the new
+				 * transaction stays in DTX_CONTEXT_LOCAL_ONLY and its
+				 * localDistribXactData.state is never moved back to ACTIVE,
+				 * so the next COMMIT trips the state assertion in
+				 * cdblocaldistribxact.c. Re-establish it here.
+				 */
+				if (Gp_role == GP_ROLE_DISPATCH)
+					setupRegularDtxContext();
 				StartTransaction();
 				s->blockState = TBLOCK_INPROGRESS;
 				s->chain = false;
@@ -4074,6 +4086,18 @@ CommitTransactionCommand(void)
 			s->blockState = TBLOCK_DEFAULT;
 			if (s->chain)
 			{
+				/*
+				 * GPDB: a chained transaction (COMMIT/ROLLBACK AND CHAIN)
+				 * restarts via StartTransaction() directly, bypassing
+				 * StartTransactionCommand() which would have re-established the
+				 * QD distributed-transaction context. Without it the new
+				 * transaction stays in DTX_CONTEXT_LOCAL_ONLY and its
+				 * localDistribXactData.state is never moved back to ACTIVE,
+				 * so the next COMMIT trips the state assertion in
+				 * cdblocaldistribxact.c. Re-establish it here.
+				 */
+				if (Gp_role == GP_ROLE_DISPATCH)
+					setupRegularDtxContext();
 				StartTransaction();
 				s->blockState = TBLOCK_INPROGRESS;
 				s->chain = false;
@@ -4092,6 +4116,18 @@ CommitTransactionCommand(void)
 			s->blockState = TBLOCK_DEFAULT;
 			if (s->chain)
 			{
+				/*
+				 * GPDB: a chained transaction (COMMIT/ROLLBACK AND CHAIN)
+				 * restarts via StartTransaction() directly, bypassing
+				 * StartTransactionCommand() which would have re-established the
+				 * QD distributed-transaction context. Without it the new
+				 * transaction stays in DTX_CONTEXT_LOCAL_ONLY and its
+				 * localDistribXactData.state is never moved back to ACTIVE,
+				 * so the next COMMIT trips the state assertion in
+				 * cdblocaldistribxact.c. Re-establish it here.
+				 */
+				if (Gp_role == GP_ROLE_DISPATCH)
+					setupRegularDtxContext();
 				StartTransaction();
 				s->blockState = TBLOCK_INPROGRESS;
 				s->chain = false;
@@ -4159,6 +4195,9 @@ CommitTransactionCommand(void)
 				s->blockState = TBLOCK_DEFAULT;
 				if (s->chain)
 				{
+					/* GPDB: see the COMMIT AND CHAIN note above. */
+					if (Gp_role == GP_ROLE_DISPATCH)
+						setupRegularDtxContext();
 					StartTransaction();
 					s->blockState = TBLOCK_INPROGRESS;
 					s->chain = false;
