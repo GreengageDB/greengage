@@ -721,17 +721,17 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance <should_err> print "Cannot perform rollback of this step. Some segment is down" to logfile with latest timestamp
          And ggrebalance <should_common> print "Rebalance is complete" to logfile with latest timestamp
          And ggrebalance <should_common> print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance <should_roll> print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance <should_roll> print "Rolled back steps:		6" to logfile with latest timestamp
          And ggrebalance <should_war> print " WARNINGS " to logfile with latest timestamp
-         And ggrebalance <should_canc> print " Cancelled steps " to logfile with latest timestamp
+         And ggrebalance <should_canc> print "Cancelled steps:		6" to logfile with latest timestamp
          And ggrebalance <should_fault> print "Cluster might be not in fault tolerance mode!" to logfile with latest timestamp
          And ggrebalance <should_common> print "Cluster is left in unbalanced state" to logfile with latest timestamp
          And ggrebalance <should_roll> print " Rolled back steps " to logfile with latest timestamp
          And clear user's answers
-         And the cluster configuration has <numseg_sdw1> segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
-         And the cluster configuration has <numseg_sdw2> segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
-         And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has <numseg> segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has <nummir> segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
+         And the cluster configuration has <numseg> segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
+         And the cluster configuration has <nummir> segments where "hostname='sdw2' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has <numseg_sdw3> segments where "hostname='sdw3' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has <nummir_sdw3> segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'd'"
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
@@ -753,11 +753,11 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And the cluster configuration has 2 segments where "hostname='sdw3' and content > -1 and role = 'm' and status = 'u'"
         
         Examples:
-        | rollback | code | should_err | should_roll | should_war | should_canc | should_fault | should_common |numseg_sdw1|numseg_sdw2|numseg_sdw3|nummir_sdw3| recover | recover_code |
-        | yes      | 1    | should     | should not  | should not | should not  | should not   | should not    |3          |3          |0          |2          | stub    | stub         |
-        | yes      | 0    | should not | should      | should     | should not  | should not   | should        |2          |2          |2          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
-        | no       | 0    | should not | should not  | should     | should      | should       | should        |3          |3          |0          |2          | stub    | stub         |
-        | no       | 0    | should not | should not  | should     | should      | should not   | should        |3          |3          |0          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
+        | rollback | code | should_err | should_roll | should_war | should_canc | should_fault | should_common |numseg|nummir|numseg_sdw3|nummir_sdw3| recover | recover_code |
+        | yes      | 1    | should     | should not  | should not | should not  | should not   | should not    |3      |2    |0          |2          | stub    | stub         |
+        | yes      | 0    | should not | should      | should     | should not  | should not   | should        |2      |3    |2          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
+        | no       | 0    | should not | should not  | should     | should      | should       | should        |3      |2    |0          |2          | stub    | stub         |
+        | no       | 0    | should not | should not  | should     | should      | should not   | should        |3      |2    |0          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
 
     Scenario Outline: 8.2.3. rebalance - interrupt during switchover M->P step (before invocation of 'gprecoverseg'), continue and rollback failed step.
         Given the database is not running
