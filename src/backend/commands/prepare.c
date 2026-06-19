@@ -63,6 +63,7 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 	CachedPlanSource *plansource;
 	Oid		   *argtypes = NULL;
 	int			nargs;
+	Query	   *query;
 	List	   *query_list;
 	int			i;
 	NodeTag		srctag;  /* GPDB */
@@ -116,10 +117,9 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 	 * Analyze the statement using these parameter types (any parameters
 	 * passed in from above us will not be visible to it), allowing
 	 * information about unknown parameters to be deduced from context.
-	 * Rewrite the query. The result could be 0, 1, or many queries.
 	 */
 	query = parse_analyze_varparams(rawstmt, pstate->p_sourcetext,
-									&argtypes, &nargs);
+									&argtypes, &nargs, NULL);
 
 	/*
 	 * Check that all parameter types were determined.
@@ -151,6 +151,9 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 			break;
 		case CMD_DELETE:
 			srctag = T_DeleteStmt;
+			break;
+		case CMD_MERGE:
+			srctag = T_MergeStmt;
 			break;
 		default:
 			ereport(ERROR,

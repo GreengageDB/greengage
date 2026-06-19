@@ -2448,6 +2448,72 @@ create_motion_path_for_upddel(PlannerInfo *root, Index rti, GpPolicy *policy,
 }
 
 /*
+ * create_motion_path_for_merge
+ *
+ * MERGE joins the target relation with the source and, per joined row, either
+ * UPDATEs/DELETEs the matched target tuple or INSERTs a not-matched source row.
+ *
+ * Unlike UPDATE/DELETE, MERGE cannot route its result rows back to the target
+ * segments with a final Explicit Motion: a WHEN NOT MATCHED row has no target
+ * tuple and therefore no gp_segment_id to route by.  The plan must instead be
+ * co-located on the target's distribution:
+ *
+ *   - a WHEN MATCHED row must be processed on the segment that owns the target
+ *     tuple (ExecUpdate/ExecDelete reject a tuple whose gp_segment_id is not
+ *     the local segment), which holds iff the target relation is not moved by
+ *     any Motion below the ModifyTable; and
+ *   - a WHEN NOT MATCHED row is INSERTed on whichever segment it currently sits
+ *     on, which is correct iff that is where its distribution key hashes.  In a
+ *     co-located plan the source is redistributed to the target's distribution
+ *     on the join key, so this holds when the INSERT distributes by that same
+ *     key (the usual case).
+ *
+ * We can guarantee the first condition here by requiring that there is no
+ * Motion between the scan of the target relation and this point; if the planner
+ * decided to redistribute the target, reject the plan rather than silently
+ * corrupting data.  Lifting this restriction needs a split-style Motion that
+ * routes matched rows by gp_segment_id and not-matched rows by the INSERT hash.
+ */
+Path *
+create_motion_path_for_merge(PlannerInfo *root, Index rti, GpPolicy *policy,
+							 Path *subpath)
+{
+	GpPolicyType	policyType = policy->ptype;
+
+	if (policyType == POLICYTYPE_PARTITIONED)
+	{
+		if (!can_elide_explicit_motion(root, rti, subpath, policy))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("MERGE on a distributed table is not supported when the join requires redistributing the target table"),
+					 errhint("Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.")));
+	}
+	else if (policyType == POLICYTYPE_REPLICATED)
+	{
+		/*
+		 * A replicated target is modified identically on every segment, so the
+		 * source has to be available on every segment and the actions must be
+		 * deterministic.  That is not handled yet.
+		 */
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("MERGE on a replicated table is not supported")));
+	}
+	else if (policyType == POLICYTYPE_ENTRY)
+	{
+		/* Coordinator-only table: the whole MERGE runs on the QD. */
+		CdbPathLocus	targetLocus;
+
+		CdbPathLocus_MakeEntry(&targetLocus);
+		subpath = cdbpath_create_motion_path(root, subpath, NIL, false, targetLocus);
+	}
+	else
+		elog(ERROR, "unrecognized policy type %u", policyType);
+
+	return subpath;
+}
+
+/*
  * In Postgres planner, we add a SplitUpdate node at top so that updating on
  * distribution columns could be handled. The SplitUpdate will split each
  * update into delete + insert.

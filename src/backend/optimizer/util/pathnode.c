@@ -5543,6 +5543,10 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
 
 			lci = lnext(is_split_updates, lci);
 		}
+		else if (operation == CMD_MERGE)
+		{
+			subpath = create_motion_path_for_merge(root, rti, targetPolicy, subpath);
+		}
 		lfirst(lcp) = subpath;
 	}
 

@@ -220,7 +220,8 @@ CdbDispatchPlan(struct QueryDesc *queryDesc,
 	if (queryDesc->operation == CMD_INSERT ||
 		queryDesc->operation == CMD_SELECT ||
 		queryDesc->operation == CMD_UPDATE ||
-		queryDesc->operation == CMD_DELETE)
+		queryDesc->operation == CMD_DELETE ||
+		queryDesc->operation == CMD_MERGE)
 	{
 		List	   *cursors;
 

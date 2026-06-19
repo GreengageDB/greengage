@@ -2188,6 +2188,9 @@ readNodeBinary(void)
 			case T_AppendRelInfo:
 				return_value = _readAppendRelInfo();
 				break;
+			case T_MergeAction:
+				return_value = _readMergeAction();
+				break;
 
 			/* GPDB: PG15 SQL/JSON nodes (bodies from readfuncs.c) */
 			case T_JsonFormat:

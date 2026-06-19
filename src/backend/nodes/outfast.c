@@ -1875,6 +1875,9 @@ _outNode(StringInfo str, void *obj)
 			case T_AppendRelInfo:
 				_outAppendRelInfo(str, obj);
 				break;
+			case T_MergeAction:
+				_outMergeAction(str, obj);
+				break;
 
 			/*
 			 * GPDB: PG15 SQL/JSON nodes — needed to dispatch JSON_TABLE /

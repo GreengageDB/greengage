@@ -245,6 +245,7 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
 		case CMD_INSERT:
 		case CMD_UPDATE:
 		case CMD_DELETE:
+		case CMD_MERGE:
 			{
 				RangeTblEntry *rte;
 
@@ -256,10 +257,11 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
 
 				if (stmt->commandType == CMD_INSERT)
 					cmdType = AUTOSTATS_CMDTYPE_INSERT;
-				else if (stmt->commandType == CMD_UPDATE)
-					cmdType = AUTOSTATS_CMDTYPE_UPDATE;
-				else
+				else if (stmt->commandType == CMD_DELETE)
 					cmdType = AUTOSTATS_CMDTYPE_DELETE;
+				else
+					/* CMD_UPDATE and CMD_MERGE */
+					cmdType = AUTOSTATS_CMDTYPE_UPDATE;
 			}
 			break;
 
