@@ -91,11 +91,6 @@ RESET enable_bitmapscan;
 RESET enable_sort;
 RESET optimizer_enable_tablescan;
 
-
-SELECT two, stringu1, ten, string4
-   INTO TABLE tmp
-   FROM onek;
-
 --
 -- awk '{print $1,$2;}' person.data |
 -- awk '{if(NF!=2){print $3,$2;}else{print;}}' - emp.data |
@@ -148,6 +143,11 @@ UNION ALL
 SELECT 2+2, 57
 UNION ALL
 TABLE int8_tbl;
+
+-- corner case: VALUES with no columns
+CREATE TEMP TABLE nocols();
+INSERT INTO nocols DEFAULT VALUES;
+SELECT * FROM nocols n, LATERAL (VALUES(n.*)) v;
 
 --
 -- Test ORDER BY options

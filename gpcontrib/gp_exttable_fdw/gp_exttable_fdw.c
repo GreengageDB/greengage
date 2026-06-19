@@ -110,7 +110,7 @@ strListToArray(List *stringlist)
 
 	foreach(cell, stringlist)
 	{
-		Value	   *val = lfirst(cell);
+		Node	   *val = lfirst(cell);
 		astate = accumArrayResult(astate, CStringGetTextDatum(strVal(val)),
 								  false, TEXTOID,
 								  CurrentMemoryContext);
@@ -410,8 +410,8 @@ gp_exttable_permission_check(PG_FUNCTION_ARGS)
 			{
 				List *location_list = TokenizeLocationUris(defGetString(def));
 				ListCell   *first_uri = list_head(location_list);
-				Value	   *v = lfirst(first_uri);
-				char	   *uri_str = pstrdup(v->val.str);
+				Node	   *v = lfirst(first_uri);
+				char	   *uri_str = pstrdup(strVal(v));
 				Uri		   *uri = ParseExternalTableUri(uri_str);
 
 				/* Assert(exttypeDesc->exttabletype == EXTTBL_TYPE_LOCATION); */

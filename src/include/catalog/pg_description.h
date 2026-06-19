@@ -23,7 +23,7 @@
  * for example).
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_description.h
@@ -67,7 +67,7 @@ FOREIGN_KEY(classoid REFERENCES pg_class(oid));
 typedef FormData_pg_description * Form_pg_description;
 
 
-#define DescriptionObjIndexId  2675
+DECLARE_UNIQUE_INDEX_PKEY(pg_description_o_c_o_index, 2675, DescriptionObjIndexId, on pg_description using btree(objoid oid_ops, classoid oid_ops, objsubid int4_ops));
 
 /* We do not use BKI_LOOKUP here because it causes problems for genbki.pl */
 

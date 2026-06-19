@@ -1938,9 +1938,9 @@ FULL JOIN
 USING (name);
  name | n  | n  
 ------+----+----
- ee   | 42 |   
- cc   | 22 | 23
  bb   | 12 | 13
+ cc   | 22 | 23
+ ee   | 42 |   
  dd   |    | 33
 (4 rows)
 
@@ -1974,9 +1974,8 @@ NATURAL FULL JOIN
  name | s2_n | s2_2 | s3_n | s3_2 
 ------+------+------+------+------
  cc   |   22 |    2 |   23 |    3
- bb   |   12 |    2 |   13 |    3
- dd   |      |      |   33 |    3
  ee   |   42 |    2 |      |     
+ dd   |      |      |   33 |    3
 (4 rows)
 
 SELECT * FROM
@@ -2219,7 +2218,7 @@ rollback;
 --
 explain (costs off)
 select aa, bb, unique1, unique1
-  from tenk1 right join b on aa = unique1
+  from tenk1 right join b_star on aa = unique1
   where bb < bb and bb is null;
              QUERY PLAN              
 -------------------------------------
@@ -2229,7 +2228,7 @@ select aa, bb, unique1, unique1
 (3 rows)
 
 select aa, bb, unique1, unique1
-  from tenk1 right join b on aa = unique1
+  from tenk1 right join b_star on aa = unique1
   where bb < bb and bb is null;
  aa | bb | unique1 | unique1 
 ----+----+---------+---------
@@ -2538,6 +2537,7 @@ reset enable_nestloop;
 set work_mem to '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set enable_mergejoin to off;
+set enable_memoize to off;
 explain (costs off)
 select count(*) from tenk1 a, tenk1 b
   where a.hundred = b.thousand and (b.fivethous % 10) < 10;
@@ -2566,6 +2566,7 @@ select count(*) from tenk1 a, tenk1 b
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 reset enable_mergejoin;
+reset enable_memoize;
 --
 -- regression test for 8.2 bug with improper re-ordering of left joins
 --
@@ -3462,6 +3463,38 @@ where x = unique1;
 
 explain (costs off)
 select unique1 from tenk1, f_immutable_int4(1) x where x = unique1;
+                  QUERY PLAN                  
+----------------------------------------------
+ Index Only Scan using tenk1_unique1 on tenk1
+   Index Cond: (unique1 = 1)
+(2 rows)
+
+explain (costs off)
+select unique1 from tenk1, lateral f_immutable_int4(1) x where x = unique1;
+                  QUERY PLAN                  
+----------------------------------------------
+ Index Only Scan using tenk1_unique1 on tenk1
+   Index Cond: (unique1 = 1)
+(2 rows)
+
+explain (costs off)
+select unique1 from tenk1, lateral f_immutable_int4(1) x where x in (select 17);
+        QUERY PLAN        
+--------------------------
+ Result
+   One-Time Filter: false
+(2 rows)
+
+explain (costs off)
+select unique1, x from tenk1 join f_immutable_int4(1) x on unique1 = x;
+                  QUERY PLAN                  
+----------------------------------------------
+ Index Only Scan using tenk1_unique1 on tenk1
+   Index Cond: (unique1 = 1)
+(2 rows)
+
+explain (costs off)
+select unique1, x from tenk1 left join f_immutable_int4(1) x on unique1 = x;
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -3714,55 +3747,40 @@ select * from tenk1 t1 left join
   (tenk1 t2 join tenk1 t3 on t2.thousand = t3.unique2)
   on t1.hundred = t2.hundred and t1.ten = t3.ten
 where t1.unique1 = 1;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: ((t2.hundred = t1.hundred) AND (t3.ten = t1.ten))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: 1
-               ->  Hash Join
-                     Hash Cond: (t3.unique2 = t2.thousand)
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: t3.unique2
-                           ->  Seq Scan on tenk1 t3
-                     ->  Hash
-                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                 Hash Key: t2.thousand
-                                 ->  Seq Scan on tenk1 t2
-         ->  Hash
-               ->  Index Scan using tenk1_unique1 on tenk1 t1
-                     Index Cond: (unique1 = 1)
- Optimizer: Postgres query optimizer
-(18 rows)
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Nested Loop Left Join
+   ->  Index Scan using tenk1_unique1 on tenk1 t1
+         Index Cond: (unique1 = 1)
+   ->  Nested Loop
+         Join Filter: (t1.ten = t3.ten)
+         ->  Bitmap Heap Scan on tenk1 t2
+               Recheck Cond: (t1.hundred = hundred)
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred = t1.hundred)
+         ->  Index Scan using tenk1_unique2 on tenk1 t3
+               Index Cond: (unique2 = t2.thousand)
+(11 rows)
 
 explain (costs off)
 select * from tenk1 t1 left join
   (tenk1 t2 join tenk1 t3 on t2.thousand = t3.unique2)
   on t1.hundred = t2.hundred and t1.ten + t2.ten = t3.ten
 where t1.unique1 = 1;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (t2.hundred = t1.hundred)
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Nested Loop Left Join
+   ->  Index Scan using tenk1_unique1 on tenk1 t1
+         Index Cond: (unique1 = 1)
+   ->  Nested Loop
          Join Filter: ((t1.ten + t2.ten) = t3.ten)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: 1
-               ->  Hash Join
-                     Hash Cond: (t3.unique2 = t2.thousand)
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: t3.unique2
-                           ->  Seq Scan on tenk1 t3
-                     ->  Hash
-                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                 Hash Key: t2.thousand
-                                 ->  Seq Scan on tenk1 t2
-         ->  Hash
-               ->  Index Scan using tenk1_unique1 on tenk1 t1
-                     Index Cond: (unique1 = 1)
- Optimizer: Postgres query optimizer
-(19 rows)
+         ->  Bitmap Heap Scan on tenk1 t2
+               Recheck Cond: (t1.hundred = hundred)
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred = t1.hundred)
+         ->  Index Scan using tenk1_unique2 on tenk1 t3
+               Index Cond: (unique2 = t2.thousand)
+(11 rows)
 
 explain (costs off)
 select count(*) from
@@ -4399,6 +4417,29 @@ select * from
   on i8.q2 = 123,
   lateral (select i8.q1, t2.f1 from text_tbl t2 limit 1) as ss
 where t1.f1 = ss.f1;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Nested Loop
+   Output: t1.f1, i8.q1, i8.q2, (i8.q1), t2.f1
+   Join Filter: (t1.f1 = t2.f1)
+   ->  Nested Loop Left Join
+         Output: t1.f1, i8.q1, i8.q2
+         ->  Seq Scan on public.text_tbl t1
+               Output: t1.f1
+         ->  Materialize
+               Output: i8.q1, i8.q2
+               ->  Seq Scan on public.int8_tbl i8
+                     Output: i8.q1, i8.q2
+                     Filter: (i8.q2 = 123)
+   ->  Memoize
+         Output: (i8.q1), t2.f1
+         Cache Key: i8.q1
+         Cache Mode: binary
+         ->  Limit
+               Output: (i8.q1), t2.f1
+               ->  Seq Scan on public.text_tbl t2
+                     Output: i8.q1, t2.f1
+(20 rows)
 
 select * from
   text_tbl t1
@@ -4415,6 +4456,39 @@ select * from
   lateral (select i8.q1, t2.f1 from text_tbl t2 limit 1) as ss1,
   lateral (select ss1.* from text_tbl t3 limit 1) as ss2
 where t1.f1 = ss2.f1;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Nested Loop
+   Output: t1.f1, i8.q1, i8.q2, (i8.q1), t2.f1, ((i8.q1)), (t2.f1)
+   Join Filter: (t1.f1 = (t2.f1))
+   ->  Nested Loop
+         Output: t1.f1, i8.q1, i8.q2, (i8.q1), t2.f1
+         ->  Nested Loop Left Join
+               Output: t1.f1, i8.q1, i8.q2
+               ->  Seq Scan on public.text_tbl t1
+                     Output: t1.f1
+               ->  Materialize
+                     Output: i8.q1, i8.q2
+                     ->  Seq Scan on public.int8_tbl i8
+                           Output: i8.q1, i8.q2
+                           Filter: (i8.q2 = 123)
+         ->  Memoize
+               Output: (i8.q1), t2.f1
+               Cache Key: i8.q1
+               Cache Mode: binary
+               ->  Limit
+                     Output: (i8.q1), t2.f1
+                     ->  Seq Scan on public.text_tbl t2
+                           Output: i8.q1, t2.f1
+   ->  Memoize
+         Output: ((i8.q1)), (t2.f1)
+         Cache Key: (i8.q1), t2.f1
+         Cache Mode: binary
+         ->  Limit
+               Output: ((i8.q1)), (t2.f1)
+               ->  Seq Scan on public.text_tbl t3
+                     Output: (i8.q1), t2.f1
+(30 rows)
 
 select * from
   text_tbl t1
@@ -4432,6 +4506,42 @@ select 1 from
   left join text_tbl as tt4 on (tt3.f1 = tt4.f1),
   lateral (select tt4.f1 as c0 from text_tbl as tt5 limit 1) as ss1
 where tt1.f1 = ss1.c0;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Nested Loop
+   Output: 1
+   ->  Nested Loop Left Join
+         Output: tt1.f1, tt4.f1
+         ->  Nested Loop
+               Output: tt1.f1
+               ->  Seq Scan on public.text_tbl tt1
+                     Output: tt1.f1
+                     Filter: (tt1.f1 = 'foo'::text)
+               ->  Seq Scan on public.text_tbl tt2
+                     Output: tt2.f1
+         ->  Materialize
+               Output: tt4.f1
+               ->  Nested Loop Left Join
+                     Output: tt4.f1
+                     Join Filter: (tt3.f1 = tt4.f1)
+                     ->  Seq Scan on public.text_tbl tt3
+                           Output: tt3.f1
+                           Filter: (tt3.f1 = 'foo'::text)
+                     ->  Seq Scan on public.text_tbl tt4
+                           Output: tt4.f1
+                           Filter: (tt4.f1 = 'foo'::text)
+   ->  Memoize
+         Output: ss1.c0
+         Cache Key: tt4.f1
+         Cache Mode: binary
+         ->  Subquery Scan on ss1
+               Output: ss1.c0
+               Filter: (ss1.c0 = 'foo'::text)
+               ->  Limit
+                     Output: (tt4.f1)
+                     ->  Seq Scan on public.text_tbl tt5
+                           Output: tt4.f1
+(33 rows)
 
 select 1 from
   text_tbl as tt1
@@ -4758,21 +4868,20 @@ select d.* from d left join (select * from b group by b.id, b.c_id) s
 explain (costs off)
 select d.* from d left join (select distinct * from b) s
   on d.a = s.id;
-                       QUERY PLAN                       
---------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Left Join
-         Hash Cond: (d.a = s.id)
+                 QUERY PLAN                  
+---------------------------------------------
+ Merge Left Join
+   Merge Cond: (d.a = s.id)
+   ->  Sort
+         Sort Key: d.a
          ->  Seq Scan on d
-         ->  Hash
-               ->  Subquery Scan on s
-                     ->  Unique
-                           Group Key: b.id, b.c_id
-                           ->  Sort
-                                 Sort Key: b.id, b.c_id
-                                 ->  Seq Scan on b
- Optimizer: Postgres query optimizer
-(12 rows)
+   ->  Sort
+         Sort Key: s.id
+         ->  Subquery Scan on s
+               ->  HashAggregate
+                     Group Key: b.id, b.c_id
+                     ->  Seq Scan on b
+(11 rows)
 
 -- check join removal works when uniqueness of the join condition is enforced
 -- by a UNION
@@ -5000,6 +5109,70 @@ where ss.stringu2 !~* ss.case1;
 (1 row)
 
 rollback;
+-- test case to expose miscomputation of required relid set for a PHV
+explain (verbose, costs off)
+select i8.*, ss.v, t.unique2
+  from int8_tbl i8
+    left join int4_tbl i4 on i4.f1 = 1
+    left join lateral (select i4.f1 + 1 as v) as ss on true
+    left join tenk1 t on t.unique2 = ss.v
+where q2 = 456;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Nested Loop Left Join
+   Output: i8.q1, i8.q2, ((i4.f1 + 1)), t.unique2
+   ->  Nested Loop Left Join
+         Output: i8.q1, i8.q2, (i4.f1 + 1)
+         ->  Seq Scan on public.int8_tbl i8
+               Output: i8.q1, i8.q2
+               Filter: (i8.q2 = 456)
+         ->  Seq Scan on public.int4_tbl i4
+               Output: i4.f1
+               Filter: (i4.f1 = 1)
+   ->  Index Only Scan using tenk1_unique2 on public.tenk1 t
+         Output: t.unique2
+         Index Cond: (t.unique2 = ((i4.f1 + 1)))
+(13 rows)
+
+select i8.*, ss.v, t.unique2
+  from int8_tbl i8
+    left join int4_tbl i4 on i4.f1 = 1
+    left join lateral (select i4.f1 + 1 as v) as ss on true
+    left join tenk1 t on t.unique2 = ss.v
+where q2 = 456;
+ q1  | q2  | v | unique2 
+-----+-----+---+---------
+ 123 | 456 |   |        
+(1 row)
+
+-- and check a related issue where we miscompute required relids for
+-- a PHV that's been translated to a child rel
+create temp table parttbl (a integer primary key) partition by range (a);
+create temp table parttbl1 partition of parttbl for values from (1) to (100);
+insert into parttbl values (11), (12);
+explain (costs off)
+select * from
+  (select *, 12 as phv from parttbl) as ss
+  right join int4_tbl on true
+where ss.a = ss.phv and f1 = 0;
+             QUERY PLAN             
+------------------------------------
+ Nested Loop
+   ->  Seq Scan on int4_tbl
+         Filter: (f1 = 0)
+   ->  Seq Scan on parttbl1 parttbl
+         Filter: (a = 12)
+(5 rows)
+
+select * from
+  (select *, 12 as phv from parttbl) as ss
+  right join int4_tbl on true
+where ss.a = ss.phv and f1 = 0;
+ a  | phv | f1 
+----+-----+----
+ 12 |  12 |  0
+(1 row)
+
 -- bug #8444: we've historically allowed duplicate aliases within aliased JOINs
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y) j on q1 = f1; -- error
@@ -5165,42 +5338,42 @@ select count(*) from tenk1 a, lateral generate_series(1,two) g;
 
 explain (costs off)
   select count(*) from tenk1 a, lateral generate_series(1,two) g;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Nested Loop
-                     ->  Seq Scan on tenk1 a
-                     ->  Function Scan on generate_series g
- Optimizer: Postgres query optimizer
+                      QUERY PLAN                      
+------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Seq Scan on tenk1 a
+         ->  Memoize
+               Cache Key: a.two
+               Cache Mode: binary
+               ->  Function Scan on generate_series g
 (7 rows)
 
 explain (costs off)
   select count(*) from tenk1 a cross join lateral generate_series(1,two) g;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Nested Loop
-                     ->  Seq Scan on tenk1 a
-                     ->  Function Scan on generate_series g
- Optimizer: Postgres query optimizer
+                      QUERY PLAN                      
+------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Seq Scan on tenk1 a
+         ->  Memoize
+               Cache Key: a.two
+               Cache Mode: binary
+               ->  Function Scan on generate_series g
 (7 rows)
 
 -- don't need the explicit LATERAL keyword for functions
 explain (costs off)
   select count(*) from tenk1 a, generate_series(1,two) g;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Nested Loop
-                     ->  Seq Scan on tenk1 a
-                     ->  Function Scan on generate_series g
- Optimizer: Postgres query optimizer
+                      QUERY PLAN                      
+------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Seq Scan on tenk1 a
+         ->  Memoize
+               Cache Key: a.two
+               Cache Mode: binary
+               ->  Function Scan on generate_series g
 (7 rows)
 
 -- lateral with UNION ALL subselect
@@ -5267,24 +5440,19 @@ select count(*) from tenk1 a,
 explain (costs off)
   select count(*) from tenk1 a,
     tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Hash Join
-                     Hash Cond: ("*VALUES*".column1 = b.unique2)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: "*VALUES*".column1
-                           ->  Nested Loop
-                                 ->  Seq Scan on tenk1 a
-                                 ->  Values Scan on "*VALUES*"
-                     ->  Hash
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                 Hash Key: b.unique2
-                                 ->  Seq Scan on tenk1 b
- Optimizer: Postgres query optimizer
-(15 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Nested Loop
+               ->  Index Only Scan using tenk1_unique1 on tenk1 a
+               ->  Values Scan on "*VALUES*"
+         ->  Memoize
+               Cache Key: "*VALUES*".column1
+               Cache Mode: logical
+               ->  Index Only Scan using tenk1_unique2 on tenk1 b
+                     Index Cond: (unique2 = "*VALUES*".column1)
+(10 rows)
 
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
@@ -5965,6 +6133,9 @@ select * from
  3 | 3
 (6 rows)
 
+-- check the number of columns specified
+SELECT * FROM (int8_tbl i cross join int4_tbl j) ss(a,b,c,d);
+ERROR:  join expression "ss" has 3 columns available but 4 columns specified
 -- check we don't try to do a unique-ified semijoin with LATERAL
 explain (verbose, costs off)
 select * from
@@ -6383,51 +6554,39 @@ select * from j1 natural join j2;
 explain (verbose, costs off)
 select * from j1
 inner join (select distinct id from j3) j3 on j1.id = j3.id;
-                  QUERY PLAN                   
------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+            QUERY PLAN             
+-----------------------------------
+ Nested Loop
    Output: j1.id, j3.id
-   ->  Hash Join
-         Output: j1.id, j3.id
-         Inner Unique: true
-         Hash Cond: (j1.id = j3.id)
-         ->  Seq Scan on public.j1
-               Output: j1.id
-         ->  Hash
+   Inner Unique: true
+   Join Filter: (j1.id = j3.id)
+   ->  HashAggregate
+         Output: j3.id
+         Group Key: j3.id
+         ->  Seq Scan on public.j3
                Output: j3.id
-               ->  HashAggregate
-                     Output: j3.id
-                     Group Key: j3.id
-                     ->  Seq Scan on public.j3
-                           Output: j3.id
- Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(17 rows)
+   ->  Seq Scan on public.j1
+         Output: j1.id
+(11 rows)
 
 -- ensure group by clause allows the inner to become unique
 explain (verbose, costs off)
 select * from j1
 inner join (select id from j3 group by id) j3 on j1.id = j3.id;
-                  QUERY PLAN                   
------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+            QUERY PLAN             
+-----------------------------------
+ Nested Loop
    Output: j1.id, j3.id
-   ->  Hash Join
-         Output: j1.id, j3.id
-         Inner Unique: true
-         Hash Cond: (j1.id = j3.id)
-         ->  Seq Scan on public.j1
-               Output: j1.id
-         ->  Hash
+   Inner Unique: true
+   Join Filter: (j1.id = j3.id)
+   ->  HashAggregate
+         Output: j3.id
+         Group Key: j3.id
+         ->  Seq Scan on public.j3
                Output: j3.id
-               ->  HashAggregate
-                     Output: j3.id
-                     Group Key: j3.id
-                     ->  Seq Scan on public.j3
-                           Output: j3.id
- Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(17 rows)
+   ->  Seq Scan on public.j1
+         Output: j1.id
+(11 rows)
 
 drop table j1;
 drop table j2;

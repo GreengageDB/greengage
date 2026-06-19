@@ -32,10 +32,8 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/htup_details.h"
 #include "access/multixact.h"
 #include "access/relation.h"
-#include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
 #include "access/toast_compression.h"
@@ -70,10 +68,8 @@
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
-#include "catalog/storage_xlog.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
-#include "executor/executor.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
@@ -83,18 +79,13 @@
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "partitioning/partdesc.h"
+#include "pgstat.h"
 #include "storage/lmgr.h"
 #include "storage/predicate.h"
-#include "storage/smgr.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
-#include "utils/partcache.h"
-#include "utils/ruleutils.h"
-#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 #include "catalog/oid_dispatch.h"
@@ -118,6 +109,11 @@ static void MetaTrackAddUpdInternal(Oid			classid,
 									char*		subtype,
 									Relation	rel,
 									HeapTuple	old_tuple);
+/* Potentially set by pg_upgrade_support functions */
+Oid			binary_upgrade_next_heap_pg_class_oid = InvalidOid;
+Oid			binary_upgrade_next_heap_pg_class_relfilenode = InvalidOid;
+Oid			binary_upgrade_next_toast_pg_class_oid = InvalidOid;
+Oid			binary_upgrade_next_toast_pg_class_relfilenode = InvalidOid;
 
 static void AddNewRelationTuple(Relation pg_class_desc,
 								Relation new_rel_desc,
@@ -326,8 +322,12 @@ SystemAttributeByName(const char *attname)
  *		heap_create		- Create an uncataloged heap relation
  *
  *		Note API change: the caller must now always provide the OID
- *		to use for the relation.  The relfilenode may (and, normally,
- *		should) be left unspecified.
+ *		to use for the relation.  The relfilenode may be (and in
+ *		the simplest cases is) left unspecified.
+ *
+ *		create_storage indicates whether or not to create the storage.
+ *		However, even if create_storage is true, no storage will be
+ *		created if the relkind is one that doesn't have storage.
  *
  *		rel->rd_rel is initialized by RelationBuildLocalRelation,
  *		and is mostly zeroes at return.
@@ -347,9 +347,9 @@ heap_create(const char *relname,
 			bool mapped_relation,
 			bool allow_system_table_mods,
 			TransactionId *relfrozenxid,
-			MultiXactId *relminmxid)
+			MultiXactId *relminmxid,
+			bool create_storage)
 {
-	bool		create_storage;
 	Relation	rel;
 
 	/* The caller must have provided an OID for the relation. */
@@ -378,42 +378,15 @@ heap_create(const char *relname,
 	*relfrozenxid = InvalidTransactionId;
 	*relminmxid = InvalidMultiXactId;
 
-	/* Handle reltablespace for specific relkinds. */
-	switch (relkind)
-	{
-		case RELKIND_VIEW:
-		case RELKIND_COMPOSITE_TYPE:
-		case RELKIND_FOREIGN_TABLE:
-
-			/*
-			 * Force reltablespace to zero if the relation has no physical
-			 * storage.  This is mainly just for cleanliness' sake.
-			 *
-			 * Partitioned tables and indexes don't have physical storage
-			 * either, but we want to keep their tablespace settings so that
-			 * their children can inherit it.
-			 */
-			reltablespace = InvalidOid;
-			break;
-
-		case RELKIND_SEQUENCE:
-
-			/*
-			 * Force reltablespace to zero for sequences, since we don't
-			 * support moving them around into different tablespaces.
-			 */
-			reltablespace = InvalidOid;
-			break;
-		default:
-			break;
-	}
-
 	/*
-	 * Decide whether to create storage. If caller passed a valid relfilenode,
-	 * storage is already created, so don't do it here.  Also don't create it
-	 * for relkinds without physical storage.
+	 * Force reltablespace to zero if the relation kind does not support
+	 * tablespaces.  This is mainly just for cleanliness' sake.
 	 */
-	if (!RELKIND_HAS_STORAGE(relkind) || OidIsValid(relfilenode))
+	if (!RELKIND_HAS_TABLESPACE(relkind))
+		reltablespace = InvalidOid;
+
+	/* Don't create storage for relkinds without physical storage. */
+	if (!RELKIND_HAS_STORAGE(relkind))
 		create_storage = false;
 	else
 	{
@@ -457,9 +430,9 @@ heap_create(const char *relname,
 	/*
 	 * Have the storage manager create the relation's disk file, if needed.
 	 *
-	 * For relations the callback creates both the main and the init fork, for
-	 * indexes only the main fork is created. The other forks will be created
-	 * on demand.
+	 * For tables, the AM callback creates both the main and the init fork.
+	 * For others, only the main fork is created; the other forks will be
+	 * created on demand.
 	 */
 	if (create_storage)
 	{
@@ -1062,9 +1035,10 @@ void MetaTrackDropObject(Oid		classid,
  *		Construct and insert a set of tuples in pg_attribute.
  *
  * Caller has already opened and locked pg_attribute.  tupdesc contains the
- * attributes to insert.  attcacheoff is always initialized to -1, attacl,
- * attfdwoptions and attmissingval are always initialized to NULL.  attoptions
- * must contain the same number of elements as tupdesc, or be NULL.
+ * attributes to insert.  attcacheoff is always initialized to -1.  attoptions
+ * supplies the values for the attoptions fields and must contain the same
+ * number of elements as tupdesc or be NULL.  The other variable-length fields
+ * of pg_attribute are always initialized to null values.
  *
  * indstate is the index state for CatalogTupleInsertWithInfo.  It can be
  * passed as NULL, in which case we'll fetch the necessary info.  (Don't do
@@ -1102,6 +1076,9 @@ InsertPgAttributeTuples(Relation pg_attribute_rel,
 		Form_pg_attribute attrs = TupleDescAttr(tupdesc, natts);
 
 		ExecClearTuple(slot[slotCount]);
+
+		memset(slot[slotCount]->tts_isnull, false,
+			   slot[slotCount]->tts_tupleDescriptor->natts * sizeof(bool));
 
 		if (new_rel_oid != InvalidOid)
 			slot[slotCount]->tts_values[Anum_pg_attribute_attrelid - 1] = ObjectIdGetDatum(new_rel_oid);
@@ -1350,7 +1327,13 @@ AddNewRelationTuple(Relation pg_class_desc,
 	 */
 	new_rel_reltup = new_rel_desc->rd_rel;
 
-	switch (relkind)
+	/* The relation is empty */
+	new_rel_reltup->relpages = 0;
+	new_rel_reltup->reltuples = -1;
+	new_rel_reltup->relallvisible = 0;
+
+	/* Sequences always have a known size */
+	if (relkind == RELKIND_SEQUENCE)
 	{
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
@@ -1613,12 +1596,16 @@ heap_create_with_catalog(const char *relname,
 	 * Create the relcache entry (mostly dummy at this point) and the physical
 	 * disk file.  (If we fail further down, it's the smgr's responsibility to
 	 * remove the disk file again.)
+	 *
+	 * NB: Note that passing create_storage = true is correct even for binary
+	 * upgrade.  The storage we create here will be replaced later, but we
+	 * need to have something on disk in the meanwhile.
 	 */
 	new_rel_desc = heap_create(relname,
 							   relnamespace,
 							   reltablespace,
 							   relid,
-							   InvalidOid,
+							   relfilenode,
 							   accessmtd,
 							   tupdesc,
 							   relkind,
@@ -1627,7 +1614,8 @@ heap_create_with_catalog(const char *relname,
 							   mapped_relation,
 							   allow_system_table_mods,
 							   &relfrozenxid,
-							   &relminmxid);
+							   &relminmxid,
+							   true);
 
 	Assert(relid == RelationGetRelid(new_rel_desc));
 
@@ -1871,6 +1859,9 @@ heap_create_with_catalog(const char *relname,
 	 */
 	if (oncommit != ONCOMMIT_NOOP)
 		register_on_commit_action(relid, oncommit);
+
+	/* ensure that stats are dropped if transaction aborts */
+	pgstat_create_relation(new_rel_desc);
 
 	/*
 	 * CDB: If caller gave us a distribution policy, store the distribution
@@ -2220,131 +2211,6 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 }
 
 /*
- *		RemoveAttrDefault
- *
- * If the specified relation/attribute has a default, remove it.
- * (If no default, raise error if complain is true, else return quietly.)
- */
-void
-RemoveAttrDefault(Oid relid, AttrNumber attnum,
-				  DropBehavior behavior, bool complain, bool internal)
-{
-	Relation	attrdef_rel;
-	ScanKeyData scankeys[2];
-	SysScanDesc scan;
-	HeapTuple	tuple;
-	bool		found = false;
-
-	attrdef_rel = table_open(AttrDefaultRelationId, RowExclusiveLock);
-
-	ScanKeyInit(&scankeys[0],
-				Anum_pg_attrdef_adrelid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(relid));
-	ScanKeyInit(&scankeys[1],
-				Anum_pg_attrdef_adnum,
-				BTEqualStrategyNumber, F_INT2EQ,
-				Int16GetDatum(attnum));
-
-	scan = systable_beginscan(attrdef_rel, AttrDefaultIndexId, true,
-							  NULL, 2, scankeys);
-
-	/* There should be at most one matching tuple, but we loop anyway */
-	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-	{
-		ObjectAddress object;
-		Form_pg_attrdef attrtuple = (Form_pg_attrdef) GETSTRUCT(tuple);
-
-		object.classId = AttrDefaultRelationId;
-		object.objectId = attrtuple->oid;
-		object.objectSubId = 0;
-
-		performDeletion(&object, behavior,
-						internal ? PERFORM_DELETION_INTERNAL : 0);
-
-		found = true;
-	}
-
-	systable_endscan(scan);
-	table_close(attrdef_rel, RowExclusiveLock);
-
-	if (complain && !found)
-		elog(ERROR, "could not find attrdef tuple for relation %u attnum %d",
-			 relid, attnum);
-}
-
-/*
- *		RemoveAttrDefaultById
- *
- * Remove a pg_attrdef entry specified by OID.  This is the guts of
- * attribute-default removal.  Note it should be called via performDeletion,
- * not directly.
- */
-void
-RemoveAttrDefaultById(Oid attrdefId)
-{
-	Relation	attrdef_rel;
-	Relation	attr_rel;
-	Relation	myrel;
-	ScanKeyData scankeys[1];
-	SysScanDesc scan;
-	HeapTuple	tuple;
-	Oid			myrelid;
-	AttrNumber	myattnum;
-
-	/* Grab an appropriate lock on the pg_attrdef relation */
-	attrdef_rel = table_open(AttrDefaultRelationId, RowExclusiveLock);
-
-	/* Find the pg_attrdef tuple */
-	ScanKeyInit(&scankeys[0],
-				Anum_pg_attrdef_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(attrdefId));
-
-	scan = systable_beginscan(attrdef_rel, AttrDefaultOidIndexId, true,
-							  NULL, 1, scankeys);
-
-	tuple = systable_getnext(scan);
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "could not find tuple for attrdef %u", attrdefId);
-
-	myrelid = ((Form_pg_attrdef) GETSTRUCT(tuple))->adrelid;
-	myattnum = ((Form_pg_attrdef) GETSTRUCT(tuple))->adnum;
-
-	/* Get an exclusive lock on the relation owning the attribute */
-	myrel = relation_open(myrelid, AccessExclusiveLock);
-
-	/* Now we can delete the pg_attrdef row */
-	CatalogTupleDelete(attrdef_rel, &tuple->t_self);
-
-	systable_endscan(scan);
-	table_close(attrdef_rel, RowExclusiveLock);
-
-	/* Fix the pg_attribute row */
-	attr_rel = table_open(AttributeRelationId, RowExclusiveLock);
-
-	tuple = SearchSysCacheCopy2(ATTNUM,
-								ObjectIdGetDatum(myrelid),
-								Int16GetDatum(myattnum));
-	if (!HeapTupleIsValid(tuple))	/* shouldn't happen */
-		elog(ERROR, "cache lookup failed for attribute %d of relation %u",
-			 myattnum, myrelid);
-
-	((Form_pg_attribute) GETSTRUCT(tuple))->atthasdef = false;
-
-	CatalogTupleUpdate(attr_rel, &tuple->t_self, tuple);
-
-	/*
-	 * Our update of the pg_attribute row will force a relcache rebuild, so
-	 * there's nothing else to do here.
-	 */
-	table_close(attr_rel, RowExclusiveLock);
-
-	/* Keep lock on attribute's rel until end of xact */
-	relation_close(myrel, NoLock);
-}
-
-/*
  * heap_drop_with_catalog	- removes specified relation from catalogs
  *
  * Note that this routine is not responsible for dropping objects that are
@@ -2462,6 +2328,9 @@ heap_drop_with_catalog(Oid relid)
 	 */
 	if (RELKIND_HAS_STORAGE(rel->rd_rel->relkind))
 		RelationDropStorage(rel);
+
+	/* ensure that stats are dropped if transaction commits */
+	pgstat_drop_relation(rel);
 
 	/*
 	 * Remove distribution policy, if any.
@@ -3029,6 +2898,8 @@ StoreRelCheck(Relation rel, const char *ccname, Node *expr,
 							  0,
 							  ' ',
 							  ' ',
+							  NULL,
+							  0,
 							  ' ',
 							  NULL, /* not an exclusion constraint */
 							  expr, /* Tree form of check constraint */
@@ -4108,9 +3979,8 @@ restart:
 		/*
 		 * If this constraint has a parent constraint which we have not seen
 		 * yet, keep track of it for the second loop, below.  Tracking parent
-		 * constraints allows us to climb up to the top-level level constraint
-		 * and look for all possible relations referencing the partitioned
-		 * table.
+		 * constraints allows us to climb up to the top-level constraint and
+		 * look for all possible relations referencing the partitioned table.
 		 */
 		if (OidIsValid(con->conparentid) &&
 			!list_member_oid(parent_cons, con->conparentid))

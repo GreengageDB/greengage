@@ -3,6 +3,7 @@
 #include "access/heapam.h"
 #include "access/genam.h"
 #include "access/xlog.h"
+#include "access/xloginsert.h"
 #include "catalog/indexing.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"

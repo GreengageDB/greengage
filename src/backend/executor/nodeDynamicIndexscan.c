@@ -247,7 +247,8 @@ ExecDynamicIndexScan(PlanState *pstate)
 				ExecFindMatchingSubPlans(node->as_prune_state,
 										 node->ss.ps.state,
 										 list_length(plan->partOids),
-										 plan->join_prune_paramids);
+										 plan->join_prune_paramids,
+										 false);
 
 		int i;
 		int partOidIdx = -1;

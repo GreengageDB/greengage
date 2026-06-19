@@ -5,7 +5,7 @@
  * Basically this is stuff that is useful in both pg_dump and pg_dumpall.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/pg_dump/dumputils.c
@@ -37,7 +37,7 @@ static void AddAcl(PQExpBuffer aclbuf, const char *keyword,
  *	nspname: the namespace the object is in (NULL if none); not pre-quoted
  *	type: the object type (as seen in GRANT command: must be one of
  *		TABLE, SEQUENCE, FUNCTION, PROCEDURE, LANGUAGE, SCHEMA, DATABASE, TABLESPACE,
- *		FOREIGN DATA WRAPPER, SERVER, or LARGE OBJECT)
+ *		FOREIGN DATA WRAPPER, SERVER, PARAMETER or LARGE OBJECT)
  *	acls: the ACL string fetched from the database
  *	baseacls: the initial ACL string for this object; can be
  *		NULL or empty string to indicate "not available from server"
@@ -401,16 +401,12 @@ buildDefaultACLCommands(const char *type, const char *nspname,
 /*
  * This will parse an aclitem string, having the general form
  *		username=privilegecodes/grantor
- * or
- *		group groupname=privilegecodes/grantor
- * (the "group" case occurs only with servers before 8.1).
  *
  * Returns true on success, false on parse error.  On success, the components
  * of the string are returned in the PQExpBuffer parameters.
  *
- * The returned grantee string will be the dequoted username or groupname
- * (preceded with "group " in the latter case).  Note that a grant to PUBLIC
- * is represented by an empty grantee string.  The returned grantor is the
+ * The returned grantee string will be the dequoted username, or an empty
+ * string in the case of a grant to PUBLIC.  The returned grantor is the
  * dequoted grantor name.  Privilege characters are translated to GRANT/REVOKE
  * comma-separated privileges lists.  If "privswgo" is non-NULL, the result is
  * separate lists for privileges with grant option ("privswgo") and without
@@ -503,8 +499,7 @@ do { \
 			{
 				CONVERT_PRIV('d', "DELETE");
 				CONVERT_PRIV('t', "TRIGGER");
-				if (remoteVersion >= 80400)
-					CONVERT_PRIV('D', "TRUNCATE");
+				CONVERT_PRIV('D', "TRUNCATE");
 			}
 		}
 
@@ -542,6 +537,11 @@ do { \
 		CONVERT_PRIV('U', "USAGE");
 	else if (strcmp(type, "FOREIGN TABLE") == 0)
 		CONVERT_PRIV('r', "SELECT");
+	else if (strcmp(type, "PARAMETER") == 0)
+	{
+		CONVERT_PRIV('s', "SET");
+		CONVERT_PRIV('A', "ALTER SYSTEM");
+	}
 	else if (strcmp(type, "LARGE OBJECT") == 0)
 	{
 		CONVERT_PRIV('r', "SELECT");

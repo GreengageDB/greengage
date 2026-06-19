@@ -18,7 +18,6 @@
  */
 #include "postgres.h"
 
-#include <limits.h>
 #include <math.h>
 
 #include "access/relation.h"
@@ -109,7 +108,7 @@ static List *get_gating_quals(PlannerInfo *root, List *quals);
 static Plan *create_gating_plan(PlannerInfo *root, Path *path, Plan *plan,
 								List *gating_quals);
 static Plan *create_join_plan(PlannerInfo *root, JoinPath *best_path);
-static bool is_async_capable_path(Path *path);
+static bool mark_async_capable_plan(Plan *plan, Path *path);
 static Plan *create_append_plan(PlannerInfo *root, AppendPath *best_path,
 								int flags);
 static Plan *create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path,
@@ -119,9 +118,8 @@ static Result *create_group_result_plan(PlannerInfo *root,
 static ProjectSet *create_project_set_plan(PlannerInfo *root, ProjectSetPath *best_path);
 static Material *create_material_plan(PlannerInfo *root, MaterialPath *best_path,
 									  int flags);
-static ResultCache *create_resultcache_plan(PlannerInfo *root,
-											ResultCachePath *best_path,
-											int flags);
+static Memoize *create_memoize_plan(PlannerInfo *root, MemoizePath *best_path,
+									int flags);
 static Plan *create_unique_plan(PlannerInfo *root, UniquePath *best_path,
 								int flags);
 static Plan *create_motion_plan(PlannerInfo *root, CdbMotionPath *path, int flags);
@@ -319,11 +317,10 @@ static Sort *make_sort_from_groupcols(List *groupcls,
 									  AttrNumber *grpColIdx,
 									  Plan *lefttree);
 /* make_material declared in planmain.h */
-static ResultCache *make_resultcache(Plan *lefttree, Oid *hashoperators,
-									 Oid *collations,
-									 List *param_exprs,
-									 bool singlerow,
-									 uint32 est_entries);
+static Memoize *make_memoize(Plan *lefttree, Oid *hashoperators,
+							 Oid *collations, List *param_exprs,
+							 bool singlerow, bool binary_mode,
+							 uint32 est_entries, Bitmapset *keyparamids);
 static WindowAgg *make_windowagg(List *tlist, Index winref,
 								 int partNumCols, AttrNumber *partColIdx, Oid *partOperators, Oid *partCollations,
 								 int ordNumCols, AttrNumber *ordColIdx, Oid *ordOperators, Oid *ordCollations,
@@ -331,6 +328,7 @@ static WindowAgg *make_windowagg(List *tlist, Index winref,
 								 int frameOptions, Node *startOffset, Node *endOffset,
 								 Oid startInRangeFunc, Oid endInRangeFunc,
 								 Oid inRangeColl, bool inRangeAsc, bool inRangeNullsFirst,
+								 List *runCondition, List *qual, bool topWindow,
 								 Plan *lefttree);
 static Unique *make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
 static Unique *make_unique_from_pathkeys(Plan *lefttree,
@@ -350,7 +348,8 @@ static ModifyTable *make_modifytable(PlannerInfo *root, Plan *subplan,
 									 List *updateColnosLists,
 									 List *withCheckOptionLists, List *returningLists,
 									 List *is_split_updates,
-									 List *rowMarks, OnConflictExpr *onconflict, int epqParam);
+									 List *rowMarks, OnConflictExpr *onconflict,
+									 List *mergeActionLists, int epqParam);
 static GatherMerge *create_gather_merge_plan(PlannerInfo *root,
 											 GatherMergePath *best_path);
 
@@ -523,10 +522,10 @@ create_plan_recurse(PlannerInfo *root, Path *best_path, int flags)
 												 (MaterialPath *) best_path,
 												 flags);
 			break;
-		case T_ResultCache:
-			plan = (Plan *) create_resultcache_plan(root,
-													(ResultCachePath *) best_path,
-													flags);
+		case T_Memoize:
+			plan = (Plan *) create_memoize_plan(root,
+												(MemoizePath *) best_path,
+												flags);
 			break;
 		case T_Unique:
 			if (IsA(best_path, UpperUniquePath))
@@ -1007,6 +1006,22 @@ use_physical_tlist(PlannerInfo *root, Path *path, int flags)
 	}
 
 	/*
+	 * For an index-only scan, the "physical tlist" is the index's indextlist.
+	 * We can only return that without a projection if all the index's columns
+	 * are returnable.
+	 */
+	if (path->pathtype == T_IndexOnlyScan)
+	{
+		IndexOptInfo *indexinfo = ((IndexPath *) path)->indexinfo;
+
+		for (i = 0; i < indexinfo->ncolumns; i++)
+		{
+			if (!indexinfo->canreturn[i])
+				return false;
+		}
+	}
+
+	/*
 	 * Also, can't do it if CP_LABEL_TLIST is specified and path is requested
 	 * to emit any sort/group columns that are not simple Vars.  (If they are
 	 * simple Vars, they should appear in the physical tlist, and
@@ -1222,28 +1237,78 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 }
 
 /*
- * is_async_capable_path
- *		Check whether a given Path node is async-capable.
+ * mark_async_capable_plan
+ *		Check whether the Plan node created from a Path node is async-capable,
+ *		and if so, mark the Plan node as such and return true, otherwise
+ *		return false.
  */
 static bool
-is_async_capable_path(Path *path)
+mark_async_capable_plan(Plan *plan, Path *path)
 {
 	switch (nodeTag(path))
 	{
+		case T_SubqueryScanPath:
+			{
+				SubqueryScan *scan_plan = (SubqueryScan *) plan;
+
+				/*
+				 * If the generated plan node includes a gating Result node,
+				 * we can't execute it asynchronously.
+				 */
+				if (IsA(plan, Result))
+					return false;
+
+				/*
+				 * If a SubqueryScan node atop of an async-capable plan node
+				 * is deletable, consider it as async-capable.
+				 */
+				if (trivial_subqueryscan(scan_plan) &&
+					mark_async_capable_plan(scan_plan->subplan,
+											((SubqueryScanPath *) path)->subpath))
+					break;
+				return false;
+			}
 		case T_ForeignPath:
 			{
 				FdwRoutine *fdwroutine = path->parent->fdwroutine;
 
+				/*
+				 * If the generated plan node includes a gating Result node,
+				 * we can't execute it asynchronously.
+				 */
+				if (IsA(plan, Result))
+					return false;
+
 				Assert(fdwroutine != NULL);
 				if (fdwroutine->IsForeignPathAsyncCapable != NULL &&
 					fdwroutine->IsForeignPathAsyncCapable((ForeignPath *) path))
-					return true;
+					break;
+				return false;
 			}
-			break;
+		case T_ProjectionPath:
+
+			/*
+			 * If the generated plan node includes a Result node for the
+			 * projection, we can't execute it asynchronously.
+			 */
+			if (IsA(plan, Result))
+				return false;
+
+			/*
+			 * create_projection_plan() would have pulled up the subplan, so
+			 * check the capability using the subpath.
+			 */
+			if (mark_async_capable_plan(plan,
+										((ProjectionPath *) path)->subpath))
+				return true;
+			return false;
 		default:
-			break;
+			return false;
 	}
-	return false;
+
+	plan->async_capable = true;
+
+	return true;
 }
 
 /*
@@ -1406,14 +1471,14 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path, int flags)
 			}
 		}
 
-		subplans = lappend(subplans, subplan);
-
-		/* Check to see if subplan can be executed asynchronously */
-		if (consider_async && is_async_capable_path(subpath))
+		/* If needed, check to see if subplan can be executed asynchronously */
+		if (consider_async && mark_async_capable_plan(subplan, subpath))
 		{
-			subplan->async_capable = true;
+			Assert(subplan->async_capable);
 			++nasyncplans;
 		}
+
+		subplans = lappend(subplans, subplan);
 	}
 
 	/*
@@ -1733,16 +1798,17 @@ create_material_plan(PlannerInfo *root, MaterialPath *best_path, int flags)
 }
 
 /*
- * create_resultcache_plan
- *	  Create a ResultCache plan for 'best_path' and (recursively) plans
- *	  for its subpaths.
+ * create_memoize_plan
+ *	  Create a Memoize plan for 'best_path' and (recursively) plans for its
+ *	  subpaths.
  *
  *	  Returns a Plan node.
  */
-static ResultCache *
-create_resultcache_plan(PlannerInfo *root, ResultCachePath *best_path, int flags)
+static Memoize *
+create_memoize_plan(PlannerInfo *root, MemoizePath *best_path, int flags)
 {
-	ResultCache *plan;
+	Memoize    *plan;
+	Bitmapset  *keyparamids;
 	Plan	   *subplan;
 	Oid		   *operators;
 	Oid		   *collations;
@@ -1774,8 +1840,11 @@ create_resultcache_plan(PlannerInfo *root, ResultCachePath *best_path, int flags
 		i++;
 	}
 
-	plan = make_resultcache(subplan, operators, collations, param_exprs,
-							best_path->singlerow, best_path->est_entries);
+	keyparamids = pull_paramids((Expr *) param_exprs);
+
+	plan = make_memoize(subplan, operators, collations, param_exprs,
+						best_path->singlerow, best_path->binary_mode,
+						best_path->est_entries, keyparamids);
 
 	copy_generic_path_info(&plan->plan, (Path *) best_path);
 
@@ -2959,6 +3028,9 @@ create_windowagg_plan(PlannerInfo *root, WindowAggPath *best_path)
 						  wc->inRangeColl,
 						  wc->inRangeAsc,
 						  wc->inRangeNullsFirst,
+						  wc->runCondition,
+						  best_path->qual,
+						  best_path->topwindow,
 						  subplan);
 
 	copy_generic_path_info(&plan->plan, (Path *) best_path);
@@ -2987,7 +3059,7 @@ create_setop_plan(PlannerInfo *root, SetOpPath *best_path, int flags)
 								  flags | CP_LABEL_TLIST);
 
 	/* Convert numGroups to long int --- but 'ware overflow! */
-	numGroups = (long) Min(best_path->numGroups, (double) LONG_MAX);
+	numGroups = clamp_cardinality_to_long(best_path->numGroups);
 
 	plan = make_setop(best_path->cmd,
 					  best_path->strategy,
@@ -3024,7 +3096,7 @@ create_recursiveunion_plan(PlannerInfo *root, RecursiveUnionPath *best_path)
 	tlist = build_path_tlist(root, &best_path->path);
 
 	/* Convert numGroups to long int --- but 'ware overflow! */
-	numGroups = (long) Min(best_path->numGroups, (double) LONG_MAX);
+	numGroups = clamp_cardinality_to_long(best_path->numGroups);
 
 	plan = make_recursive_union(tlist,
 								leftplan,
@@ -3112,6 +3184,7 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 							best_path->is_split_updates,
 							best_path->rowMarks,
 							best_path->onconflict,
+							best_path->mergeActionLists,
 							best_path->epqParam);
 
 	copy_generic_path_info(&plan->plan, &best_path->path);
@@ -3582,7 +3655,7 @@ create_seqscan_plan(PlannerInfo *root, Path *best_path,
 							 scan_clauses,
 							 scan_relid);
 
-	copy_generic_path_info(&scan_plan->plan, best_path);
+	copy_generic_path_info(&scan_plan->scan.plan, best_path);
 
 	return scan_plan;
 }
@@ -3654,7 +3727,8 @@ create_indexscan_plan(PlannerInfo *root,
 	List	   *indexclauses = best_path->indexclauses;
 	List	   *indexorderbys = best_path->indexorderbys;
 	Index		baserelid = best_path->path.parent->relid;
-	Oid			indexoid = best_path->indexinfo->indexoid;
+	IndexOptInfo *indexinfo = best_path->indexinfo;
+	Oid			indexoid = indexinfo->indexoid;
 	List	   *qpqual;
 	List	   *stripped_indexquals;
 	List	   *fixed_indexquals;
@@ -3784,6 +3858,24 @@ create_indexscan_plan(PlannerInfo *root,
 		}
 	}
 
+	/*
+	 * For an index-only scan, we must mark indextlist entries as resjunk if
+	 * they are columns that the index AM can't return; this cues setrefs.c to
+	 * not generate references to those columns.
+	 */
+	if (indexonly)
+	{
+		int			i = 0;
+
+		foreach(l, indexinfo->indextlist)
+		{
+			TargetEntry *indextle = (TargetEntry *) lfirst(l);
+
+			indextle->resjunk = !indexinfo->canreturn[i];
+			i++;
+		}
+	}
+
 	/* Finally ready to build the plan node */
 	if (indexonly)
 		scan_plan = (Scan *) make_indexonlyscan(tlist,
@@ -3793,7 +3885,7 @@ create_indexscan_plan(PlannerInfo *root,
 												fixed_indexquals,
 												stripped_indexquals,
 												fixed_indexorderbys,
-												best_path->indexinfo->indextlist,
+												indexinfo->indextlist,
 												best_path->indexscandir);
 	else
 		scan_plan = (Scan *) make_indexscan(tlist,
@@ -5011,7 +5103,7 @@ remove_isnotfalse(List *clauses)
 	{
 		Node *node = (Node *) lfirst(l);
 
-		if (IsA(node, Expr) || IsA(node, BooleanTest))
+		if (IsA(node, BooleanTest))
 		{
 			Expr *expr = (Expr *) node;
 
@@ -5114,8 +5206,8 @@ create_nestloop_plan(PlannerInfo *root,
 	NestLoop   *join_plan;
 	Plan	   *outer_plan;
 	Plan	   *inner_plan;
-	List	   *tlist = build_path_tlist(root, &best_path->path);
-	List	   *joinrestrictclauses = best_path->joinrestrictinfo;
+	List	   *tlist = build_path_tlist(root, &best_path->jpath.path);
+	List	   *joinrestrictclauses = best_path->jpath.joinrestrictinfo;
 	List	   *joinclauses;
 	List	   *otherclauses;
 	Relids		outerrelids;
@@ -5135,11 +5227,11 @@ create_nestloop_plan(PlannerInfo *root,
 	joinrestrictclauses =
 		select_nonredundant_join_clauses(root,
 										 joinrestrictclauses,
-										 best_path->innerjoinpath);
+										 best_path->jpath.innerjoinpath);
 #endif
 
 	/* NestLoop can project, so no need to be picky about child tlists */
-	outer_plan = create_plan_recurse(root, best_path->outerjoinpath, 0);
+	outer_plan = create_plan_recurse(root, best_path->jpath.outerjoinpath, 0);
 
 	/*
 	 * If the outer side contained Append nodes that can do partition pruning,
@@ -5150,9 +5242,9 @@ create_nestloop_plan(PlannerInfo *root,
 
 	/* For a nestloop, include outer relids in curOuterRels for inner side */
 	root->curOuterRels = bms_union(root->curOuterRels,
-								   best_path->outerjoinpath->parent->relids);
+								   best_path->jpath.outerjoinpath->parent->relids);
 
-	inner_plan = create_plan_recurse(root, best_path->innerjoinpath, 0);
+	inner_plan = create_plan_recurse(root, best_path->jpath.innerjoinpath, 0);
 
 	/*
 	 * MPP-1459: subqueries are resolved after our deadlock checks in
@@ -5165,8 +5257,8 @@ create_nestloop_plan(PlannerInfo *root,
 	 * NOTE: materialize_finished_plan() does *almost* what we want -- except
 	 * we aren't finished.
 	 */
-	if (best_path->innerjoinpath->motionHazard ||
-		!best_path->innerjoinpath->rescannable)
+	if (best_path->jpath.innerjoinpath->motionHazard ||
+		!best_path->jpath.innerjoinpath->rescannable)
 	{
 		Plan	   *p;
 		Material   *mat;
@@ -5203,7 +5295,7 @@ create_nestloop_plan(PlannerInfo *root,
 		 * MPP-1657: Even if there is already a materialize here, we
 		 * may need to update its strictness.
 		 */
-		if (best_path->outerjoinpath->motionHazard)
+		if (best_path->jpath.outerjoinpath->motionHazard)
 		{
 			mat->cdb_strict = true;
 			prefetch = true;
@@ -5219,10 +5311,10 @@ create_nestloop_plan(PlannerInfo *root,
 
 	/* Get the join qual clauses (in plain expression form) */
 	/* Any pseudoconstant clauses are ignored here */
-	if (IS_OUTER_JOIN(best_path->jointype))
+	if (IS_OUTER_JOIN(best_path->jpath.jointype))
 	{
 		extract_actual_join_clauses(joinrestrictclauses,
-									best_path->path.parent->relids,
+									best_path->jpath.path.parent->relids,
 									&joinclauses, &otherclauses);
 	}
 	else
@@ -5232,13 +5324,13 @@ create_nestloop_plan(PlannerInfo *root,
 		otherclauses = NIL;
 	}
 
-	if (best_path->jointype == JOIN_LASJ_NOTIN)
+	if (best_path->jpath.jointype == JOIN_LASJ_NOTIN)
 	{
 		joinclauses = remove_isnotfalse(joinclauses);
 	}
 
 	/* Replace any outer-relation variables with nestloop params */
-	if (best_path->path.param_info)
+	if (best_path->jpath.path.param_info)
 	{
 		joinclauses = (List *)
 			replace_nestloop_params(root, (Node *) joinclauses);
@@ -5250,7 +5342,7 @@ create_nestloop_plan(PlannerInfo *root,
 	 * Identify any nestloop parameters that should be supplied by this join
 	 * node, and remove them from root->curOuterParams.
 	 */
-	outerrelids = best_path->outerjoinpath->parent->relids;
+	outerrelids = best_path->jpath.outerjoinpath->parent->relids;
 	nestParams = identify_current_nestloop_params(root, outerrelids);
 
 	join_plan = make_nestloop(tlist,
@@ -5259,14 +5351,14 @@ create_nestloop_plan(PlannerInfo *root,
 							  nestParams,
 							  outer_plan,
 							  inner_plan,
-							  best_path->jointype,
-							  best_path->inner_unique);
+							  best_path->jpath.jointype,
+							  best_path->jpath.inner_unique);
 
-	copy_generic_path_info(&join_plan->join.plan, &best_path->path);
+	copy_generic_path_info(&join_plan->join.plan, &best_path->jpath.path);
 
-	if (IsA(best_path->innerjoinpath, MaterialPath))
+	if (IsA(best_path->jpath.innerjoinpath, MaterialPath))
 	{
-		MaterialPath *mp = (MaterialPath *) best_path->innerjoinpath;
+		MaterialPath *mp = (MaterialPath *) best_path->jpath.innerjoinpath;
 
 		if (mp->cdb_strict)
 			prefetch = true;
@@ -5291,16 +5383,16 @@ create_nestloop_plan(PlannerInfo *root,
 	 *
 	 * See ExecPrefetchJoinQual() for details.
 	 */
-	if (best_path->outerjoinpath &&
-		best_path->outerjoinpath->motionHazard &&
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard &&
 		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
 	/*
 	 * Similar for non join qual.
 	 */
-	if (best_path->outerjoinpath &&
-		best_path->outerjoinpath->motionHazard &&
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard &&
 		join_plan->join.plan.qual != NIL)
 		join_plan->join.prefetch_qual = true;
 
@@ -5959,7 +6051,8 @@ replace_nestloop_params_mutator(Node *node, PlannerInfo *root)
 		/* Upper-level Vars should be long gone at this point */
 		Assert(var->varlevelsup == 0);
 		/* If not to be replaced, we can just return the Var unmodified */
-		if (!bms_is_member(var->varno, root->curOuterRels))
+		if (IS_SPECIAL_VARNO(var->varno) ||
+			!bms_is_member(var->varno, root->curOuterRels))
 			return node;
 		/* Replace the Var with a nestloop Param */
 		return (Node *) replace_nestloop_param_var(root, var);
@@ -6542,13 +6635,13 @@ make_seqscan(List *qptlist,
 			 Index scanrelid)
 {
 	SeqScan    *node = makeNode(SeqScan);
-	Plan	   *plan = &node->plan;
+	Plan	   *plan = &node->scan.plan;
 
 	plan->targetlist = qptlist;
 	plan->qual = qpqual;
 	plan->lefttree = NULL;
 	plan->righttree = NULL;
-	node->scanrelid = scanrelid;
+	node->scan.scanrelid = scanrelid;
 
 	return node;
 }
@@ -6625,6 +6718,7 @@ make_indexonlyscan(List *qptlist,
 	node->indexid = indexid;
 	node->indexqual = indexqual;
 	node->indexqualorig = indexqualorig;
+	node->recheckqual = indexqualorig;
 	node->indexorderby = indexorderby;
 	node->indextlist = indextlist;
 	node->indexorderdir = indexscandir;
@@ -6733,6 +6827,7 @@ make_subqueryscan(List *qptlist,
 	node->scan.scanrelid = scanrelid;
 
 	node->subplan = subplan;
+	node->scanstatus = SUBQUERY_SCAN_UNKNOWN;
 
 	return node;
 }
@@ -7737,11 +7832,12 @@ materialize_finished_plan(PlannerInfo *root, Plan *subplan)
 	return matplan;
 }
 
-static ResultCache *
-make_resultcache(Plan *lefttree, Oid *hashoperators, Oid *collations,
-				 List *param_exprs, bool singlerow, uint32 est_entries)
+static Memoize *
+make_memoize(Plan *lefttree, Oid *hashoperators, Oid *collations,
+			 List *param_exprs, bool singlerow, bool binary_mode,
+			 uint32 est_entries, Bitmapset *keyparamids)
 {
-	ResultCache *node = makeNode(ResultCache);
+	Memoize    *node = makeNode(Memoize);
 	Plan	   *plan = &node->plan;
 
 	plan->targetlist = lefttree->targetlist;
@@ -7754,7 +7850,9 @@ make_resultcache(Plan *lefttree, Oid *hashoperators, Oid *collations,
 	node->collations = collations;
 	node->param_exprs = param_exprs;
 	node->singlerow = singlerow;
+	node->binary_mode = binary_mode;
 	node->est_entries = est_entries;
+	node->keyparamids = keyparamids;
 
 	return node;
 }
@@ -7772,7 +7870,7 @@ make_agg(List *tlist, List *qual,
 	long		numGroups;
 
 	/* Reduce to long, but 'ware overflow! */
-	numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
+	numGroups = clamp_cardinality_to_long(dNumGroups);
 
 	node->aggstrategy = aggstrategy;
 	node->aggsplit = aggsplit;
@@ -7822,7 +7920,7 @@ make_windowagg(List *tlist, Index winref,
 			   int frameOptions, Node *startOffset, Node *endOffset,
 			   Oid startInRangeFunc, Oid endInRangeFunc,
 			   Oid inRangeColl, bool inRangeAsc, bool inRangeNullsFirst,
-			   Plan *lefttree)
+			   List *runCondition, List *qual, bool topWindow, Plan *lefttree)
 {
 	WindowAgg  *node = makeNode(WindowAgg);
 	Plan	   *plan = &node->plan;
@@ -7842,17 +7940,20 @@ make_windowagg(List *tlist, Index winref,
 	node->frameOptions = frameOptions;
 	node->startOffset = startOffset;
 	node->endOffset = endOffset;
+	node->runCondition = runCondition;
+	/* a duplicate of the above for EXPLAIN */
+	node->runConditionOrig = runCondition;
 	node->startInRangeFunc = startInRangeFunc;
 	node->endInRangeFunc = endInRangeFunc;
 	node->inRangeColl = inRangeColl;
 	node->inRangeAsc = inRangeAsc;
 	node->inRangeNullsFirst = inRangeNullsFirst;
+	node->topWindow = topWindow;
 
 	plan->targetlist = tlist;
 	plan->lefttree = lefttree;
 	plan->righttree = NULL;
-	/* WindowAgg nodes never have a qual clause */
-	plan->qual = NIL;
+	plan->qual = qual;
 
 	return node;
 }
@@ -8204,7 +8305,8 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 				 List *updateColnosLists,
 				 List *withCheckOptionLists, List *returningLists,
 				 List *is_split_updates,
-				 List *rowMarks, OnConflictExpr *onconflict, int epqParam)
+				 List *rowMarks, OnConflictExpr *onconflict,
+				 List *mergeActionLists, int epqParam)
 {
 	ModifyTable *node = makeNode(ModifyTable);
 	List	   *fdw_private_list;
@@ -8212,9 +8314,10 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 	ListCell   *lc;
 	int			i;
 
-	Assert(operation == CMD_UPDATE ?
-		   list_length(resultRelations) == list_length(updateColnosLists) :
-		   updateColnosLists == NIL);
+	Assert(operation == CMD_MERGE ||
+		   (operation == CMD_UPDATE ?
+			list_length(resultRelations) == list_length(updateColnosLists) :
+			updateColnosLists == NIL));
 	Assert(withCheckOptionLists == NIL ||
 		   list_length(resultRelations) == list_length(withCheckOptionLists));
 	Assert(returningLists == NIL ||
@@ -8273,6 +8376,7 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 	node->withCheckOptionLists = withCheckOptionLists;
 	node->returningLists = returningLists;
 	node->rowMarks = rowMarks;
+	node->mergeActionLists = mergeActionLists;
 	node->epqParam = epqParam;
 
 	node->isSplitUpdates = is_split_updates;
@@ -8364,7 +8468,7 @@ is_projection_capable_path(Path *path)
 	{
 		case T_Hash:
 		case T_Material:
-		case T_ResultCache:
+		case T_Memoize:
 		case T_Sort:
 		case T_IncrementalSort:
 		case T_Unique:
@@ -8377,6 +8481,10 @@ is_projection_capable_path(Path *path)
 		case T_Motion:
 		case T_ShareInputScan:
 		case T_PartitionSelector:
+			return false;
+		case T_CustomScan:
+			if (castNode(CustomPath, path)->flags & CUSTOMPATH_SUPPORT_PROJECTION)
+				return true;
 			return false;
 		case T_Append:
 
@@ -8413,7 +8521,7 @@ is_projection_capable_plan(Plan *plan)
 	{
 		case T_Hash:
 		case T_Material:
-		case T_ResultCache:
+		case T_Memoize:
 		case T_Sort:
 		case T_Unique:
 		case T_SetOp:
@@ -8427,6 +8535,10 @@ is_projection_capable_plan(Plan *plan)
 		case T_ShareInputScan:
 		case T_Sequence:
 		case T_PartitionSelector:
+			return false;
+		case T_CustomScan:
+			if (((CustomScan *) plan)->flags & CUSTOMPATH_SUPPORT_PROJECTION)
+				return true;
 			return false;
 		case T_ProjectSet:
 

@@ -234,7 +234,9 @@ extern MemoryContext SlabContextCreate(MemoryContext parent,
 /* generation.c */
 extern MemoryContext GenerationContextCreate(MemoryContext parent,
 											 const char *name,
-											 Size blockSize);
+											 Size minContextSize,
+											 Size initBlockSize,
+											 Size maxBlockSize);
 
 /* this function should be only called by MemoryContextSetParent() */
 extern void AllocSetTransferAccounting(MemoryContext context,

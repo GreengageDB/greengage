@@ -4,7 +4,7 @@
  *	  postgres transaction access method support code
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/transam.h
@@ -166,10 +166,14 @@ FullTransactionIdAdvance(FullTransactionId *dest)
  *		when the .dat files in src/include/catalog/ do not specify an OID
  *		for a catalog entry that requires one.  Note that genbki.pl assigns
  *		these OIDs independently in each catalog, so they're not guaranteed
- *		to be globally unique.
+ *		to be globally unique.  Furthermore, the bootstrap backend and
+ *		initdb's post-bootstrap processing can also assign OIDs in this range.
+ *		The normal OID-generation logic takes care of any OID conflicts that
+ *		might arise from that.
  *
- *		OIDS 12000-16383 are reserved for assignment during initdb
- *		using the OID generator.  (We start the generator at 12000.)
+ *		OIDs 12000-16383 are reserved for unpinned objects created by initdb's
+ *		post-bootstrap processing.  initdb forces the OID generator up to
+ *		12000 as soon as it's made the pinned objects it's responsible for.
  *
  *		OIDs beginning at 16384 are assigned from the OID generator
  *		during normal multiuser operation.  (We force the generator up to
@@ -185,12 +189,22 @@ FullTransactionIdAdvance(FullTransactionId *dest)
  *
  * NOTE: if the OID generator wraps around, we skip over OIDs 0-16383
  * and resume with 16384.  This minimizes the odds of OID conflict, by not
- * reassigning OIDs that might have been assigned during initdb.
+ * reassigning OIDs that might have been assigned during initdb.  Critically,
+ * it also ensures that no user-created object will be considered pinned.
  * ----------
  */
 #define FirstGenbkiObjectId		10000
+/*
+ * Greengage raises the genbki/pinned-object watermark above upstream's 12000:
+ * GPDB defines extra catalogs/objects, so more genbki-assigned OIDs are needed
+ * (10000..FirstUnpinnedObjectId).  Keep both the legacy FirstBootstrapObjectId
+ * name and PG15's FirstUnpinnedObjectId in sync, overridable by pg_magic_oid.h.
+ */
 #ifndef FirstBootstrapObjectId
-#define FirstBootstrapObjectId	12000
+#define FirstBootstrapObjectId	12500
+#endif
+#ifndef FirstUnpinnedObjectId
+#define FirstUnpinnedObjectId	12500
 #endif
 #define FirstNormalObjectId		16384
 
@@ -320,6 +334,7 @@ extern Oid	GetNewObjectId(void);
 extern void AdvanceObjectId(Oid newOid);
 extern Oid	GetNewSegRelfilenode(void);
 extern bool OidFollowsNextOid(Oid id);
+extern void StopGeneratingPinnedObjectIds(void);
 
 #ifdef USE_ASSERT_CHECKING
 extern void AssertTransactionIdInAllowableRange(TransactionId xid);

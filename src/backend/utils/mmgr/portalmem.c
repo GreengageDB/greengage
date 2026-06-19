@@ -23,6 +23,7 @@
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "commands/portalcmds.h"
+#include "funcapi.h"
 #include "miscadmin.h"
 #include "storage/ipc.h"
 #include "utils/builtins.h"
@@ -217,6 +218,7 @@ CreatePortal(const char *name, bool allowDup, bool dupSilent)
 	portal->cleanup = PortalCleanup;
 	portal->createSubid = GetCurrentSubTransactionId();
 	portal->activeSubid = portal->createSubid;
+	portal->createLevel = GetCurrentTransactionNestLevel();
 	portal->strategy = PORTAL_MULTI_QUERY;
 	portal->cursorOptions = CURSOR_OPT_NO_SCROLL;
 	portal->atStart = true;
@@ -684,6 +686,7 @@ HoldPortal(Portal portal)
 	 */
 	portal->createSubid = InvalidSubTransactionId;
 	portal->activeSubid = InvalidSubTransactionId;
+	portal->createLevel = 0;
 }
 
 /*
@@ -984,6 +987,7 @@ PortalErrorCleanup(void)
 void
 AtSubCommit_Portals(SubTransactionId mySubid,
 					SubTransactionId parentSubid,
+					int parentLevel,
 					ResourceOwner parentXactOwner)
 {
 	HASH_SEQ_STATUS status;
@@ -998,6 +1002,7 @@ AtSubCommit_Portals(SubTransactionId mySubid,
 		if (portal->createSubid == mySubid)
 		{
 			portal->createSubid = parentSubid;
+			portal->createLevel = parentLevel;
 			if (portal->resowner)
 				ResourceOwnerNewParent(portal->resowner, parentXactOwner);
 		}
@@ -1258,10 +1263,6 @@ Datum
 pg_cursor(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc	tupdesc;
-	Tuplestorestate *tupstore;
-	MemoryContext per_query_ctx;
-	MemoryContext oldcontext;
 	HASH_SEQ_STATUS hash_seq;
 	PortalHashEnt *hentry;
 
@@ -1303,12 +1304,7 @@ pg_cursor(PG_FUNCTION_ARGS)
 	 * We put all the tuples into a tuplestore in one scan of the hashtable.
 	 * This avoids any issue of the hashtable possibly changing between calls.
 	 */
-	tupstore =
-		tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random,
-							  false, work_mem);
-
-	/* generate junk in short-term context */
-	MemoryContextSwitchTo(oldcontext);
+	SetSingleFuncCall(fcinfo, 0);
 
 	hash_seq_init(&hash_seq, PortalHashTable);
 	while ((hentry = hash_seq_search(&hash_seq)) != NULL)
@@ -1331,15 +1327,8 @@ pg_cursor(PG_FUNCTION_ARGS)
 		values[5] = TimestampTzGetDatum(portal->creation_time);
 		values[6] = BoolGetDatum(PortalIsParallelRetrieveCursor(portal));
 
-		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
 	}
-
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupstore);
-
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupdesc;
 
 	return (Datum) 0;
 }
@@ -1405,7 +1394,7 @@ HoldPinnedPortals(void)
 			 */
 			if (portal->strategy != PORTAL_ONE_SELECT)
 				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
+						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						 errmsg("cannot perform transaction commands inside a cursor loop that is not read-only")));
 
 			/* Verify it's in a suitable state to be held */

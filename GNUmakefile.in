@@ -46,6 +46,11 @@ world:
 # build src/ before contrib/
 world-contrib-recurse: world-src-recurse
 
+$(call recurse,world-bin,src config contrib,all)
+
+# build src/ before contrib/
+world-bin-contrib-recurse: world-bin-src-recurse
+
 html man:
 	$(MAKE) -C doc $@
 
@@ -84,6 +89,11 @@ install-world:
 
 # build src/ before contrib/
 install-world-contrib-recurse: install-world-src-recurse
+
+$(call recurse,install-world-bin,src config contrib,install)
+
+# build src/ before contrib/
+install-world-bin-contrib-recurse: install-world-bin-src-recurse
 
 $(call recurse,installdirs uninstall init-po update-po,doc src config gpcontrib)
 
@@ -199,6 +209,8 @@ $(call recurse,installcheck-world,src/bin/pg_upgrade,check)
 unittest-check:
 	$(MAKE) CFLAGS=-DUNITTEST -C src/backend unittest-check
 	$(MAKE) CFLAGS=-DUNITTEST -C src/bin unittest-check
+
+$(call recurse,install-tests,src/test/regress,install-tests)
 
 GNUmakefile: GNUmakefile.in $(top_builddir)/config.status
 	./config.status $@

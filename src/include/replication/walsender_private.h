@@ -3,7 +3,7 @@
  * walsender_private.h
  *	  Private definitions from replication/walsender.c.
  *
- * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2022, PostgreSQL Global Development Group
  *
  * src/include/replication/walsender_private.h
  *
@@ -106,7 +106,7 @@ typedef struct WalSnd
 	bool 		is_for_gp_walreceiver;
 } WalSnd;
 
-extern WalSnd *MyWalSnd;
+extern PGDLLIMPORT WalSnd *MyWalSnd;
 
 typedef enum
 {
@@ -166,7 +166,7 @@ typedef struct
 	WalSnd		walsnds[FLEXIBLE_ARRAY_MEMBER];
 } WalSndCtlData;
 
-extern WalSndCtlData *WalSndCtl;
+extern PGDLLIMPORT WalSndCtlData *WalSndCtl;
 
 
 extern void WalSndSetState(WalSndState state);
@@ -180,8 +180,9 @@ extern int	replication_yylex(void);
 extern void replication_yyerror(const char *str) pg_attribute_noreturn();
 extern void replication_scanner_init(const char *query_string);
 extern void replication_scanner_finish(void);
+extern bool replication_scanner_is_replication_command(void);
 
-extern Node *replication_parse_result;
+extern PGDLLIMPORT Node *replication_parse_result;
 
 #define GP_WALRECEIVER_APPNAME "gp_walreceiver"
 

@@ -538,6 +538,7 @@ create index ab_a3_b3_a_idx on ab_a3_b3 (a);
 
 set enable_hashjoin = 0;
 set enable_mergejoin = 0;
+set enable_memoize = 0;
 
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(0, 0, 1)');
 
@@ -556,6 +557,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
 
 reset enable_hashjoin;
 reset enable_mergejoin;
+reset enable_memoize;
 reset parallel_setup_cost;
 reset parallel_tuple_cost;
 reset min_parallel_table_scan_size;

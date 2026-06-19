@@ -1,13 +1,14 @@
+
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
 
-use Config;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
-my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
 ###############################################################
 # Definition of the pg_dump runs to make.
@@ -19,11 +20,21 @@ my $tempdir_short = TestLib::tempdir_short;
 # test_key indicates that a given run should simply use the same
 # set of like/unlike tests as another run, and which run that is.
 #
+# compile_option indicates if the commands run depend on a compilation
+# option, if any.  This can be used to control if tests should be
+# skipped when a build dependency is not satisfied.
+#
 # dump_cmd is the pg_dump command to run, which is an array of
 # the full command and arguments to run.  Note that this is run
 # using $node->command_ok(), so the port does not need to be
 # specified and is pulled from $PGPORT, which is set by the
-# PostgresNode system.
+# PostgreSQL::Test::Cluster system.
+#
+# compress_cmd is the utility command for (de)compression, if any.
+# Note that this should generally be used on pg_dump's output
+# either to generate a text file to run the through the tests, or
+# to test pg_restore's ability to parse manually compressed files
+# that otherwise pg_dump does not compress on its own (e.g. *.toc).
 #
 # restore_cmd is the pg_restore command to run, if any.  Note
 # that this should generally be used when the pg_dump goes to
@@ -52,6 +63,58 @@ my %pgdump_runs = (
 			"--file=$tempdir/binary_upgrade.sql",
 			"$tempdir/binary_upgrade.dump",
 		],
+	},
+
+	# Do not use --no-sync to give test coverage for data sync.
+	compression_gzip_custom => {
+		test_key       => 'compression',
+		compile_option => 'gzip',
+		dump_cmd       => [
+			'pg_dump',      '--format=custom',
+			'--compress=1', "--file=$tempdir/compression_gzip_custom.dump",
+			'postgres',
+		],
+		restore_cmd => [
+			'pg_restore',
+			"--file=$tempdir/compression_gzip_custom.sql",
+			"$tempdir/compression_gzip_custom.dump",
+		],
+	},
+
+	# Do not use --no-sync to give test coverage for data sync.
+	compression_gzip_dir => {
+		test_key       => 'compression',
+		compile_option => 'gzip',
+		dump_cmd       => [
+			'pg_dump',                              '--jobs=2',
+			'--format=directory',                   '--compress=1',
+			"--file=$tempdir/compression_gzip_dir", 'postgres',
+		],
+		# Give coverage for manually compressed blob.toc files during
+		# restore.
+		compress_cmd => {
+			program => $ENV{'GZIP_PROGRAM'},
+			args    => [ '-f', "$tempdir/compression_gzip_dir/blobs.toc", ],
+		},
+		restore_cmd => [
+			'pg_restore', '--jobs=2',
+			"--file=$tempdir/compression_gzip_dir.sql",
+			"$tempdir/compression_gzip_dir",
+		],
+	},
+
+	compression_gzip_plain => {
+		test_key       => 'compression',
+		compile_option => 'gzip',
+		dump_cmd       => [
+			'pg_dump', '--format=plain', '-Z1',
+			"--file=$tempdir/compression_gzip_plain.sql.gz", 'postgres',
+		],
+		# Decompress the generated file to run through the tests.
+		compress_cmd => {
+			program => $ENV{'GZIP_PROGRAM'},
+			args    => [ '-d', "$tempdir/compression_gzip_plain.sql.gz", ],
+		},
 	},
 	clean => {
 		dump_cmd => [
@@ -123,6 +186,14 @@ my %pgdump_runs = (
 			'pg_dump', '--no-sync', '-c', '-f',
 			"$tempdir/defaults_no_public_clean.sql",
 			'regress_pg_dump_test',
+		],
+	},
+	defaults_public_owner => {
+		database => 'regress_public_owner',
+		dump_cmd => [
+			'pg_dump', '--no-sync', '-f',
+			"$tempdir/defaults_public_owner.sql",
+			'regress_public_owner',
 		],
 	},
 
@@ -206,6 +277,13 @@ my %pgdump_runs = (
 			'postgres',
 		],
 	},
+	inserts => {
+		dump_cmd => [
+			'pg_dump',                     '--no-sync',
+			"--file=$tempdir/inserts.sql", '-a',
+			'--inserts',                   'postgres',
+		],
+	},
 	pg_dumpall_globals => {
 		dump_cmd => [
 			'pg_dumpall', '-v', "--file=$tempdir/pg_dumpall_globals.sql",
@@ -251,6 +329,13 @@ my %pgdump_runs = (
 			'postgres',
 		],
 	},
+	no_table_access_method => {
+		dump_cmd => [
+			'pg_dump', '--no-sync',
+			"--file=$tempdir/no_table_access_method.sql",
+			'--no-table-access-method', 'postgres',
+		],
+	},
 	only_dump_test_schema => {
 		dump_cmd => [
 			'pg_dump', '--no-sync',
@@ -264,7 +349,8 @@ my %pgdump_runs = (
 			'--no-sync',
 			"--file=$tempdir/only_dump_test_table.sql",
 			'--table=dump_test.test_table',
-			'--lock-wait-timeout=1000000',
+			'--lock-wait-timeout='
+			  . (1000 * $PostgreSQL::Test::Utils::timeout_default),
 			'postgres',
 		],
 	},
@@ -389,6 +475,7 @@ my %full_runs = (
 	binary_upgrade           => 1,
 	clean                    => 1,
 	clean_if_exists          => 1,
+	compression              => 1,
 	createdb                 => 1,
 	defaults                 => 1,
 	exclude_dump_test_schema => 1,
@@ -397,6 +484,7 @@ my %full_runs = (
 	no_blobs                 => 1,
 	no_owner                 => 1,
 	no_privs                 => 1,
+	no_table_access_method   => 1,
 	pg_dumpall_dbprivs       => 1,
 	pg_dumpall_exclude       => 1,
 	schema_only              => 1,);
@@ -623,6 +711,26 @@ my %tests = (
 			section_pre_data => 1,
 		},
 		unlike => { no_owner => 1, },
+	},
+
+	'ALTER SCHEMA public OWNER TO' => {
+		create_order => 15,
+		create_sql =>
+		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
+		regexp => qr/^ALTER SCHEMA public OWNER TO .+;/m,
+		like   => {
+			%full_runs, section_pre_data => 1,
+		},
+		unlike => { no_owner => 1, },
+	},
+
+	'ALTER SCHEMA public OWNER TO (w/o ACL changes)' => {
+		database     => 'regress_public_owner',
+		create_order => 100,
+		create_sql =>
+		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
+		regexp => qr/^(GRANT|REVOKE)/m,
+		unlike => { defaults_public_owner => 1 },
 	},
 
 	'ALTER SEQUENCE test_table_col1_seq' => {
@@ -962,6 +1070,23 @@ my %tests = (
 		like => {},
 	},
 
+	'COMMENT ON SCHEMA public' => {
+		regexp => qr/^COMMENT ON SCHEMA public IS .+;/m,
+		# regress_public_owner emits this, due to create_sql of next test
+		like => {
+			pg_dumpall_dbprivs => 1,
+			pg_dumpall_exclude => 1,
+		},
+	},
+
+	'COMMENT ON SCHEMA public IS NULL' => {
+		database     => 'regress_public_owner',
+		create_order => 100,
+		create_sql   => 'COMMENT ON SCHEMA public IS NULL;',
+		regexp       => qr/^COMMENT ON SCHEMA public IS '';/m,
+		like         => { defaults_public_owner => 1 },
+	},
+
 	'COMMENT ON TABLE dump_test.test_table' => {
 		create_order => 36,
 		create_sql   => 'COMMENT ON TABLE dump_test.test_table
@@ -1272,6 +1397,27 @@ my %tests = (
 		},
 	},
 
+	'COPY test_third_table' => {
+		create_order => 7,
+		create_sql =>
+		  'INSERT INTO dump_test.test_third_table VALUES (123, DEFAULT, 456);',
+		regexp => qr/^
+			\QCOPY dump_test.test_third_table (f1, "F3") FROM stdin;\E
+			\n123\t456\n\\\.\n
+			/xm,
+		like => {
+			%full_runs,
+			%dump_test_schema_runs,
+			data_only    => 1,
+			section_data => 1,
+		},
+		unlike => {
+			binary_upgrade           => 1,
+			exclude_dump_test_schema => 1,
+			schema_only              => 1,
+		},
+	},
+
 	'COPY test_fourth_table' => {
 		create_order => 7,
 		create_sql =>
@@ -1363,10 +1509,22 @@ my %tests = (
 		like => { column_inserts => 1, },
 	},
 
+	'INSERT INTO test_third_table (colnames)' => {
+		regexp =>
+		  qr/^INSERT INTO dump_test\.test_third_table \(f1, "F3"\) VALUES \(123, 456\);\n/m,
+		like => { column_inserts => 1, },
+	},
+
+	'INSERT INTO test_third_table' => {
+		regexp =>
+		  qr/^INSERT INTO dump_test\.test_third_table VALUES \(123, DEFAULT, 456, DEFAULT\);\n/m,
+		like => { inserts => 1, },
+	},
+
 	'INSERT INTO test_fourth_table' => {
 		regexp =>
 		  qr/^(?:INSERT INTO dump_test\.test_fourth_table DEFAULT VALUES;\n){2}/m,
-		like => { column_inserts => 1, rows_per_insert => 1, },
+		like => { column_inserts => 1, inserts => 1, rows_per_insert => 1, },
 	},
 
 	'INSERT INTO test_fifth_table' => {
@@ -1385,6 +1543,18 @@ my %tests = (
 		create_order => 1,
 		create_sql   => 'CREATE ROLE regress_dump_test_role;',
 		regexp       => qr/^CREATE ROLE regress_dump_test_role;/m,
+		like         => {
+			pg_dumpall_dbprivs       => 1,
+			pg_dumpall_exclude       => 1,
+			pg_dumpall_globals       => 1,
+			pg_dumpall_globals_clean => 1,
+		},
+	},
+
+	'CREATE ROLE regress_quoted...' => {
+		create_order => 1,
+		create_sql   => 'CREATE ROLE "regress_quoted  \"" role";',
+		regexp       => qr/^CREATE ROLE "regress_quoted  \\"" role";/m,
 		like         => {
 			pg_dumpall_dbprivs       => 1,
 			pg_dumpall_exclude       => 1,
@@ -2311,6 +2481,24 @@ my %tests = (
 		like => { %full_runs, section_post_data => 1, },
 	},
 
+	'CREATE PUBLICATION pub3' => {
+		create_order => 50,
+		create_sql   => 'CREATE PUBLICATION pub3;',
+		regexp       => qr/^
+			\QCREATE PUBLICATION pub3 WITH (publish = 'insert, update, delete, truncate');\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+	},
+
+	'CREATE PUBLICATION pub4' => {
+		create_order => 50,
+		create_sql   => 'CREATE PUBLICATION pub4;',
+		regexp       => qr/^
+			\QCREATE PUBLICATION pub4 WITH (publish = 'insert, update, delete, truncate');\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+	},
+
 	'CREATE SUBSCRIPTION sub1' => {
 		create_order => 50,
 		create_sql   => 'CREATE SUBSCRIPTION sub1
@@ -2346,6 +2534,76 @@ my %tests = (
 		like => { %full_runs, section_post_data => 1, },
 		unlike => { exclude_dump_test_schema => 1, },
 	},
+
+	'ALTER PUBLICATION pub1 ADD TABLE test_sixth_table (col3, col2)' => {
+		create_order => 52,
+		create_sql =>
+		  'ALTER PUBLICATION pub1 ADD TABLE dump_test.test_sixth_table (col3, col2);',
+		regexp => qr/^
+			\QALTER PUBLICATION pub1 ADD TABLE ONLY dump_test.test_sixth_table (col2, col3);\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'ALTER PUBLICATION pub1 ADD TABLE test_seventh_table (col3, col2) WHERE (col1 = 1)'
+	  => {
+		create_order => 52,
+		create_sql =>
+		  'ALTER PUBLICATION pub1 ADD TABLE dump_test.test_seventh_table (col3, col2) WHERE (col1 = 1);',
+		regexp => qr/^
+			\QALTER PUBLICATION pub1 ADD TABLE ONLY dump_test.test_seventh_table (col2, col3) WHERE ((col1 = 1));\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	  },
+
+	'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test' => {
+		create_order => 51,
+		create_sql =>
+		  'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test;',
+		regexp => qr/^
+			\QALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test;\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public' => {
+		create_order => 52,
+		create_sql =>
+		  'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public;',
+		regexp => qr/^
+			\QALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public;\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+	},
+
+	'ALTER PUBLICATION pub4 ADD TABLE test_table WHERE (col1 > 0);' => {
+		create_order => 51,
+		create_sql =>
+		  'ALTER PUBLICATION pub4 ADD TABLE dump_test.test_table WHERE (col1 > 0);',
+		regexp => qr/^
+			\QALTER PUBLICATION pub4 ADD TABLE ONLY dump_test.test_table WHERE ((col1 > 0));\E
+			/xm,
+		like   => { %full_runs, section_post_data => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			exclude_test_table       => 1,
+		},
+	},
+
+	'ALTER PUBLICATION pub4 ADD TABLE test_second_table WHERE (col2 = \'test\');'
+	  => {
+		create_order => 52,
+		create_sql =>
+		  'ALTER PUBLICATION pub4 ADD TABLE dump_test.test_second_table WHERE (col2 = \'test\');',
+		regexp => qr/^
+			\QALTER PUBLICATION pub4 ADD TABLE ONLY dump_test.test_second_table WHERE ((col2 = 'test'::text));\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	  },
 
 	'CREATE SCHEMA public' => {
 		regexp => qr/^CREATE SCHEMA public;/m,
@@ -2511,12 +2769,90 @@ my %tests = (
 		},
 	},
 
-	# this shouldn't ever get emitted
-	'Creation of row-level trigger in partition' => {
+	'Disabled trigger on partition is altered' => {
+		create_order => 93,
+		create_sql =>
+		  'CREATE TABLE dump_test_second_schema.measurement_y2006m3
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-03-01\') TO (\'2006-04-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;
+						CREATE TABLE dump_test_second_schema.measurement_y2006m4
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-04-01\') TO (\'2006-05-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m4 ENABLE REPLICA TRIGGER test_trigger;
+						CREATE TABLE dump_test_second_schema.measurement_y2006m5
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-05-01\') TO (\'2006-06-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m5 ENABLE ALWAYS TRIGGER test_trigger;
+						',
 		regexp => qr/^
-			\QCREATE TRIGGER test_trigger AFTER INSERT ON dump_test_second_schema.measurement\E
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;\E
 			/xm,
-		like => {},
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	'Replica trigger on partition is altered' => {
+		regexp => qr/^
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m4 ENABLE REPLICA TRIGGER test_trigger;\E
+			/xm,
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	'Always trigger on partition is altered' => {
+		regexp => qr/^
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m5 ENABLE ALWAYS TRIGGER test_trigger;\E
+			/xm,
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	# We should never see the creation of a trigger on a partition
+	'Disabled trigger on partition is not created' => {
+		regexp => qr/CREATE TRIGGER test_trigger.*ON dump_test_second_schema/,
+		like   => {},
+		unlike => { %full_runs, %dump_test_schema_runs },
+	},
+
+	# Triggers on partitions should not be dropped individually
+	'Triggers on partitions are not dropped' => {
+		regexp => qr/DROP TRIGGER test_trigger.*ON dump_test_second_schema/,
+		like   => {}
+	},
+
+	'CREATE TABLE test_third_table_generated_cols' => {
+		create_order => 6,
+		create_sql   => 'CREATE TABLE dump_test.test_third_table (
+						f1 int, junk int,
+						g1 int generated always as (f1 * 2) stored,
+						"F3" int,
+						g2 int generated always as ("F3" * 3) stored
+					);
+					ALTER TABLE dump_test.test_third_table DROP COLUMN junk;',
+		regexp => qr/^
+			\QCREATE TABLE dump_test.test_third_table (\E\n
+			\s+\Qf1 integer,\E\n
+			\s+\Qg1 integer GENERATED ALWAYS AS ((f1 * 2)) STORED,\E\n
+			\s+\Q"F3" integer,\E\n
+			\s+\Qg2 integer GENERATED ALWAYS AS (("F3" * 3)) STORED\E\n
+			\);\n
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => { binary_upgrade => 1, exclude_dump_test_schema => 1, },
 	},
 
 	'CREATE TABLE test_fourth_table_zero_col' => {
@@ -2548,6 +2884,44 @@ my %tests = (
 			\n\s+\Qcol3 boolean,\E
 			\n\s+\Qcol4 bit(5),\E
 			\n\s+\Qcol5 double precision\E
+			\n\);
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'CREATE TABLE test_sixth_table' => {
+		create_order => 6,
+		create_sql   => 'CREATE TABLE dump_test.test_sixth_table (
+						   col1 int,
+						   col2 text,
+						   col3 bytea
+					   );',
+		regexp => qr/^
+			\QCREATE TABLE dump_test.test_sixth_table (\E
+			\n\s+\Qcol1 integer,\E
+			\n\s+\Qcol2 text,\E
+			\n\s+\Qcol3 bytea\E
+			\n\);
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'CREATE TABLE test_seventh_table' => {
+		create_order => 6,
+		create_sql   => 'CREATE TABLE dump_test.test_seventh_table (
+						   col1 int,
+						   col2 text,
+						   col3 bytea
+					   );',
+		regexp => qr/^
+			\QCREATE TABLE dump_test.test_seventh_table (\E
+			\n\s+\Qcol1 integer,\E
+			\n\s+\Qcol2 text,\E
+			\n\s+\Qcol3 bytea\E
 			\n\);
 			/xm,
 		like =>
@@ -2742,6 +3116,18 @@ my %tests = (
 		unlike => { exclude_dump_test_schema => 1, },
 	},
 
+	'CREATE STATISTICS extended_stats_expression' => {
+		create_order => 99,
+		create_sql   => 'CREATE STATISTICS dump_test.test_ext_stats_expr
+							ON (2 * col1) FROM dump_test.test_fifth_table',
+		regexp => qr/^
+			\QCREATE STATISTICS dump_test.test_ext_stats_expr ON (2 * col1) FROM dump_test.test_fifth_table;\E
+		    /xms,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
 	'CREATE SEQUENCE test_table_col1_seq' => {
 		regexp => qr/^
 			\QCREATE SEQUENCE dump_test.test_table_col1_seq\E
@@ -2772,6 +3158,7 @@ my %tests = (
 			binary_upgrade          => 1,
 			clean                   => 1,
 			clean_if_exists         => 1,
+			compression             => 1,
 			createdb                => 1,
 			defaults                => 1,
 			exclude_test_table      => 1,
@@ -2779,6 +3166,7 @@ my %tests = (
 			no_blobs                => 1,
 			no_privs                => 1,
 			no_owner                => 1,
+			no_table_access_method  => 1,
 			only_dump_test_schema   => 1,
 			pg_dumpall_dbprivs      => 1,
 			pg_dumpall_exclude      => 1,
@@ -2843,6 +3231,7 @@ my %tests = (
 			binary_upgrade           => 1,
 			clean                    => 1,
 			clean_if_exists          => 1,
+			compression              => 1,
 			createdb                 => 1,
 			defaults                 => 1,
 			exclude_dump_test_schema => 1,
@@ -2851,6 +3240,7 @@ my %tests = (
 			no_blobs                 => 1,
 			no_privs                 => 1,
 			no_owner                 => 1,
+			no_table_access_method   => 1,
 			pg_dumpall_dbprivs       => 1,
 			pg_dumpall_exclude       => 1,
 			role                     => 1,
@@ -3158,9 +3548,12 @@ my %tests = (
 	},
 
 	'GRANT SELECT ON TABLE measurement_y2006m2' => {
-		create_order => 92,
-		create_sql   => 'GRANT SELECT ON
-						   TABLE dump_test_second_schema.measurement_y2006m2
+		create_order => 94,
+		create_sql   => 'GRANT SELECT ON TABLE
+						   dump_test_second_schema.measurement_y2006m2,
+						   dump_test_second_schema.measurement_y2006m3,
+						   dump_test_second_schema.measurement_y2006m4,
+						   dump_test_second_schema.measurement_y2006m5
 						   TO regress_dump_test_role;',
 		regexp =>
 		  qr/^\QGRANT SELECT ON TABLE dump_test_second_schema.measurement_y2006m2 TO regress_dump_test_role;\E/m,
@@ -3370,6 +3763,23 @@ my %tests = (
 		unlike => { no_privs => 1, },
 	},
 
+	# With the exception of the public schema, we don't dump ownership changes
+	# for objects originating at initdb.  Hence, any GRANT or REVOKE affecting
+	# owner privileges for those objects should reference the bootstrap
+	# superuser, not the dump-time owner.
+	'REVOKE EXECUTE ON FUNCTION pg_stat_reset FROM regress_dump_test_role' =>
+	  {
+		create_order => 15,
+		create_sql   => '
+			ALTER FUNCTION pg_stat_reset OWNER TO regress_dump_test_role;
+			REVOKE EXECUTE ON FUNCTION pg_stat_reset
+			  FROM regress_dump_test_role;',
+		regexp => qr/^[^-].*pg_stat_reset.* regress_dump_test_role/m,
+
+		# this shouldn't ever get emitted
+		like => {},
+	  },
+
 	'REVOKE SELECT ON TABLE pg_proc FROM public' => {
 		create_order => 45,
 		create_sql   => 'REVOKE SELECT ON TABLE pg_proc FROM public;',
@@ -3379,13 +3789,12 @@ my %tests = (
 		unlike => { no_privs => 1, },
 	},
 
-	'REVOKE CREATE ON SCHEMA public FROM public' => {
+	'REVOKE ALL ON SCHEMA public' => {
 		create_order => 16,
-		create_sql   => 'REVOKE CREATE ON SCHEMA public FROM public;',
-		regexp       => qr/^
-			\QREVOKE ALL ON SCHEMA public FROM PUBLIC;\E
-			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
-			/xm,
+		create_sql =>
+		  'REVOKE ALL ON SCHEMA public FROM "regress_quoted  \"" role";',
+		regexp =>
+		  qr/^REVOKE ALL ON SCHEMA public FROM "regress_quoted  \\"" role";/m,
 		like => { %full_runs, section_pre_data => 1, },
 		unlike => { no_privs => 1, },
 	},
@@ -3438,7 +3847,8 @@ my %tests = (
 		like => {
 			%full_runs, %dump_test_schema_runs, section_pre_data => 1,
 		},
-		unlike => { exclude_dump_test_schema => 1 },
+		unlike =>
+		  { exclude_dump_test_schema => 1, no_table_access_method => 1 },
 	},
 
 	'CREATE MATERIALIZED VIEW regress_pg_dump_matview_am' => {
@@ -3458,13 +3868,14 @@ my %tests = (
 		like => {
 			%full_runs, %dump_test_schema_runs, section_pre_data => 1,
 		},
-		unlike => { exclude_dump_test_schema => 1 },
+		unlike =>
+		  { exclude_dump_test_schema => 1, no_table_access_method => 1 },
 	});
 
 #########################################
 # Create a PG instance to test actually dumping from
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -3650,6 +4061,79 @@ command_fails_like(
 	'no matching tables');
 
 #########################################
+# Test invalid multipart database names
+
+$node->command_fails_like(
+	[ 'pg_dumpall', '--exclude-database', '.' ],
+	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): \./,
+	'pg_dumpall: option --exclude-database rejects multipart pattern "."');
+
+$node->command_fails_like(
+	[ 'pg_dumpall', '--exclude-database', 'myhost.mydb' ],
+	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): myhost\.mydb/,
+	'pg_dumpall: option --exclude-database rejects multipart database names');
+
+#########################################
+# Test valid database exclusion patterns
+
+$node->command_ok(
+	[ 'pg_dumpall', '-p', "$port", '--exclude-database', '"myhost.mydb"' ],
+	'pg_dumpall: option --exclude-database handles database names with embedded dots'
+);
+
+#########################################
+# Test invalid multipart schema names
+
+$node->command_fails_like(
+	[ 'pg_dump', '--schema', 'myhost.mydb.myschema' ],
+	qr/pg_dump: error: improper qualified name \(too many dotted names\): myhost\.mydb\.myschema/,
+	'pg_dump: option --schema rejects three-part schema names');
+
+$node->command_fails_like(
+	[ 'pg_dump', '--schema', 'otherdb.myschema' ],
+	qr/pg_dump: error: cross-database references are not implemented: otherdb\.myschema/,
+	'pg_dump: option --schema rejects cross-database multipart schema names');
+
+$node->command_fails_like(
+	[ 'pg_dump', '--schema', '.' ],
+	qr/pg_dump: error: cross-database references are not implemented: \./,
+	'pg_dump: option --schema rejects degenerate two-part schema name: "."');
+
+$node->command_fails_like(
+	[ 'pg_dump', '--schema', '"some.other.db".myschema' ],
+	qr/pg_dump: error: cross-database references are not implemented: "some\.other\.db"\.myschema/,
+	'pg_dump: option --schema rejects cross-database multipart schema names with embedded dots'
+);
+
+$node->command_fails_like(
+	[ 'pg_dump', '--schema', '..' ],
+	qr/pg_dump: error: improper qualified name \(too many dotted names\): \.\./,
+	'pg_dump: option --schema rejects degenerate three-part schema name: ".."'
+);
+
+#########################################
+# Test invalid multipart relation names
+
+$node->command_fails_like(
+	[ 'pg_dump', '--table', 'myhost.mydb.myschema.mytable' ],
+	qr/pg_dump: error: improper relation name \(too many dotted names\): myhost\.mydb\.myschema\.mytable/,
+	'pg_dump: option --table rejects four-part table names');
+
+$node->command_fails_like(
+	[ 'pg_dump', '--table', 'otherdb.pg_catalog.pg_class' ],
+	qr/pg_dump: error: cross-database references are not implemented: otherdb\.pg_catalog\.pg_class/,
+	'pg_dump: option --table rejects cross-database three part table names');
+
+command_fails_like(
+	[
+		'pg_dump', '-p', "$port", '--table',
+		'"some.other.db".pg_catalog.pg_class'
+	],
+	qr/pg_dump: error: cross-database references are not implemented: "some\.other\.db"\.pg_catalog\.pg_class/,
+	'pg_dump: option --table rejects cross-database three part table names with embedded dots'
+);
+
+#########################################
 # Run all runs
 
 foreach my $run (sort keys %pgdump_runs)
@@ -3657,8 +4141,31 @@ foreach my $run (sort keys %pgdump_runs)
 	my $test_key = $run;
 	my $run_db   = 'postgres';
 
+	# Skip command-level tests for gzip if there is no support for it.
+	if (   defined($pgdump_runs{$run}->{compile_option})
+		&& $pgdump_runs{$run}->{compile_option} eq 'gzip'
+		&& !$supports_gzip)
+	{
+		note "$run: skipped due to no gzip support";
+		next;
+	}
+
 	$node->command_ok(\@{ $pgdump_runs{$run}->{dump_cmd} },
 		"$run: pg_dump runs");
+
+	if ($pgdump_runs{$run}->{compress_cmd})
+	{
+		my ($compress_cmd) = $pgdump_runs{$run}->{compress_cmd};
+		my $compress_program = $compress_cmd->{program};
+
+		# Skip the rest of the test if the compression program is
+		# not defined.
+		next if (!defined($compress_program) || $compress_program eq '');
+
+		my @full_compress_cmd =
+		  ($compress_cmd->{program}, @{ $compress_cmd->{args} });
+		command_ok(\@full_compress_cmd, "$run: compression commands");
+	}
 
 	if ($pgdump_runs{$run}->{restore_cmd})
 	{
@@ -3728,3 +4235,5 @@ foreach my $run (sort keys %pgdump_runs)
 # Stop the database instance, which will be removed at the end of the tests.
 
 $node->stop('fast');
+
+done_testing();

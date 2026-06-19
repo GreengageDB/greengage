@@ -4,7 +4,7 @@
  *	  definition of the "relation" system catalog (pg_class)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_class.h
@@ -160,9 +160,9 @@ FOREIGN_KEY(reltoastrelid REFERENCES pg_class(oid));
  */
 typedef FormData_pg_class *Form_pg_class;
 
-#define ClassOidIndexId  2662
-#define ClassNameNspIndexId  2663
-#define ClassTblspcRelfilenodeIndexId  3455
+DECLARE_UNIQUE_INDEX_PKEY(pg_class_oid_index, 2662, ClassOidIndexId, on pg_class using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_class_relname_nsp_index, 2663, ClassNameNspIndexId, on pg_class using btree(relname name_ops, relnamespace oid_ops));
+DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, ClassTblspcRelfilenodeIndexId, on pg_class using btree(reltablespace oid_ops, relfilenode oid_ops));
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 
@@ -193,7 +193,7 @@ typedef FormData_pg_class *Form_pg_class;
 /*
  * an explicitly chosen candidate key's columns are used as replica identity.
  * Note this will still be set if the index has been dropped; in that case it
- * has the same meaning as 'd'.
+ * has the same meaning as 'n'.
  */
 #define		  REPLICA_IDENTITY_INDEX	'i'
 
@@ -211,6 +211,33 @@ typedef FormData_pg_class *Form_pg_class;
 	 (relkind) == RELKIND_AOVISIMAP || \
 	 (relkind) == RELKIND_AOBLOCKDIR || \
 	 (relkind) == RELKIND_MATVIEW)
+
+#define RELKIND_HAS_PARTITIONS(relkind) \
+	((relkind) == RELKIND_PARTITIONED_TABLE || \
+	 (relkind) == RELKIND_PARTITIONED_INDEX)
+
+/*
+ * Relation kinds that support tablespaces: All relation kinds with storage
+ * support tablespaces, except that we don't support moving sequences around
+ * into different tablespaces.  Partitioned tables and indexes don't have
+ * physical storage, but they have a tablespace settings so that their
+ * children can inherit it.
+ */
+#define RELKIND_HAS_TABLESPACE(relkind) \
+	((RELKIND_HAS_STORAGE(relkind) || RELKIND_HAS_PARTITIONS(relkind)) \
+	 && (relkind) != RELKIND_SEQUENCE)
+
+/*
+ * Relation kinds with a table access method (rd_tableam).  Although sequences
+ * use the heap table AM, they are enough of a special case in most uses that
+ * they are not included here.
+ */
+#define RELKIND_HAS_TABLE_AM(relkind) \
+	((relkind) == RELKIND_RELATION || \
+	 (relkind) == RELKIND_TOASTVALUE || \
+	 (relkind) == RELKIND_MATVIEW)
+
+extern int	errdetail_relkind_not_supported(char relkind);
 
 #endif							/* EXPOSE_TO_CLIENT_CODE */
 

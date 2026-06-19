@@ -8,7 +8,7 @@
  *	  Structs that need to be client-visible are in pqcomm.h.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/libpq/libpq-be.h
@@ -333,7 +333,7 @@ extern ssize_t be_gssapi_read(Port *port, void *ptr, size_t len);
 extern ssize_t be_gssapi_write(Port *port, void *ptr, size_t len);
 #endif							/* ENABLE_GSS */
 
-extern ProtocolVersion FrontendProtocol;
+extern PGDLLIMPORT ProtocolVersion FrontendProtocol;
 
 /* TCP keepalives configuration. These are no-ops on an AF_UNIX socket. */
 

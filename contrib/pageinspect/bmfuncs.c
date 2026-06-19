@@ -6,6 +6,8 @@
 
 #include "postgres.h"
 
+#include <arpa/inet.h>			/* for htonl() */
+
 #include "pageinspect.h"
 
 #include "access/bitmap_private.h"

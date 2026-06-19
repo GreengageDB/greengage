@@ -185,6 +185,34 @@ ConditionalLockRelationOid(Oid relid, LOCKMODE lockmode)
 }
 
 /*
+ *		LockRelationId
+ *
+ * Lock, given a LockRelId.  Same as LockRelationOid but take LockRelId as an
+ * input.
+ */
+void
+LockRelationId(LockRelId *relid, LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+	LOCALLOCK  *locallock;
+	LockAcquireResult res;
+
+	SET_LOCKTAG_RELATION(tag, relid->dbId, relid->relId);
+
+	res = LockAcquireExtended(&tag, lockmode, false, false, true, &locallock);
+
+	/*
+	 * Now that we have the lock, check for invalidation messages; see notes
+	 * in LockRelationOid.
+	 */
+	if (res != LOCKACQUIRE_ALREADY_CLEAR)
+	{
+		AcceptInvalidationMessages();
+		MarkLockClear(locallock);
+	}
+}
+
+/*
  *		UnlockRelationId
  *
  * Unlock, given a LockRelId.  This is preferred over UnlockRelationOid
@@ -972,9 +1000,10 @@ XactLockTableWaitErrorCb(void *arg)
  * To do this, obtain the current list of lockers, and wait on their VXIDs
  * until they are finished.
  *
- * Note we don't try to acquire the locks on the given locktags, only the VXIDs
- * of its lock holders; if somebody grabs a conflicting lock on the objects
- * after we obtained our initial list of lockers, we will not wait for them.
+ * Note we don't try to acquire the locks on the given locktags, only the
+ * VXIDs and XIDs of their lock holders; if somebody grabs a conflicting lock
+ * on the objects after we obtained our initial list of lockers, we will not
+ * wait for them.
  */
 void
 WaitForLockersMultiple(List *locktags, LOCKMODE lockmode, bool progress)

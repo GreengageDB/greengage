@@ -3,7 +3,7 @@
  * pg_user_mapping.h
  *	  definition of the "user mapping" system catalog (pg_user_mapping)
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_user_mapping.h
@@ -48,7 +48,7 @@ CATALOG(pg_user_mapping,1418,UserMappingRelationId)
 typedef FormData_pg_user_mapping *Form_pg_user_mapping;
 
 
-#define UserMappingOidIndexId	174
-#define UserMappingUserServerIndexId	175
+DECLARE_UNIQUE_INDEX_PKEY(pg_user_mapping_oid_index, 174, UserMappingOidIndexId, on pg_user_mapping using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_user_mapping_user_server_index, 175, UserMappingUserServerIndexId, on pg_user_mapping using btree(umuser oid_ops, umserver oid_ops));
 
 #endif							/* PG_USER_MAPPING_H */

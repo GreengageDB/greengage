@@ -4,7 +4,7 @@
  *
  *	  Routines for opclass (and opfamily) manipulation commands
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -244,7 +244,8 @@ get_opclass_oid(Oid amID, List *opclassname, bool missing_ok)
  * Caller must have done permissions checks etc. already.
  */
 static ObjectAddress
-CreateOpFamily(const char *amname, const char *opfname, Oid namespaceoid, Oid amoid)
+CreateOpFamily(CreateOpFamilyStmt *stmt, const char *opfname,
+			   Oid namespaceoid, Oid amoid)
 {
 	Oid			opfamilyoid;
 	Relation	rel;
@@ -268,7 +269,7 @@ CreateOpFamily(const char *amname, const char *opfname, Oid namespaceoid, Oid am
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("operator family \"%s\" for access method \"%s\" already exists",
-						opfname, amname)));
+						opfname, stmt->amname)));
 
 	/*
 	 * Okay, let's create the pg_opfamily entry.
@@ -316,6 +317,10 @@ CreateOpFamily(const char *amname, const char *opfname, Oid namespaceoid, Oid am
 
 	/* dependency on extension */
 	recordDependencyOnCurrentExtension(&myself, false);
+
+	/* Report the new operator family to possibly interested event triggers */
+	EventTriggerCollectSimpleCommand(myself, InvalidObjectAddress,
+									 (Node *) stmt);
 
 	/* Post creation hook for new operator family */
 	InvokeObjectPostCreateHook(OperatorFamilyRelationId, opfamilyoid, 0);
@@ -452,13 +457,17 @@ DefineOpClass(CreateOpClassStmt *stmt)
 		}
 		else
 		{
+			CreateOpFamilyStmt *opfstmt;
 			ObjectAddress tmpAddr;
+
+			opfstmt = makeNode(CreateOpFamilyStmt);
+			opfstmt->opfamilyname = stmt->opclassname;
+			opfstmt->amname = stmt->amname;
 
 			/*
 			 * Create it ... again no need for more permissions ...
 			 */
-			tmpAddr = CreateOpFamily(stmt->amname, opcname,
-									 namespaceoid, amoid);
+			tmpAddr = CreateOpFamily(opfstmt, opcname, namespaceoid, amoid);
 			opfamilyoid = tmpAddr.objectId;
 		}
 	}
@@ -809,7 +818,7 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 
 	/* Insert pg_opfamily catalog entry */
 	ObjectAddress objAddr;
-	objAddr = CreateOpFamily(stmt->amname, opfname, namespaceoid, amoid);
+	objAddr = CreateOpFamily(stmt, opfname, namespaceoid, amoid);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{

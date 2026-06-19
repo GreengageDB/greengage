@@ -3,7 +3,7 @@
  * typecmds.c
  *	  Routines for SQL commands that manipulate types (and domains).
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -371,10 +371,7 @@ DefineType(ParseState *pstate, List *names, List *parameters)
 			continue;
 		}
 		if (*defelp != NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("conflicting or redundant options"),
-					 parser_errposition(pstate, defel->location)));
+			errorConflictingDefElem(defel, pstate);
 		*defelp = defel;
 	}
 
@@ -546,7 +543,7 @@ DefineType(ParseState *pstate, List *names, List *parameters)
 		analyzeOid = findTypeAnalyzeFunction(analyzeName, typoid);
 
 	/*
-	 * Likewise look up the subscripting procedure if any.  If it is not
+	 * Likewise look up the subscripting function if any.  If it is not
 	 * specified, but a typelem is specified, allow that if
 	 * raw_array_subscript_handler can be used.  (This is for backwards
 	 * compatibility; maybe someday we should throw an error instead.)
@@ -560,7 +557,7 @@ DefineType(ParseState *pstate, List *names, List *parameters)
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("element type cannot be specified without a valid subscripting procedure")));
+					 errmsg("element type cannot be specified without a subscripting function")));
 	}
 
 	/*
@@ -916,7 +913,7 @@ DefineDomain(CreateDomainStmt *stmt)
 	analyzeProcedure = baseType->typanalyze;
 
 	/*
-	 * Domains don't need a subscript procedure, since they are not
+	 * Domains don't need a subscript function, since they are not
 	 * subscriptable on their own.  If the base type is subscriptable, the
 	 * parser will reduce the type to the base type before subscripting.
 	 */
@@ -1439,7 +1436,7 @@ checkEnumOwner(HeapTuple tup)
  * and users might have queries with that same assumption.
  */
 ObjectAddress
-DefineRange(CreateRangeStmt *stmt)
+DefineRange(ParseState *pstate, CreateRangeStmt *stmt)
 {
 	char	   *typeName;
 	Oid			typeNamespace;
@@ -1515,50 +1512,38 @@ DefineRange(CreateRangeStmt *stmt)
 		if (strcmp(defel->defname, "subtype") == 0)
 		{
 			if (OidIsValid(rangeSubtype))
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			/* we can look up the subtype name immediately */
 			rangeSubtype = typenameTypeId(NULL, defGetTypeName(defel));
 		}
 		else if (strcmp(defel->defname, "subtype_opclass") == 0)
 		{
 			if (rangeSubOpclassName != NIL)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			rangeSubOpclassName = defGetQualifiedName(defel);
 		}
 		else if (strcmp(defel->defname, "collation") == 0)
 		{
 			if (rangeCollationName != NIL)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			rangeCollationName = defGetQualifiedName(defel);
 		}
 		else if (strcmp(defel->defname, "canonical") == 0)
 		{
 			if (rangeCanonicalName != NIL)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			rangeCanonicalName = defGetQualifiedName(defel);
 		}
 		else if (strcmp(defel->defname, "subtype_diff") == 0)
 		{
 			if (rangeSubtypeDiffName != NIL)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			rangeSubtypeDiffName = defGetQualifiedName(defel);
 		}
 		else if (strcmp(defel->defname, "multirange_type_name") == 0)
 		{
 			if (multirangeTypeName != NULL)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			/* we can look up the subtype name immediately */
 			multirangeNamespace = QualifiedNameGetCreationNamespace(defGetQualifiedName(defel),
 																	&multirangeTypeName);
@@ -1838,7 +1823,6 @@ DefineRange(CreateRangeStmt *stmt)
 	/* Create cast from the range type to its multirange type */
 	CastCreate(typoid, multirangeOid, castFuncOid, 'e', 'f', DEPENDENCY_INTERNAL);
 
-	pfree(multirangeTypeName);
 	pfree(multirangeArrayName);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -2044,10 +2028,10 @@ makeMultirangeConstructors(const char *name, Oid namespace,
 	allParamTypes = ObjectIdGetDatum(rangeArrayOid);
 	allParameterTypes = construct_array(&allParamTypes,
 										1, OIDOID,
-										sizeof(Oid), true, 'i');
+										sizeof(Oid), true, TYPALIGN_INT);
 	paramModes = CharGetDatum(FUNC_PARAM_VARIADIC);
 	parameterModes = construct_array(&paramModes, 1, CHAROID,
-									 1, true, 'c');
+									 1, true, TYPALIGN_CHAR);
 	myself = ProcedureCreate(name,	/* name: same as multirange type */
 							 namespace,
 							 false, /* replace */
@@ -2830,6 +2814,7 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 							 0, /* relation kind is n/a */
 							 false, /* a domain isn't an implicit array */
 							 false, /* nor is it any kind of dependent type */
+							 false, /* don't touch extension membership */
 							 true); /* We do need to rebuild dependencies */
 
 	InvokeObjectPostAlterHook(TypeRelationId, domainoid, 0);
@@ -3705,6 +3690,8 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 							  0,
 							  ' ',
 							  ' ',
+							  NULL,
+							  0,
 							  ' ',
 							  NULL, /* not an exclusion constraint */
 							  expr, /* Tree form of check constraint */
@@ -4634,6 +4621,7 @@ AlterTypeRecurse(Oid typeOid, bool isImplicitArray,
 							 0, /* we rejected composite types above */
 							 isImplicitArray,	/* it might be an array */
 							 isImplicitArray,	/* dependent iff it's array */
+							 false, /* don't touch extension membership */
 							 true);
 
 	InvokeObjectPostAlterHook(TypeRelationId, typeOid, 0);

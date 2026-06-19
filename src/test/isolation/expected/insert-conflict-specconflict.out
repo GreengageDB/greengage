@@ -364,10 +364,16 @@ step controller_print_speculative_locks:
     WHERE
         locktype IN ('spectoken', 'transactionid')
         AND pa.datname = current_database()
-        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict-s%'
+        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict/s%'
     ORDER BY 1, 2, 3, 4;
 
-application_namelocktype       mode           granted        
+application_name                         |locktype     |mode         |granted
+-----------------------------------------+-------------+-------------+-------
+isolation/insert-conflict-specconflict/s1|spectoken    |ShareLock    |f      
+isolation/insert-conflict-specconflict/s1|transactionid|ExclusiveLock|t      
+isolation/insert-conflict-specconflict/s2|spectoken    |ExclusiveLock|t      
+isolation/insert-conflict-specconflict/s2|transactionid|ExclusiveLock|t      
+(4 rows)
 
 isolation/insert-conflict-specconflict-s1spectoken      ShareLock      f              
 isolation/insert-conflict-specconflict-s1transactionid  ExclusiveLock  t              
@@ -387,10 +393,15 @@ step controller_print_speculative_locks:
     WHERE
         locktype IN ('spectoken', 'transactionid')
         AND pa.datname = current_database()
-        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict-s%'
+        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict/s%'
     ORDER BY 1, 2, 3, 4;
 
-application_namelocktype       mode           granted        
+application_name                         |locktype     |mode         |granted
+-----------------------------------------+-------------+-------------+-------
+isolation/insert-conflict-specconflict/s1|transactionid|ExclusiveLock|t      
+isolation/insert-conflict-specconflict/s1|transactionid|ShareLock    |f      
+isolation/insert-conflict-specconflict/s2|transactionid|ExclusiveLock|t      
+(3 rows)
 
 isolation/insert-conflict-specconflict-s1transactionid  ExclusiveLock  t              
 isolation/insert-conflict-specconflict-s1transactionid  ShareLock      f              
@@ -410,7 +421,7 @@ step controller_print_speculative_locks:
     WHERE
         locktype IN ('spectoken', 'transactionid')
         AND pa.datname = current_database()
-        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict-s%'
+        AND pa.application_name LIKE 'isolation/insert-conflict-specconflict/s%'
     ORDER BY 1, 2, 3, 4;
 
 application_namelocktype       mode           granted        

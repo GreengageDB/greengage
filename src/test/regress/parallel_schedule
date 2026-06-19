@@ -1,6 +1,9 @@
 # ----------
 # src/test/regress/parallel_schedule
 #
+# Most test scripts can be run after running just test_setup and possibly
+# create_index.  Exceptions to this rule are documented below.
+#
 # By convention, we put no more than twenty tests in any one parallel group;
 # this limits the number of connections needed to run the tests.
 # ----------
@@ -36,26 +39,18 @@ test: strings numerology point lseg line box path polygon circle date time timet
 test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions unicode
 
 # ----------
-# These four each depend on the previous one
-# ----------
-test: create_function_1
-test: create_type
-test: create_table
-test: create_function_2
-
-# ----------
 # Load huge amounts of data
 # We should split the data files into single files and then
-# execute two copy tests parallel, to check that copy itself
+# execute two copy tests in parallel, to check that copy itself
 # is concurrent safe.
 # ----------
 test: copy copyselect copydml insert insert_conflict
 
 # ----------
 # More groups of parallel tests
+# Note: many of the tests in later groups depend on create_index
 # ----------
-test: create_misc create_operator create_procedure
-# These depend on create_misc and create_operator
+test: create_function_c create_misc create_operator create_procedure create_table create_type
 test: create_index create_index_spgist create_view index_including index_including_gist
 # Depends on things setup for create_index
 test: gp_gin_index
@@ -63,7 +58,7 @@ test: gp_gin_index
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_aggregate create_function_3 create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors
+test: create_aggregate create_function_sql create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors
 
 # ----------
 # Because vacuum will detect concurrently running transactions, it is necessary to
@@ -81,9 +76,13 @@ test: enable_autovacuum
 # ----------
 #test: sanity_check
 
+# Note: the ignore: line does not skip random, just mark it as ignorable
+ignore: random
+
 # ----------
 # Another group of parallel tests
-# Note: the ignore: line does not run random, just mark it as ignorable
+# aggregates depends on create_aggregate
+# join depends on create_misc
 # ----------
 ignore: random
 test: select_into select_distinct select_distinct_on select_implicit select_having subselect union case join aggregates random portals arrays btree_index hash_index update delete
@@ -108,13 +107,13 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 
 # ----------
 # Another group of parallel tests
+# psql depends on create_am
+# amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
 test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan collate.icu.utf8
 # GPDB_13_MERGE_FIXME: enable incremental sort
 # incremental_sort
 
-# rules cannot run concurrently with any test that creates
-# a view or rule in the public schema
 # collate.*.utf8 tests cannot be run in parallel with each other
 test: psql psql_crosstab amutils stats_ext collate.linux.utf8
 #
@@ -127,15 +126,20 @@ test: psql psql_crosstab amutils stats_ext collate.linux.utf8
 # enable it
 #test: rules
 
-# run by itself so it can run parallel workers
+# ----------
+# Run these alone so they don't run out of parallel workers
+# select_parallel depends on create_misc
+# ----------
 test: select_parallel
 test: write_parallel
+test: vacuum_parallel
 
 # no relation related tests can be put in this group
 test: publication subscription
 
 # ----------
 # Another group of parallel tests
+# select_views depends on create_view
 # ----------
 test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
 
@@ -146,10 +150,11 @@ test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch 
 # ----------
 # Another group of parallel tests (JSON related)
 # ----------
-test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath
+test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath sqljson json_sqljson jsonb_sqljson
 
 # ----------
 # Another group of parallel tests
+# with depends on create_misc
 # NB: temp.sql does a reconnect which transiently uses 2 connections,
 # so keep this parallel group to at most 19 tests
 # ----------
@@ -161,6 +166,9 @@ test: gp_foreign_data
 
 # ----------
 # Another group of parallel tests
+#
+# The stats test resets stats, so nothing else needing stats access can be in
+# this group.
 # ----------
 test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain
 

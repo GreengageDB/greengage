@@ -247,6 +247,45 @@ select x, not x as not_x, q2 from
   group by grouping sets(x, q2)
   order by x, q2;
 
+-- check qual push-down rules for a subquery with grouping sets
+explain (verbose, costs off)
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+
+-- check handling of pulled-up SubPlan in GROUPING() argument (bug #17479)
+explain (verbose, costs off)
+select grouping(ss.x)
+from int8_tbl i1
+cross join lateral (select (select i1.q1) as x) ss
+group by ss.x;
+
+select grouping(ss.x)
+from int8_tbl i1
+cross join lateral (select (select i1.q1) as x) ss
+group by ss.x;
+
+explain (verbose, costs off)
+select (select grouping(ss.x))
+from int8_tbl i1
+cross join lateral (select (select i1.q1) as x) ss
+group by ss.x;
+
+select (select grouping(ss.x))
+from int8_tbl i1
+cross join lateral (select (select i1.q1) as x) ss
+group by ss.x;
+
 -- simple rescan tests
 
 select a, b, sum(v.x)
@@ -513,6 +552,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 -- test the knapsack
 
 set enable_indexscan = false;
+set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
 explain (costs off)
   select unique1,
@@ -592,6 +632,7 @@ from gs_data_1 group by cube (g1000, g100,g10);
 
 set enable_sort = true;
 set work_mem to default;
+set hash_mem_multiplier to default;
 
 -- GPDB_12_MERGE_FIXME: the following comparison query has an ORCA plan that
 -- relies on "IS NOT DISTINCT FROM" Hash Join, a variant that we likely have
@@ -624,6 +665,15 @@ group by rollup (a) order by a;
 select a, b, rank(b) within group (order by b nulls last)
 from (values (1,1),(1,4),(1,5),(3,1),(3,2)) v(a,b)
 group by rollup (a,b) order by a;
+
+-- test handling of outer GroupingFunc within subqueries
+explain (costs off)
+select (select grouping(v1)) from (values ((select 1))) v(v1) group by cube(v1);
+select (select grouping(v1)) from (values ((select 1))) v(v1) group by cube(v1);
+
+explain (costs off)
+select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
+select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
 
 -- end
 reset optimizer_trace_fallback;

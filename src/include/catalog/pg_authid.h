@@ -80,10 +80,9 @@ FOREIGN_KEY(rolresgroup REFERENCES pg_resgroup(oid));
  */
 typedef FormData_pg_authid *Form_pg_authid;
 
-#define PgAuthidToastTable 4175
-#define PgAuthidToastIndex 4176
+DECLARE_TOAST_WITH_MACRO(pg_authid, 4175, 4176, PgAuthidToastTable, PgAuthidToastIndex);
 
-#define AuthIdRolnameIndexId	2676
-#define AuthIdOidIndexId	2677
+DECLARE_UNIQUE_INDEX(pg_authid_rolname_index, 2676, AuthIdRolnameIndexId, on pg_authid using btree(rolname name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_authid_oid_index, 2677, AuthIdOidIndexId, on pg_authid using btree(oid oid_ops));
 
 #endif							/* PG_AUTHID_H */

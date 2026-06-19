@@ -4,7 +4,7 @@
  *	  definition of the "constraint" system catalog (pg_constraint)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_constraint.h
@@ -143,6 +143,12 @@ CATALOG(pg_constraint,2606,ConstraintRelationId)
 	Oid			conffeqop[1] BKI_LOOKUP(pg_operator);
 
 	/*
+	 * If a foreign key with an ON DELETE SET NULL/DEFAULT action, the subset
+	 * of conkey to updated.  If null, all columns are updated.
+	 */
+	int16		confdelsetcols[1];
+
+	/*
 	 * If an exclusion constraint, the OIDs of the exclusion operators for
 	 * each column of the constraint
 	 */
@@ -169,11 +175,11 @@ FOREIGN_KEY(confrelid REFERENCES pg_class(oid));
 typedef FormData_pg_constraint *Form_pg_constraint;
 
 
-#define ConstraintNameNspIndexId  2664
-#define ConstraintRelidTypidNameIndexId	2665
-#define ConstraintTypidIndexId	2666
-#define ConstraintOidIndexId  2667
-#define ConstraintParentIndexId	2579
+DECLARE_INDEX(pg_constraint_conname_nsp_index, 2664, ConstraintNameNspIndexId, on pg_constraint using btree(conname name_ops, connamespace oid_ops));
+DECLARE_UNIQUE_INDEX(pg_constraint_conrelid_contypid_conname_index, 2665, ConstraintRelidTypidNameIndexId, on pg_constraint using btree(conrelid oid_ops, contypid oid_ops, conname name_ops));
+DECLARE_INDEX(pg_constraint_contypid_index, 2666, ConstraintTypidIndexId, on pg_constraint using btree(contypid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_constraint_oid_index, 2667, ConstraintOidIndexId, on pg_constraint using btree(oid oid_ops));
+DECLARE_INDEX(pg_constraint_conparentid_index, 2579, ConstraintParentIndexId, on pg_constraint using btree(conparentid oid_ops));
 
 /* conkey can contain zero (InvalidAttrNumber) if a whole-row Var is used */
 
@@ -227,6 +233,8 @@ extern Oid	CreateConstraintEntry(const char *constraintName,
 								  int foreignNKeys,
 								  char foreignUpdateType,
 								  char foreignDeleteType,
+								  const int16 *fkDeleteSetCols,
+								  int numFkDeleteSetCols,
 								  char foreignMatchType,
 								  const Oid *exclOp,
 								  Node *conExpr,
@@ -267,7 +275,8 @@ extern Bitmapset *get_primary_key_attnos(Oid relid, bool deferrableOk,
 										 Oid *constraintOid);
 extern void DeconstructFkConstraintRow(HeapTuple tuple, int *numfks,
 									   AttrNumber *conkey, AttrNumber *confkey,
-									   Oid *pf_eq_oprs, Oid *pp_eq_oprs, Oid *ff_eq_oprs);
+									   Oid *pf_eq_oprs, Oid *pp_eq_oprs, Oid *ff_eq_oprs,
+									   int *num_fk_del_set_cols, AttrNumber *fk_del_set_cols);
 
 extern bool check_functional_grouping(Oid relid,
 									  Index varno, Index varlevelsup,

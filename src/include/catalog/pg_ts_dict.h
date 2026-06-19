@@ -4,7 +4,7 @@
  *	  definition of the "text search dictionary" system catalog (pg_ts_dict)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_ts_dict.h
@@ -57,7 +57,7 @@ FOREIGN_KEY(dicttemplate REFERENCES pg_ts_template(oid));
 typedef FormData_pg_ts_dict *Form_pg_ts_dict;
 
 
-#define TSDictionaryNameNspIndexId	3604
-#define TSDictionaryOidIndexId	3605
+DECLARE_UNIQUE_INDEX(pg_ts_dict_dictname_index, 3604, TSDictionaryNameNspIndexId, on pg_ts_dict using btree(dictname name_ops, dictnamespace oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_ts_dict_oid_index, 3605, TSDictionaryOidIndexId, on pg_ts_dict using btree(oid oid_ops));
 
 #endif							/* PG_TS_DICT_H */

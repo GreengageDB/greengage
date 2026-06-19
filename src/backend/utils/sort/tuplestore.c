@@ -66,8 +66,7 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -541,7 +540,7 @@ tuplestore_end(Tuplestorestate *state)
 	if (state->myfile)
 		BufFileClose(state->myfile);
 	if (state->share_status == TSHARE_WRITER)
-		BufFileDeleteShared(state->fileset, state->shared_filename);
+		BufFileDeleteFileSet(&state->fileset->fs, state->shared_filename, false);
 	if (state->work_set)
 		workfile_mgr_close_set(state->work_set);
 	if (state->shared_filename)
@@ -1716,7 +1715,7 @@ tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const cha
 	oldowner = CurrentResourceOwner;
 	CurrentResourceOwner = state->resowner;
 
-	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
+	state->myfile = BufFileCreateFileSet(&fileset->fs, filename, state->work_set);
 	CurrentResourceOwner = oldowner;
 
 	/*
@@ -1747,7 +1746,7 @@ tuplestore_freeze(Tuplestorestate *state)
 	Assert(state->share_status == TSHARE_WRITER);
 	Assert(!state->frozen);
 	dumptuples(state);
-	BufFileExportShared(state->myfile);
+	BufFileExportFileSet(state->myfile);
 	state->frozen = true;
 }
 
@@ -1775,7 +1774,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->writetup = writetup_forbidden;
 	state->readtup = readtup_heap;
 
-	state->myfile = BufFileOpenShared(fileset, filename, O_RDONLY);
+	state->myfile = BufFileOpenFileSet(&fileset->fs, filename, O_RDONLY, false);
 	state->readptrs[0].file = 0;
 	state->readptrs[0].offset = 0L;
 	state->status = TSS_READFILE;

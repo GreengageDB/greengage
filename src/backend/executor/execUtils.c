@@ -96,7 +96,7 @@
 
 #include "cdb/memquota.h"
 
-static bool tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc);
+static bool tlist_matches_tupdesc(PlanState *ps, List *tlist, int varno, TupleDesc tupdesc);
 static void ShutdownExprContext(ExprContext *econtext, bool isCommit);
 static List *flatten_logic_exprs(Node *node);
 
@@ -607,7 +607,7 @@ ExecAssignProjectionInfo(PlanState *planstate,
  */
 void
 ExecConditionalAssignProjectionInfo(PlanState *planstate, TupleDesc inputDesc,
-									Index varno)
+									int varno)
 {
 	if (tlist_matches_tupdesc(planstate,
 							  planstate->plan->targetlist,
@@ -633,7 +633,7 @@ ExecConditionalAssignProjectionInfo(PlanState *planstate, TupleDesc inputDesc,
 }
 
 static bool
-tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc)
+tlist_matches_tupdesc(PlanState *ps, List *tlist, int varno, TupleDesc tupdesc)
 {
 	int			numattrs = tupdesc->natts;
 	int			attrno;

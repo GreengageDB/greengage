@@ -5,7 +5,7 @@
  *	  (pg_auth_members).
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_auth_members.h
@@ -50,7 +50,7 @@ FOREIGN_KEY(member  REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_auth_members *Form_pg_auth_members;
 
-#define AuthMemRoleMemIndexId	2694
-#define AuthMemMemRoleIndexId	2695
+DECLARE_UNIQUE_INDEX_PKEY(pg_auth_members_role_member_index, 2694, AuthMemRoleMemIndexId, on pg_auth_members using btree(roleid oid_ops, member oid_ops));
+DECLARE_UNIQUE_INDEX(pg_auth_members_member_role_index, 2695, AuthMemMemRoleIndexId, on pg_auth_members using btree(member oid_ops, roleid oid_ops));
 
 #endif							/* PG_AUTH_MEMBERS_H */

@@ -144,6 +144,8 @@ extern void smgrclearowner(SMgrRelation *owner, SMgrRelation reln);
 extern void smgrclose(SMgrRelation reln);
 extern void smgrcloseall(void);
 extern void smgrclosenode(RelFileNodeBackend rnode);
+extern void smgrrelease(SMgrRelation reln);
+extern void smgrreleaseall(void);
 extern void smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo);
 extern void smgrcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo);
 extern void smgrdosyncall(SMgrRelation *rels, int nrels);
@@ -164,6 +166,7 @@ extern void smgrtruncate(SMgrRelation reln, ForkNumber *forknum,
 						 int nforks, BlockNumber *nblocks);
 extern void smgrimmedsync(SMgrRelation reln, ForkNumber forknum);
 extern void AtEOXact_SMgr(void);
+extern bool ProcessBarrierSmgrRelease(void);
 
 
 /*

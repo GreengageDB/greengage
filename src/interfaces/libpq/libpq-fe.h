@@ -37,6 +37,8 @@ extern "C"
 #define LIBPQ_HAS_PIPELINING 1
 /* Indicates presence of PQsetTraceFlags; also new PQtrace output format */
 #define LIBPQ_HAS_TRACE_FLAGS 1
+/* Indicates that PQsslAttribute(NULL, "library") is useful */
+#define LIBPQ_HAS_SSL_LIBRARY_DETECTION 1
 
 /*
  * Option flags for PQcopyResult
@@ -487,6 +489,7 @@ extern int	PQconsumeInput(PGconn *conn);
 extern int	PQenterPipelineMode(PGconn *conn);
 extern int	PQexitPipelineMode(PGconn *conn);
 extern int	PQpipelineSync(PGconn *conn);
+extern int	PQsendFlushRequest(PGconn *conn);
 
 /* LISTEN/NOTIFY support */
 extern PGnotify *PQnotifies(PGconn *conn);

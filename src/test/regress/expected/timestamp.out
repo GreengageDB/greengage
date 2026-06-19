@@ -545,6 +545,162 @@ SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17
                  | Mon Feb 23 00:00:00 2004
 (1 row)
 
+-- verify date_bin behaves the same as date_trunc for relevant intervals
+-- case 1: AD dates, origin < input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2001-01-01') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '2020-02-29 15:44:17.71393')) ts (ts);
+     str     | interval | equal 
+-------------+----------+-------
+ week        | 7 d      | t
+ day         | 1 d      | t
+ hour        | 1 h      | t
+ minute      | 1 m      | t
+ second      | 1 s      | t
+ millisecond | 1 ms     | t
+ microsecond | 1 us     | t
+(7 rows)
+
+-- case 2: BC dates, origin < input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2000-01-01 BC') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '0055-6-10 15:44:17.71393 BC')) ts (ts);
+     str     | interval | equal 
+-------------+----------+-------
+ week        | 7 d      | t
+ day         | 1 d      | t
+ hour        | 1 h      | t
+ minute      | 1 m      | t
+ second      | 1 s      | t
+ millisecond | 1 ms     | t
+ microsecond | 1 us     | t
+(7 rows)
+
+-- case 3: AD dates, origin > input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2020-03-02') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '2020-02-29 15:44:17.71393')) ts (ts);
+     str     | interval | equal 
+-------------+----------+-------
+ week        | 7 d      | t
+ day         | 1 d      | t
+ hour        | 1 h      | t
+ minute      | 1 m      | t
+ second      | 1 s      | t
+ millisecond | 1 ms     | t
+ microsecond | 1 us     | t
+(7 rows)
+
+-- case 4: BC dates, origin > input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '0055-06-17 BC') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '0055-6-10 15:44:17.71393 BC')) ts (ts);
+     str     | interval | equal 
+-------------+----------+-------
+ week        | 7 d      | t
+ day         | 1 d      | t
+ hour        | 1 h      | t
+ minute      | 1 m      | t
+ second      | 1 s      | t
+ millisecond | 1 ms     | t
+ microsecond | 1 us     | t
+(7 rows)
+
+-- bin timestamps into arbitrary intervals
+SELECT
+  interval,
+  ts,
+  origin,
+  date_bin(interval::interval, ts, origin)
+FROM (
+  VALUES
+  ('15 days'),
+  ('2 hours'),
+  ('1 hour 30 minutes'),
+  ('15 minutes'),
+  ('10 seconds'),
+  ('100 milliseconds'),
+  ('250 microseconds')
+) intervals (interval),
+(VALUES (timestamp '2020-02-11 15:44:17.71393')) ts (ts),
+(VALUES (timestamp '2001-01-01')) origin (origin);
+     interval      |               ts               |          origin          |            date_bin            
+-------------------+--------------------------------+--------------------------+--------------------------------
+ 15 days           | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Thu Feb 06 00:00:00 2020
+ 2 hours           | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 14:00:00 2020
+ 1 hour 30 minutes | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 15:00:00 2020
+ 15 minutes        | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 15:30:00 2020
+ 10 seconds        | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 15:44:10 2020
+ 100 milliseconds  | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 15:44:17.7 2020
+ 250 microseconds  | Tue Feb 11 15:44:17.71393 2020 | Mon Jan 01 00:00:00 2001 | Tue Feb 11 15:44:17.71375 2020
+(7 rows)
+
+-- shift bins using the origin parameter:
+SELECT date_bin('5 min'::interval, timestamp '2020-02-01 01:01:01', timestamp '2020-02-01 00:02:30');
+         date_bin         
+--------------------------
+ Sat Feb 01 00:57:30 2020
+(1 row)
+
+-- disallow intervals with months or years
+SELECT date_bin('5 months'::interval, timestamp '2020-02-01 01:01:01', timestamp '2001-01-01');
+ERROR:  timestamps cannot be binned into intervals containing months or years
+SELECT date_bin('5 years'::interval,  timestamp '2020-02-01 01:01:01', timestamp '2001-01-01');
+ERROR:  timestamps cannot be binned into intervals containing months or years
+-- disallow zero intervals
+SELECT date_bin('0 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
+ERROR:  stride must be greater than zero
+-- disallow negative intervals
+SELECT date_bin('-2 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
+ERROR:  stride must be greater than zero
 -- Test casting within a BETWEEN qualifier
 SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
   FROM TIMESTAMP_TBL
@@ -1849,3 +2005,66 @@ select timeofday()::date = current_timestamp::date;
  t
 (1 row)
 
+-- should fail
+select make_timestamp(0, 7, 15, 12, 30, 15);
+ERROR:  date field value out of range: 0-07-15
+-- generate_series for timestamp
+select * from generate_series('2020-01-01 00:00'::timestamp,
+                              '2020-01-02 03:00'::timestamp,
+                              '1 hour'::interval);
+     generate_series      
+--------------------------
+ Wed Jan 01 00:00:00 2020
+ Wed Jan 01 01:00:00 2020
+ Wed Jan 01 02:00:00 2020
+ Wed Jan 01 03:00:00 2020
+ Wed Jan 01 04:00:00 2020
+ Wed Jan 01 05:00:00 2020
+ Wed Jan 01 06:00:00 2020
+ Wed Jan 01 07:00:00 2020
+ Wed Jan 01 08:00:00 2020
+ Wed Jan 01 09:00:00 2020
+ Wed Jan 01 10:00:00 2020
+ Wed Jan 01 11:00:00 2020
+ Wed Jan 01 12:00:00 2020
+ Wed Jan 01 13:00:00 2020
+ Wed Jan 01 14:00:00 2020
+ Wed Jan 01 15:00:00 2020
+ Wed Jan 01 16:00:00 2020
+ Wed Jan 01 17:00:00 2020
+ Wed Jan 01 18:00:00 2020
+ Wed Jan 01 19:00:00 2020
+ Wed Jan 01 20:00:00 2020
+ Wed Jan 01 21:00:00 2020
+ Wed Jan 01 22:00:00 2020
+ Wed Jan 01 23:00:00 2020
+ Thu Jan 02 00:00:00 2020
+ Thu Jan 02 01:00:00 2020
+ Thu Jan 02 02:00:00 2020
+ Thu Jan 02 03:00:00 2020
+(28 rows)
+
+-- the LIMIT should allow this to terminate in a reasonable amount of time
+-- (but that unfortunately doesn't work yet for SELECT * FROM ...)
+select generate_series('2022-01-01 00:00'::timestamp,
+                       'infinity'::timestamp,
+                       '1 month'::interval) limit 10;
+     generate_series      
+--------------------------
+ Sat Jan 01 00:00:00 2022
+ Tue Feb 01 00:00:00 2022
+ Tue Mar 01 00:00:00 2022
+ Fri Apr 01 00:00:00 2022
+ Sun May 01 00:00:00 2022
+ Wed Jun 01 00:00:00 2022
+ Fri Jul 01 00:00:00 2022
+ Mon Aug 01 00:00:00 2022
+ Thu Sep 01 00:00:00 2022
+ Sat Oct 01 00:00:00 2022
+(10 rows)
+
+-- errors
+select * from generate_series('2020-01-01 00:00'::timestamp,
+                              '2020-01-02 03:00'::timestamp,
+                              '0 hour'::interval);
+ERROR:  step size cannot equal zero

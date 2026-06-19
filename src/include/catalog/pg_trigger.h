@@ -4,7 +4,7 @@
  *	  definition of the "trigger" system catalog (pg_trigger)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_trigger.h
@@ -85,9 +85,9 @@ FOREIGN_KEY(tgconstrrelid REFERENCES pg_class(oid));
 typedef FormData_pg_trigger *Form_pg_trigger;
 
 
-#define TriggerConstraintIndexId  2699
-#define TriggerRelidNameIndexId  2701
-#define TriggerOidIndexId  2702
+DECLARE_INDEX(pg_trigger_tgconstraint_index, 2699, TriggerConstraintIndexId, on pg_trigger using btree(tgconstraint oid_ops));
+DECLARE_UNIQUE_INDEX(pg_trigger_tgrelid_tgname_index, 2701, TriggerRelidNameIndexId, on pg_trigger using btree(tgrelid oid_ops, tgname name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_trigger_oid_index, 2702, TriggerOidIndexId, on pg_trigger using btree(oid oid_ops));
 
 
 #ifdef EXPOSE_TO_CLIENT_CODE

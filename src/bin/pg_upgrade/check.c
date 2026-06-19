@@ -10,6 +10,7 @@
 #include "postgres_fe.h"
 
 #include "catalog/pg_authid_d.h"
+#include "catalog/pg_collation.h"
 #include "fe_utils/string_utils.h"
 #include "mb/pg_wchar.h"
 #include "pg_upgrade.h"
@@ -224,6 +225,8 @@ report_clusters_compatible(void)
 		stop_postmaster(false);
 		if (get_check_fatal_occurred())
 			exit(1);
+
+		cleanup_output_dirs();
 		exit(0);
 	}
 
@@ -252,6 +255,8 @@ issue_warnings_and_set_wal_level(char *sequence_script_file_name)
 	/* Reindex hash indexes for old < 10.0 */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 906)
 		old_9_6_invalidate_hash_indexes(&new_cluster, false);
+
+	report_extension_updates(&new_cluster);
 
 	stop_postmaster(false);
 }
@@ -383,6 +388,18 @@ check_locale_and_encoding(DbInfo *olddb, DbInfo *newdb)
 	if (!equivalent_locale(LC_CTYPE, olddb->db_ctype, newdb->db_ctype))
 		gp_fatal_log("lc_ctype values for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
 				 olddb->db_name, olddb->db_ctype, newdb->db_ctype);
+	if (olddb->db_collprovider != newdb->db_collprovider)
+		pg_fatal("locale providers for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
+				 olddb->db_name,
+				 collprovider_name(olddb->db_collprovider),
+				 collprovider_name(newdb->db_collprovider));
+	if ((olddb->db_iculocale == NULL && newdb->db_iculocale != NULL) ||
+		(olddb->db_iculocale != NULL && newdb->db_iculocale == NULL) ||
+		(olddb->db_iculocale != NULL && newdb->db_iculocale != NULL && strcmp(olddb->db_iculocale, newdb->db_iculocale) != 0))
+		pg_fatal("ICU locale values for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
+				 olddb->db_name,
+				 olddb->db_iculocale ? olddb->db_iculocale : "(null)",
+				 newdb->db_iculocale ? newdb->db_iculocale : "(null)");
 }
 
 /*
@@ -677,11 +694,6 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 			int			dbnum;
 
 			fprintf(script, "\n");
-			/* remove PG_VERSION? */
-			if (GET_MAJOR_VERSION(old_cluster.major_version) <= 804)
-				fprintf(script, RM_CMD " %s%cPG_VERSION\n",
-						fix_path_separator(os_info.old_tablespaces[tblnum]),
-						PATH_SEPARATOR);
 
 			for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 				fprintf(script, RMDIR_CMD " %c%s%c%d%c\n", PATH_QUOTE,
@@ -781,6 +793,13 @@ check_is_install_user(ClusterInfo *cluster)
 }
 
 
+/*
+ *	check_proper_datallowconn
+ *
+ *	Ensure that all non-template0 databases allow connections since they
+ *	otherwise won't be restored; and that template0 explicitly doesn't allow
+ *	connections since it would make pg_dumpall --globals restore fail.
+ */
 static void
 check_proper_datallowconn(ClusterInfo *cluster)
 {
@@ -790,8 +809,15 @@ check_proper_datallowconn(ClusterInfo *cluster)
 	int			ntups;
 	int			i_datname;
 	int			i_datallowconn;
+	FILE	   *script = NULL;
+	char		output_path[MAXPGPATH];
+	bool		found = false;
 
 	prep_status("Checking database connection settings");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "databases_with_datallowconn_false.txt");
 
 	conn_template1 = connectToServer(cluster, "template1");
 
@@ -823,8 +849,14 @@ check_proper_datallowconn(ClusterInfo *cluster)
 			 * restore
 			 */
 			if (strcmp(datallowconn, "f") == 0)
-				pg_fatal("All non-template0 databases must allow connections, "
-						 "i.e. their pg_database.datallowconn must be true\n");
+			{
+				found = true;
+				if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+					pg_fatal("could not open file \"%s\": %s\n",
+							 output_path, strerror(errno));
+
+				fprintf(script, "%s\n", datname);
+			}
 		}
 	}
 
@@ -832,7 +864,22 @@ check_proper_datallowconn(ClusterInfo *cluster)
 
 	PQfinish(conn_template1);
 
-	check_ok();
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		pg_fatal("All non-template0 databases must allow connections, i.e. their\n"
+				 "pg_database.datallowconn must be true.  Your installation contains\n"
+				 "non-template0 databases with their pg_database.datallowconn set to\n"
+				 "false.  Consider allowing connection for all non-template0 databases\n"
+				 "or drop the databases which do not allow connections.  A list of\n"
+				 "databases with the problem is in the file:\n"
+				 "    %s\n\n", output_path);
+	}
+	else
+		check_ok();
 }
 
 
@@ -895,7 +942,8 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		return;
 	}
 
-	snprintf(output_path, sizeof(output_path),
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
 			 "contrib_isn_and_int8_pass_by_value.txt");
 
 	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
@@ -960,6 +1008,105 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		check_ok();
 }
 
+/*
+ * Verify that no user defined postfix operators exist.
+ */
+static void
+check_for_user_defined_postfix_ops(ClusterInfo *cluster)
+{
+	int			dbnum;
+	FILE	   *script = NULL;
+	bool		found = false;
+	char		output_path[MAXPGPATH];
+
+	prep_status("Checking for user-defined postfix operators");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "postfix_ops.txt");
+
+	/* Find any user defined postfix operators */
+	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_oproid,
+					i_oprnsp,
+					i_oprname,
+					i_typnsp,
+					i_typname;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+
+		/*
+		 * The query below hardcodes FirstNormalObjectId as 16384 rather than
+		 * interpolating that C #define into the query because, if that
+		 * #define is ever changed, the cutoff we want to use is the value
+		 * used by pre-version 14 servers, not that of some future version.
+		 */
+		res = executeQueryOrDie(conn,
+								"SELECT o.oid AS oproid, "
+								"       n.nspname AS oprnsp, "
+								"       o.oprname, "
+								"       tn.nspname AS typnsp, "
+								"       t.typname "
+								"FROM pg_catalog.pg_operator o, "
+								"     pg_catalog.pg_namespace n, "
+								"     pg_catalog.pg_type t, "
+								"     pg_catalog.pg_namespace tn "
+								"WHERE o.oprnamespace = n.oid AND "
+								"      o.oprleft = t.oid AND "
+								"      t.typnamespace = tn.oid AND "
+								"      o.oprright = 0 AND "
+								"      o.oid >= 16384");
+		ntups = PQntuples(res);
+		i_oproid = PQfnumber(res, "oproid");
+		i_oprnsp = PQfnumber(res, "oprnsp");
+		i_oprname = PQfnumber(res, "oprname");
+		i_typnsp = PQfnumber(res, "typnsp");
+		i_typname = PQfnumber(res, "typname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL &&
+				(script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  (oid=%s) %s.%s (%s.%s, NONE)\n",
+					PQgetvalue(res, rowno, i_oproid),
+					PQgetvalue(res, rowno, i_oprnsp),
+					PQgetvalue(res, rowno, i_oprname),
+					PQgetvalue(res, rowno, i_typnsp),
+					PQgetvalue(res, rowno, i_typname));
+		}
+
+		PQclear(res);
+
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		pg_fatal("Your installation contains user-defined postfix operators, which are not\n"
+				 "supported anymore.  Consider dropping the postfix operators and replacing\n"
+				 "them with prefix operators or function calls.\n"
+				 "A list of user-defined postfix operators is in the file:\n"
+				 "    %s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
 
 /*
  * Verify that no tables are declared WITH OIDS.
@@ -974,7 +1121,8 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 
 	prep_status("Checking for tables WITH OIDS");
 
-	snprintf(output_path, sizeof(output_path),
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
 			 "tables_with_oids.txt");
 
 	/* Find any tables declared WITH OIDS */
@@ -1272,6 +1420,92 @@ check_for_pg_role_prefix(ClusterInfo *cluster)
 	PQfinish(conn);
 
 	check_ok();
+}
+
+/*
+ * Verify that no user-defined encoding conversions exist.
+ */
+static void
+check_for_user_defined_encoding_conversions(ClusterInfo *cluster)
+{
+	int			dbnum;
+	FILE	   *script = NULL;
+	bool		found = false;
+	char		output_path[MAXPGPATH];
+
+	prep_status("Checking for user-defined encoding conversions");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "encoding_conversions.txt");
+
+	/* Find any user defined encoding conversions */
+	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_conoid,
+					i_conname,
+					i_nspname;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+
+		/*
+		 * The query below hardcodes FirstNormalObjectId as 16384 rather than
+		 * interpolating that C #define into the query because, if that
+		 * #define is ever changed, the cutoff we want to use is the value
+		 * used by pre-version 14 servers, not that of some future version.
+		 */
+		res = executeQueryOrDie(conn,
+								"SELECT c.oid as conoid, c.conname, n.nspname "
+								"FROM pg_catalog.pg_conversion c, "
+								"     pg_catalog.pg_namespace n "
+								"WHERE c.connamespace = n.oid AND "
+								"      c.oid >= 16384");
+		ntups = PQntuples(res);
+		i_conoid = PQfnumber(res, "conoid");
+		i_conname = PQfnumber(res, "conname");
+		i_nspname = PQfnumber(res, "nspname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL &&
+				(script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  (oid=%s) %s.%s\n",
+					PQgetvalue(res, rowno, i_conoid),
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_conname));
+		}
+
+		PQclear(res);
+
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		pg_fatal("Your installation contains user-defined encoding conversions.\n"
+				 "The conversion function parameters changed in PostgreSQL version 14\n"
+				 "so this cluster cannot currently be upgraded.  You can remove the\n"
+				 "encoding conversions in the old cluster and restart the upgrade.\n"
+				 "A list of user-defined encoding conversions is in the file:\n"
+				 "    %s\n\n", output_path);
+	}
+	else
+		check_ok();
 }
 
 

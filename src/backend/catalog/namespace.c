@@ -9,7 +9,7 @@
  * and implementing search-path-controlled searches.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -64,6 +64,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
@@ -3064,7 +3065,7 @@ CheckSetNamespace(Oid oldNspOid, Oid nspOid)
 
 /*
  * QualifiedNameGetCreationNamespace
- *		Given a possibly-qualified name for an object (in List-of-Values
+ *		Given a possibly-qualified name for an object (in List-of-Strings
  *		format), determine what namespace the object should be created in.
  *		Also extract and return the object name (last component of list).
  *
@@ -3178,7 +3179,7 @@ makeRangeVarFromNameList(List *names)
  * This is used primarily to form error messages, and so we do not quote
  * the list elements, for the sake of legibility.
  *
- * In most scenarios the list elements should always be Value strings,
+ * In most scenarios the list elements should always be String values,
  * but we also allow A_Star for the convenience of ColumnRef processing.
  */
 char *
@@ -4589,6 +4590,7 @@ RemoveTempRelationsCallback(int code, Datum arg)
 		/* Need to ensure we have a usable transaction. */
 		AbortOutOfAnyTransaction();
 		StartTransactionCommand();
+		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* 
 		 * Make sure that the schema hasn't been removed. We must do this after
@@ -4606,6 +4608,7 @@ RemoveTempRelationsCallback(int code, Datum arg)
 				 myTempNamespace); 
 		}
 
+		PopActiveSnapshot();
 		CommitTransactionCommand();
 	}
 }

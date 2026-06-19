@@ -1,18 +1,16 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 # Verify that we can take and verify backups with various checksum types.
 
 use strict;
 use warnings;
-use Cwd;
-use Config;
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 19;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-my $primary = get_new_node('primary');
+my $primary = PostgreSQL::Test::Cluster->new('primary');
 $primary->init(allows_streaming => 1);
 $primary->start;
 
@@ -60,3 +58,5 @@ for my $algorithm (qw(bogus none crc32c sha224 sha256 sha384 sha512))
 	# Remove backup immediately to save disk space.
 	rmtree($backup_path);
 }
+
+done_testing();

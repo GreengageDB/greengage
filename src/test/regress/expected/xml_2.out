@@ -1135,6 +1135,9 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM xmltableview1;
  Settings: optimizer=off
 (13 rows)
 
+-- errors
+SELECT * FROM XMLTABLE (ROW () PASSING null COLUMNS v1 timestamp) AS f (v1, v2);
+ERROR:  XMLTABLE function has 1 columns available but 2 columns specified
 -- XMLNAMESPACES tests
 SELECT * FROM XMLTABLE(XMLNAMESPACES('http://x.y' AS zz),
                       '/zz:rows/zz:row'

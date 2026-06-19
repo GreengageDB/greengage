@@ -250,7 +250,13 @@ SharedSnapshotShmemSize(void)
 	size = offsetof(SharedSnapshotStruct, xips);
 	size = add_size(size, mul_size(slotSize, slotCount));
 
-	RequestNamedLWLockTranche("SharedSnapshotLocks", slotCount);
+	/*
+	 * GPDB: the LWLock tranche request used to live here, but PG15 requires
+	 * RequestNamedLWLockTranche() to run only during the shmem-request phase
+	 * (process_shmem_requests_in_progress).  It is now issued from
+	 * CreateSharedMemoryAndSemaphores().  This sizing function must stay
+	 * side-effect-free since it is also called to report shared_memory_size.
+	 */
 
 	return MAXALIGN(size);
 }

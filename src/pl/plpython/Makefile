@@ -39,9 +39,6 @@ OBJS = \
 	plpy_util.o
 
 DATA = $(NAME)u.control $(NAME)u--1.0.sql
-ifeq ($(python_majorversion),2)
-DATA += plpythonu.control plpythonu--1.0.sql
-endif
 
 # header files to install - it's not clear which of these might be needed
 # so install them all.
@@ -73,7 +70,7 @@ libpython${pytverstr}.a: python${pytverstr}.def
 	dlltool --dllname python${pytverstr}.dll --def python${pytverstr}.def --output-lib libpython${pytverstr}.a
 
 python${pytverstr}.def:
-	pexports $(PYTHONDLL) > $@
+	gendef - $(PYTHONDLL) > $@
 
 endif # win32
 
@@ -81,11 +78,6 @@ endif # win32
 SHLIB_LINK = $(python_libspec) $(python_additional_libs) $(filter -lintl,$(LIBS))
 
 REGRESS_OPTS = --dbname=$(PL_TESTDB) --init-file=$(srcdir)/init_file
-# Only load plpythonu with Python 2.  The test files themselves load
-# the versioned language plpython(2|3)u.
-ifeq ($(python_majorversion),2)
-REGRESS_OPTS += --load-extension=plpythonu
-endif
 
 # FIXME: enable plpython_returns test. exec() functionality changed
 # between Python2 and Python3. plpython_returns test uses it
@@ -120,8 +112,6 @@ REGRESS = \
 	plpython_gpdb \
 	plpython_drop
 
-REGRESS_PLPYTHON3_MANGLE := $(REGRESS)
-
 include $(top_srcdir)/src/Makefile.shlib
 
 all: all-lib
@@ -139,16 +129,12 @@ uninstall: uninstall-lib uninstall-data
 install-data: installdirs
 	$(INSTALL_DATA) $(addprefix $(srcdir)/, $(DATA)) '$(DESTDIR)$(datadir)/extension/'
 	$(INSTALL_DATA) $(addprefix $(srcdir)/, $(INCS)) '$(DESTDIR)$(includedir_server)'
-	$(INSTALL_DATA) $(srcdir)/regress-python3-mangle.mk '$(DESTDIR)$(pgxsdir)/src/pl/plpython'
 
 uninstall-data:
 	rm -f $(addprefix '$(DESTDIR)$(datadir)/extension'/, $(notdir $(DATA)))
 	rm -f $(addprefix '$(DESTDIR)$(includedir_server)'/, plpython.h plpy_util.h)
 
 .PHONY: install-data uninstall-data
-
-
-include $(srcdir)/regress-python3-mangle.mk
 
 
 check: submake-pg-regress

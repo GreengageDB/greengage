@@ -224,7 +224,9 @@ extern void InitResultRelInfo(ResultRelInfo *resultRelInfo,
 							  Index resultRelationIndex,
 							  ResultRelInfo *partition_root_rri,
 							  int instrument_options);
-extern ResultRelInfo *ExecGetTriggerResultRel(EState *estate, Oid relid);
+extern ResultRelInfo *ExecGetTriggerResultRel(EState *estate, Oid relid,
+											  ResultRelInfo *rootRelInfo);
+extern List *ExecGetAncestorResultRels(EState *estate, ResultRelInfo *resultRelInfo);
 extern void ExecConstraints(ResultRelInfo *resultRelInfo,
 							TupleTableSlot *slot, EState *estate);
 extern bool ExecPartitionCheck(ResultRelInfo *resultRelInfo,
@@ -303,6 +305,8 @@ planstate_walk_node(PlanState      *planstate,
  */
 extern ExprState *ExecInitExpr(Expr *node, PlanState *parent);
 extern ExprState *ExecInitExprWithParams(Expr *node, ParamListInfo ext_params);
+extern ExprState *ExecInitExprWithCaseValue(Expr *node, PlanState *parent,
+											Datum *caseval, bool *casenull);
 extern ExprState *ExecInitQual(List *qual, PlanState *parent);
 extern ExprState *ExecInitCheck(List *qual, PlanState *parent);
 extern List *ExecInitExprList(List *nodes, PlanState *parent);
@@ -502,7 +506,7 @@ typedef bool (*ExecScanRecheckMtd) (ScanState *node, TupleTableSlot *slot);
 extern TupleTableSlot *ExecScan(ScanState *node, ExecScanAccessMtd accessMtd,
 								ExecScanRecheckMtd recheckMtd);
 extern void ExecAssignScanProjectionInfo(ScanState *node);
-extern void ExecAssignScanProjectionInfoWithVarno(ScanState *node, Index varno);
+extern void ExecAssignScanProjectionInfoWithVarno(ScanState *node, int varno);
 extern void ExecScanReScan(ScanState *node);
 
 /*
@@ -596,7 +600,7 @@ extern const TupleTableSlotOps *ExecGetResultSlotOps(PlanState *planstate,
 extern void ExecAssignProjectionInfo(PlanState *planstate,
 									 TupleDesc inputDesc);
 extern void ExecConditionalAssignProjectionInfo(PlanState *planstate,
-												TupleDesc inputDesc, Index varno);
+												TupleDesc inputDesc, int varno);
 extern void ExecFreeExprContext(PlanState *planstate);
 extern void ExecAssignScanType(ScanState *scanstate, TupleDesc tupDesc);
 extern void ExecCreateScanSlotFromOuterPlan(EState *estate,

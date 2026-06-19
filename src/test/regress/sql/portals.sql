@@ -146,6 +146,18 @@ FETCH BACKWARD 1 FROM foo24; -- should fail
 
 END;
 
+BEGIN;
+
+DECLARE foo24 NO SCROLL CURSOR FOR SELECT * FROM tenk1 ORDER BY unique2;
+
+FETCH 1 FROM foo24;
+
+FETCH ABSOLUTE 2 FROM foo24; -- allowed
+
+FETCH ABSOLUTE 1 FROM foo24; -- should fail
+
+END;
+
 --
 -- Cursors outside transaction blocks
 --
@@ -172,6 +184,26 @@ FETCH FROM foo25;
 SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors;
 
 CLOSE foo25;
+
+BEGIN;
+
+DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2;
+
+FETCH FROM foo25ns;
+
+FETCH FROM foo25ns;
+
+COMMIT;
+
+FETCH FROM foo25ns;
+
+FETCH ABSOLUTE 4 FROM foo25ns;
+
+FETCH ABSOLUTE 4 FROM foo25ns; -- fail
+
+SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors;
+
+CLOSE foo25ns;
 
 --
 -- ROLLBACK should close holdable cursors
@@ -551,3 +583,26 @@ FETCH ALL FROM foo2;
 COMMIT;
 FETCH ALL FROM foo2;
 CLOSE foo2;
+-- Check fetching of toasted datums via cursors.
+begin;
+
+-- Other compression algorithms may cause the compressed data to be stored
+-- inline.  Use pglz to ensure consistent results.
+set default_toast_compression = 'pglz';
+
+create table toasted_data (f1 int[]);
+insert into toasted_data
+  select array_agg(i) from generate_series(12345678, 12345678 + 1000) i;
+
+declare local_portal cursor for select * from toasted_data;
+fetch all in local_portal;
+
+declare held_portal cursor with hold for select * from toasted_data;
+
+commit;
+
+drop table toasted_data;
+
+fetch all in held_portal;
+
+reset default_toast_compression;

@@ -4,7 +4,7 @@
  *	  definition of the "policy" system catalog (pg_policy)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_policy.h
@@ -51,7 +51,7 @@ CATALOG(pg_policy,3256,PolicyRelationId)
 typedef FormData_pg_policy *Form_pg_policy;
 
 
-#define PolicyOidIndexId				3257
-#define PolicyPolrelidPolnameIndexId				3258
+DECLARE_UNIQUE_INDEX_PKEY(pg_policy_oid_index, 3257, PolicyOidIndexId, on pg_policy using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_policy_polrelid_polname_index, 3258, PolicyPolrelidPolnameIndexId, on pg_policy using btree(polrelid oid_ops, polname name_ops));
 
 #endif							/* PG_POLICY_H */

@@ -8,7 +8,7 @@
  * objects, created by CREATE STATISTICS, but not the actual statistical data,
  * created by running ANALYZE.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_statistic_ext.h
@@ -69,9 +69,9 @@ CATALOG(pg_statistic_ext,3381,StatisticExtRelationId)
 typedef FormData_pg_statistic_ext *Form_pg_statistic_ext;
 
 
-#define StatisticExtOidIndexId	3380
-#define StatisticExtNameIndexId 3997
-#define StatisticExtRelidIndexId 3379
+DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_ext_oid_index, 3380, StatisticExtOidIndexId, on pg_statistic_ext using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_statistic_ext_name_index, 3997, StatisticExtNameIndexId, on pg_statistic_ext using btree(stxname name_ops, stxnamespace oid_ops));
+DECLARE_INDEX(pg_statistic_ext_relid_index, 3379, StatisticExtRelidIndexId, on pg_statistic_ext using btree(stxrelid oid_ops));
 
 
 #ifdef EXPOSE_TO_CLIENT_CODE

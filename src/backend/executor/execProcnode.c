@@ -97,6 +97,7 @@
 #include "executor/nodeLimit.h"
 #include "executor/nodeLockRows.h"
 #include "executor/nodeMaterial.h"
+#include "executor/nodeMemoize.h"
 #include "executor/nodeMergeAppend.h"
 #include "executor/nodeMergejoin.h"
 #include "executor/nodeModifyTable.h"
@@ -105,7 +106,6 @@
 #include "executor/nodeProjectSet.h"
 #include "executor/nodeRecursiveunion.h"
 #include "executor/nodeResult.h"
-#include "executor/nodeResultCache.h"
 #include "executor/nodeSamplescan.h"
 #include "executor/nodeSeqscan.h"
 #include "executor/nodeSetOp.h"
@@ -433,10 +433,9 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 														   estate, eflags);
 			break;
 
-#ifdef NOT_USED /* Group nodes are not used in GPDB */
-		case T_ResultCache:
-			result = (PlanState *) ExecInitResultCache((ResultCache *) node,
-													   estate, eflags);
+		case T_Memoize:
+			result = (PlanState *) ExecInitMemoize((Memoize *) node, estate,
+												   eflags);
 			break;
 
 		case T_Group:
@@ -976,9 +975,8 @@ ExecEndNode(PlanState *node)
 			ExecEndIncrementalSort((IncrementalSortState *) node);
 			break;
 
-#ifdef NOT_USED /* GroupState nodes are not used in GPDB */
-		case T_ResultCacheState:
-			ExecEndResultCache((ResultCacheState *) node);
+		case T_MemoizeState:
+			ExecEndMemoize((MemoizeState *) node);
 			break;
 
 		case T_GroupState:

@@ -495,6 +495,7 @@ get_ps_display_from_position(size_t pos, int *displen)
 
 	return ps_buffer + pos;
 #else
+	*displen = 0;
 	return "";
 #endif
 }

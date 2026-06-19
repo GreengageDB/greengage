@@ -45,7 +45,6 @@
 #include "cdb/cdbappendonlystorageread.h"
 #include "cdb/cdbappendonlystoragewrite.h"
 #include "utils/datumstream.h"
-#include "utils/int8.h"
 #include "utils/fmgroids.h"
 #include "access/aocssegfiles.h"
 #include "access/aosegfiles.h"

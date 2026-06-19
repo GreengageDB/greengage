@@ -1,15 +1,18 @@
+
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 55;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('vacuumdb');
 program_version_ok('vacuumdb');
 program_options_handling_ok('vacuumdb');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -140,3 +143,5 @@ $node->issues_sql_like(
 	[ 'vacuumdb', '--min-xid-age', '2147483001', 'postgres' ],
 	qr/GREATEST.*relfrozenxid.*2147483001/,
 	'vacuumdb --table --min-xid-age');
+
+done_testing();

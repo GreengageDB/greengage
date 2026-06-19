@@ -3,7 +3,7 @@
  * globals.c
  *	  global variable declarations
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -39,6 +39,7 @@ volatile sig_atomic_t IdleInTransactionSessionTimeoutPending = false;
 volatile sig_atomic_t IdleSessionTimeoutPending = false;
 volatile sig_atomic_t ProcSignalBarrierPending = false;
 volatile sig_atomic_t IdleGangTimeoutPending = false;
+volatile sig_atomic_t IdleStatsUpdateTimeoutPending = false;
 /*
  * GPDB: Make these signed integers (instead of uint32) to detect garbage
  * negative values.

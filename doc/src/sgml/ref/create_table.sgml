@@ -98,7 +98,7 @@ where storage_parameter is:
   DEFAULT <replaceable>default_expr</replaceable> |
   GENERATED ALWAYS AS ( <replaceable>generation_expr</replaceable> ) STORED |
   GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( <replaceable>sequence_options</replaceable> ) ] |
-  UNIQUE <replaceable class="parameter">index_parameters</replaceable> |
+  UNIQUE [ NULLS [ NOT ] DISTINCT ] <replaceable class="parameter">index_parameters</replaceable> |
   PRIMARY KEY <replaceable class="parameter">index_parameters</replaceable> |
   REFERENCES <replaceable class="parameter">reftable</replaceable> [ ( <replaceable class="parameter">refcolumn</replaceable> ) ] [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ]
     [ ON DELETE <replaceable class="parameter">referential_action</replaceable> ] [ ON UPDATE <replaceable class="parameter">referential_action</replaceable> ] }
@@ -108,7 +108,7 @@ where storage_parameter is:
 
 [ CONSTRAINT <replaceable class="parameter">constraint_name</replaceable> ]
 { CHECK ( <replaceable class="parameter">expression</replaceable> ) [ NO INHERIT ] |
-  UNIQUE ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
+  UNIQUE [ NULLS [ NOT ] DISTINCT ] ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
   PRIMARY KEY ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
   EXCLUDE [ USING <replaceable class="parameter">index_method</replaceable> ] ( <replaceable class="parameter">exclude_element</replaceable> WITH <replaceable class="parameter">operator</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> [ WHERE ( <replaceable class="parameter">predicate</replaceable> ) ] |
   FOREIGN KEY ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) REFERENCES <replaceable class="parameter">reftable</replaceable> [ ( <replaceable class="parameter">refcolumn</replaceable> [, ... ] ) ]
@@ -182,6 +182,9 @@ Where column_reference_storage_directive is:
    COLUMN column_name ENCODING ( storage_directive [, ... ] ), ... 
  | DEFAULT COLUMN ENCODING ( storage_directive [, ... ] )
 
+<phrase><replaceable class="parameter">referential_action</replaceable> in a <literal>FOREIGN KEY</literal>/<literal>REFERENCES</literal> constraint is:</phrase>
+
+{ NO ACTION | RESTRICT | CASCADE | SET NULL [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] | SET DEFAULT [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] }
 </synopsis>
 
  </refsynopsisdiv>
@@ -201,8 +204,8 @@ Where column_reference_storage_directive is:
    schema.  Otherwise it is created in the current schema.  Temporary
    tables exist in a special schema, so a schema name cannot be given
    when creating a temporary table.  The name of the table must be
-   distinct from the name of any other table, sequence, index, view,
-   or foreign table in the same schema.
+   distinct from the name of any other relation (table, sequence, index, view,
+   materialized view, or foreign table) in the same schema.
   </para>
 
   <para>
@@ -295,6 +298,11 @@ Where column_reference_storage_directive is:
       of an unlogged table are also not replicated to standby servers.
       Any indexes created on an unlogged table are automatically unlogged as
       well.
+     </para>
+
+     <para>
+      If this is specified, any sequences created together with the unlogged
+      table (for identity or serial columns) are also created as unlogged.
      </para>
     </listitem>
    </varlistentry>
@@ -1007,8 +1015,8 @@ Where column_reference_storage_directive is:
    </varlistentry>
 
    <varlistentry>
-    <term><literal>UNIQUE</literal> (column constraint)</term>
-    <term><literal>UNIQUE ( <replaceable class="parameter">column_name</replaceable> [, ... ] )</literal>
+    <term><literal>UNIQUE [ NULLS [ NOT ] DISTINCT ]</literal> (column constraint)</term>
+    <term><literal>UNIQUE [ NULLS [ NOT ] DISTINCT ] ( <replaceable class="parameter">column_name</replaceable> [, ... ] )</literal>
     <optional> <literal>INCLUDE ( <replaceable class="parameter">column_name</replaceable> [, ...])</literal> </optional> (table constraint)</term>
 
     <listitem>
@@ -1024,7 +1032,8 @@ Where column_reference_storage_directive is:
 
      <para>
       For the purpose of a unique constraint, null values are not
-      considered equal.
+      considered equal, unless <literal>NULLS NOT DISTINCT</literal> is
+      specified.
      </para>
 
      <para>
@@ -1259,19 +1268,23 @@ Where column_reference_storage_directive is:
        </varlistentry>
 
        <varlistentry>
-        <term><literal>SET NULL</literal></term>
+        <term><literal>SET NULL [ ( <replaceable>column_name</replaceable> [, ... ] ) ]</literal></term>
         <listitem>
          <para>
-          Set the referencing column(s) to null.
+          Set all of the referencing columns, or a specified subset of the
+          referencing columns, to null. A subset of columns can only be
+          specified for <literal>ON DELETE</literal> actions.
          </para>
         </listitem>
        </varlistentry>
 
        <varlistentry>
-        <term><literal>SET DEFAULT</literal></term>
+        <term><literal>SET DEFAULT [ ( <replaceable>column_name</replaceable> [, ... ] ) ]</literal></term>
         <listitem>
          <para>
-          Set the referencing column(s) to their default values.
+          Set all of the referencing columns, or a specified subset of the
+          referencing columns, to their default values. A subset of columns
+          can only be specified for <literal>ON DELETE</literal> actions.
           (There must be a row in the referenced table matching the default
           values, if they are not null, or the operation will fail.)
          </para>
@@ -1468,8 +1481,8 @@ Where column_reference_storage_directive is:
     If a table parameter value is set and the
     equivalent <literal>toast.</literal> parameter is not, the TOAST table
     will use the table's parameter value.
-    Except where noted, these parameters are not supported on partitioned
-    tables; however, you can specify them on individual leaf partitions.
+    Specifying these parameters for partitioned tables is not supported,
+    but you may specify them for individual leaf partitions.
    </para>
 
    <variablelist>
@@ -1551,8 +1564,6 @@ Where column_reference_storage_directive is:
      If true, the autovacuum daemon will perform automatic <command>VACUUM</command>
      and/or <command>ANALYZE</command> operations on this table following the rules
      discussed in <xref linkend="autovacuum"/>.
-     This parameter can be set for partitioned tables to prevent autovacuum
-     from running <command>ANALYZE</command> on them.
      If false, this table will not be autovacuumed, except to prevent
      transaction ID wraparound. See <xref linkend="vacuum-for-wraparound"/> for
      more about wraparound prevention.
@@ -1684,7 +1695,6 @@ Where column_reference_storage_directive is:
      <para>
       Per-table value for <xref linkend="guc-autovacuum-analyze-threshold"/>
       parameter.
-      This parameter can be set for partitioned tables.
      </para>
     </listitem>
    </varlistentry>
@@ -1700,7 +1710,6 @@ Where column_reference_storage_directive is:
      <para>
       Per-table value for <xref linkend="guc-autovacuum-analyze-scale-factor"/>
       parameter.
-      This parameter can be set for partitioned tables.
      </para>
     </listitem>
    </varlistentry>
@@ -2313,6 +2322,16 @@ CREATE TABLE cities_partdef
 
    <para>
     The <literal>EXCLUDE</literal> constraint type is a
+    <productname>PostgreSQL</productname> extension.
+   </para>
+  </refsect2>
+
+  <refsect2>
+   <title>Foreign-Key Constraint Actions</title>
+
+   <para>
+    The ability to specify column lists in the foreign-key actions
+    <literal>SET DEFAULT</literal> and <literal>SET NULL</literal> is a
     <productname>PostgreSQL</productname> extension.
    </para>
   </refsect2>

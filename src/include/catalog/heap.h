@@ -76,7 +76,8 @@ extern Relation heap_create(const char *relname,
 							bool mapped_relation,
 							bool allow_system_table_mods,
 							TransactionId *relfrozenxid,
-							MultiXactId *relminmxid);
+							MultiXactId *relminmxid,
+							bool create_storage);
 
 extern Oid	heap_create_with_catalog(const char *relname,
 									 Oid relnamespace,
@@ -157,9 +158,7 @@ extern void DeleteRelationTuple(Oid relid);
 extern void DeleteAttributeTuples(Oid relid);
 extern void DeleteSystemAttributeTuples(Oid relid);
 extern void RemoveAttributeById(Oid relid, AttrNumber attnum);
-extern void RemoveAttrDefault(Oid relid, AttrNumber attnum,
-							  DropBehavior behavior, bool complain, bool internal);
-extern void RemoveAttrDefaultById(Oid attrdefId);
+
 extern void CopyStatistics(Oid fromrelid, Oid torelid);
 extern void RemoveStatistics(Oid relid, AttrNumber attnum);
 

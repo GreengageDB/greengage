@@ -30,6 +30,7 @@
 #include "catalog/pg_db_role_setting.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "commands/seclabel.h"
 #include "commands/user.h"
 #include "libpq/crypt.h"
@@ -171,10 +172,7 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 		if (strcmp(defel->defname, "password") == 0)
 		{
 			if (dpassword)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dpassword = defel;
 		}
 		else if (strcmp(defel->defname, "sysid") == 0)
@@ -186,100 +184,67 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 		else if (strcmp(defel->defname, "superuser") == 0)
 		{
 			if (dissuper)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dissuper = defel;
 		}
 		else if (strcmp(defel->defname, "inherit") == 0)
 		{
 			if (dinherit)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dinherit = defel;
 		}
 		else if (strcmp(defel->defname, "createrole") == 0)
 		{
 			if (dcreaterole)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dcreaterole = defel;
 		}
 		else if (strcmp(defel->defname, "createdb") == 0)
 		{
 			if (dcreatedb)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dcreatedb = defel;
 		}
 		else if (strcmp(defel->defname, "canlogin") == 0)
 		{
 			if (dcanlogin)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dcanlogin = defel;
 		}
 		else if (strcmp(defel->defname, "isreplication") == 0)
 		{
 			if (disreplication)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			disreplication = defel;
 		}
 		else if (strcmp(defel->defname, "connectionlimit") == 0)
 		{
 			if (dconnlimit)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dconnlimit = defel;
 		}
 		else if (strcmp(defel->defname, "addroleto") == 0)
 		{
 			if (daddroleto)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			daddroleto = defel;
 		}
 		else if (strcmp(defel->defname, "rolemembers") == 0)
 		{
 			if (drolemembers)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			drolemembers = defel;
 		}
 		else if (strcmp(defel->defname, "adminmembers") == 0)
 		{
 			if (dadminmembers)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dadminmembers = defel;
 		}
 		else if (strcmp(defel->defname, "validUntil") == 0)
 		{
 			if (dvalidUntil)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dvalidUntil = defel;
 		}
 		else if (strcmp(defel->defname, "resourceQueue") == 0)
@@ -327,10 +292,7 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 		else if (strcmp(defel->defname, "bypassrls") == 0)
 		{
 			if (dbypassRLS)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			dbypassRLS = defel;
 		}
 		else
@@ -341,17 +303,17 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	if (dpassword && dpassword->arg)
 		password = strVal(dpassword->arg);
 	if (dissuper)
-		issuper = intVal(dissuper->arg) != 0;
+		issuper = boolVal(dissuper->arg);
 	if (dinherit)
-		inherit = intVal(dinherit->arg) != 0;
+		inherit = boolVal(dinherit->arg);
 	if (dcreaterole)
-		createrole = intVal(dcreaterole->arg) != 0;
+		createrole = boolVal(dcreaterole->arg);
 	if (dcreatedb)
-		createdb = intVal(dcreatedb->arg) != 0;
+		createdb = boolVal(dcreatedb->arg);
 	if (dcanlogin)
-		canlogin = intVal(dcanlogin->arg) != 0;
+		canlogin = boolVal(dcanlogin->arg);
 	if (disreplication)
-		isreplication = intVal(disreplication->arg) != 0;
+		isreplication = boolVal(disreplication->arg);
 	if (dconnlimit)
 	{
 		connlimit = intVal(dconnlimit->arg);
@@ -373,7 +335,7 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	if (dresgroup)
 		resgroup = strVal(linitial((List *) dresgroup->arg));
 	if (dbypassRLS)
-		bypassrls = intVal(dbypassRLS->arg) != 0;
+		bypassrls = boolVal(dbypassRLS->arg);
 
 	/* Check some permissions first */
 	if (issuper)
@@ -492,7 +454,7 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	if (password)
 	{
 		char	   *shadow_pass;
-		char	   *logdetail;
+		const char *logdetail = NULL;
 
 		/*
 		 * Don't allow an empty password. Libpq treats an empty password the
@@ -737,7 +699,7 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
  * "ALTER ROLE role ROLE rolenames", we don't document it.
  */
 Oid
-AlterRole(AlterRoleStmt *stmt)
+AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 {
 	Datum		new_record[Natts_pg_authid];
 	bool		new_record_nulls[Natts_pg_authid];
@@ -748,24 +710,16 @@ AlterRole(AlterRoleStmt *stmt)
 				new_tuple;
 	Form_pg_authid authform;
 	ListCell   *option;
-	char	   *rolename = NULL;
+	char	   *rolename;
 	char	   *password = NULL;	/* user password */
-	int			issuper = -1;	/* Make the user a superuser? */
-	int			inherit = -1;	/* Auto inherit privileges? */
-	int			createrole = -1;	/* Can this user create roles? */
-	int			createdb = -1;	/* Can the user create databases? */
-	int			canlogin = -1;	/* Can this user login? */
-	int			isreplication = -1; /* Is this a replication role? */
 	int			connlimit = -1; /* maximum connections allowed */
 	char	   *resqueue = NULL;	/* resource queue for this role */
 	char	   *resgroup = NULL;	/* resource group for this role */
 	List	   *exttabcreate = NIL;	/* external table create privileges being added  */
 	List	   *exttabnocreate = NIL;	/* external table create privileges being removed */
-	List	   *rolemembers = NIL;	/* roles to be added/removed */
 	char	   *validUntil = NULL;	/* time the login is valid until */
 	Datum		validUntil_datum;	/* same, as timestamptz Datum */
 	bool		validUntil_null;
-	int			bypassrls = -1;
 	DefElem    *dpassword = NULL;
 	DefElem    *dresqueue = NULL;
 	DefElem    *dresgroup = NULL;
@@ -817,70 +771,54 @@ AlterRole(AlterRoleStmt *stmt)
 		if (strcmp(defel->defname, "password") == 0)
 		{
 			if (dpassword)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dpassword = defel;
 		}
 		else if (strcmp(defel->defname, "superuser") == 0)
 		{
 			if (dissuper)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dissuper = defel;
 			if (1 == numopts) alter_subtype = "SUPERUSER";
 		}
 		else if (strcmp(defel->defname, "inherit") == 0)
 		{
 			if (dinherit)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dinherit = defel;
 			if (1 == numopts) alter_subtype = "INHERIT";
 		}
 		else if (strcmp(defel->defname, "createrole") == 0)
 		{
 			if (dcreaterole)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dcreaterole = defel;
 			if (1 == numopts) alter_subtype = "CREATEROLE";
 		}
 		else if (strcmp(defel->defname, "createdb") == 0)
 		{
 			if (dcreatedb)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dcreatedb = defel;
 			if (1 == numopts) alter_subtype = "CREATEDB";
 		}
 		else if (strcmp(defel->defname, "canlogin") == 0)
 		{
 			if (dcanlogin)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dcanlogin = defel;
 			if (1 == numopts) alter_subtype = "LOGIN";
 		}
 		else if (strcmp(defel->defname, "isreplication") == 0)
 		{
 			if (disreplication)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			disreplication = defel;
 		}
 		else if (strcmp(defel->defname, "connectionlimit") == 0)
 		{
 			if (dconnlimit)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dconnlimit = defel;
 			if (1 == numopts) alter_subtype = "CONNECTION LIMIT";
 		}
@@ -888,18 +826,14 @@ AlterRole(AlterRoleStmt *stmt)
 				 stmt->action != 0)
 		{
 			if (drolemembers)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			drolemembers = defel;
 			if (1 == numopts) alter_subtype = "ROLE";
 		}
 		else if (strcmp(defel->defname, "validUntil") == 0)
 		{
 			if (dvalidUntil)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dvalidUntil = defel;
 			if (1 == numopts) alter_subtype = "VALID UNTIL";
 		}
@@ -963,9 +897,7 @@ AlterRole(AlterRoleStmt *stmt)
 		else if (strcmp(defel->defname, "bypassrls") == 0)
 		{
 			if (dbypassRLS)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			dbypassRLS = defel;
 		}
 		else
@@ -975,18 +907,6 @@ AlterRole(AlterRoleStmt *stmt)
 
 	if (dpassword && dpassword->arg)
 		password = strVal(dpassword->arg);
-	if (dissuper)
-		issuper = intVal(dissuper->arg);
-	if (dinherit)
-		inherit = intVal(dinherit->arg);
-	if (dcreaterole)
-		createrole = intVal(dcreaterole->arg);
-	if (dcreatedb)
-		createdb = intVal(dcreatedb->arg);
-	if (dcanlogin)
-		canlogin = intVal(dcanlogin->arg);
-	if (disreplication)
-		isreplication = intVal(disreplication->arg);
 	if (dconnlimit)
 	{
 		connlimit = intVal(dconnlimit->arg);
@@ -995,8 +915,6 @@ AlterRole(AlterRoleStmt *stmt)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("invalid connection limit: %d", connlimit)));
 	}
-	if (drolemembers)
-		rolemembers = (List *) drolemembers->arg;
 	if (dvalidUntil)
 		validUntil = strVal(dvalidUntil->arg);
 	if (dresqueue)
@@ -1023,24 +941,23 @@ AlterRole(AlterRoleStmt *stmt)
 	 * property.  Otherwise, if you don't have createrole, you're only allowed
 	 * to change your own password.
 	 */
-
 	bWas_super = ((Form_pg_authid) GETSTRUCT(tuple))->rolsuper;
 
-	if (authform->rolsuper || issuper >= 0)
+	if (authform->rolsuper || dissuper)
 	{
 		if (!superuser())
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("must be superuser to alter superuser roles or change superuser attribute")));
 	}
-	else if (authform->rolreplication || isreplication >= 0)
+	else if (authform->rolreplication || disreplication)
 	{
 		if (!superuser())
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("must be superuser to alter replication roles or change replication attribute")));
 	}
-	else if (bypassrls >= 0)
+	else if (dbypassRLS)
 	{
 		if (!superuser())
 			ereport(ERROR,
@@ -1049,25 +966,17 @@ AlterRole(AlterRoleStmt *stmt)
 	}
 	else if (!have_createrole_privilege())
 	{
-		/* We already checked issuper, isreplication, and bypassrls */
-		if (!(inherit < 0 &&
-			  createrole < 0 &&
-			  createdb < 0 &&
-			  canlogin < 0 &&
-			  !dconnlimit &&
-			  !rolemembers &&
-			  !validUntil &&
-			  dpassword &&
-			  !exttabcreate &&
-			  !exttabnocreate &&
-			  roleid == GetUserId()))
+		/* check the rest */
+		if (dinherit || dcreaterole || dcreatedb || dcanlogin || dconnlimit ||
+			drolemembers || dvalidUntil || !dpassword ||
+			exttabcreate || exttabnocreate || roleid != GetUserId())
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("permission denied")));
 	}
 
 	/* Convert validuntil to internal form */
-	if (validUntil)
+	if (dvalidUntil)
 	{
 		validUntil_datum = DirectFunctionCall3(timestamptz_in,
 											   CStringGetDatum(validUntil),
@@ -1103,12 +1012,12 @@ AlterRole(AlterRoleStmt *stmt)
 	/*
 	 * issuper/createrole/etc
 	 */
-	if (issuper >= 0)
+	if (dissuper)
 	{
 		bool isNull;
 		Oid roleResgroup;
 
-		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(issuper > 0);
+		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(boolVal(dissuper->arg));
 		new_record_repl[Anum_pg_authid_rolsuper - 1] = true;
 
 		roleResgroup = heap_getattr(tuple, Anum_pg_authid_rolresgroup,
@@ -1135,33 +1044,33 @@ AlterRole(AlterRoleStmt *stmt)
 		bWas_super = (issuper > 0);
 	}
 
-	if (inherit >= 0)
+	if (dinherit)
 	{
-		new_record[Anum_pg_authid_rolinherit - 1] = BoolGetDatum(inherit > 0);
+		new_record[Anum_pg_authid_rolinherit - 1] = BoolGetDatum(boolVal(dinherit->arg));
 		new_record_repl[Anum_pg_authid_rolinherit - 1] = true;
 	}
 
-	if (createrole >= 0)
+	if (dcreaterole)
 	{
-		new_record[Anum_pg_authid_rolcreaterole - 1] = BoolGetDatum(createrole > 0);
+		new_record[Anum_pg_authid_rolcreaterole - 1] = BoolGetDatum(boolVal(dcreaterole->arg));
 		new_record_repl[Anum_pg_authid_rolcreaterole - 1] = true;
 	}
 
-	if (createdb >= 0)
+	if (dcreatedb)
 	{
-		new_record[Anum_pg_authid_rolcreatedb - 1] = BoolGetDatum(createdb > 0);
+		new_record[Anum_pg_authid_rolcreatedb - 1] = BoolGetDatum(boolVal(dcreatedb->arg));
 		new_record_repl[Anum_pg_authid_rolcreatedb - 1] = true;
 	}
 
-	if (canlogin >= 0)
+	if (dcanlogin)
 	{
-		new_record[Anum_pg_authid_rolcanlogin - 1] = BoolGetDatum(canlogin > 0);
+		new_record[Anum_pg_authid_rolcanlogin - 1] = BoolGetDatum(boolVal(dcanlogin->arg));
 		new_record_repl[Anum_pg_authid_rolcanlogin - 1] = true;
 	}
 
-	if (isreplication >= 0)
+	if (disreplication)
 	{
-		new_record[Anum_pg_authid_rolreplication - 1] = BoolGetDatum(isreplication > 0);
+		new_record[Anum_pg_authid_rolreplication - 1] = BoolGetDatum(boolVal(disreplication->arg));
 		new_record_repl[Anum_pg_authid_rolreplication - 1] = true;
 	}
 
@@ -1175,7 +1084,7 @@ AlterRole(AlterRoleStmt *stmt)
 	if (password)
 	{
 		char	   *shadow_pass;
-		char	   *logdetail;
+		const char *logdetail = NULL;
 
 		/* Like in CREATE USER, don't allow an empty password. */
 		if (password[0] == '\0' ||
@@ -1318,9 +1227,9 @@ AlterRole(AlterRoleStmt *stmt)
 		}
 	}
 
-	if (bypassrls >= 0)
+	if (dbypassRLS)
 	{
-		new_record[Anum_pg_authid_rolbypassrls - 1] = BoolGetDatum(bypassrls > 0);
+		new_record[Anum_pg_authid_rolbypassrls - 1] = BoolGetDatum(boolVal(dbypassRLS->arg));
 		new_record_repl[Anum_pg_authid_rolbypassrls - 1] = true;
 	}
 
@@ -1337,26 +1246,26 @@ AlterRole(AlterRoleStmt *stmt)
 	 * Advance command counter so we can see new record; else tests in
 	 * AddRoleMems may fail.
 	 */
-	if (rolemembers)
+	if (drolemembers)
+	{
+		List	   *rolemembers = (List *) drolemembers->arg;
+
 		CommandCounterIncrement();
 
-	if (stmt->action == +1)		/* add members to role */
-	{
-		if (rolemembers)
+		if (stmt->action == +1)		/* add members to role */
+		{
 			alter_subtype = "ADD USER";
-
-		AddRoleMems(rolename, roleid,
-					rolemembers, roleSpecsToIds(rolemembers),
-					GetUserId(), false);
-	}
-	else if (stmt->action == -1)	/* drop members from role */
-	{
-		if (rolemembers)
+			AddRoleMems(rolename, roleid,
+						rolemembers, roleSpecsToIds(rolemembers),
+						GetUserId(), false);
+		}
+		else if (stmt->action == -1)	/* drop members from role */
+		{
 			alter_subtype = "DROP USER";
-
-		DelRoleMems(rolename, roleid,
-					rolemembers, roleSpecsToIds(rolemembers),
-					false);
+			DelRoleMems(rolename, roleid,
+						rolemembers, roleSpecsToIds(rolemembers),
+						false);
+		}
 	}
 
 	if (bWas_super)
@@ -2097,11 +2006,6 @@ AddRoleMems(const char *rolename, Oid roleid,
 	 * The role membership grantor of record has little significance at
 	 * present.  Nonetheless, inasmuch as users might look to it for a crude
 	 * audit trail, let only superusers impute the grant to a third party.
-	 *
-	 * Before lifting this restriction, give the member == role case of
-	 * is_admin_of_role() a fresh look.  Ensure that the current role cannot
-	 * use an explicit grantor specification to take advantage of the session
-	 * user's self-admin right.
 	 */
 	if (grantorId != GetUserId() && !superuser())
 		ereport(ERROR,

@@ -1,31 +1,51 @@
+
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
-use Cwd;
-use Config;
 use File::Basename qw(basename dirname);
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 109 + 15;
 
 program_help_ok('pg_basebackup');
 program_version_ok('pg_basebackup');
 program_options_handling_ok('pg_basebackup');
 
-my $tempdir = TestLib::tempdir;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
+
+# For nearly all pg_basebackup invocations some options should be specified,
+# to keep test times reasonable. Using @pg_basebackup_defs as the first
+# element of the array passed to IPC::Run interpolate the array (as it is
+# not a reference to an array)...
+my @pg_basebackup_defs = ('pg_basebackup', '--no-sync', '-cfast');
+
 
 # Set umask so test directories and files are created with default permissions
 umask(0077);
 
 # Initialize node without replication settings
-$node->init(extra => ['--data-checksums']);
+$node->init(
+	extra      => ['--data-checksums'],
+	auth_extra => [ '--create-role', 'backupuser' ]);
 $node->start;
 my $pgdata = $node->data_dir;
 
 $node->command_fails(['pg_basebackup', '--target-gp-dbid', '123'],
 	'pg_basebackup needs target directory specified');
+
+# Sanity checks for options
+$node->command_fails_like(
+	[ 'pg_basebackup', '-D', "$tempdir/backup", '--compress', 'none:1' ],
+	qr/\Qcompression algorithm "none" does not accept a compression level/,
+	'failure if method "none" specified with compression level');
+$node->command_fails_like(
+	[ 'pg_basebackup', '-D', "$tempdir/backup", '--compress', 'none+' ],
+	qr/\Qunrecognized compression algorithm "none+"/,
+	'failure on incorrect separator to define compression level');
 
 # Some Windows ANSI code pages may reject this filename, in which case we
 # quietly proceed without this bit of test coverage.
@@ -36,7 +56,7 @@ if (open my $badchars, '>>', "$tempdir/pgdata/FOO\xe0\xe0\xe0BAR")
 }
 
 $node->set_replication_conf();
-system_or_bail 'pg_ctl', '-D', $pgdata, 'reload';
+$node->reload;
 
 command_fails(['pg_basebackup', '-D', "$tempdir/backup" ],
 	'pg_basebackup fails without specifiying the target greenplum db id');
@@ -53,7 +73,7 @@ mkdir("$tempdir/backup")
   or BAIL_OUT("unable to create $tempdir/backup");
 append_to_file("$tempdir/backup/dir-not-empty.txt", "Some data");
 
-$node->command_fails([ 'pg_basebackup', '-D', "$tempdir/backup", '-n' ],
+$node->command_fails([ @pg_basebackup_defs, '-D', "$tempdir/backup", '-n' ],
 	'failing run with no-clean option');
 
 ok(-d "$tempdir/backup", 'backup directory was created and left behind');
@@ -65,6 +85,76 @@ print $conf "max_wal_senders = 10\n";
 print $conf "wal_level = replica\n";
 close $conf;
 $node->restart;
+
+# Now that we have a server that supports replication commands, test whether
+# certain invalid compression commands fail on the client side with client-side
+# compression and on the server side with server-side compression.
+my $client_fails = 'pg_basebackup: error: ';
+my $server_fails =
+  'pg_basebackup: error: could not initiate base backup: ERROR:  ';
+my @compression_failure_tests = (
+	[
+		'extrasquishy',
+		'unrecognized compression algorithm "extrasquishy"',
+		'failure on invalid compression algorithm'
+	],
+	[
+		'gzip:',
+		'invalid compression specification: found empty string where a compression option was expected',
+		'failure on empty compression options list'
+	],
+	[
+		'gzip:thunk',
+		'invalid compression specification: unknown compression option "thunk"',
+		'failure on unknown compression option'
+	],
+	[
+		'gzip:level',
+		'invalid compression specification: compression option "level" requires a value',
+		'failure on missing compression level'
+	],
+	[
+		'gzip:level=',
+		'invalid compression specification: value for compression option "level" must be an integer',
+		'failure on empty compression level'
+	],
+	[
+		'gzip:level=high',
+		'invalid compression specification: value for compression option "level" must be an integer',
+		'failure on non-numeric compression level'
+	],
+	[
+		'gzip:level=236',
+		'invalid compression specification: compression algorithm "gzip" expects a compression level between 1 and 9',
+		'failure on out-of-range compression level'
+	],
+	[
+		'gzip:level=9,',
+		'invalid compression specification: found empty string where a compression option was expected',
+		'failure on extra, empty compression option'
+	],
+	[
+		'gzip:workers=3',
+		'invalid compression specification: compression algorithm "gzip" does not accept a worker count',
+		'failure on worker count for gzip'
+	],);
+for my $cft (@compression_failure_tests)
+{
+	my $cfail = quotemeta($client_fails . $cft->[1]);
+	my $sfail = quotemeta($server_fails . $cft->[1]);
+	$node->command_fails_like(
+		[ 'pg_basebackup', '-D', "$tempdir/backup", '--compress', $cft->[0] ],
+		qr/$cfail/,
+		'client ' . $cft->[2]);
+	$node->command_fails_like(
+		[
+			'pg_basebackup',   '-D',
+			"$tempdir/backup", '--compress',
+			'server-' . $cft->[0]
+		],
+		qr/$sfail/,
+		'server ' . $cft->[2]);
+}
 
 # Write some files to test that they are not copied.
 foreach my $filename (
@@ -162,6 +252,10 @@ isnt(slurp_file("$tempdir/backup/backup_label"),
 	'DONOTCOPY', 'existing backup_label not copied');
 rmtree("$tempdir/backup");
 
+# Now delete the bogus backup_label file since it will interfere with startup
+unlink("$pgdata/backup_label")
+  or BAIL_OUT("unable to unlink $pgdata/backup_label");
+
 $node->command_ok(
 	[
 		'pg_basebackup',    '-D',
@@ -237,12 +331,12 @@ $node->start;
 # to our physical temp location.  That way we can use shorter names
 # for the tablespace directories, which hopefully won't run afoul of
 # the 99 character length limit.
-my $shorter_tempdir = TestLib::tempdir_short . "/tempdir";
-dir_symlink "$tempdir", $shorter_tempdir;
+my $sys_tempdir      = PostgreSQL::Test::Utils::tempdir_short;
+my $real_sys_tempdir = "$sys_tempdir/tempdir";
+dir_symlink "$tempdir", $real_sys_tempdir;
 
 mkdir "$tempdir/tblspc1";
-my $realTsDir    = TestLib::perl2host("$shorter_tempdir/tblspc1");
-my $real_tempdir = TestLib::perl2host($tempdir);
+my $realTsDir = "$real_sys_tempdir/tblspc1";
 $node->safe_psql('postgres',
 	"CREATE TABLESPACE tblspc1 LOCATION '$realTsDir';");
 $node->safe_psql('postgres',
@@ -356,7 +450,7 @@ ok( -d "$tempdir/backup1/pg_replslot",
 rmtree("$tempdir/backup1");
 
 mkdir "$tempdir/tbl=spc2";
-$realTsDir = TestLib::perl2host("$shorter_tempdir/tbl=spc2");
+$realTsDir = "$real_sys_tempdir/tbl=spc2";
 $node->safe_psql('postgres', "DROP TABLE test1;");
 $node->safe_psql('postgres', "DROP TABLE tblspc1_unlogged;");
 $node->safe_psql('postgres', "DROP TABLESPACE tblspc1;");
@@ -376,7 +470,7 @@ $node->safe_psql('postgres', "DROP TABLESPACE tblspc2;");
 rmtree("$tempdir/backup3");
 
 mkdir "$tempdir/$superlongname";
-$realTsDir = TestLib::perl2host("$shorter_tempdir/$superlongname");
+$realTsDir = "$real_sys_tempdir/$superlongname";
 $node->safe_psql('postgres',
 	"CREATE TABLESPACE tblspc3 LOCATION '$realTsDir';");
 $node->command_ok(
@@ -431,6 +525,59 @@ $node->command_ok(
 	],
 	'pg_basebackup -X stream runs with --no-slot');
 rmtree("$tempdir/backupnoslot");
+$node->command_ok(
+	[ @pg_basebackup_defs, '-D', "$tempdir/backupxf", '-X', 'fetch' ],
+	'pg_basebackup -X fetch runs');
+
+$node->command_fails_like(
+	[ @pg_basebackup_defs, '--target', 'blackhole' ],
+	qr/WAL cannot be streamed when a backup target is specified/,
+	'backup target requires -X');
+$node->command_fails_like(
+	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'stream' ],
+	qr/WAL cannot be streamed when a backup target is specified/,
+	'backup target requires -X other than -X stream');
+$node->command_fails_like(
+	[ @pg_basebackup_defs, '--target', 'bogus', '-X', 'none' ],
+	qr/unrecognized target/,
+	'backup target unrecognized');
+$node->command_fails_like(
+	[
+		@pg_basebackup_defs, '--target', 'blackhole', '-X',
+		'none',              '-D',       "$tempdir/blackhole"
+	],
+	qr/cannot specify both output directory and backup target/,
+	'backup target and output directory');
+$node->command_fails_like(
+	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'none', '-Ft' ],
+	qr/cannot specify both format and backup target/,
+	'backup target and output directory');
+$node->command_ok(
+	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'none' ],
+	'backup target blackhole');
+$node->command_ok(
+	[
+		@pg_basebackup_defs,              '--target',
+		"server:$tempdir/backuponserver", '-X',
+		'none'
+	],
+	'backup target server');
+ok(-f "$tempdir/backuponserver/base.tar", 'backup tar was created');
+rmtree("$tempdir/backuponserver");
+
+$node->command_ok(
+	[qw(createuser --replication --role=pg_write_server_files backupuser)],
+	'create backup user');
+$node->command_ok(
+	[
+		@pg_basebackup_defs, '-U', 'backupuser', '--target',
+		"server:$tempdir/backuponserver",
+		'-X', 'none'
+	],
+	'backup target server');
+ok( -f "$tempdir/backuponserver/base.tar",
+	'backup tar was created as non-superuser');
+rmtree("$tempdir/backuponserver");
 
 $node->command_fails(
 	[
@@ -545,8 +692,7 @@ $node->command_checks_all(
 rmtree("$tempdir/backup_corrupt");
 
 # induce further corruption in 5 more blocks
-system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
-open $file, '+<', "$pgdata/$file_corrupt1";
+$node->stop;
 for my $i (1 .. 5)
 {
 	my $offset = $pageheader_size + $i * $block_size;

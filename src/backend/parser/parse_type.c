@@ -384,13 +384,17 @@ typenameTypeMod(ParseState *pstate, const TypeName *typeName, Type typ)
 
 			if (IsA(&ac->val, Integer))
 			{
-				cstr = psprintf("%ld", (long) ac->val.val.ival);
+				cstr = psprintf("%ld", (long) intVal(&ac->val));
 			}
-			else if (IsA(&ac->val, Float) ||
-					 IsA(&ac->val, String))
+			else if (IsA(&ac->val, Float))
 			{
-				/* we can just use the str field directly. */
-				cstr = ac->val.val.str;
+				/* we can just use the string representation directly. */
+				cstr = ac->val.fval.fval;
+			}
+			else if (IsA(&ac->val, String))
+			{
+				/* we can just use the string representation directly. */
+				cstr = strVal(&ac->val);
 			}
 		}
 		else if (IsA(tm, ColumnRef))

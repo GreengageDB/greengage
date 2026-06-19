@@ -5,7 +5,8 @@
 -- avoid bit-exact output here because operations may not be bit-exact.
 SET extra_float_digits = 0;
 
-CREATE TABLE POINT_TBL(f1 point);
+-- point_tbl was already created and filled in test_setup.sql.
+-- Here we just try to insert bad values.
 
 INSERT INTO POINT_TBL(f1) VALUES ('(0.0,0.0)');
 
@@ -29,8 +30,6 @@ INSERT INTO POINT_TBL(f1) VALUES (' ( Nan , NaN ) ');
 
 -- bad format points
 INSERT INTO POINT_TBL(f1) VALUES ('asdfasdf');
-
-INSERT INTO POINT_TBL(f1) VALUES ('10.0,10.0');
 
 INSERT INTO POINT_TBL(f1) VALUES ('(10.0 10.0)');
 

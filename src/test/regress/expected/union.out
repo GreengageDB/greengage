@@ -699,36 +699,37 @@ reset enable_hashagg;
 set enable_hashagg to on;
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
-               QUERY PLAN                
------------------------------------------
- HashAggregate
-   Group Key: "*VALUES*".column1
-   ->  Append
-         ->  Values Scan on "*VALUES*"
-         ->  Values Scan on "*VALUES*_1"
- Optimizer: Postgres query optimizer
+                  QUERY PLAN                   
+-----------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: "*VALUES*".column1
+         ->  Append
+               ->  Values Scan on "*VALUES*"
+               ->  Values Scan on "*VALUES*_1"
 (6 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
 -------
- (1,4)
- (1,3)
  (1,2)
+ (1,3)
+ (1,4)
 (3 rows)
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                  QUERY PLAN                   
------------------------------------------------
- HashSetOp Intersect
-   ->  Append
-         ->  Subquery Scan on "*SELECT* 1"
-               ->  Values Scan on "*VALUES*"
-         ->  Subquery Scan on "*SELECT* 2"
-               ->  Values Scan on "*VALUES*_1"
- Optimizer: Postgres query optimizer
-(7 rows)
+                     QUERY PLAN                      
+-----------------------------------------------------
+ SetOp Intersect
+   ->  Sort
+         Sort Key: "*SELECT* 1".x
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  Values Scan on "*VALUES*"
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  Values Scan on "*VALUES*_1"
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -738,16 +739,17 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                  QUERY PLAN                   
------------------------------------------------
- HashSetOp Except
-   ->  Append
-         ->  Subquery Scan on "*SELECT* 1"
-               ->  Values Scan on "*VALUES*"
-         ->  Subquery Scan on "*SELECT* 2"
-               ->  Values Scan on "*VALUES*_1"
- Optimizer: Postgres query optimizer
-(7 rows)
+                     QUERY PLAN                      
+-----------------------------------------------------
+ SetOp Except
+   ->  Sort
+         Sort Key: "*SELECT* 1".x
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  Values Scan on "*VALUES*"
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  Values Scan on "*VALUES*_1"
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -756,22 +758,28 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
 (1 row)
 
 -- non-hashable type
--- With an anonymous row type, the typcache reports that the type is
--- hashable, but then it will fail at run time.
+-- With an anonymous row type, the typcache does not report that the
+-- type is hashable.  (Otherwise, this would fail at execution time.)
 explain (costs off)
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
-               QUERY PLAN                
------------------------------------------
- HashAggregate
-   Group Key: "*VALUES*".column1
-   ->  Append
-         ->  Values Scan on "*VALUES*"
-         ->  Values Scan on "*VALUES*_1"
- Optimizer: Postgres query optimizer
+                  QUERY PLAN                   
+-----------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: "*VALUES*".column1
+         ->  Append
+               ->  Values Scan on "*VALUES*"
+               ->  Values Scan on "*VALUES*_1"
 (6 rows)
 
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
-ERROR:  could not identify a hash function for type money
+     x     
+-----------
+ ($100.00)
+ ($200.00)
+ ($300.00)
+(3 rows)
+
 -- With a defined row type, the typcache can inspect the type's fields
 -- for hashability.
 create type ct1 as (f1 money);
@@ -1383,30 +1391,22 @@ select distinct q1 from
    union all
    select distinct * from int8_tbl i82) ss
 where q2 = q2;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: "*SELECT* 1".q1
-   ->  Unique
-         Group Key: "*SELECT* 1".q1
-         ->  Merge Append
-               Sort Key: "*SELECT* 1".q1
-               ->  Subquery Scan on "*SELECT* 1"
-                     ->  Unique
-                           Group Key: i81.q1, i81.q2
-                           ->  Sort
-                                 Sort Key: i81.q1, i81.q2
-                                 ->  Seq Scan on int8_tbl i81
-                                       Filter: (q2 IS NOT NULL)
-               ->  Subquery Scan on "*SELECT* 2"
-                     ->  Unique
-                           Group Key: i82.q1, i82.q2
-                           ->  Sort
-                                 Sort Key: i82.q1, i82.q2
-                                 ->  Seq Scan on int8_tbl i82
-                                       Filter: (q2 IS NOT NULL)
- Optimizer: Postgres query optimizer
-(21 rows)
+                     QUERY PLAN                     
+----------------------------------------------------
+ HashAggregate
+   Group Key: "*SELECT* 1".q1
+   ->  Append
+         ->  Subquery Scan on "*SELECT* 1"
+               ->  HashAggregate
+                     Group Key: i81.q1, i81.q2
+                     ->  Seq Scan on int8_tbl i81
+                           Filter: (q2 IS NOT NULL)
+         ->  Subquery Scan on "*SELECT* 2"
+               ->  HashAggregate
+                     Group Key: i82.q1, i82.q2
+                     ->  Seq Scan on int8_tbl i82
+                           Filter: (q2 IS NOT NULL)
+(13 rows)
 
 select distinct q1 from
   (select distinct * from int8_tbl i81
@@ -1425,30 +1425,22 @@ select distinct q1 from
    union all
    select distinct * from int8_tbl i82) ss
 where -q1 = q2;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: "*SELECT* 1".q1
-   ->  Unique
-         Group Key: "*SELECT* 1".q1
-         ->  Merge Append
-               Sort Key: "*SELECT* 1".q1
-               ->  Subquery Scan on "*SELECT* 1"
-                     ->  Unique
-                           Group Key: i81.q1, i81.q2
-                           ->  Sort
-                                 Sort Key: i81.q1, i81.q2
-                                 ->  Seq Scan on int8_tbl i81
-                                       Filter: ((- q1) = q2)
-               ->  Subquery Scan on "*SELECT* 2"
-                     ->  Unique
-                           Group Key: i82.q1, i82.q2
-                           ->  Sort
-                                 Sort Key: i82.q1, i82.q2
-                                 ->  Seq Scan on int8_tbl i82
-                                       Filter: ((- q1) = q2)
- Optimizer: Postgres query optimizer
-(21 rows)
+                    QUERY PLAN                    
+--------------------------------------------------
+ HashAggregate
+   Group Key: "*SELECT* 1".q1
+   ->  Append
+         ->  Subquery Scan on "*SELECT* 1"
+               ->  HashAggregate
+                     Group Key: i81.q1, i81.q2
+                     ->  Seq Scan on int8_tbl i81
+                           Filter: ((- q1) = q2)
+         ->  Subquery Scan on "*SELECT* 2"
+               ->  HashAggregate
+                     Group Key: i82.q1, i82.q2
+                     ->  Seq Scan on int8_tbl i82
+                           Filter: ((- q1) = q2)
+(13 rows)
 
 select distinct q1 from
   (select distinct * from int8_tbl i81

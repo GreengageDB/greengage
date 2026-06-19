@@ -434,6 +434,7 @@ static int	connectDBStart(PGconn *conn);
 static int	connectDBComplete(PGconn *conn);
 static PGPing internal_ping(PGconn *conn);
 static PGconn *makeEmptyPGconn(void);
+static void pqFreeCommandQueue(PGcmdQueueEntry *queue);
 static bool fillPGconn(PGconn *conn, PQconninfoOption *connOptions);
 static void freePGconn(PGconn *conn);
 static void closePGconn(PGconn *conn);
@@ -519,6 +520,12 @@ pqDropConnection(PGconn *conn, bool flushInput)
 	/* Always discard any unsent data */
 	conn->outCount = 0;
 
+	/* Likewise, discard any pending pipelined commands */
+	pqFreeCommandQueue(conn->cmd_queue_head);
+	conn->cmd_queue_head = conn->cmd_queue_tail = NULL;
+	pqFreeCommandQueue(conn->cmd_queue_recycle);
+	conn->cmd_queue_recycle = NULL;
+
 	/* Free authentication/encryption state */
 #ifdef ENABLE_GSS
 	{
@@ -573,11 +580,7 @@ pqDropConnection(PGconn *conn, bool flushInput)
 #endif
 	if (conn->sasl_state)
 	{
-		/*
-		 * XXX: if support for more authentication mechanisms is added, this
-		 * needs to call the right 'free' function.
-		 */
-		pg_fe_scram_free(conn->sasl_state);
+		conn->sasl->free(conn->sasl_state);
 		conn->sasl_state = NULL;
 	}
 }
@@ -629,12 +632,6 @@ pqDropServerData(PGconn *conn)
 		free(prev);
 	}
 	conn->notifyHead = conn->notifyTail = NULL;
-
-	pqFreeCommandQueue(conn->cmd_queue_head);
-	conn->cmd_queue_head = conn->cmd_queue_tail = NULL;
-
-	pqFreeCommandQueue(conn->cmd_queue_recycle);
-	conn->cmd_queue_recycle = NULL;
 
 	/* Reset ParameterStatus data, as well as variables deduced from it */
 	pstatus = conn->pstatus;
@@ -725,7 +722,6 @@ PQconnectdbParams(const char *const *keywords,
 		(void) connectDBComplete(conn);
 
 	return conn;
-
 }
 
 /*
@@ -1176,6 +1172,11 @@ connectOptions2(PGconn *conn)
 		{
 			if (ch->host)
 				free(ch->host);
+
+			/*
+			 * This bit selects the default host location.  If you change
+			 * this, see also pg_regress.
+			 */
 #ifdef HAVE_UNIX_SOCKETS
 			if (DEFAULT_PGSOCKET_DIR[0])
 			{
@@ -1755,7 +1756,7 @@ static void
 emitHostIdentityInfo(PGconn *conn, const char *host_addr)
 {
 #ifdef HAVE_UNIX_SOCKETS
-	if (IS_AF_UNIX(conn->raddr.addr.ss_family))
+	if (conn->raddr.addr.ss_family == AF_UNIX)
 	{
 		char		service[NI_MAXHOST];
 
@@ -1819,7 +1820,7 @@ connectFailureMessage(PGconn *conn, int errorno)
 					  SOCK_STRERROR(errorno, sebuf, sizeof(sebuf)));
 
 #ifdef HAVE_UNIX_SOCKETS
-	if (IS_AF_UNIX(conn->raddr.addr.ss_family))
+	if (conn->raddr.addr.ss_family == AF_UNIX)
 		appendPQExpBufferStr(&conn->errorMessage,
 							 libpq_gettext("\tIs the server running locally and accepting connections on that socket?\n"));
 	else
@@ -2005,26 +2006,17 @@ setKeepalivesCount(PGconn *conn)
 /*
  * Enable keepalives and set the keepalive values on Win32,
  * where they are always set in one batch.
+ *
+ * CAUTION: This needs to be signal safe, since it's used by PQcancel.
  */
 static int
-setKeepalivesWin32(PGconn *conn)
+setKeepalivesWin32(pgsocket sock, int idle, int interval)
 {
 	struct tcp_keepalive ka;
 	DWORD		retsize;
-	int			idle = 0;
-	int			interval = 0;
 
-	if (conn->keepalives_idle &&
-		!parse_int_param(conn->keepalives_idle, &idle, conn,
-						 "keepalives_idle"))
-		return 0;
 	if (idle <= 0)
 		idle = 2 * 60 * 60;		/* 2 hours = default */
-
-	if (conn->keepalives_interval &&
-		!parse_int_param(conn->keepalives_interval, &interval, conn,
-						 "keepalives_interval"))
-		return 0;
 	if (interval <= 0)
 		interval = 1;			/* 1 second = default */
 
@@ -2032,7 +2024,7 @@ setKeepalivesWin32(PGconn *conn)
 	ka.keepalivetime = idle * 1000;
 	ka.keepaliveinterval = interval * 1000;
 
-	if (WSAIoctl(conn->sock,
+	if (WSAIoctl(sock,
 				 SIO_KEEPALIVE_VALS,
 				 (LPVOID) &ka,
 				 sizeof(ka),
@@ -2042,6 +2034,26 @@ setKeepalivesWin32(PGconn *conn)
 				 NULL,
 				 NULL)
 		!= 0)
+		return 0;
+	return 1;
+}
+
+static int
+prepKeepalivesWin32(PGconn *conn)
+{
+	int			idle = -1;
+	int			interval = -1;
+
+	if (conn->keepalives_idle &&
+		!parse_int_param(conn->keepalives_idle, &idle, conn,
+						 "keepalives_idle"))
+		return 0;
+	if (conn->keepalives_interval &&
+		!parse_int_param(conn->keepalives_interval, &interval, conn,
+						 "keepalives_interval"))
+		return 0;
+
+	if (!setKeepalivesWin32(conn->sock, idle, interval))
 	{
 		appendPQExpBuffer(&conn->errorMessage,
 						  libpq_gettext("%s(%s) failed: error code %d\n"),
@@ -2663,7 +2675,7 @@ keep_going:						/* We will come back to here until there is
 					 * TCP sockets, nonblock mode, close-on-exec.  Try the
 					 * next address if any of this fails.
 					 */
-					if (!IS_AF_UNIX(addr_cur->ai_family))
+					if (addr_cur->ai_family != AF_UNIX)
 					{
 						if (!connectNoDelay(conn))
 						{
@@ -2692,7 +2704,7 @@ keep_going:						/* We will come back to here until there is
 					}
 #endif							/* F_SETFD */
 
-					if (!IS_AF_UNIX(addr_cur->ai_family))
+					if (addr_cur->ai_family != AF_UNIX)
 					{
 #ifndef WIN32
 						int			on = 1;
@@ -2728,7 +2740,7 @@ keep_going:						/* We will come back to here until there is
 							err = 1;
 #else							/* WIN32 */
 #ifdef SIO_KEEPALIVE_VALS
-						else if (!setKeepalivesWin32(conn))
+						else if (!prepKeepalivesWin32(conn))
 							err = 1;
 #endif							/* SIO_KEEPALIVE_VALS */
 #endif							/* WIN32 */
@@ -2828,7 +2840,7 @@ keep_going:						/* We will come back to here until there is
 
 		case CONNECTION_STARTED:
 			{
-				ACCEPT_TYPE_ARG3 optlen = sizeof(optval);
+				socklen_t	optlen = sizeof(optval);
 
 				/*
 				 * Write ready, since we've made it here, so the connection
@@ -2894,13 +2906,10 @@ keep_going:						/* We will come back to here until there is
 				 * Unix-domain socket.
 				 */
 				if (conn->requirepeer && conn->requirepeer[0] &&
-					IS_AF_UNIX(conn->raddr.addr.ss_family))
+					conn->raddr.addr.ss_family == AF_UNIX)
 				{
 #ifndef WIN32
-					char		pwdbuf[BUFSIZ];
-					struct passwd pass_buf;
-					struct passwd *pass;
-					int			passerr;
+					char	   *remote_username;
 #endif
 					uid_t		uid;
 					gid_t		gid;
@@ -2923,35 +2932,27 @@ keep_going:						/* We will come back to here until there is
 					}
 
 #ifndef WIN32
-					passerr = pqGetpwuid(uid, &pass_buf, pwdbuf, sizeof(pwdbuf), &pass);
-					if (pass == NULL)
-					{
-						if (passerr != 0)
-							appendPQExpBuffer(&conn->errorMessage,
-											  libpq_gettext("could not look up local user ID %d: %s\n"),
-											  (int) uid,
-											  strerror_r(passerr, sebuf, sizeof(sebuf)));
-						else
-							appendPQExpBuffer(&conn->errorMessage,
-											  libpq_gettext("local user with ID %d does not exist\n"),
-											  (int) uid);
-						goto error_return;
-					}
+					remote_username = pg_fe_getusername(uid,
+														&conn->errorMessage);
+					if (remote_username == NULL)
+						goto error_return;	/* message already logged */
 
-					if (strcmp(pass->pw_name, conn->requirepeer) != 0)
+					if (strcmp(remote_username, conn->requirepeer) != 0)
 					{
 						appendPQExpBuffer(&conn->errorMessage,
 										  libpq_gettext("requirepeer specifies \"%s\", but actual peer user name is \"%s\"\n"),
-										  conn->requirepeer, pass->pw_name);
+										  conn->requirepeer, remote_username);
+						free(remote_username);
 						goto error_return;
 					}
+					free(remote_username);
 #else							/* WIN32 */
 					/* should have failed with ENOSYS above */
 					Assert(false);
 #endif							/* WIN32 */
 				}
 
-				if (IS_AF_UNIX(conn->raddr.addr.ss_family))
+				if (conn->raddr.addr.ss_family == AF_UNIX)
 				{
 					/* Don't request SSL or GSSAPI over Unix sockets */
 #ifdef USE_SSL
@@ -3181,6 +3182,19 @@ keep_going:						/* We will come back to here until there is
 				pollres = pqsecure_open_client(conn);
 				if (pollres == PGRES_POLLING_OK)
 				{
+					/*
+					 * At this point we should have no data already buffered.
+					 * If we do, it was received before we performed the SSL
+					 * handshake, so it wasn't encrypted and indeed may have
+					 * been injected by a man-in-the-middle.
+					 */
+					if (conn->inCursor != conn->inEnd)
+					{
+						appendPQExpBufferStr(&conn->errorMessage,
+											 libpq_gettext("received unencrypted data after SSL response\n"));
+						goto error_return;
+					}
+
 					/* SSL handshake done, ready to send startup packet */
 					conn->status = CONNECTION_MADE;
 					return PGRES_POLLING_WRITING;
@@ -3280,6 +3294,19 @@ keep_going:						/* We will come back to here until there is
 				pollres = pqsecure_open_gss(conn);
 				if (pollres == PGRES_POLLING_OK)
 				{
+					/*
+					 * At this point we should have no data already buffered.
+					 * If we do, it was received before we performed the GSS
+					 * handshake, so it wasn't encrypted and indeed may have
+					 * been injected by a man-in-the-middle.
+					 */
+					if (conn->inCursor != conn->inEnd)
+					{
+						appendPQExpBufferStr(&conn->errorMessage,
+											 libpq_gettext("received unencrypted data after GSSAPI encryption response\n"));
+						goto error_return;
+					}
+
 					/* All set for startup packet */
 					conn->status = CONNECTION_MADE;
 					return PGRES_POLLING_WRITING;
@@ -3743,7 +3770,7 @@ keep_going:						/* We will come back to here until there is
 				 * (and it seems some clients expect it to be empty after a
 				 * successful connection).
 				 */
-				resetPQExpBuffer(&conn->errorMessage);
+				pqClearConnErrorState(conn);
 
 				/* We are open for business! */
 				conn->status = CONNECTION_OK;
@@ -3980,8 +4007,7 @@ internal_ping(PGconn *conn)
 		return PQPING_MIRROR_READY;
 
 	/*
-	 * Report PQPING_REJECT if server says it's not accepting connections. (We
-	 * distinguish this case mainly for the convenience of pg_ctl.)
+	 * Report PQPING_REJECT if server says it's not accepting connections.
 	 */
 	if (strcmp(conn->last_sqlstate, ERRCODE_CANNOT_CONNECT_NOW) == 0)
 		return PQPING_REJECT;
@@ -4307,7 +4333,7 @@ closePGconn(PGconn *conn)
 
 	/*
 	 * Close the connection, reset all transient state, flush I/O buffers.
-	 * Note that this includes clearing conn->errorMessage; we're no longer
+	 * Note that this includes clearing conn's error state; we're no longer
 	 * interested in any failures associated with the old connection, and we
 	 * want a clean slate for any new connection attempt.
 	 */
@@ -4317,7 +4343,7 @@ closePGconn(PGconn *conn)
 	conn->xactStatus = PQTRANS_IDLE;
 	conn->pipelineStatus = PQ_PIPELINE_OFF;
 	pqClearAsyncResult(conn);	/* deallocate result */
-	resetPQExpBuffer(&conn->errorMessage);
+	pqClearConnErrorState(conn);
 	release_conn_addrinfo(conn);
 
 	/* Reset all state obtained from server, too */
@@ -4352,8 +4378,7 @@ PQreset(PGconn *conn)
 		if (connectDBStart(conn) && connectDBComplete(conn))
 		{
 			/*
-			 * Notify event procs of successful reset.  We treat an event proc
-			 * failure as disabling the connection ... good idea?
+			 * Notify event procs of successful reset.
 			 */
 			int			i;
 
@@ -4362,15 +4387,8 @@ PQreset(PGconn *conn)
 				PGEventConnReset evt;
 
 				evt.conn = conn;
-				if (!conn->events[i].proc(PGEVT_CONNRESET, &evt,
-										  conn->events[i].passThrough))
-				{
-					conn->status = CONNECTION_BAD;
-					appendPQExpBuffer(&conn->errorMessage,
-									  libpq_gettext("PGEventProc \"%s\" failed during PGEVT_CONNRESET event\n"),
-									  conn->events[i].name);
-					break;
-				}
+				(void) conn->events[i].proc(PGEVT_CONNRESET, &evt,
+											conn->events[i].passThrough);
 			}
 		}
 	}
@@ -4412,8 +4430,7 @@ PQresetPoll(PGconn *conn)
 		if (status == PGRES_POLLING_OK)
 		{
 			/*
-			 * Notify event procs of successful reset.  We treat an event proc
-			 * failure as disabling the connection ... good idea?
+			 * Notify event procs of successful reset.
 			 */
 			int			i;
 
@@ -4422,15 +4439,8 @@ PQresetPoll(PGconn *conn)
 				PGEventConnReset evt;
 
 				evt.conn = conn;
-				if (!conn->events[i].proc(PGEVT_CONNRESET, &evt,
-										  conn->events[i].passThrough))
-				{
-					conn->status = CONNECTION_BAD;
-					appendPQExpBuffer(&conn->errorMessage,
-									  libpq_gettext("PGEventProc \"%s\" failed during PGEVT_CONNRESET event\n"),
-									  conn->events[i].name);
-					return PGRES_POLLING_FAILED;
-				}
+				(void) conn->events[i].proc(PGEVT_CONNRESET, &evt,
+											conn->events[i].passThrough);
 			}
 		}
 
@@ -4467,8 +4477,53 @@ PQgetCancel(PGconn *conn)
 	memcpy(&cancel->raddr, &conn->raddr, sizeof(SockAddr));
 	cancel->be_pid = conn->be_pid;
 	cancel->be_key = conn->be_key;
+	/* We use -1 to indicate an unset connection option */
+	cancel->pgtcp_user_timeout = -1;
+	cancel->keepalives = -1;
+	cancel->keepalives_idle = -1;
+	cancel->keepalives_interval = -1;
+	cancel->keepalives_count = -1;
+	if (conn->pgtcp_user_timeout != NULL)
+	{
+		if (!parse_int_param(conn->pgtcp_user_timeout,
+							 &cancel->pgtcp_user_timeout,
+							 conn, "tcp_user_timeout"))
+			goto fail;
+	}
+	if (conn->keepalives != NULL)
+	{
+		if (!parse_int_param(conn->keepalives,
+							 &cancel->keepalives,
+							 conn, "keepalives"))
+			goto fail;
+	}
+	if (conn->keepalives_idle != NULL)
+	{
+		if (!parse_int_param(conn->keepalives_idle,
+							 &cancel->keepalives_idle,
+							 conn, "keepalives_idle"))
+			goto fail;
+	}
+	if (conn->keepalives_interval != NULL)
+	{
+		if (!parse_int_param(conn->keepalives_interval,
+							 &cancel->keepalives_interval,
+							 conn, "keepalives_interval"))
+			goto fail;
+	}
+	if (conn->keepalives_count != NULL)
+	{
+		if (!parse_int_param(conn->keepalives_count,
+							 &cancel->keepalives_count,
+							 conn, "keepalives_count"))
+			goto fail;
+	}
 
 	return cancel;
+
+fail:
+	free(cancel);
+	return NULL;
 }
 
 /* PQfreeCancel: free a cancel structure */
@@ -4481,13 +4536,35 @@ PQfreeCancel(PGcancel *cancel)
 
 
 /*
- * PQcancel and PQrequestCancel: attempt to request cancellation of the
- * current operation.
+ * Sets an integer socket option on a TCP socket, if the provided value is
+ * not negative.  Returns false if setsockopt fails for some reason.
+ *
+ * CAUTION: This needs to be signal safe, since it's used by PQcancel.
+ */
+#if defined(TCP_USER_TIMEOUT) || !defined(WIN32)
+static bool
+optional_setsockopt(int fd, int protoid, int optid, int value)
+{
+	if (value < 0)
+		return true;
+	if (setsockopt(fd, protoid, optid, (char *) &value, sizeof(value)) < 0)
+		return false;
+	return true;
+}
+#endif
+
+
+/*
+ * PQcancel: request query cancel
  *
  * The return value is true if the cancel request was successfully
  * dispatched, false if not (in which case an error message is available).
  * Note: successful dispatch is no guarantee that there will be any effect at
  * the backend.  The application must read the operation result as usual.
+ *
+ * On failure, an error message is stored in *errbuf, which must be of size
+ * errbufsize (recommended size is 256 bytes).  *errbuf is not changed on
+ * success return.
  *
  * CAUTION: we want this routine to be safely callable from a signal handler
  * (for example, an application might want to call it in a SIGINT handler).
@@ -4496,9 +4573,6 @@ PQfreeCancel(PGcancel *cancel)
  * just as dangerous.  We avoid sprintf here for that reason.  Building up
  * error messages with strcpy/strcat is tedious but should be quite safe.
  * We also save/restore errno in case the signal handler support doesn't.
- *
- * internal_cancel() is an internal helper function to make code-sharing
- * between the two versions of the cancel function possible.
  */
 static int
 internal_cancel(SockAddr *raddr, int be_pid, int be_key,
@@ -4693,6 +4767,7 @@ int
 PQrequestCancel(PGconn *conn)
 {
 	int			r;
+	PGcancel   *cancel;
 
 	/* Check we have an open connection */
 	if (!conn)
@@ -4704,6 +4779,7 @@ PQrequestCancel(PGconn *conn)
 				"PQrequestCancel() -- connection is not open\n",
 				conn->errorMessage.maxlen);
 		conn->errorMessage.len = strlen(conn->errorMessage.data);
+		conn->errorReported = 0;
 
 		return false;
 	}
@@ -4713,7 +4789,10 @@ PQrequestCancel(PGconn *conn)
 						false);
 
 	if (!r)
+	{
 		conn->errorMessage.len = strlen(conn->errorMessage.data);
+		conn->errorReported = 0;
+	}
 
 	return r;
 }
@@ -5243,7 +5322,7 @@ ldapServiceLookup(const char *purl, PQconninfoOption *options,
  * Returns 0 on success, nonzero on failure.  On failure, if errorMessage
  * isn't null, also store an error message there.  (Note: the only reason
  * this function and related ones don't dump core on errorMessage == NULL
- * is the undocumented fact that printfPQExpBuffer does nothing when passed
+ * is the undocumented fact that appendPQExpBuffer does nothing when passed
  * a null PQExpBuffer pointer.)
  */
 static int
@@ -6908,6 +6987,14 @@ PQerrorMessage(const PGconn *conn)
 	if (!conn)
 		return libpq_gettext("connection pointer is NULL\n");
 
+	/*
+	 * The errorMessage buffer might be marked "broken" due to having
+	 * previously failed to allocate enough memory for the message.  In that
+	 * case, tell the application we ran out of memory.
+	 */
+	if (PQExpBufferBroken(&conn->errorMessage))
+		return libpq_gettext("out of memory\n");
+
 	return conn->errorMessage.data;
 }
 
@@ -7396,14 +7483,12 @@ bool
 pqGetHomeDirectory(char *buf, int bufsize)
 {
 #ifndef WIN32
-	char		pwdbuf[BUFSIZ];
-	struct passwd pwdstr;
-	struct passwd *pwd = NULL;
+	const char *home;
 
-	(void) pqGetpwuid(geteuid(), &pwdstr, pwdbuf, sizeof(pwdbuf), &pwd);
-	if (pwd == NULL)
-		return false;
-	strlcpy(buf, pwd->pw_dir, bufsize);
+	home = getenv("HOME");
+	if (home == NULL || home[0] == '\0')
+		return pg_get_user_home_dir(geteuid(), buf, bufsize);
+	strlcpy(buf, home, bufsize);
 	return true;
 #else
 	char		tmppath[MAX_PATH];
@@ -7419,6 +7504,11 @@ pqGetHomeDirectory(char *buf, int bufsize)
 /*
  * To keep the API consistent, the locking stubs are always provided, even
  * if they are not required.
+ *
+ * Since we neglected to provide any error-return convention in the
+ * pgthreadlock_t API, we can't do much except Assert upon failure of any
+ * mutex primitive.  Fortunately, such failures appear to be nonexistent in
+ * the field.
  */
 
 static void
@@ -7438,7 +7528,7 @@ default_threadlock(int acquire)
 		if (singlethread_lock == NULL)
 		{
 			if (pthread_mutex_init(&singlethread_lock, NULL))
-				PGTHREAD_ERROR("failed to initialize mutex");
+				Assert(false);
 		}
 		InterlockedExchange(&mutex_initlock, 0);
 	}
@@ -7446,12 +7536,12 @@ default_threadlock(int acquire)
 	if (acquire)
 	{
 		if (pthread_mutex_lock(&singlethread_lock))
-			PGTHREAD_ERROR("failed to lock mutex");
+			Assert(false);
 	}
 	else
 	{
 		if (pthread_mutex_unlock(&singlethread_lock))
-			PGTHREAD_ERROR("failed to unlock mutex");
+			Assert(false);
 	}
 #endif
 }

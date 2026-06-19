@@ -34,6 +34,10 @@ OBJS += greenplum/aotable.o greenplum/version_gp.o \
 override CPPFLAGS := -DDLSUFFIX=\"$(DLSUFFIX)\" -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
 LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils $(libpq_pgport)
 
+# required for 002_pg_upgrade.pl
+REGRESS_SHLIB=$(abs_top_builddir)/src/test/regress/regress$(DLSUFFIX)
+export REGRESS_SHLIB
+
 all: pg_upgrade
 
 pg_upgrade: $(OBJS) | submake-libpq submake-libpgport submake-libpgfeutils
@@ -66,14 +70,8 @@ greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_f
 # src/bin/pg_upgrade, the real test of pg_upgrade will be triggered by
 # "make check" in the end of installcheck-world, see GNUmakefile.in
 
-# When $(MAKE) is present, make automatically infers that this is a
-# recursive make. which is not actually what we want here, as that
-# e.g. prevents output synchronization from working (as make thinks
-# that the subsidiary make knows how to deal with that itself, but
-# we're invoking a shell script that doesn't know). Referencing
-# $(MAKE) indirectly avoids that behaviour.
-# See https://www.gnu.org/software/make/manual/html_node/MAKE-Variable.html#MAKE-Variable
-NOTSUBMAKEMAKE=$(MAKE)
+check:
+	$(prove_check)
 
 check: test_gpdb.sh all
 	bash $< -C -r -s -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)

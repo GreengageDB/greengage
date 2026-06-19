@@ -4,7 +4,7 @@
  *	  Definitions for using the POSTGRES copy command.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/copy.h
@@ -22,6 +22,17 @@
 #include "executor/executor.h"
 #include "cdb/cdbhash.h"
 #include "cdb/cdbcopy.h"
+
+/*
+ * Represents whether a header line should be present, and whether it must
+ * match the actual names (which implies "true").
+ */
+typedef enum CopyHeaderChoice
+{
+	COPY_HEADER_FALSE = 0,
+	COPY_HEADER_TRUE,
+	COPY_HEADER_MATCH,
+} CopyHeaderChoice;
 
 /*
  * Represents the different source/dest cases we need to worry about at
@@ -142,7 +153,7 @@ typedef struct CopyStateData
 	bool		freeze;			/* freeze rows on loading? */
 	bool		binary;			/* binary format */
 	bool		csv_mode;		/* Comma Separated Value format? */
-	bool		header_line;	/* CSV header line? */
+	CopyHeaderChoice header_line;	/* header line? */
 	char	   *null_print;		/* NULL marker string (server encoding!) */
 	int			null_print_len;	/* length of same */
 	char	   *null_print_client;	/* same converted to file encoding */

@@ -193,6 +193,12 @@ SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'GMT') as gmt_trunc;  -- fixed-offset abbreviation
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'VET') as vet_trunc;  -- variable-offset abbreviation
 
+-- disallow zero intervals
+SELECT date_bin('0 days'::interval, timestamp with time zone '1970-01-01 01:00:00+00' , timestamp with time zone '1970-01-01 00:00:00+00');
+
+-- disallow negative intervals
+SELECT date_bin('-2 days'::interval, timestamp with time zone '1970-01-01 01:00:00+00' , timestamp with time zone '1970-01-01 00:00:00+00');
+
 -- Test casting within a BETWEEN qualifier
 SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
   FROM TIMESTAMPTZ_TBL
@@ -295,6 +301,28 @@ SET timezone = '04:15';
 SELECT to_char(now(), 'OF') as "OF", to_char(now(), 'TZH:TZM') as "TZH:TZM";
 RESET timezone;
 
+-- Check of, tzh, tzm with various zone offsets.
+SET timezone = '00:00';
+SELECT to_char(now(), 'of') as "Of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '+02:00';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '-13:00';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '-00:30';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '00:30';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '-04:30';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '04:30';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '-04:15';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+SET timezone = '04:15';
+SELECT to_char(now(), 'of') as "of", to_char(now(), 'tzh:tzm') as "tzh:tzm";
+RESET timezone;
+
+
 CREATE TABLE TIMESTAMPTZ_TST (a int , b timestamptz);
 
 -- Test year field value with len > 4
@@ -358,6 +386,19 @@ insert into dttm_com values
      (2, current_timestamp, localtimestamp::date, current_date::date, date_in(date_out(current_date))),
      (3, now(), current_timestamp, now(), current_date);
 select id from dttm_com where d1 <> current_date;
+-- generate_series for timestamptz
+select * from generate_series('2020-01-01 00:00'::timestamptz,
+                              '2020-01-02 03:00'::timestamptz,
+                              '1 hour'::interval);
+-- the LIMIT should allow this to terminate in a reasonable amount of time
+-- (but that unfortunately doesn't work yet for SELECT * FROM ...)
+select generate_series('2022-01-01 00:00'::timestamptz,
+                       'infinity'::timestamptz,
+                       '1 month'::interval) limit 10;
+-- errors
+select * from generate_series('2020-01-01 00:00'::timestamptz,
+                              '2020-01-02 03:00'::timestamptz,
+                              '0 hour'::interval);
 
 --
 -- Test behavior with a dynamic (time-varying) timezone abbreviation.

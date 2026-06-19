@@ -16,5 +16,8 @@ OBJS = \
 	assert.o \
 	debugutils.o \
 	elog.o
+	csvlog.o \
+	elog.o \
+	jsonlog.o
 
 include $(top_srcdir)/src/backend/common.mk

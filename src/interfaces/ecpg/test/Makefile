@@ -13,7 +13,6 @@ override CPPFLAGS := \
 	-Wno-error \
 	'-DHOST_TUPLE="$(host_tuple)"' \
 	'-DSHELLPROG="$(SHELL)"' \
-	'-DDLSUFFIX="$(DLSUFFIX)"' \
 	$(CPPFLAGS)
 
 # default encoding for regression tests

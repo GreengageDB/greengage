@@ -4,7 +4,7 @@
  *	  prototypes for clauses.c.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/clauses.h
@@ -75,5 +75,6 @@ extern bool subexpression_match(Expr *expr1, Expr *expr2);
 
 // resolve the join alias varno/varattno information to its base varno/varattno information
 extern Query *flatten_join_alias_var_optimizer(Query *query, int queryLevel);
+extern Bitmapset *pull_paramids(Expr *expr);
 
 #endif							/* CLAUSES_H */

@@ -144,7 +144,7 @@ FOREIGN_KEY(staop4 REFERENCES pg_operator(oid));
 typedef FormData_pg_statistic *Form_pg_statistic;
 
 
-#define StatisticRelidAttnumInhIndexId	2696
+DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelidAttnumInhIndexId, on pg_statistic using btree(starelid oid_ops, staattnum int2_ops, stainherit bool_ops));
 
 
 #ifdef EXPOSE_TO_CLIENT_CODE

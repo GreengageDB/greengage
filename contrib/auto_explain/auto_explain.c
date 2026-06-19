@@ -3,7 +3,7 @@
  * auto_explain.c
  *
  *
- * Copyright (c) 2008-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2008-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/auto_explain/auto_explain.c
@@ -19,6 +19,7 @@
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
+#include "common/pg_prng.h"
 #include "executor/instrument.h"
 #include "jit/jit.h"
 #include "utils/guc.h"
@@ -85,7 +86,6 @@ static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 void		_PG_init(void);
-void		_PG_fini(void);
 
 static void explain_ExecutorStart(QueryDesc *queryDesc, int eflags);
 static void explain_ExecutorRun(QueryDesc *queryDesc,
@@ -243,7 +243,7 @@ _PG_init(void)
 							 NULL,
 							 NULL);
 
-	EmitWarningsOnPlaceholders("auto_explain");
+	MarkGUCPrefixReserved("auto_explain");
 
 	/* Install hooks. */
 	prev_ExecutorStart = ExecutorStart_hook;
@@ -254,19 +254,6 @@ _PG_init(void)
 	ExecutorFinish_hook = explain_ExecutorFinish;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = explain_ExecutorEnd;
-}
-
-/*
- * Module unload callback
- */
-void
-_PG_fini(void)
-{
-	/* Uninstall hooks. */
-	ExecutorStart_hook = prev_ExecutorStart;
-	ExecutorRun_hook = prev_ExecutorRun;
-	ExecutorFinish_hook = prev_ExecutorFinish;
-	ExecutorEnd_hook = prev_ExecutorEnd;
 }
 
 /*
@@ -290,8 +277,7 @@ explain_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	if (nesting_level == 0)
 	{
 		if (auto_explain_log_min_duration >= 0 && !IsParallelWorker())
-			current_query_sampled = (random() < auto_explain_sample_rate *
-									 ((double) MAX_RANDOM_VALUE + 1));
+			current_query_sampled = (pg_prng_double(&pg_global_prng_state) < auto_explain_sample_rate);
 		else
 			current_query_sampled = false;
 	}

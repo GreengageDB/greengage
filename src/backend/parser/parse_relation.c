@@ -708,6 +708,17 @@ scanNSItemForColumn(ParseState *pstate, ParseNamespaceItem *nsitem,
 						colname),
 				 parser_errposition(pstate, location)));
 
+	/*
+	 * In a MERGE WHEN condition, no system column is allowed except tableOid
+	 */
+	if (pstate->p_expr_kind == EXPR_KIND_MERGE_WHEN &&
+		attnum < InvalidAttrNumber && attnum != TableOidAttributeNumber)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+				 errmsg("cannot use system column \"%s\" in MERGE WHEN condition",
+						colname),
+				 parser_errposition(pstate, location)));
+
 	/* Found a valid match, so build a Var */
 	if (attnum > InvalidAttrNumber)
 	{
@@ -1165,7 +1176,7 @@ buildRelationAliases(TupleDesc tupdesc, Alias *alias, Alias *eref)
 	for (varattno = 0; varattno < maxattrs; varattno++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, varattno);
-		Value	   *attrname;
+		String	   *attrname;
 
 		if (attr->attisdropped)
 		{
@@ -1178,7 +1189,7 @@ buildRelationAliases(TupleDesc tupdesc, Alias *alias, Alias *eref)
 		else if (aliaslc)
 		{
 			/* Use the next user-supplied alias */
-			attrname = (Value *) lfirst(aliaslc);
+			attrname = lfirst_node(String, aliaslc);
 			aliaslc = lnext(aliaslist, aliaslc);
 			alias->colnames = lappend(alias->colnames, attrname);
 		}
@@ -2183,9 +2194,12 @@ addRangeTableEntryForTableFunc(ParseState *pstate,
 							   bool inFromCl)
 {
 	RangeTblEntry *rte = makeNode(RangeTblEntry);
-	char	   *refname = alias ? alias->aliasname : pstrdup("xmltable");
+	char	   *refname;
 	Alias	   *eref;
 	int			numaliases;
+
+	refname = alias ? alias->aliasname :
+		pstrdup(tf->functype == TFT_XMLTABLE ? "xmltable" : "json_table");
 
 	Assert(pstate != NULL);
 
@@ -2205,6 +2219,13 @@ addRangeTableEntryForTableFunc(ParseState *pstate,
 	if (numaliases < list_length(tf->colnames))
 		eref->colnames = list_concat(eref->colnames,
 									 list_copy_tail(tf->colnames, numaliases));
+
+	if (numaliases > list_length(tf->colnames))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+				 errmsg("%s function has %d columns available but %d columns specified",
+						tf->functype == TFT_XMLTABLE ? "XMLTABLE" : "JSON_TABLE",
+						list_length(tf->colnames), numaliases)));
 
 	rte->eref = eref;
 
@@ -2384,6 +2405,12 @@ addRangeTableEntryForJoin(ParseState *pstate,
 	if (numaliases < list_length(colnames))
 		eref->colnames = list_concat(eref->colnames,
 									 list_copy_tail(colnames, numaliases));
+
+	if (numaliases > list_length(colnames))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+				 errmsg("join expression \"%s\" has %d columns available but %d columns specified",
+						eref->aliasname, list_length(colnames), numaliases)));
 
 	rte->eref = eref;
 
@@ -3347,7 +3374,7 @@ expandNSItemVars(ParseNamespaceItem *nsitem,
 	colindex = 0;
 	foreach(lc, nsitem->p_names->colnames)
 	{
-		Value	   *colnameval = (Value *) lfirst(lc);
+		String	   *colnameval = lfirst(lc);
 		const char *colname = strVal(colnameval);
 		ParseNamespaceColumn *nscol = nsitem->p_nscolumns + colindex;
 
@@ -3390,11 +3417,12 @@ expandNSItemVars(ParseNamespaceItem *nsitem,
  *	  for the attributes of the nsitem
  *
  * pstate->p_next_resno determines the resnos assigned to the TLEs.
- * The referenced columns are marked as requiring SELECT access.
+ * The referenced columns are marked as requiring SELECT access, if
+ * caller requests that.
  */
 List *
 expandNSItemAttrs(ParseState *pstate, ParseNamespaceItem *nsitem,
-				  int sublevels_up, int location)
+				  int sublevels_up, bool require_col_privs, int location)
 {
 	RangeTblEntry *rte = nsitem->p_rte;
 	List	   *names,
@@ -3428,8 +3456,11 @@ expandNSItemAttrs(ParseState *pstate, ParseNamespaceItem *nsitem,
 							 false);
 		te_list = lappend(te_list, te);
 
-		/* Require read access to each column */
-		markVarForSelectPriv(pstate, varnode);
+		if (require_col_privs)
+		{
+			/* Require read access to each column */
+			markVarForSelectPriv(pstate, varnode);
+		}
 	}
 
 	Assert(name == NULL && var == NULL);	/* lists not the same length? */

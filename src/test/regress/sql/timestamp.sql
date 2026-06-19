@@ -166,6 +166,12 @@ SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71393' ) AS week_trunc;
 
+-- disallow zero intervals
+SELECT date_bin('0 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
+
+-- disallow negative intervals
+SELECT date_bin('-2 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
+
 -- Test casting within a BETWEEN qualifier
 SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
   FROM TIMESTAMP_TBL
@@ -291,3 +297,21 @@ SET DateStyle TO DEFAULT;
 
 -- Make sure timeofdate() and current_time() are doing roughly the same thing
 select timeofday()::date = current_timestamp::date;
+SELECT make_timestamp(2014, 12, 28, 6, 30, 45.887);
+SELECT make_timestamp(-44, 3, 15, 12, 30, 15);
+-- should fail
+select make_timestamp(0, 7, 15, 12, 30, 15);
+
+-- generate_series for timestamp
+select * from generate_series('2020-01-01 00:00'::timestamp,
+                              '2020-01-02 03:00'::timestamp,
+                              '1 hour'::interval);
+-- the LIMIT should allow this to terminate in a reasonable amount of time
+-- (but that unfortunately doesn't work yet for SELECT * FROM ...)
+select generate_series('2022-01-01 00:00'::timestamp,
+                       'infinity'::timestamp,
+                       '1 month'::interval) limit 10;
+-- errors
+select * from generate_series('2020-01-01 00:00'::timestamp,
+                              '2020-01-02 03:00'::timestamp,
+                              '0 hour'::interval);
