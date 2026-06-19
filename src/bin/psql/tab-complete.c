@@ -1838,8 +1838,17 @@ psql_completion(const char *text, int start, int end)
 
 	else if(TailMatches("DENY") && !TailMatches("DROP", "DENY"))
 		COMPLETE_WITH("DAY", "BETWEEN DAY");
-	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny) ||
-			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
+	else if(TailMatches("DROP", "DENY", "FOR"))
+		COMPLETE_WITH("DAY");
+	else if(TailMatches("DAY"))
+		COMPLETE_WITH("'Monday'", "'Tuesday'", "'Wednesday'", "'Thursday'",
+					  "'Friday'", "'Saturday'", "'Sunday'");
+	else if(TailMatches("DENY", "DAY", MatchAny) ||
+			TailMatches("AND", "DAY", MatchAny))
+		COMPLETE_WITH("TIME");
+	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny))
+		COMPLETE_WITH("AND DAY", "TIME");
+	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
 			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*", "PM'|AM'"))
 		COMPLETE_WITH("AND DAY");
 
