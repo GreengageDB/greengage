@@ -107,6 +107,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_publication.h"
 #include "catalog/pg_publication_rel.h"
+#include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_resqueue.h"
 #include "catalog/pg_resqueuecapability.h"
 #include "catalog/pg_resgroup.h"
@@ -1234,6 +1235,23 @@ GetNewOidForPublicationRel(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	key.type = T_OidAssignment;
 	key.keyOid1 = prrelid;
 	key.keyOid2 = prpubid;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+}
+
+Oid
+GetNewOidForPublicationNamespace(Relation relation, Oid indexId, AttrNumber oidcolumn,
+								 Oid pnnspid, Oid pnpubid)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == PublicationNamespaceRelationId);
+	Assert(indexId == PublicationNamespaceObjectIndexId);
+	Assert(oidcolumn == Anum_pg_publication_namespace_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.keyOid1 = pnnspid;
+	key.keyOid2 = pnpubid;
 	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
 }
 

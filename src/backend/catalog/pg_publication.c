@@ -627,8 +627,9 @@ publication_add_schema(Oid pubid, Oid schemaid, bool if_not_exists)
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-	psschid = GetNewOidWithIndex(rel, PublicationNamespaceObjectIndexId,
-								 Anum_pg_publication_namespace_oid);
+	psschid = GetNewOidForPublicationNamespace(rel, PublicationNamespaceObjectIndexId,
+											   Anum_pg_publication_namespace_oid,
+											   schemaid, pubid);
 	values[Anum_pg_publication_namespace_oid - 1] = ObjectIdGetDatum(psschid);
 	values[Anum_pg_publication_namespace_pnpubid - 1] =
 		ObjectIdGetDatum(pubid);
