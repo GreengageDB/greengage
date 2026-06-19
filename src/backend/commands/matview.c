@@ -324,10 +324,17 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	 * Don't lock it down too tight to create a temporary table just yet.  We
 	 * will switch modes when we are about to execute user code.
 	 */
-	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	/*
+	 * GPDB: switch to the owner's userid for creating the transient table.
+	 * The original userid/sec_context were already saved (and SECURITY_
+	 * RESTRICTED_OPERATION set) at the top of this function; do NOT re-fetch
+	 * them here, or the final SetUserIdAndSecContext(save_userid,
+	 * save_sec_context) would restore the restricted context instead of the
+	 * original, tripping the "prevSecContext == 0" assert in the next
+	 * StartTransaction.  The GUC nest level is likewise already established.
+	 */
 	SetUserIdAndSecContext(relowner,
 						   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-	save_nestlevel = NewGUCNestLevel();
 
 	/* Concurrent refresh builds new data in temp tablespace, and does diff. */
 	if (concurrent)
