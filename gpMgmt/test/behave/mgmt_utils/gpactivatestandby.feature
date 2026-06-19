@@ -78,7 +78,6 @@ Feature: gpactivatestandby
 
     Scenario: master can be made on dir with trailing slash
         Given the database is running
-          And the catalog has a standby master entry
           And the standby is not initialized
 
          When the user runs gpinitstandby with options "-S /tmp/standby_data/"
