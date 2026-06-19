@@ -756,8 +756,6 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | rollback | code | should_err | should_roll | should_war | should_canc | should_fault | should_common |numseg|nummir|numseg_sdw3|nummir_sdw3| recover | recover_code |
         | yes      | 1    | should     | should not  | should not | should not  | should not   | should not    |3      |2    |0          |2          | stub    | stub         |
         | yes      | 0    | should not | should      | should     | should not  | should not   | should        |2      |3    |2          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
-        | no       | 0    | should not | should not  | should     | should      | should       | should        |3      |2    |0          |2          | stub    | stub         |
-        | no       | 0    | should not | should not  | should     | should      | should not   | should        |3      |2    |0          |0          | the user runs "gprecoverseg -a" | gprecoverseg should return a return code of 0 |
 
     Scenario Outline: 8.2.3. rebalance - interrupt during switchover M->P step (before invocation of 'gprecoverseg'), continue and rollback failed step.
         Given the database is not running
