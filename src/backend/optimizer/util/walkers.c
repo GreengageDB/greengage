@@ -510,6 +510,8 @@ plan_tree_walker(Node *node,
 				return true;
 			if (walker((Node *) ((ModifyTable *) node)->returningLists, context))
 				return true;
+			if (walker((Node *) ((ModifyTable *) node)->mergeActionLists, context))
+				return true;
 
 			break;
 
