@@ -1642,7 +1642,22 @@ AllocSetGetPeakUsage_recurse(MemoryContext parent, MemoryContext context)
 		 child != NULL;
 		 child = child->nextchild)
 	{
-		AllocSet	childset = (AllocSet) child;
+		AllocSet	childset;
+
+		/*
+		 * GPDB: non-AllocSet contexts (e.g. the Generation "Caller tuples"
+		 * context that PG15's tuplesort creates under the sort context) do not
+		 * carry the AllocSet accounting fields and are never memory accounts,
+		 * so we must not cast them to AllocSet and read ->accountingParent.
+		 * Account for their footprint via the generic mem_allocated instead.
+		 */
+		if (!IsA(child, AllocSetContext))
+		{
+			total += child->mem_allocated;
+			continue;
+		}
+
+		childset = (AllocSet) child;
 
 		if (childset->accountingParent == (AllocSet) parent)
 			AllocSetGetPeakUsage_recurse(parent, child);
