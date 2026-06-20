@@ -14,8 +14,6 @@ CREATE TABLE a_star (
 	a 			int4
 );
 
-INSERT INTO tenk2 SELECT * FROM tenk1;
-ANALYZE tenk2;
 CREATE TABLE b_star (
 	b 			text
 ) INHERITS (a_star);
