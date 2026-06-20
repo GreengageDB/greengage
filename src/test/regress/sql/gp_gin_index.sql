@@ -1,3 +1,15 @@
+-- GPDB: gp_gin_index runs (parallel_schedule) before the jsonb and tsearch
+-- tests, which create testjsonb and test_tsvector.  Create and load them here so
+-- this test is self-contained, and drop them at the end so jsonb/tsearch can
+-- recreate them.
+\getenv abs_srcdir PG_ABS_SRCDIR
+CREATE TABLE testjsonb (j jsonb);
+\set filename :abs_srcdir '/data/jsonb.data'
+COPY testjsonb FROM :'filename';
+CREATE TABLE test_tsvector (t text, a tsvector);
+\set filename :abs_srcdir '/data/tsearch.data'
+COPY test_tsvector FROM :'filename';
+
 CREATE INDEX jidx ON testjsonb USING gin (j);
 SET optimizer_enable_tablescan = off;
 SET enable_seqscan = off;
@@ -126,3 +138,7 @@ DROP TABLE complex_array_table;
 RESET enable_seqscan;
 RESET enable_bitmapscan;
 RESET optimizer_enable_tablescan;
+
+-- GPDB: drop the shared tables created at the top of this test.
+DROP TABLE testjsonb;
+DROP TABLE test_tsvector;
