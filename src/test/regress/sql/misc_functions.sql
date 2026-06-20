@@ -195,8 +195,16 @@ CREATE FUNCTION my_gen_series(int, int) RETURNS SETOF integer
   AS $$generate_series_int4$$
   SUPPORT test_support_func;
 
+-- GPDB: tenk1's column correlation varies run-to-run (the per-segment heap
+-- order from test_setup's COPY isn't fixed), which flips this join between a
+-- hash join and a nestloop+index.  Force nestloop+index so the support
+-- function's row estimate is still exercised but the plan is stable.
+set enable_hashjoin = off;
+set enable_mergejoin = off;
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 a JOIN my_gen_series(1,1000) g ON a.unique1 = g;
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 a JOIN my_gen_series(1,10) g ON a.unique1 = g;
+reset enable_hashjoin;
+reset enable_mergejoin;
