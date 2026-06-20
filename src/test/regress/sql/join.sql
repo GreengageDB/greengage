@@ -458,6 +458,11 @@ reset enable_hashjoin;
 --
 set enable_mergejoin = true;
 set enable_hashjoin = false;
+-- GPDB: force seqscan+sort for the order-by-unique2 inner.  tenk1.unique2's
+-- correlation varies run-to-run (the per-segment heap order from test_setup's
+-- COPY isn't fixed), which otherwise flips this plan between an index scan and
+-- a sort.  The merge-join redundant-sort-key behavior under test is unaffected.
+set enable_indexscan = false;
 explain (costs off)
 select count(*) from
   (select * from tenk1 x order by x.thousand, x.twothousand, x.fivethous) x
@@ -472,6 +477,7 @@ select count(*) from
   on x.thousand = y.unique2 and x.twothousand = y.hundred and x.fivethous = y.unique2;
 reset enable_mergejoin;
 reset enable_hashjoin;
+reset enable_indexscan;
 
 
 --
