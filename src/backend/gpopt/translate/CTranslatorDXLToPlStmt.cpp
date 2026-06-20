@@ -610,8 +610,8 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 	{
 		// create seq scan node
 		SeqScan *seq_scan = MakeNode(SeqScan);
-		seq_scan->scanrelid = index;
-		plan = &(seq_scan->plan);
+		seq_scan->scan.scanrelid = index;
+		plan = &(seq_scan->scan.plan);
 		plan_return = (Plan *) seq_scan;
 
 		plan->targetlist = targetlist;
@@ -1621,7 +1621,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -1759,7 +1759,7 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -3254,7 +3254,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSubQueryScan(
 
 		// non-system attribute
 		CHAR *col_name_char_array = PStrDup(target_entry->resname);
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// get corresponding child project element
@@ -4091,7 +4091,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	// create dynamic scan node
 	DynamicSeqScan *dyn_seq_scan = MakeNode(DynamicSeqScan);
 
-	dyn_seq_scan->seqscan.scanrelid = index;
+	dyn_seq_scan->seqscan.scan.scanrelid = index;
 
 	IMdIdArray *parts = dyn_tbl_scan_dxlop->GetParts();
 
@@ -4123,7 +4123,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	}
 
 
-	Plan *plan = &(dyn_seq_scan->seqscan.plan);
+	Plan *plan = &(dyn_seq_scan->seqscan.scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 	//plan->nMotionNodes = 0;
 
@@ -4852,7 +4852,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 			for (INT dropped_col_attno = last_attno + 1;
 				 dropped_col_attno < attno; dropped_col_attno++)
 			{
-				Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+				Node *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 				alias->colnames =
 					gpdb::LAppend(alias->colnames, val_dropped_colname);
 			}
@@ -4861,7 +4861,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 			CHAR *col_name_char_array =
 				CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 					dxl_col_descr->MdName()->GetMDName()->GetBuffer());
-			Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+			Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 
 			alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 			last_attno = attno;
@@ -4874,7 +4874,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	// if there are any dropped columns at the end, add those too to the RangeTblEntry
 	for (ULONG ul = last_attno + 1; ul <= num_of_non_sys_cols; ul++)
 	{
-		Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+		Node *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 		alias->colnames = gpdb::LAppend(alias->colnames, val_dropped_colname);
 	}
 

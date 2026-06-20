@@ -1350,23 +1350,23 @@ gpdb::LookupTypeCache(Oid type_id, int flags)
 	return nullptr;
 }
 
-Value *
+Node *
 gpdb::MakeStringValue(char *str)
 {
 	GP_WRAP_START;
 	{
-		return makeString(str);
+		return (Node *) makeString(str);
 	}
 	GP_WRAP_END;
 	return nullptr;
 }
 
-Value *
+Node *
 gpdb::MakeIntegerValue(long i)
 {
 	GP_WRAP_START;
 	{
-		return makeInteger(i);
+		return (Node *) makeInteger(i);
 	}
 	GP_WRAP_END;
 	return nullptr;

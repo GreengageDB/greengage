@@ -487,7 +487,7 @@ CTranslatorUtils::GetColumnDescriptorsFromRecord(CMemoryPool *mp,
 	ForThree(col_name, col_names, col_type, col_types, col_type_modifier,
 			 col_type_modifiers)
 	{
-		Value *value = (Value *) lfirst(col_name);
+		String *value = (String *) lfirst(col_name);
 		Oid coltype = lfirst_oid(col_type);
 		INT type_modifier = lfirst_int(col_type_modifier);
 
@@ -533,7 +533,7 @@ CTranslatorUtils::GetColumnDescriptorsFromRecord(CMemoryPool *mp,
 
 	ForEach(col_name, col_names)
 	{
-		Value *value = (Value *) lfirst(col_name);
+		String *value = (String *) lfirst(col_name);
 
 		CHAR *col_name_char_array = strVal(value);
 		CWStringDynamic *column_name =

@@ -1099,7 +1099,7 @@ CTranslatorQueryToDXL::GetDXLCtasOptionArray(
 			}
 		}
 
-		NodeTag arg_type = T_Null;
+		NodeTag arg_type = T_Invalid;
 		if (!is_null_arg)
 		{
 			arg_type = def_elem->arg->type;
@@ -4116,7 +4116,7 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 		}
 		GPOS_ASSERT(IsA(join_alias_node, Var) ||
 					IsA(join_alias_node, CoalesceExpr));
-		Value *value = (Value *) lfirst(lc_col_name);
+		String *value = (String *) lfirst(lc_col_name);
 		CHAR *col_name_char_array = strVal(value);
 
 		// create the DXL node holding the target list entry and add it to proj list
