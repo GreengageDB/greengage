@@ -293,8 +293,11 @@ COMMIT;
 
 -- and after clustering on clstr_expression_minus_a
 CLUSTER clstr_expression USING clstr_expression_minus_a;
+-- GPDB: CLUSTER orders the heap per segment, and ctid is per-segment, so
+-- partition the ordering check by gp_segment_id (a global ctid order would
+-- interleave segments and report spurious out-of-order rows).
 WITH rows AS
-  (SELECT ctid, lag(a) OVER (ORDER BY ctid) AS la, a FROM clstr_expression)
+  (SELECT ctid, lag(a) OVER (PARTITION BY gp_segment_id ORDER BY ctid) AS la, a FROM clstr_expression)
 SELECT * FROM rows WHERE la < a;
 BEGIN;
 SET LOCAL enable_seqscan = false;
@@ -306,8 +309,9 @@ COMMIT;
 
 -- and after clustering on clstr_expression_upper_b
 CLUSTER clstr_expression USING clstr_expression_upper_b;
+-- GPDB: per-segment ordering check (see note above).
 WITH rows AS
-  (SELECT ctid, lag(b) OVER (ORDER BY ctid) AS lb, b FROM clstr_expression)
+  (SELECT ctid, lag(b) OVER (PARTITION BY gp_segment_id ORDER BY ctid) AS lb, b FROM clstr_expression)
 SELECT * FROM rows WHERE upper(lb) > upper(b);
 BEGIN;
 SET LOCAL enable_seqscan = false;
