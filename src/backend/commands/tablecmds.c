@@ -14597,6 +14597,28 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 						 */
 						Assert(foundObject.objectSubId == 0);
 					}
+					else if (foundObject.objectId == RelationGetRelid(rel) &&
+							 foundObject.objectSubId != 0 &&
+							 TupleDescAttr(RelationGetDescr(rel),
+										   foundObject.objectSubId - 1)->attgenerated)
+					{
+						/*
+						 * GPDB: after a table rewrite (e.g. SET DISTRIBUTED), a
+						 * generated column elsewhere in the same table can carry
+						 * a direct column-on-column dependency on this column.
+						 * Altering the type of a column used by a generated
+						 * column is not supported, same as the attrdef path
+						 * handled below.
+						 */
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("cannot alter type of a column used by a generated column"),
+								 errdetail("Column \"%s\" is used by generated column \"%s\".",
+										   colName,
+										   get_attname(foundObject.objectId,
+													   foundObject.objectSubId,
+													   false))));
+					}
 					else
 					{
 						/* Not expecting any other direct dependencies... */
