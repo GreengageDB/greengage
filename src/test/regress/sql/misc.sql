@@ -148,7 +148,9 @@ CREATE FUNCTION hobby_construct_named(name text, hobby text)
 
 CREATE FUNCTION hobbies_by_name(hobbies_r.name%TYPE)
    RETURNS hobbies_r.person%TYPE
-   AS 'select person from hobbies_r where name = $1'
+   -- GPDB: order by so the test below returns a deterministic person when
+   -- several people share a hobby (result-set order is not fixed in MPP).
+   AS 'select person from hobbies_r where name = $1 order by person'
    LANGUAGE SQL;
 
 CREATE FUNCTION equipment(hobbies_r)

@@ -187,7 +187,9 @@ CLOSE foo25;
 
 BEGIN;
 
-DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2;
+-- GPDB: ORDER BY so the FETCH below returns a deterministic row (tenk2's
+-- per-segment scan order is not fixed across runs).
+DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2 ORDER BY 1,2,3,4;
 
 FETCH FROM foo25ns;
 

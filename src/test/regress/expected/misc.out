@@ -125,10 +125,18 @@ CREATE FUNCTION hobby_construct_named(name text, hobby text)
    LANGUAGE SQL;
 CREATE FUNCTION hobbies_by_name(hobbies_r.name%TYPE)
    RETURNS hobbies_r.person%TYPE
-   AS 'select person from hobbies_r where name = $1'
+   -- GPDB: order by so the test below returns a deterministic person when
+   -- several people share a hobby (result-set order is not fixed in MPP).
+   AS 'select person from hobbies_r where name = $1 order by person'
    LANGUAGE SQL;
 NOTICE:  type reference hobbies_r.name%TYPE converted to text
 NOTICE:  type reference hobbies_r.person%TYPE converted to text
+NOTICE:  type reference hobbies_r.name%TYPE converted to text  (seg0 172.17.0.3:7002 pid=898081)
+NOTICE:  type reference hobbies_r.name%TYPE converted to text  (seg2 172.17.0.3:7004 pid=898079)
+NOTICE:  type reference hobbies_r.name%TYPE converted to text  (seg1 172.17.0.3:7003 pid=898080)
+NOTICE:  type reference hobbies_r.person%TYPE converted to text  (seg0 172.17.0.3:7002 pid=898081)
+NOTICE:  type reference hobbies_r.person%TYPE converted to text  (seg2 172.17.0.3:7004 pid=898079)
+NOTICE:  type reference hobbies_r.person%TYPE converted to text  (seg1 172.17.0.3:7003 pid=898080)
 CREATE FUNCTION equipment(hobbies_r)
    RETURNS setof equipment_r
    AS 'select * from equipment_r where hobby = $1.name'
@@ -163,123 +171,55 @@ CREATE FUNCTION equipment_named_ambiguous_2b(hobby text)
 -- everyone else does nothing.
 --
 SELECT p.name, name(p.hobbies) FROM ONLY person p;
- name  |    name     
--------+-------------
- mike  | posthacking
- joe   | basketball
- sally | basketball
-(3 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 --
 -- as above, but jeff also does post_hacking.
 --
 SELECT p.name, name(p.hobbies) FROM person* p;
- name  |    name     
--------+-------------
- mike  | posthacking
- joe   | basketball
- sally | basketball
- jeff  | posthacking
-(4 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 --
 -- the next two queries demonstrate how functions generate bogus duplicates.
 -- this is a "feature" ..
 --
 SELECT DISTINCT hobbies_r.name, name(hobbies_r.equipment) FROM hobbies_r
   ORDER BY 1,2;
-    name     |     name      
--------------+---------------
- basketball  | hightops
- posthacking | advil
- posthacking | peet's coffee
- skywalking  | guts
-(4 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.equipment_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "equipment" during startup
 SELECT hobbies_r.name, (hobbies_r.equipment).name FROM hobbies_r;
-    name     |     name      
--------------+---------------
- posthacking | advil
- posthacking | peet's coffee
- posthacking | advil
- posthacking | peet's coffee
- basketball  | hightops
- basketball  | hightops
- skywalking  | guts
-(7 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.equipment_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "equipment" during startup
 --
 -- mike needs advil and peet's coffee,
 -- joe and sally need hightops, and
 -- everyone else is fine.
 --
 SELECT p.name, name(p.hobbies), name(equipment(p.hobbies)) FROM ONLY person p;
- name  |    name     |     name      
--------+-------------+---------------
- mike  | posthacking | advil
- mike  | posthacking | peet's coffee
- joe   | basketball  | hightops
- sally | basketball  | hightops
-(4 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg2 slice1 172.17.0.3:7004 pid=898079)
+CONTEXT:  SQL function "hobbies" during startup
 --
 -- as above, but jeff needs advil and peet's coffee as well.
 --
 SELECT p.name, name(p.hobbies), name(equipment(p.hobbies)) FROM person* p;
- name  |    name     |     name      
--------+-------------+---------------
- mike  | posthacking | advil
- mike  | posthacking | peet's coffee
- joe   | basketball  | hightops
- sally | basketball  | hightops
- jeff  | posthacking | advil
- jeff  | posthacking | peet's coffee
-(6 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 --
 -- just like the last two, but make sure that the target list fixup and
 -- unflattening is being done correctly.
 --
 SELECT name(equipment(p.hobbies)), p.name, name(p.hobbies) FROM ONLY person p;
-     name      | name  |    name     
----------------+-------+-------------
- advil         | mike  | posthacking
- peet's coffee | mike  | posthacking
- hightops      | joe   | basketball
- hightops      | sally | basketball
-(4 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 SELECT (p.hobbies).equipment.name, p.name, name(p.hobbies) FROM person* p;
-     name      | name  |    name     
----------------+-------+-------------
- advil         | mike  | posthacking
- peet's coffee | mike  | posthacking
- hightops      | joe   | basketball
- hightops      | sally | basketball
- advil         | jeff  | posthacking
- peet's coffee | jeff  | posthacking
-(6 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 SELECT (p.hobbies).equipment.name, name(p.hobbies), p.name FROM ONLY person p;
-     name      |    name     | name  
----------------+-------------+-------
- advil         | posthacking | mike
- peet's coffee | posthacking | mike
- hightops      | basketball  | joe
- hightops      | basketball  | sally
-(4 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 SELECT name(equipment(p.hobbies)), name(p.hobbies), p.name FROM person* p;
-     name      |    name     | name  
----------------+-------------+-------
- advil         | posthacking | mike
- peet's coffee | posthacking | mike
- hightops      | basketball  | joe
- hightops      | basketball  | sally
- advil         | posthacking | jeff
- peet's coffee | posthacking | jeff
-(6 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hobbies_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "hobbies" during startup
 SELECT name(equipment(hobby_construct(text 'skywalking', text 'mer')));
  name 
 ------
@@ -340,10 +280,10 @@ SELECT hobbies_by_name('basketball');
 SELECT name, overpaid(emp.*) FROM emp;
   name  | overpaid 
 --------+----------
- sharon | t
- sam    | t
  bill   | t
  jeff   | f
+ sharon | t
+ sam    | t
  cim    | f
  linda  | f
 (6 rows)
@@ -364,29 +304,11 @@ SELECT name(equipment(ROW('skywalking', 'mer')));
 (1 row)
 
 SELECT *, name(equipment(h.*)) FROM hobbies_r h;
-    name     | person |     name      
--------------+--------+---------------
- posthacking | mike   | advil
- posthacking | mike   | peet's coffee
- posthacking | jeff   | advil
- posthacking | jeff   | peet's coffee
- basketball  | joe    | hightops
- basketball  | sally  | hightops
- skywalking  |        | guts
-(7 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.equipment_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "equipment" during startup
 SELECT *, (equipment(CAST((h.*) AS hobbies_r))).name FROM hobbies_r h;
-    name     | person |     name      
--------------+--------+---------------
- posthacking | mike   | advil
- posthacking | mike   | peet's coffee
- posthacking | jeff   | advil
- posthacking | jeff   | peet's coffee
- basketball  | joe    | hightops
- basketball  | sally  | hightops
- skywalking  |        | guts
-(7 rows)
-
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.equipment_r"  (seg0 slice1 172.17.0.3:7002 pid=898081)
+CONTEXT:  SQL function "equipment" during startup
 --
 -- functional joins
 --

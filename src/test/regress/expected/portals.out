@@ -36,7 +36,7 @@ FETCH 2 in foo2;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
-       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
 (2 rows)
 
 FETCH 3 in foo3;
@@ -51,9 +51,9 @@ FETCH 4 in foo4;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
-       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
-       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
 (4 rows)
 
 FETCH 5 in foo5;
@@ -70,11 +70,11 @@ FETCH 6 in foo6;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
-       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
-       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
-       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
 (6 rows)
 
 FETCH 7 in foo7;
@@ -93,13 +93,13 @@ FETCH 8 in foo8;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
-       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
-       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
-       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
-       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
 (8 rows)
 
 FETCH 9 in foo9;
@@ -120,15 +120,15 @@ FETCH 10 in foo10;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
-       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
-       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
-       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
-       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
-       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
 (10 rows)
 
 FETCH 11 in foo11;
@@ -151,17 +151,17 @@ FETCH 12 in foo12;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
-       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
-       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
-       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
-       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
-      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
 (12 rows)
 
 FETCH 13 in foo13;
@@ -186,19 +186,19 @@ FETCH 14 in foo14;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
-       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
-       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
-       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
-      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
-      12 |    6605 |   0 |    0 |   2 |     12 |      12 |       12 |          12 |        12 |       12 |  24 |   25 | MAAAAA   | BUJAAA   | HHHHxx
-      13 |    5696 |   1 |    1 |   3 |     13 |      13 |       13 |          13 |        13 |       13 |  26 |   27 | NAAAAA   | CLIAAA   | AAAAxx
+       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
 (14 rows)
 
 FETCH 15 in foo15;
@@ -225,21 +225,21 @@ FETCH 16 in foo16;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
        7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
-       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
-       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
-      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
-      12 |    6605 |   0 |    0 |   2 |     12 |      12 |       12 |          12 |        12 |       12 |  24 |   25 | MAAAAA   | BUJAAA   | HHHHxx
-      13 |    5696 |   1 |    1 |   3 |     13 |      13 |       13 |          13 |        13 |       13 |  26 |   27 | NAAAAA   | CLIAAA   | AAAAxx
-      14 |    4341 |   0 |    2 |   4 |     14 |      14 |       14 |          14 |        14 |       14 |  28 |   29 | OAAAAA   | ZKGAAA   | HHHHxx
-      15 |    1358 |   1 |    3 |   5 |     15 |      15 |       15 |          15 |        15 |       15 |  30 |   31 | PAAAAA   | GACAAA   | OOOOxx
+       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
 (16 rows)
 
 FETCH 17 in foo17;
@@ -268,23 +268,23 @@ FETCH 18 in foo18;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
-       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
-      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
-      12 |    6605 |   0 |    0 |   2 |     12 |      12 |       12 |          12 |        12 |       12 |  24 |   25 | MAAAAA   | BUJAAA   | HHHHxx
-      13 |    5696 |   1 |    1 |   3 |     13 |      13 |       13 |          13 |        13 |       13 |  26 |   27 | NAAAAA   | CLIAAA   | AAAAxx
-      14 |    4341 |   0 |    2 |   4 |     14 |      14 |       14 |          14 |        14 |       14 |  28 |   29 | OAAAAA   | ZKGAAA   | HHHHxx
-      15 |    1358 |   1 |    3 |   5 |     15 |      15 |       15 |          15 |        15 |       15 |  30 |   31 | PAAAAA   | GACAAA   | OOOOxx
-      16 |    9675 |   0 |    0 |   6 |     16 |      16 |       16 |          16 |        16 |       16 |  32 |   33 | QAAAAA   | DIOAAA   | VVVVxx
-      17 |    8274 |   1 |    1 |   7 |     17 |      17 |       17 |          17 |        17 |       17 |  34 |   35 | RAAAAA   | GGMAAA   | OOOOxx
+       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
 (18 rows)
 
 FETCH 19 in foo19;
@@ -315,25 +315,25 @@ FETCH 20 in foo20;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
+       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
        9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
-      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
-      12 |    6605 |   0 |    0 |   2 |     12 |      12 |       12 |          12 |        12 |       12 |  24 |   25 | MAAAAA   | BUJAAA   | HHHHxx
-      13 |    5696 |   1 |    1 |   3 |     13 |      13 |       13 |          13 |        13 |       13 |  26 |   27 | NAAAAA   | CLIAAA   | AAAAxx
-      14 |    4341 |   0 |    2 |   4 |     14 |      14 |       14 |          14 |        14 |       14 |  28 |   29 | OAAAAA   | ZKGAAA   | HHHHxx
-      15 |    1358 |   1 |    3 |   5 |     15 |      15 |       15 |          15 |        15 |       15 |  30 |   31 | PAAAAA   | GACAAA   | OOOOxx
-      16 |    9675 |   0 |    0 |   6 |     16 |      16 |       16 |          16 |        16 |       16 |  32 |   33 | QAAAAA   | DIOAAA   | VVVVxx
-      17 |    8274 |   1 |    1 |   7 |     17 |      17 |       17 |          17 |        17 |       17 |  34 |   35 | RAAAAA   | GGMAAA   | OOOOxx
-      18 |     376 |   0 |    2 |   8 |     18 |      18 |       18 |          18 |        18 |       18 |  36 |   37 | SAAAAA   | MOAAAA   | AAAAxx
-      19 |    7303 |   1 |    3 |   9 |     19 |      19 |       19 |          19 |        19 |       19 |  38 |   39 | TAAAAA   | XUKAAA   | VVVVxx
+       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
 (20 rows)
 
 FETCH 21 in foo21;
@@ -366,27 +366,27 @@ FETCH 22 in foo22;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
        0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
        2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        3 |    5679 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | LKIAAA   | VVVVxx
        4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       4 |    1621 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | JKCAAA   | HHHHxx
+       5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        5 |    5557 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | TFIAAA   | HHHHxx
        6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       6 |    2855 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | VFEAAA   | VVVVxx
+       7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        7 |    8518 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | QPMAAA   | OOOOxx
        8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
+       8 |    5435 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | BBIAAA   | VVVVxx
+       9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
        9 |    4463 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | RPGAAA   | VVVVxx
       10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
-      11 |    8396 |   1 |    3 |   1 |     11 |      11 |       11 |          11 |        11 |       11 |  22 |   23 | LAAAAA   | YKMAAA   | AAAAxx
-      12 |    6605 |   0 |    0 |   2 |     12 |      12 |       12 |          12 |        12 |       12 |  24 |   25 | MAAAAA   | BUJAAA   | HHHHxx
-      13 |    5696 |   1 |    1 |   3 |     13 |      13 |       13 |          13 |        13 |       13 |  26 |   27 | NAAAAA   | CLIAAA   | AAAAxx
-      14 |    4341 |   0 |    2 |   4 |     14 |      14 |       14 |          14 |        14 |       14 |  28 |   29 | OAAAAA   | ZKGAAA   | HHHHxx
-      15 |    1358 |   1 |    3 |   5 |     15 |      15 |       15 |          15 |        15 |       15 |  30 |   31 | PAAAAA   | GACAAA   | OOOOxx
-      16 |    9675 |   0 |    0 |   6 |     16 |      16 |       16 |          16 |        16 |       16 |  32 |   33 | QAAAAA   | DIOAAA   | VVVVxx
-      17 |    8274 |   1 |    1 |   7 |     17 |      17 |       17 |          17 |        17 |       17 |  34 |   35 | RAAAAA   | GGMAAA   | OOOOxx
-      18 |     376 |   0 |    2 |   8 |     18 |      18 |       18 |          18 |        18 |       18 |  36 |   37 | SAAAAA   | MOAAAA   | AAAAxx
-      19 |    7303 |   1 |    3 |   9 |     19 |      19 |       19 |          19 |        19 |       19 |  38 |   39 | TAAAAA   | XUKAAA   | VVVVxx
-      20 |    5574 |   0 |    0 |   0 |      0 |      20 |       20 |          20 |        20 |       20 |  40 |   41 | UAAAAA   | KGIAAA   | OOOOxx
-      21 |    1628 |   1 |    1 |   1 |      1 |      21 |       21 |          21 |        21 |       21 |  42 |   43 | VAAAAA   | QKCAAA   | AAAAxx
+      10 |    8788 |   0 |    2 |   0 |     10 |      10 |       10 |          10 |        10 |       10 |  20 |   21 | KAAAAA   | AANAAA   | AAAAxx
 (22 rows)
 
 FETCH 23 in foo23;
@@ -483,8 +483,7 @@ FETCH ABSOLUTE 2 FROM foo24; -- allowed
 (1 row)
 
 FETCH ABSOLUTE 1 FROM foo24; -- should fail
-ERROR:  cursor can only scan forward
-HINT:  Declare it with SCROLL option to enable backward scan.
+ERROR:  backward scan is not supported in this version of Greenplum Database
 END;
 --
 -- Cursors outside transaction blocks
@@ -505,14 +504,14 @@ FETCH FROM foo25;
 FETCH FROM foo25;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
 (1 row)
 
 COMMIT;
 FETCH FROM foo25;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-       2 |    2716 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | MAEAAA   | AAAAxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
 (1 row)
 
 --FETCH BACKWARD FROM foo25; -- backwards scans not supported in GPDB
@@ -525,39 +524,41 @@ SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors;
 
 CLOSE foo25;
 BEGIN;
-DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2;
+-- GPDB: ORDER BY so the FETCH below returns a deterministic row (tenk2's
+-- per-segment scan order is not fixed across runs).
+DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2 ORDER BY 1,2,3,4;
 FETCH FROM foo25ns;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-    8800 |       0 |   0 |    0 |   0 |      0 |       0 |      800 |         800 |      3800 |     8800 |   0 |    1 | MAAAAA   | AAAAAA   | AAAAxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
 (1 row)
 
 FETCH FROM foo25ns;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-    1891 |       1 |   1 |    3 |   1 |     11 |      91 |      891 |        1891 |      1891 |     1891 | 182 |  183 | TUAAAA   | BAAAAA   | HHHHxx
+       0 |    9998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | OUOAAA   | OOOOxx
 (1 row)
 
 COMMIT;
 FETCH FROM foo25ns;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-    3420 |       2 |   0 |    0 |   0 |      0 |      20 |      420 |        1420 |      3420 |     3420 |  40 |   41 | OBAAAA   | CAAAAA   | OOOOxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
 (1 row)
 
 FETCH ABSOLUTE 4 FROM foo25ns;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-    9850 |       3 |   0 |    2 |   0 |     10 |      50 |      850 |        1850 |      4850 |     9850 | 100 |  101 | WOAAAA   | DAAAAA   | VVVVxx
+       1 |    2838 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | EFEAAA   | OOOOxx
 (1 row)
 
 FETCH ABSOLUTE 4 FROM foo25ns; -- fail
 ERROR:  cursor can only scan forward
 HINT:  Declare it with SCROLL option to enable backward scan.
 SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors;
-  name   |                              statement                              | is_holdable | is_binary | is_scrollable 
----------+---------------------------------------------------------------------+-------------+-----------+---------------
- foo25ns | DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2; | t           | f         | f
+  name   |                                      statement                                       | is_holdable | is_binary | is_scrollable 
+---------+--------------------------------------------------------------------------------------+-------------+-----------+---------------
+ foo25ns | DECLARE foo25ns NO SCROLL CURSOR WITH HOLD FOR SELECT * FROM tenk2 ORDER BY 1,2,3,4; | t           | f         | f
 (1 row)
 
 CLOSE foo25ns;
@@ -1030,11 +1031,11 @@ COMMIT;
 BEGIN;
 EXPLAIN (costs off)
 DECLARE c1 CURSOR FOR SELECT stringu1 FROM onek WHERE stringu1 = 'DZAAAA';
-                    QUERY PLAN                     
----------------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using onek_stringu1 on onek
-         Index Cond: (stringu1 = 'DZAAAA'::name)
+   ->  Seq Scan on onek
+         Filter: (stringu1 = 'DZAAAA'::name)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -1069,7 +1070,7 @@ DECLARE c1 SCROLL CURSOR FOR SELECT * FROM current_check;
 FETCH ABSOLUTE 12 FROM c1;
  currentid | payload 
 -----------+---------
-         5 | p5
+        10 | P10
 (1 row)
 
 FETCH ABSOLUTE 8 FROM c1;
@@ -1132,11 +1133,11 @@ create function nochange(int) returns int
 declare c cursor for select * from int8_tbl limit nochange(3);
 -- start_ignore
 fetch all from c;
-        q1        |        q2         
-------------------+-------------------
- 4567890123456789 |               123
- 4567890123456789 |  4567890123456789
- 4567890123456789 | -4567890123456789
+        q1        |        q2        
+------------------+------------------
+              123 |              456
+              123 | 4567890123456789
+ 4567890123456789 |              123
 (3 rows)
 
 -- end_ignore
@@ -1204,6 +1205,44 @@ fetch all in c2;
 fetch backward all in c2;
 ERROR:  backward scan is not supported in this version of Greenplum Database
 rollback;
+-- gpdb: Test executor should return NULL directly during commit for holdable
+-- cursor if previously executor has emitted all tuples. We've seen two issues
+-- below.
+-- Assert failure:
+-- DETAIL:  FailedAssertion("!(!((heap)->bh_size == 0) && heap->bh_has_heap_property)", File: "binaryheap.c", Line: 161)
+CREATE TABLE foo1_tbl (a int);
+INSERT INTO foo1_tbl values(2);
+BEGIN;
+DECLARE foo1 CURSOR WITH HOLD FOR SELECT * FROM foo1_tbl ORDER BY a;
+FETCH ALL FROM foo1;
+ a 
+---
+ 2
+(1 row)
+
+COMMIT;
+FETCH ALL FROM foo1;
+ a 
+---
+(0 rows)
+
+CLOSE foo1;
+DROP TABLE foo1_tbl;
+-- ERROR:  cannot execute squelched plan node of type: 232 (execProcnode.c:887)
+BEGIN;
+DECLARE foo2 CURSOR WITH HOLD FOR SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c where c.reltablespace = t.oid AND c.relname = 'foo1_tbl';
+FETCH ALL FROM foo2;
+ relname | spcname 
+---------+---------
+(0 rows)
+
+COMMIT;
+FETCH ALL FROM foo2;
+ relname | spcname 
+---------+---------
+(0 rows)
+
+CLOSE foo2;
 -- Check fetching of toasted datums via cursors.
 begin;
 -- Other compression algorithms may cause the compressed data to be stored

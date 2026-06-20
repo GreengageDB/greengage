@@ -641,8 +641,8 @@ group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
-   0 |   2
    6 |   2
+   0 |   2
    4 |   2
    2 |   2
    8 |   2
@@ -1820,8 +1820,6 @@ select ten, sum(distinct four) filter (where four::text ~ '123') from onek a
 group by ten;
  ten | sum 
 -----+-----
-   0 |    
-   1 |    
    9 |    
    6 |    
    5 |    
@@ -1830,6 +1828,8 @@ group by ten;
    8 |    
    7 |    
    3 |    
+   0 |    
+   1 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
@@ -2235,14 +2235,14 @@ group by ten;
 -----+-----
    0 |    
    1 |    
-   9 |    
-   6 |    
-   5 |    
    4 |    
    2 |    
    8 |    
    7 |    
    3 |    
+   9 |    
+   6 |    
+   5 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
@@ -2471,14 +2471,14 @@ select ten, mode() within group (order by string4) from tenk1 group by ten;
 -----+--------
    0 | HHHHxx
    1 | OOOOxx
+   5 | HHHHxx
+   6 | OOOOxx
+   9 | VVVVxx
    2 | VVVVxx
    3 | OOOOxx
    4 | HHHHxx
    7 | AAAAxx
    8 | VVVVxx
-   5 | HHHHxx
-   6 | OOOOxx
-   9 | VVVVxx
 (10 rows)
 
 select percentile_disc(array[0.25,0.5,0.75]) within group (order by x)
@@ -3628,18 +3628,25 @@ drop table agg_hash_1;
 drop table agg_hash_3;
 drop table agg_hash_4;
 -- fix github issue #12061 numsegments of general locus is not -1 on create_minmaxagg_path
+-- GPDB: force a seqscan so the pg_class scan method (and thus the normalized
+-- plan) doesn't flip between Seq Scan and Index Only Scan as pg_class's size
+-- and stats change from run to run; the locus behavior under test is unaffected.
+set enable_indexscan = off;
+set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
                                                       QUERY PLAN                                                       
 -----------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000039.68..10000000039.69 rows=1 width=8) (actual time=0.273..0.275 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000037.94 rows=695 width=0) (actual time=0.016..0.218 rows=887 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.006..0.007 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.003..0.003 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..30.95 rows=695 width=0) (actual time=0.008..0.132 rows=887 loops=1)
+ Aggregate  (cost=10000000044.48..10000000044.49 rows=1 width=8) (actual time=0.150..0.151 rows=1 loops=1)
+   ->  Nested Loop  (cost=10000000000.02..10000000042.10 rows=953 width=0) (actual time=0.011..0.123 rows=887 loops=1)
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.004 rows=1 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.002 rows=1 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..32.53 rows=953 width=0) (actual time=0.007..0.075 rows=887 loops=1)
  Optimizer: Postgres query optimizer
- Planning Time: 1.120 ms
+ Planning Time: 0.397 ms
    (slice0)    Executor memory: 145K bytes.
  Memory used:  128000kB
- Execution Time: 0.377 ms
+ Execution Time: 0.208 ms
 (10 rows)
 
+reset enable_indexscan;
+reset enable_indexonlyscan;
