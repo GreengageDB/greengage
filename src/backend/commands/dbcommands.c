@@ -1785,11 +1785,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 		MetaTrackDropObject(DatabaseRelationId, db_id);
 
 	/*
-	 * Tell the stats collector to forget it immediately, too.
-	 */
-	pgstat_drop_database(db_id);
-
-	/*
 	 * Tell checkpointer to forget any pending fsync and unlink requests for
 	 * files in the database; else the fsyncs will fail at next checkpoint, or
 	 * worse, it will delete files that belong to a newly created database
