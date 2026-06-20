@@ -524,9 +524,10 @@ logicaltape_test(void)
 	int test_tape = 5;
 	int test_entry = 45000;
 
-	LogicalTapeSet *tape_set = LogicalTapeSetCreate(max_tapes, false, NULL, NULL, -1);
+	LogicalTapeSet *tape_set = LogicalTapeSetCreate(false, NULL, -1);
+	LogicalTape **tapes = (LogicalTape **) palloc(max_tapes * sizeof(LogicalTape *));
 
-	int work_tape = 0;
+	LogicalTape *work_tape = NULL;
 	long blocknum = 0;
 	int offset = 0;
 
@@ -537,7 +538,8 @@ logicaltape_test(void)
 	/* Fill LogicalTapeSet */
 	for (int i = 0; i < max_tapes; i++)
 	{
-		work_tape = i;
+		tapes[i] = LogicalTapeCreate(tape_set);
+		work_tape = tapes[i];
 
 		/* Create large SpillFile for LogicalTape */
 		if (test_tape == i)
@@ -547,15 +549,15 @@ logicaltape_test(void)
 			{
 				if ( j == test_entry)
 				{
-					LogicalTapeTell(tape_set, work_tape, &blocknum, &offset);
-					LogicalTapeWrite(tape_set, work_tape, test_string->data, (size_t)test_string->len);
+					LogicalTapeTell(work_tape, &blocknum, &offset);
+					LogicalTapeWrite(work_tape, test_string->data, (size_t)test_string->len);
 				}
 				else
 				{
 					/* Add additional records */
 					StringInfo text = create_text_stringinfo(nchars);
 
-					LogicalTapeWrite(tape_set, work_tape, text->data, (size_t)text->len);
+					LogicalTapeWrite(work_tape, text->data, (size_t)text->len);
 
 					pfree(text->data);
 					pfree(text);
@@ -567,7 +569,7 @@ logicaltape_test(void)
 			/* Add additional records */
 			StringInfo text = create_text_stringinfo(nchars);
 
-			LogicalTapeWrite(tape_set, work_tape, text->data, (size_t)text->len);
+			LogicalTapeWrite(work_tape, text->data, (size_t)text->len);
 
 			pfree(text->data);
 			pfree(text);
@@ -576,17 +578,17 @@ logicaltape_test(void)
 	}
 
 	/* Set target LogicalTape */
-	work_tape = test_tape;
+	work_tape = tapes[test_tape];
 	char *buffer = palloc(nchars * sizeof(char));
 
 	elog(LOG, "Running sub-test: Freeze LogicalTape");
-	LogicalTapeFreeze(tape_set, work_tape, NULL);
+	LogicalTapeFreeze(work_tape, NULL);
 
 	elog(LOG, "Running sub-test: Seek in LogicalTape");
-	LogicalTapeSeek(tape_set, work_tape, blocknum, offset);
+	LogicalTapeSeek(work_tape, blocknum, offset);
 
 	elog(LOG, "Running sub-test: Reading from LogicalTape");
-	LogicalTapeRead(tape_set, work_tape, buffer, (size_t)(nchars*sizeof(char)));
+	LogicalTapeRead(work_tape, buffer, (size_t)(nchars*sizeof(char)));
 
 	LogicalTapeSetClose(tape_set);
 

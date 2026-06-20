@@ -1372,6 +1372,7 @@ initialize_environment(void)
 			printf(_("(using postmaster on Unix socket, default port)\n"));
 	}
 
+	convert_sourcefiles();
 	load_resultmap();
 }
 
