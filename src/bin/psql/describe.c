@@ -5104,9 +5104,11 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	if (!showChildren)
 		appendPQExpBuffer(&buf, "      AND c.oid NOT IN (select inhrelid from pg_catalog.pg_inherits)\n");
 
-	processSQLNamePattern(pset.db, &buf, pattern, true, false,
-						  "n.nspname", "c.relname", NULL,
-						  "pg_catalog.pg_table_is_visible(c.oid)", NULL, NULL);
+	if (!validateSQLNamePattern(&buf, pattern, true, false,
+								"n.nspname", "c.relname", NULL,
+								"pg_catalog.pg_table_is_visible(c.oid)",
+								NULL, 3))
+		return false;
 
 	appendPQExpBufferStr(&buf, "ORDER BY 1,2;");
 
