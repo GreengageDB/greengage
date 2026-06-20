@@ -25,9 +25,6 @@ CREATE TABLE addr_nsp.parttable (
 ) PARTITION BY RANGE (a);
 CREATE VIEW addr_nsp.genview AS SELECT * from addr_nsp.gentable;
 CREATE MATERIALIZED VIEW addr_nsp.genmatview AS SELECT * FROM addr_nsp.gentable;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
-NOTICE:  One or more columns in the following table(s) do not have statistics: gentable
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 CREATE TYPE addr_nsp.gencomptype AS (a int);
 CREATE TYPE addr_nsp.genenum AS ENUM ('one', 'two');
 CREATE FOREIGN TABLE addr_nsp.genftable (a int) SERVER addr_fserv;
@@ -53,9 +50,9 @@ CREATE PUBLICATION addr_pub_schema FOR ALL TABLES IN SCHEMA addr_nsp;
 RESET client_min_messages;
 CREATE SUBSCRIPTION regress_addr_sub CONNECTION '' PUBLICATION bar WITH (connect = false, slot_name = NONE);
 WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg0 172.17.0.3:7002 pid=266481)
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg1 172.17.0.3:7003 pid=266477)
-WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg2 172.17.0.3:7004 pid=266474)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg1 172.17.0.3:7003 pid=469753)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg2 172.17.0.3:7004 pid=469741)
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables  (seg0 172.17.0.3:7002 pid=469739)
 CREATE STATISTICS addr_nsp.gentable_stat ON a, b FROM addr_nsp.gentable;
 -- test some error cases
 SELECT pg_get_object_address('stone', '{}', '{}');
@@ -498,6 +495,7 @@ SELECT (pg_identify_object(addr1.classid, addr1.objid, addr1.objsubid)).*,
  text search template      | addr_nsp   | addr_ts_temp      | addr_nsp.addr_ts_temp                                                | t
  subscription              |            | regress_addr_sub  | regress_addr_sub                                                     | t
  publication relation      |            |                   | addr_nsp.gentable in publication addr_pub                            | t
+ publication               |            | addr_pub          | addr_pub                                                             | t
  publication namespace     |            |                   | addr_nsp in publication addr_pub_schema                              | t
 (50 rows)
 

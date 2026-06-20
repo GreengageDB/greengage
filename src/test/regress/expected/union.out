@@ -146,15 +146,15 @@ UNION ALL
 SELECT f1 FROM FLOAT8_TBL;
           ten          
 -----------------------
+ -1.2345678901234e+200
+ -1.2345678901234e+200
                      0
                 -34.84
                -1004.3
- -1.2345678901234e+200
  -1.2345678901234e-200
                      0
                 -34.84
                -1004.3
- -1.2345678901234e+200
  -1.2345678901234e-200
 (10 rows)
 
@@ -180,14 +180,14 @@ UNION ALL
 SELECT f1 FROM INT4_TBL;
           ten          
 -----------------------
-                     0
-                -34.84
-               -1004.3
  -1.2345678901234e+200
- -1.2345678901234e-200
                      0
             2147483647
            -2147483647
+                     0
+                -34.84
+               -1004.3
+ -1.2345678901234e-200
                 123456
                -123456
 (10 rows)
@@ -702,12 +702,14 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1
    ->  Sort
          Sort Key: "*VALUES*".column1
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -729,7 +731,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -749,7 +752,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -765,12 +769,14 @@ select x from (values (row(100::money)), (row(200::money))) _(x) union select x 
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1
    ->  Sort
          Sort Key: "*VALUES*".column1
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
      x     
@@ -934,13 +940,13 @@ SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM 
 SELECT q1 FROM int8_tbl UNION ALL (((SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1))); --order none
         q1         
 -------------------
-               123
-               123
   4567890123456789
   4567890123456789
   4567890123456789
  -4567890123456789
                456
+               123
+               123
 (7 rows)
 
 (((SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl))) EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1;
@@ -1391,22 +1397,24 @@ select distinct q1 from
    union all
    select distinct * from int8_tbl i82) ss
 where q2 = q2;
-                     QUERY PLAN                     
-----------------------------------------------------
- HashAggregate
-   Group Key: "*SELECT* 1".q1
-   ->  Append
-         ->  Subquery Scan on "*SELECT* 1"
-               ->  HashAggregate
-                     Group Key: i81.q1, i81.q2
-                     ->  Seq Scan on int8_tbl i81
-                           Filter: (q2 IS NOT NULL)
-         ->  Subquery Scan on "*SELECT* 2"
-               ->  HashAggregate
-                     Group Key: i82.q1, i82.q2
-                     ->  Seq Scan on int8_tbl i82
-                           Filter: (q2 IS NOT NULL)
-(13 rows)
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: "*SELECT* 1".q1
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  HashAggregate
+                           Group Key: i81.q1, i81.q2
+                           ->  Seq Scan on int8_tbl i81
+                                 Filter: (q2 IS NOT NULL)
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  HashAggregate
+                           Group Key: i82.q1, i82.q2
+                           ->  Seq Scan on int8_tbl i82
+                                 Filter: (q2 IS NOT NULL)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 select distinct q1 from
   (select distinct * from int8_tbl i81
@@ -1415,8 +1423,8 @@ select distinct q1 from
 where q2 = q2;
         q1        
 ------------------
-              123
  4567890123456789
+              123
 (2 rows)
 
 explain (costs off)
@@ -1425,22 +1433,24 @@ select distinct q1 from
    union all
    select distinct * from int8_tbl i82) ss
 where -q1 = q2;
-                    QUERY PLAN                    
---------------------------------------------------
- HashAggregate
-   Group Key: "*SELECT* 1".q1
-   ->  Append
-         ->  Subquery Scan on "*SELECT* 1"
-               ->  HashAggregate
-                     Group Key: i81.q1, i81.q2
-                     ->  Seq Scan on int8_tbl i81
-                           Filter: ((- q1) = q2)
-         ->  Subquery Scan on "*SELECT* 2"
-               ->  HashAggregate
-                     Group Key: i82.q1, i82.q2
-                     ->  Seq Scan on int8_tbl i82
-                           Filter: ((- q1) = q2)
-(13 rows)
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: "*SELECT* 1".q1
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  HashAggregate
+                           Group Key: i81.q1, i81.q2
+                           ->  Seq Scan on int8_tbl i81
+                                 Filter: ((- q1) = q2)
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  HashAggregate
+                           Group Key: i82.q1, i82.q2
+                           ->  Seq Scan on int8_tbl i82
+                                 Filter: ((- q1) = q2)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 select distinct q1 from
   (select distinct * from int8_tbl i81

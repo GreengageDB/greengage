@@ -11,7 +11,7 @@ CREATE TABLE arrtest (
 	e 			float8[],
 	f			char(5)[],
 	g			varchar(5)[]
-);
+) DISTRIBUTED RANDOMLY;
 CREATE TABLE array_op_test (
 	seqno		int4,
 	i			int4[],
@@ -158,18 +158,18 @@ INSERT INTO arrtest(a) VALUES('{1,null,3}');
 SELECT a FROM arrtest;
        a       
 ---------------
+ {1,NULL,3}
  {16,25,3,4,5}
  {}
  {16,25,23}
- {1,NULL,3}
 (4 rows)
 
 UPDATE arrtest SET a[4] = NULL WHERE a[2] IS NULL;
 SELECT a FROM arrtest WHERE a[2] IS NULL;
         a        
 -----------------
- [4:4]={NULL}
  {1,NULL,3,NULL}
+ [4:4]={NULL}
 (2 rows)
 
 DELETE FROM arrtest WHERE a[2] IS NULL AND b IS NULL;
@@ -235,15 +235,15 @@ SELECT ('{{{1},{2},{3}},{{4},{5},{6}}}'::int[])[1][1:NULL][1];
 UPDATE arrtest
   SET c[NULL] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null
+ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
 UPDATE arrtest
   SET c[NULL:1] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null
+ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
 UPDATE arrtest
   SET c[1:NULL] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null
+ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
 -- test slices with empty lower and/or upper index
 CREATE TEMP TABLE arrtest_s (
   a       int2[],
@@ -285,8 +285,8 @@ UPDATE arrtest_s SET a[:3] = '{11, 12, 13}', b[:2][:2] = '{{11,12}, {14,15}}'
 SELECT * FROM arrtest_s;
          a         |                  b                   
 -------------------+--------------------------------------
- [0:4]={1,2,3,4,5} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,9}}
  {11,12,13,4,5}    | {{11,12,3},{14,15,6},{7,8,9}}
+ [0:4]={1,2,3,4,5} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,9}}
 (2 rows)
 
 UPDATE arrtest_s SET a[3:] = '{23, 24, 25}', b[2:][2:] = '{{25,26}, {28,29}}';
@@ -301,28 +301,28 @@ UPDATE arrtest_s SET a[:] = '{11, 12, 13, 14, 15}';
 SELECT * FROM arrtest_s;
            a            |                   b                   
 ------------------------+---------------------------------------
- [0:4]={11,12,13,14,15} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,25}}
  {11,12,13,14,15}       | {{11,12,3},{14,25,26},{7,28,29}}
+ [0:4]={11,12,13,14,15} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,25}}
 (2 rows)
 
 UPDATE arrtest_s SET a[:] = '{23, 24, 25}';  -- fail, too small
-ERROR:  source array too small
+ERROR:  source array too small  (seg0 slice1 172.17.0.3:7002 pid=468024)
 INSERT INTO arrtest_s VALUES(NULL, NULL);
 UPDATE arrtest_s SET a[:] = '{11, 12, 13, 14, 15}';  -- fail, no good with null
-ERROR:  array slice subscript must provide both boundaries
+ERROR:  array slice subscript must provide both boundaries  (seg0 slice1 172.17.0.3:7002 pid=468024)
 DETAIL:  When assigning to a slice of an empty array value, slice boundaries must be fully specified.
 -- we want to work with a point_tbl that includes a null
 CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
 -- check with fixed-length-array type, such as point
 SELECT f1[0:1] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented
+ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
 SELECT f1[0:] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented
+ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
 SELECT f1[:1] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented
+ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
 SELECT f1[:] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented
+ERROR:  slices of fixed-length arrays not implemented  (seg1 slice1 172.17.0.3:7003 pid=467623)
 -- subscript assignments to fixed-width result in NULL if previous value is NULL
 UPDATE point_tbl SET f1[0] = 10 WHERE f1 IS NULL RETURNING *;
  f1 
@@ -352,7 +352,7 @@ UPDATE point_tbl SET f1[0] = -10, f1[1] = -10 WHERE f1::text = '(10,10)'::point:
 
 -- but not to expand the range
 UPDATE point_tbl SET f1[3] = 10 WHERE f1::text = '(-10,-10)'::point::text RETURNING *;
-ERROR:  array subscript out of range
+ERROR:  array subscript out of range  (seg0 slice1 172.17.0.3:7002 pid=467629)
 --
 -- test array extension
 --
@@ -525,12 +525,12 @@ SELECT ARRAY(select f2 from arrtest_f order by f2) AS "ARRAY" ORDER BY 1; -- MPP
 
 -- check no merge on Motion
 EXPLAIN SELECT ARRAY(select f2 from arrtest_f) AS "ARRAY";
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Result  (cost=1.03..1.04 rows=1 width=32)
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Result  (cost=770.67..770.68 rows=1 width=32)
    InitPlan 1 (returns $0)  (slice1)
-     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
-           ->  Seq Scan on arrtest_f  (cost=0.00..1.01 rows=1 width=8)
+     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..770.67 rows=44200 width=8)
+           ->  Seq Scan on arrtest_f  (cost=0.00..181.33 rows=14733 width=8)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -1352,7 +1352,7 @@ insert into arr_tbl values ('{1,2,3}');
 insert into arr_tbl values ('{1,2}');
 -- failure expected:
 insert into arr_tbl values ('{1,2,3}');
-ERROR:  duplicate key value violates unique constraint "arr_tbl_f1_key"
+ERROR:  duplicate key value violates unique constraint "arr_tbl_f1_key"  (seg1 172.17.0.3:7003 pid=467623)
 DETAIL:  Key (f1)=({1,2,3}) already exists.
 insert into arr_tbl values ('{2,3,4}');
 insert into arr_tbl values ('{1,5,3}');

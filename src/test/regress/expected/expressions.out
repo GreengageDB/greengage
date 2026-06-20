@@ -117,11 +117,14 @@ View definition:
    FROM numeric_tbl;
 
 explain (verbose, costs off) select * from numeric_view;
-                                                                      QUERY PLAN                                                                       
--------------------------------------------------------------------------------------------------------------------------------------------------------
- Seq Scan on public.numeric_tbl
-   Output: numeric_tbl.f1, (numeric_tbl.f1)::numeric(16,4), (numeric_tbl.f1)::numeric, numeric_tbl.f2, (numeric_tbl.f2)::numeric(16,4), numeric_tbl.f2
-(2 rows)
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: numeric_tbl.f1, ((numeric_tbl.f1)::numeric(16,4)), ((numeric_tbl.f1)::numeric), numeric_tbl.f2, ((numeric_tbl.f2)::numeric(16,4)), numeric_tbl.f2
+   ->  Seq Scan on public.numeric_tbl
+         Output: numeric_tbl.f1, (numeric_tbl.f1)::numeric(16,4), (numeric_tbl.f1)::numeric, numeric_tbl.f2, (numeric_tbl.f2)::numeric(16,4), numeric_tbl.f2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- bpchar, lacking planner support for its length coercion function,
 -- could behave differently
@@ -152,12 +155,15 @@ View definition:
 
 explain (verbose, costs off) select * from bpchar_view
   where f1::bpchar = 'foo';
-                                                                   QUERY PLAN                                                                   
-------------------------------------------------------------------------------------------------------------------------------------------------
- Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
-   Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
-   Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
-(3 rows)
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   Output: bpchar_tbl.f1, ((bpchar_tbl.f1)::character(14)), ((bpchar_tbl.f1)::bpchar), bpchar_tbl.f2, ((bpchar_tbl.f2)::character(14)), bpchar_tbl.f2
+   ->  Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
+         Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
+         Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 rollback;
 --
@@ -170,7 +176,8 @@ select random() IN (1, 4, 8.0);
 ------------------------------------------------------------
  Result
    Output: (random() = ANY ('{1,4,8}'::double precision[]))
-(2 rows)
+ Optimizer: Postgres query optimizer
+(3 rows)
 
 explain (verbose, costs off)
 select random()::int IN (1, 4, 8.0);
@@ -178,7 +185,8 @@ select random()::int IN (1, 4, 8.0);
 ---------------------------------------------------------------------------
  Result
    Output: (((random())::integer)::numeric = ANY ('{1,4,8.0}'::numeric[]))
-(2 rows)
+ Optimizer: Postgres query optimizer
+(3 rows)
 
 -- However, if there's not a common supertype for the IN elements,
 -- we should instead try to produce "x = v1 OR x = v2 OR ...".
@@ -358,8 +366,8 @@ insert into inttest values(1::myint),(null);
 select * from inttest where a in (1::myint,2::myint,3::myint,4::myint,5::myint,6::myint,7::myint,8::myint,9::myint, null);
  a 
 ---
- 1
  
+ 1
 (2 rows)
 
 select * from inttest where a not in (1::myint,2::myint,3::myint,4::myint,5::myint,6::myint,7::myint,8::myint,9::myint, null);
@@ -377,8 +385,8 @@ select * from inttest where a not in (0::myint,2::myint,3::myint,4::myint,5::myi
 select * from inttest where a in (1::myint,2::myint,3::myint,4::myint,5::myint, null);
  a 
 ---
- 1
  
+ 1
 (2 rows)
 
 select * from inttest where a not in (1::myint,2::myint,3::myint,4::myint,5::myint, null);
