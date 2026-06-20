@@ -316,6 +316,15 @@ cluster_multiple_rels(ClusterStmt *stmt, List *rtcs, ClusterParams *params)
 			stmt->relation = makeNode(RangeVar);
 			stmt->relation->schemaname = get_namespace_name(get_rel_namespace(rtc->tableOid));
 			stmt->relation->relname = get_rel_name(rtc->tableOid);
+			/*
+			 * GPDB: rtcs may name child partitions (whole-database CLUSTER or a
+			 * partitioned-table CLUSTER), each with its OWN index.  Re-point
+			 * indexname at this relation's index, otherwise we would dispatch
+			 * the parent's index name against a child and the QEs would error
+			 * "<idx> is not an index for table <child>".
+			 */
+			stmt->indexname = OidIsValid(rtc->indexOid) ?
+				get_rel_name(rtc->indexOid) : NULL;
 			CdbDispatchUtilityStatement((Node *) stmt,
 										DF_CANCEL_ON_ERROR|
 										DF_WITH_SNAPSHOT,
