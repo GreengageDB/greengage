@@ -35,7 +35,9 @@ vacuum spgist_point_tbl;
 -- use box and && rather than point, so that rescan happens when the
 -- traverse stack is non-empty
 
-create unlogged table spgist_box_tbl(id serial, b box);
+-- GPDB: 'unlogged' dropped here (incidental to the SP-GiST test; unlogged
+-- sequences from the serial column are not supported in Greenplum).
+create table spgist_box_tbl(id serial, b box);
 insert into spgist_box_tbl(b)
 select box(point(i,j),point(i+s,j+s))
   from generate_series(1,100,5) i,
