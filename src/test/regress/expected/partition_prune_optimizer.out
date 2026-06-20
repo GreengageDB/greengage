@@ -1813,12 +1813,12 @@ insert into hp values (1, 'abcde');
 select tableoid::regclass, * from hp;
  tableoid | a |   b   
 ----------+---+-------
- hp0      | 1 | xxx
- hp1      | 1 | 
- hp2      | 1 | abcde
  hp0      |   | 
  hp2      |   | xxx
  hp3      | 2 | xxx
+ hp0      | 1 | xxx
+ hp1      | 1 | 
+ hp2      | 1 | abcde
 (6 rows)
 
 -- partial keys won't prune, nor would non-equality conditions
@@ -2182,33 +2182,30 @@ explain (analyze, costs off, summary off, timing off) select * from list_part wh
    ->  Dynamic Seq Scan on list_part (actual rows=1 loops=1)
          Number of partitions to scan: 1 (out of 4)
          Filter: (a = 1)
-         Partitions scanned:  1 .
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 -- Ensure pruning does not take place when the function has a Var parameter
 explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(a);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=4 loops=1)
    ->  Dynamic Seq Scan on list_part (actual rows=3 loops=1)
          Number of partitions to scan: 4 (out of 4)
          Filter: (a = list_part_fn(a))
-         Partitions scanned:  Avg 4.0 x 3 workers.  Max 4 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 -- Ensure pruning does not take place when the expression contains a Var.
 explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(1) + a;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on list_part (actual rows=0 loops=1)
          Number of partitions to scan: 4 (out of 4)
          Filter: (a = (1 + a))
-         Partitions scanned:  Avg 4.0 x 3 workers.  Max 4 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 rollback;
 drop table list_part;
@@ -2368,7 +2365,6 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2386,12 +2382,11 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{0,0,1}'::integer[]))
  Optimizer: Postgres query optimizer
-(31 rows)
+(29 rows)
 
 -- Ensure the same partitions are pruned when we make the nested loop
 -- parameter an Expr rather than a plain Param.
@@ -2440,7 +2435,6 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 50kB
-                           Executor Memory: 51kB  Segments: 2  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2470,12 +2464,11 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
                            Sort Method:  quicksort  Memory: 50kB
-                           Executor Memory: 159kB  Segments: 2  Max: 134kB (segment 0)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,3}'::integer[]))
  Optimizer: Postgres query optimizer
-(43 rows)
+(41 rows)
 
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
                                         explain_parallel_append                                        
@@ -2488,7 +2481,6 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2506,12 +2498,11 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(31 rows)
+(29 rows)
 
 delete from lprt_a where a = 1;
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
@@ -2525,7 +2516,6 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
@@ -2543,12 +2533,11 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
                            Sort Method:  quicksort  Memory: 25kB
-                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(31 rows)
+(29 rows)
 
 reset enable_hashjoin;
 reset enable_mergejoin;
@@ -2560,19 +2549,19 @@ reset max_parallel_workers_per_gather;
 -- Test run-time partition pruning with an initplan
 explain (analyze, costs off, summary off, timing off)
 select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 from lprt_a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Finalize Aggregate (actual rows=1 loops=1)
            ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
-                 ->  Partial Aggregate (actual rows=1 loops=1)
-                       ->  Seq Scan on lprt_a (actual rows=100 loops=1)
+                 ->  Partial Aggregate (never executed)
+                       ->  Seq Scan on lprt_a (never executed)
    InitPlan 2 (returns $1)  (slice4)
      ->  Finalize Aggregate (actual rows=1 loops=1)
            ->  Gather Motion 3:1  (slice5; segments: 3) (actual rows=3 loops=1)
-                 ->  Partial Aggregate (actual rows=1 loops=1)
-                       ->  Seq Scan on lprt_a lprt_a_1 (actual rows=100 loops=1)
+                 ->  Partial Aggregate (never executed)
+                       ->  Seq Scan on lprt_a lprt_a_1 (never executed)
    ->  Append (actual rows=0 loops=1)
          ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
                Recheck Cond: (a = $0)
@@ -2889,8 +2878,8 @@ set enable_mergejoin = off;
 set enable_seqscan=off;
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 > tprt.col1;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=6 loops=1)
    ->  Nested Loop (actual rows=4 loops=1)
          Join Filter: (tbl1.col1 > tprt.col1)
@@ -2898,27 +2887,24 @@ select * from tbl1 join tprt on tbl1.col1 > tprt.col1;
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
          ->  Seq Scan on tbl1 (actual rows=1 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(9 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
    ->  Hash Join (actual rows=1 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
-         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 3 of 524288 buckets.
          ->  Seq Scan on tbl1 (actual rows=1 loops=1)
          ->  Hash (actual rows=3 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(9 rows)
 
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 > tprt.col1
@@ -2946,8 +2932,8 @@ order by tbl1.col1, tprt.col1;
 insert into tbl1 values (1001), (1010), (1011);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 inner join tprt on tbl1.col1 > tprt.col1;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=23 loops=1)
    ->  Nested Loop (actual rows=15 loops=1)
          Join Filter: (tbl1.col1 > tprt.col1)
@@ -2955,27 +2941,24 @@ select * from tbl1 inner join tprt on tbl1.col1 > tprt.col1;
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
          ->  Seq Scan on tbl1 (actual rows=3 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(9 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 inner join tprt on tbl1.col1 = tprt.col1;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
    ->  Hash Join (actual rows=2 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
-         Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 3 of 524288 buckets.
          ->  Seq Scan on tbl1 (actual rows=3 loops=1)
          ->  Hash (actual rows=3 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(9 rows)
 
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 > tprt.col1
@@ -3022,8 +3005,8 @@ delete from tbl1;
 insert into tbl1 values (4400);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 < tprt.col1;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
    ->  Nested Loop (actual rows=1 loops=1)
          Join Filter: (tbl1.col1 < tprt.col1)
@@ -3031,10 +3014,9 @@ select * from tbl1 join tprt on tbl1.col1 < tprt.col1;
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
          ->  Seq Scan on tbl1 (actual rows=1 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(9 rows)
 
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 < tprt.col1
@@ -3050,8 +3032,8 @@ delete from tbl1;
 insert into tbl1 values (10000);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Hash Join (actual rows=0 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
@@ -3060,9 +3042,8 @@ select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(9 rows)
 
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 = tprt.col1
@@ -3215,10 +3196,9 @@ select * from stable_qual_pruning where a < localtimestamp;
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 2 (out of 3)
-         Filter: (a < 'Sat Jun 20 12:14:49.208317 2026'::timestamp without time zone)
-         Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         Filter: (a < 'Sat Jun 20 14:11:04.044014 2026'::timestamp without time zone)
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 -- timestamp < timestamptz comparison is only stable, not immutable
 explain (analyze, costs off, summary off, timing off)
@@ -3229,9 +3209,8 @@ select * from stable_qual_pruning where a < '2000-02-01'::timestamptz;
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a < 'Tue Feb 01 00:00:00 2000 PST'::timestamp with time zone)
-         Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 -- check ScalarArrayOp cases
 explain (analyze, costs off, summary off, timing off)
@@ -3253,9 +3232,8 @@ select * from stable_qual_pruning
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Fri Jan 01 00:00:00 2010"}'::timestamp without time zone[]))
-         Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
@@ -3265,10 +3243,9 @@ select * from stable_qual_pruning
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 1 (out of 3)
-         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Sat Jun 20 12:14:49.244649 2026"}'::timestamp without time zone[]))
-         Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
+         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Sat Jun 20 14:11:04.082557 2026"}'::timestamp without time zone[]))
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
@@ -3289,22 +3266,20 @@ select * from stable_qual_pruning
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000 PST","Fri Jan 01 00:00:00 2010 PST"}'::timestamp with time zone[]))
-         Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(null::timestamptz[]);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 3 (out of 3)
          Filter: (a = ANY (NULL::timestamp with time zone[]))
-         Partitions scanned:  Avg 3.0 x 3 workers.  Max 3 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 drop table stable_qual_pruning;
 --
@@ -3408,9 +3383,8 @@ select * from boolp where a = (select value from boolvalues where value);
                ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0 loops=1)
                      ->  Dynamic Seq Scan on boolp (actual rows=0 loops=1)
                            Number of partitions to scan: 2 (out of 2)
-                           Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(18 rows)
+(17 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from boolp where a = (select value from boolvalues where not value);
@@ -3432,9 +3406,8 @@ select * from boolp where a = (select value from boolvalues where not value);
                ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0 loops=1)
                      ->  Dynamic Seq Scan on boolp (actual rows=0 loops=1)
                            Number of partitions to scan: 2 (out of 2)
-                           Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(18 rows)
+(17 rows)
 
 drop table boolp;
 --
@@ -3544,7 +3517,6 @@ explain (analyze, costs off, summary off, timing off) select * from ma_test wher
    ->  Sort (actual rows=8 loops=1)
          Sort Key: ma_test.b
          Sort Method:  quicksort  Memory: 75kB
-         Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Nested Loop (actual rows=8 loops=1)
                Join Filter: (ma_test.a >= (min(ma_test_p2.b)))
                Rows Removed by Join Filter: 3
@@ -3555,9 +3527,8 @@ explain (analyze, costs off, summary off, timing off) select * from ma_test wher
                                        ->  Seq Scan on ma_test_p2 (actual rows=5 loops=1)
                ->  Dynamic Seq Scan on ma_test (actual rows=6 loops=2)
                      Number of partitions to scan: 3 (out of 3)
-                     Partitions scanned:  Avg 2.0 x 3 workers of 2 scans.  Max 2 parts (seg0).
  Optimizer: Pivotal Optimizer (GPORCA)
-(18 rows)
+(16 rows)
 
 reset enable_seqscan;
 reset enable_sort;
