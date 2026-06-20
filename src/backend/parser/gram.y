@@ -20970,6 +20970,7 @@ unreserved_keyword:
 			| TYPE_P
 			| TYPES_P
 			| UESCAPE
+			| UNBOUNDED
 			| UNCOMMITTED
 			| UNCONDITIONAL
 			| UNENCRYPTED
@@ -21484,7 +21485,6 @@ reserved_keyword:
 			| TO
 			| TRAILING
 			| TRUE_P
-			| UNBOUNDED
 			| UNION
 			| UNIQUE
 			| USER
