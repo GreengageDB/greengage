@@ -1,6 +1,4 @@
 CREATE TABLE vacstat_test (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vacstat_test SELECT i FROM generate_series(1,10) i ;
 VACUUM vacstat_test;
 -- Confirm that VACUUM has updated stats from all nodes
@@ -8,8 +6,8 @@ SELECT true FROM pg_class WHERE oid='vacstat_test'::regclass
 AND relpages > 0
 AND reltuples > 0
 AND relallvisible > 0;
- bool 
-------
+ ?column? 
+----------
  t
 (1 row)
 
@@ -23,8 +21,8 @@ AND reltuples =
 AND relallvisible =
     (SELECT SUM(relallvisible) FROM gp_dist_random('pg_class')
      WHERE oid='vacstat_test'::regclass);
- bool 
-------
+ ?column? 
+----------
  t
 (1 row)
 

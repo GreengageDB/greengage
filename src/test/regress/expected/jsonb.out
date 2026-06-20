@@ -549,9 +549,9 @@ SELECT test_json ->> 2 FROM test_jsonb WHERE json_type = 'object';
 (1 row)
 
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'scalar';
-ERROR:  cannot call jsonb_object_keys on a scalar
+ERROR:  cannot call jsonb_object_keys on a scalar  (seg2 slice1 172.17.0.3:7004 pid=536083)
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'array';
-ERROR:  cannot call jsonb_object_keys on an array
+ERROR:  cannot call jsonb_object_keys on an array  (seg0 slice1 172.17.0.3:7002 pid=536082)
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'object';
  jsonb_object_keys 
 -------------------
@@ -3018,16 +3018,17 @@ SELECT count(*) FROM testjsonb WHERE j ?& ARRAY['public','disabled'];
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM testjsonb WHERE j @@ '$.wait == null';
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Aggregate
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Bitmap Heap Scan on testjsonb
-               Recheck Cond: (j @@ '($."wait" == null)'::jsonpath)
-               ->  Bitmap Index Scan on jidx
-                     Index Cond: (j @@ '($."wait" == null)'::jsonpath)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on testjsonb
+                     Recheck Cond: (j @@ '($."wait" == null)'::jsonpath)
+                     ->  Bitmap Index Scan on jidx
+                           Index Cond: (j @@ '($."wait" == null)'::jsonpath)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 SELECT count(*) FROM testjsonb WHERE j @@ '$.wait == null';
  count 
@@ -3133,16 +3134,17 @@ SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.public) && exists($.disabled
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Aggregate
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Bitmap Heap Scan on testjsonb
-               Recheck Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
-               ->  Bitmap Index Scan on jidx
-                     Index Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on testjsonb
+                     Recheck Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
+                     ->  Bitmap Index Scan on jidx
+                           Index Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
  count 
@@ -3441,16 +3443,17 @@ SELECT count(*) FROM testjsonb WHERE j @@ 'exists($)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Aggregate
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Bitmap Heap Scan on testjsonb
-               Recheck Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
-               ->  Bitmap Index Scan on jidx
-                     Index Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on testjsonb
+                     Recheck Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
+                     ->  Bitmap Index Scan on jidx
+                           Index Cond: (j @? '$."wait"?(@ == null)'::jsonpath)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
  count 
@@ -4974,8 +4977,8 @@ update test_jsonb_subscript set test_json['a'] = '"test"';
 select * from test_jsonb_subscript;
  id |           test_json           
 ----+-------------------------------
-  1 | {"a": "test"}
   2 | {"a": "test", "key": "value"}
+  1 | {"a": "test"}
 (2 rows)
 
 -- replace by object
@@ -4983,8 +4986,8 @@ update test_jsonb_subscript set test_json['a'] = '{"b": 1}'::jsonb;
 select * from test_jsonb_subscript;
  id |            test_json            
 ----+---------------------------------
-  1 | {"a": {"b": 1}}
   2 | {"a": {"b": 1}, "key": "value"}
+  1 | {"a": {"b": 1}}
 (2 rows)
 
 -- replace by array
@@ -5015,13 +5018,13 @@ select * from test_jsonb_subscript where test_json['key'] = '"wrong_value"';
 
 -- NULL
 update test_jsonb_subscript set test_json[NULL] = '1';
-ERROR:  jsonb subscript in assignment must not be null
+ERROR:  jsonb subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=536082)
 update test_jsonb_subscript set test_json['another_key'] = NULL;
 select * from test_jsonb_subscript;
  id |                       test_json                       
 ----+-------------------------------------------------------
-  1 | {"a": [1, 2, 3], "another_key": null}
   2 | {"a": [1, 2, 3], "key": "value", "another_key": null}
+  1 | {"a": [1, 2, 3], "another_key": null}
 (2 rows)
 
 -- NULL as jsonb source
@@ -5030,9 +5033,9 @@ update test_jsonb_subscript set test_json['a'] = '1' where id = 3;
 select * from test_jsonb_subscript;
  id |                       test_json                       
 ----+-------------------------------------------------------
-  1 | {"a": [1, 2, 3], "another_key": null}
   2 | {"a": [1, 2, 3], "key": "value", "another_key": null}
   3 | {"a": 1}
+  1 | {"a": [1, 2, 3], "another_key": null}
 (3 rows)
 
 update test_jsonb_subscript set test_json = NULL where id = 3;
@@ -5063,7 +5066,7 @@ select * from test_jsonb_subscript;
 (1 row)
 
 update test_jsonb_subscript set test_json[-8] = '1';
-ERROR:  path element at position 1 is out of range: -8
+ERROR:  path element at position 1 is out of range: -8  (seg1 172.17.0.3:7003 pid=536081)
 select * from test_jsonb_subscript;
  id |          test_json          
 ----+-----------------------------
@@ -5184,28 +5187,28 @@ select * from test_jsonb_subscript;
 delete from test_jsonb_subscript;
 insert into test_jsonb_subscript values (1, '{"a": 1}');
 update test_jsonb_subscript set test_json['a']['b'] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a']['b']['c'] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0]['c'] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0][0] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 -- trying replace assuming a composite object, but it's a raw scalar
 delete from test_jsonb_subscript;
 insert into test_jsonb_subscript values (1, 'null');
 update test_jsonb_subscript set test_json[0] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json[0][0] = '1';
-ERROR:  cannot replace existing key
+ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=536081)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 -- jsonb to tsvector
 select to_tsvector('{"a": "aaa bbb ddd ccc", "b": ["eee fff ggg"], "c": {"d": "hhh iii"}}'::jsonb);

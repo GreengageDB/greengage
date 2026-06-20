@@ -137,7 +137,10 @@ SET ROLE regress_rol_lock1;
 BEGIN;
 LOCK TABLE lock_view1 IN ACCESS EXCLUSIVE MODE;
 -- lock_view1 and lock_tbl1 (plus children lock_tbl2 and lock_tbl3) are locked.
-select relname from pg_locks l, pg_class c
+-- GPDB: DISTINCT collapses the per-segment pg_locks rows (the lock is taken on
+-- every segment) so the set of locked relations matches upstream regardless of
+-- the segment count.
+select distinct relname from pg_locks l, pg_class c
  where l.relation = c.oid and relname like '%lock_%' and mode = 'AccessExclusiveLock'
  order by relname;
 ROLLBACK;
@@ -164,7 +167,10 @@ GRANT UPDATE ON TABLE lock_tbl1 TO regress_rol_lock1;
 BEGIN;
 LOCK TABLE lock_view8 IN ACCESS EXCLUSIVE MODE;
 -- lock_view8 and lock_tbl1 (plus children lock_tbl2 and lock_tbl3) are locked.
-select relname from pg_locks l, pg_class c
+-- GPDB: DISTINCT collapses the per-segment pg_locks rows (the lock is taken on
+-- every segment) so the set of locked relations matches upstream regardless of
+-- the segment count.
+select distinct relname from pg_locks l, pg_class c
  where l.relation = c.oid and relname like '%lock_%' and mode = 'AccessExclusiveLock'
  order by relname;
 ROLLBACK;

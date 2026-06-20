@@ -1536,8 +1536,8 @@ EXPLAIN (COSTS OFF) SELECT tableoid::regclass as part, a, b FROM part WHERE a IS
 (7 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM part p(x) ORDER BY x;
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                     QUERY PLAN                      
+-----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.x, p.b
    Merge Key: p.x
@@ -1552,7 +1552,7 @@ EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM part p(x) ORDER BY x;
                ->  Seq Scan on public.part_p2_p1 p_3
                      Output: p_3.x, p_3.b
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', plan_cache_mode = 'force_generic_plan'
+ Settings: plan_cache_mode = 'force_generic_plan'
 (15 rows)
 
 --
@@ -1890,12 +1890,12 @@ insert into hp values (1, 'abcde');
 select tableoid::regclass, * from hp;
  tableoid | a |   b   
 ----------+---+-------
- hp0      | 1 | xxx
- hp1      | 1 | 
- hp2      | 1 | abcde
  hp0      |   | 
  hp2      |   | xxx
  hp3      | 2 | xxx
+ hp0      | 1 | xxx
+ hp1      | 1 | 
+ hp2      | 1 | abcde
 (6 rows)
 
 -- partial keys won't prune, nor would non-equality conditions
@@ -2453,6 +2453,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2469,12 +2470,13 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 30kB
+                           Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{0,0,1}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(31 rows)
 
 -- Ensure the same partitions are pruned when we make the nested loop
 -- parameter an Expr rather than a plain Param.
@@ -2523,6 +2525,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 50kB
+                           Executor Memory: 51kB  Segments: 2  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2551,12 +2554,13 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 55kB
+                           Sort Method:  quicksort  Memory: 50kB
+                           Executor Memory: 159kB  Segments: 2  Max: 134kB (segment 0)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,3}'::integer[]))
  Optimizer: Postgres query optimizer
-(41 rows)
+(43 rows)
 
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
                                         explain_parallel_append                                        
@@ -2569,6 +2573,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
@@ -2585,12 +2590,13 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 30kB
+                           Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(31 rows)
 
 delete from lprt_a where a = 1;
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
@@ -2604,6 +2610,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
                                  ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
@@ -2620,12 +2627,13 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 30kB
+                           Sort Method:  quicksort  Memory: 25kB
+                           Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(31 rows)
 
 reset enable_hashjoin;
 reset enable_mergejoin;
@@ -2637,19 +2645,19 @@ reset max_parallel_workers_per_gather;
 -- Test run-time partition pruning with an initplan
 explain (analyze, costs off, summary off, timing off)
 select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 from lprt_a);
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Finalize Aggregate (actual rows=1 loops=1)
            ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
-                 ->  Partial Aggregate (never executed)
-                       ->  Seq Scan on lprt_a (never executed)
+                 ->  Partial Aggregate (actual rows=1 loops=1)
+                       ->  Seq Scan on lprt_a (actual rows=100 loops=1)
    InitPlan 2 (returns $1)  (slice4)
      ->  Finalize Aggregate (actual rows=1 loops=1)
            ->  Gather Motion 3:1  (slice5; segments: 3) (actual rows=3 loops=1)
-                 ->  Partial Aggregate (never executed)
-                       ->  Seq Scan on lprt_a lprt_a_1 (never executed)
+                 ->  Partial Aggregate (actual rows=1 loops=1)
+                       ->  Seq Scan on lprt_a lprt_a_1 (actual rows=100 loops=1)
    ->  Append (actual rows=0 loops=1)
          ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
                Recheck Cond: (a = $0)
@@ -2771,7 +2779,7 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
          ->  Result (actual rows=0 loops=1)
-               One-Time Filter: (gp_execution_segment() = 2)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result (actual rows=0 loops=1)
                      One-Time Filter: (5 = $0)
          ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
@@ -3407,9 +3415,9 @@ select * from stable_qual_pruning where a < localtimestamp;
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          ->  Seq Scan on stable_qual_pruning1 stable_qual_pruning_1 (actual rows=0 loops=1)
-               Filter: (a < 'Tue Jun 16 20:26:00.490012 2026'::timestamp without time zone)
+               Filter: (a < 'Sat Jun 20 01:49:41.498602 2026'::timestamp without time zone)
          ->  Seq Scan on stable_qual_pruning2 stable_qual_pruning_2 (actual rows=0 loops=1)
-               Filter: (a < 'Tue Jun 16 20:26:00.490012 2026'::timestamp without time zone)
+               Filter: (a < 'Sat Jun 20 01:49:41.498602 2026'::timestamp without time zone)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -3451,11 +3459,11 @@ select * from stable_qual_pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', localtimestamp]::timestamp[]);
-                                                         QUERY PLAN                                                          
------------------------------------------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Seq Scan on stable_qual_pruning2 stable_qual_pruning (actual rows=0 loops=1)
-         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Tue Jun 16 20:26:00.495877 2026"}'::timestamp without time zone[]))
+         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Sat Jun 20 01:49:41.50339 2026"}'::timestamp without time zone[]))
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -3588,15 +3596,16 @@ select * from boolp where a = (select value from boolvalues where value);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1 loops=1)
-           ->  Seq Scan on boolvalues (never executed)
+           ->  Seq Scan on boolvalues (actual rows=1 loops=1)
                  Filter: value
+                 Rows Removed by Filter: 1
    ->  Append (actual rows=0 loops=1)
          ->  Seq Scan on boolp_f boolp_1 (never executed)
                Filter: (a = $0)
          ->  Seq Scan on boolp_t boolp_2 (actual rows=0 loops=1)
                Filter: (a = $0)
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 explain (analyze, costs off, summary off, timing off)
 select * from boolp where a = (select value from boolvalues where not value);
@@ -3605,15 +3614,16 @@ select * from boolp where a = (select value from boolvalues where not value);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1 loops=1)
-           ->  Seq Scan on boolvalues (never executed)
+           ->  Seq Scan on boolvalues (actual rows=1 loops=1)
                  Filter: (NOT value)
+                 Rows Removed by Filter: 1
    ->  Append (actual rows=0 loops=1)
          ->  Seq Scan on boolp_f boolp_1 (actual rows=0 loops=1)
                Filter: (a = $0)
          ->  Seq Scan on boolp_t boolp_2 (never executed)
                Filter: (a = $0)
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 drop table boolp;
 --
@@ -3697,8 +3707,8 @@ deallocate mt_q1;
 prepare mt_q2 (int) as select * from ma_test where a >= $1 order by b limit 1;
 -- Ensure output list looks sane when the MergeAppend has no subplans.
 explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35);
-                                                                               QUERY PLAN                                                                                
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit (actual rows=0 loops=1)
    Output: ma_test.a, ma_test.b
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3710,14 +3720,14 @@ explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35
                      Sort Key: ma_test.b
                      Subplans Removed: 3
  Optimizer: Postgres query optimizer
- Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_seqscan = 'off', enable_sort = 'off', optimizer = 'off', plan_cache_mode = 'force_generic_plan'
+ Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_seqscan = 'off', enable_sort = 'off', plan_cache_mode = 'force_generic_plan'
 (12 rows)
 
 deallocate mt_q2;
 -- ensure initplan params properly prune partitions
 explain (analyze, costs off, summary off, timing off) select * from ma_test where a >= (select min(b) from ma_test_p2) order by b;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=20 loops=1)
    Merge Key: ma_test.b
    InitPlan 2 (returns $1)  (slice2)
@@ -3726,7 +3736,7 @@ explain (analyze, costs off, summary off, timing off) select * from ma_test wher
              ->  Limit (actual rows=1 loops=1)
                    ->  Gather Motion 3:1  (slice4; segments: 3) (actual rows=1 loops=1)
                          Merge Key: ma_test_p2.b
-                         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 (never executed)
+                         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 (actual rows=5 loops=1)
                                Index Cond: (b IS NOT NULL)
    ->  Merge Append (actual rows=8 loops=1)
          Sort Key: ma_test.b
@@ -4179,7 +4189,7 @@ from (
 where s.a = 1 and s.b = 1 and s.c = (select 1);
                          QUERY PLAN                          
 -------------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
+ Gather Motion 1:1  (slice1; segments: 1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result
    ->  Append
@@ -4188,7 +4198,7 @@ where s.a = 1 and s.b = 1 and s.c = (select 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = 1) AND (b = 1) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 2)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result
                      One-Time Filter: (1 = $0)
  Optimizer: Postgres query optimizer
@@ -4231,7 +4241,7 @@ explain (costs off) execute q (1, 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = $1) AND (b = $2) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 2)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result
                      One-Time Filter: ((1 = $1) AND (1 = $2) AND (1 = $0))
  Optimizer: Postgres query optimizer

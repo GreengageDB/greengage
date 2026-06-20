@@ -115,15 +115,16 @@ select name, setting from pg_settings where name like 'enable%';
  enable_bitmapscan              | on
  enable_gathermerge             | on
  enable_group_by_reordering     | on
+ enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
  enable_incremental_sort        | off
  enable_indexonlyscan           | on
  enable_indexscan               | on
  enable_material                | on
- enable_memoize                 | on
- enable_mergejoin               | on
- enable_nestloop                | on
+ enable_memoize                 | off
+ enable_mergejoin               | off
+ enable_nestloop                | off
  enable_parallel_append         | on
  enable_parallel_hash           | on
  enable_partition_pruning       | on
@@ -132,7 +133,7 @@ select name, setting from pg_settings where name like 'enable%';
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(21 rows)
+(22 rows)
 
 -- Test that the pg_timezone_names and pg_timezone_abbrevs views are
 -- more-or-less working.  We can't test their contents in any great detail
