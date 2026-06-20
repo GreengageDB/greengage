@@ -563,8 +563,6 @@ ERROR:  unrecognized configuration parameter "plpgsql.extra_foo_warnings"
 -- Test DISCARD TEMP
 --
 CREATE TEMP TABLE reset_test ( data text ) ON COMMIT DELETE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT relname FROM pg_class WHERE relname = 'reset_test';
   relname   
 ------------
@@ -586,8 +584,6 @@ PREPARE foo AS SELECT 1;
 LISTEN foo_event;
 SET vacuum_cost_delay = 13;
 CREATE TEMP TABLE tmp_foo (data text) ON COMMIT DELETE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE ROLE regress_guc_user;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_guc_user;
@@ -847,9 +843,9 @@ create function func_with_bad_set() returns int as $$ select 1 $$
 language sql
 set default_text_search_config = no_such_config;
 NOTICE:  text search configuration "no_such_config" does not exist
-NOTICE:  text search configuration "no_such_config" does not exist  (seg0 172.17.0.3:7002 pid=864305)
-NOTICE:  text search configuration "no_such_config" does not exist  (seg1 172.17.0.3:7003 pid=864316)
-NOTICE:  text search configuration "no_such_config" does not exist  (seg2 172.17.0.3:7004 pid=864310)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg0 172.17.0.3:7002 pid=548125)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg1 172.17.0.3:7003 pid=548113)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg2 172.17.0.3:7004 pid=548109)
 select func_with_bad_set();
 ERROR:  invalid value for parameter "default_text_search_config": "no_such_config"
 reset check_function_bodies;
@@ -857,6 +853,39 @@ set default_with_oids to f;
 -- Should not allow to set it to true.
 set default_with_oids to t;
 ERROR:  tables declared WITH OIDS are not supported
+SET "request.header.user-agent" = 'curl/7.29.0';
+ERROR:  invalid configuration parameter name "request.header.user-agent"
+DETAIL:  Custom parameter names must be two or more simple identifiers separated by dots.
+SHOW "request.header.user-agent";
+ERROR:  unrecognized configuration parameter "request.header.user-agent"
+-- Test function with SET search_path
+create schema n1;
+create type ty1 as (i int);
+CREATE OR REPLACE FUNCTION n1.drop_table(v_schema character varying, v_table character varying) RETURNS text
+AS $$
+BEGIN
+    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(v_schema) || '.' || quote_ident(v_table) || ';';
+    RETURN '0';
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN SQLSTATE;
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = n1, pg_temp;
+select n1.drop_table('public','t1');
+NOTICE:  table "t1" does not exist, skipping
+ drop_table 
+------------
+ 0
+(1 row)
+
+-- After funtion drop table, public schema is still in search_path
+create table public.t1(i ty1);
+drop table public.t1;
+drop type public.ty1;
+drop function n1.drop_table(v_schema character varying, v_table character varying);
+drop schema n1;
 -- Test GUC categories and flag patterns
 SELECT pg_settings_get_flags(NULL);
  pg_settings_get_flags 
@@ -882,27 +911,97 @@ CREATE TABLE tab_settings_flags AS SELECT name, category,
 SELECT name FROM tab_settings_flags
   WHERE category = 'Developer Options' AND NOT not_in_sample
   ORDER BY 1;
- name 
-------
-(0 rows)
+                   name                    
+-------------------------------------------
+ create_restartpoint_on_ckpt_record_replay
+ gp_autostats_allow_nonowner
+ gp_autostats_mode
+ gp_autostats_mode_in_functions
+ gp_autostats_on_change_threshold
+ gp_explain_jit
+ gp_reraise_signal
+ optimizer_control
+(8 rows)
 
 -- Most query-tuning GUCs are flagged as valid for EXPLAIN.
 -- default_statistics_target is an exception.
 SELECT name FROM tab_settings_flags
   WHERE category ~ '^Query Tuning' AND NOT explain
   ORDER BY 1;
-           name            
----------------------------
- default_statistics_target
-(1 row)
+                           name                            
+-----------------------------------------------------------
+ enable_groupagg
+ gp_adjust_selectivity_for_outerjoins
+ gp_dynamic_partition_pruning
+ gp_enable_agg_distinct
+ gp_enable_agg_distinct_pruning
+ gp_enable_direct_dispatch
+ gp_enable_fast_sri
+ gp_enable_minmax_optimization
+ gp_enable_multiphase_agg
+ gp_enable_predicate_propagation
+ gp_enable_preunique
+ gp_enable_relsize_collection
+ gp_enable_sort_limit
+ gp_motion_cost_per_row
+ gp_segments_for_planner
+ gp_statistics_pullup_from_child_partition
+ gp_statistics_use_fkeys
+ optimizer
+ optimizer_enable_assert_maxonerow
+ optimizer_enable_associativity
+ optimizer_enable_bitmapscan
+ optimizer_enable_broadcast_nestloop_outer_child
+ optimizer_enable_constant_expression_evaluation
+ optimizer_enable_ctas
+ optimizer_enable_direct_dispatch
+ optimizer_enable_dml
+ optimizer_enable_dml_constraints
+ optimizer_enable_dynamictablescan
+ optimizer_enable_gather_on_segment_for_dml
+ optimizer_enable_groupagg
+ optimizer_enable_hashagg
+ optimizer_enable_hashjoin
+ optimizer_enable_hashjoin_redistribute_broadcast_children
+ optimizer_enable_indexjoin
+ optimizer_enable_indexonlyscan
+ optimizer_enable_indexscan
+ optimizer_enable_master_only_queries
+ optimizer_enable_materialize
+ optimizer_enable_mergejoin
+ optimizer_enable_motion_broadcast
+ optimizer_enable_motion_gather
+ optimizer_enable_motion_redistribute
+ optimizer_enable_motions
+ optimizer_enable_motions_masteronly_queries
+ optimizer_enable_multiple_distinct_aggs
+ optimizer_enable_nljoin
+ optimizer_enable_outerjoin_rewrite
+ optimizer_enable_outerjoin_to_unionall_rewrite
+ optimizer_enable_partition_propagation
+ optimizer_enable_partition_selection
+ optimizer_enable_sort
+ optimizer_enable_streaming_material
+ optimizer_enable_tablescan
+ optimizer_expand_fulljoin
+ optimizer_force_agg_skew_avoidance
+ optimizer_force_comprehensive_join_implementation
+ optimizer_force_multistage_agg
+ optimizer_join_arity_for_associativity_commutativity
+ optimizer_join_order
+ optimizer_join_order_threshold
+ optimizer_metadata_caching
+ optimizer_penalize_skew
+(62 rows)
 
 -- Runtime-computed GUCs should be part of the preset category.
 SELECT name FROM tab_settings_flags
   WHERE NOT category = 'Preset Options' AND runtime_computed
   ORDER BY 1;
- name 
-------
-(0 rows)
+        name        
+--------------------
+ checkpoint_timeout
+(1 row)
 
 -- Preset GUCs are flagged as NOT_IN_SAMPLE.
 SELECT name FROM tab_settings_flags
@@ -926,10 +1025,12 @@ SELECT name FROM tab_settings_flags
   ORDER BY 1;
           name          
 ------------------------
+ gp_debug_linger
+ gp_reraise_signal
  transaction_deferrable
  transaction_isolation
  transaction_read_only
-(3 rows)
+(5 rows)
 
 -- NO_SHOW_ALL implies NOT_IN_SAMPLE.
 SELECT name FROM tab_settings_flags

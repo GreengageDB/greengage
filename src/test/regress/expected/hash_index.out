@@ -45,8 +45,14 @@ CREATE INDEX hash_f8_index ON hash_f8_heap USING hash (random float8_ops)
 -- tables that already contain data.
 --
 create unique index hash_f8_index_1 on hash_f8_heap(abs(random));
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
 create unique index hash_f8_index_2 on hash_f8_heap((seqno + 1), random);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
 create unique index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
 --
 -- hash index
 -- grep 843938989 hash.data

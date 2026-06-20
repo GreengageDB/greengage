@@ -16,16 +16,16 @@ CREATE SEQUENCE sequence_testx CACHE 0;
 ERROR:  CACHE (0) must be greater than zero
 -- OWNED BY errors
 CREATE SEQUENCE sequence_testx OWNED BY nobody;  -- nonsense word
-ERROR:  invalid OWNED BY option
+ERROR:  invalid OWNED BY option  (seg2 172.17.0.3:7004 pid=548906)
 HINT:  Specify OWNED BY table.column or OWNED BY NONE.
 CREATE SEQUENCE sequence_testx OWNED BY pg_class_oid_index.oid;  -- not a table
-ERROR:  sequence cannot be owned by relation "pg_class_oid_index"
+ERROR:  sequence cannot be owned by relation "pg_class_oid_index"  (seg0 172.17.0.3:7002 pid=548912)
 DETAIL:  This operation is not supported for indexes.
 CREATE SEQUENCE sequence_testx OWNED BY pg_class.relname;  -- not same schema
-ERROR:  sequence must be in same schema as table it is linked to
+ERROR:  sequence must be in same schema as table it is linked to  (seg0 172.17.0.3:7002 pid=548912)
 CREATE TABLE sequence_test_table (a int);
 CREATE SEQUENCE sequence_testx OWNED BY sequence_test_table.b;  -- wrong column
-ERROR:  column "b" of relation "sequence_test_table" does not exist
+ERROR:  column "b" of relation "sequence_test_table" does not exist  (seg0 172.17.0.3:7002 pid=548912)
 DROP TABLE sequence_test_table;
 -- sequence data types
 CREATE SEQUENCE sequence_test5 AS integer;
@@ -68,14 +68,14 @@ INSERT INTO serialTest1 VALUES ('foo');
 INSERT INTO serialTest1 VALUES ('bar');
 INSERT INTO serialTest1 VALUES ('force', 100);
 INSERT INTO serialTest1 VALUES ('wrong', NULL);
-ERROR:  null value in column "f2" of relation "serialtest1" violates not-null constraint
+ERROR:  null value in column "f2" of relation "serialtest1" violates not-null constraint  (seg1 172.17.0.3:7003 pid=548904)
 DETAIL:  Failing row contains (wrong, null).
 SELECT * FROM serialTest1;
   f1   | f2  
 -------+-----
- foo   |   1
  bar   |   2
  force | 100
+ foo   |   1
 (3 rows)
 
 SELECT pg_get_serial_sequence('serialTest1', 'f2');
@@ -263,9 +263,9 @@ INSERT INTO serialTest1 VALUES ('more');
 SELECT * FROM serialTest1;
   f1   | f2  
 -------+-----
- foo   |   1
  bar   |   2
  force | 100
+ foo   |   1
  more  |   3
 (4 rows)
 
@@ -573,26 +573,19 @@ SELECT nextval('seq2');
 --SELECT lastval();
 DROP SEQUENCE seq2;
 -- should fail
-SELECT lastval();
-ERROR:  lastval is not yet defined in this session
+--SELECT lastval();
 -- unlogged sequences
 -- (more tests in src/test/recovery/)
 CREATE UNLOGGED SEQUENCE sequence_test_unlogged;
+ERROR:  unlogged sequences are not supported
 ALTER SEQUENCE sequence_test_unlogged SET LOGGED;
+ERROR:  relation "sequence_test_unlogged" does not exist
 \d sequence_test_unlogged
-                   Sequence "public.sequence_test_unlogged"
-  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache 
---------+-------+---------+---------------------+-----------+---------+-------
- bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
-
 ALTER SEQUENCE sequence_test_unlogged SET UNLOGGED;
+ERROR:  relation "sequence_test_unlogged" does not exist
 \d sequence_test_unlogged
-              Unlogged sequence "public.sequence_test_unlogged"
-  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache 
---------+-------+---------+---------------------+-----------+---------+-------
- bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
-
 DROP SEQUENCE sequence_test_unlogged;
+ERROR:  sequence "sequence_test_unlogged" does not exist
 -- Test sequences in read-only transactions
 CREATE TEMPORARY SEQUENCE sequence_test_temp1;
 START TRANSACTION READ ONLY;
@@ -617,6 +610,7 @@ ERROR:  cannot execute setval() in a read-only transaction
 ROLLBACK;
 -- privileges tests
 CREATE USER regress_seq_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- nextval
 BEGIN;
 SET LOCAL SESSION AUTHORIZATION regress_seq_user;

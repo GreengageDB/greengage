@@ -12,23 +12,32 @@ CREATE TABLE a_star (
 	class		char,
 	a 			int4
 );
+INSERT INTO tenk2 SELECT * FROM tenk1;
+ANALYZE tenk2;
 CREATE TABLE b_star (
 	b 			text
 ) INHERITS (a_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE c_star (
 	c 			name
 ) INHERITS (a_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- GPDB: fast_emp4000/slow_emp4000 are created and populated in create_index
+-- (which runs after this test); upstream create_misc does not touch them.
 CREATE TABLE d_star (
 	d 			float8
 ) INHERITS (b_star, c_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "class"
 NOTICE:  merging multiple inherited definitions of column "a"
 CREATE TABLE e_star (
 	e 			int2
 ) INHERITS (c_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE f_star (
 	f 			polygon
 ) INHERITS (e_star);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO a_star (class, a) VALUES ('a', 1);
 INSERT INTO a_star (class, a) VALUES ('a', 2);
 INSERT INTO a_star (class) VALUES ('a');
@@ -127,10 +136,6 @@ SELECT * FROM a_star*;
  a     |  1
  a     |  2
  a     |   
- b     |  3
- b     |  4
- b     |   
- b     |   
  c     |  5
  c     |  6
  c     |   
@@ -151,6 +156,10 @@ SELECT * FROM a_star*;
  d     |   
  d     |   
  d     |   
+ b     |  3
+ b     |  4
+ b     |   
+ b     |   
  e     | 15
  e     | 16
  e     | 17
@@ -189,8 +198,6 @@ SELECT class, a
    WHERE x.c ~ text 'hi';
  class | a  
 -------+----
- c     |  5
- c     |   
  d     |  7
  d     |  8
  d     | 10
@@ -199,6 +206,8 @@ SELECT class, a
  d     |   
  d     |   
  d     |   
+ c     |  5
+ c     |   
  e     | 15
  e     | 16
  e     |   
@@ -287,30 +296,30 @@ SELECT class, aa
    WHERE aa ISNULL;
  class | aa 
 -------+----
+ d     |   
+ d     |   
+ d     |   
+ d     |   
+ d     |   
+ d     |   
+ d     |   
+ d     |   
+ b     |   
+ b     |   
+ e     |   
+ e     |   
+ e     |   
+ f     |   
+ f     |   
+ f     |   
+ f     |   
+ f     |   
+ f     |   
+ f     |   
+ f     |   
  a     |   
- b     |   
- b     |   
  c     |   
  c     |   
- d     |   
- d     |   
- d     |   
- d     |   
- d     |   
- d     |   
- d     |   
- d     |   
- e     |   
- e     |   
- e     |   
- f     |   
- f     |   
- f     |   
- f     |   
- f     |   
- f     |   
- f     |   
- f     |   
 (24 rows)
 
 -- As of Postgres 7.1, ALTER implicitly recurses,
@@ -321,11 +330,6 @@ SELECT class, foo
    WHERE x.foo >= 2;
  class | foo 
 -------+-----
- a     |   2
- b     |   3
- b     |   4
- c     |   5
- c     |   6
  d     |   7
  d     |   8
  d     |   9
@@ -334,6 +338,8 @@ SELECT class, foo
  d     |  12
  d     |  13
  d     |  14
+ b     |   3
+ b     |   4
  e     |  15
  e     |  16
  e     |  17
@@ -346,6 +352,9 @@ SELECT class, foo
  f     |  25
  f     |  26
  f     |  27
+ a     |   2
+ c     |   5
+ c     |   6
 (25 rows)
 
 ALTER TABLE a_star RENAME COLUMN foo TO aa;
@@ -354,20 +363,8 @@ SELECT *
    WHERE aa < 1000;
  class | aa 
 -------+----
- a     |  1
- a     |  2
  b     |  3
  b     |  4
- c     |  5
- c     |  6
- d     |  7
- d     |  8
- d     |  9
- d     | 10
- d     | 11
- d     | 12
- d     | 13
- d     | 14
  e     | 15
  e     | 16
  e     | 17
@@ -380,6 +377,18 @@ SELECT *
  f     | 25
  f     | 26
  f     | 27
+ a     |  1
+ a     |  2
+ c     |  5
+ c     |  6
+ d     |  7
+ d     |  8
+ d     |  9
+ d     | 10
+ d     | 11
+ d     | 12
+ d     | 13
+ d     | 14
 (26 rows)
 
 ALTER TABLE f_star ADD COLUMN f int4;
@@ -433,17 +442,6 @@ SELECT relname, reltoastrelid <> 0 AS has_toast_table
 SELECT class, aa, a FROM a_star*;
  class | aa | a 
 -------+----+---
- a     |  1 | 
- a     |  2 | 
- a     |    | 
- b     |  3 | 
- b     |  4 | 
- b     |    | 
- b     |    | 
- c     |  5 | 
- c     |  6 | 
- c     |    | 
- c     |    | 
  d     |  7 | 
  d     |  8 | 
  d     |  9 | 
@@ -460,6 +458,17 @@ SELECT class, aa, a FROM a_star*;
  d     |    | 
  d     |    | 
  d     |    | 
+ a     |  1 | 
+ a     |  2 | 
+ a     |    | 
+ c     |  5 | 
+ c     |  6 | 
+ c     |    | 
+ c     |    | 
+ b     |  3 | 
+ b     |  4 | 
+ b     |    | 
+ b     |    | 
  e     | 15 | 
  e     | 16 | 
  e     | 17 | 

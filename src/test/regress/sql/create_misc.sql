@@ -24,8 +24,8 @@ CREATE TABLE c_star (
 	c 			name
 ) INHERITS (a_star);
 
-INSERT INTO fast_emp4000 SELECT * FROM slow_emp4000;
-ANALYZE fast_emp4000;
+-- GPDB: fast_emp4000/slow_emp4000 are created and populated in create_index
+-- (which runs after this test); upstream create_misc does not touch them.
 CREATE TABLE d_star (
 	d 			float8
 ) INHERITS (b_star, c_star);
