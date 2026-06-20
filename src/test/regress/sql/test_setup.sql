@@ -203,7 +203,12 @@ CREATE TABLE tenk1 (
 COPY tenk1 FROM :'filename';
 VACUUM ANALYZE tenk1;
 
-CREATE TABLE tenk2 AS SELECT * FROM tenk1;
+-- GPDB: distribute tenk2 by unique1 (matching tenk1) so it is deterministic
+-- and co-located.  Without an explicit clause the Postgres planner picks
+-- unique1 as the key, but ORCA falls back to a randomly-distributed (NULL
+-- policy) table, which makes per-segment row counts vary run-to-run and
+-- destabilizes EXPLAIN ANALYZE output (e.g. select_parallel).
+CREATE TABLE tenk2 AS SELECT * FROM tenk1 DISTRIBUTED BY (unique1);
 VACUUM ANALYZE tenk2;
 
 CREATE TABLE person (

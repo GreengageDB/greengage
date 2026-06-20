@@ -787,14 +787,14 @@ WITH t AS (
 INSERT INTO y
 SELECT a+20 FROM t RETURNING *;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 WITH t AS (
 	SELECT a FROM y
 )
 UPDATE y SET a = y.a-10 FROM t WHERE y.a > 20 AND t.a = y.a RETURNING y.a;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 WITH RECURSIVE t(a) AS (
 	SELECT 11
@@ -803,7 +803,7 @@ WITH RECURSIVE t(a) AS (
 )
 DELETE FROM y USING t WHERE t.a = y.a RETURNING y.a;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 DROP TABLE y;
 
@@ -1162,7 +1162,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- UPDATE ... RETURNING
 WITH t AS (
@@ -1172,7 +1172,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- DELETE ... RETURNING
 WITH t AS (
@@ -1182,7 +1182,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- forward reference
 WITH RECURSIVE t AS (
@@ -1196,7 +1196,7 @@ SELECT * FROM t
 UNION ALL
 SELECT * FROM t2;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- unconditional DO INSTEAD rule
 CREATE RULE y_rule AS ON DELETE TO y DO INSTEAD
@@ -1207,7 +1207,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 DROP RULE y_rule ON y;
 
@@ -1303,7 +1303,7 @@ WITH RECURSIVE t(a) AS (
 )
 SELECT * FROM t2 JOIN y USING (a) ORDER BY a;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- data-modifying WITH in a modifying statement
 WITH t AS (
@@ -1313,7 +1313,7 @@ WITH t AS (
 )
 INSERT INTO y SELECT -a FROM t RETURNING *;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- check that WITH query is run to completion even if outer query isn't
 WITH t AS (
@@ -1321,7 +1321,7 @@ WITH t AS (
 )
 SELECT a BETWEEN 0 AND 4200 FROM t LIMIT 10;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 -- data-modifying WITH containing INSERT...ON CONFLICT DO UPDATE
 CREATE TABLE withz AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i DISTRIBUTED BY (k);
@@ -1450,8 +1450,8 @@ WITH RECURSIVE t1 AS (
 )
 SELECT 1;
 
-SELECT * FROM y;
-SELECT * FROM yy;
+SELECT * FROM y ORDER BY 1;
+SELECT * FROM yy ORDER BY 1;
 
 WITH RECURSIVE t1 AS (
   INSERT INTO yy SELECT * FROM t2 RETURNING *
@@ -1460,8 +1460,8 @@ WITH RECURSIVE t1 AS (
 )
 SELECT 1;
 
-SELECT * FROM y;
-SELECT * FROM yy;
+SELECT * FROM y ORDER BY 1;
+SELECT * FROM yy ORDER BY 1;
 
 -- start_ignore
 -- These tests actually seem to work, but they have unstable return order
@@ -1491,7 +1491,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 DROP TRIGGER y_trig ON y;
 
@@ -1508,7 +1508,7 @@ WITH t AS (
 )
 SELECT * FROM t LIMIT 1;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 DROP TRIGGER y_trig ON y;
 
@@ -1532,7 +1532,7 @@ WITH t AS (
 )
 SELECT * FROM t;
 
-SELECT * FROM y;
+SELECT * FROM y ORDER BY 1;
 
 DROP TRIGGER y_trig ON y;
 DROP FUNCTION y_trigger();

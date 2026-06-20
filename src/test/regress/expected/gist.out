@@ -80,16 +80,16 @@ select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5));
 select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5));
       p      
 -------------
- (0.4,0.4)
- (0.45,0.45)
- (0,0)
- (0.05,0.05)
- (0.1,0.1)
- (0.15,0.15)
- (0.2,0.2)
  (0.25,0.25)
  (0.3,0.3)
+ (0,0)
+ (0.1,0.1)
  (0.35,0.35)
+ (0.45,0.45)
+ (0.05,0.05)
+ (0.15,0.15)
+ (0.2,0.2)
+ (0.4,0.4)
  (0.5,0.5)
 (11 rows)
 
@@ -189,26 +189,26 @@ select b from gist_tbl where b <@ box(point(5,5), point(6,6));
 select b from gist_tbl where b <@ box(point(5,5), point(6,6));
             b            
 -------------------------
+ (5.05,5.05),(5.05,5.05)
+ (5.1,5.1),(5.1,5.1)
  (5.25,5.25),(5.25,5.25)
  (5.35,5.35),(5.35,5.35)
  (5.45,5.45),(5.45,5.45)
- (5,5),(5,5)
- (5.2,5.2),(5.2,5.2)
- (5.3,5.3),(5.3,5.3)
- (5.55,5.55),(5.55,5.55)
  (5.6,5.6),(5.6,5.6)
- (5.8,5.8),(5.8,5.8)
- (5.85,5.85),(5.85,5.85)
- (5.05,5.05),(5.05,5.05)
- (5.1,5.1),(5.1,5.1)
- (5.15,5.15),(5.15,5.15)
- (5.4,5.4),(5.4,5.4)
- (5.5,5.5),(5.5,5.5)
- (5.65,5.65),(5.65,5.65)
  (5.7,5.7),(5.7,5.7)
  (5.75,5.75),(5.75,5.75)
  (5.9,5.9),(5.9,5.9)
+ (5,5),(5,5)
+ (5.2,5.2),(5.2,5.2)
+ (5.3,5.3),(5.3,5.3)
+ (5.4,5.4),(5.4,5.4)
+ (5.55,5.55),(5.55,5.55)
  (5.95,5.95),(5.95,5.95)
+ (5.15,5.15),(5.15,5.15)
+ (5.5,5.5),(5.5,5.5)
+ (5.65,5.65),(5.65,5.65)
+ (5.8,5.8),(5.8,5.8)
+ (5.85,5.85),(5.85,5.85)
  (6,6),(6,6)
 (21 rows)
 
@@ -315,17 +315,17 @@ where b <@ box(point(4.5, 4.5), point(5.5, 5.5))
 and p <@ box(point(5,5), point(6, 6));
             b            |      p      
 -------------------------+-------------
- (5,5),(5,5)             | (5,5)
- (5.2,5.2),(5.2,5.2)     | (5.2,5.2)
- (5.3,5.3),(5.3,5.3)     | (5.3,5.3)
  (5.05,5.05),(5.05,5.05) | (5.05,5.05)
  (5.1,5.1),(5.1,5.1)     | (5.1,5.1)
- (5.15,5.15),(5.15,5.15) | (5.15,5.15)
- (5.4,5.4),(5.4,5.4)     | (5.4,5.4)
- (5.5,5.5),(5.5,5.5)     | (5.5,5.5)
  (5.25,5.25),(5.25,5.25) | (5.25,5.25)
  (5.35,5.35),(5.35,5.35) | (5.35,5.35)
  (5.45,5.45),(5.45,5.45) | (5.45,5.45)
+ (5.15,5.15),(5.15,5.15) | (5.15,5.15)
+ (5.5,5.5),(5.5,5.5)     | (5.5,5.5)
+ (5,5),(5,5)             | (5,5)
+ (5.2,5.2),(5.2,5.2)     | (5.2,5.2)
+ (5.3,5.3),(5.3,5.3)     | (5.3,5.3)
+ (5.4,5.4),(5.4,5.4)     | (5.4,5.4)
 (11 rows)
 
 drop index gist_tbl_multi_index;
@@ -337,28 +337,28 @@ create index gist_tbl_multi_index on gist_tbl using gist (circle(p,1), p);
 explain (verbose, costs off)
 select circle(p,1) from gist_tbl
 where p <@ box(point(5, 5), point(5.3, 5.3));
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: (circle(p, '1'::double precision))
    ->  Index Only Scan using gist_tbl_multi_index on public.gist_tbl
          Output: circle(p, '1'::double precision)
          Index Cond: (gist_tbl.p <@ '(5.3,5.3),(5,5)'::box)
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
 (7 rows)
 
 select circle(p,1) from gist_tbl
 where p <@ box(point(5, 5), point(5.3, 5.3));
      circle      
 -----------------
+ <(5.15,5.15),1>
+ <(5.05,5.05),1>
+ <(5.1,5.1),1>
+ <(5.25,5.25),1>
  <(5,5),1>
  <(5.2,5.2),1>
  <(5.3,5.3),1>
- <(5.05,5.05),1>
- <(5.1,5.1),1>
- <(5.15,5.15),1>
- <(5.25,5.25),1>
 (7 rows)
 
 -- Similarly, test that index rechecks involving a non-returnable column
@@ -373,7 +373,7 @@ select p from gist_tbl where circle(p,1) @> circle(point(0,0),0.95);
          Output: p
          Index Cond: ((circle(gist_tbl.p, '1'::double precision)) @> '<(0,0),0.95>'::circle)
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
 (7 rows)
 
 select p from gist_tbl where circle(p,1) @> circle(point(0,0),0.95);
@@ -395,7 +395,7 @@ select count(*) from gist_tbl;
                Output: PARTIAL count(*)
                ->  Index Only Scan using gist_tbl_multi_index on public.gist_tbl
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
 (9 rows)
 
 select count(*) from gist_tbl;
@@ -404,27 +404,37 @@ select count(*) from gist_tbl;
  10001
 (1 row)
 
--- This case isn't supported, but it should at least EXPLAIN correctly.
+-- GPDB: point(0,0) is inside the unit circle of every nearby point, so the
+-- lossy circle distance ties at 0 for many rows.  gist_tbl has no column type
+-- suitable for a hash distribution key (box/point/circle), so it is randomly
+-- distributed and ORCA's LIMIT 1 over the gathered ties is non-deterministic.
+-- Add the point coordinates as a deterministic tiebreaker.
 explain (verbose, costs off)
-select p from gist_tbl order by circle(p,1) <-> point(0,0) limit 1;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+select p from gist_tbl order by circle(p,1) <-> point(0,0), p[0], p[1] limit 1;
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
  Limit
-   Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point))
+   Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point)), (p[0]), (p[1])
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point))
-         Merge Key: ((circle(p, '1'::double precision) <-> '(0,0)'::point))
+         Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point)), (p[0]), (p[1])
+         Merge Key: ((circle(p, '1'::double precision) <-> '(0,0)'::point)), (p[0]), (p[1])
          ->  Limit
-               Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point))
-               ->  Index Only Scan using gist_tbl_multi_index on public.gist_tbl
-                     Output: p, (circle(p, '1'::double precision) <-> '(0,0)'::point)
-                     Order By: ((circle(gist_tbl.p, '1'::double precision)) <-> '(0,0)'::point)
+               Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point)), (p[0]), (p[1])
+               ->  Sort
+                     Output: p, ((circle(p, '1'::double precision) <-> '(0,0)'::point)), (p[0]), (p[1])
+                     Sort Key: ((circle(gist_tbl.p, '1'::double precision) <-> '(0,0)'::point)), (gist_tbl.p[0]), (gist_tbl.p[1])
+                     ->  Index Only Scan using gist_tbl_multi_index on public.gist_tbl
+                           Output: p, (circle(p, '1'::double precision) <-> '(0,0)'::point), p[0], p[1]
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
-(12 rows)
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(14 rows)
 
-select p from gist_tbl order by circle(p,1) <-> point(0,0) limit 1;
-ERROR:  lossy distance functions are not supported in index-only scans  (seg0 slice1 172.17.0.3:7002 pid=469768)
+select p from gist_tbl order by circle(p,1) <-> point(0,0), p[0], p[1] limit 1;
+   p   
+-------
+ (0,0)
+(1 row)
+
 -- Clean up
 reset enable_seqscan;
 reset enable_bitmapscan;

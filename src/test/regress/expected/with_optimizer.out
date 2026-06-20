@@ -467,30 +467,30 @@ with recursive q as (
 select id, parent_department, name from q limit 24;
  id | parent_department | name 
 ----+-------------------+------
-  5 |                 0 | E
-  6 |                 4 | F
-  0 |                   | ROOT
-  1 |                 0 | A
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
+  0 |                   | ROOT
+  1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
 (24 rows)
 
 with recursive q as (
@@ -506,38 +506,38 @@ with recursive q as (
 select id, parent_department, name from q limit 32;
  id | parent_department | name 
 ----+-------------------+------
-  5 |                 0 | E
-  6 |                 4 | F
-  0 |                   | ROOT
-  1 |                 0 | A
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
+  0 |                   | ROOT
+  1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
 (32 rows)
 
 -- recursive term has sub-UNION
@@ -685,7 +685,7 @@ select * from search_graph order by seq;
                                  ->  Seq Scan on pg_temp.graph0 g_1
                                        Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -758,7 +758,7 @@ select * from search_graph order by seq;
                                  ->  Seq Scan on pg_temp.graph0 g_1
                                        Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -900,11 +900,11 @@ select pg_get_viewdef('v_search');
 select * from v_search;
  f | t |   label    
 ---+---+------------
+ 2 | 3 | arc 2 -> 3
+ 4 | 5 | arc 4 -> 5
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
- 2 | 3 | arc 2 -> 3
- 4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
  4 | 5 | arc 4 -> 5
 (7 rows)
@@ -930,14 +930,6 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
@@ -955,6 +947,14 @@ select * from search_graph;
  4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
  5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
 -- UNION DISTINCT exercises row type hashing support
@@ -968,29 +968,29 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
  5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
  4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
  4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 4 | arc 1 -> 4 | t        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
@@ -1063,7 +1063,7 @@ select * from search_graph;
                            ->  Seq Scan on pg_temp.graph g_1
                                  Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: gp_cte_sharing = 'on'
 (19 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -1076,13 +1076,14 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
@@ -1093,14 +1094,13 @@ select * from search_graph;
  1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
 (25 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -1212,21 +1212,6 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    |                    seq                    | is_cycle |                   path                    
 ---+---+------------+-------------------------------------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | {"(2,3)"}                                 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | {"(4,5)"}                                 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | {"(4,5)","(5,1)"}                         | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | {"(4,5)","(5,1)","(1,4)"}                 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | {"(4,5)","(5,1)","(1,3)"}                 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | {"(4,5)","(5,1)","(1,2)"}                 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | {"(4,5)","(5,1)","(1,4)","(4,5)"}         | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | {"(4,5)","(5,1)","(1,2)","(2,3)"}         | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | {"(5,1)"}                                 | f        | {"(5,1)"}
- 1 | 4 | arc 1 -> 4 | {"(5,1)","(1,4)"}                         | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | {"(5,1)","(1,3)"}                         | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | {"(5,1)","(1,2)"}                         | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | {"(5,1)","(1,4)","(4,5)"}                 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | {"(5,1)","(1,2)","(2,3)"}                 | f        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | {"(5,1)","(1,4)","(4,5)","(5,1)"}         | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  1 | 2 | arc 1 -> 2 | {"(1,2)"}                                 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | {"(1,3)"}                                 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | {"(1,4)"}                                 | f        | {"(1,4)"}
@@ -1237,6 +1222,21 @@ select * from search_graph;
  1 | 3 | arc 1 -> 3 | {"(1,4)","(4,5)","(5,1)","(1,3)"}         | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | {"(1,4)","(4,5)","(5,1)","(1,2)"}         | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"} | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | {"(5,1)"}                                 | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | {"(5,1)","(1,4)"}                         | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | {"(5,1)","(1,3)"}                         | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | {"(5,1)","(1,2)"}                         | f        | {"(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | {"(5,1)","(1,4)","(4,5)"}                 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | {"(5,1)","(1,2)","(2,3)"}                 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | {"(5,1)","(1,4)","(4,5)","(5,1)"}         | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 2 | 3 | arc 2 -> 3 | {"(2,3)"}                                 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | {"(4,5)"}                                 | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | {"(4,5)","(5,1)"}                         | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | {"(4,5)","(5,1)","(1,4)"}                 | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | {"(4,5)","(5,1)","(1,3)"}                 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | {"(4,5)","(5,1)","(1,2)"}                 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | {"(4,5)","(5,1)","(1,4)","(4,5)"}         | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | {"(4,5)","(5,1)","(1,2)","(2,3)"}         | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -1250,6 +1250,13 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    |   seq   | is_cycle |                   path                    
 ---+---+------------+---------+----------+-------------------------------------------
+ 5 | 1 | arc 5 -> 1 | (0,5,1) | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | (1,1,4) | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | (1,1,3) | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | (1,1,2) | f        | {"(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | (2,4,5) | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | (2,2,3) | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | (3,5,1) | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | (0,2,3) | f        | {"(2,3)"}
  4 | 5 | arc 4 -> 5 | (0,4,5) | f        | {"(4,5)"}
  5 | 1 | arc 5 -> 1 | (1,5,1) | f        | {"(4,5)","(5,1)"}
@@ -1268,13 +1275,6 @@ select * from search_graph;
  1 | 3 | arc 1 -> 3 | (3,1,3) | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | (3,1,2) | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | (4,2,3) | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | (0,5,1) | f        | {"(5,1)"}
- 1 | 4 | arc 1 -> 4 | (1,1,4) | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | (1,1,3) | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | (1,1,2) | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | (2,4,5) | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | (2,2,3) | f        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | (3,5,1) | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
 (25 rows)
 
 -- various syntax errors
@@ -1451,6 +1451,13 @@ select * from v_cycle1;
  1 | 2 | arc 1 -> 2
  4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
+ 1 | 4 | arc 1 -> 4
+ 1 | 3 | arc 1 -> 3
+ 1 | 2 | arc 1 -> 2
+ 4 | 5 | arc 4 -> 5
+ 2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
@@ -1461,18 +1468,18 @@ select * from v_cycle1;
  1 | 3 | arc 1 -> 3
  1 | 2 | arc 1 -> 2
  2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
- 1 | 4 | arc 1 -> 4
- 1 | 3 | arc 1 -> 3
- 1 | 2 | arc 1 -> 2
- 4 | 5 | arc 4 -> 5
- 2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
 (25 rows)
 
 select * from v_cycle2;
  f | t |   label    
 ---+---+------------
+ 5 | 1 | arc 5 -> 1
+ 1 | 4 | arc 1 -> 4
+ 1 | 3 | arc 1 -> 3
+ 1 | 2 | arc 1 -> 2
+ 4 | 5 | arc 4 -> 5
+ 2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
  2 | 3 | arc 2 -> 3
  4 | 5 | arc 4 -> 5
  5 | 1 | arc 5 -> 1
@@ -1481,13 +1488,6 @@ select * from v_cycle2;
  1 | 2 | arc 1 -> 2
  4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
- 1 | 4 | arc 1 -> 4
- 1 | 3 | arc 1 -> 3
- 1 | 2 | arc 1 -> 2
- 4 | 5 | arc 4 -> 5
- 2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
@@ -1683,16 +1683,16 @@ INSERT INTO y
 SELECT a+20 FROM t RETURNING *;
  a  
 ----
- 27
- 28
- 29
- 23
- 24
- 25
- 26
- 30
- 21
  22
+ 24
+ 29
+ 21
+ 23
+ 26
+ 27
+ 25
+ 28
+ 30
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -1726,16 +1726,16 @@ WITH t AS (
 UPDATE y SET a = y.a-10 FROM t WHERE y.a > 20 AND t.a = y.a RETURNING y.a;
  a  
 ----
- 17
- 18
- 19
- 13
- 14
- 15
- 16
- 20
- 11
  12
+ 14
+ 19
+ 11
+ 13
+ 16
+ 17
+ 15
+ 18
+ 20
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -1771,16 +1771,16 @@ WITH RECURSIVE t(a) AS (
 DELETE FROM y USING t WHERE t.a = y.a RETURNING y.a;
  a  
 ----
- 11
  12
- 13
  14
- 15
- 16
- 20
- 17
- 18
  19
+ 11
+ 13
+ 16
+ 17
+ 15
+ 18
+ 20
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2060,11 +2060,11 @@ select ( with cte(foo) as ( values(f1) )
 from int4_tbl;
      foo     
 -------------
-      123456
-     -123456
            0
   2147483647
  -2147483647
+      123456
+     -123456
 (5 rows)
 
 select ( with cte(foo) as ( values(f1) )
@@ -2399,16 +2399,16 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
- 17
- 19
- 11
- 12
  13
  15
- 18
  20
- 14
+ 11
  16
+ 17
+ 18
+ 12
+ 14
+ 19
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2446,25 +2446,25 @@ SELECT * FROM t;
  a  
 ----
   3
-  7
-  9
- 11
- 15
- 17
-  8
- 18
- 20
-  2
-  4
   5
-  6
+  8
  10
- 12
- 13
  14
  16
- 19
  21
+  6
+  7
+  9
+ 12
+ 17
+ 18
+ 19
+  2
+  4
+ 11
+ 13
+ 15
+ 20
 (20 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2502,14 +2502,14 @@ SELECT * FROM t;
  a  
 ----
   3
+  5
+  8
+ 10
+  6
   7
   9
   2
   4
-  5
-  6
- 10
-  8
 (9 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2607,8 +2607,8 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM bug6051;
  i 
 ---
- 2
  3
+ 2
  1
 (3 rows)
 
@@ -2624,9 +2624,9 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM bug6051;
  i 
 ---
- 2
- 3
  1
+ 3
+ 2
 (3 rows)
 
 SELECT * FROM bug6051_2;
@@ -2660,8 +2660,8 @@ SELECT * FROM bug6051_3;
  a  
 ----
  11
- 13
  12
+ 13
 (3 rows)
 
 -- check case where CTE reference is removed due to optimization
@@ -2672,17 +2672,15 @@ SELECT q1 FROM
   SELECT q1, (SELECT q2 FROM t_cte WHERE t_cte.q1 = i8.q1) AS t_sub
   FROM int8_tbl i8
 ) ss;
-                     QUERY PLAN                     
-----------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: ss.q1
-   ->  Subquery Scan on ss
-         Output: ss.q1
-         ->  Seq Scan on public.int8_tbl i8
-               Output: i8.q1, NULL::bigint
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(8 rows)
+   Output: q1
+   ->  Seq Scan on public.int8_tbl
+         Output: q1
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: gp_cte_sharing = 'on'
+(6 rows)
 
 SELECT q1 FROM
 (
@@ -2692,11 +2690,11 @@ SELECT q1 FROM
 ) ss;
         q1        
 ------------------
+ 4567890123456789
+ 4567890123456789
+ 4567890123456789
               123
               123
- 4567890123456789
- 4567890123456789
- 4567890123456789
 (5 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -2706,17 +2704,15 @@ SELECT q1 FROM
   SELECT q1, (SELECT q2 FROM t_cte WHERE t_cte.q1 = i8.q1) AS t_sub
   FROM int8_tbl i8
 ) ss;
-                     QUERY PLAN                     
-----------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: ss.q1
-   ->  Subquery Scan on ss
-         Output: ss.q1
-         ->  Seq Scan on public.int8_tbl i8
-               Output: i8.q1, NULL::bigint
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(8 rows)
+   Output: q1
+   ->  Seq Scan on public.int8_tbl
+         Output: q1
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: gp_cte_sharing = 'on'
+(6 rows)
 
 SELECT q1 FROM
 (
@@ -2928,6 +2924,7 @@ DROP TABLE withz;
 -- WITH referenced by MERGE statement
 CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
 ALTER TABLE m ADD UNIQUE (k);
+ERROR:  UNIQUE and DISTRIBUTED RANDOMLY are incompatible
 WITH RECURSIVE cte_basic AS (SELECT 1 a, 'cte_basic val' b)
 MERGE INTO m USING (select 0 k, 'merge source SubPlan' v) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
@@ -2938,12 +2935,13 @@ WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
 MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 -- Examine
 SELECT * FROM m where k = 0;
- k |          v           
----+----------------------
- 0 | merge source SubPlan
-(1 row)
+ k | v 
+---+---
+(0 rows)
 
 -- See EXPLAIN output for same query:
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -2951,45 +2949,20 @@ WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
 MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Merge on public.m
-   ->  Hash Right Join
-         Output: m.ctid, m.gp_segment_id, (0), ('merge source SubPlan'::text)
-         Hash Cond: (m.k = (0))
-         ->  Seq Scan on public.m
-               Output: m.ctid, m.gp_segment_id, m.k
-         ->  Hash
-               Output: (0), ('merge source SubPlan'::text)
-               ->  Redistribute Motion 1:3  (slice1; segments: 1)
-                     Output: (0), ('merge source SubPlan'::text)
-                     Hash Key: (0)
-                     ->  Result
-                           Output: 0, 'merge source SubPlan'::text
-   SubPlan 1
-     ->  Limit
-           Output: ((share0_ref1.b || ' merge update'::text))
-           ->  Result
-                 Output: (share0_ref1.b || ' merge update'::text)
-                 Filter: (share0_ref1.a = m.k)
-                 ->  Shared Scan (share slice:id 0:0)
-                       Output: share0_ref1.a, share0_ref1.b
-                       ->  Result
-                             Output: 1, 'cte_basic val'::text
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(25 rows)
-
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 -- InitPlan
 WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
 MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 -- Examine
 SELECT * FROM m where k = 1;
- k |             v             
----+---------------------------
- 1 | cte_init val merge update
+ k |  v  
+---+-----
+ 1 | 1 v
 (1 row)
 
 -- See EXPLAIN output for same query:
@@ -2998,46 +2971,20 @@ WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
 MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Merge on public.m
-   InitPlan 1 (returns $0)  (slice2)
-     ->  Limit
-           Output: ((cte_init.b || ' merge update'::text))
-           ->  Subquery Scan on cte_init
-                 Output: (cte_init.b || ' merge update'::text)
-                 Filter: (cte_init.a = 1)
-                 ->  Shared Scan (share slice:id 2:0)
-                       Output: share0_ref1.a, share0_ref1.b
-                       ->  Result
-                             Output: 1, 'cte_init val'::text
-   ->  Hash Right Join
-         Output: m.ctid, m.gp_segment_id, (1), ('merge source InitPlan'::text)
-         Hash Cond: (m.k = (1))
-         ->  Seq Scan on public.m
-               Output: m.ctid, m.gp_segment_id, m.k
-         ->  Hash
-               Output: (1), ('merge source InitPlan'::text)
-               ->  Redistribute Motion 1:3  (slice1; segments: 1)
-                     Output: (1), ('merge source InitPlan'::text)
-                     Hash Key: (1)
-                     ->  Result
-                           Output: 1, 'merge source InitPlan'::text
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(25 rows)
-
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 -- MERGE source comes from CTE:
 WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
 MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
 WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 -- Examine
 SELECT * FROM m where k = 15;
- k  |                              v                               
-----+--------------------------------------------------------------
- 15 | merge_source_cte val(15,"merge_source_cte val") merge insert
-(1 row)
+ k | v 
+---+---
+(0 rows)
 
 -- See EXPLAIN output for same query:
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -3045,38 +2992,8 @@ WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
 MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
 WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
- Merge on public.m
-   InitPlan 1 (returns $0)  (slice2)
-     ->  Subquery Scan on merge_source_cte
-           Output: ((merge_source_cte.b || (merge_source_cte.*)::text) || ' merge update'::text)
-           Filter: (merge_source_cte.a = 15)
-           ->  Shared Scan (share slice:id 2:0)
-                 Output: share0_ref1.a, share0_ref1.b
-                 ->  Result
-                       Output: 15, 'merge_source_cte val'::text
-   InitPlan 2 (returns $1)  (slice3)
-     ->  Subquery Scan on merge_source_cte_1
-           Output: ((merge_source_cte_1.*)::text || ' merge insert'::text)
-           ->  Shared Scan (share slice:id 3:0)
-                 Output: share0_ref2.a, share0_ref2.b
-   ->  Hash Right Join
-         Output: m.ctid, m.gp_segment_id, share0_ref3.a, share0_ref3.b
-         Hash Cond: (m.k = share0_ref3.a)
-         ->  Seq Scan on public.m
-               Output: m.ctid, m.gp_segment_id, m.k
-         ->  Hash
-               Output: share0_ref3.a, share0_ref3.b
-               ->  Redistribute Motion 1:3  (slice1)
-                     Output: share0_ref3.a, share0_ref3.b
-                     Hash Key: share0_ref3.a
-                     ->  Shared Scan (share slice:id 1:0)
-                           Output: share0_ref3.a, share0_ref3.b
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(28 rows)
-
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 DROP TABLE m;
 -- check that run to completion happens in proper ordering
 TRUNCATE TABLE y;
@@ -3149,9 +3066,9 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t;
-NOTICE:  y_trigger: a = 22  (seg0 slice1 172.17.0.3:7002 pid=1280219)
-NOTICE:  y_trigger: a = 23  (seg2 slice1 172.17.0.3:7004 pid=1280234)
-NOTICE:  y_trigger: a = 21  (seg1 slice1 172.17.0.3:7003 pid=1280222)
+NOTICE:  y_trigger: a = 22  (seg0 slice1 172.17.0.3:7002 pid=1230776)
+NOTICE:  y_trigger: a = 23  (seg0 slice1 172.17.0.3:7002 pid=1230776)
+NOTICE:  y_trigger: a = 21  (seg1 slice1 172.17.0.3:7003 pid=1230781)
  a  
 ----
  22
@@ -3189,12 +3106,12 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t LIMIT 1;
-NOTICE:  y_trigger: a = 32  (seg0 slice1 172.17.0.3:7002 pid=1280219)
-NOTICE:  y_trigger: a = 33  (seg1 slice1 172.17.0.3:7003 pid=1280222)
-NOTICE:  y_trigger: a = 31  (seg2 slice1 172.17.0.3:7004 pid=1280234)
+NOTICE:  y_trigger: a = 31  (seg1 slice1 172.17.0.3:7003 pid=1230781)
+NOTICE:  y_trigger: a = 32  (seg0 slice1 172.17.0.3:7002 pid=1230776)
+NOTICE:  y_trigger: a = 33  (seg1 slice1 172.17.0.3:7003 pid=1230781)
  a  
 ----
- 31
+ 32
 (1 row)
 
 SELECT * FROM y ORDER BY 1;
@@ -3286,11 +3203,11 @@ UPDATE parent SET id = id + totalid FROM rcte;
 SELECT * FROM parent;
  id | val 
 ----+-----
- 94 | c21
  72 | p1
  83 | c12
  95 | c22
  82 | c11
+ 94 | c21
 (5 rows)
 
 WITH wcte AS ( INSERT INTO child1 VALUES ( 42, 'new' ) RETURNING id AS newid )
@@ -3301,8 +3218,8 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
  94 | c21
+ 82 | c11
  72 | p1
  83 | c12
  95 | c22
@@ -3313,10 +3230,10 @@ DELETE FROM parent USING rcte WHERE id = maxid;
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
- 94 | c21
  72 | p1
  83 | c12
+ 82 | c11
+ 94 | c21
 (4 rows)
 
 WITH wcte AS ( INSERT INTO child2 VALUES ( 42, 'new2' ) RETURNING id AS newid )
@@ -3327,10 +3244,10 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
- 94 | c21
  72 | p1
  83 | c12
+ 94 | c21
+ 82 | c11
 (4 rows)
 
 -- check EXPLAIN VERBOSE for a wCTE with RETURNING

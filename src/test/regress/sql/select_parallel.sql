@@ -256,11 +256,15 @@ drop function explain_parallel_sort_stats();
 analyze tenk2;
 set enable_hashjoin to off;
 set enable_nestloop to off;
+-- GPDB: tenk1's merge input is a cost-tie between an Index Only Scan and a
+-- Seq Scan + Sort; pin the index-only-scan variant so the plan is stable.
+set enable_seqscan to off;
 
 explain (costs off)
 	select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
 select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
 
+reset enable_seqscan;
 reset enable_hashjoin;
 reset enable_nestloop;
 

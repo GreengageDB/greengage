@@ -67,8 +67,6 @@ GRANT ALL ON SCHEMA public TO public;
 -- of these tables in later tests, as it may affect other tests.)
 --
 CREATE TABLE CHAR_TBL(f1 char(4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO CHAR_TBL (f1) VALUES
   ('a'),
   ('ab'),
@@ -76,8 +74,6 @@ INSERT INTO CHAR_TBL (f1) VALUES
   ('abcd    ');
 VACUUM CHAR_TBL;
 CREATE TABLE FLOAT8_TBL(f1 float8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FLOAT8_TBL(f1) VALUES
   ('0.0'),
   ('-34.84'),
@@ -86,8 +82,6 @@ INSERT INTO FLOAT8_TBL(f1) VALUES
   ('-1.2345678901234e-200');
 VACUUM FLOAT8_TBL;
 CREATE TABLE INT2_TBL(f1 int2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT2_TBL(f1) VALUES
   ('0   '),
   ('  1234 '),
@@ -96,8 +90,6 @@ INSERT INTO INT2_TBL(f1) VALUES
   ('-32767');
 VACUUM INT2_TBL;
 CREATE TABLE INT4_TBL(f1 int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT4_TBL(f1) VALUES
   ('   0  '),
   ('123456     '),
@@ -106,8 +98,6 @@ INSERT INTO INT4_TBL(f1) VALUES
   ('-2147483647');
 VACUUM INT4_TBL;
 CREATE TABLE INT8_TBL(q1 int8, q2 int8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'q1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT8_TBL VALUES
   ('  123   ','  456'),
   ('123   ','4567890123456789'),
@@ -116,7 +106,6 @@ INSERT INTO INT8_TBL VALUES
   ('+4567890123456789','-4567890123456789');
 VACUUM INT8_TBL;
 CREATE TABLE POINT_TBL(f1 point);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO POINT_TBL(f1) VALUES
   ('(0.0,0.0)'),
   ('(-10.0,0.0)'),
@@ -130,15 +119,11 @@ INSERT INTO POINT_TBL(f1) VALUES
   ('10.0,10.0');
 -- We intentionally don't vacuum point_tbl here; geometry depends on that
 CREATE TABLE TEXT_TBL (f1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEXT_TBL VALUES
   ('doh!'),
   ('hi de ho neighbor');
 VACUUM TEXT_TBL;
 CREATE TABLE VARCHAR_TBL(f1 varchar(4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO VARCHAR_TBL (f1) VALUES
   ('a'),
   ('ab'),
@@ -163,14 +148,10 @@ CREATE TABLE onek (
 	stringu2	name,
 	string4		name
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/onek.data'
 COPY onek FROM :'filename';
 VACUUM ANALYZE onek;
 CREATE TABLE onek2 AS SELECT * FROM onek;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'unique1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 VACUUM ANALYZE onek2;
 CREATE TABLE tenk1 (
 	unique1		int4,
@@ -190,22 +171,21 @@ CREATE TABLE tenk1 (
 	stringu2	name,
 	string4		name
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/tenk.data'
 COPY tenk1 FROM :'filename';
 VACUUM ANALYZE tenk1;
-CREATE TABLE tenk2 AS SELECT * FROM tenk1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'unique1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- GPDB: distribute tenk2 by unique1 (matching tenk1) so it is deterministic
+-- and co-located.  Without an explicit clause the Postgres planner picks
+-- unique1 as the key, but ORCA falls back to a randomly-distributed (NULL
+-- policy) table, which makes per-segment row counts vary run-to-run and
+-- destabilizes EXPLAIN ANALYZE output (e.g. select_parallel).
+CREATE TABLE tenk2 AS SELECT * FROM tenk1 DISTRIBUTED BY (unique1);
 VACUUM ANALYZE tenk2;
 CREATE TABLE person (
 	name 		text,
 	age			int4,
 	location 	point
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/person.data'
 COPY person FROM :'filename';
 VACUUM ANALYZE person;
@@ -238,8 +218,6 @@ CREATE TABLE road (
 	name		text,
 	thepath 	path
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/streets.data'
 COPY road FROM :'filename';
 VACUUM ANALYZE road;

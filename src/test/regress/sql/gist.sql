@@ -172,10 +172,14 @@ explain (verbose, costs off)
 select count(*) from gist_tbl;
 select count(*) from gist_tbl;
 
--- This case isn't supported, but it should at least EXPLAIN correctly.
+-- GPDB: point(0,0) is inside the unit circle of every nearby point, so the
+-- lossy circle distance ties at 0 for many rows.  gist_tbl has no column type
+-- suitable for a hash distribution key (box/point/circle), so it is randomly
+-- distributed and ORCA's LIMIT 1 over the gathered ties is non-deterministic.
+-- Add the point coordinates as a deterministic tiebreaker.
 explain (verbose, costs off)
-select p from gist_tbl order by circle(p,1) <-> point(0,0) limit 1;
-select p from gist_tbl order by circle(p,1) <-> point(0,0) limit 1;
+select p from gist_tbl order by circle(p,1) <-> point(0,0), p[0], p[1] limit 1;
+select p from gist_tbl order by circle(p,1) <-> point(0,0), p[0], p[1] limit 1;
 
 -- Clean up
 reset enable_seqscan;
