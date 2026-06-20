@@ -14,8 +14,6 @@ set enable_mergejoin to true;
 -- partitioned by a single column
 --
 CREATE TABLE prt1 (a int, b int, c varchar) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_p1 PARTITION OF prt1 FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_p3 PARTITION OF prt1 FOR VALUES FROM (500) TO (600);
@@ -28,8 +26,6 @@ CREATE INDEX iprt1_p2_a on prt1_p2(a);
 CREATE INDEX iprt1_p3_a on prt1_p3(a);
 ANALYZE prt1;
 CREATE TABLE prt2 (a int, b int, c varchar) PARTITION BY RANGE(b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_p1 PARTITION OF prt2 FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_p2 PARTITION OF prt2 FOR VALUES FROM (250) TO (500);
@@ -436,11 +432,11 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
 			  ON t1.a = ss.t2a WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 SELECT * FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
 			  ON t1.a = ss.t2a WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 EXPLAIN (COSTS OFF)
 SELECT t1.a, ss.t2a, ss.t2c FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, t2.b t2b, t2.c t2c, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
@@ -514,41 +510,52 @@ EXPLAIN (COSTS OFF)
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510
   GROUP BY 1, 2 ORDER BY 1, 2;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
- Group
-   Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-   ->  Sort
-         Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-         ->  Append
-               ->  Merge Full Join
-                     Merge Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
-                     Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
-                     ->  Sort
-                           Sort Key: prt1_1.a, prt1_1.b
-                           ->  Seq Scan on prt1_p1 prt1_1
-                     ->  Sort
-                           Sort Key: p2_1.a, p2_1.b
-                           ->  Seq Scan on prt2_p1 p2_1
-               ->  Merge Full Join
-                     Merge Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
-                     Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
-                     ->  Sort
-                           Sort Key: prt1_2.a, prt1_2.b
-                           ->  Seq Scan on prt1_p2 prt1_2
-                     ->  Sort
-                           Sort Key: p2_2.a, p2_2.b
-                           ->  Seq Scan on prt2_p2 p2_2
-               ->  Merge Full Join
-                     Merge Cond: ((prt1_3.b = p2_3.b) AND (prt1_3.a = p2_3.a))
-                     Filter: ((COALESCE(prt1_3.a, p2_3.a) >= 490) AND (COALESCE(prt1_3.a, p2_3.a) <= 510))
-                     ->  Sort
-                           Sort Key: prt1_3.b, prt1_3.a
-                           ->  Seq Scan on prt1_p3 prt1_3
-                     ->  Sort
-                           Sort Key: p2_3.b, p2_3.a
-                           ->  Seq Scan on prt2_p3 p2_3
-(32 rows)
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+   ->  GroupAggregate
+         Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+         ->  Sort
+               Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+                     ->  Append
+                           ->  Merge Full Join
+                                 Merge Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
+                                 Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
+                                 ->  Sort
+                                       Sort Key: prt1_1.a, prt1_1.b
+                                       ->  Seq Scan on prt1_p1 prt1_1
+                                 ->  Sort
+                                       Sort Key: p2_1.a, p2_1.b
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: p2_1.a
+                                             ->  Seq Scan on prt2_p1 p2_1
+                           ->  Merge Full Join
+                                 Merge Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
+                                 Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
+                                 ->  Sort
+                                       Sort Key: prt1_2.a, prt1_2.b
+                                       ->  Seq Scan on prt1_p2 prt1_2
+                                 ->  Sort
+                                       Sort Key: p2_2.a, p2_2.b
+                                       ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                             Hash Key: p2_2.a
+                                             ->  Seq Scan on prt2_p2 p2_2
+                           ->  Merge Full Join
+                                 Merge Cond: ((prt1_3.a = p2_3.a) AND (prt1_3.b = p2_3.b))
+                                 Filter: ((COALESCE(prt1_3.a, p2_3.a) >= 490) AND (COALESCE(prt1_3.a, p2_3.a) <= 510))
+                                 ->  Sort
+                                       Sort Key: prt1_3.a, prt1_3.b
+                                       ->  Seq Scan on prt1_p3 prt1_3
+                                 ->  Sort
+                                       Sort Key: p2_3.a, p2_3.b
+                                       ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                             Hash Key: p2_3.a
+                                             ->  Seq Scan on prt2_p3 p2_3
+ Optimizer: Postgres query optimizer
+(43 rows)
 
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510
@@ -577,8 +584,6 @@ RESET enable_hashjoin;
 -- partitioned by expression
 --
 CREATE TABLE prt1_e (a int, b int, c int) PARTITION BY RANGE(((a + b)/2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_e_p1 PARTITION OF prt1_e FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_e_p2 PARTITION OF prt1_e FOR VALUES FROM (250) TO (500);
@@ -591,8 +596,6 @@ CREATE INDEX iprt1_e_p2_ab2 on prt1_e_p2(((a+b)/2));
 CREATE INDEX iprt1_e_p3_ab2 on prt1_e_p3(((a+b)/2));
 ANALYZE prt1_e;
 CREATE TABLE prt2_e (a int, b int, c int) PARTITION BY RANGE(((b + a)/2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_e_p1 PARTITION OF prt2_e FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_e_p2 PARTITION OF prt2_e FOR VALUES FROM (250) TO (500);
@@ -1367,31 +1370,27 @@ SELECT t1.a, t1.c, t2.b, t2.c, t3.a + t3.b, t3.c FROM (prt1 t1 LEFT JOIN prt2 t2
                            ->  Redistribute Motion 3:3  (slice7; segments: 3)
                                  Hash Key: t2_2.b
                                  ->  Seq Scan on prt2_p2 t2_2
-               ->  Merge Left Join
-                     Merge Cond: (t1_3.a = t2_3.b)
+               ->  Merge Right Join
+                     Merge Cond: (t1_3.a = (((t3_3.a + t3_3.b) / 2)))
+                     ->  Merge Left Join
+                           Merge Cond: (t1_3.a = t2_3.b)
+                           ->  Sort
+                                 Sort Key: t1_3.a
+                                 ->  Seq Scan on prt1_p3 t1_3
+                           ->  Sort
+                                 Sort Key: t2_3.b
+                                 ->  Redistribute Motion 3:3  (slice8; segments: 3)
+                                       Hash Key: t2_3.b
+                                       ->  Seq Scan on prt2_p3 t2_3
                      ->  Sort
-                           Sort Key: t1_3.a
-                           ->  Redistribute Motion 3:3  (slice8; segments: 3)
-                                 Hash Key: t1_3.a
-                                 ->  Merge Left Join
-                                       Merge Cond: ((((t3_3.a + t3_3.b) / 2)) = t1_3.a)
-                                       ->  Sort
-                                             Sort Key: (((t3_3.a + t3_3.b) / 2))
-                                             ->  Result
-                                                   ->  Redistribute Motion 3:3  (slice9; segments: 3)
-                                                         Hash Key: ((t3_3.a + t3_3.b) / 2)
-                                                         ->  Seq Scan on prt1_e_p3 t3_3
-                                                               Filter: (c = 0)
-                                       ->  Sort
-                                             Sort Key: t1_3.a
-                                             ->  Seq Scan on prt1_p3 t1_3
-                     ->  Sort
-                           Sort Key: t2_3.b
-                           ->  Redistribute Motion 3:3  (slice10; segments: 3)
-                                 Hash Key: t2_3.b
-                                 ->  Seq Scan on prt2_p3 t2_3
+                           Sort Key: (((t3_3.a + t3_3.b) / 2))
+                           ->  Result
+                                 ->  Redistribute Motion 3:3  (slice9; segments: 3)
+                                       Hash Key: ((t3_3.a + t3_3.b) / 2)
+                                       ->  Seq Scan on prt1_e_p3 t3_3
+                                             Filter: (c = 0)
  Optimizer: Postgres query optimizer
-(75 rows)
+(71 rows)
 
 SELECT t1.a, t1.c, t2.b, t2.c, t3.a + t3.b, t3.c FROM (prt1 t1 LEFT JOIN prt2 t2 ON t1.a = t2.b) RIGHT JOIN prt1_e t3 ON (t1.a = (t3.a + t3.b)/2) WHERE t3.c = 0 ORDER BY t1.a, t2.b, t3.a + t3.b;
   a  |  c   |  b  |  c   | ?column? | c 
@@ -1502,8 +1501,6 @@ RESET enable_nestloop;
 -- partitioned by multiple columns
 --
 CREATE TABLE prt1_m (a int, b int, c int) PARTITION BY RANGE(a, ((a + b)/2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_m_p1 PARTITION OF prt1_m FOR VALUES FROM (0, 0) TO (250, 250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_m_p2 PARTITION OF prt1_m FOR VALUES FROM (250, 250) TO (500, 500);
@@ -1513,8 +1510,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_m SELECT i, i, i % 25 FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_m;
 CREATE TABLE prt2_m (a int, b int, c int) PARTITION BY RANGE(((b + a)/2), b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_m_p1 PARTITION OF prt2_m FOR VALUES FROM (0, 0) TO (250, 250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_m_p2 PARTITION OF prt2_m FOR VALUES FROM (250, 250) TO (500, 500);
@@ -1587,8 +1582,6 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_m WHERE prt1_m.c = 0) t1 
 -- tests for list partitioned tables.
 --
 CREATE TABLE plt1 (a int, b int, c text) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_p1 PARTITION OF plt1 FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_p2 PARTITION OF plt1 FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1598,8 +1591,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE plt1;
 CREATE TABLE plt2 (a int, b int, c text) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_p1 PARTITION OF plt2 FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_p2 PARTITION OF plt2 FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1612,8 +1603,6 @@ ANALYZE plt2;
 -- list partitioned by expression
 --
 CREATE TABLE plt1_e (a int, b int, c text) PARTITION BY LIST(ltrim(c, 'A'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_e_p1 PARTITION OF plt1_e FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_e_p2 PARTITION OF plt1_e FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1770,8 +1759,6 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1 WHERE a = 1 AND a = 2) t1
 -- tests for hash partitioned tables.
 --
 CREATE TABLE pht1 (a int, b int, c text) PARTITION BY HASH(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_p1 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_p2 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1781,8 +1768,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pht1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE pht1;
 CREATE TABLE pht2 (a int, b int, c text) PARTITION BY HASH(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht2_p1 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht2_p2 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1795,8 +1780,6 @@ ANALYZE pht2;
 -- hash partitioned by expression
 --
 CREATE TABLE pht1_e (a int, b int, c text) PARTITION BY HASH(ltrim(c, 'A'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_e_p1 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_e_p2 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1960,8 +1943,6 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
 -- multiple levels of partitioning
 --
 CREATE TABLE prt1_l (a int, b int, c varchar) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_l_p1 PARTITION OF prt1_l FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p2 PARTITION OF prt1_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
@@ -1979,8 +1960,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_l SELECT i, i % 25, to_char(i % 4, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_l;
 CREATE TABLE prt2_l (a int, b int, c varchar) PARTITION BY RANGE(b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_l_p1 PARTITION OF prt2_l FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p2 PARTITION OF prt2_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
@@ -2250,11 +2229,11 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t2.c AS t2c, t2.b AS t2b, t3.b AS t3b, least(t1.a,t2.a,t3.b) FROM prt1_l t2 JOIN prt2_l t3 ON (t2.a = t3.b AND t2.c = t3.c)) ss
 			  ON t1.a = ss.t2a AND t1.c = ss.t2c WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 SELECT * FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t2.c AS t2c, t2.b AS t2b, t3.b AS t3b, least(t1.a,t2.a,t3.b) FROM prt1_l t2 JOIN prt2_l t3 ON (t2.a = t3.b AND t2.c = t3.c)) ss
 			  ON t1.a = ss.t2a AND t1.c = ss.t2c WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 -- join with one side empty
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_l WHERE a = 1 AND a = 2) t1 RIGHT JOIN prt2_l t2 ON t1.a = t2.b AND t1.b = t2.a AND t1.c = t2.c;
@@ -2320,8 +2299,6 @@ WHERE EXISTS (
 -- negative testcases
 --
 CREATE TABLE prt1_n (a int, b int, c varchar) PARTITION BY RANGE(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_n_p1 PARTITION OF prt1_n FOR VALUES FROM ('0000') TO ('0250');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_n_p2 PARTITION OF prt1_n FOR VALUES FROM ('0250') TO ('0500');
@@ -2329,8 +2306,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_n SELECT i, i, to_char(i, 'FM0000') FROM generate_series(0, 499, 2) i;
 ANALYZE prt1_n;
 CREATE TABLE prt2_n (a int, b int, c text) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_n_p1 PARTITION OF prt2_n FOR VALUES IN ('0000', '0003', '0004', '0010', '0006', '0007');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_n_p2 PARTITION OF prt2_n FOR VALUES IN ('0001', '0005', '0002', '0009', '0008', '0011');
@@ -2338,8 +2313,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt2_n;
 CREATE TABLE prt3_n (a int, b int, c text) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_n_p1 PARTITION OF prt3_n FOR VALUES IN ('0000', '0004', '0006', '0007');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_n_p2 PARTITION OF prt3_n FOR VALUES IN ('0001', '0002', '0008', '0010');
@@ -2349,8 +2322,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt3_n;
 CREATE TABLE prt4_n (a int, b int, c text) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt4_n_p1 PARTITION OF prt4_n FOR VALUES FROM (0) TO (300);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt4_n_p2 PARTITION OF prt4_n FOR VALUES FROM (300) TO (500);
@@ -2599,8 +2570,6 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_n t1 FULL JOIN prt1 t2 ON (t1.c = t2.c);
 --
 create temp table prtx1 (a integer, b integer, c integer)
   partition by range (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx1_1 partition of prtx1 for values from (1) to (11);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx1_2 partition of prtx1 for values from (11) to (21);
@@ -2609,8 +2578,6 @@ create temp table prtx1_3 partition of prtx1 for values from (21) to (31);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2 (a integer, b integer, c integer)
   partition by range (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx2_1 partition of prtx2 for values from (1) to (11);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2_2 partition of prtx2 for values from (11) to (21);
@@ -2720,8 +2687,6 @@ RESET enable_nestloop;
 --
 -- Tests for range-partitioned tables
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
@@ -2732,8 +2697,6 @@ CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (150);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (300);
@@ -3682,8 +3645,6 @@ ANALYZE prt1_adv;
 DROP TABLE prt2_adv_p3;
 ANALYZE prt2_adv;
 CREATE TABLE prt3_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_adv_p1 PARTITION OF prt3_adv FOR VALUES FROM (200) TO (300);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_adv_p2 PARTITION OF prt3_adv FOR VALUES FROM (300) TO (400);
@@ -3747,8 +3708,6 @@ DROP TABLE prt2_adv;
 DROP TABLE prt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
@@ -3759,8 +3718,6 @@ CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (400);
@@ -3861,8 +3818,6 @@ DROP TABLE prt1_adv;
 DROP TABLE prt2_adv;
 -- Tests for list-partitioned tables
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001', '0003');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0004', '0006');
@@ -3872,8 +3827,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002', '0003');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0004', '0006');
@@ -5219,8 +5172,6 @@ DROP TABLE plt2_adv_p2_ext;
 ALTER TABLE plt2_adv ATTACH PARTITION plt2_adv_p2 FOR VALUES IN ('0004', '0006');
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0004', '0006');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0007', '0009');
@@ -5346,8 +5297,6 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0002');
@@ -5360,8 +5309,6 @@ INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series
 INSERT INTO plt1_adv VALUES (-1, -1, NULL);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0001', '0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN (NULL);
@@ -5497,8 +5444,6 @@ DROP TABLE plt1_adv;
 DROP TABLE plt2_adv;
 -- Test the process_outer_partition() code path
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0000', '0001', '0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0003', '0004');
@@ -5506,8 +5451,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i;
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0003', '0004');
@@ -5515,8 +5458,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i WHERE i % 5 IN (2, 3, 4);
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0001');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0003', '0004');
@@ -5552,28 +5493,27 @@ SELECT t1.a, t1.c, t2.a, t2.c, t3.a, t3.c FROM (plt1_adv t1 LEFT JOIN plt2_adv t
                                  Hash Key: t3_1.c
                                  ->  Seq Scan on plt3_adv_p1 t3_1
                ->  Merge Full Join
-                     Merge Cond: (t3_2.c = t1_2.c)
+                     Merge Cond: (t1_2.c = t3_2.c)
                      Filter: (((COALESCE(t1_2.a, 0) % 5) <> 3) AND ((COALESCE(t1_2.a, 0) % 5) <> 4))
+                     ->  Merge Left Join
+                           Merge Cond: (t1_2.c = t2_2.c)
+                           ->  Sort
+                                 Sort Key: t1_2.c
+                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                       Hash Key: t1_2.c
+                                       ->  Seq Scan on plt1_adv_p2 t1_2
+                           ->  Sort
+                                 Sort Key: t2_2.c
+                                 ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                       Hash Key: t2_2.c
+                                       ->  Seq Scan on plt2_adv_p2 t2_2
                      ->  Sort
                            Sort Key: t3_2.c
-                           ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                           ->  Redistribute Motion 3:3  (slice7; segments: 3)
                                  Hash Key: t3_2.c
                                  ->  Seq Scan on plt3_adv_p2 t3_2
-                     ->  Materialize
-                           ->  Merge Left Join
-                                 Merge Cond: (t1_2.c = t2_2.c)
-                                 ->  Sort
-                                       Sort Key: t1_2.c
-                                       ->  Redistribute Motion 3:3  (slice6; segments: 3)
-                                             Hash Key: t1_2.c
-                                             ->  Seq Scan on plt1_adv_p2 t1_2
-                                 ->  Sort
-                                       Sort Key: t2_2.c
-                                       ->  Redistribute Motion 3:3  (slice7; segments: 3)
-                                             Hash Key: t2_2.c
-                                             ->  Seq Scan on plt2_adv_p2 t2_2
  Optimizer: Postgres query optimizer
-(42 rows)
+(41 rows)
 
 SELECT t1.a, t1.c, t2.a, t2.c, t3.a, t3.c FROM (plt1_adv t1 LEFT JOIN plt2_adv t2 ON (t1.c = t2.c)) FULL JOIN plt3_adv t3 ON (t1.c = t3.c) WHERE coalesce(t1.a, 0) % 5 != 3 AND coalesce(t1.a, 0) % 5 != 4 ORDER BY t1.c, t1.a, t2.a, t3.a;
  a  |  c   | a  |  c   | a  |  c   
@@ -5640,8 +5580,6 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Tests for multi-level partitioned tables
 CREATE TABLE alpha (a double precision, b int, c text) PARTITION BY RANGE (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE alpha_neg PARTITION OF alpha FOR VALUES FROM ('-Infinity') TO (0) PARTITION BY RANGE (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos PARTITION OF alpha FOR VALUES FROM (0) TO (10.0) PARTITION BY LIST (c);
@@ -5662,8 +5600,6 @@ INSERT INTO alpha_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_se
 INSERT INTO alpha_pos SELECT  1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(100, 399) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE alpha;
 CREATE TABLE beta (a double precision, b int, c text) PARTITION BY RANGE (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE beta_neg PARTITION OF beta FOR VALUES FROM (-10.0) TO (0) PARTITION BY RANGE (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos PARTITION OF beta FOR VALUES FROM (0) TO ('Infinity') PARTITION BY LIST (c);
@@ -5899,7 +5835,9 @@ SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2
 -- partitionwise join with fractional paths
 CREATE TABLE fract_t (id BIGINT, PRIMARY KEY (id)) PARTITION BY RANGE (id);
 CREATE TABLE fract_t0 PARTITION OF fract_t FOR VALUES FROM ('0') TO ('1000');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE fract_t1 PARTITION OF fract_t FOR VALUES FROM ('1000') TO ('2000');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- insert data
 INSERT INTO fract_t (id) (SELECT generate_series(0, 1999));
 ANALYZE fract_t;
@@ -5908,37 +5846,48 @@ SET max_parallel_workers_per_gather = 0;
 SET enable_partitionwise_join = on;
 EXPLAIN (COSTS OFF)
 SELECT * FROM fract_t x LEFT JOIN fract_t y USING (id) ORDER BY id ASC LIMIT 10;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
  Limit
-   ->  Merge Append
-         Sort Key: x.id
-         ->  Merge Left Join
-               Merge Cond: (x_1.id = y_1.id)
-               ->  Index Only Scan using fract_t0_pkey on fract_t0 x_1
-               ->  Index Only Scan using fract_t0_pkey on fract_t0 y_1
-         ->  Merge Left Join
-               Merge Cond: (x_2.id = y_2.id)
-               ->  Index Only Scan using fract_t1_pkey on fract_t1 x_2
-               ->  Index Only Scan using fract_t1_pkey on fract_t1 y_2
-(11 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: x.id
+         ->  Limit
+               ->  Merge Append
+                     Sort Key: x.id
+                     ->  Merge Left Join
+                           Merge Cond: (x_1.id = y_1.id)
+                           ->  Index Only Scan using fract_t0_pkey on fract_t0 x_1
+                           ->  Index Only Scan using fract_t0_pkey on fract_t0 y_1
+                     ->  Merge Left Join
+                           Merge Cond: (x_2.id = y_2.id)
+                           ->  Index Only Scan using fract_t1_pkey on fract_t1 x_2
+                           ->  Index Only Scan using fract_t1_pkey on fract_t1 y_2
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM fract_t x LEFT JOIN fract_t y USING (id) ORDER BY id DESC LIMIT 10;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Limit
-   ->  Merge Append
-         Sort Key: x.id DESC
-         ->  Nested Loop Left Join
-               ->  Index Only Scan Backward using fract_t0_pkey on fract_t0 x_1
-               ->  Index Only Scan using fract_t0_pkey on fract_t0 y_1
-                     Index Cond: (id = x_1.id)
-         ->  Nested Loop Left Join
-               ->  Index Only Scan Backward using fract_t1_pkey on fract_t1 x_2
-               ->  Index Only Scan using fract_t1_pkey on fract_t1 y_2
-                     Index Cond: (id = x_2.id)
-(11 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: x.id
+         ->  Limit
+               ->  Sort
+                     Sort Key: x.id DESC
+                     ->  Append
+                           ->  Hash Left Join
+                                 Hash Cond: (x_1.id = y_1.id)
+                                 ->  Seq Scan on fract_t0 x_1
+                                 ->  Hash
+                                       ->  Seq Scan on fract_t0 y_1
+                           ->  Hash Left Join
+                                 Hash Cond: (x_2.id = y_2.id)
+                                 ->  Seq Scan on fract_t1 x_2
+                                 ->  Hash
+                                       ->  Seq Scan on fract_t1 y_2
+ Optimizer: Postgres query optimizer
+(18 rows)
 
 -- cleanup
 DROP TABLE fract_t;

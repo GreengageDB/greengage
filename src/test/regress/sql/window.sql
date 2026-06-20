@@ -490,7 +490,9 @@ window w as
 CREATE FUNCTION unbounded_syntax_test1a(x int) RETURNS TABLE (a int, b int, c int)
 LANGUAGE SQL
 BEGIN ATOMIC
-  SELECT sum(unique1) over (rows between x preceding and x following),
+  -- GPDB: ORDER BY in the frame makes the windowed sum deterministic under MPP
+  -- (without it the ROWS frame depends on inter-segment gather order).
+  SELECT sum(unique1) over (order by unique1 rows between x preceding and x following),
          unique1, four
   FROM tenk1 WHERE unique1 < 10;
 END;
@@ -498,7 +500,9 @@ END;
 CREATE FUNCTION unbounded_syntax_test1b(x int) RETURNS TABLE (a int, b int, c int)
 LANGUAGE SQL
 AS $$
-  SELECT sum(unique1) over (rows between x preceding and x following),
+  -- GPDB: ORDER BY in the frame makes the windowed sum deterministic under MPP
+  -- (without it the ROWS frame depends on inter-segment gather order).
+  SELECT sum(unique1) over (order by unique1 rows between x preceding and x following),
          unique1, four
   FROM tenk1 WHERE unique1 < 10;
 $$;
@@ -533,15 +537,16 @@ DROP FUNCTION unbounded_syntax_test1a, unbounded_syntax_test1b,
 -- Other tests with token UNBOUNDED in potentially problematic position
 CREATE FUNCTION unbounded(x int) RETURNS int LANGUAGE SQL IMMUTABLE RETURN x;
 
-SELECT sum(unique1) over (rows between 1 preceding and 1 following),
+-- GPDB: ORDER BY in the frame for MPP determinism (see note above).
+SELECT sum(unique1) over (order by unique1 rows between 1 preceding and 1 following),
        unique1, four
 FROM tenk1 WHERE unique1 < 10;
 
-SELECT sum(unique1) over (rows between unbounded(1) preceding and unbounded(1) following),
+SELECT sum(unique1) over (order by unique1 rows between unbounded(1) preceding and unbounded(1) following),
        unique1, four
 FROM tenk1 WHERE unique1 < 10;
 
-SELECT sum(unique1) over (rows between unbounded.x preceding and unbounded.x following),
+SELECT sum(unique1) over (order by unique1 rows between unbounded.x preceding and unbounded.x following),
        unique1, four
 FROM tenk1, (values (1)) as unbounded(x) WHERE unique1 < 10;
 
