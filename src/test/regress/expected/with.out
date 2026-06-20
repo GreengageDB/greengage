@@ -265,8 +265,6 @@ INSERT INTO department VALUES (7, 5, 'G');
 -- because of moving rows across segments. This table is the same, except that
 -- all the rows reside on a single segment, so that you get consistent results.
 CREATE TEMP TABLE department_oneseg AS SELECT 1 AS distkey, * FROM department DISTRIBUTED BY (distkey);
-NOTICE:  One or more columns in the following table(s) do not have statistics: department
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- extract all departments under 'A'. Result should be A, B, C, D and F
 WITH RECURSIVE subdepartment AS
 (
@@ -334,8 +332,6 @@ WITH RECURSIVE subdepartment AS
 	SELECT * FROM department WHERE name = 'A'
 )
 SELECT * FROM subdepartment ORDER BY name;
-NOTICE:  One or more columns in the following table(s) do not have statistics: department
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | parent_department | name 
 ----+-------------------+------
   1 |                 0 | A
@@ -651,8 +647,6 @@ SELECT t1.id, t2.path, t2 FROM t AS t1 JOIN t AS t2 ON
 
 -- SEARCH clause
 create temp table graph0( f int, t int, label text );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into graph0 values
 	(1, 2, 'arc 1 -> 2'),
 	(1, 3, 'arc 1 -> 3'),
@@ -668,30 +662,30 @@ with recursive search_graph(f, t, label) as (
 	where g.f = sg.t
 ) search depth first by f, t set seq
 select * from search_graph order by seq;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
- Sort
-   Output: search_graph.f, search_graph.t, search_graph.label, search_graph.seq
-   Sort Key: search_graph.seq
-   CTE search_graph
-     ->  Recursive Union
-           ->  Seq Scan on pg_temp.graph0 g
-                 Output: g.f, g.t, g.label, ARRAY[ROW(g.f, g.t)]
-           ->  Merge Join
-                 Output: g_1.f, g_1.t, g_1.label, array_cat(sg.seq, ARRAY[ROW(g_1.f, g_1.t)])
-                 Merge Cond: (g_1.f = sg.t)
-                 ->  Sort
-                       Output: g_1.f, g_1.t, g_1.label
-                       Sort Key: g_1.f
-                       ->  Seq Scan on pg_temp.graph0 g_1
-                             Output: g_1.f, g_1.t, g_1.label
-                 ->  Sort
-                       Output: sg.seq, sg.t
-                       Sort Key: sg.t
-                       ->  WorkTable Scan on search_graph sg
-                             Output: sg.seq, sg.t
-   ->  CTE Scan on search_graph
-         Output: search_graph.f, search_graph.t, search_graph.label, search_graph.seq
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (ARRAY[ROW(g.f, g.t)])
+   Merge Key: (ARRAY[ROW(g.f, g.t)])
+   ->  Sort
+         Output: g.f, g.t, g.label, (ARRAY[ROW(g.f, g.t)])
+         Sort Key: (ARRAY[ROW(g.f, g.t)])
+         ->  Recursive Union
+               ->  Seq Scan on pg_temp.graph0 g
+                     Output: g.f, g.t, g.label, ARRAY[ROW(g.f, g.t)]
+               ->  Hash Join
+                     Output: g_1.f, g_1.t, g_1.label, array_cat(sg.seq, ARRAY[ROW(g_1.f, g_1.t)])
+                     Hash Cond: (sg.t = g_1.f)
+                     ->  WorkTable Scan on search_graph sg
+                           Output: sg.f, sg.t, sg.label, sg.seq
+                     ->  Hash
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 Output: g_1.f, g_1.t, g_1.label
+                                 ->  Seq Scan on pg_temp.graph0 g_1
+                                       Output: g_1.f, g_1.t, g_1.label
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -741,30 +735,30 @@ with recursive search_graph(f, t, label) as (
 	where g.f = sg.t
 ) search breadth first by f, t set seq
 select * from search_graph order by seq;
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
- Sort
-   Output: search_graph.f, search_graph.t, search_graph.label, search_graph.seq
-   Sort Key: search_graph.seq
-   CTE search_graph
-     ->  Recursive Union
-           ->  Seq Scan on pg_temp.graph0 g
-                 Output: g.f, g.t, g.label, ROW('0'::bigint, g.f, g.t)
-           ->  Merge Join
-                 Output: g_1.f, g_1.t, g_1.label, ROW(int8inc((sg.seq)."*DEPTH*"), g_1.f, g_1.t)
-                 Merge Cond: (g_1.f = sg.t)
-                 ->  Sort
-                       Output: g_1.f, g_1.t, g_1.label
-                       Sort Key: g_1.f
-                       ->  Seq Scan on pg_temp.graph0 g_1
-                             Output: g_1.f, g_1.t, g_1.label
-                 ->  Sort
-                       Output: sg.seq, sg.t
-                       Sort Key: sg.t
-                       ->  WorkTable Scan on search_graph sg
-                             Output: sg.seq, sg.t
-   ->  CTE Scan on search_graph
-         Output: search_graph.f, search_graph.t, search_graph.label, search_graph.seq
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (ROW('0'::bigint, g.f, g.t))
+   Merge Key: (ROW('0'::bigint, g.f, g.t))
+   ->  Sort
+         Output: g.f, g.t, g.label, (ROW('0'::bigint, g.f, g.t))
+         Sort Key: (ROW('0'::bigint, g.f, g.t))
+         ->  Recursive Union
+               ->  Seq Scan on pg_temp.graph0 g
+                     Output: g.f, g.t, g.label, ROW('0'::bigint, g.f, g.t)
+               ->  Hash Join
+                     Output: g_1.f, g_1.t, g_1.label, ROW(int8inc((sg.seq)."*DEPTH*"), g_1.f, g_1.t)
+                     Hash Cond: (sg.t = g_1.f)
+                     ->  WorkTable Scan on search_graph sg
+                           Output: sg.f, sg.t, sg.label, sg.seq
+                     ->  Hash
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 Output: g_1.f, g_1.t, g_1.label
+                                 ->  Seq Scan on pg_temp.graph0 g_1
+                                       Output: g_1.f, g_1.t, g_1.label
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -906,11 +900,11 @@ select pg_get_viewdef('v_search');
 select * from v_search;
  f | t |   label    
 ---+---+------------
+ 2 | 3 | arc 2 -> 3
+ 4 | 5 | arc 4 -> 5
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
- 2 | 3 | arc 2 -> 3
- 4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
  4 | 5 | arc 4 -> 5
 (7 rows)
@@ -919,8 +913,6 @@ select * from v_search;
 -- test cycle detection
 --
 create temp table graph( f int, t int, label text );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into graph values
 	(1, 2, 'arc 1 -> 2'),
 	(1, 3, 'arc 1 -> 3'),
@@ -938,14 +930,6 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
  1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
@@ -963,6 +947,14 @@ select * from search_graph;
  1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
 -- UNION DISTINCT exercises row type hashing support
@@ -976,30 +968,30 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
  4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
  5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
  4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
  1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
  5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
- 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
  4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 4 | arc 1 -> 4 | t        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
+ 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
@@ -1051,29 +1043,28 @@ with recursive search_graph(f, t, label) as (
 	where g.f = sg.t
 ) cycle f, t set is_cycle using path
 select * from search_graph;
-                                                                              QUERY PLAN                                                                               
------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- CTE Scan on search_graph
-   Output: search_graph.f, search_graph.t, search_graph.label, search_graph.is_cycle, search_graph.path
-   CTE search_graph
-     ->  Recursive Union
-           ->  Seq Scan on pg_temp.graph g
-                 Output: g.f, g.t, g.label, false, ARRAY[ROW(g.f, g.t)]
-           ->  Merge Join
-                 Output: g_1.f, g_1.t, g_1.label, CASE WHEN (ROW(g_1.f, g_1.t) = ANY (sg.path)) THEN true ELSE false END, array_cat(sg.path, ARRAY[ROW(g_1.f, g_1.t)])
-                 Merge Cond: (g_1.f = sg.t)
-                 ->  Sort
-                       Output: g_1.f, g_1.t, g_1.label
-                       Sort Key: g_1.f
-                       ->  Seq Scan on pg_temp.graph g_1
-                             Output: g_1.f, g_1.t, g_1.label
-                 ->  Sort
-                       Output: sg.path, sg.t
-                       Sort Key: sg.t
-                       ->  WorkTable Scan on search_graph sg
-                             Output: sg.path, sg.t
-                             Filter: (NOT sg.is_cycle)
-(20 rows)
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (false), (ARRAY[ROW(g.f, g.t)])
+   ->  Recursive Union
+         ->  Seq Scan on pg_temp.graph g
+               Output: g.f, g.t, g.label, false, ARRAY[ROW(g.f, g.t)]
+         ->  Hash Join
+               Output: g_1.f, g_1.t, g_1.label, CASE WHEN (ROW(g_1.f, g_1.t) = ANY (sg.path)) THEN true ELSE false END, array_cat(sg.path, ARRAY[ROW(g_1.f, g_1.t)])
+               Hash Cond: (sg.t = g_1.f)
+               ->  WorkTable Scan on search_graph sg
+                     Output: sg.path, sg.t
+                     Filter: (NOT sg.is_cycle)
+               ->  Hash
+                     Output: g_1.f, g_1.t, g_1.label
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Seq Scan on pg_temp.graph g_1
+                                 Output: g_1.f, g_1.t, g_1.label
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(19 rows)
 
 with recursive search_graph(f, t, label) as (
 	select * from graph g
@@ -1122,30 +1113,30 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | N        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(5,1)"}
  1 | 2 | arc 1 -> 2 | N        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | N        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | N        | {"(1,4)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(5,1)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(4,5)","(5,1)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(1,2)","(2,3)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(4,5)"}
  1 | 4 | arc 1 -> 4 | N        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(5,1)","(1,2)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(1,2)","(2,3)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(1,4)","(4,5)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(1,4)","(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | N        | {"(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(4,5)","(5,1)","(1,2)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(1,4)","(4,5)","(5,1)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(5,1)","(1,2)","(2,3)"}
- 4 | 5 | arc 4 -> 5 | Y        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | Y        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | Y        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
- 5 | 1 | arc 5 -> 1 | Y        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | Y        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  2 | 3 | arc 2 -> 3 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
@@ -1259,6 +1250,14 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    |   seq   | is_cycle |                   path                    
 ---+---+------------+---------+----------+-------------------------------------------
+ 2 | 3 | arc 2 -> 3 | (0,2,3) | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | (0,4,5) | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | (1,5,1) | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | (2,1,4) | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | (2,1,3) | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | (2,1,2) | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | (3,4,5) | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | (3,2,3) | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 2 | arc 1 -> 2 | (0,1,2) | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | (0,1,3) | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | (0,1,4) | f        | {"(1,4)"}
@@ -1269,14 +1268,6 @@ select * from search_graph;
  1 | 3 | arc 1 -> 3 | (3,1,3) | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | (3,1,2) | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | (4,2,3) | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
- 2 | 3 | arc 2 -> 3 | (0,2,3) | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | (0,4,5) | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | (1,5,1) | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | (2,1,4) | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | (2,1,3) | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | (2,1,2) | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | (3,4,5) | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | (3,2,3) | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  5 | 1 | arc 5 -> 1 | (0,5,1) | f        | {"(5,1)"}
  1 | 4 | arc 1 -> 4 | (1,1,4) | f        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | (1,1,3) | f        | {"(5,1)","(1,3)"}
@@ -1452,6 +1443,13 @@ select pg_get_viewdef('v_cycle2');
 select * from v_cycle1;
  f | t |   label    
 ---+---+------------
+ 5 | 1 | arc 5 -> 1
+ 1 | 4 | arc 1 -> 4
+ 1 | 3 | arc 1 -> 3
+ 1 | 2 | arc 1 -> 2
+ 4 | 5 | arc 4 -> 5
+ 2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
  2 | 3 | arc 2 -> 3
  4 | 5 | arc 4 -> 5
  5 | 1 | arc 5 -> 1
@@ -1470,26 +1468,11 @@ select * from v_cycle1;
  1 | 3 | arc 1 -> 3
  1 | 2 | arc 1 -> 2
  2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
- 1 | 4 | arc 1 -> 4
- 1 | 3 | arc 1 -> 3
- 1 | 2 | arc 1 -> 2
- 4 | 5 | arc 4 -> 5
- 2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
 (25 rows)
 
 select * from v_cycle2;
  f | t |   label    
 ---+---+------------
- 2 | 3 | arc 2 -> 3
- 4 | 5 | arc 4 -> 5
- 5 | 1 | arc 5 -> 1
- 1 | 4 | arc 1 -> 4
- 1 | 3 | arc 1 -> 3
- 1 | 2 | arc 1 -> 2
- 4 | 5 | arc 4 -> 5
- 2 | 3 | arc 2 -> 3
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
@@ -1507,6 +1490,14 @@ select * from v_cycle2;
  4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
  5 | 1 | arc 5 -> 1
+ 2 | 3 | arc 2 -> 3
+ 4 | 5 | arc 4 -> 5
+ 5 | 1 | arc 5 -> 1
+ 1 | 4 | arc 1 -> 4
+ 1 | 3 | arc 1 -> 3
+ 1 | 2 | arc 1 -> 2
+ 4 | 5 | arc 4 -> 5
+ 2 | 3 | arc 2 -> 3
 (25 rows)
 
 --
@@ -1692,41 +1683,41 @@ INSERT INTO y
 SELECT a+20 FROM t RETURNING *;
  a  
 ----
- 21
  26
- 30
- 25
- 27
+ 28
+ 21
  22
  23
  24
- 28
+ 25
  29
+ 30
+ 27
 (10 rows)
 
 SELECT * FROM y;
  a  
 ----
-  5
+  6
+  8
+ 26
+ 28
   7
- 25
  27
   1
-  6
- 10
- 21
- 26
- 30
   2
   3
   4
-  8
+  5
   9
+ 10
+ 21
  22
  23
  24
- 28
+ 25
  29
+ 30
 (20 rows)
 
 WITH t AS (
@@ -1735,41 +1726,41 @@ WITH t AS (
 UPDATE y SET a = y.a-10 FROM t WHERE y.a > 20 AND t.a = y.a RETURNING y.a;
  a  
 ----
- 15
  17
- 11
  16
- 20
+ 18
+ 11
  12
  13
  14
- 18
+ 15
  19
+ 20
 (10 rows)
 
 SELECT * FROM y;
  a  
 ----
+  7
+ 17
+  1
   2
   3
   4
-  8
+  5
   9
+ 10
+ 11
  12
  13
  14
- 18
- 19
-  5
-  7
  15
- 17
-  1
-  6
- 10
- 11
- 16
+ 19
  20
+  6
+  8
+ 16
+ 18
 (20 rows)
 
 WITH RECURSIVE t(a) AS (
@@ -1780,31 +1771,31 @@ WITH RECURSIVE t(a) AS (
 DELETE FROM y USING t WHERE t.a = y.a RETURNING y.a;
  a  
 ----
- 11
+ 17
  16
- 20
+ 18
+ 11
  12
  13
  14
- 18
- 19
  15
- 17
+ 19
+ 20
 (10 rows)
 
 SELECT * FROM y;
  a  
 ----
-  1
   6
- 10
-  5
+  8
   7
+  1
   2
   3
   4
-  8
+  5
   9
+ 10
 (10 rows)
 
 DROP TABLE y;
@@ -1888,8 +1879,6 @@ WITH RECURSIVE x(n) AS (SELECT 1 UNION ALL SELECT distinct(n+1) FROM x)
 ERROR:  DISTINCT in a recursive query is not implemented
 -- recursive term with a group by operation is not allowed
 CREATE TEMPORARY TABLE bar(c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WITH RECURSIVE x(n) AS (
 	SELECT 1,2
 	UNION ALL
@@ -2046,8 +2035,6 @@ LINE 2:    (SELECT i::numeric(3,0) FROM (VALUES(1),(2)) t(i)
 HINT:  Cast the output of the non-recursive term to the correct type.
 -- disallow OLD/NEW reference in CTE
 CREATE TEMPORARY TABLE x (n integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE r2 AS ON UPDATE TO x DO INSTEAD
     WITH t AS (SELECT OLD.*) UPDATE y SET a = t.n FROM t;
 ERROR:  cannot refer to OLD within WITH query
@@ -2073,11 +2060,11 @@ select ( with cte(foo) as ( values(f1) )
 from int4_tbl;
      foo     
 -------------
+      123456
+     -123456
            0
   2147483647
  -2147483647
-      123456
-     -123456
 (5 rows)
 
 select ( with cte(foo) as ( values(f1) )
@@ -2085,11 +2072,11 @@ select ( with cte(foo) as ( values(f1) )
 from int4_tbl;
    column1   
 -------------
-      123456
-     -123456
            0
   2147483647
  -2147483647
+      123456
+     -123456
 (5 rows)
 
 --
@@ -2247,11 +2234,11 @@ C as ( select A.id, array(select B.id from B where B.id = A.id) from A )
 select * from C;
         id         |                array                
 -------------------+-------------------------------------
+               456 | {456}
+  4567890123456789 | {4567890123456789,4567890123456789}
                123 | {123}
   4567890123456789 | {4567890123456789,4567890123456789}
  -4567890123456789 | {-4567890123456789}
-               456 | {456}
-  4567890123456789 | {4567890123456789,4567890123456789}
 (5 rows)
 
 --
@@ -2412,41 +2399,41 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
- 14
- 16
- 19
  11
  13
+ 16
+ 17
+ 18
  15
  20
  12
- 17
- 18
+ 14
+ 19
 (10 rows)
 
 SELECT * FROM y;
  a  
 ----
   3
- 12
- 17
- 18
-  1
-  2
-  4
-  6
  10
- 14
- 16
- 19
-  5
-  7
-  8
-  9
  11
  13
+ 16
+ 17
+ 18
+  4
+  5
+  8
+  9
  15
  20
+  1
+  2
+  6
+  7
+ 12
+ 14
+ 19
 (20 rows)
 
 -- UPDATE ... RETURNING
@@ -2458,26 +2445,26 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
-  6
-  8
-  9
- 10
+  4
+ 11
  12
  14
- 16
- 21
-  4
- 13
+ 17
  18
  19
   2
   3
-  5
   7
- 11
+  8
+ 13
  15
- 17
  20
+  5
+  6
+  9
+ 10
+ 16
+ 21
 (20 rows)
 
 SELECT * FROM y;
@@ -2485,24 +2472,24 @@ SELECT * FROM y;
 ----
   2
   3
-  5
   7
- 11
- 15
- 17
- 20
-  6
   8
-  9
- 10
+ 13
+ 15
+ 20
+  4
+ 11
  12
  14
- 16
- 21
-  4
- 13
+ 17
  18
  19
+  5
+  6
+  9
+ 10
+ 16
+ 21
 (20 rows)
 
 -- DELETE ... RETURNING
@@ -2514,29 +2501,29 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
+  5
   6
-  8
   9
  10
   2
   3
-  5
   7
+  8
   4
 (9 rows)
 
 SELECT * FROM y;
  a  
 ----
- 12
- 14
  16
  21
- 11
- 15
- 17
- 20
  13
+ 15
+ 20
+ 11
+ 12
+ 14
+ 17
  18
  19
 (11 rows)
@@ -2558,16 +2545,16 @@ HINT:  Rewrite the query to only include one writable CTE clause.
 SELECT * FROM y;
  a  
 ----
- 13
- 18
- 19
- 12
- 14
  16
  21
  11
- 15
+ 12
+ 14
  17
+ 18
+ 19
+ 13
+ 15
  20
 (11 rows)
 
@@ -2586,31 +2573,30 @@ SELECT * FROM t;
 SELECT * FROM y;
  a  
 ----
- 13
- 18
- 19
  11
- 15
- 17
- 20
- 42
  12
  14
+ 17
+ 18
+ 19
+ 42
  16
  21
+ 13
+ 15
+ 20
 (12 rows)
 
 DROP RULE y_rule ON y;
 -- check merging of outer CTE with CTE in a rule action
 CREATE TEMP TABLE bug6051 AS
   select i from generate_series(1,3) as t(i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT * FROM bug6051;
  i 
 ---
- 1
  2
  3
+ 1
 (3 rows)
 
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
@@ -2621,14 +2607,12 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM bug6051;
  i 
 ---
- 1
  2
  3
+ 1
 (3 rows)
 
 CREATE TEMP TABLE bug6051_2 (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
  INSERT INTO bug6051_2
  VALUES(NEW.i);
@@ -2645,6 +2629,11 @@ SELECT * FROM bug6051;
  3
 (3 rows)
 
+SELECT * FROM bug6051_2;
+ i 
+---
+(0 rows)
+
 -- check INSERT...SELECT rule actions are disallowed on commands
 -- that have modifyingCTEs
 CREATE OR REPLACE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
@@ -2652,7 +2641,9 @@ CREATE OR REPLACE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
  SELECT NEW.i;
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
-ERROR:  INSERT...SELECT rule actions are not supported for queries having data-modifying statements in WITH
+ERROR:  writable CTE queries cannot be themselves writable
+DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+HINT:  Rewrite the query to only include one writable clause.
 -- silly example to verify that hasModifyingCTE flag is propagated
 CREATE TEMP TABLE bug6051_3 AS
   SELECT a FROM generate_series(11,13) AS a;
@@ -2661,24 +2652,17 @@ CREATE RULE bug6051_3_ins AS ON INSERT TO bug6051_3 DO INSTEAD
 BEGIN; SET LOCAL force_parallel_mode = on;
 WITH t1 AS ( DELETE FROM bug6051_3 RETURNING * )
   INSERT INTO bug6051_3 SELECT * FROM t1;
- i 
----
- 1
- 2
- 3
- 1
- 2
- 3
- 1
- 2
- 3
-(9 rows)
-
+ERROR:  writable CTE queries cannot be themselves writable
+DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+HINT:  Rewrite the query to only include one writable clause.
 COMMIT;
 SELECT * FROM bug6051_3;
- a 
----
-(0 rows)
+ a  
+----
+ 12
+ 11
+ 13
+(3 rows)
 
 -- check case where CTE reference is removed due to optimization
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -2688,13 +2672,17 @@ SELECT q1 FROM
   SELECT q1, (SELECT q2 FROM t_cte WHERE t_cte.q1 = i8.q1) AS t_sub
   FROM int8_tbl i8
 ) ss;
-              QUERY PLAN              
---------------------------------------
- Subquery Scan on ss
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: ss.q1
-   ->  Seq Scan on public.int8_tbl i8
-         Output: i8.q1, NULL::bigint
-(4 rows)
+   ->  Subquery Scan on ss
+         Output: ss.q1
+         ->  Seq Scan on public.int8_tbl i8
+               Output: i8.q1, NULL::bigint
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(8 rows)
 
 SELECT q1 FROM
 (
@@ -2718,16 +2706,17 @@ SELECT q1 FROM
   SELECT q1, (SELECT q2 FROM t_cte WHERE t_cte.q1 = i8.q1) AS t_sub
   FROM int8_tbl i8
 ) ss;
-                 QUERY PLAN                  
----------------------------------------------
- Subquery Scan on ss
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: ss.q1
-   ->  Seq Scan on public.int8_tbl i8
-         Output: i8.q1, NULL::bigint
-         CTE t_cte
-           ->  Seq Scan on public.int8_tbl t
-                 Output: t.q1, t.q2
-(7 rows)
+   ->  Subquery Scan on ss
+         Output: ss.q1
+         ->  Seq Scan on public.int8_tbl i8
+               Output: i8.q1, NULL::bigint
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(8 rows)
 
 SELECT q1 FROM
 (
@@ -2737,11 +2726,11 @@ SELECT q1 FROM
 ) ss;
         q1        
 ------------------
+ 4567890123456789
+ 4567890123456789
+ 4567890123456789
               123
               123
- 4567890123456789
- 4567890123456789
- 4567890123456789
 (5 rows)
 
 -- a truly recursive CTE in the same list
@@ -2762,23 +2751,23 @@ SELECT * FROM t2 JOIN y USING (a) ORDER BY a;
 SELECT * FROM y;
  a  
 ----
- 11
- 15
- 17
- 20
- 42
-  0
- 12
- 14
  16
  21
-  1
-  4
+  0
+  3
  13
+ 15
+ 20
+  1
+ 11
+ 12
+ 14
+ 17
  18
  19
+ 42
   2
-  3
+  4
 (17 rows)
 
 -- data-modifying WITH in a modifying statement
@@ -2794,23 +2783,23 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM y;
  a  
 ----
+ 11
  12
  14
- 16
- 21
-  1
-  4
- 13
+ 17
  18
  19
-  2
-  3
- 11
- 15
- 17
- 20
  42
+  2
+  4
+ 16
+ 21
   0
+  3
+ 13
+ 15
+ 20
+  1
 (17 rows)
 
 -- check that WITH query is run to completion even if outer query isn't
@@ -2835,23 +2824,23 @@ SELECT a BETWEEN 0 AND 4200 FROM t LIMIT 10;
 SELECT * FROM y;
   a   
 ------
- 1200
- 1400
  1600
  2100
-  100
-  400
+    0
+  300
  1300
+ 1500
+ 2000
+  100
+ 1100
+ 1200
+ 1400
+ 1700
  1800
  1900
-  200
-  300
- 1100
- 1500
- 1700
- 2000
  4200
-    0
+  200
+  400
 (17 rows)
 
 -- data-modifying WITH containing INSERT...ON CONFLICT DO UPDATE
@@ -2882,8 +2871,6 @@ SELECT * FROM aa;
 
 -- New query/snapshot demonstrates side-effects of previous query.
 SELECT * FROM withz ORDER BY k;
-NOTICE:  One or more columns in the following table(s) do not have statistics: withz
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  k  |        v         
 ----+------------------
   0 | insert
@@ -2964,28 +2951,34 @@ WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
 MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Merge on public.m
-   CTE cte_basic
-     ->  Result
-           Output: 1, 'cte_basic val'::text
    ->  Hash Right Join
-         Output: m.ctid, (0), ('merge source SubPlan'::text)
+         Output: m.ctid, m.gp_segment_id, (0), ('merge source SubPlan'::text)
          Hash Cond: (m.k = (0))
          ->  Seq Scan on public.m
-               Output: m.ctid, m.k
+               Output: m.ctid, m.gp_segment_id, m.k
          ->  Hash
                Output: (0), ('merge source SubPlan'::text)
-               ->  Result
-                     Output: 0, 'merge source SubPlan'::text
-   SubPlan 2
+               ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                     Output: (0), ('merge source SubPlan'::text)
+                     Hash Key: (0)
+                     ->  Result
+                           Output: 0, 'merge source SubPlan'::text
+   SubPlan 1
      ->  Limit
-           Output: ((cte_basic.b || ' merge update'::text))
-           ->  CTE Scan on cte_basic
-                 Output: (cte_basic.b || ' merge update'::text)
-                 Filter: (cte_basic.a = m.k)
-(19 rows)
+           Output: ((share0_ref1.b || ' merge update'::text))
+           ->  Result
+                 Output: (share0_ref1.b || ' merge update'::text)
+                 Filter: (share0_ref1.a = m.k)
+                 ->  Shared Scan (share slice:id 0:0)
+                       Output: share0_ref1.a, share0_ref1.b
+                       ->  Result
+                             Output: 1, 'cte_basic val'::text
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(25 rows)
 
 -- InitPlan
 WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
@@ -3005,28 +2998,34 @@ WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
 MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
-                          QUERY PLAN                           
----------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Merge on public.m
-   CTE cte_init
-     ->  Result
-           Output: 1, 'cte_init val'::text
-   InitPlan 2 (returns $1)
+   InitPlan 1 (returns $0)  (slice2)
      ->  Limit
            Output: ((cte_init.b || ' merge update'::text))
-           ->  CTE Scan on cte_init
+           ->  Subquery Scan on cte_init
                  Output: (cte_init.b || ' merge update'::text)
                  Filter: (cte_init.a = 1)
+                 ->  Shared Scan (share slice:id 2:0)
+                       Output: share0_ref1.a, share0_ref1.b
+                       ->  Result
+                             Output: 1, 'cte_init val'::text
    ->  Hash Right Join
-         Output: m.ctid, (1), ('merge source InitPlan'::text)
+         Output: m.ctid, m.gp_segment_id, (1), ('merge source InitPlan'::text)
          Hash Cond: (m.k = (1))
          ->  Seq Scan on public.m
-               Output: m.ctid, m.k
+               Output: m.ctid, m.gp_segment_id, m.k
          ->  Hash
                Output: (1), ('merge source InitPlan'::text)
-               ->  Result
-                     Output: 1, 'merge source InitPlan'::text
-(19 rows)
+               ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                     Output: (1), ('merge source InitPlan'::text)
+                     Hash Key: (1)
+                     ->  Result
+                           Output: 1, 'merge source InitPlan'::text
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(25 rows)
 
 -- MERGE source comes from CTE:
 WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
@@ -3046,37 +3045,43 @@ WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
 MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
 WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
 WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Merge on public.m
-   CTE merge_source_cte
-     ->  Result
-           Output: 15, 'merge_source_cte val'::text
-   InitPlan 2 (returns $1)
-     ->  CTE Scan on merge_source_cte merge_source_cte_1
-           Output: ((merge_source_cte_1.b || (merge_source_cte_1.*)::text) || ' merge update'::text)
-           Filter: (merge_source_cte_1.a = 15)
-   InitPlan 3 (returns $2)
-     ->  CTE Scan on merge_source_cte merge_source_cte_2
-           Output: ((merge_source_cte_2.*)::text || ' merge insert'::text)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Subquery Scan on merge_source_cte
+           Output: ((merge_source_cte.b || (merge_source_cte.*)::text) || ' merge update'::text)
+           Filter: (merge_source_cte.a = 15)
+           ->  Shared Scan (share slice:id 2:0)
+                 Output: share0_ref1.a, share0_ref1.b
+                 ->  Result
+                       Output: 15, 'merge_source_cte val'::text
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Subquery Scan on merge_source_cte_1
+           Output: ((merge_source_cte_1.*)::text || ' merge insert'::text)
+           ->  Shared Scan (share slice:id 3:0)
+                 Output: share0_ref2.a, share0_ref2.b
    ->  Hash Right Join
-         Output: m.ctid, merge_source_cte.a, merge_source_cte.b
-         Hash Cond: (m.k = merge_source_cte.a)
+         Output: m.ctid, m.gp_segment_id, share0_ref3.a, share0_ref3.b
+         Hash Cond: (m.k = share0_ref3.a)
          ->  Seq Scan on public.m
-               Output: m.ctid, m.k
+               Output: m.ctid, m.gp_segment_id, m.k
          ->  Hash
-               Output: merge_source_cte.a, merge_source_cte.b
-               ->  CTE Scan on merge_source_cte
-                     Output: merge_source_cte.a, merge_source_cte.b
-(20 rows)
+               Output: share0_ref3.a, share0_ref3.b
+               ->  Redistribute Motion 1:3  (slice1)
+                     Output: share0_ref3.a, share0_ref3.b
+                     Hash Key: share0_ref3.a
+                     ->  Shared Scan (share slice:id 1:0)
+                           Output: share0_ref3.a, share0_ref3.b
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing = 'on'
+(28 rows)
 
 DROP TABLE m;
 -- check that run to completion happens in proper ordering
 TRUNCATE TABLE y;
 INSERT INTO y SELECT generate_series(1, 3);
 CREATE TEMPORARY TABLE yy (a INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WITH RECURSIVE t1 AS (
   INSERT INTO y SELECT * FROM y RETURNING *
 ), t2 AS (
@@ -3095,8 +3100,6 @@ SELECT * FROM y;
 (3 rows)
 
 SELECT * FROM yy;
-NOTICE:  One or more columns in the following table(s) do not have statistics: yy
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -3113,14 +3116,12 @@ HINT:  Rewrite the query to only include one writable CTE clause.
 SELECT * FROM y;
  a 
 ---
- 1
  2
  3
+ 1
 (3 rows)
 
 SELECT * FROM yy;
-NOTICE:  One or more columns in the following table(s) do not have statistics: yy
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
 (0 rows)
@@ -3148,9 +3149,9 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t;
-NOTICE:  y_trigger: a = 21  (seg1 slice1 172.17.0.3:7003 pid=865033)
-NOTICE:  y_trigger: a = 22  (seg1 slice1 172.17.0.3:7003 pid=865033)
-NOTICE:  y_trigger: a = 23  (seg1 slice1 172.17.0.3:7003 pid=865033)
+NOTICE:  y_trigger: a = 21  (seg1 slice1 172.17.0.3:7003 pid=574122)
+NOTICE:  y_trigger: a = 22  (seg1 slice1 172.17.0.3:7003 pid=574122)
+NOTICE:  y_trigger: a = 23  (seg2 slice1 172.17.0.3:7004 pid=574118)
  a  
 ----
  21
@@ -3161,19 +3162,19 @@ NOTICE:  y_trigger: a = 23  (seg1 slice1 172.17.0.3:7003 pid=865033)
 SELECT * FROM y;
  a  
 ----
-  5
-  6
- 10
-  2
-  4
+  3
   7
   8
  21
  22
- 23
   1
-  3
+  6
   9
+ 10
+  2
+  4
+  5
+ 23
 (13 rows)
 
 DROP TRIGGER y_trig ON y;
@@ -3188,32 +3189,32 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t LIMIT 1;
-NOTICE:  y_trigger: a = 32  (seg1 slice1 172.17.0.3:7003 pid=865033)
-NOTICE:  y_trigger: a = 31  (seg0 slice1 172.17.0.3:7002 pid=865050)
-NOTICE:  y_trigger: a = 33  (seg2 slice1 172.17.0.3:7004 pid=865035)
+NOTICE:  y_trigger: a = 31  (seg2 slice1 172.17.0.3:7004 pid=574118)
+NOTICE:  y_trigger: a = 32  (seg2 slice1 172.17.0.3:7004 pid=574118)
+NOTICE:  y_trigger: a = 33  (seg1 slice1 172.17.0.3:7003 pid=574122)
  a  
 ----
- 32
+ 33
 (1 row)
 
 SELECT * FROM y;
  a  
 ----
-  5
+  1
   6
+  9
  10
- 31
   2
   4
+  5
+ 23
+ 31
+ 32
+  3
   7
   8
  21
  22
- 23
- 32
-  1
-  3
-  9
  33
 (16 rows)
 
@@ -3246,25 +3247,25 @@ SELECT * FROM t;
 SELECT * FROM y;
  a  
 ----
-  2
-  4
+  3
   7
   8
  21
  22
- 23
- 32
-  1
-  3
-  9
  33
- 41
-  5
-  6
- 10
- 31
  42
  43
+  2
+  4
+  5
+ 23
+ 31
+ 32
+  1
+  6
+  9
+ 10
+ 41
 (19 rows)
 
 DROP TRIGGER y_trig ON y;
@@ -3273,8 +3274,6 @@ DROP FUNCTION y_trigger();
 -- end_ignore
 -- WITH attached to inherited UPDATE or DELETE
 CREATE TEMP TABLE parent ( id int, val text );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE child1 ( ) INHERITS ( parent );
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TEMP TABLE child2 ( ) INHERITS ( parent );
@@ -3302,11 +3301,11 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
+ 94 | c21
  72 | p1
  83 | c12
  95 | c22
  82 | c11
- 94 | c21
 (5 rows)
 
 WITH rcte AS ( SELECT max(id) AS maxid FROM parent )
@@ -3314,9 +3313,9 @@ DELETE FROM parent USING rcte WHERE id = maxid;
 SELECT * FROM parent;
  id | val 
 ----+-----
+ 82 | c11
  72 | p1
  83 | c12
- 82 | c11
  94 | c21
 (4 rows)
 
@@ -3328,52 +3327,19 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
- 94 | c21
  72 | p1
  83 | c12
  82 | c11
+ 94 | c21
 (4 rows)
 
 -- check EXPLAIN VERBOSE for a wCTE with RETURNING
 EXPLAIN (VERBOSE, COSTS OFF)
 WITH wcte AS ( INSERT INTO int8_tbl VALUES ( 42, 47 ) RETURNING q2 )
 DELETE FROM a_star USING wcte WHERE aa = q2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
- Delete on public.a_star
-   Delete on public.a_star a_star_1
-   Delete on public.b_star a_star_2
-   Delete on public.c_star a_star_3
-   Delete on public.d_star a_star_4
-   Delete on public.e_star a_star_5
-   Delete on public.f_star a_star_6
-   CTE wcte
-     ->  Insert on public.int8_tbl
-           Output: int8_tbl.q2
-           ->  Result
-                 Output: '42'::bigint, '47'::bigint
-   ->  Hash Join
-         Output: wcte.*, a_star.tableoid, a_star.ctid
-         Hash Cond: (a_star.aa = wcte.q2)
-         ->  Append
-               ->  Seq Scan on public.a_star a_star_1
-                     Output: a_star_1.aa, a_star_1.tableoid, a_star_1.ctid
-               ->  Seq Scan on public.b_star a_star_2
-                     Output: a_star_2.aa, a_star_2.tableoid, a_star_2.ctid
-               ->  Seq Scan on public.c_star a_star_3
-                     Output: a_star_3.aa, a_star_3.tableoid, a_star_3.ctid
-               ->  Seq Scan on public.d_star a_star_4
-                     Output: a_star_4.aa, a_star_4.tableoid, a_star_4.ctid
-               ->  Seq Scan on public.e_star a_star_5
-                     Output: a_star_5.aa, a_star_5.tableoid, a_star_5.ctid
-               ->  Seq Scan on public.f_star a_star_6
-                     Output: a_star_6.aa, a_star_6.tableoid, a_star_6.ctid
-         ->  Hash
-               Output: wcte.*, wcte.q2
-               ->  CTE Scan on wcte
-                     Output: wcte.*, wcte.q2
-(32 rows)
-
+ERROR:  writable CTE queries cannot be themselves writable
+DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+HINT:  Rewrite the query to only include one writable clause.
 -- error cases
 -- data-modifying WITH tries to use its own output
 WITH RECURSIVE t AS (
