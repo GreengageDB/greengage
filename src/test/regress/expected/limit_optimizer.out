@@ -123,11 +123,11 @@ select * from int8_tbl limit (case when random() < 0.5 then null::bigint end);
 select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
         q1        |        q2         
 ------------------+-------------------
-              123 |               456
-              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
+              123 |               456
+              123 |  4567890123456789
 (5 rows)
 
 -- Test assorted cases involving backwards fetch from a LIMIT plan node
@@ -224,9 +224,8 @@ select unique1, unique2, nextval('testseq')
                            Sort Key: tenk1.unique2
                            ->  Seq Scan on public.tenk1
                                  Output: unique1, unique2
- Optimizer: Pivotal Optimizer (GPORCA) version 3.79.1
- Settings: optimizer=on
-(16 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
 
 -- In gpdb, our sequence can only promise monotonicity due to MPP structure
 -- The follow case does not make sence for us.
@@ -264,9 +263,8 @@ select unique1, unique2, generate_series(1,10)
                            Sort Key: tenk1.unique2
                            ->  Seq Scan on public.tenk1
                                  Output: unique1, unique2
- Optimizer: Pivotal Optimizer (GPORCA) version 3.79.1
- Settings: optimizer=on
-(16 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
 
 select unique1, unique2, generate_series(1,10)
   from tenk1 order by unique2 limit 7;
@@ -302,9 +300,8 @@ select unique1, unique2, generate_series(1,10)
                                  Sort Key: tenk1.tenthous
                                  ->  Seq Scan on public.tenk1
                                        Output: unique1, unique2, tenthous
- Optimizer: Pivotal Optimizer (GPORCA) version 3.79.1
- Settings: optimizer=on
-(18 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
 
 select unique1, unique2, generate_series(1,10)
   from tenk1 order by tenthous limit 7;
@@ -328,7 +325,7 @@ select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2;
    Output: generate_series(0, 2), generate_series(((random() * '0.1'::double precision))::integer, 2)
    ->  Result
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2;
  s1 | s2 
@@ -350,7 +347,7 @@ order by s2 desc;
          Output: generate_series(0, 2), generate_series(((random() * '0.1'::double precision))::integer, 2)
          ->  Result
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2
 order by s2 desc;
@@ -390,9 +387,8 @@ select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
                                              Group Key: tenk1.thousand
                                              ->  Seq Scan on public.tenk1
                                                    Output: thousand, tenthous
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
- Settings: optimizer=on
-(25 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(24 rows)
 
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;
@@ -467,6 +463,11 @@ SELECT  thousand
         0
 (2 rows)
 
+-- SKIP LOCKED and WITH TIES are incompatible
+SELECT  thousand
+		FROM onek WHERE thousand < 5
+		ORDER BY thousand FETCH FIRST 1 ROW WITH TIES FOR UPDATE SKIP LOCKED;
+ERROR:  SKIP LOCKED and WITH TIES options cannot be used together
 -- should fail
 SELECT ''::text AS two, unique1, unique2, stringu1
 		FROM onek WHERE unique1 > 50

@@ -1,4 +1,6 @@
 set optimizer_print_missing_stats = off;
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 --
 -- Sanity checks for text search catalogs
 --
@@ -56,6 +58,14 @@ WHERE
 -------+-------+--------+--------------+----------+---------
 (0 rows)
 
+-- Load some test data
+CREATE TABLE test_tsvector(
+	t text,
+	a tsvector
+);
+\set filename :abs_srcdir '/data/tsearch.data'
+COPY test_tsvector FROM :'filename';
+ANALYZE test_tsvector;
 -- test basic text search behavior without indexes, then with
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
@@ -542,7 +552,6 @@ CREATE INDEX wowidx2 ON test_tsvector USING gist (a tsvector_ops(siglen=1));
 Indexes:
     "wowidx" gist (a)
     "wowidx2" gist (a tsvector_ops (siglen='1'))
-Distributed by: (t)
 
 DROP INDEX wowidx;
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
@@ -711,7 +720,6 @@ CREATE INDEX wowidx ON test_tsvector USING gist (a tsvector_ops(siglen=484));
  a      | tsvector |           |          | 
 Indexes:
     "wowidx" gist (a tsvector_ops (siglen='484'))
-Distributed by: (t)
 
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
                             QUERY PLAN                             
@@ -2008,8 +2016,6 @@ to_tsquery('english','Lorem') && phraseto_tsquery('english','ullamcorper urna'),
 
 --Rewrite sub system
 CREATE TABLE test_tsquery (txtkeyword TEXT, txtsample TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtkeyword' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set ECHO none
 ALTER TABLE test_tsquery ADD COLUMN keyword tsquery;
 UPDATE test_tsquery SET keyword = to_tsquery('english', txtkeyword);
@@ -2413,7 +2419,6 @@ select * from test_tsquery, to_tsquery('english', 'new') q where txtsample @@ q;
 
 -- test finding items in GIN's pending list
 create temp table pendtest (ts tsvector);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 create index pendtest_idx on pendtest using gin(ts);
 insert into pendtest values (to_tsvector('Lore ipsam'));
 insert into pendtest values (to_tsvector('Lore ipsum'));
@@ -2448,7 +2453,6 @@ select * from pendtest where 'ipi:*'::tsquery @@ ts;
 
 --check OP_PHRASE on index
 create temp table phrase_index_test(fts tsvector);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 insert into phrase_index_test values ('A fat cat has just eaten a rat.');
 insert into phrase_index_test values (to_tsvector('english', 'A fat cat has just eaten a rat.'));
 create index phrase_index_test_idx on phrase_index_test using gin(fts);

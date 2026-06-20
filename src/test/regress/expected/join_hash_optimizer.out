@@ -58,14 +58,12 @@ $$;
 -- estimated size.
 create table simple as
   select generate_series(1, 60000) AS id, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 alter table simple set (parallel_workers = 2);
 analyze simple;
 -- Make a relation whose size we will under-estimate.  We want stats
 -- to say 1000 rows, but actually there are 20,000 rows.
 create table bigger_than_it_looks as
   select generate_series(1, 60000) as id, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 alter table bigger_than_it_looks set (autovacuum_enabled = 'false');
 WARNING:  autovacuum is not supported in Greenplum
 alter table bigger_than_it_looks set (parallel_workers = 2);
@@ -75,8 +73,6 @@ update pg_class set reltuples = 1000 where relname = 'bigger_than_it_looks';
 -- kind of skew that breaks our batching scheme.  We want stats to say
 -- 2 rows, but actually there are 20,000 rows with the same key.
 create table extremely_skewed (id int, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table extremely_skewed set (autovacuum_enabled = 'false');
 WARNING:  autovacuum is not supported in Greenplum
 alter table extremely_skewed set (parallel_workers = 2);
@@ -89,7 +85,6 @@ update pg_class
   where relname = 'extremely_skewed';
 -- Make a relation with a couple of enormous tuples.
 create table wide as select generate_series(1, 2) as id, rpad('', 320000, 'x') as t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 alter table wide set (parallel_workers = 2);
 ANALYZE wide;
 -- The "optimal" case: the hash table fits in memory; we plan for 1
@@ -100,6 +95,7 @@ savepoint settings;
 set local max_parallel_workers_per_gather = 0;
 set local work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set local hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
                                   QUERY PLAN                                  
@@ -141,6 +137,7 @@ savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set local hash_mem_multiplier = 1.0;
 set local enable_parallel_hash = off;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
@@ -183,6 +180,7 @@ savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set local hash_mem_multiplier = 1.0;
 set local enable_parallel_hash = on;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
@@ -363,8 +361,8 @@ WARNING:  "work_mem": setting is deprecated, and may be removed in a future rele
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) FROM simple r JOIN bigger_than_it_looks s USING (id);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -375,7 +373,7 @@ explain (costs off)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                  ->  Seq Scan on bigger_than_it_looks
  Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+(10 rows)
 
 select count(*) FROM simple r JOIN bigger_than_it_looks s USING (id);
  count 
@@ -403,8 +401,8 @@ set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_m
 set local enable_parallel_hash = off;
 explain (costs off)
   select count(*) from simple r join bigger_than_it_looks s using (id);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -415,7 +413,7 @@ explain (costs off)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                  ->  Seq Scan on bigger_than_it_looks
  Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+(10 rows)
 
 select count(*) from simple r join bigger_than_it_looks s using (id);
  count 
@@ -443,8 +441,8 @@ set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_m
 set local enable_parallel_hash = on;
 explain (costs off)
   select count(*) from simple r join bigger_than_it_looks s using (id);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -455,7 +453,7 @@ explain (costs off)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                  ->  Seq Scan on bigger_than_it_looks
  Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+(10 rows)
 
 select count(*) from simple r join bigger_than_it_looks s using (id);
  count 
@@ -619,6 +617,7 @@ savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set local hash_mem_multiplier = 1.0;
 set local parallel_leader_participation = off;
 select * from hash_join_batches(
 $$
@@ -633,11 +632,9 @@ rollback to settings;
 -- Exercise rescans.  We'll turn off parallel_leader_participation so
 -- that we can check that instrumentation comes back correctly.
 create table join_foo as select generate_series(1, 3) as id, 'xxxxx'::text as t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 analyze join_foo;
 alter table join_foo set (parallel_workers = 0);
 create table join_bar as select generate_series(1, 20000) as id, 'xxxxx'::text as t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 analyze join_bar;
 alter table join_bar set (parallel_workers = 2);
 -- multi-batch with rescan, parallel-oblivious
@@ -712,6 +709,7 @@ set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from join_foo
     left join (select b1.id, b1.t from join_bar b1 join join_bar b2 using (id)) ss
@@ -831,6 +829,7 @@ set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '4MB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from join_foo
     left join (select b1.id, b1.t from join_bar b1 join join_bar b2 using (id)) ss
@@ -1066,11 +1065,7 @@ rollback to settings;
 savepoint settings;
 set max_parallel_workers_per_gather = 0;
 create table join_hash_t_small(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table join_hash_t_big(b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into join_hash_t_small select i%100 from generate_series(0, 3000)i;
 insert into join_hash_t_big select i%100000 from generate_series(1, 100000)i ;
 analyze join_hash_t_small;

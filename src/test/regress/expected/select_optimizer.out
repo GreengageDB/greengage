@@ -219,16 +219,16 @@ SET enable_sort TO off;
 SELECT onek2.* FROM onek2 WHERE onek2.unique1 < 10;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-       7 |     647 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | XYAAAA   | VVVVxx
-       6 |     978 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | QLBAAA   | OOOOxx
        2 |     326 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | OMAAAA   | OOOOxx
-       4 |     833 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | BGBAAA   | HHHHxx
+       3 |     431 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | PQAAAA   | VVVVxx
+       7 |     647 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | XYAAAA   | VVVVxx
+       0 |     998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | KMBAAA   | OOOOxx
+       8 |     653 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | DZAAAA   | HHHHxx
        1 |     214 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | GIAAAA   | OOOOxx
        9 |      49 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | XBAAAA   | HHHHxx
-       3 |     431 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | PQAAAA   | VVVVxx
-       8 |     653 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | DZAAAA   | HHHHxx
        5 |     541 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | VUAAAA   | HHHHxx
-       0 |     998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | KMBAAA   | OOOOxx
+       4 |     833 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | BGBAAA   | HHHHxx
+       6 |     978 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | QLBAAA   | OOOOxx
 (10 rows)
 
 --
@@ -268,35 +268,31 @@ SELECT onek2.unique1, onek2.stringu1 FROM onek2
    WHERE onek2.unique1 > 980;
  unique1 | stringu1 
 ---------+----------
-     997 | JMAAAA
-     983 | VLAAAA
-     986 | YLAAAA
-     989 | BMAAAA
-     990 | CMAAAA
-     991 | DMAAAA
-     993 | FMAAAA
-     994 | GMAAAA
-     995 | HMAAAA
-     992 | EMAAAA
-     998 | KMAAAA
-     981 | TLAAAA
-     999 | LMAAAA
      996 | IMAAAA
      982 | ULAAAA
+     990 | CMAAAA
      984 | WLAAAA
+     997 | JMAAAA
+     986 | YLAAAA
+     981 | TLAAAA
+     999 | LMAAAA
+     992 | EMAAAA
+     993 | FMAAAA
+     994 | GMAAAA
      988 | AMAAAA
      987 | ZLAAAA
      985 | XLAAAA
+     991 | DMAAAA
+     995 | HMAAAA
+     989 | BMAAAA
+     983 | VLAAAA
+     998 | KMAAAA
 (19 rows)
 
 RESET enable_seqscan;
 RESET enable_bitmapscan;
 RESET enable_sort;
 RESET optimizer_enable_tablescan;
-SELECT two, stringu1, ten, string4
-   INTO TABLE tmp
-   FROM onek;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 --
 -- awk '{print $1,$2;}' person.data |
 -- awk '{if(NF!=2){print $3,$2;}else{print;}}' - emp.data |
@@ -307,25 +303,25 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entr
 SELECT p.name, p.age FROM person* p;
   name   | age 
 ---------+-----
- sally   |  34
- denise  |  24
- leah    |  68
- mary    |   8
- liza    |  38
- juanita |  58
- susan   |  78
- martie  |  88
- chris   |  78
- edna    |  18
- bertha  |  88
- koko    |  88
- paula   |  68
- belinda |  38
- carina  |  58
- pamela  |  48
- trisha  |  88
- uma     |  78
- jeff    |  23
+ mike    |  40
+ alex    |  30
+ sue     |  50
+ sarah   |  88
+ wendy   |  78
+ jean    |  28
+ zena    |  98
+ pat     |  18
+ sumi    |  38
+ sharon  |  78
+ julie   |  68
+ fanny   |   8
+ lita    |  25
+ sandy   |  38
+ velma   |  68
+ sharon  |  25
+ sam     |  30
+ cim     |  30
+ linda   |  19
  joe     |  20
  sandra  |  19
  teresa  |  38
@@ -346,25 +342,25 @@ SELECT p.name, p.age FROM person* p;
  bill    |  20
  fred    |  28
  larry   |  60
- mike    |  40
- alex    |  30
- sue     |  50
- sarah   |  88
- wendy   |  78
- jean    |  28
- zena    |  98
- pat     |  18
- sumi    |  38
- sharon  |  78
- julie   |  68
- fanny   |   8
- lita    |  25
- sandy   |  38
- velma   |  68
- sharon  |  25
- sam     |  30
- cim     |  30
- linda   |  19
+ sally   |  34
+ denise  |  24
+ leah    |  68
+ mary    |   8
+ liza    |  38
+ juanita |  58
+ susan   |  78
+ martie  |  88
+ chris   |  78
+ edna    |  18
+ bertha  |  88
+ koko    |  88
+ paula   |  68
+ belinda |  38
+ carina  |  58
+ pamela  |  48
+ trisha  |  88
+ uma     |  78
+ jeff    |  23
 (58 rows)
 
 --
@@ -518,6 +514,13 @@ TABLE int8_tbl;
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
 (9 rows)
+
+-- corner case: VALUES with no columns
+CREATE TEMP TABLE nocols();
+INSERT INTO nocols DEFAULT VALUES;
+SELECT * FROM nocols n, LATERAL (VALUES(n.*)) v;
+--
+(1 row)
 
 --
 -- Test ORDER BY options
@@ -743,8 +746,8 @@ SET enable_seqscan TO off;
 SET optimizer_enable_tablescan TO off;
 explain (costs off)
 select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Index Scan using onek2_u2_prtl on onek2
          Index Cond: (unique2 = 11)
@@ -761,8 +764,8 @@ select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
 -- actually run the query with an analyze to use the partial index
 explain (costs off, analyze on, timing off, summary off)
 select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
    ->  Index Scan using onek2_u2_prtl on onek2 (actual rows=1 loops=1)
          Index Cond: (unique2 = 11)
@@ -772,8 +775,8 @@ select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
 
 explain (costs off)
 select unique2 from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Index Scan using onek2_u2_prtl on onek2
          Index Cond: (unique2 = 11)
@@ -898,8 +901,8 @@ select unique1, unique2 from onek2
   where (unique2 = 11 or unique1 = 0) and stringu1 < 'B';
  unique1 | unique2 
 ---------+---------
-     494 |      11
        0 |     998
+     494 |      11
 (2 rows)
 
 explain (costs off)
@@ -979,6 +982,7 @@ select * from (values (2),(null),(1)) v(k) where k = k;
 create table list_parted_tbl (a int,b int) partition by list (a);
 create table list_parted_tbl1 partition of list_parted_tbl
   for values in (1) partition by list(b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from list_parted_tbl;
              QUERY PLAN              
 -------------------------------------

@@ -82,8 +82,8 @@ SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
  x    |      5
- y    |     12
  z    |     11
+ y    |     12
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
@@ -389,7 +389,7 @@ CREATE VIEW mvtest_vt2 AS SELECT moo, 2*moo FROM mvtest_vt1 UNION ALL SELECT moo
  ?column? | integer |           |          |         | plain   | 
 View definition:
  SELECT mvtest_vt1.moo,
-    2 * mvtest_vt1.moo
+    2 * mvtest_vt1.moo AS "?column?"
    FROM mvtest_vt1
 UNION ALL
  SELECT mvtest_vt1.moo,
@@ -405,7 +405,7 @@ CREATE MATERIALIZED VIEW mv_test2 AS SELECT moo, 2*moo FROM mvtest_vt2 UNION ALL
  ?column? | integer |           |          |         | plain   |             |              | 
 View definition:
  SELECT mvtest_vt2.moo,
-    2 * mvtest_vt2.moo
+    2 * mvtest_vt2.moo AS "?column?"
    FROM mvtest_vt2
 UNION ALL
  SELECT mvtest_vt2.moo,
@@ -431,7 +431,7 @@ CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a)
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.2:7003 pid=19994)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.3:7003 pid=1077203)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -569,21 +569,21 @@ DELETE FROM mvtest_v WHERE EXISTS ( SELECT * FROM mvtest_mv_v WHERE mvtest_mv_v.
 SELECT * FROM mvtest_v;
  a  
 ----
+  6
   8
-  9
  10
   7
-  6
+  9
 (5 rows)
 
 SELECT * FROM mvtest_mv_v;
  a 
 ---
+ 4
  3
  5
- 4
- 1
  2
+ 1
 (5 rows)
 
 DROP TABLE mvtest_v CASCADE;

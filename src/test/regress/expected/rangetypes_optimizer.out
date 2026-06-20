@@ -5,9 +5,10 @@
 -- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
 -- s/.//gs
 -- end_matchsubs
-create type textrange as range (subtype=text, collation="C");
+-- NB: type "textrange" is created in test_setup.sql (shared by several tests).
 --
 -- test input parser
+-- (type textrange was already made in test_setup.sql)
 --
 -- negative tests; should fail
 select ''::textrange;
@@ -76,12 +77,6 @@ select ' ( " a " " a ", " z " " z " )  '::textrange;
         textrange         
 --------------------------
  ("  a   a ","  z   z  ")
-(1 row)
-
-select '(,z)'::textrange;
- textrange 
------------
- (,z)
 (1 row)
 
 select '(a,)'::textrange;
@@ -191,8 +186,6 @@ select '(a,a)'::textrange;
 -- create some test data and test the operators
 --
 CREATE TABLE numrange_test (nr NUMRANGE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test_btree on numrange_test(nr);
 INSERT INTO numrange_test VALUES('[,)');
 INSERT INTO numrange_test VALUES('[3,]');
@@ -201,21 +194,17 @@ INSERT INTO numrange_test VALUES(numrange(1.1, 2.2));
 INSERT INTO numrange_test VALUES('empty');
 INSERT INTO numrange_test VALUES(numrange(1.7, 1.7, '[]'));
 SELECT nr, isempty(nr), lower(nr), upper(nr) FROM numrange_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     | isempty | lower | upper 
 -----------+---------+-------+-------
- (,)       | f       |       |      
- (,5)      | f       |       |     5
  [3,)      | f       |     3 |      
  empty     | t       |       |      
+ (,)       | f       |       |      
+ (,5)      | f       |       |     5
  [1.1,2.2) | f       |   1.1 |   2.2
  [1.7,1.7] | f       |   1.7 |   1.7
 (6 rows)
 
 SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numrange_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     | lower_inc | lower_inf | upper_inc | upper_inf 
 -----------+-----------+-----------+-----------+-----------
  [3,)      | t         | f         | f         | t
@@ -227,26 +216,20 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (6 rows)
 
 SELECT * FROM numrange_test WHERE range_contains(nr, numrange(1.9,1.91));
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
- [1.1,2.2)
  (,)
  (,5)
+ [1.1,2.2)
 (3 rows)
 
 SELECT * FROM numrange_test WHERE nr @> numrange(1.0,10000.1);
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr  
 -----
  (,)
 (1 row)
 
 SELECT * FROM numrange_test WHERE range_contained_by(numrange(-1e7,-10000.1), nr);
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr  
 ------
  (,)
@@ -254,8 +237,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (2 rows)
 
 SELECT * FROM numrange_test WHERE 1.9 <@ nr;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  (,)
@@ -264,48 +245,36 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select * from numrange_test where nr = 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
  empty
 (1 row)
 
 select * from numrange_test where nr = '(1.1, 2.2)';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr 
 ----
 (0 rows)
 
 select * from numrange_test where nr = '[1.1, 2.2)';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  [1.1,2.2)
 (1 row)
 
 select * from numrange_test where nr < 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr 
 ----
 (0 rows)
 
 select * from numrange_test where nr < numrange(-1000.0, -1000.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
- empty
  (,5)
  (,)
+ empty
 (3 rows)
 
 select * from numrange_test where nr < numrange(0.0, 1.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
  (,5)
@@ -314,42 +283,34 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 select * from numrange_test where nr < numrange(1000.0, 1001.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  (,5)
  (,)
- empty
- [3,)
  [1.1,2.2)
  [1.7,1.7]
+ empty
+ [3,)
 (6 rows)
 
 select * from numrange_test where nr <= 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
  empty
 (1 row)
 
 select * from numrange_test where nr >= 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
- [1.1,2.2)
- [1.7,1.7]
  (,5)
  (,)
+ [1.1,2.2)
+ [1.7,1.7]
  empty
  [3,)
 (6 rows)
 
 select * from numrange_test where nr > 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  (,5)
@@ -360,28 +321,22 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 select * from numrange_test where nr > numrange(-1001.0, -1000.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
+ [3,)
  [1.1,2.2)
  [1.7,1.7]
- [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(0.0, 1.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
+ [3,)
  [1.1,2.2)
  [1.7,1.7]
- [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(1000.0, 1000.0,'[]');
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr 
 ----
 (0 rows)
@@ -565,8 +520,6 @@ select numrange(1.0, 2.0) * numrange(2.5, 3.0);
 (1 row)
 
 select range_intersect_agg(nr) from numrange_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  range_intersect_agg 
 ---------------------
  empty
@@ -579,8 +532,6 @@ select range_intersect_agg(nr) from numrange_test where false;
 (1 row)
 
 select range_intersect_agg(nr) from numrange_test where nr @> 4.0;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  range_intersect_agg 
 ---------------------
  [3,5)
@@ -588,8 +539,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 analyze numrange_test;
 create table numrange_test2(nr numrange);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test2_hash_idx on numrange_test2 using hash (nr);
 INSERT INTO numrange_test2 VALUES('[, 5)');
 INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2));
@@ -597,16 +546,12 @@ INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2));
 INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2,'()'));
 INSERT INTO numrange_test2 VALUES('empty');
 select * from numrange_test2 where nr = 'empty'::numrange;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
  empty
 (1 row)
 
 select * from numrange_test2 where nr = numrange(1.1, 2.2);
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  [1.1,2.2)
@@ -614,8 +559,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (2 rows)
 
 select * from numrange_test2 where nr = numrange(1.1, 2.3);
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr 
 ----
 (0 rows)
@@ -624,8 +567,6 @@ set enable_nestloop=t;
 set enable_hashjoin=f;
 set enable_mergejoin=f;
 select * from numrange_test natural join numrange_test2 order by nr;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  empty
@@ -638,8 +579,6 @@ set enable_nestloop=f;
 set enable_hashjoin=t;
 set enable_mergejoin=f;
 select * from numrange_test natural join numrange_test2 order by nr;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  empty
@@ -652,8 +591,6 @@ set enable_nestloop=f;
 set enable_hashjoin=f;
 set enable_mergejoin=t;
 select * from numrange_test natural join numrange_test2 order by nr;
-NOTICE:  One or more columns in the following table(s) do not have statistics: numrange_test2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  empty
@@ -671,8 +608,6 @@ DROP TABLE numrange_test2;
 -- Apply a subset of the above tests on a collatable type, too
 --
 CREATE TABLE textrange_test (tr textrange);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tr' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index textrange_test_btree on textrange_test(tr);
 INSERT INTO textrange_test VALUES('[,)');
 INSERT INTO textrange_test VALUES('["a",]');
@@ -681,54 +616,44 @@ INSERT INTO textrange_test VALUES(textrange('b', 'g'));
 INSERT INTO textrange_test VALUES('empty');
 INSERT INTO textrange_test VALUES(textrange('d', 'd', '[]'));
 SELECT tr, isempty(tr), lower(tr), upper(tr) FROM textrange_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   | isempty | lower | upper 
 -------+---------+-------+-------
- (,)   | f       |       | 
- (,q)  | f       |       | q
  empty | t       |       | 
  [a,)  | f       | a     | 
  [b,g) | f       | b     | g
  [d,d] | f       | d     | d
+ (,)   | f       |       | 
+ (,q)  | f       |       | q
 (6 rows)
 
 SELECT tr, lower_inc(tr), lower_inf(tr), upper_inc(tr), upper_inf(tr) FROM textrange_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   | lower_inc | lower_inf | upper_inc | upper_inf 
 -------+-----------+-----------+-----------+-----------
- (,)   | f         | t         | f         | t
- (,q)  | f         | t         | f         | f
- empty | f         | f         | f         | f
  [a,)  | t         | f         | f         | t
  [b,g) | t         | f         | f         | f
  [d,d] | t         | f         | t         | f
+ (,)   | f         | t         | f         | t
+ (,q)  | f         | t         | f         | f
+ empty | f         | f         | f         | f
 (6 rows)
 
 SELECT * FROM textrange_test WHERE range_contains(tr, textrange('f', 'fx'));
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   
 -------
- (,)
- (,q)
  [a,)
  [b,g)
+ (,)
+ (,q)
 (4 rows)
 
 SELECT * FROM textrange_test WHERE tr @> textrange('a', 'z');
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr  
 ------
- (,)
  [a,)
+ (,)
 (2 rows)
 
 SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr  
 ------
  (,)
@@ -736,42 +661,32 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (2 rows)
 
 SELECT * FROM textrange_test WHERE 'e'::text <@ tr;
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   
 -------
- (,)
- (,q)
  [a,)
  [b,g)
+ (,)
+ (,q)
 (4 rows)
 
 select * from textrange_test where tr = 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   
 -------
  empty
 (1 row)
 
 select * from textrange_test where tr = '("b","g")';
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tr 
 ----
 (0 rows)
 
 select * from textrange_test where tr = '["b","g")';
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tr   
 -------
  [b,g)
 (1 row)
 
 select * from textrange_test where tr < 'empty';
-NOTICE:  One or more columns in the following table(s) do not have statistics: textrange_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tr 
 ----
 (0 rows)
@@ -870,8 +785,6 @@ select daterange('2000-01-01'::date, 'infinity'::date, '[]');
 
 -- test GiST index that's been built incrementally
 create table test_range_gist(ir int4range);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_gist_idx on test_range_gist using gist (ir);
 insert into test_range_gist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_gist select 'empty'::int4range from generate_series(1,500) g;
@@ -1258,8 +1171,6 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 
 -- test SP-GiST index that's been built incrementally
 create table test_range_spgist(ir int4range);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
 insert into test_range_spgist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_spgist select 'empty'::int4range from generate_series(1,500) g;
@@ -1273,88 +1184,66 @@ SET enable_seqscan    = t;
 SET enable_indexscan  = f;
 SET enable_bitmapscan = f;
 select count(*) from test_range_spgist where ir @> 'empty'::int4range;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   6200
 (1 row)
 
 select count(*) from test_range_spgist where ir = int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      2
 (1 row)
 
 select count(*) from test_range_spgist where ir @> 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    130
 (1 row)
 
 select count(*) from test_range_spgist where ir @> int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    111
 (1 row)
 
 select count(*) from test_range_spgist where ir && int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    158
 (1 row)
 
 select count(*) from test_range_spgist where ir <@ int4range(10,50);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1062
 (1 row)
 
 select count(*) from test_range_spgist where ir << int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    189
 (1 row)
 
 select count(*) from test_range_spgist where ir >> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   3554
 (1 row)
 
 select count(*) from test_range_spgist where ir &< int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1029
 (1 row)
 
 select count(*) from test_range_spgist where ir &> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   4794
 (1 row)
 
 select count(*) from test_range_spgist where ir -|- int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1365,88 +1254,66 @@ SET enable_seqscan    = f;
 SET enable_indexscan  = t;
 SET enable_bitmapscan = f;
 select count(*) from test_range_spgist where ir @> 'empty'::int4range;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   6200
 (1 row)
 
 select count(*) from test_range_spgist where ir = int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      2
 (1 row)
 
 select count(*) from test_range_spgist where ir @> 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    130
 (1 row)
 
 select count(*) from test_range_spgist where ir @> int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    111
 (1 row)
 
 select count(*) from test_range_spgist where ir && int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    158
 (1 row)
 
 select count(*) from test_range_spgist where ir <@ int4range(10,50);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1062
 (1 row)
 
 select count(*) from test_range_spgist where ir << int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    189
 (1 row)
 
 select count(*) from test_range_spgist where ir >> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   3554
 (1 row)
 
 select count(*) from test_range_spgist where ir &< int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1029
 (1 row)
 
 select count(*) from test_range_spgist where ir &> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   4794
 (1 row)
 
 select count(*) from test_range_spgist where ir -|- int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1456,88 +1323,66 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 drop index test_range_spgist_idx;
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
 select count(*) from test_range_spgist where ir @> 'empty'::int4range;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   6200
 (1 row)
 
 select count(*) from test_range_spgist where ir = int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      2
 (1 row)
 
 select count(*) from test_range_spgist where ir @> 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    130
 (1 row)
 
 select count(*) from test_range_spgist where ir @> int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    111
 (1 row)
 
 select count(*) from test_range_spgist where ir && int4range(10,20);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    158
 (1 row)
 
 select count(*) from test_range_spgist where ir <@ int4range(10,50);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1062
 (1 row)
 
 select count(*) from test_range_spgist where ir << int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
    189
 (1 row)
 
 select count(*) from test_range_spgist where ir >> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   3554
 (1 row)
 
 select count(*) from test_range_spgist where ir &< int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   1029
 (1 row)
 
 select count(*) from test_range_spgist where ir &> int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
   4794
 (1 row)
 
 select count(*) from test_range_spgist where ir -|- int4range(100,500);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -1546,8 +1391,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- test index-only scans
 explain (costs off)
 select ir from test_range_spgist where ir -|- int4range(10,20) order by ir;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                      
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1560,8 +1403,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (7 rows)
 
 select ir from test_range_spgist where ir -|- int4range(10,20) order by ir;
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_spgist
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      ir     
 ------------
  [20,30)
@@ -1574,14 +1415,10 @@ RESET enable_indexscan;
 RESET enable_bitmapscan;
 -- test elem <@ range operator
 create table test_range_elem(i int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_elem_idx on test_range_elem (i);
 insert into test_range_elem select i from generate_series(1,100) i;
 SET enable_seqscan    = f;
 select count(*) from test_range_elem where i <@ int4range(10,50);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_elem
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     40
@@ -1591,8 +1428,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 create index on test_range_elem using spgist(int4range(i,i+10));
 explain (costs off)
 select count(*) from test_range_elem where int4range(i,i+10) <@ int4range(10,30);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_elem
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Aggregate
@@ -1603,8 +1438,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 select count(*) from test_range_elem where int4range(i,i+10) <@ int4range(10,30);
-NOTICE:  One or more columns in the following table(s) do not have statistics: test_range_elem
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     11
@@ -1631,13 +1464,13 @@ insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg2 172.17.0.3:7004 pid=81722)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg0 172.17.0.3:7002 pid=1071609)
 DETAIL:  Key (room, during)=([123,124), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (room, during)=([123,124), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 insert into test_range_excl
   values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
 insert into test_range_excl
   values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg0 172.17.0.3:7002 pid=81741)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg0 172.17.0.3:7002 pid=1071609)
 DETAIL:  Key (speaker, during)=([1,2), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (speaker, during)=([1,2), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
@@ -1662,12 +1495,11 @@ LINE 1: select '[2010-01-01 01:00:00 -08, 2010-01-01 02:00:00 -05)':...
 set timezone to default;
 --
 -- Test user-defined range of floats
+-- (type float8range was already made in test_setup.sql)
 --
 --should fail
-create type float8range as range (subtype=float8, subtype_diff=float4mi);
+create type bogus_float8range as range (subtype=float8, subtype_diff=float4mi);
 ERROR:  function float4mi(double precision, double precision) does not exist
---should succeed
-create type float8range as range (subtype=float8, subtype_diff=float8mi);
 select '[123.001, 5.e9)'::float8range @> 888.882::float8;
  ?column? 
 ----------
@@ -1675,12 +1507,8 @@ select '[123.001, 5.e9)'::float8range @> 888.882::float8;
 (1 row)
 
 create table float8range_test(f8r float8range, i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f8r' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into float8range_test values(float8range(-100.00007, '1.111113e9'), 42);
 select * from float8range_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: float8range_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            f8r           | i  
 -------------------------+----
  [-100.00007,1111113000) | 42
@@ -1824,12 +1652,8 @@ select ARRAY[numrange(1.1, 1.2), numrange(12.3, 155.5)];
 (1 row)
 
 create table i8r_array (f1 int, f2 int8range[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i8r_array values (42, array[int8range(1,10), int8range(2,20)]);
 select * from i8r_array;
-NOTICE:  One or more columns in the following table(s) do not have statistics: i8r_array
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 |         f2          
 ----+---------------------
  42 | {"[1,10)","[2,20)"}
@@ -1965,16 +1789,12 @@ INSERT INTO distribute_by_range VALUES(numrange(1.1, 2.2));
 INSERT INTO distribute_by_range VALUES(numrange(1.1, 2.2,'()'));
 INSERT INTO distribute_by_range VALUES('empty');
 select * from distribute_by_range where nr = 'empty'::numrange;
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   nr   
 -------
  empty
 (1 row)
 
 select * from distribute_by_range where nr = numrange(1.1, 2.2);
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     nr     
 -----------
  [1.1,2.2)
@@ -1982,8 +1802,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (2 rows)
 
 select * from distribute_by_range where nr = numrange(1.1, 2.3);
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  nr 
 ----
 (0 rows)
@@ -1996,23 +1814,17 @@ INSERT INTO distribute_by_text_range VALUES('[aaa,aac]');
 INSERT INTO distribute_by_text_range VALUES('(,)');
 INSERT INTO distribute_by_text_range VALUES('[aaa,)');
 select * from distribute_by_text_range where tr = '(,)'::textrange3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_text_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tr  
 -----
  (,)
 (1 row)
 
 select * from distribute_by_text_range where tr = '(aaa,aab)'::textrange3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_text_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tr 
 ----
 (0 rows)
 
 select * from distribute_by_text_range where tr = '[aaa,aab)'::textrange3;
-NOTICE:  One or more columns in the following table(s) do not have statistics: distribute_by_text_range
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     tr     
 -----------
  [aaa,aab)
