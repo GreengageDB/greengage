@@ -5148,7 +5148,17 @@ static struct config_enum ConfigureNamesEnum[] =
 			gettext_noop("Look ahead in the WAL to find references to uncached data.")
 		},
 		&recovery_prefetch,
-		RECOVERY_PREFETCH_TRY, recovery_prefetch_options,
+		/*
+		 * GPDB: default OFF.  Our PG15 base (15beta2) carries a WAL prefetcher
+		 * bug where lrq_complete_lsn()'s readahead can advance the reader past
+		 * the record just returned, tripping
+		 * Assert(record == prefetcher->reader->record) in
+		 * XLogPrefetcherReadRecord() and crashing the startup process during
+		 * WAL replay -- which takes mirror segments down under load.  Disable
+		 * the recovery-only prefetch optimization until the upstream fix is
+		 * backported; re-enable to RECOVERY_PREFETCH_TRY afterwards.
+		 */
+		RECOVERY_PREFETCH_OFF, recovery_prefetch_options,
 		check_recovery_prefetch, assign_recovery_prefetch, NULL
 	},
 
