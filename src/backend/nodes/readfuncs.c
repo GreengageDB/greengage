@@ -52,6 +52,7 @@
 #include "cdb/cdbgang.h"
 #include "nodes/altertablenodes.h"
 #include "utils/builtins.h"
+#include "catalog/gp_distribution_policy.h"
 
 /*
  * readfuncs.c is compiled normally into readfuncs.o, but it's also
@@ -722,6 +723,27 @@ _readIntoClause(void)
 
 	READ_DONE();
 }
+
+#ifndef COMPILING_BINARY_FUNCS
+/*
+ * _readGpPolicy
+ *	  Text counterpart of readfast.c's binary _readGpPolicy; reads what
+ *	  _outGpPolicy (outfuncs.c) wrote.
+ */
+static GpPolicy *
+_readGpPolicy(void)
+{
+	READ_LOCALS(GpPolicy);
+
+	READ_ENUM_FIELD(ptype, GpPolicyType);
+	READ_INT_FIELD(numsegments);
+	READ_INT_FIELD(nattrs);
+	READ_ATTRNUMBER_ARRAY(attrs, local_node->nattrs);
+	READ_OID_ARRAY(opclasses, local_node->nattrs);
+
+	READ_DONE();
+}
+#endif /* COMPILING_BINARY_FUNCS */
 
 static CopyIntoClause *
 _readCopyIntoClause(void)
@@ -5059,6 +5081,8 @@ parseNodeString(void)
 		return_value = _readRangeVar();
 	else if (MATCH("INTOCLAUSE", 10))
 		return_value = _readIntoClause();
+	else if (MATCH("GPPOLICY", 8))
+		return_value = _readGpPolicy();
 	else if (MATCH("COPYINTOCLAUSE", 14))
 		return_value = _readCopyIntoClause();
 	else if (MATCH("REFRESHCLAUSE", 13))

@@ -45,6 +45,7 @@
 
 #include "cdb/cdbgang.h"
 #include "nodes/altertablenodes.h"
+#include "catalog/gp_distribution_policy.h"
 
 
 /*
@@ -5974,6 +5975,26 @@ _outTupleDescNode(StringInfo str, const TupleDescNode *node)
 
 #ifndef COMPILING_BINARY_FUNCS
 /*
+ * GpPolicy is not a parse/plan node, but it is embedded as Query->intoPolicy
+ * (and PlannedStmt->intoPolicy), so outNode() can be asked to dump it.  The
+ * binary serializer (outfast.c) has its own _outGpPolicy; provide the text
+ * version here so we don't warn "could not dump unrecognized node type".
+ */
+static void
+_outGpPolicy(StringInfo str, const GpPolicy *node)
+{
+	WRITE_NODE_TYPE("GPPOLICY");
+
+	WRITE_ENUM_FIELD(ptype, GpPolicyType);
+	WRITE_INT_FIELD(numsegments);
+	WRITE_INT_FIELD(nattrs);
+	WRITE_ATTRNUMBER_ARRAY(attrs, node->nattrs);
+	WRITE_OID_ARRAY(opclasses, node->nattrs);
+}
+#endif /* COMPILING_BINARY_FUNCS */
+
+#ifndef COMPILING_BINARY_FUNCS
+/*
  * outNode -
  *	  converts a Node into ascii string and append it to 'str'
  */
@@ -6221,6 +6242,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_IntoClause:
 				_outIntoClause(str, obj);
+				break;
+			case T_GpPolicy:
+				_outGpPolicy(str, obj);
 				break;
 			case T_CopyIntoClause:
 				_outCopyIntoClause(str, obj);
