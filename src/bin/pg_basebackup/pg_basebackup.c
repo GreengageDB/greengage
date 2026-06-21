@@ -2983,6 +2983,20 @@ main(int argc, char **argv)
 	BaseBackup(compression_algorithm, compression_detail, compressloc,
 			   &client_compress);
 
+	/*
+	 * GPDB: overwrite internal.auto.conf in the new data directory with the
+	 * target segment's dbid.  The backup stream carries the source segment's
+	 * internal.auto.conf (i.e. the source's gp_dbid), so without this the new
+	 * mirror/standby would advertise the wrong dbid and FTS would reject its
+	 * probes once it is promoted ("PROBE received dbid:N doesn't match this
+	 * segments configured dbid").  In tar mode the file must be added manually
+	 * (see note above), so only do this for plain-format backups extracted
+	 * into basedir.  (The PG15 merge dropped this call when pg_basebackup's
+	 * receive path was rewritten around bbstreamer.)
+	 */
+	if (format == 'p')
+		WriteInternalConfFile();
+
 	success = true;
 	return 0;
 }
