@@ -1204,7 +1204,8 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 			: get_tablespace_mapping(spclocation);
 		streamer = bbstreamer_extractor_new(directory,
 											get_tablespace_mapping,
-											progress_update_filename);
+											progress_update_filename,
+											forceoverwrite);
 	}
 	else
 	{

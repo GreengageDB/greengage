@@ -34,6 +34,7 @@ typedef struct bbstreamer_extractor
 	void		(*report_output_file) (const char *);
 	char		filename[MAXPGPATH];
 	FILE	   *file;
+	bool		forceoverwrite;
 } bbstreamer_extractor;
 
 static void bbstreamer_plain_writer_content(bbstreamer *streamer,
@@ -55,7 +56,8 @@ static void bbstreamer_extractor_content(bbstreamer *streamer,
 										 bbstreamer_archive_context context);
 static void bbstreamer_extractor_finalize(bbstreamer *streamer);
 static void bbstreamer_extractor_free(bbstreamer *streamer);
-static void extract_directory(const char *filename, mode_t mode);
+static void extract_directory(const char *filename, mode_t mode,
+							  bool forceoverwrite);
 static void extract_link(const char *filename, const char *linktarget);
 static FILE *create_file_for_extract(const char *filename, mode_t mode);
 
@@ -182,7 +184,8 @@ bbstreamer_plain_writer_free(bbstreamer *streamer)
 bbstreamer *
 bbstreamer_extractor_new(const char *basepath,
 						 const char *(*link_map) (const char *),
-						 void (*report_output_file) (const char *))
+						 void (*report_output_file) (const char *),
+						 bool forceoverwrite)
 {
 	bbstreamer_extractor *streamer;
 
@@ -192,6 +195,7 @@ bbstreamer_extractor_new(const char *basepath,
 	streamer->basepath = pstrdup(basepath);
 	streamer->link_map = link_map;
 	streamer->report_output_file = report_output_file;
+	streamer->forceoverwrite = forceoverwrite;
 
 	return &streamer->base;
 }
@@ -226,7 +230,8 @@ bbstreamer_extractor_content(bbstreamer *streamer, bbstreamer_member *member,
 
 			/* Dispatch based on file type. */
 			if (member->is_directory)
-				extract_directory(mystreamer->filename, member->mode);
+				extract_directory(mystreamer->filename, member->mode,
+								   mystreamer->forceoverwrite);
 			else if (member->is_link)
 			{
 				const char *linktarget = member->linktarget;
@@ -280,7 +285,7 @@ bbstreamer_extractor_content(bbstreamer *streamer, bbstreamer_member *member,
  * Create a directory.
  */
 static void
-extract_directory(const char *filename, mode_t mode)
+extract_directory(const char *filename, mode_t mode, bool forceoverwrite)
 {
 	if (mkdir(filename, pg_dir_create_mode) != 0)
 	{
@@ -290,10 +295,16 @@ extract_directory(const char *filename, mode_t mode)
 		 * directory location was specified, pg_wal (or pg_xlog) has already
 		 * been created as a symbolic link before starting the actual backup.
 		 * So just ignore creation failures on related directories.
+		 *
+		 * GPDB: with --force-overwrite the backup is extracted into an
+		 * existing data directory (e.g. gprecoverseg full recovery in place),
+		 * so any pre-existing directory is expected; tolerate EEXIST for all
+		 * directories in that case.
 		 */
 		if (!((pg_str_endswith(filename, "/pg_wal") ||
 			   pg_str_endswith(filename, "/pg_xlog") ||
-			   pg_str_endswith(filename, "/archive_status")) &&
+			   pg_str_endswith(filename, "/archive_status") ||
+			   forceoverwrite) &&
 			  errno == EEXIST))
 			pg_fatal("could not create directory \"%s\": %m",
 					 filename);
