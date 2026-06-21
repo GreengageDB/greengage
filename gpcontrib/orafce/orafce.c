@@ -4,6 +4,8 @@
 #include "utils/guc.h"
 #include "commands/variable.h"
 
+#include "storage/ipc.h"
+
 #include "orafce.h"
 #include "builtins.h"
 #include "pipe.h"
@@ -11,6 +13,23 @@
 /*  default value */
 char  *nls_date_format = NULL;
 char  *orafce_timezone = NULL;
+
+#if PG_VERSION_NUM >= 150000
+/*
+ * PG15 requires shared-memory requests to be made from a shmem_request_hook
+ * rather than directly in _PG_init().
+ */
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+
+static void
+orafce_shmem_request(void)
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
+	RequestAddinShmemSpace(SHMEMMSGSZ);
+}
+#endif
 
 void
 _PG_init(void)
@@ -22,7 +41,12 @@ _PG_init(void)
 
 #endif
 
+#if PG_VERSION_NUM >= 150000
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = orafce_shmem_request;
+#else
 	RequestAddinShmemSpace(SHMEMMSGSZ);
+#endif
 
 	/* Define custom GUC variables. */
 	DefineCustomStringVariable("orafce.nls_date_format",
