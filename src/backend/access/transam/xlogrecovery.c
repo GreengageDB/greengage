@@ -41,6 +41,7 @@
 #include "access/xlogrecovery.h"
 #include "access/xlogutils.h"
 #include "catalog/pg_control.h"
+#include "cdb/cdbtm.h"
 #include "commands/tablespace.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -3845,6 +3846,31 @@ emode_for_corrupt_record(int emode, XLogRecPtr RecPtr)
 
 
 /*
+ * Process passed checkpoint record either during normal recovery or
+ * in standby mode.
+ *
+ * GPDB writes an extended checkpoint record that carries distributed
+ * transaction information (the in-doubt distributed-committed transactions)
+ * appended after the CheckPoint struct.  This must be extracted and handed to
+ * the DTM recovery machinery so that the second phase of 2PC can complete
+ * during crash recovery.  Without this, a distributed transaction that has
+ * committed on the coordinator can be wrongly aborted on the segments.
+ */
+static void
+XLogProcessCheckpointRecord(XLogReaderState *rec)
+{
+	CheckpointExtendedRecord ckptExtended;
+
+	UnpackCheckPointRecord(rec, &ckptExtended);
+
+	if (ckptExtended.dtxCheckpoint)
+	{
+		/* Handle the DTX information. */
+		redoDtxCheckPoint(ckptExtended.dtxCheckpoint);
+	}
+}
+
+/*
  * Subroutine to try to fetch and validate a prior checkpoint record.
  *
  * whichChkpt identifies the checkpoint (merely for reporting purposes).
@@ -3975,6 +4001,18 @@ ReadCheckpointRecord(XLogPrefetcher *xlogprefetcher, XLogRecPtr RecPtr,
 		}
 		return NULL;
 	}
+
+	/*
+	 * Find Xacts that are distributed-committed from the checkpoint record and
+	 * store them such that they can be utilized later during DTM recovery.
+	 *
+	 * The 'report' parameter is currently always true when we want to process
+	 * the extended (GPDB) checkpoint record, so reuse it as the guard here to
+	 * avoid a wider diff against upstream.
+	 */
+	if (report)
+		XLogProcessCheckpointRecord(xlogreader);
+
 	return record;
 }
 

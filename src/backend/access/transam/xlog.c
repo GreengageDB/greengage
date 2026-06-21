@@ -740,9 +740,6 @@ static void pg_backup_start_callback(int code, Datum arg);
 
 static int	get_sync_bit(int method);
 
-/* New functions added for WAL replication */
-static void XLogProcessCheckpointRecord(XLogReaderState *rec);
-
 static void CopyXLogRecordToWAL(int write_len, bool isLogSwitch,
 								XLogRecData *rdata,
 								XLogRecPtr StartPos, XLogRecPtr EndPos,
