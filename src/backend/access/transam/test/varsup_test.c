@@ -87,8 +87,18 @@ test_GetNewTransactionId_xid_warn_limit(void **state)
 {
 	const int xid = 25;
 	VariableCacheData data;
-	PGPROC proc;
-	PROC_HDR procGlobal;
+	/*
+	 * Zero-initialize: this test exercises the warn-limit path which (unlike
+	 * the stop-limit path) continues into the XID assignment, where
+	 * GetNewTransactionId() indexes ProcGlobal->xids[MyProc->pgxactoff] and
+	 * ProcGlobal->subxidStates[MyProc->pgxactoff].  pgxactoff must therefore be
+	 * a valid index (0) into the size-1 arrays below, and MyProc->subxidStatus
+	 * must be empty for the asserts in that path.  Leaving proc uninitialized
+	 * left pgxactoff as stack garbage, which started to index out of bounds
+	 * (SIGSEGV) after the PG15 PGPROC layout change.
+	 */
+	PGPROC proc = {0};
+	PROC_HDR procGlobal = {0};
 	XidCacheStatus subxidStates[1] = {0};
 	TransactionId xids[1] = {0};
 
