@@ -11,17 +11,47 @@
 -- between primary and mirror is still alive and hence walreceiver
 -- also exist during promotion.
 
+-- Allow extra time for mirror promotion to complete recovery to avoid
+-- gprecoverseg BEGIN failures due to gang creation failure as some primaries
+-- are not up (segment in reset/recovery).  Increase the gang-creation retry
+-- count/timer so the QD (and gprecoverseg's own sessions) ride out a
+-- still-recovering segment instead of failing fast.  The fault-based scenario
+-- below can keep a segment in reset/recovery well past 30s, so allow ~120s.
+!\retcode gpconfig -c gp_gang_creation_retry_count -v 120 --skipvalidation --masteronly;
+-- start_ignore
+20260621:22:44:46:2270934 gpconfig:b40467422d7d:gpadmin-[INFO]:-completed successfully with parameters '-c gp_gang_creation_retry_count -v 120 --skipvalidation --masteronly'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -c gp_gang_creation_retry_timer -v 1000 --skipvalidation --masteronly;
+-- start_ignore
+20260621:22:44:47:2271015 gpconfig:b40467422d7d:gpadmin-[INFO]:-completed successfully with parameters '-c gp_gang_creation_retry_timer -v 1000 --skipvalidation --masteronly'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)
+
 SELECT role, preferred_role, content, mode, status FROM gp_segment_configuration;
  role | preferred_role | content | mode | status 
 ------+----------------+---------+------+--------
- m    | m              | -1      | s    | u      
- m    | m              | 0       | s    | u      
- m    | m              | 1       | s    | u      
- m    | m              | 2       | s    | u      
  p    | p              | -1      | n    | u      
- p    | p              | 0       | s    | u      
  p    | p              | 1       | s    | u      
+ m    | m              | 1       | s    | u      
+ p    | p              | 0       | s    | u      
+ m    | m              | 0       | s    | u      
  p    | p              | 2       | s    | u      
+ m    | m              | 2       | s    | u      
+ m    | m              | -1      | s    | u      
 (8 rows)
 -- stop a primary in order to trigger a mirror promotion
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
@@ -58,6 +88,44 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 -- fully recover the failed primary as new mirror
 !\retcode gprecoverseg -aF --no-progress;
 -- start_ignore
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 1
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Full
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7002
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7005
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 segment(s) to recover
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0 is symlink. Assuming it is not symlink
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:44:53:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:44:54:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
+
 -- end_ignore
 (exited with code 0)
 
@@ -157,6 +225,45 @@ CREATE
 -- -- now, let's fully recover the mirror
 !\retcode gprecoverseg -aF  --no-progress;
 -- start_ignore
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 1
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Full
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7005
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7002
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:45:15:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:45:15:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 segment(s) to recover
+20260621:22:45:15:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260621:22:45:15:2271517 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0 is symlink. Assuming it is not symlink
+20260621:22:45:18:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-2269807: /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:45:19:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:45:19:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:45:19:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:45:19:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:45:20:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
+
 -- end_ignore
 (exited with code 0)
 
@@ -180,3 +287,28 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
  0       | p              | p    | u      | s    
  0       | m              | m    | u      | s    
 (2 rows)
+
+-- reset the gang-creation retry GUCs bumped at the top of this test
+!\retcode gpconfig -r gp_gang_creation_retry_count --skipvalidation --masteronly;
+-- start_ignore
+20260621:22:45:21:2274192 gpconfig:b40467422d7d:gpadmin-[INFO]:-completed successfully with parameters '-r gp_gang_creation_retry_count --skipvalidation --masteronly'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --masteronly;
+-- start_ignore
+20260621:22:45:21:2274280 gpconfig:b40467422d7d:gpadmin-[INFO]:-completed successfully with parameters '-r gp_gang_creation_retry_timer --skipvalidation --masteronly'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:45:22:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:22:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)

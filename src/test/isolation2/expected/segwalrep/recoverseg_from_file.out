@@ -44,6 +44,11 @@ select gp_request_fts_probe_scan();
 (1 row)
 
 -- wait for content 1 (earlier mirror, now primary) to finish the promotion
+select wait_until_segment_accepts_connections(1);
+ wait_until_segment_accepts_connections 
+----------------------------------------
+ OK                                     
+(1 row)
 1U: select 1;
  ?column? 
 ----------
@@ -67,6 +72,11 @@ select gp_request_fts_probe_scan();
 (1 row)
 
 -- wait for content 0 (earlier mirror, now primary) to finish the promotion
+select wait_until_segment_accepts_connections(0);
+ wait_until_segment_accepts_connections 
+----------------------------------------
+ OK                                     
+(1 row)
 0U: select 1;
  ?column? 
 ----------
@@ -85,6 +95,49 @@ select generate_recover_config_file( (select datadir from gp_segment_configurati
 -- recover from config file, only seg with content=1 will be recovered
 !\retcode gprecoverseg -a -i /tmp/recover_config_file1;
 -- start_ignore
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a -i /tmp/recover_config_file1
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery from configuration -i option supplied
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 1
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Full
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7003
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7006
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance host        = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance address     = b40467422d7d
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1temp
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance port        = 7003
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Segment is being recovered to the same host as its primary: primary b40467422d7d:/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1    failover target: b40467422d7d:/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1temp
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 segment(s) to recover
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1 is symlink. Assuming it is not symlink
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:45:37:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+b40467422d7d (dbid 3): pg_basebackup: base backup completed
+b40467422d7d (dbid 3): pg_basebackup: base backup completed
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:45:39:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
 
 -- end_ignore
 (exited with code 0)
@@ -106,6 +159,53 @@ select dbid from gp_segment_configuration where dbid=2;
 -- recover the segment to its original datadir
 !\retcode gprecoverseg -a -i /tmp/recover_config_file2;
 -- start_ignore
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a -i /tmp/recover_config_file2
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery from configuration -i option supplied
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 1
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Full
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1temp
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7003
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7006
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance host        = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance address     = b40467422d7d
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target instance port        = 7003
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Segment is being recovered to the same host as its primary: primary b40467422d7d:/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1    failover target: b40467422d7d:/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 segment(s) to recover
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1temp is symlink. Assuming it is not symlink
+20260621:22:45:44:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-2274704: /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1temp
+20260621:22:45:45:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Waiting for segments to be marked down.
+20260621:22:45:45:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-This may take up to 1800 seconds on large clusters.
+........................................................
+ 20260621:22:46:41:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 of 1 segments have been marked down.
+20260621:22:46:41:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:46:41:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:46:41:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:46:41:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+b40467422d7d (dbid 3): pg_basebackup: base backup completed
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:46:42:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
 
 -- end_ignore
 (exited with code 0)
@@ -120,6 +220,45 @@ SET
 -- at here
 !\retcode gprecoverseg -a;
 -- start_ignore
+20260621:22:46:42:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 1
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7002
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7005
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-1 segment(s) to recover
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20260621:22:46:44:2277690 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0 is symlink. Assuming it is not symlink
+20260621:22:46:47:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-2271349: /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:46:48:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:46:48:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:46:48:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:46:48:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+b40467422d7d (dbid 2): pg_rewind: Done!
+20260621:22:46:49:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:46:50:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:46:50:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:46:50:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:46:50:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:46:50:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
 
 -- end_ignore
 (exited with code 0)
@@ -134,6 +273,111 @@ select wait_until_all_segments_synchronized();
 -- rebalance the cluster
 !\retcode gprecoverseg -ar;
 -- start_ignore
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -ar
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Rebalance
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Unbalanced segment 1 of 4
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance host        = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance address     = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance port        = 7005
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Balanced role                   = Mirror
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Current role                    = Primary
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Unbalanced segment 2 of 4
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance host        = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance address     = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance port        = 7002
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Balanced role                   = Primary
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Current role                    = Mirror
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Unbalanced segment 3 of 4
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance host        = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance address     = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance port        = 7006
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Balanced role                   = Mirror
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Current role                    = Primary
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Unbalanced segment 4 of 4
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance host        = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance address     = b40467422d7d
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Unbalanced instance port        = 7003
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Balanced role                   = Primary
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Current role                    = Mirror
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Determining primary and mirror segment pairs to rebalance
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Stopping unbalanced primary segments...
+20260621:22:46:51:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering segment reconfiguration
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting segment synchronization
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-=============================START ANOTHER RECOVER=========================================
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 1 of 2
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7005
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7002
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery 2 of 2
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance host                 = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance address              = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Failed instance port                 = 7006
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance host        = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance address     = b40467422d7d
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Source instance port        = 7003
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-2 segment(s) to recover
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Ensuring 2 failed segment(s) are stopped
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0 is symlink. Assuming it is not symlink
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[WARNING]:-Unable to determine if /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1 is symlink. Assuming it is not symlink
+20260621:22:46:59:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Setting up the required segments for recovery
+20260621:22:47:00:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Updating configuration for mirrors
+20260621:22:47:00:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20260621:22:47:00:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-era is 0fce50425fae04f6_260621224434
+b40467422d7d (dbid 5): pg_rewind: no rewind required
+b40467422d7d (dbid 6): pg_rewind: no rewind required
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering FTS probe
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Segments successfully recovered.
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-********************************
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovered mirror segments need to sync WAL with primary segments.
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-==============================END ANOTHER RECOVER==========================================
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-******************************************************************
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-The rebalance operation has completed successfully.
+20260621:22:47:01:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-******************************************************************
 
 -- end_ignore
 (exited with code 0)

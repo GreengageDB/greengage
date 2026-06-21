@@ -11,6 +11,16 @@
 -- between primary and mirror is still alive and hence walreceiver
 -- also exist during promotion.
 
+-- Allow extra time for mirror promotion to complete recovery to avoid
+-- gprecoverseg BEGIN failures due to gang creation failure as some primaries
+-- are not up (segment in reset/recovery).  Increase the gang-creation retry
+-- count/timer so the QD (and gprecoverseg's own sessions) ride out a
+-- still-recovering segment instead of failing fast.  The fault-based scenario
+-- below can keep a segment in reset/recovery well past 30s, so allow ~120s.
+!\retcode gpconfig -c gp_gang_creation_retry_count -v 120 --skipvalidation --masteronly;
+!\retcode gpconfig -c gp_gang_creation_retry_timer -v 1000 --skipvalidation --masteronly;
+!\retcode gpstop -u;
+
 SELECT role, preferred_role, content, mode, status FROM gp_segment_configuration;
 -- stop a primary in order to trigger a mirror promotion
 select pg_ctl((select datadir from gp_segment_configuration c
@@ -94,3 +104,8 @@ select wait_until_all_segments_synchronized();
 select content, preferred_role, role, status, mode
 from gp_segment_configuration
 where content = 0;
+
+-- reset the gang-creation retry GUCs bumped at the top of this test
+!\retcode gpconfig -r gp_gang_creation_retry_count --skipvalidation --masteronly;
+!\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --masteronly;
+!\retcode gpstop -u;

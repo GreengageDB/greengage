@@ -41,6 +41,7 @@ where c.role='p' and c.content=1), 'stop');
 select gp_request_fts_probe_scan();
 
 -- wait for content 1 (earlier mirror, now primary) to finish the promotion
+select wait_until_segment_accepts_connections(1);
 1U: select 1;
 -- Quit this utility mode session, as need to start fresh one below
 1Uq:
@@ -54,6 +55,7 @@ update gp_segment_configuration set dbid=9 where content=0 and role='p';
 select gp_request_fts_probe_scan();
 
 -- wait for content 0 (earlier mirror, now primary) to finish the promotion
+select wait_until_segment_accepts_connections(0);
 0U: select 1;
 -- Quit this utility mode session, as need to start fresh one below
 0Uq:
