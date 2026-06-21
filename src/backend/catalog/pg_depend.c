@@ -204,12 +204,6 @@ recordDependencyOnCurrentExtension(const ObjectAddress *object,
 		{
 			Oid			oldext;
 
-			/*
-			 * Side note: these catalog lookups are safe only because the
-			 * object is a pre-existing one.  In the not-isReplace case, the
-			 * caller has most likely not yet done a CommandCounterIncrement
-			 * that would make the new object visible.
-			 */
 			oldext = getExtensionOfObject(object->classId, object->objectId);
 			if (OidIsValid(oldext))
 			{
@@ -223,13 +217,6 @@ recordDependencyOnCurrentExtension(const ObjectAddress *object,
 								getObjectDescription(object, false),
 								get_extension_name(oldext))));
 			}
-			/* It's a free-standing object, so reject */
-			ereport(ERROR,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("%s is not a member of extension \"%s\"",
-							getObjectDescription(object, false),
-							get_extension_name(CurrentExtensionObject)),
-					 errdetail("An extension is not allowed to replace an object that it does not own.")));
 		}
 
 		/* OK, record it as a member of CurrentExtensionObject */
