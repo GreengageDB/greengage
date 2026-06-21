@@ -371,7 +371,11 @@ create or replace function pg_basebackup(host text, dbid int, port int, create_s
             os.environ.pop('PGAPPNAME')
         results = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace(b'.', b'').decode()
     except subprocess.CalledProcessError as e:
-        results = str(e) + "\ncommand output: " + e.output
+        # e.output is bytes under Python 3; decode it before concatenating
+        # (otherwise this error handler itself raises TypeError and masks the
+        # real pg_basebackup failure).
+        output = e.output.decode() if e.output is not None else ''
+        results = str(e) + "\ncommand output: " + output
 
     return results
 $$ language plpython3u;

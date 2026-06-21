@@ -128,7 +128,7 @@ if slotname is not None: cmd += ' --slot %s' % (slotname)
 if force_overwrite: cmd += ' --force-overwrite' 
 if xlog_method == 'stream': cmd += ' --wal-method stream' elif xlog_method == 'fetch': cmd += ' --wal-method fetch' else: plpy.error('invalid xlog method') 
 # GPDB_12_MERGE_FIXME: avoid checking checksum for heap tables # till we code logic to skip/verify checksum for # appendoptimized tables. Enabling this results in basebackup # failures with appendoptimized tables. cmd += ' --no-verify-checksums' 
-try: # Unset PGAPPNAME so that the pg_stat_replication.application_name is not affected if os.getenv('PGAPPNAME') is not None: os.environ.pop('PGAPPNAME') results = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace(b'.', b'').decode() except subprocess.CalledProcessError as e: results = str(e) + "\ncommand output: " + e.output 
+try: # Unset PGAPPNAME so that the pg_stat_replication.application_name is not affected if os.getenv('PGAPPNAME') is not None: os.environ.pop('PGAPPNAME') results = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace(b'.', b'').decode() except subprocess.CalledProcessError as e: # e.output is bytes under Python 3; decode it before concatenating # (otherwise this error handler itself raises TypeError and masks the # real pg_basebackup failure). output = e.output.decode() if e.output is not None else '' results = str(e) + "\ncommand output: " + output 
 return results $$ language plpython3u;
 CREATE
 
