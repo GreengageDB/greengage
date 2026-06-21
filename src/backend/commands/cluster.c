@@ -511,9 +511,19 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 		goto out;
 	}
 
+	/*
+	 * GPDB: VACUUM FULL on an append-optimized table recurses into its
+	 * heap-backed auxiliary relations (aoseg, block directory, visimap) and
+	 * rewrites each one via cluster_rel(), just like the TOAST relation.
+	 * Those carry GPDB-specific relkinds, so accept them here in addition to
+	 * the upstream set.
+	 */
 	Assert(OldHeap->rd_rel->relkind == RELKIND_RELATION ||
 		   OldHeap->rd_rel->relkind == RELKIND_MATVIEW ||
-		   OldHeap->rd_rel->relkind == RELKIND_TOASTVALUE);
+		   OldHeap->rd_rel->relkind == RELKIND_TOASTVALUE ||
+		   OldHeap->rd_rel->relkind == RELKIND_AOSEGMENTS ||
+		   OldHeap->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
+		   OldHeap->rd_rel->relkind == RELKIND_AOVISIMAP);
 
 	/*
 	 * All predicate locks on the tuples or pages are about to be made
