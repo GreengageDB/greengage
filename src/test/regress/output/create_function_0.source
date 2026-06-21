@@ -5,10 +5,8 @@
 CREATE FUNCTION test_enc_conversion(bytea, name, name, bool, validlen OUT int, result OUT bytea)
     AS '@libdir@/regress@DLSUFFIX@', 'test_enc_conversion'
     LANGUAGE C STRICT;
-CREATE FUNCTION binary_coercible(oid, oid)
-    RETURNS bool
-    AS '@libdir@/regress@DLSUFFIX@', 'binary_coercible'
-    LANGUAGE C STRICT STABLE PARALLEL SAFE;
+-- NB: binary_coercible() is created by test_setup.sql (which runs first),
+-- per upstream PG15 commit cc50080a828; do not redefine it here.
 -- Things that shouldn't work:
 CREATE FUNCTION test1 (int) RETURNS int LANGUAGE SQL
     AS 'SELECT ''not an integer'';';
