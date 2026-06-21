@@ -25,9 +25,13 @@ test_boundaries_of_CreateSharedSnapshotArray(void **state)
 	LWLockPadded 			*fakeLockBase = NULL;
 	bool found = false;
 
-	expect_string(RequestNamedLWLockTranche, tranche_name, "SharedSnapshotLocks");
-	expect_value(RequestNamedLWLockTranche, num_lwlocks, NUM_SHARED_SNAPSHOT_SLOTS);
-	will_be_called(RequestNamedLWLockTranche);
+	/*
+	 * GPDB/PG15: RequestNamedLWLockTranche() must run only during the
+	 * shmem-request phase, so it was moved out of SharedSnapshotShmemSize()
+	 * and CreateSharedSnapshotArray() into CreateSharedMemoryAndSemaphores().
+	 * Neither function exercised here requests the tranche any more, so no
+	 * RequestNamedLWLockTranche expectations are set up.
+	 */
 	Size sharedSnapshotShmemSize = SharedSnapshotShmemSize();
 	fakeSharedSnapshotArray = malloc(sharedSnapshotShmemSize);
 
@@ -37,9 +41,6 @@ test_boundaries_of_CreateSharedSnapshotArray(void **state)
 	expect_any_count(ShmemInitStruct, size, 1);
 	expect_any_count(ShmemInitStruct, foundPtr, 1);
 
-	expect_string(RequestNamedLWLockTranche, tranche_name, "SharedSnapshotLocks");
-	expect_value(RequestNamedLWLockTranche, num_lwlocks, NUM_SHARED_SNAPSHOT_SLOTS);
-	will_be_called(RequestNamedLWLockTranche);
 	fakeLockBase = malloc(NUM_SHARED_SNAPSHOT_SLOTS * sizeof(LWLockPadded));
 	will_return(GetNamedLWLockTranche, fakeLockBase);
 	expect_any(GetNamedLWLockTranche, tranche_name);
