@@ -29,6 +29,7 @@ ao_invalid_segment_file_test(uint8 xl_info)
 	RelFileNode relfilenode;
 	XLogRecord record;
 	XLogReaderState *mockrecord;
+	DecodedXLogRecord decoded = {0};
 	xl_ao_target xlaotarget;
 	xl_ao_insert xlaoinsert;
 	xl_ao_truncate xlaotruncate;
@@ -51,15 +52,27 @@ ao_invalid_segment_file_test(uint8 xl_info)
 											   .segment_close = wal_segment_close),
 									NULL);
 
+	/*
+	 * PG15 moved the record's main data out of XLogReaderState and into the
+	 * decoded record (XLogReaderState->record), which XLogRecGetData() /
+	 * XLogRecGetDataLen() read.  Point the reader at a stack DecodedXLogRecord
+	 * carrying the header and the main data the replay functions expect.
+	 */
+	decoded.header = record;
+	decoded.max_block_id = -1;
+	mockrecord->record = &decoded;
+
 	if (xl_info == XLOG_APPENDONLY_INSERT)
 	{
 		xlaoinsert.target = xlaotarget;
-		mockrecord->main_data = (char *) &xlaoinsert;
+		decoded.main_data = (char *) &xlaoinsert;
+		decoded.main_data_len = sizeof(xlaoinsert);
 	}
 	else if (xl_info == XLOG_APPENDONLY_TRUNCATE)
 	{
 		xlaotruncate.target = xlaotarget;
-		mockrecord->main_data = (char *) &xlaotruncate;
+		decoded.main_data = (char *) &xlaotruncate;
+		decoded.main_data_len = sizeof(xlaotruncate);
 	}
 
 	/* mock to not find AO segment file */
