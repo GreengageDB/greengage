@@ -3895,8 +3895,20 @@ RelationSetNewRelfilenode(Relation relation, char persistence)
 	newrnode = relation->rd_node;
 	newrnode.relNode = newrelfilenode;
 
-	if (RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind))
+	if (RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind) ||
+		relation->rd_rel->relkind == RELKIND_AOSEGMENTS ||
+		relation->rd_rel->relkind == RELKIND_AOVISIMAP ||
+		relation->rd_rel->relkind == RELKIND_AOBLOCKDIR)
 	{
+		/*
+		 * GPDB: the append-optimized auxiliary relations (aoseg, block
+		 * directory, visimap) are heaps with a table AM, but the upstream
+		 * RELKIND_HAS_TABLE_AM() macro doesn't list them.  Route them through
+		 * the table AM here too so they get a valid relfrozenxid assigned;
+		 * otherwise TRUNCATE would leave relfrozenxid invalid and a later
+		 * heap VACUUM of the aux relation would trip the wraparound-failsafe
+		 * assert.
+		 */
 		table_relation_set_new_filenode(relation, &newrnode,
 										persistence,
 										&freezeXid, &minmulti);
