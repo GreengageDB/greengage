@@ -15,8 +15,10 @@
 #   hitting max_connections limit on segments.
 #
 
-# required setup steps
-test: test_setup
+# NB: test_setup runs at the start of parallel_schedule, which installcheck-good
+# runs before this schedule in the same database, so do not re-run it here -- its
+# CREATE TABLEs would fail "already exists" and (worse) its INSERTs would
+# double-load the shared read-only tables, breaking later tests.
 
 test: pg_dump_binary_upgrade
 

@@ -2,14 +2,10 @@
 -- CREATE_FUNCTION_0
 --
 
--- Create a bunch of C functions that will be used by later tests:
-
-CREATE FUNCTION test_enc_conversion(bytea, name, name, bool, validlen OUT int, result OUT bytea)
-    AS '@libdir@/regress@DLSUFFIX@', 'test_enc_conversion'
-    LANGUAGE C STRICT;
-
--- NB: binary_coercible() is created by test_setup.sql (which runs first),
--- per upstream PG15 commit cc50080a828; do not redefine it here.
+-- NB: the shared C helpers formerly created here moved upstream in PG15
+-- (commit cc50080a828): binary_coercible() now lives in test_setup.sql and
+-- test_enc_conversion() in conversion.sql; redefining them here makes those
+-- tests fail with "already exists".
 
 -- Things that shouldn't work:
 
