@@ -672,8 +672,8 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should not print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
 
@@ -853,8 +853,8 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should not print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
          And all files in gpAdminLogs directory are deleted
 
@@ -1184,6 +1184,6 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should print "Tables rollback rate:" to logfile with latest timestamp
          And ggrebalance should print "Rollback total time:" to logfile with latest timestamp
          And ggrebalance should not print "Segments moved:" to logfile with latest timestamp
-         And ggrebalance should not print "Rolled back moves:" to logfile with latest timestamp
-         And ggrebalance should not print "Cancelled moves:" to logfile with latest timestamp
+         And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
+         And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
