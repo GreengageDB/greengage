@@ -179,7 +179,8 @@ Feature: gpstart behave tests
           And the standby is not initialized
 
          When the user runs gpinitstandby with options "-S /tmp/standby_data/"
-         Then verify the standby master entries in catalog
+         Then gpinitstandby should return a return code of 0
+          And verify the standby master entries in catalog
         
          When the master goes down
           And the user runs "gpstart -a"

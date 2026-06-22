@@ -106,7 +106,8 @@ Feature: Tests for gpinitstandby feature
           And the standby is not initialized
 
          When the user runs gpinitstandby with options "-S /tmp/standby_data/"
-         Then verify the standby master entries in catalog
+         Then gpinitstandby should return a return code of 0
+          And verify the standby master entries in catalog
          When execute sql "select datadir from gp_segment_configuration where content = -1 and role = 'm'" in db "postgres" and store result in the context
          Then validate that "/tmp/standby_data/" is in the stored rows
 
