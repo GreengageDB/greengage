@@ -14,9 +14,11 @@ DO LANGUAGE plpython3u $$
         return
 
     def check_call(cmds):
+        py_path = os.path.join(os.getenv("GPHOME"), 'lib/python')
         ret = subprocess.Popen(cmds,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               env=dict(os.environ, PYTHONPATH=py_path))
         out = ret.communicate()
         if ret.returncode != 0:
             raise SystemError('''\
