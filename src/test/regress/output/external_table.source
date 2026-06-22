@@ -327,7 +327,8 @@ ERROR:  cannot update foreign table "ext"
 insert into ext(x) values(123);
 ERROR:  foreign table "ext" does not allow inserts
 create index ext_index on ext(x); -- should fail
-ERROR:  cannot create index on foreign table "ext"
+ERROR:  cannot create index on relation "ext"
+DETAIL:  This operation is not supported for foreign tables.
 drop table ext; -- should fail (wrong object)
 ERROR:  "ext" is not a table
 HINT:  Use DROP FOREIGN TABLE to remove a foreign table.
