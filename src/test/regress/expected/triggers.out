@@ -1896,14 +1896,16 @@ create table trigpart42 (like trigpart);
 alter table trigpart4 attach partition trigpart42 for values from (3500) to (4000);
 select tgrelid::regclass, tgname, tgfoid::regproc from pg_trigger
   where tgrelid::regclass::text like 'trigpart%' order by tgrelid::regclass::text;
-  tgrelid  | tgname |     tgfoid      
------------+--------+-----------------
- trigpart  | trg1   | trigger_nothing
- trigpart1 | trg1   | trigger_nothing
- trigpart2 | trg1   | trigger_nothing
- trigpart3 | trg1   | trigger_nothing
- trigpart4 | trg1   | trigger_nothing
-(5 rows)
+  tgrelid   | tgname |     tgfoid      
+------------+--------+-----------------
+ trigpart   | trg1   | trigger_nothing
+ trigpart1  | trg1   | trigger_nothing
+ trigpart2  | trg1   | trigger_nothing
+ trigpart3  | trg1   | trigger_nothing
+ trigpart4  | trg1   | trigger_nothing
+ trigpart41 | trg1   | trigger_nothing
+ trigpart42 | trg1   | trigger_nothing
+(7 rows)
 
 drop trigger trg1 on trigpart1;	-- fail
 ERROR:  cannot drop trigger trg1 on table trigpart1 because trigger trg1 on table trigpart requires it
@@ -1917,13 +1919,15 @@ HINT:  You can drop trigger trg1 on table trigpart instead.
 drop table trigpart2;			-- ok, trigger should be gone in that partition
 select tgrelid::regclass, tgname, tgfoid::regproc from pg_trigger
   where tgrelid::regclass::text like 'trigpart%' order by tgrelid::regclass::text;
-  tgrelid  | tgname |     tgfoid      
------------+--------+-----------------
- trigpart  | trg1   | trigger_nothing
- trigpart1 | trg1   | trigger_nothing
- trigpart3 | trg1   | trigger_nothing
- trigpart4 | trg1   | trigger_nothing
-(4 rows)
+  tgrelid   | tgname |     tgfoid      
+------------+--------+-----------------
+ trigpart   | trg1   | trigger_nothing
+ trigpart1  | trg1   | trigger_nothing
+ trigpart3  | trg1   | trigger_nothing
+ trigpart4  | trg1   | trigger_nothing
+ trigpart41 | trg1   | trigger_nothing
+ trigpart42 | trg1   | trigger_nothing
+(6 rows)
 
 drop trigger trg1 on trigpart;		-- ok, all gone
 select tgrelid::regclass, tgname, tgfoid::regproc from pg_trigger
@@ -2522,31 +2526,33 @@ CREATE OR REPLACE FUNCTION tgf() RETURNS trigger LANGUAGE plpgsql
   AS $$ begin raise exception 'except'; end $$;
 CREATE TRIGGER tg AFTER INSERT ON trgfire FOR EACH ROW EXECUTE FUNCTION tgf();
 INSERT INTO trgfire VALUES (1);
-ERROR:  except  (seg1 172.17.0.3:7003 pid=542176)
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 ALTER TABLE trgfire DISABLE TRIGGER tg;
 INSERT INTO trgfire VALUES (1);
 CREATE TABLE trgfire2 PARTITION OF trgfire FOR VALUES FROM (10) TO (20);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trgfire VALUES (11);
-ERROR:  except  (seg2 172.17.0.3:7004 pid=542169)
+ERROR:  except  (seg2 172.17.0.2:7004 pid=572475)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire3 (LIKE trgfire);
 ALTER TABLE trgfire ATTACH PARTITION trgfire3 FOR VALUES FROM (20) TO (30);
 INSERT INTO trgfire VALUES (21);
-ERROR:  except  (seg2 172.17.0.3:7004 pid=542169)
+ERROR:  except  (seg2 172.17.0.2:7004 pid=572475)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire4 PARTITION OF trgfire FOR VALUES FROM (30) TO (40) PARTITION BY LIST (i);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trgfire4_30 PARTITION OF trgfire4 FOR VALUES IN (30);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trgfire VALUES (30);
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
+CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire5 (LIKE trgfire) PARTITION BY LIST (i);
 CREATE TABLE trgfire5_40 PARTITION OF trgfire5 FOR VALUES IN (40);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE trgfire ATTACH PARTITION trgfire5 FOR VALUES FROM (40) TO (50);
 INSERT INTO trgfire VALUES (40);
-ERROR:  except  (seg1 172.17.0.3:7003 pid=542176)
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 SELECT tgrelid::regclass, tgenabled FROM pg_trigger
   WHERE tgrelid::regclass IN (SELECT oid from pg_class where relname LIKE 'trgfire%')
@@ -2558,22 +2564,26 @@ SELECT tgrelid::regclass, tgenabled FROM pg_trigger
  trgfire2    | O
  trgfire3    | O
  trgfire4    | O
+ trgfire4_30 | O
  trgfire5    | O
  trgfire5_40 | O
-(7 rows)
+(8 rows)
 
 ALTER TABLE trgfire ENABLE TRIGGER tg;
-ERROR:  trigger "tg" for table "trgfire4_30" does not exist
 INSERT INTO trgfire VALUES (1);
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
+CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (11);
-ERROR:  except  (seg2 172.17.0.3:7004 pid=542169)
+ERROR:  except  (seg2 172.17.0.2:7004 pid=572475)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (21);
-ERROR:  except  (seg2 172.17.0.3:7004 pid=542169)
+ERROR:  except  (seg2 172.17.0.2:7004 pid=572475)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (30);
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
+CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (40);
-ERROR:  except  (seg1 172.17.0.3:7003 pid=542176)
+ERROR:  except  (seg1 172.17.0.2:7003 pid=572466)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 DROP TABLE trgfire;
 DROP FUNCTION tgf();
@@ -3175,7 +3185,6 @@ create table trigger_parted_p2_2 partition of trigger_parted_p2 for values in (2
 NOTICE:  table has parent, setting distribution columns to match parent table
 alter table only trigger_parted_p2 disable trigger aft_row;
 alter table trigger_parted_p2_2 enable always trigger aft_row;
-ERROR:  trigger "aft_row" for table "trigger_parted_p2_2" does not exist
 -- verify transition table conversion slot's lifetime
 -- https://postgr.es/m/39a71864-b120-5a5c-8cc5-c632b6f16761@amazon.com
 create table convslot_test_parent (col1 text primary key);
