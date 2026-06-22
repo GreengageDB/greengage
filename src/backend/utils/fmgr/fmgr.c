@@ -2009,7 +2009,7 @@ get_fn_opclass_options(FmgrInfo *flinfo)
 
 	ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("opclass options info is absent in function call context")));
+			 errmsg("operator class options info is absent in function call context")));
 
 	return NULL;
 }

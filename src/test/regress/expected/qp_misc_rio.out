@@ -730,9 +730,9 @@ order by a;
 -- does. The fix was submitted to upstream PostgreSQL and fixed there in
 -- version 8.4.16 (commit 5c4eb9166e.)
 -- ----------------------------------------------------------------------
-select to_date('-4713-11-23', 'yyyy-mm-dd');
-ERROR:  date out of range: "-4713-11-23"
-select to_date('-4713-11-24', 'yyyy-mm-dd');
+select to_date('-4714-11-23', 'yyyy-mm-dd');
+ERROR:  date out of range: "-4714-11-23"
+select to_date('-4714-11-24', 'yyyy-mm-dd');
     to_date    
 ---------------
  11-24-4714 BC

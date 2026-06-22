@@ -76,6 +76,7 @@
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 #include "utils/relmapper.h"
+#include "utils/pg_rusage.h"
 #include "utils/snapmgr.h"
 #include "utils/timestamp.h"
 
@@ -715,7 +716,7 @@ typedef struct XLogCtlData
 	 * WAL replay, if it is waiting for WAL to arrive or failover trigger file
 	 * to appear.
 	 */
-	Latch		recoveryWakeupLatch;
+	Latch		*recoveryWakeupLatch;
 
 	/*
 	 * During recovery, we keep a copy of the latest checkpoint record here.
@@ -976,6 +977,7 @@ static bool CheckForStandbyTrigger(void);
 #ifdef WAL_DEBUG
 static void xlog_outrec(StringInfo buf, XLogReaderState *record);
 #endif
+static void xlog_block_info(StringInfo buf, XLogReaderState *record);
 static void xlog_outdesc(StringInfo buf, XLogReaderState *record);
 static void pg_start_backup_callback(int code, Datum arg);
 static void pg_stop_backup_callback(int code, Datum arg);
@@ -2236,6 +2238,7 @@ AdvanceXLInsertBuffer(XLogRecPtr upto, bool opportunistic)
 					WriteRqst.Flush = 0;
 					XLogWrite(WriteRqst, false);
 					LWLockRelease(WALWriteLock);
+					WalStats.m_wal_buffers_full++;
 					TRACE_POSTGRESQL_WAL_BUFFER_WRITE_DIRTY_DONE();
 				}
 				/* Re-acquire WALBufMappingLock and retry */
@@ -5249,7 +5252,6 @@ XLOGShmemInit(void)
 	SpinLockInit(&XLogCtl->Insert.insertpos_lck);
 	SpinLockInit(&XLogCtl->info_lck);
 	SpinLockInit(&XLogCtl->ulsn_lck);
-	InitSharedLatch(&XLogCtl->recoveryWakeupLatch);
 }
 
 /*
@@ -6206,7 +6208,7 @@ recoveryApplyDelay(XLogReaderState *record)
 
 	while (true)
 	{
-		ResetLatch(&XLogCtl->recoveryWakeupLatch);
+		ResetLatch(MyLatch);
 
 		/* might change the trigger file's location */
 		HandleStartupProcInterrupts();
@@ -6230,7 +6232,7 @@ recoveryApplyDelay(XLogReaderState *record)
 		elog(DEBUG2, "recovery apply delay %ld seconds, %d milliseconds",
 			 secs, microsecs / 1000);
 
-		(void) WaitLatch(&XLogCtl->recoveryWakeupLatch,
+		(void) WaitLatch(MyLatch,
 						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 						 secs * 1000L + microsecs / 1000,
 						 WAIT_EVENT_RECOVERY_APPLY_DELAY);
@@ -6730,11 +6732,11 @@ StartupXLOG(void)
 	}
 
 	/*
-	 * Take ownership of the wakeup latch if we're going to sleep during
-	 * recovery.
+	 * Advertise our latch that other processes can use to wake us up
+	 * if we're going to sleep during recovery.
 	 */
 	if (ArchiveRecoveryRequested)
-		OwnLatch(&XLogCtl->recoveryWakeupLatch);
+		XLogCtl->recoveryWakeupLatch = &MyProc->procLatch;
 
 	/* Set up XLOG reader facility */
 	MemSet(&private, 0, sizeof(XLogPageReadPrivate));
@@ -7465,6 +7467,9 @@ StartupXLOG(void)
 		{
 			ErrorContextCallback errcallback;
 			TimestampTz xtime;
+			PGRUsage	ru0;
+
+			pg_rusage_init(&ru0);
 
 			InRedo = true;
 
@@ -7756,8 +7761,9 @@ StartupXLOG(void)
 			}
 
 			ereport(LOG,
-					(errmsg("redo done at %X/%X",
-							(uint32) (ReadRecPtr >> 32), (uint32) ReadRecPtr)));
+					(errmsg("redo done at %X/%X system usage: %s",
+							(uint32) (ReadRecPtr >> 32), (uint32) ReadRecPtr,
+							pg_rusage_show(&ru0))));
 			xtime = GetLatestXTime();
 			if (xtime)
 				ereport(LOG,
@@ -7804,11 +7810,11 @@ StartupXLOG(void)
 		ResetUnloggedRelations(UNLOGGED_RELATION_INIT);
 
 	/*
-	 * We don't need the latch anymore. It's not strictly necessary to disown
-	 * it, but let's do it for the sake of tidiness.
+	 * We don't need the latch anymore. It's not strictly necessary to reset
+	 * it to NULL, but let's do it for the sake of tidiness.
 	 */
 	if (ArchiveRecoveryRequested)
-		DisownLatch(&XLogCtl->recoveryWakeupLatch);
+		XLogCtl->recoveryWakeupLatch = NULL;
 
 	/*
 	 * We are now done reading the xlog from stream. Turn off streaming
@@ -8959,11 +8965,6 @@ ShutdownXLOG(int code pg_attribute_unused() , Datum arg pg_attribute_unused() )
 
 		CreateCheckPoint(CHECKPOINT_IS_SHUTDOWN | CHECKPOINT_IMMEDIATE);
 	}
-	ShutdownCLOG();
-	ShutdownCommitTs();
-	ShutdownSUBTRANS();
-	ShutdownMultiXact();
-	DistributedLog_Shutdown();
 }
 
 /*
@@ -9739,18 +9740,30 @@ CreateOverwriteContrecordRecord(XLogRecPtr aborted_lsn)
 static void
 CheckPointGuts(XLogRecPtr checkPointRedo, int flags)
 {
+	CheckPointRelationMap();
+	CheckPointReplicationSlots();
+	CheckPointSnapBuild();
+	CheckPointLogicalRewriteHeap();
+	CheckPointReplicationOrigin();
+
+	/* Write out all dirty data in SLRUs and the main buffer pool */
+	TRACE_POSTGRESQL_BUFFER_CHECKPOINT_START(flags);
+	CheckpointStats.ckpt_write_t = GetCurrentTimestamp();
 	CheckPointCLOG();
 	CheckPointCommitTs();
 	CheckPointSUBTRANS();
 	CheckPointMultiXact();
 	DistributedLog_CheckPoint();
 	CheckPointPredicate();
-	CheckPointRelationMap();
-	CheckPointReplicationSlots();
-	CheckPointSnapBuild();
-	CheckPointLogicalRewriteHeap();
-	CheckPointBuffers(flags);	/* performs all required fsyncs */
-	CheckPointReplicationOrigin();
+	CheckPointBuffers(flags);
+
+	/* Perform all queued up fsyncs */
+	TRACE_POSTGRESQL_BUFFER_CHECKPOINT_SYNC_START();
+	CheckpointStats.ckpt_sync_t = GetCurrentTimestamp();
+	ProcessSyncRequests();
+	CheckpointStats.ckpt_sync_end_t = GetCurrentTimestamp();
+	TRACE_POSTGRESQL_BUFFER_CHECKPOINT_DONE();
+
 	/* We deliberately delay 2PC checkpointing as long as possible */
 	CheckPointTwoPhase(checkPointRedo);
 }
@@ -10947,8 +10960,6 @@ VerifyOverwriteContrecord(xl_overwrite_contrecord *xlrec, XLogReaderState *state
 static void
 xlog_outrec(StringInfo buf, XLogReaderState *record)
 {
-	int			block_id;
-
 	appendStringInfo(buf, "prev %X/%X; xid %u",
 					 (uint32) (XLogRecGetPrev(record) >> 32),
 					 (uint32) XLogRecGetPrev(record),
@@ -10956,6 +10967,19 @@ xlog_outrec(StringInfo buf, XLogReaderState *record)
 
 	appendStringInfo(buf, "; len %u",
 					 XLogRecGetDataLen(record));
+
+	xlog_block_info(buf, record);
+}
+#endif							/* WAL_DEBUG */
+
+/*
+ * Returns a string giving information about all the blocks in an
+ * XLogRecord.
+ */
+static void
+xlog_block_info(StringInfo buf, XLogReaderState *record)
+{
+	int			block_id;
 
 	/* decode block references */
 	for (block_id = 0; block_id <= record->max_block_id; block_id++)
@@ -10983,7 +11007,6 @@ xlog_outrec(StringInfo buf, XLogReaderState *record)
 			appendStringInfoString(buf, " FPW");
 	}
 }
-#endif							/* WAL_DEBUG */
 
 /*
  * Returns a string describing an XLogRecord, consisting of its identity
@@ -12469,6 +12492,7 @@ rm_redo_error_callback(void *arg)
 
 	initStringInfo(&buf);
 	xlog_outdesc(&buf, record);
+	xlog_block_info(&buf, record);
 
 	/* translator: %s is a WAL record description */
 	errcontext("WAL redo at %X/%X for %s",
@@ -12945,12 +12969,12 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 						wait_time = wal_retrieve_retry_interval -
 							(secs * 1000 + usecs / 1000);
 
-						(void) WaitLatch(&XLogCtl->recoveryWakeupLatch,
+						(void) WaitLatch(MyLatch,
 										 WL_LATCH_SET | WL_TIMEOUT |
 										 WL_EXIT_ON_PM_DEATH,
 										 wait_time,
 										 WAIT_EVENT_RECOVERY_RETRIEVE_RETRY_INTERVAL);
-						ResetLatch(&XLogCtl->recoveryWakeupLatch);
+						ResetLatch(MyLatch);
 						now = GetCurrentTimestamp();
 					}
 					last_fail_time = now;
@@ -13216,11 +13240,11 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 					 * to react to a trigger file promptly and to check if the
 					 * WAL receiver is still active.
 					 */
-					(void) WaitLatch(&XLogCtl->recoveryWakeupLatch,
+					(void) WaitLatch(MyLatch,
 									 WL_LATCH_SET | WL_TIMEOUT |
 									 WL_EXIT_ON_PM_DEATH,
 									 5000L, WAIT_EVENT_RECOVERY_WAL_STREAM);
-					ResetLatch(&XLogCtl->recoveryWakeupLatch);
+					ResetLatch(MyLatch);
 					break;
 				}
 
@@ -13248,7 +13272,7 @@ StartupRequestWalReceiverRestart(void)
 	if (currentSource == XLOG_FROM_STREAM && WalRcvRunning())
 	{
 		ereport(LOG,
-				(errmsg("wal receiver process shutdown requested")));
+				(errmsg("WAL receiver process shutdown requested")));
 
 		pendingWalRcvRestart = true;
 	}
@@ -13392,7 +13416,7 @@ CheckPromoteSignal(void)
 void
 WakeupRecovery(void)
 {
-	SetLatch(&XLogCtl->recoveryWakeupLatch);
+	SetLatch(XLogCtl->recoveryWakeupLatch);
 }
 
 /*

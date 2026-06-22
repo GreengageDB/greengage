@@ -215,4 +215,95 @@ from
 
 reset enable_seqscan;
 reset enable_bitmapscan;
+-- re-purpose t_gin_test_tbl to test scans involving posting trees
+insert into t_gin_test_tbl select array[1, g, g/10], array[2, g, g/10]
+  from generate_series(1, 20000) g;
+select gin_clean_pending_list('t_gin_test_tbl_i_j_idx') is not null;
+ ?column? 
+----------
+ t
+ t
+ t
+(3 rows)
+
+analyze t_gin_test_tbl;
+set enable_seqscan = off;
+set enable_bitmapscan = on;
+explain (costs off)
+select count(*) from t_gin_test_tbl where j @> array[50];
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_gin_test_tbl
+                     Filter: (j @> '{50}'::integer[])
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
+
+select count(*) from t_gin_test_tbl where j @> array[50];
+ count 
+-------
+    11
+(1 row)
+
+explain (costs off)
+select count(*) from t_gin_test_tbl where j @> array[2];
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_gin_test_tbl
+                     Filter: (j @> '{2}'::integer[])
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
+
+select count(*) from t_gin_test_tbl where j @> array[2];
+ count 
+-------
+ 20000
+(1 row)
+
+explain (costs off)
+select count(*) from t_gin_test_tbl where j @> '{}'::int[];
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_gin_test_tbl
+                     Filter: (j OPERATOR(pg_catalog.@>) '{}'::anyarray)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
+
+select count(*) from t_gin_test_tbl where j @> '{}'::int[];
+ count 
+-------
+ 20006
+(1 row)
+
+-- test vacuuming of posting trees
+delete from t_gin_test_tbl where j @> array[2];
+vacuum t_gin_test_tbl;
+select count(*) from t_gin_test_tbl where j @> array[50];
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_gin_test_tbl where j @> array[2];
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_gin_test_tbl where j @> '{}'::int[];
+ count 
+-------
+     6
+(1 row)
+
+reset enable_seqscan;
+reset enable_bitmapscan;
 drop table t_gin_test_tbl;

@@ -30,7 +30,7 @@ select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
     relname     | reltuples 
 ----------------+-----------
- autostats_test |         0
+ autostats_test |        -1
 (1 row)
 
 -- Try it with gp_autostats_allow_nonowner GUC enabled, but as a non-owner
@@ -48,7 +48,7 @@ select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
     relname     | reltuples 
 ----------------+-----------
- autostats_test |         0
+ autostats_test |        -1
 (1 row)
 
 reset role;
@@ -60,7 +60,7 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(11, 20);
 LOG:  statement: insert into autostats_test select generate_series(11, 20);
-LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(XXXXX,XXXXX) modifying 10 tuples caused Auto-ANALYZE.
+LOG:  In mode on_change, command INSERT on (dboid,tableoid)=(72126,72259) modifying 10 tuples caused Auto-ANALYZE.
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
     relname     | reltuples 

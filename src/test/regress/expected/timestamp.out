@@ -1834,13 +1834,6 @@ SELECT '' AS to_char_12, to_char(d, 'FF1 FF2 FF3 FF4 FF5 FF6  ff1 ff2 ff3 ff4 ff
             | 7 78 789 7890 78901 789012  7 78 789 7890 78901 789012  789 789012
 (4 rows)
 
--- timestamp numeric fields constructor
-SELECT make_timestamp(2014,12,28,6,30,45.887);
-        make_timestamp        
-------------------------------
- Sun Dec 28 06:30:45.887 2014
-(1 row)
-
 SET DateStyle TO DEFAULT;
 -- Make sure timeofdate() and current_time() are doing roughly the same thing
 select timeofday()::date = current_timestamp::date;
@@ -1849,3 +1842,19 @@ select timeofday()::date = current_timestamp::date;
  t
 (1 row)
 
+-- timestamp numeric fields constructor
+SELECT make_timestamp(2014, 12, 28, 6, 30, 45.887);
+        make_timestamp        
+------------------------------
+ Sun Dec 28 06:30:45.887 2014
+(1 row)
+
+SELECT make_timestamp(-44, 3, 15, 12, 30, 15);
+       make_timestamp        
+-----------------------------
+ Fri Mar 15 12:30:15 0044 BC
+(1 row)
+
+-- should fail
+select make_timestamp(0, 7, 15, 12, 30, 15);
+ERROR:  date field value out of range: 0-07-15

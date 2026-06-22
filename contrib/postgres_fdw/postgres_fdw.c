@@ -452,6 +452,7 @@ static void init_returning_filter(PgFdwDirectModifyState *dmstate,
 								  List *fdw_scan_tlist,
 								  Index rtindex);
 static TupleTableSlot *apply_returning_filter(PgFdwDirectModifyState *dmstate,
+											  ResultRelInfo *resultRelInfo,
 											  TupleTableSlot *slot,
 											  EState *estate);
 static void prepare_query_params(PlanState *node,
@@ -694,15 +695,14 @@ postgresGetForeignRelSize(PlannerInfo *root,
 	else
 	{
 		/*
-		 * If the foreign table has never been ANALYZEd, it will have relpages
-		 * and reltuples equal to zero, which most likely has nothing to do
-		 * with reality.  We can't do a whole lot about that if we're not
+		 * If the foreign table has never been ANALYZEd, it will have
+		 * reltuples < 0, meaning "unknown".  We can't do much if we're not
 		 * allowed to consult the remote server, but we can use a hack similar
 		 * to plancat.c's treatment of empty relations: use a minimum size
 		 * estimate of 10 pages, and divide by the column-datatype-based width
 		 * estimate to get the corresponding number of tuples.
 		 */
-		if (baserel->pages == 0 && baserel->tuples == 0)
+		if (baserel->tuples < 0)
 		{
 			baserel->pages = 10;
 			baserel->tuples =
@@ -2301,9 +2301,10 @@ postgresPlanDirectModify(PlannerInfo *root,
 	}
 
 	/*
-	 * Update the operation info.
+	 * Update the operation and target relation info.
 	 */
 	fscan->operation = operation;
+	fscan->resultRelation = resultRelation;
 
 	/*
 	 * Update the fdw_exprs list that will be available to the executor.
@@ -2369,7 +2370,7 @@ postgresBeginDirectModify(ForeignScanState *node, int eflags)
 	 * Identify which user to do the remote access as.  This should match what
 	 * ExecCheckRTEPerms() does.
 	 */
-	rtindex = estate->es_result_relation_info->ri_RangeTableIndex;
+	rtindex = node->resultRelInfo->ri_RangeTableIndex;
 	rte = exec_rt_fetch(rtindex, estate);
 	userid = rte->checkAsUser ? rte->checkAsUser : GetUserId();
 
@@ -2464,7 +2465,7 @@ postgresIterateDirectModify(ForeignScanState *node)
 {
 	PgFdwDirectModifyState *dmstate = (PgFdwDirectModifyState *) node->fdw_state;
 	EState	   *estate = node->ss.ps.state;
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	ResultRelInfo *resultRelInfo = node->resultRelInfo;
 
 	/*
 	 * If this is the first call after Begin, execute the statement.
@@ -2603,8 +2604,8 @@ postgresExplainForeignScan(ForeignScanState *node, ExplainState *es)
 									 quote_identifier(relname));
 				}
 				else
-					appendStringInfo(relations, "%s",
-									 quote_identifier(relname));
+					appendStringInfoString(relations,
+										   quote_identifier(relname));
 				refname = (char *) list_nth(es->rtable_names, rti - 1);
 				if (refname == NULL)
 					refname = rte->eref->aliasname;
@@ -4102,7 +4103,7 @@ get_returning_data(ForeignScanState *node)
 {
 	PgFdwDirectModifyState *dmstate = (PgFdwDirectModifyState *) node->fdw_state;
 	EState	   *estate = node->ss.ps.state;
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	ResultRelInfo *resultRelInfo = node->resultRelInfo;
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 	TupleTableSlot *resultSlot;
 
@@ -4157,7 +4158,7 @@ get_returning_data(ForeignScanState *node)
 		if (dmstate->rel)
 			resultSlot = slot;
 		else
-			resultSlot = apply_returning_filter(dmstate, slot, estate);
+			resultSlot = apply_returning_filter(dmstate, resultRelInfo, slot, estate);
 	}
 	dmstate->next_tuple++;
 
@@ -4246,10 +4247,10 @@ init_returning_filter(PgFdwDirectModifyState *dmstate,
  */
 static TupleTableSlot *
 apply_returning_filter(PgFdwDirectModifyState *dmstate,
+					   ResultRelInfo *resultRelInfo,
 					   TupleTableSlot *slot,
 					   EState *estate)
 {
-	ResultRelInfo *relInfo = estate->es_result_relation_info;
 	TupleDesc	resultTupType = RelationGetDescr(dmstate->resultRel);
 	TupleTableSlot *resultSlot;
 	Datum	   *values;
@@ -4261,7 +4262,7 @@ apply_returning_filter(PgFdwDirectModifyState *dmstate,
 	/*
 	 * Use the return tuple slot as a place to store the result tuple.
 	 */
-	resultSlot = ExecGetReturningSlot(estate, relInfo);
+	resultSlot = ExecGetReturningSlot(estate, resultRelInfo);
 
 	/*
 	 * Extract all the values of the scan tuple.

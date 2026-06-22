@@ -26,7 +26,7 @@ ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="para
 ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="parameter">argmode</replaceable> ] [ <replaceable class="parameter">argname</replaceable> ] <replaceable class="parameter">argtype</replaceable> [, ...] ] ) ]
     RENAME TO <replaceable>new_name</replaceable>
 ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="parameter">argmode</replaceable> ] [ <replaceable class="parameter">argname</replaceable> ] <replaceable class="parameter">argtype</replaceable> [, ...] ] ) ]
-    OWNER TO { <replaceable>new_owner</replaceable> | CURRENT_USER | SESSION_USER }
+    OWNER TO { <replaceable>new_owner</replaceable> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
 ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="parameter">argmode</replaceable> ] [ <replaceable class="parameter">argname</replaceable> ] <replaceable class="parameter">argtype</replaceable> [, ...] ] ) ]
     SET SCHEMA <replaceable>new_schema</replaceable>
 ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="parameter">argmode</replaceable> ] [ <replaceable class="parameter">argname</replaceable> ] <replaceable class="parameter">argtype</replaceable> [, ...] ] ) ]
@@ -81,8 +81,9 @@ ALTER PROCEDURE <replaceable>name</replaceable> [ ( [ [ <replaceable class="para
 
     <listitem>
      <para>
-      The mode of an argument: <literal>IN</literal>  or <literal>VARIADIC</literal>.
-      If omitted, the default is <literal>IN</literal>.
+      The mode of an argument: <literal>IN</literal>, <literal>OUT</literal>,
+      <literal>INOUT</literal>, or <literal>VARIADIC</literal>.  If omitted,
+      the default is <literal>IN</literal>.
      </para>
     </listitem>
    </varlistentry>

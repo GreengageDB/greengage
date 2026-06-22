@@ -84,7 +84,7 @@ select relname, relpages, reltuples from gp_dist_random('pg_class') where (oid =
  relname | relpages | reltuples 
 ---------+----------+-----------
  vfheap  |        0 |         0
- ivfheap |        1 |         0
+ ivfheap |        0 |        -1
 (2 rows)
 
 -- again, but delete second half

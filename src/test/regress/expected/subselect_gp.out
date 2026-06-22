@@ -1800,23 +1800,17 @@ EXPLAIN select count(distinct ss.ten) from
 -- we should see 2 subplans in the explain
 --
 EXPLAIN SELECT EXISTS(SELECT * FROM tenk1 WHERE tenk1.unique1 = tenk2.unique1) FROM tenk2 LIMIT 1;
-                                                        QUERY PLAN                                                        
---------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..0.08 rows=1 width=4)
-   ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..0.08 rows=1 width=4)
-         ->  Limit  (cost=0.00..0.06 rows=1 width=4)
-               ->  Seq Scan on tenk2  (cost=0.00..625.00 rows=3334 width=4)
-                     SubPlan 1
-                       ->  Result  (cost=0.00..439.00 rows=10000 width=4)
-                             Filter: (tenk1.unique1 = tenk2.unique1)
-                             ->  Materialize  (cost=0.00..439.00 rows=10000 width=4)
-                                   ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..389.00 rows=3334 width=4)
-                                         ->  Seq Scan on tenk1  (cost=0.00..189.00 rows=3334 width=4)
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Limit  (cost=17.76..17.79 rows=1 width=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=17.76..17.85 rows=3 width=1)
+         ->  Limit  (cost=17.76..17.81 rows=1 width=1)
+               ->  Seq Scan on tenk2  (cost=0.00..177.56 rows=3333 width=1)
                      SubPlan 2
-                       ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..189.00 rows=3334 width=4)
-                             ->  Seq Scan on tenk1 tenk1_1  (cost=0.00..189.00 rows=3334 width=4)
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..62.33 rows=3333 width=4)
+                             ->  Seq Scan on tenk1  (cost=0.00..62.33 rows=3333 width=4)
  Optimizer: Postgres query optimizer
-(14 rows)
+(8 rows)
 
 SELECT EXISTS(SELECT * FROM tenk1 WHERE tenk1.unique1 = tenk2.unique1) FROM tenk2 LIMIT 1;
  exists 

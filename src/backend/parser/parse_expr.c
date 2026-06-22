@@ -57,7 +57,7 @@ bool		Transform_null_equals = false;
 #define PREC_GROUP_NOT_LIKE		9	/* NOT LIKE/ILIKE/SIMILAR */
 #define PREC_GROUP_NOT_BETWEEN	10	/* NOT BETWEEN */
 #define PREC_GROUP_NOT_IN		11	/* NOT IN */
-#define PREC_GROUP_POSTFIX_OP	12	/* generic postfix operators */
+#define PREC_GROUP_ANY_ALL		12	/* ANY/ALL */
 #define PREC_GROUP_INFIX_OP		13	/* generic infix operators */
 #define PREC_GROUP_PREFIX_OP	14	/* generic prefix operators */
 
@@ -71,7 +71,7 @@ bool		Transform_null_equals = false;
  * 4. LIKE ILIKE SIMILAR
  * 5. BETWEEN
  * 6. IN
- * 7. generic postfix Op
+ * 7. ANY ALL
  * 8. generic Op, including <= => <>
  * 9. generic prefix Op
  * 10. IS tests (NullTest, BooleanTest, etc)
@@ -1053,7 +1053,7 @@ transformAExprOpAny(ParseState *pstate, A_Expr *a)
 	Node	   *rexpr = a->rexpr;
 
 	if (operator_precedence_warning)
-		emit_precedence_warnings(pstate, PREC_GROUP_POSTFIX_OP,
+		emit_precedence_warnings(pstate, PREC_GROUP_ANY_ALL,
 								 strVal(llast(a->name)),
 								 lexpr, NULL,
 								 a->location);
@@ -1076,7 +1076,7 @@ transformAExprOpAll(ParseState *pstate, A_Expr *a)
 	Node	   *rexpr = a->rexpr;
 
 	if (operator_precedence_warning)
-		emit_precedence_warnings(pstate, PREC_GROUP_POSTFIX_OP,
+		emit_precedence_warnings(pstate, PREC_GROUP_ANY_ALL,
 								 strVal(llast(a->name)),
 								 lexpr, NULL,
 								 a->location);
@@ -1744,11 +1744,12 @@ transformMultiAssignRef(ParseState *pstate, MultiAssignRef *maref)
 		/*
 		 * If we're at the last column, delete the RowExpr from
 		 * p_multiassign_exprs; we don't need it anymore, and don't want it in
-		 * the finished UPDATE tlist.
+		 * the finished UPDATE tlist.  We assume this is still the last entry
+		 * in p_multiassign_exprs.
 		 */
 		if (maref->colno == maref->ncolumns)
 			pstate->p_multiassign_exprs =
-				list_delete_ptr(pstate->p_multiassign_exprs, tle);
+				list_delete_last(pstate->p_multiassign_exprs);
 
 		return result;
 	}
@@ -2092,7 +2093,7 @@ transformSubLink(ParseState *pstate, SubLink *sublink)
 										 sublink->testexpr, NULL,
 										 sublink->location);
 			else
-				emit_precedence_warnings(pstate, PREC_GROUP_POSTFIX_OP,
+				emit_precedence_warnings(pstate, PREC_GROUP_ANY_ALL,
 										 strVal(llast(sublink->operName)),
 										 sublink->testexpr, NULL,
 										 sublink->location);
@@ -3386,28 +3387,11 @@ operator_precedence_group(Node *node, const char **nodename)
 				group = PREC_GROUP_PREFIX_OP;
 			}
 		}
-		else if (aexpr->kind == AEXPR_OP &&
-				 aexpr->lexpr != NULL &&
-				 aexpr->rexpr == NULL)
-		{
-			/* postfix operator */
-			if (list_length(aexpr->name) == 1)
-			{
-				*nodename = strVal(linitial(aexpr->name));
-				group = PREC_GROUP_POSTFIX_OP;
-			}
-			else
-			{
-				/* schema-qualified operator syntax */
-				*nodename = "OPERATOR()";
-				group = PREC_GROUP_POSTFIX_OP;
-			}
-		}
 		else if (aexpr->kind == AEXPR_OP_ANY ||
 				 aexpr->kind == AEXPR_OP_ALL)
 		{
 			*nodename = strVal(llast(aexpr->name));
-			group = PREC_GROUP_POSTFIX_OP;
+			group = PREC_GROUP_ANY_ALL;
 		}
 		else if (aexpr->kind == AEXPR_DISTINCT ||
 				 aexpr->kind == AEXPR_NOT_DISTINCT)
@@ -3498,7 +3482,7 @@ operator_precedence_group(Node *node, const char **nodename)
 			else
 			{
 				*nodename = strVal(llast(s->operName));
-				group = PREC_GROUP_POSTFIX_OP;
+				group = PREC_GROUP_ANY_ALL;
 			}
 		}
 	}
@@ -3574,9 +3558,8 @@ emit_precedence_warnings(ParseState *pstate,
 	 * Complain if left child, which should be same or higher precedence
 	 * according to current rules, used to be lower precedence.
 	 *
-	 * Exception to precedence rules: if left child is IN or NOT IN or a
-	 * postfix operator, the grouping is syntactically forced regardless of
-	 * precedence.
+	 * Exception to precedence rules: if left child is IN or NOT IN the
+	 * grouping is syntactically forced regardless of precedence.
 	 */
 	cgroup = operator_precedence_group(lchild, &copname);
 	if (cgroup > 0)
@@ -3584,7 +3567,7 @@ emit_precedence_warnings(ParseState *pstate,
 		if (oldprecedence_l[cgroup] < oldprecedence_r[opgroup] &&
 			cgroup != PREC_GROUP_IN &&
 			cgroup != PREC_GROUP_NOT_IN &&
-			cgroup != PREC_GROUP_POSTFIX_OP &&
+			cgroup != PREC_GROUP_ANY_ALL &&
 			cgroup != PREC_GROUP_POSTFIX_IS)
 			ereport(WARNING,
 					(errmsg("operator precedence change: %s is now lower precedence than %s",

@@ -44,7 +44,7 @@ static const char *logicalrep_read_namespace(StringInfo in);
 void
 logicalrep_write_begin(StringInfo out, ReorderBufferTXN *txn)
 {
-	pq_sendbyte(out, 'B');		/* BEGIN */
+	pq_sendbyte(out, LOGICAL_REP_MSG_BEGIN);
 
 	/* fixed fields */
 	pq_sendint64(out, txn->final_lsn);
@@ -76,7 +76,7 @@ logicalrep_write_commit(StringInfo out, ReorderBufferTXN *txn,
 {
 	uint8		flags = 0;
 
-	pq_sendbyte(out, 'C');		/* sending COMMIT */
+	pq_sendbyte(out, LOGICAL_REP_MSG_COMMIT);
 
 	/* send the flags field (unused for now) */
 	pq_sendbyte(out, flags);
@@ -112,7 +112,7 @@ void
 logicalrep_write_origin(StringInfo out, const char *origin,
 						XLogRecPtr origin_lsn)
 {
-	pq_sendbyte(out, 'O');		/* ORIGIN */
+	pq_sendbyte(out, LOGICAL_REP_MSG_ORIGIN);
 
 	/* fixed fields */
 	pq_sendint64(out, origin_lsn);
@@ -138,9 +138,14 @@ logicalrep_read_origin(StringInfo in, XLogRecPtr *origin_lsn)
  * Write INSERT to the output stream.
  */
 void
-logicalrep_write_insert(StringInfo out, Relation rel, HeapTuple newtuple, bool binary)
+logicalrep_write_insert(StringInfo out, TransactionId xid, Relation rel,
+						HeapTuple newtuple, bool binary)
 {
-	pq_sendbyte(out, 'I');		/* action INSERT */
+	pq_sendbyte(out, LOGICAL_REP_MSG_INSERT);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	/* use Oid as relation identifier */
 	pq_sendint32(out, RelationGetRelid(rel));
@@ -177,14 +182,18 @@ logicalrep_read_insert(StringInfo in, LogicalRepTupleData *newtup)
  * Write UPDATE to the output stream.
  */
 void
-logicalrep_write_update(StringInfo out, Relation rel, HeapTuple oldtuple,
-						HeapTuple newtuple, bool binary)
+logicalrep_write_update(StringInfo out, TransactionId xid, Relation rel,
+						HeapTuple oldtuple, HeapTuple newtuple, bool binary)
 {
-	pq_sendbyte(out, 'U');		/* action UPDATE */
+	pq_sendbyte(out, LOGICAL_REP_MSG_UPDATE);
 
 	Assert(rel->rd_rel->relreplident == REPLICA_IDENTITY_DEFAULT ||
 		   rel->rd_rel->relreplident == REPLICA_IDENTITY_FULL ||
 		   rel->rd_rel->relreplident == REPLICA_IDENTITY_INDEX);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	/* use Oid as relation identifier */
 	pq_sendint32(out, RelationGetRelid(rel));
@@ -247,13 +256,18 @@ logicalrep_read_update(StringInfo in, bool *has_oldtuple,
  * Write DELETE to the output stream.
  */
 void
-logicalrep_write_delete(StringInfo out, Relation rel, HeapTuple oldtuple, bool binary)
+logicalrep_write_delete(StringInfo out, TransactionId xid, Relation rel,
+						HeapTuple oldtuple, bool binary)
 {
 	Assert(rel->rd_rel->relreplident == REPLICA_IDENTITY_DEFAULT ||
 		   rel->rd_rel->relreplident == REPLICA_IDENTITY_FULL ||
 		   rel->rd_rel->relreplident == REPLICA_IDENTITY_INDEX);
 
-	pq_sendbyte(out, 'D');		/* action DELETE */
+	pq_sendbyte(out, LOGICAL_REP_MSG_DELETE);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	/* use Oid as relation identifier */
 	pq_sendint32(out, RelationGetRelid(rel));
@@ -295,6 +309,7 @@ logicalrep_read_delete(StringInfo in, LogicalRepTupleData *oldtup)
  */
 void
 logicalrep_write_truncate(StringInfo out,
+						  TransactionId xid,
 						  int nrelids,
 						  Oid relids[],
 						  bool cascade, bool restart_seqs)
@@ -302,7 +317,11 @@ logicalrep_write_truncate(StringInfo out,
 	int			i;
 	uint8		flags = 0;
 
-	pq_sendbyte(out, 'T');		/* action TRUNCATE */
+	pq_sendbyte(out, LOGICAL_REP_MSG_TRUNCATE);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	pq_sendint32(out, nrelids);
 
@@ -346,11 +365,15 @@ logicalrep_read_truncate(StringInfo in,
  * Write relation description to the output stream.
  */
 void
-logicalrep_write_rel(StringInfo out, Relation rel)
+logicalrep_write_rel(StringInfo out, TransactionId xid, Relation rel)
 {
 	char	   *relname;
 
-	pq_sendbyte(out, 'R');		/* sending RELATION */
+	pq_sendbyte(out, LOGICAL_REP_MSG_RELATION);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	/* use Oid as relation identifier */
 	pq_sendint32(out, RelationGetRelid(rel));
@@ -396,13 +419,17 @@ logicalrep_read_rel(StringInfo in)
  * This function will always write base type info.
  */
 void
-logicalrep_write_typ(StringInfo out, Oid typoid)
+logicalrep_write_typ(StringInfo out, TransactionId xid, Oid typoid)
 {
 	Oid			basetypoid = getBaseType(typoid);
 	HeapTuple	tup;
 	Form_pg_type typtup;
 
-	pq_sendbyte(out, 'Y');		/* sending TYPE */
+	pq_sendbyte(out, LOGICAL_REP_MSG_TYPE);
+
+	/* transaction ID (if not valid, we're not streaming) */
+	if (TransactionIdIsValid(xid))
+		pq_sendint32(out, xid);
 
 	tup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(basetypoid));
 	if (!HeapTupleIsValid(tup))
@@ -719,4 +746,127 @@ logicalrep_read_namespace(StringInfo in)
 		nspname = "pg_catalog";
 
 	return nspname;
+}
+
+/*
+ * Write the information for the start stream message to the output stream.
+ */
+void
+logicalrep_write_stream_start(StringInfo out,
+							  TransactionId xid, bool first_segment)
+{
+	pq_sendbyte(out, LOGICAL_REP_MSG_STREAM_START);
+
+	Assert(TransactionIdIsValid(xid));
+
+	/* transaction ID (we're starting to stream, so must be valid) */
+	pq_sendint32(out, xid);
+
+	/* 1 if this is the first streaming segment for this xid */
+	pq_sendbyte(out, first_segment ? 1 : 0);
+}
+
+/*
+ * Read the information about the start stream message from output stream.
+ */
+TransactionId
+logicalrep_read_stream_start(StringInfo in, bool *first_segment)
+{
+	TransactionId xid;
+
+	Assert(first_segment);
+
+	xid = pq_getmsgint(in, 4);
+	*first_segment = (pq_getmsgbyte(in) == 1);
+
+	return xid;
+}
+
+/*
+ * Write the stop stream message to the output stream.
+ */
+void
+logicalrep_write_stream_stop(StringInfo out)
+{
+	pq_sendbyte(out, LOGICAL_REP_MSG_STREAM_END);
+}
+
+/*
+ * Write STREAM COMMIT to the output stream.
+ */
+void
+logicalrep_write_stream_commit(StringInfo out, ReorderBufferTXN *txn,
+							   XLogRecPtr commit_lsn)
+{
+	uint8		flags = 0;
+
+	pq_sendbyte(out, LOGICAL_REP_MSG_STREAM_COMMIT);
+
+	Assert(TransactionIdIsValid(txn->xid));
+
+	/* transaction ID */
+	pq_sendint32(out, txn->xid);
+
+	/* send the flags field (unused for now) */
+	pq_sendbyte(out, flags);
+
+	/* send fields */
+	pq_sendint64(out, commit_lsn);
+	pq_sendint64(out, txn->end_lsn);
+	pq_sendint64(out, txn->commit_time);
+}
+
+/*
+ * Read STREAM COMMIT from the output stream.
+ */
+TransactionId
+logicalrep_read_stream_commit(StringInfo in, LogicalRepCommitData *commit_data)
+{
+	TransactionId xid;
+	uint8		flags;
+
+	xid = pq_getmsgint(in, 4);
+
+	/* read flags (unused for now) */
+	flags = pq_getmsgbyte(in);
+
+	if (flags != 0)
+		elog(ERROR, "unrecognized flags %u in commit message", flags);
+
+	/* read fields */
+	commit_data->commit_lsn = pq_getmsgint64(in);
+	commit_data->end_lsn = pq_getmsgint64(in);
+	commit_data->committime = pq_getmsgint64(in);
+
+	return xid;
+}
+
+/*
+ * Write STREAM ABORT to the output stream. Note that xid and subxid will be
+ * same for the top-level transaction abort.
+ */
+void
+logicalrep_write_stream_abort(StringInfo out, TransactionId xid,
+							  TransactionId subxid)
+{
+	pq_sendbyte(out, LOGICAL_REP_MSG_STREAM_ABORT);
+
+	Assert(TransactionIdIsValid(xid) && TransactionIdIsValid(subxid));
+
+	/* transaction ID */
+	pq_sendint32(out, xid);
+	pq_sendint32(out, subxid);
+}
+
+/*
+ * Read STREAM ABORT from the output stream.
+ */
+void
+logicalrep_read_stream_abort(StringInfo in, TransactionId *xid,
+							 TransactionId *subxid)
+{
+	Assert(xid && subxid);
+
+	*xid = pq_getmsgint(in, 4);
+	*subxid = pq_getmsgint(in, 4);
 }

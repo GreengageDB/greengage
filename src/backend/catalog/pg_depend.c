@@ -19,13 +19,16 @@
 #include "access/table.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/pg_locale.h"
 #include "utils/rel.h"
 
 
@@ -44,25 +47,33 @@ recordDependencyOn(const ObjectAddress *depender,
 				   const ObjectAddress *referenced,
 				   DependencyType behavior)
 {
-	recordMultipleDependencies(depender, referenced, 1, behavior);
+	recordMultipleDependencies(depender, referenced, 1, behavior, false);
 }
 
 /*
  * Record multiple dependencies (of the same kind) for a single dependent
  * object.  This has a little less overhead than recording each separately.
+ *
+ * If record_version is true, then a record is added even if the referenced
+ * object is pinned, and the dependency version will be retrieved according to
+ * the referenced object kind.  For now, only collation version is
+ * supported.
  */
 void
 recordMultipleDependencies(const ObjectAddress *depender,
 						   const ObjectAddress *referenced,
 						   int nreferenced,
-						   DependencyType behavior)
+						   DependencyType behavior,
+						   bool record_version)
 {
 	Relation	dependDesc;
 	CatalogIndexState indstate;
-	HeapTuple	tup;
-	int			i;
-	bool		nulls[Natts_pg_depend];
-	Datum		values[Natts_pg_depend];
+	TupleTableSlot **slot;
+	int			i,
+				max_slots,
+				slot_init_count,
+				slot_stored_count;
+	char	   *version = NULL;
 
 	if (nreferenced <= 0)
 		return;					/* nothing to do */
@@ -76,50 +87,121 @@ recordMultipleDependencies(const ObjectAddress *depender,
 
 	dependDesc = table_open(DependRelationId, RowExclusiveLock);
 
+	/*
+	 * Allocate the slots to use, but delay costly initialization until we
+	 * know that they will be used.
+	 */
+	max_slots = Min(nreferenced,
+					MAX_CATALOG_MULTI_INSERT_BYTES / sizeof(FormData_pg_depend));
+	slot = palloc(sizeof(TupleTableSlot *) * max_slots);
+
 	/* Don't open indexes unless we need to make an update */
 	indstate = NULL;
 
-	memset(nulls, false, sizeof(nulls));
-
+	/* number of slots currently storing tuples */
+	slot_stored_count = 0;
+	/* number of slots currently initialized */
+	slot_init_count = 0;
 	for (i = 0; i < nreferenced; i++, referenced++)
 	{
+		bool		ignore_systempin = false;
+
+		if (record_version)
+		{
+			/* For now we only know how to deal with collations. */
+			if (referenced->classId == CollationRelationId)
+			{
+				/* C and POSIX don't need version tracking. */
+				if (referenced->objectId == C_COLLATION_OID ||
+					referenced->objectId == POSIX_COLLATION_OID)
+					continue;
+
+				version = get_collation_version_for_oid(referenced->objectId);
+
+				/*
+				 * Default collation is pinned, so we need to force recording
+				 * the dependency to store the version.
+				 */
+				if (referenced->objectId == DEFAULT_COLLATION_OID)
+					ignore_systempin = true;
+			}
+		}
+		else
+			Assert(!version);
+
 		/*
 		 * If the referenced object is pinned by the system, there's no real
-		 * need to record dependencies on it.  This saves lots of space in
-		 * pg_depend, so it's worth the time taken to check.
+		 * need to record dependencies on it, unless we need to record a
+		 * version.  This saves lots of space in pg_depend, so it's worth the
+		 * time taken to check.
 		 */
-		if (!isObjectPinned(referenced, dependDesc))
+		if (!ignore_systempin && isObjectPinned(referenced, dependDesc))
+			continue;
+
+		if (slot_init_count < max_slots)
 		{
-			/*
-			 * Record the Dependency.  Note we don't bother to check for
-			 * duplicate dependencies; there's no harm in them.
-			 */
-			values[Anum_pg_depend_classid - 1] = ObjectIdGetDatum(depender->classId);
-			values[Anum_pg_depend_objid - 1] = ObjectIdGetDatum(depender->objectId);
-			values[Anum_pg_depend_objsubid - 1] = Int32GetDatum(depender->objectSubId);
+			slot[slot_stored_count] = MakeSingleTupleTableSlot(RelationGetDescr(dependDesc),
+															   &TTSOpsHeapTuple);
+			slot_init_count++;
+		}
 
-			values[Anum_pg_depend_refclassid - 1] = ObjectIdGetDatum(referenced->classId);
-			values[Anum_pg_depend_refobjid - 1] = ObjectIdGetDatum(referenced->objectId);
-			values[Anum_pg_depend_refobjsubid - 1] = Int32GetDatum(referenced->objectSubId);
+		ExecClearTuple(slot[slot_stored_count]);
 
-			values[Anum_pg_depend_deptype - 1] = CharGetDatum((char) behavior);
+		/*
+		 * Record the dependency.  Note we don't bother to check for duplicate
+		 * dependencies; there's no harm in them.
+		 */
+		memset(slot[slot_stored_count]->tts_isnull, false,
+			   slot[slot_stored_count]->tts_tupleDescriptor->natts * sizeof(bool));
 
-			tup = heap_form_tuple(dependDesc->rd_att, values, nulls);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_refclassid - 1] = ObjectIdGetDatum(referenced->classId);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_refobjid - 1] = ObjectIdGetDatum(referenced->objectId);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_refobjsubid - 1] = Int32GetDatum(referenced->objectSubId);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_deptype - 1] = CharGetDatum((char) behavior);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_classid - 1] = ObjectIdGetDatum(depender->classId);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_objid - 1] = ObjectIdGetDatum(depender->objectId);
+		slot[slot_stored_count]->tts_values[Anum_pg_depend_objsubid - 1] = Int32GetDatum(depender->objectSubId);
+		if (version)
+			slot[slot_stored_count]->tts_values[Anum_pg_depend_refobjversion - 1] = CStringGetTextDatum(version);
+		else
+			slot[slot_stored_count]->tts_isnull[Anum_pg_depend_refobjversion - 1] = true;
 
+		ExecStoreVirtualTuple(slot[slot_stored_count]);
+		slot_stored_count++;
+
+		/* If slots are full, insert a batch of tuples */
+		if (slot_stored_count == max_slots)
+		{
 			/* fetch index info only when we know we need it */
 			if (indstate == NULL)
 				indstate = CatalogOpenIndexes(dependDesc);
 
-			CatalogTupleInsertWithInfo(dependDesc, tup, indstate);
-
-			heap_freetuple(tup);
+			CatalogTuplesMultiInsertWithInfo(dependDesc, slot, slot_stored_count,
+											 indstate);
+			slot_stored_count = 0;
 		}
+	}
+
+	/* Insert any tuples left in the buffer */
+	if (slot_stored_count > 0)
+	{
+		/* fetch index info only when we know we need it */
+		if (indstate == NULL)
+			indstate = CatalogOpenIndexes(dependDesc);
+
+		CatalogTuplesMultiInsertWithInfo(dependDesc, slot, slot_stored_count,
+										 indstate);
 	}
 
 	if (indstate != NULL)
 		CatalogCloseIndexes(indstate);
 
 	table_close(dependDesc, RowExclusiveLock);
+
+	/* Drop only the number of slots used */
+	for (i = 0; i < slot_init_count; i++)
+		ExecDropSingleTupleTableSlot(slot[i]);
+	pfree(slot);
 }
 
 /*
@@ -542,7 +624,7 @@ changeDependenciesOf(Oid classId, Oid oldObjectId,
 
 	while (HeapTupleIsValid((tup = systable_getnext(scan))))
 	{
-		Form_pg_depend depform = (Form_pg_depend) GETSTRUCT(tup);
+		Form_pg_depend depform;
 
 		/* make a modifiable copy */
 		tup = heap_copytuple(tup);
@@ -625,12 +707,12 @@ changeDependenciesOn(Oid refClassId, Oid oldRefObjectId,
 
 	while (HeapTupleIsValid((tup = systable_getnext(scan))))
 	{
-		Form_pg_depend depform = (Form_pg_depend) GETSTRUCT(tup);
-
 		if (newIsPinned)
 			CatalogTupleDelete(depRel, &tup->t_self);
 		else
 		{
+			Form_pg_depend depform;
+
 			/* make a modifiable copy */
 			tup = heap_copytuple(tup);
 			depform = (Form_pg_depend) GETSTRUCT(tup);

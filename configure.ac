@@ -508,9 +508,12 @@ BITCODE_CFLAGS=""
 user_BITCODE_CXXFLAGS=$BITCODE_CXXFLAGS
 BITCODE_CXXFLAGS=""
 
-# set CFLAGS_VECTOR from the environment, if available
-if test "$ac_env_CFLAGS_VECTOR_set" = set; then
-  CFLAGS_VECTOR=$ac_env_CFLAGS_VECTOR_value
+# set CFLAGS_UNROLL_LOOPS and CFLAGS_VECTORIZE from the environment, if present
+if test "$ac_env_CFLAGS_UNROLL_LOOPS_set" = set; then
+  CFLAGS_UNROLL_LOOPS=$ac_env_CFLAGS_UNROLL_LOOPS_value
+fi
+if test "$ac_env_CFLAGS_VECTORIZE_set" = set; then
+  CFLAGS_VECTORIZE=$ac_env_CFLAGS_VECTORIZE_value
 fi
 
 # Some versions of GCC support some additional useful warning flags.
@@ -568,9 +571,10 @@ if test "$GCC" = yes -a "$ICC" = no; then
   # implicit-fallthrough level 3 (GCC's default).
   PGAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-fallthrough=3])
   PGAC_PROG_CXX_CFLAGS_OPT([-fexcess-precision=standard])
+  # Optimization flags for specific files that benefit from loop unrolling
+  PGAC_PROG_CC_VAR_OPT(CFLAGS_UNROLL_LOOPS, [-funroll-loops])
   # Optimization flags for specific files that benefit from vectorization
-  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTOR, [-funroll-loops])
-  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTOR, [-ftree-vectorize])
+  PGAC_PROG_CC_VAR_OPT(CFLAGS_VECTORIZE, [-ftree-vectorize])
   # We want to suppress clang's unhelpful unused-command-line-argument warnings
   # but gcc won't complain about unrecognized -Wno-foo switches, so we have to
   # test for the positive form and if that works, add the negative form
@@ -623,7 +627,8 @@ elif test "$PORTNAME" = "hpux"; then
   PGAC_PROG_CXX_CFLAGS_OPT([+Olibmerrno])
 fi
 
-AC_SUBST(CFLAGS_VECTOR)
+AC_SUBST(CFLAGS_UNROLL_LOOPS)
+AC_SUBST(CFLAGS_VECTORIZE)
 
 # Determine flags used to emit bitcode for JIT inlining. Need to test
 # for behaviour changing compiler flags, to keep compatibility with
@@ -2166,6 +2171,7 @@ if test "$PORTNAME" = "win32"; then
   AC_LIBOBJ(win32error)
   AC_LIBOBJ(win32security)
   AC_LIBOBJ(win32setlocale)
+  AC_LIBOBJ(win32stat)
   AC_DEFINE([HAVE_SYMLINK], 1,
             [Define to 1 if you have the `symlink' function.])
   AC_CHECK_TYPES(MINIDUMP_TYPE, [pgac_minidump_type=yes], [pgac_minidump_type=no], [
@@ -2681,20 +2687,18 @@ AC_MSG_CHECKING([thread safety of required library functions])
 
 _CFLAGS="$CFLAGS"
 _LIBS="$LIBS"
-CFLAGS="$CFLAGS $PTHREAD_CFLAGS -DIN_CONFIGURE"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
 AC_RUN_IFELSE(
-  [AC_LANG_SOURCE([[#include "$srcdir/src/test/thread/thread_test.c"]])],
+  [AC_LANG_SOURCE([[#include "$srcdir/config/thread_test.c"]])],
   [AC_MSG_RESULT(yes)],
   [AC_MSG_RESULT(no)
   AC_MSG_ERROR([thread test program failed
-This platform is not thread-safe.  Check the file 'config.log' or compile
-and run src/test/thread/thread_test for the exact reason.
-Use --disable-thread-safety to disable thread safety.])],
+This platform is not thread-safe.  Check the file 'config.log' for the
+exact reason, or use --disable-thread-safety to disable thread safety.])],
   [AC_MSG_RESULT(maybe)
   AC_MSG_WARN([
 *** Skipping thread test program because of cross-compile build.
-*** Run the program in src/test/thread on the target machine.
 ])])
 CFLAGS="$_CFLAGS"
 LIBS="$_LIBS"

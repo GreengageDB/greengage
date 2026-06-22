@@ -141,7 +141,8 @@ static void show_foreignscan_info(ForeignScanState *fsstate, ExplainState *es);
 static void show_eval_params(Bitmapset *bms_params, ExplainState *es);
 static void show_join_pruning_info(List *join_prune_ids, ExplainState *es);
 static const char *explain_get_index_name(Oid indexId);
-static void show_buffer_usage(ExplainState *es, const BufferUsage *usage);
+static void show_buffer_usage(ExplainState *es, const BufferUsage *usage,
+							  bool planning);
 static void show_wal_usage(ExplainState *es, const WalUsage *usage);
 static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir,
 									ExplainState *es);
@@ -255,11 +256,6 @@ ExplainQuery(ParseState *pstate, ExplainStmt *stmt,
 							opt->defname),
 					 parser_errposition(pstate, opt->location)));
 	}
-
-	if (es->buffers && !es->analyze)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("EXPLAIN option BUFFERS requires ANALYZE")));
 
 	if (es->wal && !es->analyze)
 		ereport(ERROR,
@@ -724,8 +720,13 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	if (cursorOptions & CURSOR_OPT_PARALLEL_RETRIEVE)
 		ExplainParallelRetrieveCursor(es, queryDesc);
 
-	if (es->summary && (planduration || bufusage))
+	/* Show buffer usage in planning */
+	if (bufusage)
+	{
 		ExplainOpenGroup("Planning", "Planning", true, es);
+		show_buffer_usage(es, bufusage, true);
+		ExplainCloseGroup("Planning", "Planning", true, es);
+	}
 
 	if (es->summary && planduration)
 	{
@@ -737,19 +738,6 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	/* Print slice table */
 	if (es->slicetable)
 		ExplainPrintSliceTable(es, queryDesc);
-
-	/* Show buffer usage */
-	if (es->summary && bufusage)
-	{
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			es->indent++;
-		show_buffer_usage(es, bufusage);
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			es->indent--;
-	}
-
-	if (es->summary && (planduration || bufusage))
-		ExplainCloseGroup("Planning", "Planning", true, es);
 
 	/* Print info about runtime of triggers */
 	if (es->analyze)
@@ -1077,27 +1065,24 @@ ExplainPrintTriggers(ExplainState *es, QueryDesc *queryDesc)
 {
 	ResultRelInfo *rInfo;
 	bool		show_relname;
-	int			numrels = queryDesc->estate->es_num_result_relations;
-	int			numrootrels = queryDesc->estate->es_num_root_result_relations;
+	List	   *resultrels;
 	List	   *routerels;
 	List	   *targrels;
-	int			nr;
 	ListCell   *l;
 
+	resultrels = queryDesc->estate->es_opened_result_relations;
 	routerels = queryDesc->estate->es_tuple_routing_result_relations;
 	targrels = queryDesc->estate->es_trig_target_relations;
 
 	ExplainOpenGroup("Triggers", "Triggers", false, es);
 
-	show_relname = (numrels > 1 || numrootrels > 0 ||
+	show_relname = (list_length(resultrels) > 1 ||
 					routerels != NIL || targrels != NIL);
-	rInfo = queryDesc->estate->es_result_relations;
-	for (nr = 0; nr < numrels; rInfo++, nr++)
+	foreach(l, resultrels)
+	{
+		rInfo = (ResultRelInfo *) lfirst(l);
 		report_triggers(rInfo, show_relname, es);
-
-	rInfo = queryDesc->estate->es_root_result_relations;
-	for (nr = 0; nr < numrootrels; rInfo++, nr++)
-		report_triggers(rInfo, show_relname, es);
+	}
 
 	foreach(l, routerels)
 	{
@@ -2689,7 +2674,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 
 	/* Show buffer/WAL usage */
 	if (es->buffers && planstate->instrument)
-		show_buffer_usage(es, &planstate->instrument->bufusage);
+		show_buffer_usage(es, &planstate->instrument->bufusage, false);
 	if (es->wal && planstate->instrument)
 		show_wal_usage(es, &planstate->instrument->walusage);
 
@@ -2708,7 +2693,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 
 			ExplainOpenWorker(n, es);
 			if (es->buffers)
-				show_buffer_usage(es, &instrument->bufusage);
+				show_buffer_usage(es, &instrument->bufusage, false);
 			if (es->wal)
 				show_wal_usage(es, &instrument->walusage);
 			ExplainCloseWorker(n, es);
@@ -3605,14 +3590,14 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 						 groupInfo->groupCount);
 		/* plural/singular based on methodNames size */
 		if (list_length(methodNames) > 1)
-			appendStringInfo(es->str, "s: ");
+			appendStringInfoString(es->str, "s: ");
 		else
-			appendStringInfo(es->str, ": ");
+			appendStringInfoString(es->str, ": ");
 		foreach(methodCell, methodNames)
 		{
-			appendStringInfo(es->str, "%s", (char *) methodCell->ptr_value);
+			appendStringInfoString(es->str, (char *) methodCell->ptr_value);
 			if (foreach_current_index(methodCell) < list_length(methodNames) - 1)
-				appendStringInfo(es->str, ", ");
+				appendStringInfoString(es->str, ", ");
 		}
 
 		if (groupInfo->maxMemorySpaceUsed > 0)
@@ -3664,7 +3649,7 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 			ExplainPropertyInteger("Peak Sort Space Used", "kB",
 								   groupInfo->maxMemorySpaceUsed, es);
 
-			ExplainCloseGroup("Sort Spaces", memoryName.data, true, es);
+			ExplainCloseGroup("Sort Space", memoryName.data, true, es);
 		}
 		if (groupInfo->maxDiskSpaceUsed > 0)
 		{
@@ -3681,7 +3666,7 @@ show_incremental_sort_group_info(IncrementalSortGroupInfo *groupInfo,
 			ExplainPropertyInteger("Peak Sort Space Used", "kB",
 								   groupInfo->maxDiskSpaceUsed, es);
 
-			ExplainCloseGroup("Sort Spaces", diskName.data, true, es);
+			ExplainCloseGroup("Sort Space", diskName.data, true, es);
 		}
 
 		ExplainCloseGroup("Incremental Sort Groups", groupName.data, true, es);
@@ -3719,11 +3704,11 @@ show_incremental_sort_info(IncrementalSortState *incrsortstate,
 		if (prefixsortGroupInfo->groupCount > 0)
 		{
 			if (es->format == EXPLAIN_FORMAT_TEXT)
-				appendStringInfo(es->str, "\n");
+				appendStringInfoChar(es->str, '\n');
 			show_incremental_sort_group_info(prefixsortGroupInfo, "Pre-sorted", true, es);
 		}
 		if (es->format == EXPLAIN_FORMAT_TEXT)
-			appendStringInfo(es->str, "\n");
+			appendStringInfoChar(es->str, '\n');
 	}
 
 	if (incrsortstate->shared_info != NULL)
@@ -3762,11 +3747,11 @@ show_incremental_sort_info(IncrementalSortState *incrsortstate,
 			if (prefixsortGroupInfo->groupCount > 0)
 			{
 				if (es->format == EXPLAIN_FORMAT_TEXT)
-					appendStringInfo(es->str, "\n");
+					appendStringInfoChar(es->str, '\n');
 				show_incremental_sort_group_info(prefixsortGroupInfo, "Pre-sorted", true, es);
 			}
 			if (es->format == EXPLAIN_FORMAT_TEXT)
-				appendStringInfo(es->str, "\n");
+				appendStringInfoChar(es->str, '\n');
 
 			if (es->workers_state)
 				ExplainCloseWorker(n, es);
@@ -4144,7 +4129,7 @@ explain_get_index_name(Oid indexId)
  * Show buffer usage details.
  */
 static void
-show_buffer_usage(ExplainState *es, const BufferUsage *usage)
+show_buffer_usage(ExplainState *es, const BufferUsage *usage, bool planning)
 {
 	if (es->format == EXPLAIN_FORMAT_TEXT)
 	{
@@ -4160,6 +4145,15 @@ show_buffer_usage(ExplainState *es, const BufferUsage *usage)
 								usage->temp_blks_written > 0);
 		bool		has_timing = (!INSTR_TIME_IS_ZERO(usage->blk_read_time) ||
 								  !INSTR_TIME_IS_ZERO(usage->blk_write_time));
+		bool		show_planning = (planning && (has_shared ||
+												  has_local || has_temp || has_timing));
+
+		if (show_planning)
+		{
+			ExplainIndentText(es);
+			appendStringInfoString(es->str, "Planning:\n");
+			es->indent++;
+		}
 
 		/* Show only positive counter values. */
 		if (has_shared || has_local || has_temp)
@@ -4229,6 +4223,9 @@ show_buffer_usage(ExplainState *es, const BufferUsage *usage)
 								 INSTR_TIME_GET_MILLISEC(usage->blk_write_time));
 			appendStringInfoChar(es->str, '\n');
 		}
+
+		if (show_planning)
+			es->indent--;
 	}
 	else
 	{

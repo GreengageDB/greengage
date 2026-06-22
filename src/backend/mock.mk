@@ -20,6 +20,21 @@ override CPPFLAGS+= -I$(top_srcdir)/src/backend/libpq \
 # postgres in src/backend/Makefile doesn't need this and -pthread.
 MOCK_LIBS := -ldl $(filter-out -ledit, $(LIBS)) $(LDAP_LIBS_BE) $(ICU_LIBS) $(ZSTD_LIBS)
 
+# The server variants of libpgcommon/libpgport are already part of $(OBJFILES)
+# (they sit at the end of objfiles.txt), but they are scanned *before* the mock
+# objects in the link line.  A mocked backend file can reference a symbol that
+# lives only in src/common -- e.g. PG14's fd.c references get_dirent_type(),
+# which is defined in common/file_utils.c.  That reference only becomes
+# unresolved once the linker reaches the mock object, i.e. after the server
+# archives have already been scanned, so the symbol would otherwise be resolved
+# by the FRONTEND libpgcommon.a in $(LIBS) -- pulling in fe_memutils.o /
+# file_utils.o and producing "multiple definition" errors against mcxt.o and
+# the mock (palloc, fsync_fname, durable_rename, ...).  Re-list the *server*
+# archives after the mock objects so such late references resolve against the
+# server variant (which omits the FRONTEND-only definitions).
+MOCK_SRV_LIBS := $(top_builddir)/src/common/libpgcommon_srv.a \
+				 $(top_builddir)/src/port/libpgport_srv.a
+
 # These files are not linked into test programs.
 EXCL_OBJS=\
 	src/backend/main/main.o \
@@ -121,7 +136,7 @@ WRAP_FUNCS=$(addprefix $(WRAP_FLAGS), \
 
 # The test target depends on $(OBJFILES) which would update files including mocks.
 %.t: $(OBJFILES) $(CMOCKERY_OBJS) $(MOCK_OBJS) %_test.o
-	$(CXX) $(CFLAGS) $(LDFLAGS) $(call WRAP_FUNCS, $(top_srcdir)/$(subdir)/test/$*_test.c) $(call BACKEND_OBJS, $(top_srcdir)/$(subdir)/$*.o $(patsubst $(MOCK_DIR)/%_mock.o,$(top_builddir)/src/%.o, $^)) $(filter-out %/objfiles.txt, $^) $(MOCK_LIBS) -o $@
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(call WRAP_FUNCS, $(top_srcdir)/$(subdir)/test/$*_test.c) $(call BACKEND_OBJS, $(top_srcdir)/$(subdir)/$*.o $(patsubst $(MOCK_DIR)/%_mock.o,$(top_builddir)/src/%.o, $^)) $(filter-out %/objfiles.txt, $^) $(MOCK_SRV_LIBS) $(MOCK_LIBS) -o $@
 
 # We'd like to call only src/backend, but it seems we should build src/port and
 # src/timezone before src/backend.  This is not the case when main build has finished,

@@ -14,10 +14,8 @@
  */
 #include "postgres.h"
 
-#include "access/genam.h"
-#include "access/heapam.h"
 #include "access/htup_details.h"
-#include "access/reloptions.h"
+#include "access/relation.h"
 #include "access/table.h"
 #include "access/xact.h"
 #include "catalog/binary_upgrade.h"
@@ -33,7 +31,6 @@
 #include "commands/typecmds.h"
 #include "miscadmin.h"
 #include "parser/scansup.h"
-#include "parser/parse_type.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -41,8 +38,12 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/reloptions.h"
 #include "catalog/pg_type_encoding.h"
 #include "cdb/cdbvars.h"
+#include "parser/parse_type.h"
 
 /*
  * Record a type's default encoding clause in the catalog.
@@ -654,6 +655,65 @@ TypeCreate(Oid newTypeOid,
 }
 
 /*
+ * Get a list of all distinct collations that the given type depends on.
+ */
+List *
+GetTypeCollations(Oid typeoid)
+{
+	List	   *result = NIL;
+	HeapTuple	tuple;
+	Form_pg_type typeTup;
+
+	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeoid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for type %u", typeoid);
+	typeTup = (Form_pg_type) GETSTRUCT(tuple);
+
+	if (OidIsValid(typeTup->typcollation))
+		result = list_append_unique_oid(result, typeTup->typcollation);
+	else if (typeTup->typtype == TYPTYPE_COMPOSITE)
+	{
+		Relation	rel = relation_open(typeTup->typrelid, AccessShareLock);
+		TupleDesc	desc = RelationGetDescr(rel);
+
+		for (int i = 0; i < RelationGetNumberOfAttributes(rel); i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(desc, i);
+
+			if (OidIsValid(att->attcollation))
+				result = list_append_unique_oid(result, att->attcollation);
+			else
+				result = list_concat_unique_oid(result,
+												GetTypeCollations(att->atttypid));
+		}
+
+		relation_close(rel, NoLock);
+	}
+	else if (typeTup->typtype == TYPTYPE_DOMAIN)
+	{
+		Assert(OidIsValid(typeTup->typbasetype));
+
+		result = list_concat_unique_oid(result,
+										GetTypeCollations(typeTup->typbasetype));
+	}
+	else if (typeTup->typtype == TYPTYPE_RANGE)
+	{
+		Oid			rangeid = get_range_subtype(typeTup->oid);
+
+		Assert(OidIsValid(rangeid));
+
+		result = list_concat_unique_oid(result, GetTypeCollations(rangeid));
+	}
+	else if (OidIsValid(typeTup->typelem))
+		result = list_concat_unique_oid(result,
+										GetTypeCollations(typeTup->typelem));
+
+	ReleaseSysCache(tuple);
+
+	return result;
+}
+
+/*
  * GenerateTypeDependencies: build the dependencies needed for a type
  *
  * Most of what this function needs to know about the type is passed as the
@@ -694,6 +754,7 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 	bool		isNull;
 	ObjectAddress myself,
 				referenced;
+	ObjectAddresses *addrs_normal;
 
 	/* Extract defaultExpr if caller didn't pass it */
 	if (defaultExpr == NULL)
@@ -727,6 +788,10 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 	 * Skip these for a dependent type, since it will have such dependencies
 	 * indirectly through its depended-on type or relation.
 	 */
+
+	/* placeholder for all normal dependencies */
+	addrs_normal = new_object_addresses();
+
 	if (!isDependentType)
 	{
 		ObjectAddressSet(referenced, NamespaceRelationId,
@@ -746,44 +811,69 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 	if (OidIsValid(typeForm->typinput))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typinput);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typoutput))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typoutput);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typreceive))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typreceive);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typsend))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typsend);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typmodin))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typmodin);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typmodout))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typmodout);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
 
 	if (OidIsValid(typeForm->typanalyze))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typanalyze);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+		add_exact_object_address(&referenced, addrs_normal);
 	}
+
+	/* Normal dependency from a domain to its base type. */
+	if (OidIsValid(typeForm->typbasetype))
+	{
+		ObjectAddressSet(referenced, TypeRelationId, typeForm->typbasetype);
+		add_exact_object_address(&referenced, addrs_normal);
+	}
+
+	/*
+	 * Normal dependency from a domain to its collation.  We know the default
+	 * collation is pinned, so don't bother recording it.
+	 */
+	if (OidIsValid(typeForm->typcollation) &&
+		typeForm->typcollation != DEFAULT_COLLATION_OID)
+	{
+		ObjectAddressSet(referenced, CollationRelationId, typeForm->typcollation);
+		add_exact_object_address(&referenced, addrs_normal);
+	}
+
+	record_object_address_dependencies(&myself, addrs_normal, DEPENDENCY_NORMAL);
+	free_object_addresses(addrs_normal);
+
+	/* Normal dependency on the default expression. */
+	if (defaultExpr)
+		recordDependencyOnExpr(&myself, defaultExpr, NIL, DEPENDENCY_NORMAL);
 
 	/*
 	 * If the type is a rowtype for a relation, mark it as internally
@@ -815,26 +905,6 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 		recordDependencyOn(&myself, &referenced,
 						   isImplicitArray ? DEPENDENCY_INTERNAL : DEPENDENCY_NORMAL);
 	}
-
-	/* Normal dependency from a domain to its base type. */
-	if (OidIsValid(typeForm->typbasetype))
-	{
-		ObjectAddressSet(referenced, TypeRelationId, typeForm->typbasetype);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
-	}
-
-	/* Normal dependency from a domain to its collation. */
-	/* We know the default collation is pinned, so don't bother recording it */
-	if (OidIsValid(typeForm->typcollation) &&
-		typeForm->typcollation != DEFAULT_COLLATION_OID)
-	{
-		ObjectAddressSet(referenced, CollationRelationId, typeForm->typcollation);
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
-	}
-
-	/* Normal dependency on the default expression. */
-	if (defaultExpr)
-		recordDependencyOnExpr(&myself, defaultExpr, NIL, DEPENDENCY_NORMAL);
 }
 
 /*

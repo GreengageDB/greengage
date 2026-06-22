@@ -662,6 +662,12 @@ DecodeCommit(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 	/* replay actions of all transaction + subtransactions in order */
 	ReorderBufferCommit(ctx->reorder, xid, buf->origptr, buf->endptr,
 						commit_time, origin_id, origin_lsn);
+
+	/*
+	 * Update the decoding stats at transaction commit/abort. It is not clear
+	 * that sending more or less frequently than this would be better.
+	 */
+	UpdateDecodingStats(ctx);
 }
 
 /*
@@ -681,6 +687,9 @@ DecodeAbort(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 	}
 
 	ReorderBufferAbort(ctx->reorder, xid, buf->record->EndRecPtr);
+
+	/* update the decoding stats */
+	UpdateDecodingStats(ctx);
 }
 
 /*

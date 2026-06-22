@@ -925,7 +925,22 @@ ModifyWaitEvent(WaitEventSet *set, int pos, uint32 events, Latch *latch)
 
 	if (events == WL_LATCH_SET)
 	{
+		if (latch && latch->owner_pid != MyProcPid)
+			elog(ERROR, "cannot wait on a latch owned by another process");
 		set->latch = latch;
+		/*
+		 * On Unix, we don't need to modify the kernel object because the
+		 * underlying pipe is the same for all latches so we can return
+		 * immediately.  On Windows, we need to update our array of handles,
+		 * but we leave the old one in place and tolerate spurious wakeups if
+		 * the latch is disabled.
+		 */
+#if defined(WAIT_USE_WIN32)
+		if (!latch)
+			return;
+#else
+		return;
+#endif
 	}
 
 #if defined(WAIT_USE_EPOLL)
@@ -1134,7 +1149,8 @@ WaitEventAdjustKqueue(WaitEventSet *set, WaitEvent *event, int old_events)
 
 	if (rc < 0)
 	{
-		if (event->events == WL_POSTMASTER_DEATH && errno == ESRCH)
+		if (event->events == WL_POSTMASTER_DEATH &&
+			(errno == ESRCH || errno == EACCES))
 			set->report_postmaster_not_running = true;
 		else
 			ereport(ERROR,
@@ -1387,7 +1403,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			/* There's data in the self-pipe, clear it. */
 			drainSelfPipe();
 
-			if (set->latch->is_set)
+			if (set->latch && set->latch->is_set)
 			{
 				occurred_events->fd = PGINVALID_SOCKET;
 				occurred_events->events = WL_LATCH_SET;
@@ -1478,7 +1494,10 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 		timeout_p = &timeout;
 	}
 
-	/* Report events discovered by WaitEventAdjustKqueue(). */
+	/*
+	 * Report postmaster events discovered by WaitEventAdjustKqueue() or an
+	 * earlier call to WaitEventSetWait().
+	 */
 	if (unlikely(set->report_postmaster_not_running))
 	{
 		if (set->exit_on_postmaster_death)
@@ -1537,7 +1556,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			/* There's data in the self-pipe, clear it. */
 			drainSelfPipe();
 
-			if (set->latch->is_set)
+			if (set->latch && set->latch->is_set)
 			{
 				occurred_events->fd = PGINVALID_SOCKET;
 				occurred_events->events = WL_LATCH_SET;
@@ -1549,6 +1568,13 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 				 cur_kqueue_event->filter == EVFILT_PROC &&
 				 (cur_kqueue_event->fflags & NOTE_EXIT) != 0)
 		{
+			/*
+			 * The kernel will tell this kqueue object only once about the exit
+			 * of the postmaster, so let's remember that for next time so that
+			 * we provide level-triggered semantics.
+			 */
+			set->report_postmaster_not_running = true;
+
 			if (set->exit_on_postmaster_death)
 				proc_exit(1);
 			occurred_events->fd = PGINVALID_SOCKET;
@@ -1646,7 +1672,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			/* There's data in the self-pipe, clear it. */
 			drainSelfPipe();
 
-			if (set->latch->is_set)
+			if (set->latch && set->latch->is_set)
 			{
 				occurred_events->fd = PGINVALID_SOCKET;
 				occurred_events->events = WL_LATCH_SET;
@@ -1813,7 +1839,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 		if (!ResetEvent(set->latch->event))
 			elog(ERROR, "ResetEvent failed: error code %lu", GetLastError());
 
-		if (set->latch->is_set)
+		if (set->latch && set->latch->is_set)
 		{
 			occurred_events->fd = PGINVALID_SOCKET;
 			occurred_events->events = WL_LATCH_SET;

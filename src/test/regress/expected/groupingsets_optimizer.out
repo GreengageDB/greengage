@@ -541,6 +541,33 @@ select x, not x as not_x, q2 from
    |       |  4567890123456789
 (5 rows)
 
+-- check qual push-down rules for a subquery with grouping sets
+explain (verbose, costs off)
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Result
+   Output: NULL::integer, NULL::bigint, NULL::numeric
+   One-Time Filter: false
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: enable_hashagg = 'off'
+(5 rows)
+
+select * from (
+  select 1 as x, q1, sum(q2)
+  from int8_tbl i1
+  group by grouping sets(1, 2)
+) ss
+where x = 1 and q1 = 123;
+ x | q1 | sum 
+---+----+-----
+(0 rows)
+
 -- simple rescan tests
 select a, b, sum(v.x)
   from (values (1),(2)) v(x), gstest_data(v.x)
@@ -1936,6 +1963,7 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 set enable_indexscan = false;
 set work_mem = '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+set hash_mem_multiplier = 2;
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -2047,6 +2075,7 @@ explain (costs off)
  Optimizer: Pivotal Optimizer (GPORCA)
 (39 rows)
 
+reset hash_mem_multiplier;
 set work_mem = '384kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 explain (costs off)

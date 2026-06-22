@@ -735,6 +735,25 @@ ReadNextMultiXactId(void)
 }
 
 /*
+ * ReadMultiXactIdRange
+ *		Get the range of IDs that may still be referenced by a relation.
+ */
+void
+ReadMultiXactIdRange(MultiXactId *oldest, MultiXactId *next)
+{
+	LWLockAcquire(MultiXactGenLock, LW_SHARED);
+	*oldest = MultiXactState->oldestMultiXactId;
+	*next = MultiXactState->nextMXact;
+	LWLockRelease(MultiXactGenLock);
+
+	if (*oldest < FirstMultiXactId)
+		*oldest = FirstMultiXactId;
+	if (*next < FirstMultiXactId)
+		*next = FirstMultiXactId;
+}
+
+
+/*
  * MultiXactIdCreateFromMembers
  *		Make a new MultiXactId from the specified set of members
  *
@@ -1741,7 +1760,7 @@ PostPrepare_MultiXact(TransactionId xid)
 	OldestVisibleMXactId[MyBackendId] = InvalidMultiXactId;
 
 	/*
-	 * Discard the local MultiXactId cache like in AtEOX_MultiXact
+	 * Discard the local MultiXactId cache like in AtEOXact_MultiXact.
 	 */
 	MXactContext = NULL;
 	dlist_init(&MXactCache);
@@ -1771,7 +1790,7 @@ multixact_twophase_recover(TransactionId xid, uint16 info,
 
 /*
  * multixact_twophase_postcommit
- *		Similar to AtEOX_MultiXact but for COMMIT PREPARED
+ *		Similar to AtEOXact_MultiXact but for COMMIT PREPARED
  */
 void
 multixact_twophase_postcommit(TransactionId xid, uint16 info,
@@ -1830,11 +1849,13 @@ MultiXactShmemInit(void)
 	SimpleLruInit(MultiXactOffsetCtl,
 				  "MultiXactOffset", NUM_MULTIXACTOFFSET_BUFFERS, 0,
 				  MultiXactOffsetSLRULock, "pg_multixact/offsets",
-				  LWTRANCHE_MULTIXACTOFFSET_BUFFER);
+				  LWTRANCHE_MULTIXACTOFFSET_BUFFER,
+				  SYNC_HANDLER_MULTIXACT_OFFSET);
 	SimpleLruInit(MultiXactMemberCtl,
 				  "MultiXactMember", NUM_MULTIXACTMEMBER_BUFFERS, 0,
 				  MultiXactMemberSLRULock, "pg_multixact/members",
-				  LWTRANCHE_MULTIXACTMEMBER_BUFFER);
+				  LWTRANCHE_MULTIXACTMEMBER_BUFFER,
+				  SYNC_HANDLER_MULTIXACT_MEMBER);
 
 	/* Initialize our shared state struct */
 	MultiXactState = ShmemInitStruct("Shared MultiXact State",
@@ -2100,20 +2121,6 @@ TrimMultiXact(void)
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-ShutdownMultiXact(void)
-{
-	/* Flush dirty MultiXact pages to disk */
-	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_START(false);
-	SimpleLruFlush(MultiXactOffsetCtl, false);
-	SimpleLruFlush(MultiXactMemberCtl, false);
-
-	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_DONE(false);
-}
-
-/*
  * Get the MultiXact data to save in a checkpoint record
  */
 void
@@ -2143,9 +2150,13 @@ CheckPointMultiXact(void)
 {
 	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_START(true);
 
-	/* Flush dirty MultiXact pages to disk */
-	SimpleLruFlush(MultiXactOffsetCtl, true);
-	SimpleLruFlush(MultiXactMemberCtl, true);
+	/*
+	 * Write dirty MultiXact pages to disk.  This may result in sync requests
+	 * queued for later handling by ProcessSyncRequests(), as part of the
+	 * checkpoint.
+	 */
+	SimpleLruWriteAll(MultiXactOffsetCtl, true);
+	SimpleLruWriteAll(MultiXactMemberCtl, true);
 
 	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_DONE(true);
 }
@@ -2728,14 +2739,10 @@ find_multixact_start(MultiXactId multi, MultiXactOffset *result)
 	entryno = MultiXactIdToOffsetEntry(multi);
 
 	/*
-	 * Flush out dirty data, so PhysicalPageExists can work correctly.
-	 * SimpleLruFlush() is a pretty big hammer for that.  Alternatively we
-	 * could add an in-memory version of page exists, but find_multixact_start
-	 * is called infrequently, and it doesn't seem bad to flush buffers to
-	 * disk before truncation.
+	 * Write out dirty data, so PhysicalPageExists can work correctly.
 	 */
-	SimpleLruFlush(MultiXactOffsetCtl, true);
-	SimpleLruFlush(MultiXactMemberCtl, true);
+	SimpleLruWriteAll(MultiXactOffsetCtl, true);
+	SimpleLruWriteAll(MultiXactMemberCtl, true);
 
 	if (!SimpleLruDoesPhysicalPageExist(MultiXactOffsetCtl, pageno))
 		return false;
@@ -3331,7 +3338,7 @@ pg_get_multixact_members(PG_FUNCTION_ARGS)
 		int			nmembers;
 		int			iter;
 	} mxact;
-	MultiXactId mxid = PG_GETARG_UINT32(0);
+	MultiXactId mxid = PG_GETARG_TRANSACTIONID(0);
 	mxact	   *multi;
 	FuncCallContext *funccxt;
 
@@ -3385,4 +3392,22 @@ pg_get_multixact_members(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funccxt);
+}
+
+/*
+ * Entrypoint for sync.c to sync offsets files.
+ */
+int
+multixactoffsetssyncfiletag(const FileTag *ftag, char *path)
+{
+	return SlruSyncFileTag(MultiXactOffsetCtl, ftag, path);
+}
+
+/*
+ * Entrypoint for sync.c to sync members files.
+ */
+int
+multixactmemberssyncfiletag(const FileTag *ftag, char *path)
+{
+	return SlruSyncFileTag(MultiXactMemberCtl, ftag, path);
 }

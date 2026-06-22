@@ -93,7 +93,7 @@ CATALOG(pg_proc,1255,ProcedureRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81,Proce
 	 * proargtypes
 	 */
 
-	/* parameter types (excludes OUT params) */
+	/* parameter types (excludes OUT params of functions) */
 	oidvector	proargtypes BKI_LOOKUP(pg_type) BKI_FORCE_NOT_NULL;
 
 #ifdef CATALOG_VARLEN
@@ -248,10 +248,10 @@ extern bool function_parse_error_transpose(const char *prosrc);
 
 extern List *oid_array_to_list(Datum datum);
 
-#define IS_MEDIAN_OID(x) ((x) == MEDIAN_FLOAT8_OID || \
-						  (x) == MEDIAN_INTERVAL_OID || \
-						  (x) == MEDIAN_TIMESTAMP_OID || \
-						  (x) == MEDIAN_TIMESTAMPTZ_OID)
+#define IS_MEDIAN_OID(x) ((x) == F_MEDIAN_FLOAT8_FLOAT8 || \
+						  (x) == F_MEDIAN_FLOAT8_INTERVAL || \
+						  (x) == F_MEDIAN_FLOAT8_TIMESTAMP || \
+						  (x) == F_MEDIAN_FLOAT8_TIMESTAMPTZ)
 
 
 #endif							/* PG_PROC_H */

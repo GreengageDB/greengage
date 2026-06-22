@@ -1029,7 +1029,7 @@ recv_password_packet(Port *port)
 	}
 
 	initStringInfo(&buf);
-	if (pq_getmessage(&buf, 1000))	/* receive password */
+	if (pq_getmessage(&buf, 0)) /* receive password */
 	{
 		/* EOF - pq_getmessage already logged a suitable message */
 		pfree(buf.data);
@@ -1893,7 +1893,7 @@ pg_SSPI_recvauth(Port *port)
 				(errmsg("could not load library \"%s\": error code %lu",
 						"SECUR32.DLL", GetLastError())));
 
-	_QuerySecurityContextToken = (QUERY_SECURITY_CONTEXT_TOKEN_FN)
+	_QuerySecurityContextToken = (QUERY_SECURITY_CONTEXT_TOKEN_FN) (pg_funcptr_t)
 		GetProcAddress(secur32, "QuerySecurityContextToken");
 	if (_QuerySecurityContextToken == NULL)
 	{
@@ -2900,7 +2900,7 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 				ldap_unbind(*ldap);
 				return STATUS_ERROR;
 			}
-			_ldap_start_tls_sA = (__ldap_start_tls_sA) GetProcAddress(ldaphandle, "ldap_start_tls_sA");
+			_ldap_start_tls_sA = (__ldap_start_tls_sA) (pg_funcptr_t) GetProcAddress(ldaphandle, "ldap_start_tls_sA");
 			if (_ldap_start_tls_sA == NULL)
 			{
 				ereport(LOG,

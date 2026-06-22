@@ -384,7 +384,7 @@ COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model)
 								      * enforce them ourselves in the executor */
 				  push_group_by_below_setop_threshold, xform_bind_threshold,
 				  skew_factor),
-		GPOS_NEW(mp) CWindowOids(OID(F_WINDOW_ROW_NUMBER), OID(F_WINDOW_RANK)));
+		GPOS_NEW(mp) CWindowOids(OID(F_ROW_NUMBER), OID(F_RANK_)));
 }
 
 //---------------------------------------------------------------------------

@@ -32,10 +32,14 @@
  * (by opening multiple fd.c temporary files).  This is an essential feature
  * for sorts and hashjoins on large amounts of data.
  *
- * BufFile supports temporary files that can be made read-only and shared with
- * other backends, as infrastructure for parallel execution.  Such files need
- * to be created as a member of a SharedFileSet that all participants are
- * attached to.
+ * BufFile supports temporary files that can be shared with other backends, as
+ * infrastructure for parallel execution.  Such files need to be created as a
+ * member of a SharedFileSet that all participants are attached to.
+ *
+ * BufFile also supports temporary files that can be used by the single backend
+ * when the corresponding files need to be survived across the transaction and
+ * need to be opened and closed multiple times.  Such files need to be created
+ * as a member of a SharedFileSet.
  *-------------------------------------------------------------------------
  */
 
@@ -390,7 +394,7 @@ BufFileCreateShared(SharedFileSet *fileset, const char *name, workfile_set *work
  * backends and render it read-only.
  */
 BufFile *
-BufFileOpenShared(SharedFileSet *fileset, const char *name)
+BufFileOpenShared(SharedFileSet *fileset, const char *name, int mode)
 {
 	BufFile    *file;
 	char		segment_name[MAXPGPATH];
@@ -414,7 +418,7 @@ BufFileOpenShared(SharedFileSet *fileset, const char *name)
 		}
 		/* Try to load a segment. */
 		SharedSegmentName(segment_name, name, nfiles);
-		files[nfiles] = SharedFileSetOpen(fileset, segment_name);
+		files[nfiles] = SharedFileSetOpen(fileset, segment_name, mode);
 		if (files[nfiles] <= 0)
 			break;
 		++nfiles;
@@ -434,7 +438,7 @@ BufFileOpenShared(SharedFileSet *fileset, const char *name)
 
 	file = makeBufFileCommon(nfiles);
 	file->files = files;
-	file->readOnly = true;		/* Can't write to files opened this way */
+	file->readOnly = (mode == O_RDONLY) ? true : false;
 	file->fileset = fileset;
 	file->name = pstrdup(name);
 
@@ -910,6 +914,7 @@ BufFileSeek(BufFile *file, int fileno, off_t offset, int whence)
 			newOffset = (file->curOffset + file->pos) + offset;
 			break;
 		case SEEK_END:
+
 			/*
 			 * The file size of the last file gives us the end offset of that
 			 * file.
@@ -922,9 +927,9 @@ BufFileSeek(BufFile *file, int fileno, off_t offset, int whence)
 				ereport(ERROR,
 						(errcode_for_file_access(),
 						 errmsg("could not determine size of temporary file \"%s\" from BufFile \"%s\": %m",
-							 FilePathName(file->files[file->numFiles - 1]),
-							 file->name)));
-			break;	
+								FilePathName(file->files[file->numFiles - 1]),
+								file->name)));
+			break;
 		default:
 			elog(ERROR, "invalid whence: %d", whence);
 			return EOF;
@@ -1491,3 +1496,98 @@ BufFileLoadCompressedBuffer(BufFile *file, void *buffer, size_t bufsize)
 }
 
 #endif		/* USE_ZSTD */
+
+/*
+ * Truncate a BufFile created by BufFileCreateShared up to the given fileno and
+ * the offset.
+ */
+void
+BufFileTruncateShared(BufFile *file, int fileno, off_t offset)
+{
+	int			numFiles = file->numFiles;
+	int			newFile = fileno;
+	off_t		newOffset = file->curOffset;
+	char		segment_name[MAXPGPATH];
+	int			i;
+
+	/*
+	 * Loop over all the files up to the given fileno and remove the files
+	 * that are greater than the fileno and truncate the given file up to the
+	 * offset. Note that we also remove the given fileno if the offset is 0
+	 * provided it is not the first file in which we truncate it.
+	 */
+	for (i = file->numFiles - 1; i >= fileno; i--)
+	{
+		if ((i != fileno || offset == 0) && i != 0)
+		{
+			SharedSegmentName(segment_name, file->name, i);
+			FileClose(file->files[i]);
+			if (!SharedFileSetDelete(file->fileset, segment_name, true))
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not delete shared fileset \"%s\": %m",
+								segment_name)));
+			numFiles--;
+			newOffset = MAX_PHYSICAL_FILESIZE;
+
+			/*
+			 * This is required to indicate that we have deleted the given
+			 * fileno.
+			 */
+			if (i == fileno)
+				newFile--;
+		}
+		else
+		{
+			if (FileTruncate(file->files[i], offset,
+							 WAIT_EVENT_BUFFILE_TRUNCATE) < 0)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not truncate file \"%s\": %m",
+								FilePathName(file->files[i]))));
+			newOffset = offset;
+		}
+	}
+
+	file->numFiles = numFiles;
+
+	/*
+	 * If the truncate point is within existing buffer then we can just adjust
+	 * pos within buffer.
+	 */
+	if (newFile == file->curFile &&
+		newOffset >= file->curOffset &&
+		newOffset <= file->curOffset + file->nbytes)
+	{
+		/* No need to reset the current pos if the new pos is greater. */
+		if (newOffset <= file->curOffset + file->pos)
+			file->pos = (int) (newOffset - file->curOffset);
+
+		/* Adjust the nbytes for the current buffer. */
+		file->nbytes = (int) (newOffset - file->curOffset);
+	}
+	else if (newFile == file->curFile &&
+			 newOffset < file->curOffset)
+	{
+		/*
+		 * The truncate point is within the existing file but prior to the
+		 * current position, so we can forget the current buffer and reset the
+		 * current position.
+		 */
+		file->curOffset = newOffset;
+		file->pos = 0;
+		file->nbytes = 0;
+	}
+	else if (newFile < file->curFile)
+	{
+		/*
+		 * The truncate point is prior to the current file, so need to reset
+		 * the current position accordingly.
+		 */
+		file->curFile = newFile;
+		file->curOffset = newOffset;
+		file->pos = 0;
+		file->nbytes = 0;
+	}
+	/* Nothing to do, if the truncate point is beyond current file. */
+}
