@@ -1724,6 +1724,17 @@ void mppExecutorCleanup(QueryDesc *queryDesc)
 
 	/* caller must have switched into per-query memory context already */
 	estate = queryDesc->estate;
+
+	/*
+	 * GPDB: this can be reached from a PG_CATCH in standard_ExecutorStart()
+	 * (e.g. when the resource-manager operator-memory assignment throws) before
+	 * the executor state has been created, so queryDesc->estate may still be
+	 * NULL.  There is nothing to clean up in that case; guard against the NULL
+	 * dereference rather than crashing the backend.
+	 */
+	if (estate == NULL)
+		return;
+
 	ds = estate->dispatcherState;
 
 	/* GPDB hook for collecting query info */
