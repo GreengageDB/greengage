@@ -830,10 +830,10 @@ Feature: expand the cluster by adding more segments
         And database "gptest" exists
         And the user creates an event trigger test_trigger
         And verify that event trigger test_trigger exists
-        And verify that the query "SELECT * FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
+        Then verify that the query "SELECT count(*) FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
         When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
         Then gpexpand should return a return code of 0
         And verify that the cluster has 1 new segments
-        And verify that the query "SELECT * FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
+        Then verify that the query "SELECT count(*) FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
