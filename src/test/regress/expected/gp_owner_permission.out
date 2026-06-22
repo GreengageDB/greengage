@@ -9,6 +9,10 @@ CREATE ROLE test2 WITH login CREATEDB;
 SET role = test2;
 CREATE database reindexdb2;
 \c reindexdb2
+-- PG15 no longer grants CREATE on schema public to PUBLIC in a freshly created
+-- database; restore it (as the regression test_setup does) so the non-owner
+-- role test1 can create the tables this reindex-by-database-owner test needs.
+GRANT ALL ON SCHEMA public TO public;
 BEGIN;
 SET role = test1;
 CREATE TABLE mytab1_heap(a int, b int);
@@ -36,18 +40,18 @@ REINDEX DATABASE  reindexdb2;
 select usename as user_for_reindex_heap from pg_stat_operations where objname = 'idx_mytab1_heap' and subtype = 'REINDEX' ;
  user_for_reindex_heap 
 -----------------------
- test2
+ test1
 (1 row)
 
 select usename as user_for_reindex_ao from pg_stat_operations where objname = 'idx_mytab1_ao' and subtype = 'REINDEX' ;
  user_for_reindex_ao 
 ---------------------
- test2
+ test1
 (1 row)
 
 select usename as user_for_reindex_aoco from pg_stat_operations where objname = 'idx_mytab1_aoco' and subtype = 'REINDEX' ;
  user_for_reindex_aoco 
 -----------------------
- test2
+ test1
 (1 row)
 
