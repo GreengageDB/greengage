@@ -2729,21 +2729,33 @@ pg_get_expr_worker(text *expr, Oid relid, const char *relname, int prettyFlags)
 	/*
 	 * Throw error if the expression contains Vars we won't be able to
 	 * deparse.
+	 *
+	 * GPDB: the gp_partition_template.template catalog column stores a
+	 * serialized GpPartitionDefinition node tree.  That GPDB-specific node is
+	 * not an ordinary expression and contains no Vars, but the upstream
+	 * var-safety check below walks it with expression_tree_walker(), which has
+	 * no case for GPDB partition nodes and would fail with "unrecognized node
+	 * type".  The deparse path (get_rule_expr -> T_GpPartitionDefinition)
+	 * handles the node directly, so skip the Var check for it.  (Pre-PG15 this
+	 * check did not exist; it arrived with upstream commit 6867f963e319.)
 	 */
-	relids = pull_varnos(NULL, node);
-	if (OidIsValid(relid))
+	if (!(tst && IsA(tst, GpPartitionDefinition)))
 	{
-		if (!bms_is_subset(relids, bms_make_singleton(1)))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("expression contains variables of more than one relation")));
-	}
-	else
-	{
-		if (!bms_is_empty(relids))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("expression contains variables")));
+		relids = pull_varnos(NULL, node);
+		if (OidIsValid(relid))
+		{
+			if (!bms_is_subset(relids, bms_make_singleton(1)))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("expression contains variables of more than one relation")));
+		}
+		else
+		{
+			if (!bms_is_empty(relids))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("expression contains variables")));
+		}
 	}
 
 	/* Prepare deparse context if needed */
