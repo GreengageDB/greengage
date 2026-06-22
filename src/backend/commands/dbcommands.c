@@ -189,6 +189,15 @@ CreateDatabaseUsingWalLog(Oid src_dboid, Oid dst_dboid,
 	/* Create database directory and write PG_VERSION file. */
 	CreateDirAndVersionFile(dstpath, dst_dboid, dst_tsid, false);
 
+	/*
+	 * GPDB: register the new database directory in the PendingDBDelete list so
+	 * it is removed if the transaction aborts.  The createdb strategy rewrite
+	 * in PG15 dropped this re-graft; without it a failed CREATE DATABASE leaks
+	 * the destination directory on every segment (regress test createdb,
+	 * db_with_leftover_files).
+	 */
+	ScheduleDbDirDelete(dst_dboid, dst_tsid, false);
+
 	/* Copy relmap file from source database to the destination database. */
 	RelationMapCopy(dst_dboid, dst_tsid, srcpath, dstpath);
 
@@ -635,11 +644,22 @@ CreateDatabaseUsingFileCopy(Oid src_dboid, Oid dst_dboid, Oid src_tsid,
 		dstpath = GetDatabasePath(dst_dboid, dsttablespace);
 
 		/*
+		 * GPDB: register this database directory in the PendingDBDelete list
+		 * so it is removed if the transaction aborts.  The createdb strategy
+		 * rewrite in PG15 dropped this re-graft; without it a failed CREATE
+		 * DATABASE leaks the destination directories on every segment.
+		 */
+		ScheduleDbDirDelete(dst_dboid, dsttablespace, false);
+
+		/*
 		 * Copy this subdirectory to the new location
 		 *
 		 * We don't need to copy subdirectories
 		 */
 		copydir(srcpath, dstpath, false);
+
+		/* GPDB: fault point to test cleanup of a failed CREATE DATABASE */
+		SIMPLE_FAULT_INJECTOR("create_db_after_file_copy");
 
 		/* Record the filesystem change in XLOG */
 		{
@@ -660,6 +680,10 @@ CreateDatabaseUsingFileCopy(Oid src_dboid, Oid dst_dboid, Oid src_tsid,
 		pfree(srcpath);
 		pfree(dstpath);
 	}
+
+	/* GPDB: fault point to test cleanup after the XLOG_DBASE_CREATE record */
+	SIMPLE_FAULT_INJECTOR("after_xlog_create_database");
+
 	table_endscan(scan);
 	table_close(rel, AccessShareLock);
 

@@ -41,7 +41,7 @@ select gp_inject_fault('create_db_after_file_copy', 'error', dbid)
 from gp_segment_configuration where content=0 and role='p';
 
 -- should fail
-create database db_with_leftover_files;
+create database db_with_leftover_files strategy file_copy;
 
 -- Wait until replay_lsn = flush_lsn.
 select force_mirrors_to_catch_up();
@@ -63,7 +63,7 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
 select gp_inject_fault('after_xlog_create_database', 'error', dbid)
 from gp_segment_configuration where content=-1 and role='p';
 -- should fail
-create database db2;
+create database db2 strategy file_copy;
 
 select force_mirrors_to_catch_up();
 
@@ -83,7 +83,7 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
 select gp_inject_fault('after_xlog_create_database', 'error', dbid)
 from gp_segment_configuration where content=0 and role='p';
 -- should fail
-create database db3;
+create database db3 strategy file_copy;
 
 select force_mirrors_to_catch_up();
 
@@ -105,7 +105,7 @@ from gp_segment_configuration where content=0 and role='p';
 select gp_inject_fault_infinite('fts_probe', 'skip', dbid)
 from gp_segment_configuration where content=0 and role='p';
 -- should fail
-create database db4;
+create database db4 strategy file_copy;
 
 select force_mirrors_to_catch_up();
 

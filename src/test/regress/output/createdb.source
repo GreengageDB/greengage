@@ -76,7 +76,7 @@ from gp_segment_configuration where content=0 and role='p';
 (1 row)
 
 -- should fail
-create database db_with_leftover_files;
+create database db_with_leftover_files strategy file_copy;
 ERROR:  fault triggered, fault name:'create_db_after_file_copy' fault type:'error'  (seg0 10.34.49.130:25432 pid=83183)
 -- Wait until replay_lsn = flush_lsn.
 select force_mirrors_to_catch_up();
@@ -119,7 +119,7 @@ from gp_segment_configuration where content=-1 and role='p';
 (1 row)
 
 -- should fail
-create database db2;
+create database db2 strategy file_copy;
 ERROR:  fault triggered, fault name:'after_xlog_create_database' fault type:'error'
 select force_mirrors_to_catch_up();
  force_mirrors_to_catch_up 
@@ -160,7 +160,7 @@ from gp_segment_configuration where content=0 and role='p';
 (1 row)
 
 -- should fail
-create database db3;
+create database db3 strategy file_copy;
 ERROR:  fault triggered, fault name:'after_xlog_create_database' fault type:'error'  (seg0 10.34.49.130:25432 pid=83183)
 select force_mirrors_to_catch_up();
  force_mirrors_to_catch_up 
@@ -208,7 +208,7 @@ from gp_segment_configuration where content=0 and role='p';
 (1 row)
 
 -- should fail
-create database db4;
+create database db4 strategy file_copy;
 ERROR:  fault triggered, fault name:'end_prepare_two_phase' fault type:'panic'  (seg0 10.34.49.130:25432 pid=83183)
 select force_mirrors_to_catch_up();
  force_mirrors_to_catch_up 
