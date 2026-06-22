@@ -4,9 +4,9 @@ set gp_autostats_mode = none;
 -- Test pgstat table stat for copy on QD
 create table table_for_docopy(i int, j varchar) distributed by (i);
 copy table_for_docopy (i, j) from stdin;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -26,9 +26,9 @@ create table copy_on_segment (a int,b char);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY copy_on_segment from '/tmp/data_tbl<SEGID>.csv' on segment log errors segment reject limit 3 rows;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -64,9 +64,9 @@ with updated AS (update table_for_initplan set k = 33 where i = 3 returning k) s
  1 | test1 |  1 |  33
 (3 rows)
 
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -80,9 +80,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 create table table_for_ctas with (autovacuum_enabled=false) as select i, 'hello' || i from generate_series(1, 100) f(i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -95,9 +95,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 select i, 'hello' || i into table_for_insert_into from generate_series(1, 100) f(i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -110,9 +110,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 -- Test pgstat table stat in ALTER TABLE SET DISTRIBUTED BY on QD
 create table table_for_set_distributed_by(i int, j varchar) distributed by (i);
 insert into table_for_set_distributed_by select i, 'hello' || i from generate_series(1, 333) f(i);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -123,9 +123,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 (1 row)
 
 alter table table_for_set_distributed_by set distributed by (j);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -151,9 +151,9 @@ select update_table_for_function();
  
 (1 row)
 
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -179,9 +179,9 @@ select count(distinct gp_segment_id) from table_for_expand;
      1
 (1 row)
 
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -198,9 +198,9 @@ select count(distinct gp_segment_id) from table_for_expand;
      3
 (1 row)
 
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -232,9 +232,9 @@ rollback to savepoint level5;
 update table_for_iud set j = 'heroes never die' where i >= 300;
 release savepoint level3;
 commit;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -258,9 +258,9 @@ update table_for_iud set j = 'are you ok' where i >= 300;
 rollback to savepoint level3;
 delete from table_for_iud where i <= 200;
 commit;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -273,9 +273,9 @@ select n_live_tup, n_dead_tup from pg_stat_all_tables_internal where relid = 'ta
 -- Test pgstat table stat in TRUNCATE on QD
 create table table_for_truncate(i int, j varchar) distributed by (i);
 insert into table_for_truncate select i, 'hello' || i from generate_series(1, 777) f(i);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -297,9 +297,9 @@ insert into table_for_truncate select i, 'hello' || i from generate_series(1, 80
 delete from table_for_truncate where i >= 700;
 update table_for_truncate set j = 'D' where i <= 200;
 commit;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -311,9 +311,9 @@ select n_live_tup, n_dead_tup from pg_stat_all_tables_internal where relid = 'ta
 
 create table table_for_truncate_abort(i int, j varchar) distributed by (i);
 insert into table_for_truncate_abort select i, 'hello' || i from generate_series(1, 777) f(i);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -335,9 +335,9 @@ insert into table_for_truncate_abort select i, 'hello' || i from generate_series
 delete from table_for_truncate_abort where i < 700;
 update table_for_truncate_abort set j = 'D' where i >= 200;
 rollback;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -354,9 +354,9 @@ PARTITION BY RANGE (rank)
 ( START (1) END (10) EVERY (5),
   DEFAULT PARTITION extra );
 insert into rankpart select i, i % 10, i from generate_series(1, 1000)i;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -381,9 +381,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 begin;
 delete from rankpart where id <= 100;
 rollback;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -406,9 +406,9 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 (1 row)
 
 copy rankpart (id, rank, product) from stdin;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -433,9 +433,9 @@ delete from rankpart where id > 1005;
 release savepoint level2;
 rollback to savepoint level1;
 commit;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -462,9 +462,9 @@ savepoint level1_1;
 insert into rankpart select i, i % 10, i from generate_series(2001, 3000)i;
 insert into rankpart select i, i % 10, i from generate_series(3001, 4000)i;
 commit;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -492,9 +492,9 @@ insert into base_table select i,i,i from generate_series(1, 100) i;
 create materialized view mt as select * from base_table where z>=50;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -506,9 +506,15 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
-select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: flush the QD's own combined stats (for the pg_stat_all_tables_internal read below).
+ pg_stat_force_next_flush 
+--------------------------
+ 
+(1 row)
+
+select pg_stat_force_next_flush() from gp_dist_random('gp_id'); -- PG15: force each segment to flush pending cumulative stats to shared memory now (for the cross-segment pg_stat_all_tables gather; PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
  
  
@@ -533,9 +539,9 @@ drop table base_table;
 create table base_table(i int, j int, z int ) distributed replicated;
 insert into base_table select i,i,i from generate_series(1, 100) i;
 create materialized view mt as select * from base_table where z>=50 distributed replicated;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: force pending cumulative stats to shared memory now (PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -547,9 +553,15 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
-select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
- pg_sleep 
-----------
+select pg_stat_force_next_flush(); -- PG15: flush the QD's own combined stats (for the pg_stat_all_tables_internal read below).
+ pg_stat_force_next_flush 
+--------------------------
+ 
+(1 row)
+
+select pg_stat_force_next_flush() from gp_dist_random('gp_id'); -- PG15: force each segment to flush pending cumulative stats to shared memory now (for the cross-segment pg_stat_all_tables gather; PGSTAT_MIN_INTERVAL rate-limits the implicit flush, so the old pg_sleep raced).
+ pg_stat_force_next_flush 
+--------------------------
  
  
  
