@@ -249,6 +249,91 @@ SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default', 'rbps=5242880000 wbps=
  t
 (1 row)
 
+-- 7 Two ALTERs set the same io_limit across two tablespaces in a different
+-- element order. The order-independent compare treats the two values as equal,
+-- so the duplicate is dropped and only one apply happens.
+select mkdir('@testtablespace@/rg_io_limit_ts_1') from gp_dist_random('gp_id') intersect select mkdir('@testtablespace@/rg_io_limit_ts_1') from gp_id;
+ mkdir
+-------
+ t
+(1 row)
+
+select mkdir('@testtablespace@/rg_io_limit_ts_2') from gp_dist_random('gp_id') intersect select mkdir('@testtablespace@/rg_io_limit_ts_2') from gp_id;
+ mkdir
+-------
+ t
+(1 row)
+
+CREATE TABLESPACE rg_io_limit_ts_1 LOCATION '@testtablespace@/rg_io_limit_ts_1';
+CREATE TABLESPACE
+CREATE TABLESPACE rg_io_limit_ts_2 LOCATION '@testtablespace@/rg_io_limit_ts_2';
+CREATE TABLESPACE
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'skip', '', '', '', 1, 100, 0, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+BEGIN;
+BEGIN
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'rg_io_limit_ts_1:rbps=1000,wbps=1000;rg_io_limit_ts_2:rbps=2000,wbps=2000';
+ALTER RESOURCE GROUP
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit 'rg_io_limit_ts_2:rbps=2000,wbps=2000;rg_io_limit_ts_1:rbps=1000,wbps=1000';
+ALTER RESOURCE GROUP
+COMMIT;
+COMMIT
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'rg_io_limit_ts_1', 'rbps=1048576000 wbps=1048576000 riops=max wiops=max');
+ check_cgroup_io_max
+---------------------
+ t
+(1 row)
+
+SELECT check_cgroup_io_max('rg_alter_tran', 'rg_io_limit_ts_2', 'rbps=2097152000 wbps=2097152000 riops=max wiops=max');
+ check_cgroup_io_max
+---------------------
+ t
+(1 row)
+
+-- Should be one in `num times hit`
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1'
+
+(1 row)
+
+SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault
+-----------------
+ Success:
+(1 row)
+
+-- Remove the tablespace dependency before the tablespaces are dropped.
+ALTER RESOURCE GROUP rg_alter_tran SET io_limit '-1';
+ALTER RESOURCE GROUP
+DROP TABLESPACE rg_io_limit_ts_1;
+DROP TABLESPACE
+DROP TABLESPACE rg_io_limit_ts_2;
+DROP TABLESPACE
+select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_dist_random('gp_id') intersect select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_id;
+ rmdir
+-------
+ t
+(1 row)
+
+select rmdir('@testtablespace@/rg_io_limit_ts_2') from gp_dist_random('gp_id') intersect select rmdir('@testtablespace@/rg_io_limit_ts_2') from gp_id;
+ rmdir
+-------
+ t
+(1 row)
+
 -- clean
 DROP RESOURCE GROUP rg_alter_tran;
 DROP RESOURCE GROUP
