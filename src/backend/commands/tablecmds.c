@@ -22254,10 +22254,24 @@ CloneRowTriggersToPartition(Relation parent, Relation partition)
 			continue;
 
 		/*
-		 * Don't clone internal triggers, because the constraint cloning code
-		 * will.
+		 * Internal triggers require careful examination.  Ideally, we don't
+		 * clone them.  However, if our parent is itself a partition, there
+		 * might be internal triggers that must not be skipped; for example,
+		 * triggers on our parent that are in turn clones from its parent (our
+		 * grandparent) are marked internal, yet they are to be cloned.  (GPDB
+		 * marks partition-inherited row triggers internal, so without this the
+		 * trigger never reaches sub-partitions added/split/exchanged under an
+		 * intermediate partition -- relhastriggers stays false on the
+		 * grandchild.  The PG15 merge dropped this GGDB refinement and took
+		 * upstream's unconditional "skip all internal triggers".)
+		 *
+		 * Note we dare not verify that the other trigger belongs to an
+		 * ancestor relation of our parent, because that creates deadlock
+		 * opportunities.
 		 */
-		if (trigForm->tgisinternal)
+		if (trigForm->tgisinternal &&
+			(!parent->rd_rel->relispartition ||
+			 !OidIsValid(trigForm->tgparentid)))
 			continue;
 
 		/*
