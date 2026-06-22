@@ -493,7 +493,6 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 CppAsString2(RELKIND_AOSEGMENTS) ", "
 			 CppAsString2(RELKIND_AOBLOCKDIR) ", "
 			 CppAsString2(RELKIND_MATVIEW) ", "
-			 CppAsString2(RELKIND_FOREIGN_TABLE) ", "
 			 "%s"
 			 CppAsString2(RELKIND_SEQUENCE) ") AND "
 	/* exclude possible orphaned temp tables */
