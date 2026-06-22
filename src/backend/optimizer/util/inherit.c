@@ -400,6 +400,17 @@ expand_partitioned_rtentry(PlannerInfo *root, RelOptInfo *relinfo,
 			/* release the lock, since we're not scanning this partition */
 			table_close(childrel, lockmode);
 
+			/*
+			 * GPDB: also drop this partition from live_parts.  We intentionally
+			 * leave part_rels[i] NULL for the skipped partition, but downstream
+			 * code walks live_parts and expects a part_rels[] entry for every
+			 * live member (e.g. the Assert(child_rel != NULL) in
+			 * apply_scanjoin_target_to_paths()).  Keeping the two in sync avoids
+			 * a crash on COPY ... IGNORE EXTERNAL PARTITIONS over a partitioned
+			 * table that has an external (foreign) partition.
+			 */
+			relinfo->live_parts = live_parts = bms_del_member(live_parts, i);
+
 			continue;
 		}
 
