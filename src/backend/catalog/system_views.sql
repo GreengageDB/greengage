@@ -564,6 +564,9 @@ REVOKE EXECUTE ON FUNCTION pg_get_shmem_allocations() FROM PUBLIC;
 CREATE VIEW pg_backend_memory_contexts AS
     SELECT * FROM pg_get_backend_memory_contexts();
 
+REVOKE ALL ON pg_backend_memory_contexts FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION pg_get_backend_memory_contexts() FROM PUBLIC;
+
 -- Statistics views
 
 CREATE VIEW pg_stat_all_tables_internal AS
@@ -967,6 +970,18 @@ CREATE VIEW gp_stat_replication AS
          ON G.gp_segment_id = R.gp_segment_id
     );
 
+CREATE VIEW pg_stat_replication_slots AS
+    SELECT
+            s.slot_name,
+            s.spill_txns,
+            s.spill_count,
+            s.spill_bytes,
+            s.stream_txns,
+            s.stream_count,
+            s.stream_bytes,
+            s.stats_reset
+    FROM pg_stat_get_replication_slots() AS s;
+
 CREATE VIEW pg_stat_slru AS
     SELECT
             s.name,
@@ -1363,6 +1378,12 @@ CREATE VIEW pg_stat_bgwriter AS
         pg_stat_get_buf_alloc() AS buffers_alloc,
         pg_stat_get_bgwriter_stat_reset_time() AS stats_reset;
 
+CREATE VIEW pg_stat_wal AS
+    SELECT
+        w.wal_buffers_full,
+        w.stats_reset
+    FROM pg_stat_get_wal() w;
+
 CREATE VIEW pg_stat_progress_analyze AS
     SELECT
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
@@ -1512,7 +1533,7 @@ REVOKE ALL ON pg_replication_origin_status FROM public;
 
 -- All columns of pg_subscription except subconninfo are readable.
 REVOKE ALL ON pg_subscription FROM public;
-GRANT SELECT (subdbid, subname, subowner, subenabled, subbinary, subslotname, subpublications)
+GRANT SELECT (subdbid, subname, subowner, subenabled, subbinary, substream, subslotname, subpublications)
     ON pg_subscription TO public;
 
 
@@ -1832,6 +1853,7 @@ REVOKE EXECUTE ON FUNCTION pg_stat_reset_shared(text) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_slru(text) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_single_table_counters(oid) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_single_function_counters(oid) FROM public;
+REVOKE EXECUTE ON FUNCTION pg_stat_reset_replication_slot(text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION lo_import(text) FROM public;
 REVOKE EXECUTE ON FUNCTION lo_import(text, oid) FROM public;

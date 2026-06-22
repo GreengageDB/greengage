@@ -13,6 +13,7 @@
 #include "postgres_fe.h"
 #include "common.h"
 #include "common/logging.h"
+#include "common/string.h"
 #include "fe_utils/string_utils.h"
 
 
@@ -45,9 +46,9 @@ main(int argc, char *argv[])
 	char	   *port = NULL;
 	char	   *username = NULL;
 	enum trivalue prompt_password = TRI_DEFAULT;
+	ConnParams	cparams;
 	bool		echo = false;
 	bool		interactive = false;
-	char		dropuser_buf[128];
 
 	PQExpBufferData sql;
 
@@ -112,9 +113,7 @@ main(int argc, char *argv[])
 	{
 		if (interactive)
 		{
-			simple_prompt("Enter name of role to drop: ",
-						  dropuser_buf, sizeof(dropuser_buf), true);
-			dropuser = dropuser_buf;
+			dropuser = simple_prompt("Enter name of role to drop: ", true);
 		}
 		else
 		{
@@ -131,12 +130,18 @@ main(int argc, char *argv[])
 			exit(0);
 	}
 
+	cparams.dbname = NULL;		/* this program lacks any dbname option... */
+	cparams.pghost = host;
+	cparams.pgport = port;
+	cparams.pguser = username;
+	cparams.prompt_password = prompt_password;
+	cparams.override_dbname = NULL;
+
+	conn = connectMaintenanceDatabase(&cparams, progname, echo);
+
 	initPQExpBuffer(&sql);
 	appendPQExpBuffer(&sql, "DROP ROLE %s%s;",
 					  (if_exists ? "IF EXISTS " : ""), fmtId(dropuser));
-
-	conn = connectDatabase("postgres", host, port, username, prompt_password,
-						   progname, echo, false, false);
 
 	if (echo)
 		printf("%s\n", sql.data);

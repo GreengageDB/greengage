@@ -1088,7 +1088,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			{
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 
-				if (stmt->concurrent)
+				if ((stmt->options & REINDEXOPT_CONCURRENTLY) != 0)
 					PreventInTransactionBlock(isTopLevel,
 											  "REINDEX CONCURRENTLY");
 
@@ -1115,7 +1115,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 												  (stmt->kind == REINDEX_OBJECT_SCHEMA) ? "REINDEX SCHEMA" :
 												  (stmt->kind == REINDEX_OBJECT_SYSTEM) ? "REINDEX SYSTEM" :
 												  "REINDEX DATABASE");
-						ReindexMultipleTables(stmt->name, stmt->kind, stmt->options, stmt->concurrent);
+						ReindexMultipleTables(stmt->name, stmt->kind, stmt->options);
 						break;
 					default:
 						elog(ERROR, "unrecognized object type: %d",
@@ -1312,6 +1312,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					List	   *stmts;
 					ListCell   *l;
 					List	   *more_stmts = NIL;
+					RangeVar   *table_rv = NULL;
 
 					/* Run parse analysis ... */
 					/*
@@ -1354,15 +1355,18 @@ ProcessUtilitySlow(ParseState *pstate,
 							else
 								cstmt->relKind = relKind;
 
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->relation;
+
 							/*
 							 * GPDB: Don't dispatch it yet, as we haven't
 							 * created the toast and other auxiliary tables
 							 * yet.
 							 */
 							/* Create the table itself */
-							address = DefineRelation((CreateStmt *) stmt,
+							address = DefineRelation(cstmt,
 													 relKind,
-													 ((CreateStmt *) stmt)->ownerid, NULL,
+													 cstmt->ownerid, NULL,
 													 queryString, false, true,
 													 cstmt->intoPolicy);
 
@@ -1407,7 +1411,7 @@ ProcessUtilitySlow(ParseState *pstate,
 								 * table
 								 */
 								toast_options = transformRelOptions((Datum) 0,
-																	((CreateStmt *) stmt)->options,
+																	cstmt->options,
 																	"toast",
 																	validnsps,
 																	true,
@@ -1450,20 +1454,48 @@ ProcessUtilitySlow(ParseState *pstate,
 						}
 						else if (IsA(stmt, CreateForeignTableStmt))
 						{
+							CreateForeignTableStmt *cstmt = (CreateForeignTableStmt *) stmt;
+
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->base.relation;
+
 							/* Create the table itself */
-							address = DefineRelation((CreateStmt *) stmt,
+							address = DefineRelation(&cstmt->base,
 													 RELKIND_FOREIGN_TABLE,
 													 InvalidOid, NULL,
 													 queryString,
 													 true,
 													 true,
 													 NULL);
-							CreateForeignTable((CreateForeignTableStmt *) stmt,
+							CreateForeignTable(cstmt,
 											   address.objectId,
 											   false /* skip_permission_checks */);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
+						}
+						else if (IsA(stmt, TableLikeClause))
+						{
+							/*
+							 * Do delayed processing of LIKE options.  This
+							 * will result in additional sub-statements for us
+							 * to process.  We can just tack those onto the
+							 * to-do list.
+							 */
+							TableLikeClause *like = (TableLikeClause *) stmt;
+							List	   *morestmts;
+
+							Assert(table_rv != NULL);
+
+							morestmts = expandTableLikeClause(table_rv, like);
+							stmts = list_concat(stmts, morestmts);
+
+							/*
+							 * We don't need a CCI now, besides which the "l"
+							 * list pointer is now possibly invalid, so just
+							 * skip the CCI test below.
+							 */
+							continue;
 						}
 						else
 						{
@@ -1747,6 +1779,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					IndexStmt  *stmt = (IndexStmt *) parsetree;
 					Oid			relid;
 					LOCKMODE	lockmode;
+					bool		is_alter_table = false; // see below
 
 					if (stmt->concurrent)
 						PreventInTransactionBlock(isTopLevel,
@@ -1816,6 +1849,41 @@ ProcessUtilitySlow(ParseState *pstate,
 						list_free(inheritors);
 					}
 
+					/*
+					 * Greengage specific behavior:
+					 * Postgres will pass false for is_alter_table for DefineIndex.
+					 * This argument is only used at two places in DefineIndex (in original postgres code):
+					 *   1. the function index_check_primary_key
+					 *   2. print a debug log on what the statement is
+					 *
+					 * In fact when calling DefineIndex here, we can always pass
+					 * false for is_alter_table when it actually comes from expandTableLikeClause:
+					 *   for 1, we are sure relationHasPrimaryKey check will pass because we are
+					 *   building a new relation with index here.
+					 *   for 2, I do not think it will mislead the user if we print it as CreateStmt.
+					 *
+					 * But for Greengage, is_alter_table matters a lot and has to be set false here:
+					 * DefineIndex need to dispatch, and if it is_alter_table is true, Greengage will
+					 * take this as a sub command of AlterTable stmt, thus it will not dispatch and
+					 * lead to errors. Thus, we comment off the following code and pass false for
+					 * is_alter_table for DefineIndex here.
+					 *
+					 * See following discussion for details:
+					 * https://www.postgresql.org/message-id/CANerzActdrdFO1r4RSqK0M2d0Xtwu5t5bH%3DZOoLsAQ%3DHhZrB%3Dg%40mail.gmail.com
+					 */
+#if 0
+					/*
+					 * If the IndexStmt is already transformed, it must have
+					 * come from generateClonedIndexStmt, which in current
+					 * usage means it came from expandTableLikeClause rather
+					 * than from original parse analysis.  And that means we
+					 * must treat it like ALTER TABLE ADD INDEX, not CREATE.
+					 * (This is a bit grotty, but currently it doesn't seem
+					 * worth adding a separate bool field for the purpose.)
+					 */
+					is_alter_table = stmt->transformed;
+#endif
+
 					/* Run parse analysis ... */
 					stmt = transformIndexStmt(relid, stmt, queryString);
 
@@ -1827,7 +1895,7 @@ ProcessUtilitySlow(ParseState *pstate,
 									InvalidOid, /* no predefined OID */
 									InvalidOid, /* no parent index */
 									InvalidOid, /* no parent constraint */
-									false,	/* is_alter_table */
+									is_alter_table,
 									true,	/* check_rights */
 									true,	/* check_not_in_use */
 									false,	/* skip_build */
@@ -2157,10 +2225,6 @@ ProcessUtilitySlow(ParseState *pstate,
 
 			case T_AlterStatsStmt:
 				address = AlterStatistics((AlterStatsStmt *) parsetree);
-				break;
-
-			case T_AlterCollationStmt:
-				address = AlterCollation((AlterCollationStmt *) parsetree);
 				break;
 
 			default:
@@ -3421,10 +3485,6 @@ CreateCommandTag(Node *parsetree)
 			tag = CMDTAG_DROP_SUBSCRIPTION;
 			break;
 
-		case T_AlterCollationStmt:
-			tag = CMDTAG_ALTER_COLLATION;
-			break;
-
 		case T_PrepareStmt:
 			tag = CMDTAG_PREPARE;
 			break;
@@ -4047,10 +4107,6 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_AlterStatsStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
-		case T_AlterCollationStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

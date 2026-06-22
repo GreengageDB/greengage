@@ -284,10 +284,13 @@ SELECT '' AS to_char_12, to_char(d, 'FF1 FF2 FF3 FF4 FF5 FF6  ff1 ff2 ff3 ff4 ff
        ('2018-11-02 12:34:56.78901234')
    ) d(d);
 
--- timestamp numeric fields constructor
-SELECT make_timestamp(2014,12,28,6,30,45.887);
-
 SET DateStyle TO DEFAULT;
 
 -- Make sure timeofdate() and current_time() are doing roughly the same thing
 select timeofday()::date = current_timestamp::date;
+
+-- timestamp numeric fields constructor
+SELECT make_timestamp(2014, 12, 28, 6, 30, 45.887);
+SELECT make_timestamp(-44, 3, 15, 12, 30, 15);
+-- should fail
+select make_timestamp(0, 7, 15, 12, 30, 15);

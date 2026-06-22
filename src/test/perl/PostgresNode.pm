@@ -510,15 +510,17 @@ sub init
 		{
 			print $conf "wal_level = replica\n";
 		}
-		print $conf "max_wal_senders = 5\n";
-		print $conf "max_replication_slots = 5\n";
+		print $conf "max_wal_senders = 10\n";
+		print $conf "max_replication_slots = 10\n";
+		print $conf "wal_log_hints = on\n";
+		print $conf "hot_standby = on\n";
+		# conservative settings to ensure we can run multiple postmasters:
+		print $conf "shared_buffers = 1MB\n";
+		print $conf "max_connections = 20\n";
+		# limit disk space consumption, too:
 		# PG sets this to 128MB but that makes checkpoint too frequent for GPDB. 
 		# 512MB corresponds to the ratio of GPDB seg size (64) over PG seg size (16).
 		print $conf "max_wal_size = 512MB\n";
-		print $conf "shared_buffers = 1MB\n";
-		print $conf "wal_log_hints = on\n";
-		print $conf "hot_standby = on\n";
-		print $conf "max_connections = 20\n";
 	}
 	else
 	{
@@ -609,8 +611,10 @@ sub backup
 	my $name        = $self->name;
 
 	print "# Taking pg_basebackup $backup_name from node \"$name\"\n";
-	TestLib::system_or_bail('pg_basebackup', '-D', $backup_path, '-h',
-		$self->host, '-p', $self->port, '--no-sync', '--target-gp-dbid', 99);
+	TestLib::system_or_bail(
+		'pg_basebackup', '-D', $backup_path, '-h',
+		$self->host,     '-p', $self->port,  '--checkpoint',
+		'fast',          '--no-sync', '--target-gp-dbid', 99);
 	print "# Backup finished\n";
 	return;
 }

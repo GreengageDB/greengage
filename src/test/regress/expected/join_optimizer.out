@@ -6337,6 +6337,64 @@ ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 drop table join_pt1;
 drop table join_ut1;
 --
+-- test estimation behavior with multi-column foreign key and constant qual
+--
+begin;
+-- GPDB: persuade the planner to choose same plan as in upstream.
+set local enable_nestloop=on;
+create table fkest (x integer, x10 integer, x10b integer, x100 integer);
+insert into fkest select x, x/10, x/10, x/100 from generate_series(1,1000) x;
+create unique index on fkest(x, x10, x100);
+analyze fkest;
+explain (costs off)
+select * from fkest f1
+  join fkest f2 on (f1.x = f2.x and f1.x10 = f2.x10b and f1.x100 = f2.x100)
+  join fkest f3 on f1.x = f3.x
+  where f1.x100 = 2;
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: ((fkest_1.x = fkest_2.x) AND (fkest_1.x10b = fkest_2.x10) AND (fkest_1.x100 = fkest_2.x100))
+         ->  Hash Join
+               Hash Cond: (fkest.x = fkest_1.x)
+               ->  Seq Scan on fkest
+               ->  Hash
+                     ->  Index Scan using fkest_x_x10_x100_idx on fkest fkest_1
+                           Index Cond: (x100 = 2)
+         ->  Hash
+               ->  Index Scan using fkest_x_x10_x100_idx on fkest fkest_2
+                     Index Cond: (x100 = 2)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+alter table fkest add constraint fk
+  foreign key (x, x10b, x100) references fkest (x, x10, x100);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+explain (costs off)
+select * from fkest f1
+  join fkest f2 on (f1.x = f2.x and f1.x10 = f2.x10b and f1.x100 = f2.x100)
+  join fkest f3 on f1.x = f3.x
+  where f1.x100 = 2;
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: ((fkest_1.x = fkest_2.x) AND (fkest_1.x10b = fkest_2.x10) AND (fkest_1.x100 = fkest_2.x100))
+         ->  Hash Join
+               Hash Cond: (fkest.x = fkest_1.x)
+               ->  Seq Scan on fkest
+               ->  Hash
+                     ->  Index Scan using fkest_x_x10_x100_idx on fkest fkest_1
+                           Index Cond: (x100 = 2)
+         ->  Hash
+               ->  Index Scan using fkest_x_x10_x100_idx on fkest fkest_2
+                     Index Cond: (x100 = 2)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+rollback;
+--
 -- test that foreign key join estimation performs sanely for outer joins
 --
 begin;

@@ -1079,7 +1079,7 @@ WHERE condefault AND
 -- Look for illegal values in pg_operator fields.
 SELECT p1.oid, p1.oprname
 FROM pg_operator as p1
-WHERE (p1.oprkind != 'b' AND p1.oprkind != 'l' AND p1.oprkind != 'r') OR
+WHERE (p1.oprkind != 'b' AND p1.oprkind != 'l') OR
     p1.oprresult = 0 OR p1.oprcode = 0;
  oid | oprname 
 -----+---------
@@ -1090,8 +1090,7 @@ SELECT p1.oid, p1.oprname
 FROM pg_operator as p1
 WHERE (p1.oprleft = 0 and p1.oprkind != 'l') OR
     (p1.oprleft != 0 and p1.oprkind = 'l') OR
-    (p1.oprright = 0 and p1.oprkind != 'r') OR
-    (p1.oprright != 0 and p1.oprkind = 'r');
+    p1.oprright = 0;
  oid | oprname 
 -----+---------
 (0 rows)
@@ -1177,14 +1176,13 @@ ORDER BY 1, 2;
  ?-|  | ?-|
  ?|   | ?|
  ?||  | ?||
- @    | ~
  @@   | @@
  @@@  | @@@
  |    | |
  ~<=~ | ~>=~
  ~<~  | ~>~
  ~=   | ~=
-(30 rows)
+(29 rows)
 
 -- Likewise for negator pairs.
 SELECT DISTINCT o1.oprname AS op1, o2.oprname AS op2
@@ -1296,18 +1294,6 @@ WHERE p1.oprcode = p2.oid AND
      OR NOT binary_coercible(p2.prorettype, p1.oprresult)
      OR NOT binary_coercible(p1.oprright, p2.proargtypes[0])
      OR p1.oprleft != 0);
- oid | oprname | oid | proname 
------+---------+-----+---------
-(0 rows)
-
-SELECT p1.oid, p1.oprname, p2.oid, p2.proname
-FROM pg_operator AS p1, pg_proc AS p2
-WHERE p1.oprcode = p2.oid AND
-    p1.oprkind = 'r' AND
-    (p2.pronargs != 1
-     OR NOT binary_coercible(p2.prorettype, p1.oprresult)
-     OR NOT binary_coercible(p1.oprleft, p2.proargtypes[0])
-     OR p1.oprright != 0);
  oid | oprname | oid | proname 
 -----+---------+-----+---------
 (0 rows)
@@ -2031,8 +2017,6 @@ ORDER BY 1, 2, 3;
         783 |           11 | >^
         783 |           11 | |>>
         783 |           12 | |&>
-        783 |           13 | ~
-        783 |           14 | @
         783 |           15 | <->
         783 |           16 | @>
         783 |           18 | =
@@ -2143,7 +2127,7 @@ ORDER BY 1, 2, 3;
        7013 |            5 | >
        7013 |            5 | >>
        7013 |            5 | ~>~
-(147 rows)
+(145 rows)
 
 -- Check that all opclass search operators have selectivity estimators.
 -- This is not absolutely required, but it seems a reasonable thing

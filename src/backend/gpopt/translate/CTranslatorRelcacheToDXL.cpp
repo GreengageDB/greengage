@@ -1098,7 +1098,7 @@ CTranslatorRelcacheToDXL::RetrieveType(CMemoryPool *mp, IMDId *mdid)
 
 	// count aggregate is the same for all types
 	CMDIdGPDB *mdid_count =
-		GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, COUNT_ANY_OID);
+		GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, GPDB_COUNT_ANY);
 
 	// check if type is composite
 	CMDIdGPDB *mdid_type_relid = nullptr;

@@ -289,16 +289,16 @@ INSERT INTO vacuum_gp_pt SELECT 0, 6 FROM generate_series(1, 12);
 SELECT relname, reltuples, relpages FROM pg_catalog.pg_class WHERE relname like 'vacuum_gp_pt%';
        relname        | reltuples | relpages 
 ----------------------+-----------+----------
- vacuum_gp_pt         |         0 |        0
- vacuum_gp_pt_1_prt_1 |         0 |        0
- vacuum_gp_pt_1_prt_2 |         0 |        0
+ vacuum_gp_pt         |        -1 |        0
+ vacuum_gp_pt_1_prt_1 |        -1 |        0
+ vacuum_gp_pt_1_prt_2 |        -1 |        0
 (3 rows)
 
 ANALYZE vacuum_gp_pt;
 SELECT relname, reltuples, relpages FROM pg_catalog.pg_class WHERE relname like 'vacuum_gp_pt%';
        relname        | reltuples | relpages 
 ----------------------+-----------+----------
- vacuum_gp_pt         |         0 |        0
+ vacuum_gp_pt         |        -1 |        0
  vacuum_gp_pt_1_prt_1 |         0 |        1
  vacuum_gp_pt_1_prt_2 |        12 |        1
 (3 rows)
@@ -307,7 +307,7 @@ VACUUM vacuum_gp_pt;
 SELECT relname, reltuples, relpages FROM pg_catalog.pg_class WHERE relname like 'vacuum_gp_pt%';
        relname        | reltuples | relpages 
 ----------------------+-----------+----------
- vacuum_gp_pt         |         0 |        0
+ vacuum_gp_pt         |        -1 |        0
  vacuum_gp_pt_1_prt_1 |         0 |        1
  vacuum_gp_pt_1_prt_2 |        12 |        1
 (3 rows)
@@ -316,7 +316,7 @@ VACUUM ANALYZE vacuum_gp_pt;
 SELECT relname, reltuples, relpages FROM pg_catalog.pg_class WHERE relname like 'vacuum_gp_pt%';
        relname        | reltuples | relpages 
 ----------------------+-----------+----------
- vacuum_gp_pt         |         0 |        0
+ vacuum_gp_pt         |        -1 |        0
  vacuum_gp_pt_1_prt_1 |         0 |        1
  vacuum_gp_pt_1_prt_2 |        12 |        1
 (3 rows)

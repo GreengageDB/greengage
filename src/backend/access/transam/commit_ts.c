@@ -404,7 +404,7 @@ error_commit_ts_disabled(void)
 Datum
 pg_xact_commit_timestamp(PG_FUNCTION_ARGS)
 {
-	TransactionId xid = PG_GETARG_UINT32(0);
+	TransactionId xid = PG_GETARG_TRANSACTIONID(0);
 	TimestampTz ts;
 	bool		found;
 
@@ -481,7 +481,7 @@ pg_last_committed_xact(PG_FUNCTION_ARGS)
 Datum
 pg_xact_commit_timestamp_origin(PG_FUNCTION_ARGS)
 {
-	TransactionId xid = PG_GETARG_UINT32(0);
+	TransactionId xid = PG_GETARG_TRANSACTIONID(0);
 	RepOriginId nodeid;
 	TimestampTz ts;
 	Datum		values[2];
@@ -555,7 +555,8 @@ CommitTsShmemInit(void)
 	CommitTsCtl->PagePrecedes = CommitTsPagePrecedes;
 	SimpleLruInit(CommitTsCtl, "CommitTs", CommitTsShmemBuffers(), 0,
 				  CommitTsSLRULock, "pg_commit_ts",
-				  LWTRANCHE_COMMITTS_BUFFER);
+				  LWTRANCHE_COMMITTS_BUFFER,
+				  SYNC_HANDLER_COMMIT_TS);
 
 	commitTsShared = ShmemInitStruct("CommitTs shared",
 									 sizeof(CommitTimestampShared),
@@ -799,35 +800,17 @@ DeactivateCommitTs(void)
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-ShutdownCommitTs(void)
-{
-	/* Flush dirty CommitTs pages to disk */
-	SimpleLruFlush(CommitTsCtl, false);
-
-	/*
-	 * fsync pg_commit_ts to ensure that any files flushed previously are
-	 * durably on disk.
-	 */
-	fsync_fname("pg_commit_ts", true);
-}
-
-/*
  * Perform a checkpoint --- either during shutdown, or on-the-fly
  */
 void
 CheckPointCommitTs(void)
 {
-	/* Flush dirty CommitTs pages to disk */
-	SimpleLruFlush(CommitTsCtl, true);
-
 	/*
-	 * fsync pg_commit_ts to ensure that any files flushed previously are
-	 * durably on disk.
+	 * Write dirty CommitTs pages to disk.  This may result in sync requests
+	 * queued for later handling by ProcessSyncRequests(), as part of the
+	 * checkpoint.
 	 */
-	fsync_fname("pg_commit_ts", true);
+	SimpleLruWriteAll(CommitTsCtl, true);
 }
 
 /*
@@ -1082,4 +1065,13 @@ commit_ts_redo(XLogReaderState *record)
 	}
 	else
 		elog(PANIC, "commit_ts_redo: unknown op code %u", info);
+}
+
+/*
+ * Entrypoint for sync.c to sync commit_ts files.
+ */
+int
+committssyncfiletag(const FileTag *ftag, char *path)
+{
+	return SlruSyncFileTag(CommitTsCtl, ftag, path);
 }

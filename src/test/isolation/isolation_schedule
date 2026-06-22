@@ -102,6 +102,7 @@ test: delete-abort-savept
 #test: lock-committed-keyupdate
 test: update-locked-tuple
 #test: reindex-concurrently
+#test: reindex-schema
 #test: propagate-lock-delete
 #test: tuplelock-conflict
 #test: tuplelock-update
@@ -132,9 +133,11 @@ test: timeouts
 test: vacuum-concurrent-drop
 test: vacuum-conflict
 test: vacuum-skip-locked
+test: horizons
 #test: predicate-hash
 #test: predicate-gist
 #test: predicate-gin
+#test: partition-concurrent-attach
 
 test: partition-drop-index-locking
 

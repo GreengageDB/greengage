@@ -342,7 +342,7 @@ gp_acquire_sample_rows_col_type(Oid typid)
 			 */
 			return OIDOID;
 
-		case PGNODETREEOID:
+		case PG_NODE_TREEOID:
 			/*
 			 * Input function of pg_node_tree doesn't allow loading
 			 * back values. Treat it as text.

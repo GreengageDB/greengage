@@ -59,7 +59,7 @@ test: gp_gin_index
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_aggregate create_function_3 create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors
+test: create_aggregate create_function_3 create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors infinite_recurse
 
 # ----------
 # Because vacuum will detect concurrently running transactions, it is necessary to

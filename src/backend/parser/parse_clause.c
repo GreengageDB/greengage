@@ -1780,24 +1780,13 @@ buildMergedJoinVar(ParseState *pstate, JoinType jointype,
 			   *r_node,
 			   *res_node;
 
-	/*
-	 * Choose output type if input types are dissimilar.
-	 */
-	outcoltype = l_colvar->vartype;
-	outcoltypmod = l_colvar->vartypmod;
-	if (outcoltype != r_colvar->vartype)
-	{
-		outcoltype = select_common_type(pstate,
+	outcoltype = select_common_type(pstate,
+									list_make2(l_colvar, r_colvar),
+									"JOIN/USING",
+									NULL);
+	outcoltypmod = select_common_typmod(pstate,
 										list_make2(l_colvar, r_colvar),
-										"JOIN/USING",
-										NULL);
-		outcoltypmod = -1;		/* ie, unknown */
-	}
-	else if (outcoltypmod != r_colvar->vartypmod)
-	{
-		/* same type, but not same typmod */
-		outcoltypmod = -1;		/* ie, unknown */
-	}
+										outcoltype);
 
 	/*
 	 * Insert coercion functions if needed.  Note that a difference in typmod
@@ -1982,7 +1971,7 @@ transformLimitClause(ParseState *pstate, Node *clause,
 		IsA(clause, A_Const) && ((A_Const *) clause)->val.type == T_Null)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_ROW_COUNT_IN_LIMIT_CLAUSE),
-				 errmsg("row count cannot be NULL in FETCH FIRST ... WITH TIES clause")));
+				 errmsg("row count cannot be null in FETCH FIRST ... WITH TIES clause")));
 
 	return qual;
 }

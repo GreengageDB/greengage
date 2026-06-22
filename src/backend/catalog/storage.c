@@ -449,7 +449,8 @@ RelationCopyStorage(SMgrRelation src, SMgrRelation dst,
 
 		smgrread(src, forkNum, blkno, buf.data);
 
-		if (!PageIsVerified(page, blkno))
+		if (!PageIsVerifiedExtended(page, blkno,
+									PIV_LOG_WARNING | PIV_REPORT_STAT))
 			ereport(ERROR,
 					(errcode(ERRCODE_DATA_CORRUPTED),
 					 errmsg("invalid page in block %u of relation %s",
@@ -608,7 +609,6 @@ smgrDoPendingDeletes(bool isCommit)
 	PendingRelDelete *prev;
 	PendingRelDelete *next;
 	int			nrels = 0,
-				i = 0,
 				maxrels = 0;
 	SMgrRelation *srels = NULL;
 
@@ -664,7 +664,7 @@ smgrDoPendingDeletes(bool isCommit)
 	{
 		smgrdounlinkall(srels, nrels, false);
 
-		for (i = 0; i < nrels; i++)
+		for (int i = 0; i < nrels; i++)
 			smgrclose(srels[i]);
 
 		pfree(srels);

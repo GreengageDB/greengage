@@ -22,6 +22,7 @@
 #include "common/string.h"
 #include "lib/stringinfo.h"
 
+
 static void
 ecpg_filter(const char *sourcefile, const char *outfile)
 {
@@ -160,6 +161,7 @@ ecpg_start_test(const char *testname,
 
 	unsetenv("PGAPPNAME");
 	free(appnameenv);
+
 	free(testname_dash.data);
 
 	return pid;

@@ -19,7 +19,6 @@
 #include "catalog/pg_control.h"
 #include "common/controldata_utils.h"
 #include "common/file_perm.h"
-#include "common/file_utils.h"
 #include "common/restricted_token.h"
 #include "common/string.h"
 #include "fe_utils/recovery_gen.h"
@@ -38,7 +37,6 @@ static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 
 static void digestControlFile(ControlFileData *ControlFile, char *source,
 							  size_t size);
-static void syncTargetDirectory(void);
 static void getRestoreCommand(const char *argv0);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, int *tliIndex);
@@ -135,7 +133,8 @@ main(int argc, char **argv)
 	TimeLineID	endtli;
 	ControlFileData ControlFile_new;
 	bool		writerecoveryconf = false;
-	char		*replication_slot = NULL;
+	char	   *replication_slot = NULL;
+	filemap_t  *filemap;
 
 	pg_logging_init(argv[0]);
 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("pg_rewind"));
@@ -190,7 +189,7 @@ main(int argc, char **argv)
 
 			case 3:
 				debug = true;
-				pg_logging_set_level(PG_LOG_DEBUG);
+				pg_logging_increase_verbosity();
 				break;
 
 			case 'D':			/* -D or --target-pgdata */
@@ -396,13 +395,16 @@ main(int argc, char **argv)
 				(uint32) (chkptrec >> 32), (uint32) chkptrec,
 				chkpttli);
 
+	/* Initialize the hash table to track the status of each file */
+	filehash_init();
+
 	/*
 	 * Collect information about all files in the target and source systems.
 	 */
-	filemap_create();
 	if (showprogress)
 		pg_log_info("reading source file list");
 	fetchSourceFileList();
+
 	if (showprogress)
 		pg_log_info("reading target file list");
 	traverse_datadir(datadir_target, &process_target_file);
@@ -423,13 +425,13 @@ main(int argc, char **argv)
 	 * We have collected all information we need from both systems. Decide
 	 * what to do with each file.
 	 */
-	decide_file_actions();
+	filemap = decide_file_actions();
 	if (showprogress)
-		calculate_totals();
+		calculate_totals(filemap);
 
 	/* this is too verbose even for verbose mode */
 	if (debug)
-		print_filemap();
+		print_filemap(filemap);
 
 	/*
 	 * Ok, we're ready to start copying things over.
@@ -449,7 +451,7 @@ main(int argc, char **argv)
 	 * modified the target directory and there is no turning back!
 	 */
 
-	executeFileMap();
+	execute_file_actions(filemap);
 
 	progress_report(true);
 
@@ -489,7 +491,7 @@ main(int argc, char **argv)
 
 	if (showprogress)
 		pg_log_info("syncing target data directory");
-	syncTargetDirectory();
+	sync_target_dir(filemap);
 
 	if (writerecoveryconf && !dry_run)
 		WriteRecoveryConfig(conn, datadir_target,
@@ -835,83 +837,6 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 
 	/* Additional checks on control file */
 	checkControlFile(ControlFile);
-}
-
-/*
- * Sync target data directory to ensure that modifications are safely on disk.
- *
- * We do this once, for the whole data directory, for performance reasons.  At
- * the end of pg_rewind's run, the kernel is likely to already have flushed
- * most dirty buffers to disk.  Additionally fsync_pgdata uses a two-pass
- * approach (only initiating writeback in the first pass), which often reduces
- * the overall amount of IO noticeably.
- *
- * gpdb: We assume that all files are synchronized before rewinding and thus we
- * just need to synchronize those affected files. This is a resonable
- * assumption for gpdb since we've ensured that the db state is clean shutdown
- * in pg_rewind by running single mode postgres if needed and also we do not
- * copy an unsynchronized dababase without sync as the target base.
- */
-static void
-syncTargetDirectory(void)
-{
-	if (!do_sync || dry_run)
-		return;
-
-	file_entry_t *entry;
-	int			  i;
-
-	if (chdir(datadir_target) < 0)
-	{
-		pg_log_error("could not change directory to \"%s\": %m", datadir_target);
-		exit(1);
-	}
-
-	for (i = 0; i < filemap->narray; i++)
-	{
-		entry = filemap->array[i];
-
-		if (entry->target_pages_to_overwrite.bitmapsize > 0)
-			fsync_fname(entry->path, false);
-		else
-		{
-			switch (entry->action)
-			{
-				case FILE_ACTION_COPY:
-				case FILE_ACTION_TRUNCATE:
-				case FILE_ACTION_COPY_TAIL:
-					fsync_fname(entry->path, false);
-					break;
-
-				case FILE_ACTION_CREATE:
-					fsync_fname(entry->path,
-								entry->source_type == FILE_TYPE_DIRECTORY);
-					/* FALLTHROUGH */
-				case FILE_ACTION_REMOVE:
-					/*
-					 * Fsync the parent directory if we either create or delete
-					 * files/directories in the parent directory. The parent
-					 * directory might be missing as expected, so fsync it could
-					 * fail but we ignore that error.
-					 */
-					fsync_parent_path(entry->path);
-					break;
-
-				case FILE_ACTION_NONE:
-					break;
-
-				default:
-					pg_fatal("no action decided for \"%s\"", entry->path);
-					break;
-			}
-		}
-	}
-
-	/* fsync some files that are (possibly) written by pg_rewind. */
-	fsync_fname("global/pg_control", false);
-	fsync_fname("backup_label", false);
-	fsync_fname("postgresql.auto.conf", false);
-	fsync_fname(".", true); /* due to new file backup_label. */
 }
 
 static int32

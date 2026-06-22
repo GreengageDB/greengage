@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include "common/file_perm.h"
+#include "common/file_utils.h"
 #include "file_ops.h"
 #include "filemap.h"
 #include "pg_rewind.h"
@@ -312,6 +313,83 @@ create_target_tablespace_layout(const char *path, const char *link)
 				 newlink);
 
 	pfree(newlink);
+}
+
+/*
+ * Sync target data directory to ensure that modifications are safely on disk.
+ *
+ * We do this once, for the whole data directory, for performance reasons.  At
+ * the end of pg_rewind's run, the kernel is likely to already have flushed
+ * most dirty buffers to disk.  Additionally fsync_pgdata uses a two-pass
+ * approach (only initiating writeback in the first pass), which often reduces
+ * the overall amount of IO noticeably.
+ *
+ * gpdb: We assume that all files are synchronized before rewinding and thus we
+ * just need to synchronize those affected files. This is a resonable
+ * assumption for gpdb since we've ensured that the db state is clean shutdown
+ * in pg_rewind by running single mode postgres if needed and also we do not
+ * copy an unsynchronized dababase without sync as the target base.
+ */
+void
+sync_target_dir(filemap_t *filemap)
+{
+	if (!do_sync || dry_run)
+		return;
+
+	file_entry_t *entry;
+	int			  i;
+
+	if (chdir(datadir_target) < 0)
+	{
+		pg_log_error("could not change directory to \"%s\": %m", datadir_target);
+		exit(1);
+	}
+
+	for (i = 0; i < filemap->nentries; i++)
+	{
+		entry = filemap->entries[i];
+
+		if (entry->target_pages_to_overwrite.bitmapsize > 0)
+			fsync_fname(entry->path, false);
+		else
+		{
+			switch (entry->action)
+			{
+				case FILE_ACTION_COPY:
+				case FILE_ACTION_TRUNCATE:
+				case FILE_ACTION_COPY_TAIL:
+					fsync_fname(entry->path, false);
+					break;
+
+				case FILE_ACTION_CREATE:
+					fsync_fname(entry->path,
+								entry->source_type == FILE_TYPE_DIRECTORY);
+					/* FALLTHROUGH */
+				case FILE_ACTION_REMOVE:
+					/*
+					 * Fsync the parent directory if we either create or delete
+					 * files/directories in the parent directory. The parent
+					 * directory might be missing as expected, so fsync it could
+					 * fail but we ignore that error.
+					 */
+					fsync_parent_path(entry->path);
+					break;
+
+				case FILE_ACTION_NONE:
+					break;
+
+				default:
+					pg_fatal("no action decided for \"%s\"", entry->path);
+					break;
+			}
+		}
+	}
+
+	/* fsync some files that are (possibly) written by pg_rewind. */
+	fsync_fname("global/pg_control", false);
+	fsync_fname("backup_label", false);
+	fsync_fname("postgresql.auto.conf", false);
+	fsync_fname(".", true); /* due to new file backup_label. */
 }
 
 /*

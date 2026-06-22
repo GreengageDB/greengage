@@ -1177,23 +1177,6 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				break;
 			}
 
-		case T_AlternativeSubPlan:
-			{
-				AlternativeSubPlan *asplan = (AlternativeSubPlan *) node;
-				AlternativeSubPlanState *asstate;
-
-				if (!state->parent)
-					elog(ERROR, "AlternativeSubPlan found with no parent plan");
-
-				asstate = ExecInitAlternativeSubPlan(asplan, state->parent);
-
-				scratch.opcode = EEOP_ALTERNATIVE_SUBPLAN;
-				scratch.d.alternative_subplan.asstate = asstate;
-
-				ExprEvalPushStep(state, &scratch);
-				break;
-			}
-
 		case T_FieldSelect:
 			{
 				FieldSelect *fselect = (FieldSelect *) node;
@@ -3596,7 +3579,7 @@ ExecBuildAggTransCall(ExprState *state, AggState *aggstate,
 	 *
 	 * For ordered aggregates:
 	 *
-	 * Only need to choose between the faster path for a single orderred
+	 * Only need to choose between the faster path for a single ordered
 	 * column, and the one between multiple columns. Checking strictness etc
 	 * is done when finalizing the aggregate. See
 	 * process_ordered_aggregate_{single, multi} and

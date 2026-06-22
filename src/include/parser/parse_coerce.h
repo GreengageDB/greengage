@@ -79,6 +79,8 @@ extern void fixup_unknown_vars_in_exprlist(ParseState *pstate, List *exprlist);
 extern void fixup_unknown_vars_in_targetlist(ParseState *pstate, 
 											 List *targetlist);
 
+extern int32 select_common_typmod(ParseState *pstate, List *exprs, Oid common_type);
+
 extern bool check_generic_type_consistency(const Oid *actual_arg_types,
 										   const Oid *declared_arg_types,
 										   int nargs);

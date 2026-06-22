@@ -268,14 +268,13 @@ pqsecure_raw_read(PGconn *conn, void *ptr, size_t len)
 				/* no error message, caller is expected to retry */
 				break;
 
-#ifdef ECONNRESET
+			case EPIPE:
 			case ECONNRESET:
 				printfPQExpBuffer(&conn->errorMessage,
 								  libpq_gettext("server closed the connection unexpectedly\n"
 												"\tThis probably means the server terminated abnormally\n"
 												"\tbefore or while processing the request.\n"));
 				break;
-#endif
 
 			default:
 				printfPQExpBuffer(&conn->errorMessage,
@@ -381,11 +380,9 @@ retry_masked:
 				/* Set flag for EPIPE */
 				REMEMBER_EPIPE(spinfo, true);
 
-#ifdef ECONNRESET
 				/* FALL THRU */
 
 			case ECONNRESET:
-#endif
 				printfPQExpBuffer(&conn->errorMessage,
 								  libpq_gettext("server closed the connection unexpectedly\n"
 												"\tThis probably means the server terminated abnormally\n"

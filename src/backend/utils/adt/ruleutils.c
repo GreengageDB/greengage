@@ -4771,7 +4771,7 @@ make_ruledef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 	bool		is_instead;
 	char	   *ev_qual;
 	char	   *ev_action;
-	List	   *actions = NIL;
+	List	   *actions;
 	Relation	ev_relation;
 	TupleDesc	viewResultDesc = NULL;
 	int			fno;
@@ -4801,14 +4801,16 @@ make_ruledef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 	Assert(!isnull);
 	is_instead = DatumGetBool(dat);
 
-	/* these could be nulls */
 	fno = SPI_fnumber(rulettc, "ev_qual");
 	ev_qual = SPI_getvalue(ruletup, rulettc, fno);
+	Assert(ev_qual != NULL);
 
 	fno = SPI_fnumber(rulettc, "ev_action");
 	ev_action = SPI_getvalue(ruletup, rulettc, fno);
-	if (ev_action != NULL)
-		actions = (List *) stringToNode(ev_action);
+	Assert(ev_action != NULL);
+	actions = (List *) stringToNode(ev_action);
+	if (actions == NIL)
+		elog(ERROR, "invalid empty ev_action list");
 
 	ev_relation = table_open(ev_class, AccessShareLock);
 
@@ -4858,9 +4860,7 @@ make_ruledef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 					 generate_qualified_relation_name(ev_class));
 
 	/* If the rule has an event qualification, add it */
-	if (ev_qual == NULL)
-		ev_qual = "";
-	if (strlen(ev_qual) > 0 && strcmp(ev_qual, "<>") != 0)
+	if (strcmp(ev_qual, "<>") != 0)
 	{
 		Node	   *qual;
 		Query	   *query;
@@ -4932,10 +4932,6 @@ make_ruledef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 		}
 		appendStringInfoString(buf, ");");
 	}
-	else if (list_length(actions) == 0)
-	{
-		appendStringInfoString(buf, "NOTHING;");
-	}
 	else
 	{
 		Query	   *query;
@@ -4965,7 +4961,7 @@ make_viewdef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 	bool		is_instead;
 	char	   *ev_qual;
 	char	   *ev_action;
-	List	   *actions = NIL;
+	List	   *actions;
 	Relation	ev_relation;
 	int			fno;
 	Datum		dat;
@@ -4989,14 +4985,14 @@ make_viewdef(StringInfo buf, HeapTuple ruletup, TupleDesc rulettc,
 	Assert(!isnull);
 	is_instead = DatumGetBool(dat);
 
-	/* these could be nulls */
 	fno = SPI_fnumber(rulettc, "ev_qual");
 	ev_qual = SPI_getvalue(ruletup, rulettc, fno);
+	Assert(ev_qual != NULL);
 
 	fno = SPI_fnumber(rulettc, "ev_action");
 	ev_action = SPI_getvalue(ruletup, rulettc, fno);
-	if (ev_action != NULL)
-		actions = (List *) stringToNode(ev_action);
+	Assert(ev_action != NULL);
+	actions = (List *) stringToNode(ev_action);
 
 	if (list_length(actions) != 1)
 	{
@@ -5302,7 +5298,7 @@ get_select_query_def(Query *query, deparse_context *context,
 			appendContextKeyword(context, " FETCH FIRST ",
 								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 			get_rule_expr(query->limitCount, context, false);
-			appendStringInfo(buf, " ROWS WITH TIES");
+			appendStringInfoString(buf, " ROWS WITH TIES");
 		}
 		else
 		{
@@ -8202,7 +8198,7 @@ get_rule_expr(Node *node, deparse_context *context,
 			{
 				BoolExpr   *expr = (BoolExpr *) node;
 				Node	   *first_arg = linitial(expr->args);
-				ListCell   *arg = list_second_cell(expr->args);
+				ListCell   *arg;
 
 				switch (expr->boolop)
 				{
@@ -8211,12 +8207,11 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
 											false, node);
-						while (arg)
+						for_each_from(arg, expr->args, 1)
 						{
 							appendStringInfoString(buf, " AND ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -8227,12 +8222,11 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
 											false, node);
-						while (arg)
+						for_each_from(arg, expr->args, 1)
 						{
 							appendStringInfoString(buf, " OR ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -8281,7 +8275,12 @@ get_rule_expr(Node *node, deparse_context *context,
 				AlternativeSubPlan *asplan = (AlternativeSubPlan *) node;
 				ListCell   *lc;
 
-				/* As above, this can only happen during EXPLAIN */
+				/*
+				 * This case cannot be reached in normal usage, since no
+				 * AlternativeSubPlan can appear either in parsetrees or
+				 * finished plan trees.  We keep it just in case somebody
+				 * wants to use this code to print planner data structures.
+				 */
 				appendStringInfoString(buf, "(alternatives: ");
 				foreach(lc, asplan->subplans)
 				{
@@ -9504,35 +9503,14 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 	}
 	else
 	{
-		/* unary operator --- but which side? */
+		/* prefix operator */
 		Node	   *arg = (Node *) linitial(args);
-		HeapTuple	tp;
-		Form_pg_operator optup;
 
-		tp = SearchSysCache1(OPEROID, ObjectIdGetDatum(opno));
-		if (!HeapTupleIsValid(tp))
-			elog(ERROR, "cache lookup failed for operator %u", opno);
-		optup = (Form_pg_operator) GETSTRUCT(tp);
-		switch (optup->oprkind)
-		{
-			case 'l':
-				appendStringInfo(buf, "%s ",
-								 generate_operator_name(opno,
-														InvalidOid,
-														exprType(arg)));
-				get_rule_expr_paren(arg, context, true, (Node *) expr);
-				break;
-			case 'r':
-				get_rule_expr_paren(arg, context, true, (Node *) expr);
-				appendStringInfo(buf, " %s",
-								 generate_operator_name(opno,
-														exprType(arg),
-														InvalidOid));
-				break;
-			default:
-				elog(ERROR, "bogus oprkind: %d", optup->oprkind);
-		}
-		ReleaseSysCache(tp);
+		appendStringInfo(buf, "%s ",
+						 generate_operator_name(opno,
+												InvalidOid,
+												exprType(arg)));
+		get_rule_expr_paren(arg, context, true, (Node *) expr);
 	}
 	if (!PRETTY_PAREN(context))
 		appendStringInfoChar(buf, ')');
@@ -10562,7 +10540,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 						RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
 						if (!IsA(rtfunc->funcexpr, FuncExpr) ||
-							((FuncExpr *) rtfunc->funcexpr)->funcid != F_ARRAY_UNNEST ||
+							((FuncExpr *) rtfunc->funcexpr)->funcid != F_UNNEST_ANYARRAY ||
 							rtfunc->funccolnames != NIL)
 						{
 							all_unnest = false;
@@ -11542,10 +11520,6 @@ generate_operator_name(Oid operid, Oid arg1, Oid arg2)
 			p_result = left_oper(NULL, list_make1(makeString(oprname)), arg2,
 								 true, -1);
 			break;
-		case 'r':
-			p_result = right_oper(NULL, list_make1(makeString(oprname)), arg1,
-								  true, -1);
-			break;
 		default:
 			elog(ERROR, "unrecognized oprkind: %d", operform->oprkind);
 			p_result = NULL;	/* keep compiler quiet */
@@ -11933,7 +11907,7 @@ get_range_partbound_string(List *bound_datums)
 	memset(&context, 0, sizeof(deparse_context));
 	context.buf = buf;
 
-	appendStringInfoString(buf, "(");
+	appendStringInfoChar(buf, '(');
 	sep = "";
 	foreach(cell, bound_datums)
 	{

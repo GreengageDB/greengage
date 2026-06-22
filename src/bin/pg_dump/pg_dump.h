@@ -450,9 +450,11 @@ typedef struct _indxInfo
 	int			indnattrs;		/* total number of index attributes */
 	Oid		   *indkeys;		/* In spite of the name 'indkeys' this field
 								 * contains both key and nonkey attributes */
+	char	   *inddependcollnames;	/* FQ names of depended-on collations */
+	char	   *inddependcollversions;	/* versions of the above */
 	bool		indisclustered;
 	bool		indisreplident;
-	Oid			parentidx;		/* if partitioned, parent index OID */
+	Oid			parentidx;		/* if a partition, parent index OID */
 	SimplePtrList partattaches; /* if partitioned, partition attach objects */
 
 	/* if there is an associated constraint object, its dumpId: */
@@ -704,6 +706,7 @@ typedef struct _SubscriptionInfo
 	char	   *subconninfo;
 	char	   *subslotname;
 	char	   *subbinary;
+	char	   *substream;
 	char	   *subsynccommit;
 	char	   *subpublications;
 } SubscriptionInfo;

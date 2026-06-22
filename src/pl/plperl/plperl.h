@@ -99,6 +99,7 @@
 #undef bind
 #undef connect
 #undef fopen
+#undef fstat
 #undef kill
 #undef listen
 #undef lstat

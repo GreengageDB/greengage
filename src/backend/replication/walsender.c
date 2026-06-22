@@ -829,7 +829,7 @@ StartReplication(StartReplicationCmd *cmd)
 	}
 
 	/* Send CommandComplete message */
-	pq_puttextmessage('C', "START_STREAMING");
+	EndReplicationCommand("START_STREAMING");
 }
 
 /*
@@ -1160,11 +1160,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 static void
 DropReplicationSlot(DropReplicationSlotCmd *cmd)
 {
-	QueryCompletion qc;
-
 	ReplicationSlotDrop(cmd->slotname, !cmd->wait);
-	SetQueryCompletion(&qc, CMDTAG_DROP_REPLICATION_SLOT, 0);
-	EndCommand(&qc, DestRemote, false);
 }
 
 /*
@@ -1555,9 +1551,9 @@ exec_replication_command(const char *cmd_string)
 {
 	int			parse_rc;
 	Node	   *cmd_node;
+	const char *cmdtag;
 	MemoryContext cmd_context;
 	MemoryContext old_context;
-	QueryCompletion qc;
 
 	/*
 	 * If WAL sender has been told that shutdown is getting close, switch its
@@ -1583,6 +1579,9 @@ exec_replication_command(const char *cmd_string)
 
 	CHECK_FOR_INTERRUPTS();
 
+	/*
+	 * Parse the command.
+	 */
 	cmd_context = AllocSetContextCreate(CurrentMemoryContext,
 										"Replication command context",
 										ALLOCSET_DEFAULT_SIZES);
@@ -1595,31 +1594,47 @@ exec_replication_command(const char *cmd_string)
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg_internal("replication command parser returned %d",
 								 parse_rc)));
+	replication_scanner_finish();
 
 	cmd_node = replication_parse_result;
 
 	/*
+	 * If it's a SQL command, just clean up our mess and return false; the
+	 * caller will take care of executing it.
+	 */
+	if (IsA(cmd_node, SQLCmd))
+	{
+		if (MyDatabaseId == InvalidOid)
+			ereport(ERROR,
+					(errmsg("cannot execute SQL commands in WAL sender for physical replication")));
+
+		MemoryContextSwitchTo(old_context);
+		MemoryContextDelete(cmd_context);
+
+		/* Tell the caller that this wasn't a WalSender command. */
+		return false;
+	}
+
+	/*
+	 * Report query to various monitoring facilities.  For this purpose, we
+	 * report replication commands just like SQL commands.
+	 */
+	debug_query_string = cmd_string;
+
+	pgstat_report_activity(STATE_RUNNING, cmd_string);
+
+	/*
 	 * Log replication command if log_replication_commands is enabled. Even
 	 * when it's disabled, log the command with DEBUG1 level for backward
-	 * compatibility. Note that SQL commands are not logged here, and will be
-	 * logged later if log_statement is enabled.
+	 * compatibility.
 	 */
-	if (cmd_node->type != T_SQLCmd)
-		ereport(log_replication_commands ? LOG : DEBUG1,
-				(errmsg("received replication command: %s", cmd_string)));
+	ereport(log_replication_commands ? LOG : DEBUG1,
+			(errmsg("received replication command: %s", cmd_string)));
 
 	/*
-	 * CREATE_REPLICATION_SLOT ... LOGICAL exports a snapshot. If it was
-	 * called outside of transaction the snapshot should be cleared here.
+	 * Disallow replication commands in aborted transaction blocks.
 	 */
-	if (!IsTransactionBlock())
-		SnapBuildClearExportedSnapshot();
-
-	/*
-	 * For aborted transactions, don't allow anything except pure SQL, the
-	 * exec_simple_query() will handle it correctly.
-	 */
-	if (IsAbortedTransactionBlockState() && !IsA(cmd_node, SQLCmd))
+	if (IsAbortedTransactionBlockState())
 		ereport(ERROR,
 				(errcode(ERRCODE_IN_FAILED_SQL_TRANSACTION),
 				 errmsg("current transaction is aborted, "
@@ -1635,46 +1650,63 @@ exec_replication_command(const char *cmd_string)
 	initStringInfo(&reply_message);
 	initStringInfo(&tmpbuf);
 
-	/* Report to pgstat that this process is running */
-	pgstat_report_activity(STATE_RUNNING, NULL);
-
 	switch (cmd_node->type)
 	{
 		case T_IdentifySystemCmd:
+			cmdtag = "IDENTIFY_SYSTEM";
+			set_ps_display(cmdtag);
 			IdentifySystem();
+			EndReplicationCommand(cmdtag);
 			break;
 
 		case T_BaseBackupCmd:
-			PreventInTransactionBlock(true, "BASE_BACKUP");
+			cmdtag = "BASE_BACKUP";
+			set_ps_display(cmdtag);
+			PreventInTransactionBlock(true, cmdtag);
 			SendBaseBackup((BaseBackupCmd *) cmd_node);
+			EndReplicationCommand(cmdtag);
 			break;
 
 		case T_CreateReplicationSlotCmd:
+			cmdtag = "CREATE_REPLICATION_SLOT";
+			set_ps_display(cmdtag);
 			CreateReplicationSlot((CreateReplicationSlotCmd *) cmd_node);
+			EndReplicationCommand(cmdtag);
 			break;
 
 		case T_DropReplicationSlotCmd:
+			cmdtag = "DROP_REPLICATION_SLOT";
+			set_ps_display(cmdtag);
 			DropReplicationSlot((DropReplicationSlotCmd *) cmd_node);
+			EndReplicationCommand(cmdtag);
 			break;
 
 		case T_StartReplicationCmd:
 			{
 				StartReplicationCmd *cmd = (StartReplicationCmd *) cmd_node;
 
-				PreventInTransactionBlock(true, "START_REPLICATION");
+				cmdtag = "START_REPLICATION";
+				set_ps_display(cmdtag);
+				PreventInTransactionBlock(true, cmdtag);
 
 				if (cmd->kind == REPLICATION_KIND_PHYSICAL)
 					StartReplication(cmd);
 				else
 					StartLogicalReplication(cmd);
 
+				/* dupe, but necessary per libpqrcv_endstreaming */
+				EndReplicationCommand(cmdtag);
+
 				Assert(xlogreader != NULL);
 				break;
 			}
 
 		case T_TimeLineHistoryCmd:
-			PreventInTransactionBlock(true, "TIMELINE_HISTORY");
+			cmdtag = "TIMELINE_HISTORY";
+			set_ps_display(cmdtag);
+			PreventInTransactionBlock(true, cmdtag);
 			SendTimeLineHistory((TimeLineHistoryCmd *) cmd_node);
+			EndReplicationCommand(cmdtag);
 			break;
 
 		case T_VariableShowStmt:
@@ -1682,23 +1714,16 @@ exec_replication_command(const char *cmd_string)
 				DestReceiver *dest = CreateDestReceiver(DestRemoteSimple);
 				VariableShowStmt *n = (VariableShowStmt *) cmd_node;
 
+				cmdtag = "SHOW";
+				set_ps_display(cmdtag);
+
 				/* syscache access needs a transaction environment */
 				StartTransactionCommand();
 				GetPGVariable(n->name, dest);
 				CommitTransactionCommand();
+				EndReplicationCommand(cmdtag);
 			}
 			break;
-
-		case T_SQLCmd:
-			if (MyDatabaseId == InvalidOid)
-				ereport(ERROR,
-						(errmsg("cannot execute SQL commands in WAL sender for physical replication")));
-
-			/* Report to pgstat that this process is now idle */
-			pgstat_report_activity(STATE_IDLE, NULL);
-
-			/* Tell the caller that this wasn't a WalSender command. */
-			return false;
 
 		default:
 			elog(ERROR, "unrecognized replication command node tag: %u",
@@ -1709,12 +1734,12 @@ exec_replication_command(const char *cmd_string)
 	MemoryContextSwitchTo(old_context);
 	MemoryContextDelete(cmd_context);
 
-	/* Send CommandComplete message */
-	SetQueryCompletion(&qc, CMDTAG_SELECT, 0);
-	EndCommand(&qc, DestRemote, true);
-
-	/* Report to pgstat that this process is now idle */
-	pgstat_report_activity(STATE_IDLE, NULL);
+	/*
+	 * We need not update ps display or pg_stat_activity, because PostgresMain
+	 * will reset those to "idle".  But we must reset debug_query_string to
+	 * ensure it doesn't become a dangling pointer.
+	 */
+	debug_query_string = NULL;
 
 	return true;
 }
@@ -3187,7 +3212,7 @@ WalSndSignals(void)
 	pqsignal(SIGHUP, SignalHandlerForConfigReload);
 	pqsignal(SIGINT, StatementCancelHandler);	/* query cancel */
 	pqsignal(SIGTERM, die);		/* request shutdown */
-	pqsignal(SIGQUIT, quickdie);	/* hard crash time */
+	/* SIGQUIT handler was already set up by InitPostmasterChild */
 	InitializeTimeouts();		/* establishes SIGALRM handler */
 	pqsignal(SIGPIPE, SIG_IGN);
 	pqsignal(SIGUSR1, procsignal_sigusr1_handler);

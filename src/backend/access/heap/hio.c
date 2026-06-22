@@ -47,6 +47,15 @@ RelationPutHeapTuple(Relation relation pg_attribute_unused(),
 	 */
 	Assert(!token || HeapTupleHeaderIsSpeculative(tuple->t_data));
 
+	/*
+	 * Do not allow tuples with invalid combinations of hint bits to be placed
+	 * on a page.  This combination is detected as corruption by the
+	 * contrib/amcheck logic, so if you disable this assertion, make
+	 * corresponding changes there.
+	 */
+	Assert(!((tuple->t_data->t_infomask & HEAP_XMAX_COMMITTED) &&
+			 (tuple->t_data->t_infomask & HEAP_XMAX_IS_MULTI)));
+
 	/* Add the tuple to the page */
 	pageHeader = BufferGetPage(buffer);
 

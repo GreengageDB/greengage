@@ -23,10 +23,12 @@ static void check_is_install_user(ClusterInfo *cluster);
 static void check_proper_datallowconn(ClusterInfo *cluster);
 static void check_for_prepared_transactions(ClusterInfo *cluster);
 static void check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster);
+static void check_for_user_defined_postfix_ops(ClusterInfo *cluster);
 static void check_for_tables_with_oids(ClusterInfo *cluster);
 static void check_for_reg_data_type_usage(ClusterInfo *cluster);
 static void check_for_jsonb_9_4_usage(ClusterInfo *cluster);
 static void check_for_pg_role_prefix(ClusterInfo *cluster);
+static void check_for_new_tablespace_dir(ClusterInfo *new_cluster);
 static char *get_canonical_locale_name(int category, const char *locale);
 static void check_for_appendonly_materialized_view_with_relfrozenxid(ClusterInfo *cluster);
 
@@ -110,6 +112,13 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	/* GPDB 7 removed support for SHA-256 hashed passwords */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 905)
 		old_GPDB6_check_for_unsupported_sha256_password_hashes();
+
+	/*
+	 * Pre-PG 14 allowed user defined postfix operators, which are not
+	 * supported anymore.  Verify there are none, iff applicable.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1300)
+		check_for_user_defined_postfix_ops(&old_cluster);
 
 	/*
 	 * Pre-PG 12 allowed tables to be declared WITH OIDS, which is not
@@ -201,6 +210,8 @@ check_new_cluster(void)
 	check_is_install_user(&new_cluster);
 
 	check_for_prepared_transactions(&new_cluster);
+
+	check_for_new_tablespace_dir(&new_cluster);
 }
 
 
@@ -261,18 +272,10 @@ void
 output_completion_banner(char *analyze_script_file_name,
 						 char *deletion_script_file_name)
 {
-	/* Did we copy the free space files? */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)
-		pg_log(PG_REPORT,
-			   "Optimizer statistics are not transferred by pg_upgrade so,\n"
-			   "once you start the new server, consider running:\n"
-			   "    %s\n\n", analyze_script_file_name);
-	else
-		pg_log(PG_REPORT,
-			   "Optimizer statistics and free space information are not transferred\n"
-			   "by pg_upgrade so, once you start the new server, consider running:\n"
-			   "    %s\n\n", analyze_script_file_name);
-
+	pg_log(PG_REPORT,
+		   "Optimizer statistics are not transferred by pg_upgrade so,\n"
+		   "once you start the new server, consider running:\n"
+		   "    %s\n\n", analyze_script_file_name);
 
 	if (deletion_script_file_name)
 		pg_log(PG_REPORT,
@@ -357,7 +360,7 @@ check_cluster_compatibility(bool live_check)
 	}
 
 	/* We read the real port number for PG >= 9.1 */
-	if (live_check && GET_MAJOR_VERSION(old_cluster.major_version) < 901 &&
+	if (live_check && GET_MAJOR_VERSION(old_cluster.major_version) <= 900 &&
 		old_cluster.port == DEF_PGUPORT)
 		pg_fatal("When checking a pre-PG 9.1 live old server, "
 				 "you must specify the old server's port number.\n");
@@ -566,19 +569,12 @@ create_script_for_cluster_analyze(char **analyze_script_file_name)
 			ECHO_QUOTE, ECHO_QUOTE);
 	fprintf(script, "echo %sthis script and run:%s\n",
 			ECHO_QUOTE, ECHO_QUOTE);
-	fprintf(script, "echo %s    \"%s/vacuumdb\" %s--all %s%s\n", ECHO_QUOTE,
-			new_cluster.bindir, user_specification.data,
-	/* Did we copy the free space files? */
-			(GET_MAJOR_VERSION(old_cluster.major_version) >= 804) ?
-			"--analyze-only" : "--analyze", ECHO_QUOTE);
+	fprintf(script, "echo %s    \"%s/vacuumdb\" %s--all --analyze-only%s\n", ECHO_QUOTE,
+			new_cluster.bindir, user_specification.data, ECHO_QUOTE);
 	fprintf(script, "echo%s\n\n", ECHO_BLANK);
 
 	fprintf(script, "\"%s/vacuumdb\" %s--all --analyze-in-stages\n",
 			new_cluster.bindir, user_specification.data);
-	/* Did we copy the free space files? */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) < 804)
-		fprintf(script, "\"%s/vacuumdb\" %s--all\n", new_cluster.bindir,
-				user_specification.data);
 
 	fprintf(script, "echo%s\n\n", ECHO_BLANK);
 	fprintf(script, "echo %sDone%s\n",
@@ -593,6 +589,44 @@ create_script_for_cluster_analyze(char **analyze_script_file_name)
 #endif
 
 	termPQExpBuffer(&user_specification);
+
+	check_ok();
+}
+
+/*
+ * A previous run of pg_upgrade might have failed and the new cluster
+ * directory recreated, but they might have forgotten to remove
+ * the new cluster's tablespace directories.  Therefore, check that
+ * new cluster tablespace directories do not already exist.  If
+ * they do, it would cause an error while restoring global objects.
+ * This allows the failure to be detected at check time, rather than
+ * during schema restore.
+ *
+ * Note, v8.4 has no tablespace_suffix, which is fine so long as the
+ * version being upgraded *to* has a suffix, since it's not allowed
+ * to pg_upgrade from a version to the same version if tablespaces are
+ * in use.
+ */
+static void
+check_for_new_tablespace_dir(ClusterInfo *new_cluster)
+{
+	int		tblnum;
+	char	new_tablespace_dir[MAXPGPATH];
+
+	prep_status("Checking for new cluster tablespace directories");
+
+	for (tblnum = 0; tblnum < os_info.num_old_tablespaces; tblnum++)
+	{
+		struct stat statbuf;
+
+		snprintf(new_tablespace_dir, MAXPGPATH, "%s%s",
+				os_info.old_tablespaces[tblnum],
+				new_cluster->tablespace_suffix);
+
+		if (stat(new_tablespace_dir, &statbuf) == 0 || errno != ENOENT)
+			pg_fatal("new cluster tablespace directory already exists: \"%s\"\n",
+					 new_tablespace_dir);
+	}
 
 	check_ok();
 }
@@ -968,6 +1002,104 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		check_ok();
 }
 
+/*
+ * Verify that no user defined postfix operators exist.
+ */
+static void
+check_for_user_defined_postfix_ops(ClusterInfo *cluster)
+{
+	int			dbnum;
+	FILE	   *script = NULL;
+	bool		found = false;
+	char		output_path[MAXPGPATH];
+
+	prep_status("Checking for user-defined postfix operators");
+
+	snprintf(output_path, sizeof(output_path),
+			 "postfix_ops.txt");
+
+	/* Find any user defined postfix operators */
+	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_oproid,
+					i_oprnsp,
+					i_oprname,
+					i_typnsp,
+					i_typname;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+
+		/*
+		 * The query below hardcodes FirstNormalObjectId as 16384 rather than
+		 * interpolating that C #define into the query because, if that
+		 * #define is ever changed, the cutoff we want to use is the value
+		 * used by pre-version 14 servers, not that of some future version.
+		 */
+		res = executeQueryOrDie(conn,
+								"SELECT o.oid AS oproid, "
+								"       n.nspname AS oprnsp, "
+								"       o.oprname, "
+								"       tn.nspname AS typnsp, "
+								"       t.typname "
+								"FROM pg_catalog.pg_operator o, "
+								"     pg_catalog.pg_namespace n, "
+								"     pg_catalog.pg_type t, "
+								"     pg_catalog.pg_namespace tn "
+								"WHERE o.oprnamespace = n.oid AND "
+								"      o.oprleft = t.oid AND "
+								"      t.typnamespace = tn.oid AND "
+								"      o.oprright = 0 AND "
+								"      o.oid >= 16384");
+		ntups = PQntuples(res);
+		i_oproid = PQfnumber(res, "oproid");
+		i_oprnsp = PQfnumber(res, "oprnsp");
+		i_oprname = PQfnumber(res, "oprname");
+		i_typnsp = PQfnumber(res, "typnsp");
+		i_typname = PQfnumber(res, "typname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL &&
+				(script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  (oid=%s) %s.%s (%s.%s, NONE)\n",
+					PQgetvalue(res, rowno, i_oproid),
+					PQgetvalue(res, rowno, i_oprnsp),
+					PQgetvalue(res, rowno, i_oprname),
+					PQgetvalue(res, rowno, i_typnsp),
+					PQgetvalue(res, rowno, i_typname));
+		}
+
+		PQclear(res);
+
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		pg_fatal("Your installation contains user-defined postfix operators, which are not\n"
+				 "supported anymore.  Consider dropping the postfix operators and replacing\n"
+				 "them with prefix operators or function calls.\n"
+				 "A list of user-defined postfix operators is in the file:\n"
+				 "    %s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
 
 /*
  * Verify that no tables are declared WITH OIDS.

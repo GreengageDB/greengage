@@ -1774,7 +1774,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->writetup = writetup_forbidden;
 	state->readtup = readtup_heap;
 
-	state->myfile = BufFileOpenShared(fileset, filename);
+	state->myfile = BufFileOpenShared(fileset, filename, O_RDONLY);
 	state->readptrs[0].file = 0;
 	state->readptrs[0].offset = 0L;
 	state->status = TSS_READFILE;

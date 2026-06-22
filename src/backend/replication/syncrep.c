@@ -160,6 +160,28 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	const char *old_status;
 	int			mode;
 
+	/*
+	 * Fast exit if user has not requested sync replication, or there are no
+	 * sync replication standby names defined.
+	 *
+	 * Since this routine gets called every commit time, it's important to
+	 * exit quickly if sync replication is not requested. So we check
+	 * WalSndCtl->sync_standbys_defined flag without the lock and exit
+	 * immediately if it's false. If it's true, we need to check it again later
+	 * while holding the lock, to check the flag and operate the sync rep
+	 * queue atomically. This is necessary to avoid the race condition
+	 * described in SyncRepUpdateSyncStandbysDefined(). On the other
+	 * hand, if it's false, the lock is not necessary because we don't touch
+	 * the queue.
+	 *
+	 * GGDB: the coordinator should be able to commit even if standby is not
+	 * available. Therefore, at the coordinator, we make a separate check below
+	 * about whether synchronous replication is currently available or not.
+	 */
+	if (!IS_QUERY_DISPATCHER() && (!SyncRepRequested() ||
+		!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined))
+		return;
+
 	/* Cap the level for anything other than commit to remote flush only. */
 	if (commit)
 		mode = SyncRepWaitMode;
@@ -170,12 +192,6 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	elogif(debug_walrepl_syncrep, LOG,
 			"syncrep wait -- This backend's commit LSN for syncrep is %X/%X.",
 		   (uint32) (lsn >> 32), (uint32) lsn);
-
-	/*
-	 * Fast exit if user has not requested sync replication.
-	 */
-	if (!SyncRepRequested())
-		return;
 
 	Assert(SHMQueueIsDetached(&(MyProc->syncRepLinks)));
 	Assert(WalSndCtl != NULL);

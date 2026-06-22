@@ -172,6 +172,8 @@ static Oid	namespaceUser = InvalidOid;
 /* The above four values are valid only if baseSearchPathValid */
 static bool baseSearchPathValid = true;
 
+static bool before_shmem_exit_callback_registered = false;
+
 /* Override requests are remembered in a stack of OverrideStackEntry structs */
 
 typedef struct
@@ -1497,8 +1499,7 @@ FunctionIsVisible(Oid funcid)
  *		Given a possibly-qualified operator name and exact input datatypes,
  *		look up the operator.  Returns InvalidOid if not found.
  *
- * Pass oprleft = InvalidOid for a prefix op, oprright = InvalidOid for
- * a postfix op.
+ * Pass oprleft = InvalidOid for a prefix op.
  *
  * If the operator name is not schema-qualified, it is sought in the current
  * namespace search path.  If the name is schema-qualified and the given
@@ -1604,8 +1605,8 @@ OpernameGetOprid(List *names, Oid oprleft, Oid oprright)
  * namespace case, we arrange for entries in earlier namespaces to mask
  * identical entries in later namespaces.
  *
- * The returned items always have two args[] entries --- one or the other
- * will be InvalidOid for a prefix or postfix oprkind.  nargs is 2, too.
+ * The returned items always have two args[] entries --- the first will be
+ * InvalidOid for a prefix oprkind.  nargs is always 2, too.
  */
 FuncCandidateList
 OpernameGetCandidates(List *names, char oprkind, bool missing_schema_ok)
@@ -3942,7 +3943,7 @@ recomputeNamespacePath(void)
 	/*
 	 * We want to detect the case where the effective value of the base search
 	 * path variables didn't change.  As long as we're doing so, we can avoid
-	 * copying the OID list unncessarily.
+	 * copying the OID list unnecessarily.
 	 */
 	if (baseCreationNamespace == firstNS &&
 		baseTempCreationPending == temp_missing &&
@@ -4306,10 +4307,14 @@ ResetTempNamespace(void)
 
 	/*
 	 * MPP-19973: The shmem exit callback to remove a temp
-	 * namespace is registered. We need to remove it here as the
+	 * namespace may be registered. We need to remove it here as the
 	 * namespace has already been reseted. 
 	 */
-	cancel_before_shmem_exit(RemoveTempRelationsCallback, 0);
+	if (before_shmem_exit_callback_registered)
+	{
+		before_shmem_exit_callback_registered = false;
+		cancel_before_shmem_exit(RemoveTempRelationsCallback, 0);
+	}
 
 	myTempNamespace = InvalidOid;
 	myTempToastNamespace = InvalidOid;
@@ -4336,7 +4341,10 @@ AtEOXact_Namespace(bool isCommit, bool parallel)
 	if (myTempNamespaceSubID != InvalidSubTransactionId && !parallel)
 	{
 		if (isCommit)
+		{
 			before_shmem_exit(RemoveTempRelationsCallback, 0);
+			before_shmem_exit_callback_registered = true;
+		}
 		else
 		{
 			myTempNamespace = InvalidOid;
@@ -4519,6 +4527,8 @@ RemoveSchemaById(Oid schemaOid)
 static void
 RemoveTempRelationsCallback(int code, Datum arg)
 {
+	before_shmem_exit_callback_registered = false;
+
 	if (DistributedTransactionContext == DTX_CONTEXT_QE_PREPARED)
 	{
 		/*

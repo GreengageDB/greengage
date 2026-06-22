@@ -272,12 +272,11 @@ select * from locktest_master where coalesce not like 'gp_%' and coalesce not li
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
      coalesce      |       mode       | locktype |    node    
 -------------------+------------------+----------+------------
- partlockt         | AccessShareLock  | relation | n segments
  partlockt         | RowExclusiveLock | relation | n segments
  partlockt_1_prt_1 | RowExclusiveLock | relation | 1 segment
  partlockt_1_prt_2 | RowExclusiveLock | relation | 1 segment
  partlockt_1_prt_3 | RowExclusiveLock | relation | 1 segment
-(5 rows)
+(4 rows)
 
 commit;
 -- drop
@@ -443,10 +442,9 @@ select * from locktest_master where coalesce not like 'gp_%' and coalesce not li
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
      coalesce      |       mode       | locktype |   node    
 -------------------+------------------+----------+-----------
- partlockt         | AccessShareLock  | relation | 1 segment
  partlockt         | RowExclusiveLock | relation | 1 segment
  partlockt_1_prt_3 | RowExclusiveLock | relation | 1 segment
-(3 rows)
+(2 rows)
 
 commit;
 -- delete locking
@@ -457,25 +455,23 @@ delete from partlockt where i = 4;
 -- GPDB_12_MERGE_FIXME Revisit this post merge and see if we have a chance to unlock the pruned partitions
 -- end_ignore
 select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
-        coalesce         |      mode       | locktype |  node  
--------------------------+-----------------+----------+--------
- partlockt               | AccessShareLock | relation | master
- partlockt               | ExclusiveLock   | relation | master
- partlockt_1_prt_4       | ExclusiveLock   | relation | master
- partlockt_1_prt_4_i_idx | ExclusiveLock   | relation | master
-(4 rows)
+        coalesce         |     mode      | locktype |  node  
+-------------------------+---------------+----------+--------
+ partlockt               | ExclusiveLock | relation | master
+ partlockt_1_prt_4       | ExclusiveLock | relation | master
+ partlockt_1_prt_4_i_idx | ExclusiveLock | relation | master
+(3 rows)
 
 -- start_ignore
 -- GPDB_12_MERGE_FIXME Revisit this post merge and see if we have a chance to unlock the root table
 -- end_ignore
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
-        coalesce         |      mode       | locktype |   node    
--------------------------+-----------------+----------+-----------
- partlockt               | AccessShareLock | relation | 1 segment
- partlockt               | ExclusiveLock   | relation | 1 segment
- partlockt_1_prt_4       | ExclusiveLock   | relation | 1 segment
- partlockt_1_prt_4_i_idx | ExclusiveLock   | relation | 1 segment
-(4 rows)
+        coalesce         |     mode      | locktype |   node    
+-------------------------+---------------+----------+-----------
+ partlockt               | ExclusiveLock | relation | 1 segment
+ partlockt_1_prt_4       | ExclusiveLock | relation | 1 segment
+ partlockt_1_prt_4_i_idx | ExclusiveLock | relation | 1 segment
+(3 rows)
 
 commit;
 -- drop index

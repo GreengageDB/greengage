@@ -64,7 +64,7 @@ gp_create_restore_point(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "gp_segment_id",
 						   INT2OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "restore_lsn",
-						   LSNOID, -1, 0);
+						   PG_LSNOID, -1, 0);
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
@@ -198,7 +198,7 @@ gp_switch_wal(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "segment_id",
 						   INT2OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "switch_lsn",
-						   LSNOID, -1, 0);
+						   PG_LSNOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "switch_walfilename",
 						   TEXTOID, -1, 0);
 

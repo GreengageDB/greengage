@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * assert.c
- *	  Assert code.
+ *	  Assert support code.
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -11,9 +11,6 @@
  *
  * IDENTIFICATION
  *	  src/backend/utils/error/assert.c
- *
- * NOTE
- *	  This should eventually work with elog()
  *
  *-------------------------------------------------------------------------
  */
@@ -29,6 +26,10 @@
 
 /*
  * ExceptionalCondition - Handles the failure of an Assert()
+ *
+ * We intentionally do not go through elog() here, on the grounds of
+ * wanting to minimize the amount of infrastructure that has to be
+ * working to report an assertion failure.
  */
 void
 ExceptionalCondition(const char *conditionName,
@@ -42,17 +43,20 @@ ExceptionalCondition(const char *conditionName,
 		|| !PointerIsValid(errorType))
 		ereport(FATAL,
 				errFatalReturn(gp_reraise_signal),
-				errmsg("TRAP: ExceptionalCondition: bad arguments"));
+				errmsg("TRAP: ExceptionalCondition: bad arguments in PID %d"),
+					   (int) getpid());
 	else
 		ereport(FATAL,
 				errFatalReturn(gp_reraise_signal),
 				errmsg("Unexpected internal error"),
-				errdetail("%s(\"%s\", File: \"%s\", Line: %d)\n",
-						  errorType, conditionName, fileName, lineNumber));
+				errdetail("%s(\"%s\", File: \"%s\", Line: %d, PID: %d)\n",
+						  errorType, conditionName, fileName, lineNumber,
+						  (int) getpid()));
 				
 	/* Usually this shouldn't be needed, but make sure the msg went out */
 	fflush(stderr);
 
+	/* If we have support for it, dump a simple backtrace */
 #ifdef HAVE_BACKTRACE_SYMBOLS
 	{
 		void	   *buf[100];
@@ -63,12 +67,12 @@ ExceptionalCondition(const char *conditionName,
 	}
 #endif
 
-#ifdef SLEEP_ON_ASSERT
-
 	/*
-	 * It would be nice to use pg_usleep() here, but only does 2000 sec or 33
-	 * minutes, which seems too short.
+	 * If configured to do so, sleep indefinitely to allow user to attach a
+	 * debugger.  It would be nice to use pg_usleep() here, but that can sleep
+	 * at most 2G usec or ~33 minutes, which seems too short.
 	 */
+#ifdef SLEEP_ON_ASSERT
 	sleep(1000000);
 #endif
 

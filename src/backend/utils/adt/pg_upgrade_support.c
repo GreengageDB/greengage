@@ -14,6 +14,7 @@
 #include "access/transam.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/heap.h"
+#include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_authid.h"

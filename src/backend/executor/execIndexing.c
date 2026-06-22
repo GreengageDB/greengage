@@ -274,7 +274,8 @@ ExecCloseIndices(ResultRelInfo *resultRelInfo)
  * ----------------------------------------------------------------
  */
 List *
-ExecInsertIndexTuples(TupleTableSlot *slot,
+ExecInsertIndexTuples(ResultRelInfo *resultRelInfo,
+					  TupleTableSlot *slot,
 					  EState *estate,
 					  bool noDupErr,
 					  bool *specConflict,
@@ -282,7 +283,6 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 {
 	ItemPointer tupleid = &slot->tts_tid;
 	List	   *result = NIL;
-	ResultRelInfo *resultRelInfo;
 	int			i;
 	int			numIndices;
 	RelationPtr relationDescs;
@@ -297,7 +297,6 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 	/*
 	 * Get information from the result relation info structure.
 	 */
-	resultRelInfo = estate->es_result_relation_info;
 	numIndices = resultRelInfo->ri_NumIndices;
 	relationDescs = resultRelInfo->ri_IndexRelationDescs;
 	indexInfoArray = resultRelInfo->ri_IndexRelationInfo;
@@ -483,11 +482,10 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
  * ----------------------------------------------------------------
  */
 bool
-ExecCheckIndexConstraints(TupleTableSlot *slot,
+ExecCheckIndexConstraints(ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
 						  EState *estate, ItemPointer conflictTid,
 						  List *arbiterIndexes)
 {
-	ResultRelInfo *resultRelInfo;
 	int			i;
 	int			numIndices;
 	RelationPtr relationDescs;
@@ -505,7 +503,6 @@ ExecCheckIndexConstraints(TupleTableSlot *slot,
 	/*
 	 * Get information from the result relation info structure.
 	 */
-	resultRelInfo = estate->es_result_relation_info;
 	numIndices = resultRelInfo->ri_NumIndices;
 	relationDescs = resultRelInfo->ri_IndexRelationDescs;
 	indexInfoArray = resultRelInfo->ri_IndexRelationInfo;
