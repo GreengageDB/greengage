@@ -4,6 +4,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_async_append            | on
  enable_bitmapscan              | on
  enable_gathermerge             | on
+ enable_group_by_reordering     | on
  enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
@@ -11,6 +12,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_indexonlyscan           | on
  enable_indexscan               | on
  enable_material                | on
+ enable_memoize                 | off
  enable_mergejoin               | off
  enable_nestloop                | off
  enable_parallel_append         | on
@@ -18,11 +20,10 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_partition_pruning       | on
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
- enable_resultcache             | off
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(21 rows)
+(22 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;
@@ -195,7 +196,7 @@ $$  LANGUAGE plpgsql;
 -- function in select clause
 --   Fails: plpgsql does not support SFRM_Materialize
 select foor(1);
-ERROR:  set-valued function called in context that cannot accept a set
+ERROR:  materialize mode required, but it is not allowed in this context
 CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
 -- expanding columns in the select list
 --    Fails: record type not registered
@@ -218,7 +219,7 @@ select * from foor(1) as (fooid int, f2 int);
 -- function over function (executed on master) 
 --    Fails: plpgsql does not support SFRM_Materialize
 select foor(fooid), * from foor(3) as (fooid int, f2 int);
-ERROR:  set-valued function called in context that cannot accept a set
+ERROR:  materialize mode required, but it is not allowed in this context
 CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
 -- Joining with a table
 select * from foo2, foor(3) z(fooid int, f2 int) where foo2.f2 = z.f2;
