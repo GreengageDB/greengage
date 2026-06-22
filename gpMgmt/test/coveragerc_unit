@@ -9,13 +9,15 @@ omit =
         */sitecustomize.py*
         */test/*
         */gpload_test/*
-        /usr/local/greengage-db-devel/lib/python/pygresql/*
-        /usr/local/greengage-db-devel/lib/python/yaml/*
-        /usr/local/greengage-db-devel/lib/python/sitecustomize.py
-        /usr/local/greengage-db-devel/lib/python/subprocess32.py
-        /usr/local/greengage-db-devel/lib/python/subprocess32.pyc
-        /usr/local/greengage-db-devel/bin/lib/pexpect/*
-        /usr/local/greengage-db-devel/lib/python/psutil/*
+        $GPHOME/lib/python/pygresql/*
+        $GPHOME/lib/python/pg.py
+        $GPHOME/lib/python/pgdb.py
+        $GPHOME/lib/python/yaml/*
+        $GPHOME/lib/python/sitecustomize.py
+        $GPHOME/lib/python/subprocess32.py
+        $GPHOME/lib/python/subprocess32.pyc
+        $GPHOME/bin/lib/pexpect/*
+        $GPHOME/lib/python/psutil/*
         */dist-packages/*
         /usr/local/bin/behave
         /usr/local/bin/coverage
@@ -25,19 +27,19 @@ omit =
 source =
         /home/gpadmin/gpdb_src/gpMgmt/bin
         /home/gpadmin/gpdb_src/gpMgmt/bin
-        /usr/local/greengage-db-devel/bin
+        $GPHOME/bin
 
 source2 =
         /home/gpadmin/gpdb_src/gpMgmt/sbin
         /home/gpadmin/gpdb_src/gpMgmt/sbin
-        /usr/local/greengage-db-devel/sbin
+        $GPHOME/sbin
 
 source3 =
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
-        /usr/local/greengage-db-devel/lib/python/gppylib
+        /$GPHOME/lib/python/gppylib
 
 source4 =
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        /usr/local/greengage-db-devel/bin/gp_replica_check.py
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        $GPHOME/bin
