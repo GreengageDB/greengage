@@ -7756,6 +7756,10 @@ alter_table_type_to_string(AlterTableType cmdtype)
 			return "ALTER COLUMN ... DROP IDENTITY";
 		case AT_ReAddStatistics:
 			return NULL;		/* not real grammar */
+		case AT_ExpandTable:
+			return "EXPAND TABLE";
+		case AT_ExpandPartitionTablePrepare:
+			return "EXPAND PARTITION PREPARE";
 	}
 
 	return NULL;
