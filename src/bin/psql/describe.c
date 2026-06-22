@@ -4645,45 +4645,25 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 					  "        JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid)\n"
 					  "        WHERE m.member = r.oid) as memberof");
 
-	if (verbose)
+	/*
+	 * GPDB: append the Greenplum-specific role attributes (columns 9, 10, 11)
+	 * unconditionally, so that both \du and \du+ produce the same column layout
+	 * that the result loop below reads.  The PG15 merge moved these into a
+	 * verbose-only branch (along with a duplicate query and a duplicate FROM
+	 * clause), leaving the non-verbose \du query one column short -- the loop
+	 * then read a non-existent column 11 and \du failed with the libpq error
+	 * "column number 11 is out of range".
+	 */
+	appendPQExpBufferStr(&buf, "\n, r.rolcreaterextgpfd");
+	appendPQExpBufferStr(&buf, "\n, r.rolcreatewextgpfd");
+	appendPQExpBufferStr(&buf, "\n, r.rolcreaterexthttp");
+
+	if (verbose && pset.sversion >= 80200)
 	{
-		printfPQExpBuffer(&buf,
-						  "SELECT r.rolname, r.rolsuper, r.rolinherit,\n"
-						  "  r.rolcreaterole, r.rolcreatedb, r.rolcanlogin,\n"
-						  "  r.rolconnlimit, r.rolvaliduntil,\n"
-						  "  ARRAY(SELECT b.rolname\n"
-						  "        FROM pg_catalog.pg_auth_members m\n"
-						  "        JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid)\n"
-						  "        WHERE m.member = r.oid) as memberof");
-
-		/* add Greenplum specific attributes */
-		appendPQExpBufferStr(&buf, "\n, r.rolcreaterextgpfd");
-		appendPQExpBufferStr(&buf, "\n, r.rolcreatewextgpfd");
-		appendPQExpBufferStr(&buf, "\n, r.rolcreaterexthttp");
-
-		if (verbose && pset.sversion >= 80200)
-		{
-			appendPQExpBufferStr(&buf, "\n, pg_catalog.shobj_description(r.oid, 'pg_authid') AS description");
-			ncols++;
-		}
-		if (pset.sversion >= 90100)
-		{
-			appendPQExpBufferStr(&buf, "\n, r.rolreplication");
-		}
-
-		if (pset.sversion >= 90500)
-		{
-			appendPQExpBufferStr(&buf, "\n, r.rolbypassrls");
-		}
-
-		appendPQExpBufferStr(&buf, "\nFROM pg_catalog.pg_roles r\n");
-
-		if (!showSystem && !pattern)
-			appendPQExpBufferStr(&buf, "WHERE r.rolname !~ '^pg_'\n");
-
-		processSQLNamePattern(pset.db, &buf, pattern, false, false,
-							  NULL, "r.rolname", NULL, NULL, NULL, NULL);
+		appendPQExpBufferStr(&buf, "\n, pg_catalog.shobj_description(r.oid, 'pg_authid') AS description");
+		ncols++;
 	}
+
 	appendPQExpBufferStr(&buf, "\n, r.rolreplication");
 
 	if (pset.sversion >= 90500)
@@ -4759,7 +4739,8 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 				add_role_attribute(&buf, _("Replication"));
 
 		if (pset.sversion >= 90500)
-			if (strcmp(PQgetvalue(res, i, (verbose ? 11 : 10)), "t") == 0)
+			/* +numgreenplumspecificattrs is due to additional Greenplum specific attributes */
+			if (strcmp(PQgetvalue(res, i, (verbose ? 11 + numgreenplumspecificattrs : 10 + numgreenplumspecificattrs)), "t") == 0)
 				add_role_attribute(&buf, _("Bypass RLS"));
 
 		conns = atoi(PQgetvalue(res, i, 6));
