@@ -22268,9 +22268,18 @@ CloneRowTriggersToPartition(Relation parent, Relation partition)
 		 * Note we dare not verify that the other trigger belongs to an
 		 * ancestor relation of our parent, because that creates deadlock
 		 * opportunities.
+		 *
+		 * Constraint-backed internal triggers (foreign-key / RI triggers,
+		 * tgconstraint set) are always skipped here -- the constraint cloning
+		 * code (CloneForeignKeyConstraints) re-creates them.  Unlike PG14, PG15
+		 * sets tgparentid on those partition-inherited FK triggers, so the
+		 * tgparentid test below no longer excludes them on its own; cloning
+		 * them here too would duplicate the RI triggers and later fail with
+		 * "constraint N is not a foreign key constraint".
 		 */
 		if (trigForm->tgisinternal &&
-			(!parent->rd_rel->relispartition ||
+			(OidIsValid(trigForm->tgconstraint) ||
+			 !parent->rd_rel->relispartition ||
 			 !OidIsValid(trigForm->tgparentid)))
 			continue;
 
