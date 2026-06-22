@@ -67,7 +67,8 @@ class ForeignKeyCheck(object):
         # skip these master-only tables
         skipped_masteronly = ['gp_relation_node', 'pg_description',
                               'pg_shdescription', 'pg_stat_last_operation',
-                              'pg_stat_last_shoperation', 'pg_statistic']
+                              'pg_stat_last_shoperation', 'pg_statistic',
+                              'pg_event_trigger']
 
         if catname in skipped_masteronly:
             return
