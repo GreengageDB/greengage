@@ -24,9 +24,12 @@ $$ language 'plpgsql';
 
 CREATE FUNCTION classify_age(age integer) RETURNS text AS $$
   SELECT CASE WHEN $1 < 0 THEN 'negative'
-              WHEN $1 = 0 THEN 'zero'
-	      WHEN $1 < 50 THEN 'very young' -- less than vacuum_freeze_min_age=50 that we use below
-	      WHEN $1 < 100 THEN 'young' -- recently processed by vacuum freeze
+	      -- "young" = a table recently processed by VACUUM freeze.  PG14 set
+	      -- relfrozenxid to FreezeLimit (current XID - vacuum_freeze_min_age),
+	      -- yielding an age near 50; PG15 freezes the table all the way to the
+	      -- current XID, yielding an age near 0.  Bucket any small age as
+	      -- "young" so the classification is robust across both PG versions.
+	      WHEN $1 < 100 THEN 'young'
 	      ELSE 'old' END; -- not frozen
 $$ LANGUAGE SQL IMMUTABLE STRICT;
 
@@ -156,7 +159,7 @@ vacuum freeze test_table_ao_with_toast;
 vacuum freeze test_table_co;
 
 -- Check table ages again. Because we used VACUUM FREEZE, they should be
--- very young now.
+-- young now.
 select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('test_table_heap')
 group by segid = -1, relname, classify_age(age);
 
