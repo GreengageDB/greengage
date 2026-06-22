@@ -10,11 +10,11 @@
  *
  * NOTE (PG15 merge): PostgreSQL 15 replaced the UDP statistics collector with
  * the shared-memory cumulative stats system.  The resource-queue level stats
- * used to be forwarded to that collector; there is no collector to send them
- * to any more, so pgstat_report_queuestat()/pgstat_fetch_stat_queueentry()
- * are degraded (local-only / no cross-backend aggregation) until they are
- * re-implemented on top of the shared-memory stats infrastructure.
- * See GPDB_15_MERGE_FIXME below.
+ * used to be forwarded to that collector; they are now reported into the
+ * shared-memory stats system as the PGSTAT_KIND_RESQUEUE kind (keyed by queue
+ * OID), so pg_stat_resqueues again sees cross-backend per-queue totals.  The
+ * backend-local per-portal hash below still tracks elapsed exec/wait time and
+ * is flushed into the shared per-queue entry by pgstat_report_queuestat().
  *
  * Portions Copyright (c) 2006-2023, Greenplum inc
  * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
@@ -28,6 +28,7 @@
 #include "pgstat.h"
 #include "utils/backend_status.h"
 #include "utils/hsearch.h"
+#include "utils/pgstat_internal.h"
 
 /* GUC: collect resource-queue level statistics */
 bool		pgstat_collect_queuelevel = false;
@@ -130,12 +131,14 @@ pgstat_getportalentry(uint32 portalid, Oid queueid)
  *
  *	Called from tcop/postgres.c at end of statement.
  *
- *	GPDB_15_MERGE_FIXME: the UDP statistics collector was removed in PG15, so
- *	the accumulated per-queue statistics can no longer be forwarded to a
- *	collector.  For now we just consume (reset) the backend-local accounting
- *	so it does not accumulate indefinitely.  Re-implement on top of the
- *	shared-memory cumulative stats system to restore cross-backend
- *	aggregation of resource-queue statistics.
+ *	PG15 removed the UDP statistics collector that used to aggregate the
+ *	per-backend per-portal accounting into cross-backend per-queue totals.  We
+ *	now forward that accounting directly into the shared-memory cumulative
+ *	stats system: for each portal we add its counters into the shared
+ *	PGSTAT_KIND_RESQUEUE entry for its queue (keyed by queue OID, global), then
+ *	reset the backend-local accounting.  The shared entry is updated
+ *	synchronously (like replication-slot stats), so the totals are immediately
+ *	visible to pgstat_fetch_stat_queueentry() / pg_stat_resqueues.
  */
 void
 pgstat_report_queuestat(void)
@@ -149,7 +152,26 @@ pgstat_report_queuestat(void)
 	hash_seq_init(&hstat, localStatPortalHash);
 	while ((pentry = (PgStat_StatPortalEntry *) hash_seq_search(&hstat)) != NULL)
 	{
-		/* Reset the counters for this entry. */
+		Oid			queueid = pentry->queueentry.queueid;
+		PgStat_EntryRef *entry_ref;
+		PgStat_StatQueueEntry *statent;
+
+		/* Skip already-consumed / never-initialized portal entries. */
+		if (queueid == InvalidOid)
+			continue;
+
+		/* Forward this portal's accounting into the shared per-queue entry. */
+		entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RESQUEUE, InvalidOid,
+												queueid, false);
+		statent = &((PgStatShared_Resqueue *) entry_ref->shared_stats)->stats;
+		statent->queueid = queueid;
+		statent->n_queries_exec += pentry->queueentry.n_queries_exec;
+		statent->n_queries_wait += pentry->queueentry.n_queries_wait;
+		statent->elapsed_exec += pentry->queueentry.elapsed_exec;
+		statent->elapsed_wait += pentry->queueentry.elapsed_wait;
+		pgstat_unlock_entry(entry_ref);
+
+		/* Reset the backend-local counters for this portal. */
 		pentry->queueentry.queueid = InvalidOid;
 		pentry->queueentry.n_queries_exec = 0;
 		pentry->queueentry.n_queries_wait = 0;
@@ -163,12 +185,13 @@ pgstat_report_queuestat(void)
  *
  *	Support function for the SQL-callable resource-queue stats functions.
  *
- *	GPDB_15_MERGE_FIXME: with the UDP collector gone there is no cross-backend
- *	resource-queue stats hash to read; return NULL (callers report zeroes)
- *	until this is re-implemented on the shared-memory stats system.
+ *	Reads the cross-backend per-queue totals from the shared-memory cumulative
+ *	stats system (PGSTAT_KIND_RESQUEUE).  Returns NULL if the queue has no
+ *	recorded statistics yet, in which case the callers report zeroes.
  */
 PgStat_StatQueueEntry *
 pgstat_fetch_stat_queueentry(Oid queueid)
 {
-	return NULL;
+	return (PgStat_StatQueueEntry *)
+		pgstat_fetch_entry(PGSTAT_KIND_RESQUEUE, InvalidOid, queueid);
 }

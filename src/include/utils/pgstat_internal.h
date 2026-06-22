@@ -383,6 +383,13 @@ typedef struct PgStatShared_ReplSlot
 	PgStat_StatReplSlotEntry stats;
 } PgStatShared_ReplSlot;
 
+/* GPDB: shared per-resource-queue statistics (keyed by queue OID) */
+typedef struct PgStatShared_Resqueue
+{
+	PgStatShared_Common header;
+	PgStat_StatQueueEntry stats;
+} PgStatShared_Resqueue;
+
 
 /*
  * Central shared memory entry for the cumulative stats system.

@@ -313,6 +313,24 @@ static const PgStat_KindInfo pgstat_kind_infos[PGSTAT_NUM_KINDS] = {
 		.from_serialized_name = pgstat_replslot_from_serialized_name_cb,
 	},
 
+	/* GPDB: per-resource-queue statistics, keyed by queue OID, global */
+	[PGSTAT_KIND_RESQUEUE] = {
+		.name = "resqueue",
+
+		.fixed_amount = false,
+		.accessed_across_databases = true,
+
+		.shared_size = sizeof(PgStatShared_Resqueue),
+		.shared_data_off = offsetof(PgStatShared_Resqueue, stats),
+		.shared_data_len = sizeof(((PgStatShared_Resqueue *) 0)->stats),
+
+		/*
+		 * Reported synchronously straight into shared memory at statement end
+		 * (pgstat_report_queuestat), so there is no per-backend pending state
+		 * and no flush callback -- same model as replication-slot stats.
+		 */
+	},
+
 	[PGSTAT_KIND_SUBSCRIPTION] = {
 		.name = "subscription",
 

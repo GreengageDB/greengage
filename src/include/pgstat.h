@@ -43,6 +43,7 @@ typedef enum PgStat_Kind
 	PGSTAT_KIND_FUNCTION,		/* per-function statistics */
 	PGSTAT_KIND_REPLSLOT,		/* per-slot statistics */
 	PGSTAT_KIND_SUBSCRIPTION,	/* per-subscription statistics */
+	PGSTAT_KIND_RESQUEUE,		/* GPDB: per-resource-queue statistics */
 
 	/* stats for fixed-numbered objects */
 	PGSTAT_KIND_ARCHIVER,
@@ -242,7 +243,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA7
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA8
 
 typedef struct PgStat_ArchiverStats
 {
