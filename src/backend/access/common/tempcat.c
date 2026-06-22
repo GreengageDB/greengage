@@ -41,6 +41,7 @@
 #include "miscadmin.h"
 #include "access/tempcat.h"
 #include "access/relscan.h"
+#include "access/xact.h"
 #include "access/valid.h"
 #include "access/memtup.h"
 #include "access/sysattr.h"
@@ -219,6 +220,23 @@ TempcatDListFree(dlist_head *head)
 
 		DListHeapTupleFree(dlist_tup);
 	}
+}
+
+/*
+ * Mark the current command id as "used".
+ *
+ * tempcat mutates the (virtual) catalog and registers cache invalidation
+ * messages via CacheInvalidateHeapTuple(), but it never writes a real heap
+ * tuple, so unlike heap_insert()/heap_update()/heap_delete() it never calls
+ * GetCurrentCommandId(true).  CommandCounterIncrement() only flushes pending
+ * local invalidation messages (via AtCCI_LocalCache) when the command id has
+ * been "used"; otherwise those invalidations linger and stale catcache
+ * entries (notably negative entries) survive into later commands.
+ */
+static inline void
+tempcat_mark_command_id_used(void)
+{
+	(void) GetCurrentCommandId(true);
 }
 
 /*
@@ -703,6 +721,7 @@ tempcat_insert(Relation relation, HeapTuple htup)
 #endif
 
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
+	tempcat_mark_command_id_used();
 	pgstat_count_heap_insert(relation, 1);
 	TempcatDirtyFlag = true;
 }
@@ -733,6 +752,7 @@ tempcat_delete(Relation relation, ItemPointer tid)
 		{
 			pgstat_count_heap_delete(relation);
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
+			tempcat_mark_command_id_used();
 
 			dlist_delete(&dlist_tup->node);
 			DListHeapTupleFree(dlist_tup);
@@ -793,6 +813,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 			MemoryContext oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
 
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, newtup);
+			tempcat_mark_command_id_used();
 			heap_freetuple(dlist_tup->tup);
 			newtup->t_self = GenTempcatItemPointerData();
 			dlist_tup->tup = heap_copytuple(newtup);
