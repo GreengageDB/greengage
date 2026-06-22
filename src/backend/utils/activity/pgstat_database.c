@@ -19,6 +19,7 @@
 
 #include "utils/pgstat_internal.h"
 #include "utils/timestamp.h"
+#include "storage/ipc.h"
 #include "storage/procsignal.h"
 
 
@@ -174,6 +175,21 @@ pgstat_report_tempfile(size_t filesize)
 	PgStat_StatDBEntry *dbent;
 
 	if (!pgstat_track_counts)
+		return;
+
+	/*
+	 * GPDB: temporary-file cleanup can run while the process is exiting --
+	 * e.g. dsm_backend_shutdown() -> dsm_detach() -> FileSetDeleteAll() ->
+	 * PathNameDeleteTemporaryFile() -> ReportTemporaryFileUsage().  That path
+	 * (an on_shmem_exit callback) runs after pgstat_shutdown() (a
+	 * before_shmem_exit callback) has already torn down this backend's stats
+	 * state, so reporting here would trip pgstat_assert_is_up() under
+	 * assertions and touch detached stats shared memory otherwise.  Backends
+	 * that spilled to shared work files hit this on exit, which crashed
+	 * segments intermittently under load.  Skip reporting once exit is in
+	 * progress; the per-file accounting is moot for a backend that is leaving.
+	 */
+	if (proc_exit_inprogress)
 		return;
 
 	dbent = pgstat_prep_database_pending(MyDatabaseId);
