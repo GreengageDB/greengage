@@ -350,7 +350,7 @@ static char *to_nlower(const char *str, size_t max) {
   char *lower_str;
   int i = 0;
 
-  lower_str = (char *)calloc(strlen(str), sizeof(char));
+  lower_str = (char *)calloc(strlen(str) + 1, sizeof(char));
 
   for (const char *p = str; *p && i < max; p++) {
     lower_str[i++] = tolower(*p);
