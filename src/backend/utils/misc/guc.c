@@ -9104,9 +9104,17 @@ AlterSystemSetConfigFile(AlterSystemStmt *altersysstmt)
 	}
 
 	/*
-	 * Check permission to run ALTER SYSTEM on the target variable
+	 * Check permission to run ALTER SYSTEM on the target variable.
+	 *
+	 * GPDB: the FTS message handler rewrites synchronous_standby_names in
+	 * gp_replication.conf through this path (set_gp_replication_config ->
+	 * AlterSystemSetConfigFile) while running outside a transaction, so it
+	 * must bypass this per-parameter permission check just like the superuser
+	 * check above.  Otherwise superuser()/pg_parameter_aclcheck issue a
+	 * syscache lookup that trips Assert(IsTransactionState()) and crashes the
+	 * segment, preventing mirror promotion (PG15 added this second check).
 	 */
-	if (!superuser())
+	if (!am_ftshandler && !superuser())
 	{
 		if (resetall)
 			ereport(ERROR,
