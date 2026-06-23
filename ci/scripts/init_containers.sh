@@ -35,13 +35,16 @@ do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "
     
-    date;
+    if [[ ${service} == "cdw" ]]; then
+      date; 
+      ssh-keyscan -v ${services/$service/} >> /home/gpadmin/.ssh/known_hosts; 
+      date; 
+      cat /home/gpadmin/.ssh/known_hosts; 
+    else 
+      ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts; 
     
-    ssh-keyscan -v ${services/$service/} >> /home/gpadmin/.ssh/known_hosts;
-
-    date;
+    fi
     
-    if [[ ${service} == "cdw" ]]; then cat /home/gpadmin/.ssh/known_hosts; fi 
     " &
 done
 wait
