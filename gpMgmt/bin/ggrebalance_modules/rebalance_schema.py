@@ -441,7 +441,7 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
     def updateExecutionStep(self, step: RebalanceStep) -> None:
         dbconn.execSQL(self.conn,
                        f'''UPDATE {self.schema_name}.{self.segment_move_steps}
-                       SET status='{step.getStatus().name}', step='\\x{step.serializeStep().hex()}' WHERE move_order = {step.getMoveOrder()}''')
+                       SET status='{step.getStatus().name}', is_rollback={step.isRollback()}, step='\\x{step.serializeStep().hex()}' WHERE move_order = {step.getMoveOrder()}''')
 
     def allExecutionStepsAreDone(self) -> bool:
         row = dbconn.queryRow(self.conn,

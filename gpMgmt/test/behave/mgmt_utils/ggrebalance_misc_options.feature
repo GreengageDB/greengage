@@ -340,6 +340,10 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance is already running." to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance is already running." to logfile with latest timestamp
          And the background pid is killed on "coordinator" segment
          And a sample ggrebalance.pid file is removed from the coordinator_data_directory
          And all files in gpAdminLogs directory are deleted
