@@ -4082,7 +4082,18 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 			else
 				initValue = GetAggInitVal(textInitVal, aggtranstype);
 
-			if (DO_AGGSPLIT_COMBINE(aggstate->aggsplit))
+			/*
+			 * GPDB: check aggref->aggsplit, not aggstate->aggsplit, to match
+			 * the per-aggref combinefn choice made above.  ORCA can put
+			 * aggregates of different stages into one Agg node (e.g. a
+			 * combining sum next to a single-stage count over deduplicated
+			 * input), so the node-level split is not authoritative; using it
+			 * here would build the combining aggref through the plain-transfn
+			 * path and then reject it in the strict/NULL-initval input-type
+			 * check below (e.g. sum(int4): combinefn fed as int4 vs int8
+			 * transtype).
+			 */
+			if (DO_AGGSPLIT_COMBINE(aggref->aggsplit))
 			{
 				Oid			combineFnInputTypes[] = {aggtranstype,
 				aggtranstype};
