@@ -1737,36 +1737,30 @@ get_tablespace_mapping(const char *dir)
 
 
 static void
-add_to_exclude_list(PQExpBufferData *buf, const char *exclude)
+add_to_exclude_list(PQExpBuffer buf, bool use_new_option_syntax,
+					const char *exclude)
 {
-	char		quoted[MAXPGPATH];
-	int			error;
-	size_t		len;
-
-	error = 1;
-	len = PQescapeStringConn(conn, quoted, exclude, MAXPGPATH, &error);
-	if (len == 0 || error != 0)
-	{
-		pg_log_error("could not process exclude \"%s\": %s",
-					 exclude, PQerrorMessage(conn));
-		exit(1);
-	}
-	appendPQExpBuffer(buf, " EXCLUDE '%s'", quoted);
+	/*
+	 * GPDB: thread each EXCLUDE into the BASE_BACKUP option list so it is
+	 * emitted in whichever syntax the target server speaks.  PG15+ servers use
+	 * the parenthesized option syntax (BASE_BACKUP (...)); appending the legacy
+	 * space-separated " EXCLUDE 'path'" form there is silently ignored, which
+	 * is how mirror/standby copies started pulling in dirs they should skip
+	 * (e.g. the GPDB promote-signal dir "promote", which then makes the new
+	 * segment self-promote instead of streaming).  AppendStringCommandOption
+	 * handles the escaping and the new/legacy comma-vs-space separation.
+	 */
+	AppendStringCommandOption(buf, use_new_option_syntax, "EXCLUDE",
+							  (char *) exclude);
 }
 
-static char *
-build_exclude_list(void)
+static void
+append_exclude_command_options(PQExpBuffer buf, bool use_new_option_syntax)
 {
-	PQExpBufferData	buf;
 	int				i;
 
-	if (num_exclude == 0 && num_exclude_from == 0)
-		return "";
-
-	initPQExpBuffer(&buf);
-
 	for (i = 0; i < num_exclude; i++)
-		add_to_exclude_list(&buf, excludes[i]);
+		add_to_exclude_list(buf, use_new_option_syntax, excludes[i]);
 
 	for (i = 0; i < num_exclude_from; i++)
 	{
@@ -1795,19 +1789,11 @@ build_exclude_list(void)
 				 len--)
 				str[len - 1] = '\0';
 
-			add_to_exclude_list(&buf, str);
+			add_to_exclude_list(buf, use_new_option_syntax, str);
 		}
 
 		fclose(file);
 	}
-
-	if (PQExpBufferDataBroken(buf))
-	{
-		pg_log_error("out of memory");
-		exit(1);
-	}
-
-	return buf.data;
 }
 
 
@@ -1883,7 +1869,6 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	char		xlogend[64];
 	int			minServerMajor,
 				maxServerMajor;
-	char 	   *exclude_list;
 	int			serverVersion,
 				serverMajor;
 	int			writing_to_stdout;
@@ -1975,7 +1960,7 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 									 "NOVERIFY_CHECKSUMS");
 	}
 
-	exclude_list = build_exclude_list();
+	append_exclude_command_options(&buf, use_new_option_syntax);
 
 	if (manifest)
 	{
@@ -2043,18 +2028,14 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	}
 
 	/*
-	 * GPDB_15_MERGE_FIXME: the GPDB EXCLUDE options (exclude_list) are built
-	 * in the legacy space-separated syntax, so they are only appended in the
-	 * legacy-syntax path.  For new-syntax (server >= 15) servers EXCLUDE needs
-	 * to be threaded into the option list (buf) via AppendStringCommandOption.
+	 * GPDB: the EXCLUDE options were threaded into the option list (buf) above
+	 * via append_exclude_command_options(), so they ride along in whichever
+	 * syntax the server speaks.
 	 */
 	if (use_new_option_syntax && buf.len > 0)
 		basebkp = psprintf("BASE_BACKUP (%s)", buf.data);
 	else
-		basebkp = psprintf("BASE_BACKUP %s%s", buf.data, exclude_list);
-
-	if (exclude_list[0] != '\0')
-		free(exclude_list);
+		basebkp = psprintf("BASE_BACKUP %s", buf.data);
 
 	if (PQsendQuery(conn, basebkp) == 0)
 		pg_fatal("could not send replication command \"%s\": %s",
