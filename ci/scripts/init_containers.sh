@@ -29,7 +29,20 @@ wait
 for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
-    $service bash -c "ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts" &
+    $service bash -c "
+    
+    date;
+    
+    ssh-keyscan -v ${services/$service/} >> /home/gpadmin/.ssh/known_hosts;
+
+    date;
+
+    sleep 10;
+
+    date;
+    
+    if [[ ${service} == "sdw5" ]]; then cat /home/gpadmin/.ssh/known_hosts; fi
+    " &
 done
 wait
 
