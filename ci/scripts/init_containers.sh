@@ -40,13 +40,9 @@ do
     ssh-keyscan -v ${services/$service/} >> /home/gpadmin/.ssh/known_hosts;
 
     date;
-
-    sleep 10;
-
-    date;
     
     if [[ ${service} == "cdw" ]]; then cat /home/gpadmin/.ssh/known_hosts; fi
-    " &
+    "
 done
 wait
 
