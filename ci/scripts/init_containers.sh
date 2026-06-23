@@ -50,6 +50,8 @@ do
 done
 wait
 
+docker container ps
+
 # Add ip and host names of all cluster nodes to /etc/hosts
 for service in $services
 do

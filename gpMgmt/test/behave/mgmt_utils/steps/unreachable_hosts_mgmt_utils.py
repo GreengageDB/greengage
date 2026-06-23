@@ -2,6 +2,7 @@ import socket
 import subprocess
 import tempfile
 import platform
+import sys
 
 from behave import given, when, then
 
@@ -78,6 +79,10 @@ def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
     cmd += "| awk '{print $1}'"
     disconnect_addr = gpsubprocess.check_output(["bash", "-c", cmd])
     disconnect_addr = disconnect_addr.strip()
+
+    with open('/tmp/allure-results/logs.log', 'a') as f:
+        results = gpsubprocess.check_output(["bash", "-c", 'hostname'])
+        f.write(results)
 
     for host in hosts:
         if host == disconnect_host:
