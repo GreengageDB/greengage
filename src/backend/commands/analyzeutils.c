@@ -1249,6 +1249,18 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 		if (partRelid == relid_exclude)
 			continue;
 
+		/*
+		 * Ignore all but leaf partitions, mirroring the first loop above.
+		 * find_all_inheritors() includes the root (and any mid-level
+		 * partitioned tables); those are not leaves and have no own column
+		 * statistics to fetch.  Once a merge ANALYZE sets the root's reltuples
+		 * to the merged total, the root would otherwise slip past the
+		 * relTuples==0 skip below, fail the colstats check on its (inherited)
+		 * stats, and make us wrongly report the leaves as not-analyzed.
+		 */
+		if (get_rel_relkind(partRelid) == RELKIND_PARTITIONED_TABLE)
+			continue;
+
 		float4		relTuples = get_rel_reltuples(partRelid);
 
 		/* Partition is analyzed and we detect it is empty */
