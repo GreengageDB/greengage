@@ -136,7 +136,9 @@ CREATE FUNCTION hobby_construct_named(name text, hobby text)
    LANGUAGE SQL;
 CREATE FUNCTION hobbies_by_name(hobbies_r.name%TYPE)
    RETURNS hobbies_r.person%TYPE
-   AS 'select person from hobbies_r where name = $1'
+   -- GPDB: use an order by to force the later test in 'misc' to return
+   -- a particular person, when multiple persons have the same hobby.
+   AS 'select person from hobbies_r where name = $1 order by person'
    LANGUAGE SQL;
 NOTICE:  type reference hobbies_r.name%TYPE converted to text
 NOTICE:  type reference hobbies_r.person%TYPE converted to text
@@ -283,7 +285,7 @@ SELECT name(equipment_named_ambiguous_2b(text 'skywalking'));
 SELECT hobbies_by_name('basketball');
  hobbies_by_name 
 -----------------
- sally
+ joe
 (1 row)
 
 SELECT name, overpaid(emp.*) FROM emp;
