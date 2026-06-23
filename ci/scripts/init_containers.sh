@@ -45,7 +45,7 @@ do
     
     fi
     
-    " &
+    "
 done
 wait
 
