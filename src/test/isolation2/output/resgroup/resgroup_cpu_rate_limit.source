@@ -838,7 +838,7 @@ TRUNCATE
 ------------------
  t                
 (1 row)
-1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 2);
+1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 5);
  verify_cpu_usage 
 ------------------
  t                

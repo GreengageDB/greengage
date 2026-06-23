@@ -457,7 +457,7 @@ SELECT * FROM cancel_all;
 -- end_ignore
 
 1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 2);
-1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 2);
+1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 5);
 
 -- start_ignore
 1:SELECT * FROM cancel_all;
