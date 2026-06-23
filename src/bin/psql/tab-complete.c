@@ -1836,20 +1836,20 @@ psql_completion(const char *text, int start, int end)
 					  "RENAME TO", "REPLICATION", "RESET", "SET", "SUPERUSER",
 					  "VALID UNTIL");
 
-	else if(TailMatches("DENY") && !TailMatches("DROP", "DENY"))
+	else if (TailMatches("DENY") && !TailMatches("DROP", "DENY"))
 		COMPLETE_WITH("DAY", "BETWEEN DAY");
-	else if(TailMatches("DROP", "DENY", "FOR"))
+	else if (TailMatches("DROP", "DENY", "FOR"))
 		COMPLETE_WITH("DAY");
-	else if(TailMatches("DAY"))
+	else if (TailMatches("DAY"))
 		COMPLETE_WITH("'Monday'", "'Tuesday'", "'Wednesday'", "'Thursday'",
 					  "'Friday'", "'Saturday'", "'Sunday'");
-	else if(TailMatches("DENY", "DAY", MatchAny) ||
+	else if (TailMatches("DENY", "DAY", MatchAny) ||
 			TailMatches("AND", "DAY", MatchAny) ||
 			TailMatches("FOR", "DAY", MatchAny))
 		COMPLETE_WITH("TIME");
-	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny))
+	else if (TailMatches("DENY", "BETWEEN", "DAY", MatchAny))
 		COMPLETE_WITH("AND DAY", "TIME");
-	else if(TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
+	else if (TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
 			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*", "PM'|AM'"))
 		COMPLETE_WITH("AND DAY");
 
@@ -2216,7 +2216,7 @@ psql_completion(const char *text, int start, int end)
 	/* complete ALTER TYPE <foo> ADD with actions */
 	else if (Matches("ALTER", "TYPE", MatchAny, "ADD"))
 		COMPLETE_WITH("ATTRIBUTE", "VALUE");
-	else if(Matches("ALTER", "TYPE", MatchAny, "SET"))
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET"))
 		COMPLETE_WITH_SUPPRESS_APPEND("SCHEMA ", "DEFAULT ENCODING (");
 	/* ALTER TYPE <foo> RENAME	*/
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME"))
@@ -2250,9 +2250,9 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME", "VALUE"))
 		COMPLETE_WITH_ENUM_VALUE(prev3_wd);
 
-	else if(Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "("))
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "("))
 		COMPLETE_WITH("COMPRESSTYPE =", "COMPRESSLEVEL =", "BLOCKSIZE =");
-	else if(Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "(", "COMPRESSTYPE", "="))
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "(", "COMPRESSTYPE", "="))
 		COMPLETE_WITH("ZLIB", "ZSTD", "RLE_TYPE", "NONE");
 
 /*
@@ -2354,7 +2354,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_access_methods);
 	else if (Matches("COMMENT", "ON", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
-	else if(Matches("COMMENT", "ON", "RESOURCE"))
+	else if (Matches("COMMENT", "ON", "RESOURCE"))
 		COMPLETE_WITH("GROUP", "QUEUE");
 	else if (Matches("COMMENT", "ON", "RESOURCE", "GROUP"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
@@ -2412,7 +2412,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
 					  "ENCODING", "FREEZE", "FILL MISSING FILEDS", "NEWLINE",
 					  "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
-	else if(Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
+	else if (Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
 		COMPLETE_WITH("CSV", "ENCODING", "FREEZE", "FILL MISSING FILEDS",
 					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
 
