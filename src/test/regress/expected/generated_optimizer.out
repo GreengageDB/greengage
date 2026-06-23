@@ -944,7 +944,7 @@ ALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error
 ERROR:  cannot alter type of a column used by a generated column
 DETAIL:  Column "a" is used by generated column "x".
 ALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;
-ERROR:  found unexpected dependency type 'a' (tablecmds.c:14810)
+ERROR:  found unexpected dependency type 'a' (tablecmds.c:14814)
 \d gtest27
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Non-default collation
