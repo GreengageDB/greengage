@@ -41,8 +41,8 @@ do
 
     date;
     
-    if [[ ${service} == "cdw" ]]; then cat /home/gpadmin/.ssh/known_hosts; fi
-    "
+    if [[ ${service} == "cdw" ]]; then cat /home/gpadmin/.ssh/known_hosts; fi 
+    " &
 done
 wait
 
