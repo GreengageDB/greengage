@@ -88,8 +88,24 @@ def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
             subcmd = "delete"
 
         cmd = "sudo ip route {} {}".format(subcmd, disconnect_addr)
-        gpsubprocess.check_output(["ssh", host, cmd])
 
+        ssh_cmd = [
+            "ssh",
+            "-vvv",
+            host,
+            cmd
+        ]
+
+        try:
+            result = gpsubprocess.check_output(
+                ssh_cmd
+            )
+            print(result)
+                
+        except subprocess.CalledProcessError as e:
+            print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
+            print("Also: disconnect host = ", disconnect_host)
+            raise
 @given('all postgres processes are killed on "{disconnected}" hosts')
 @then('all postgres processes are killed on "{disconnected}" hosts')
 def impl(context, disconnected):
