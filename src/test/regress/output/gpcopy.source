@@ -473,15 +473,14 @@ COPY copy_regression_newline from stdin with delimiter '|' newline 'lf';
 COPY copy_regression_newline from stdin with delimiter '|' newline 'lf' csv;
 -- negative: text
 COPY copy_regression_newline from stdin with delimiter '|' newline 'cr';
-ERROR:  extra data after last expected column  (seg0 subraa4-mac:40000 pid=80439)
-CONTEXT:  COPY copy_regression_newline, line 1: "1|1
-2|2
-"
+ERROR:  end-of-copy marker does not match previous newline style
+CONTEXT:  COPY copy_regression_newline, line 1
 -- negative: csv
 COPY copy_regression_newline from stdin with delimiter '|' newline 'cr' csv;
-ERROR:  extra data after last expected column  (seg0 subraa4-mac:40000 pid=80439)
+ERROR:  extra data after last expected column
 CONTEXT:  COPY copy_regression_newline, line 1: "1|1
 2|2
+\.
 "
 -- negative: invalid newline
 COPY copy_regression_newline from stdin with delimiter '|' newline 'blah';
