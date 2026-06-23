@@ -2291,8 +2291,6 @@ psql_completion(const char *text, int start, int end)
 	else if (HeadMatches("ANALYZE") && TailMatches("("))
 		/* "ANALYZE (" should be caught above, so assume we want columns */
 		COMPLETE_WITH_ATTR(prev2_wd, "");
-	else if (HeadMatches("ANALYZE") && !TailMatches("ALL"))
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables, NULL);
 
 /* BEGIN */
 	else if (Matches("BEGIN"))
