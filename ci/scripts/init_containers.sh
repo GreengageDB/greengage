@@ -13,6 +13,8 @@ else
   services="$@"
 fi
 
+docker container ps
+
 # Prepare ALL containers first
 for service in $services
 do
@@ -24,6 +26,8 @@ do
       ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
 done
 wait
+
+docker container ps
 
 # Add host keys to known_hosts after containers setup
 for service in $services
