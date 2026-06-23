@@ -4676,3 +4676,28 @@ def impl(context):
 def impl(context, second):
 	cmd = Command(name='psql', cmdStr="-c 'SELECT * from generate_series(1, %s) a where pg_sleep(1) is not null;'" % second)
 	cmd.runNoWait()
+
+@given('the user creates an event trigger {trigger_name}')
+def impl(context, trigger_name):
+    func_name = "%s_fn" % trigger_name
+    with dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False) as conn:
+        sql = """CREATE OR REPLACE FUNCTION %s()
+RETURNS event_trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE NOTICE 'Event trigger %s_fn fired after DDL command';
+END;
+$$;
+""" % (func_name, trigger_name)
+
+        dbconn.execSQL(conn, sql)
+        sql = "CREATE EVENT TRIGGER %s ON ddl_command_start EXECUTE PROCEDURE %s();" % (trigger_name, func_name)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+@given('verify that event trigger {trigger_name} exists')
+def impl(context, trigger_name):    
+    with dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False) as conn:
+        sql = "SELECT evtname FROM pg_event_trigger WHERE evtname = '%s';" % trigger_name
+        cursor = dbconn.execSQL(conn, sql)
+        assert cursor.rowcount == 1
