@@ -2110,9 +2110,12 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* If we have ALTER TABLE <sth> SET, provide list of attributes and '(' */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET"))
-		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA",
-					  "TABLESPACE", "UNLOGGED", "WITH", "WITHOUT");
+		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA", "TABLESPACE",
+					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED");
 
+	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
+			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
+		COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
 	/*
 	 * If we have ALTER TABLE <smt> SET ACCESS METHOD provide a list of table
 	 * AMs.
