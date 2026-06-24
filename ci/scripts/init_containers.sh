@@ -34,7 +34,7 @@ for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "
-    if [[ ${service} == "cdw" || ${service} == "sdw5" ]]; then
+    if [[ ${service} == "cdw" || ${service} == "sdw5" || ${service} == "sdw6" ]]; then
       ssh -Q HostKeyAlgorithms; 
     fi
 
