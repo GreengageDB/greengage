@@ -216,8 +216,8 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		/*
 		 * For the following cases, file transfer is not necessary:
 
-		 * External tables have relfilenodes but no physical files, and aoseg
-		 * tables are handled by their AO table.
+		 * External and foreign tables have relfilenodes but no physical
+		 * files, and aoseg tables are handled by their AO table.
 		 * 
 		 * Partitioned tables have relfilenodes = 0 and no physical files in GG7.
 		 * 
@@ -225,6 +225,7 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		 * 
 		 */
 		if ((old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0) ||
+			(new_rel->relkind == RELKIND_FOREIGN_TABLE) ||
 			(new_rel->relkind == RELKIND_PARTITIONED_TABLE) ||
 			(new_rel->relkind == RELKIND_SEQUENCE) )
 		{
