@@ -3905,11 +3905,18 @@ RelationCopyStorageUsingBuffer(Relation src, Relation dst, ForkNumber forkNum,
 										   RBM_NORMAL, bstrategy_src,
 										   permanent);
 		srcPage = BufferGetPage(srcBuf);
-		if (PageIsNew(srcPage) || PageIsEmpty(srcPage))
-		{
-			ReleaseBuffer(srcBuf);
-			continue;
-		}
+
+		/*
+		 * Copy every block, including empty/new ones.  The upstream PG15.0
+		 * code skipped PageIsNew/PageIsEmpty source pages while extending the
+		 * destination with P_NEW; that silently dropped those blocks and
+		 * shifted the number of every later block, corrupting any relation
+		 * with an empty-but-referenced page -- e.g. an empty btree's root
+		 * leaf (PageIsEmpty), which left the metapage pointing at a block
+		 * that was never copied ("could not read block N ... read only 0 of
+		 * 8192 bytes" when such a database was later read).  Upstream fixed
+		 * this in PG16; copy all blocks so block numbers are preserved.
+		 */
 
 		/* Use P_NEW to extend the destination relation. */
 		dstBuf = ReadBufferWithoutRelcache(dst->rd_node, forkNum, P_NEW,
