@@ -24,6 +24,7 @@
 #include "access/hio.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
+#include "catalog/aoblkdir.h"
 #include "catalog/catalog.h"
 #include "catalog/gp_fastsequence.h"
 #include "catalog/index.h"
@@ -48,6 +49,7 @@
 #include "utils/builtins.h"
 #include "utils/datumstream.h"
 #include "utils/faultinjector.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -1388,61 +1390,122 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	}
 
 	if (gp_aocs_scan_shortpass &&
-		scan->columnScanInfo.projKind == AOCS_PROJ_ANY)
+		!gp_select_invisible &&
+		scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
+		!scan->blockDirectory && scan->aocsfetch)
 	{
-		/* short pass via visibility map */
+		/*
+		 * Short pass via visibility map and block directory for cases when
+		 * there is no actual need to access tables data, for ex. for queries
+		 * like "SELECT COUNT(*) FROM some_table;".
+		 */
+
+		typedef struct Context
+		{
+			SysScanDesc					scan_blkdir;
+			MinipagePerColumnGroup		curr_minipage;
+			MinipageEntry				*minipage_entry;
+			bool						curr_minipage_valid;
+			int							curr_minipage_entry_idx;
+			int							segno;
+		} Context;
+
+		static Context context =
+		{
+			.scan_blkdir = NULL,
+			.minipage_entry = NULL,
+			.curr_minipage_valid = false,
+			.curr_minipage_entry_idx = 0,
+			.segno = -1
+		};
+
 		while(1)
 		{
-			if (likely(scan->cur_seg >= 0))
+			if (likely(context.minipage_entry &&
+					  scan->segrowsprocessed < context.minipage_entry->rowCount))
 			{
-				AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-				if (likely(scan->segrowsprocessed < curseginfo->total_tupcount))
+				Assert(context.segno >= 0);
+				scan->segrowsprocessed++;
+				AOTupleIdInit(&aoTupleId, context.segno, context.minipage_entry->firstRowNum + scan->segrowsprocessed-1);
+				if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
 				{
-					scan->segrowsprocessed++;
-					AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
-					if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
-					{
-						/* The tuple is invisible */
-						continue;
-					}
-					slot->tts_nvalid = 0;
-					slot->tts_tid = *((ItemPointer) &aoTupleId); // scan->cdb_fake_ctid;
-					return true;
+					/* The tuple is invisible */
+					continue;
 				}
+				slot->tts_nvalid = 0;
+				slot->tts_tid = *((ItemPointer) &aoTupleId);
+				return true;
 			}
 
-			while (++scan->cur_seg < scan->total_seg)
+			if (likely(context.curr_minipage_valid))
 			{
-				AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+				Assert(context.curr_minipage_entry_idx < context.curr_minipage.numMinipageEntries);
 
-				if (curseginfo->total_tupcount > 0)
-				{
-					if (curseginfo->state == AOSEG_STATE_AWAITING_DROP)
-						continue;
-					else
-					{
-						AOCSVPInfoEntry *e;
+				context.minipage_entry = &context.curr_minipage.minipage->entry[context.curr_minipage_entry_idx];
+				scan->segrowsprocessed = 0;
 
-						e = getAOCSVPEntry(curseginfo, scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]);
-						if (e->eof == 0)
-							elog(ERROR, "inconsistent segment state for relation %s, segment %d, tuple count " INT64_FORMAT,
-								 RelationGetRelationName(scan->rs_base.rs_rd),
-								 curseginfo->segno,
-								 curseginfo->total_tupcount);
-					}
-
-					scan->segrowsprocessed = 0;
-					break;
-				}
+				context.curr_minipage_entry_idx++;
+				context.curr_minipage_valid =
+					(context.curr_minipage_entry_idx != context.curr_minipage.numMinipageEntries);
+				continue;
 			}
 
-			if (scan->cur_seg >= scan->total_seg)
+			if (unlikely(context.scan_blkdir == NULL))
 			{
-				/* No more seg, we are at the end */
-				ExecClearTuple(slot);
-				scan->cur_seg = -1;
-				slotAocs->current_scan = NULL;
-				return false;
+				static ScanKeyData scanKey;
+				ScanKeyInit(&scanKey,
+							Anum_pg_aoblkdir_columngroupno,
+							BTEqualStrategyNumber,
+							F_INT4EQ,
+							Int32GetDatum(scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]));
+
+				context.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
+												   InvalidOid,
+												   true,// false,
+												   scan->rs_base.rs_snapshot,
+												   1,
+												   &scanKey);
+				context.curr_minipage.minipage = palloc0(minipage_size(NUM_MINIPAGE_ENTRIES));
+				context.curr_minipage_valid = false;
+				context.minipage_entry = NULL;
+			}
+
+			if (!context.curr_minipage_valid)
+			{
+				Datum	minipage_datum;
+				bool	minipageNull;
+				bool	segnoNull;
+
+				if (!HeapTupleIsValid(systable_getnext(context.scan_blkdir)))
+				{
+					/* No more seg, we are at the end */
+					systable_endscan(context.scan_blkdir);
+					context.scan_blkdir = NULL;
+					pfree(context.curr_minipage.minipage);
+					context.curr_minipage.minipage = NULL;
+					context.curr_minipage_valid = false;
+					context.minipage_entry = NULL;
+					context.curr_minipage_entry_idx = 0;
+
+					ExecClearTuple(slot);
+					scan->cur_seg = -1;
+					slotAocs->current_scan = NULL;
+					return false;
+				}
+
+				TupleTableSlot *blkdir_slot = context.scan_blkdir->slot;
+
+				slot_getallattrs(blkdir_slot);
+
+				context.segno = DatumGetInt32(slot_getattr(blkdir_slot, Anum_pg_aoblkdir_segno, &segnoNull));
+
+				minipage_datum = slot_getattr(blkdir_slot, Anum_pg_aoblkdir_minipage, &minipageNull);
+				context.curr_minipage_valid = !minipageNull;
+				if (context.curr_minipage_valid)
+				{
+					copy_out_minipage(&context.curr_minipage, minipage_datum, false);
+					context.curr_minipage_entry_idx = 0;
+				}
 			}
 		}
 	}
