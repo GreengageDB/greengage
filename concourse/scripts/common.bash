@@ -10,14 +10,12 @@ function set_env() {
 }
 
 function os_id() {
-	if [[ ! -f "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
-		echo "centos"
-	else
-		echo "$(
-			. /etc/os-release
-			echo "${ID}"
-		)"
+	if [[ -f "/etc/os-release" ]]; then
+		. /etc/os-release
+	elif [[ -f "/etc/redhat-release" ]]; then
+		ID="centos"
 	fi
+	echo "${ID}"
 }
 
 function os_version() {
