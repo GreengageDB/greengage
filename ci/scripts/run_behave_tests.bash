@@ -58,6 +58,7 @@ run_feature() {
     -e FEATURE="$feature" -e PROJECT="$project" \
     cdw bash -eux <<'EOF'
       set -ex
+      source /usr/local/greengage-db-devel/greengage_path.sh
       cd /tmp/coverage-data
 
       if [ "$(ls "$PROJECT"-coverage-data/ | wc -l)" -gt 0 ]; then

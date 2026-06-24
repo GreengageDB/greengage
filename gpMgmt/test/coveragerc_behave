@@ -11,6 +11,8 @@ omit =
         */gpload_test/*
         $GPHOME/lib/python/pygresql/*
         $GPHOME/lib/python/yaml/*
+        $GPHOME/lib/python/pg.py
+        $GPHOME/lib/python/pgdb.py
         $GPHOME/lib/python/sitecustomize.py
         $GPHOME/lib/python/subprocess32.py
         $GPHOME/lib/python/subprocess32.pyc
@@ -36,3 +38,9 @@ source3 =
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         /home/gpadmin/gpdb_src/gpMgmt/bin/gppylib
         $GPHOME/lib/python/gppylib
+
+source4 =
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        $GPHOME/bin
+        $GPHOME/sbin

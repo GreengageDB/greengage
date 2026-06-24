@@ -1380,6 +1380,8 @@ def start_standbymaster(host, datadir, port, era=None,
                         wrapper=None, wrapper_args=None):
     logger.info("Starting standby master")
 
+    datadir = os.path.normpath(datadir)
+
     logger.info("Checking if standby master is running on host: %s  in directory: %s" % (host,datadir))
     cmd = Command("recovery_startup",
                   ("python -c "

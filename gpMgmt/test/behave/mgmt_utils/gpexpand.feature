@@ -820,3 +820,20 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--verbose"
         Then gpexpand should print "[DEBUG]:-Skipping tar file (gpexpand_schema.tar) copy to cdw" escaped to stdout
         And verify that the cluster has 1 new segments
+
+    @gpexpand_verify_master_only
+    Scenario: Verify master only tables are not copied to segment
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And the user creates an event trigger test_trigger
+        And verify that event trigger test_trigger exists
+        Then verify that the query "SELECT count(*) FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
+        When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
+        Then the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
+        Then gpexpand should return a return code of 0
+        And verify that the cluster has 1 new segments
+        Then verify that the query "SELECT count(*) FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
