@@ -1991,7 +1991,8 @@ psql_completion(const char *text, int start, int end)
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT", "EXPAND",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
-					  "DETACH PARTITION", "REPACK BY COLUMNS (");
+					  "DETACH PARTITION", "REPACK BY COLUMNS (",
+					  "EXCHANGE", "SPLIT", "TRUNCATE");
 	/* ALTER TABLE xxx ENABLE */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE"))
 		COMPLETE_WITH("ALWAYS", "REPLICA", "ROW LEVEL SECURITY", "RULE",
@@ -2114,7 +2115,8 @@ psql_completion(const char *text, int start, int end)
 	/* If we have ALTER TABLE <sth> SET, provide list of attributes and '(' */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET"))
 		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA", "TABLESPACE",
-					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED");
+					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED",
+					  "SUBPARTITION TEMPLATE");
 
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
 			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
@@ -2162,14 +2164,11 @@ psql_completion(const char *text, int start, int end)
 	/* Limited completion support for partition bound specification */
 	else if (TailMatches("ATTACH", "PARTITION", MatchAny))
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
-	else if (TailMatches("FOR", "VALUES"))
+	else if (TailMatches("ATTACH", "PARTITION", MatchAny, "FOR", "VALUES"))
 		COMPLETE_WITH("FROM (", "IN (", "WITH (");
 
-	/*
-	 * If we have ALTER TABLE <foo> DETACH PARTITION, provide a list of
-	 * partitions of <foo>.
-	 */
-	else if (Matches("ALTER", "TABLE", MatchAny, "DETACH", "PARTITION"))
+	/* ALTER TABLE xxx yyy PARTITION */
+	else if(Matches("ALTER", "TABLE", MatchAny, MatchAnyExcept("ADD"), "PARTITION"))
 	{
 		completion_info_charp = prev3_wd;
 		COMPLETE_WITH_QUERY(Query_for_partition_of_table);
