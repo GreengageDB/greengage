@@ -2175,6 +2175,12 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_partition_of_table);
 	}
 
+	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
+	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "("))
+		COMPLETE_WITH_ATTR(prev5_wd, "");
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "("))
+		COMPLETE_WITH_ATTR(prev7_wd, "");
+
 	/* ALTER TABLE xxx REPACK BY COLUMN ( */
 	else if (Matches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "("))
 		COMPLETE_WITH_ATTR(prev5_wd, "");
