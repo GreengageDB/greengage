@@ -435,6 +435,15 @@ if [ "$enable_gpfdist" = "yes" ] && [ "$with_ssl" = "openssl" ]; then
 	echo ""
 fi
 
+# Reconcile template1's visibility map before any database is cloned from it.
+# Cluster bringup can leave pg_class heap pages with PD_ALL_VISIBLE clear while
+# the visibility-map bit is still set; CREATE DATABASE copies that state
+# verbatim, so every freshly-created database then warns "page is not marked
+# all-visible but visibility map bit is set" on the first forced scan (e.g.
+# VACUUM ANALYZE). A one-time forced vacuum here reconciles it so new databases
+# start consistent. (The warning this emits lands only in the setup output.)
+psql -p ${COORDINATOR_DEMO_PORT} -d template1 -c "VACUUM (DISABLE_PAGE_SKIPPING) pg_class" > /dev/null 2>&1
+
 OPTIMIZER=$(psql -t -p ${COORDINATOR_DEMO_PORT} -d template1 -c "show optimizer"   2>&1)
 
 echo "======================================================================" 2>&1 | tee -a optimizer-state.log
