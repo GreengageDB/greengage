@@ -1993,6 +1993,10 @@ psql_completion(const char *text, int start, int end)
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
 					  "DETACH PARTITION", "REPACK BY COLUMNS (",
 					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "ADD"))
+		COMPLETE_WITH("CONSTRAINT", "COLUMN", "PARTITION", "DEFAULT");
+
 	else if(Matches("ALTER", "TABLE", MatchAny, "NO"))
 		COMPLETE_WITH("INHERIT", "FORCE");
 	/* ALTER TABLE xxx ENABLE */
@@ -2049,22 +2053,31 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* ALTER TABLE xxx FORCE/NO FORCE */
-	else if (Matches("ALTER", "TABLE", MatchAny, "FORCE") || 
+	else if (Matches("ALTER", "TABLE", MatchAny, "FORCE") ||
 			 Matches("ALTER", "TABLE", MatchAny, "NO", "FORCE"))
 		COMPLETE_WITH("ROW LEVEL SECURITY");
 
 	/* ALTER TABLE xxx ALTER */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'DEFAULT'"
+						   " UNION SELECT 'PARTITION'");
 
 	/* ALTER TABLE xxx RENAME */
 	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT' UNION SELECT 'TO'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'TO'"
+						   " UNION SELECT 'DEFAULT'"
+						   " UNION SELECT 'PARTITION'");
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER|RENAME", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
 
 	/* ALTER TABLE xxx RENAME yyy */
-	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO")))
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO|DEFAULT|PARTITION")))
 		COMPLETE_WITH("TO");
 
 	/* ALTER TABLE xxx RENAME COLUMN/CONSTRAINT yyy */
@@ -2073,7 +2086,7 @@ psql_completion(const char *text, int start, int end)
 
 	/* If we have ALTER TABLE <sth> DROP, provide COLUMN or CONSTRAINT */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP"))
-		COMPLETE_WITH("COLUMN", "CONSTRAINT");
+		COMPLETE_WITH("COLUMN", "CONSTRAINT", "DEFAULT", "PARTITION");
 	/* If we have ALTER TABLE <sth> DROP COLUMN, provide list of columns */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
@@ -2089,7 +2102,7 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny) ||
-			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny))
+			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAnyExcept("DEFAULT|PARTITION")))
 		COMPLETE_WITH("TYPE", "SET", "RESET", "RESTART", "ADD", "DROP");
 	/* ALTER TABLE ALTER [COLUMN] <foo> SET */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET") ||
@@ -2127,7 +2140,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET"))
 		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA", "TABLESPACE",
 					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED",
-					  "SUBPARTITION TEMPLATE");
+					  "SUBPARTITION TEMPLATE (");
 
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
 			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
@@ -2177,6 +2190,15 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
 	else if (TailMatches("ATTACH", "PARTITION", MatchAny, "FOR", "VALUES"))
 		COMPLETE_WITH("FROM (", "IN (", "WITH (");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "EXCHANGE"))
+		COMPLETE_WITH("PARTITION", "DEFAULT");
+	else if (Matches("ALTER", "TABLE", MatchAny, "SPLIT"))
+		COMPLETE_WITH("PARTITION", "DEFAULT");
+	else if (Matches("ALTER", "TABLE", MatchAny, "TRUNCATE"))
+		COMPLETE_WITH("PARTITION", "DEFAULT");
+	else if(Matches("ALTER", "TABLE", MatchAny, MatchAny, "DEFAULT"))
+		COMPLETE_WITH("PARTITION");
 
 	/* ALTER TABLE xxx yyy PARTITION */
 	else if(Matches("ALTER", "TABLE", MatchAny, MatchAnyExcept("ADD"), "PARTITION"))
