@@ -253,7 +253,16 @@ typedef enum
 #define GUC_UNIT				(GUC_UNIT_MEMORY | GUC_UNIT_TIME)
 
 /* GPDB speific */
-#define GUC_DISALLOW_USER_SET  0x00200000 /* Do not allow this GUC to be set by the user */
+/*
+ * NB: keep these above every upstream GUC_* flag bit.  GUC_DISALLOW_USER_SET
+ * used to be 0x00200000, but PG15 added upstream GUC_RUNTIME_COMPUTED at that
+ * very bit (0x200000); the collision made every runtime-computed GUC
+ * (data_checksums, wal_segment_size, min/max_wal_size, shared_memory_size)
+ * look user-disallowed, so set_config_option silently dropped even the
+ * internal SetConfigOption() from ReadControlFile -- e.g. "show data_checksums"
+ * reported off on a checksummed cluster.  Use a free high bit instead.
+ */
+#define GUC_DISALLOW_USER_SET  0x01000000 /* Do not allow this GUC to be set by the user */
 #define GUC_GPDB_NEED_SYNC     0x00400000  /* guc value is synced between master and primary */
 #define GUC_GPDB_NO_SYNC       0x00800000  /* guc value is not synced between master and primary */
 
