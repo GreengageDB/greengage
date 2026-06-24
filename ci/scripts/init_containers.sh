@@ -48,9 +48,7 @@ do
       echo "Pause"
       ssh-keyscan -vvv sdw4 1> >(tee -a /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined4.txt >/dev/null);
       echo "Pause"
-      ssh-keyscan -vvv sdw5 1> >(tee -a /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined5.txt >/dev/null);
-      echo "Pause"
-      ssh-keyscan -vvv sdw6 1> >(tee -a /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined6.txt >/dev/null);
+      ssh-keyscan -vvv sdw5 sdw6 1> >(tee -a /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined5.txt >/dev/null);
       date; 
       cat /home/gpadmin/.ssh/known_hosts; 
     else 
