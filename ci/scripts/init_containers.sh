@@ -55,6 +55,13 @@ do
       ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts; 
     fi
     
+    if [[ ${service} == "cdw" || ${service} == "sdw5" || ${service} == "sdw6" ]]; then
+      journalctl -u ssh -f;
+      journalctl -u sshd -f;
+      cat /var/log/auth.log;
+      cat /var/log/secure;
+    fi
+
     " &
 done
 wait
