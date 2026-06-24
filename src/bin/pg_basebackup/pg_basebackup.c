@@ -247,6 +247,7 @@ static bool reached_end_position(XLogRecPtr segendpos, uint32 timeline,
 								 bool segment_finished);
 
 static const char *get_tablespace_mapping(const char *dir);
+static const char *get_tablespace_link_target(const char *dir);
 static void tablespace_list_append(const char *arg);
 static void WriteInternalConfFile(void);
 
@@ -1203,7 +1204,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		directory = spclocation == NULL ? basedir
 			: get_tablespace_mapping(spclocation);
 		streamer = bbstreamer_extractor_new(directory,
-											get_tablespace_mapping,
+											get_tablespace_link_target,
 											progress_update_filename,
 											forceoverwrite);
 	}
@@ -1732,6 +1733,34 @@ get_tablespace_mapping(const char *dir)
 			return cell->new_dir;
 
 	return dir;
+}
+
+/*
+ * Map a pg_tblspc symlink target for the recovered data directory.
+ *
+ * GPDB: a tablespace's per-segment contents live under a per-dbid
+ * subdirectory of the (mapped) location, i.e.
+ * <location>/<dbid>/<GP_TABLESPACE_VERSION_DIRECTORY>/<dboid>/...  The server
+ * strips the source segment's dbid from the symlink target it streams, so when
+ * recovering with --target-gp-dbid we must re-append the target segment's
+ * dbid here.  Otherwise the recovered symlink points one level too high
+ * (<location> instead of <location>/<dbid>); the data is extracted into the
+ * correct per-dbid directory, so the breakage stays hidden until the recovered
+ * segment is promoted to primary (e.g. by a gprecoverseg rebalance) and a
+ * backend tries to open a database that lives in the tablespace -- it then
+ * FATALs with "... is not a valid data directory".  (The bbsink/bbstreamer
+ * rewrite in PG15 dropped the explicit "/<dbid>" that the pre-PG15 extractor
+ * appended at symlink creation time.)
+ */
+static const char *
+get_tablespace_link_target(const char *dir)
+{
+	const char *mapped = get_tablespace_mapping(dir);
+
+	if (target_gp_dbid > 0)
+		return psprintf("%s/%d", mapped, target_gp_dbid);
+
+	return mapped;
 }
 
 
