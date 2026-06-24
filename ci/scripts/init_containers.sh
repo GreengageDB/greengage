@@ -56,10 +56,10 @@ do
     fi
     
     if [[ ${service} == "cdw" || ${service} == "sdw5" || ${service} == "sdw6" ]]; then
-      journalctl -u ssh -f;
-      journalctl -u sshd -f;
-      cat /var/log/auth.log;
-      cat /var/log/secure;
+      journalctl -u ssh &> /tmp/allure-results/journalssh.txt;
+      journalctl -u sshd &> /tmp/allure-results/journalsshd.txt;
+      cat /var/log/auth.log | tee -a /tmp/allure-results/authlog.txt;
+      cat /var/log/secure | tee -a /tmp/allure-results/secure.txt;
     fi
 
     " &
