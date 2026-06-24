@@ -62,6 +62,7 @@ dnf -y install \
     libxml2-devel \
     libxslt-devel \
     libyaml-devel \
+    lsof \
     net-tools \
     openldap-devel \
     openssh-server \

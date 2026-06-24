@@ -19,15 +19,23 @@ source3 =
         $GPHOME/lib/python/gppylib
 
 source4 =
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check/gp_replica_check.py
-        $GPHOME/bin/gp_replica_check.py
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        /home/gpadmin/gpdb_src/gpcontrib/gp_replica_check
+        $GPHOME/bin
+
+source5 =
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        /home/gpadmin/gpdb_src/gpAux/gpperfmon/src/gpmon
+        $GPHOME/bin
+        $GPHOME/sbin
 
 [report]
 omit =
         */__init__.py*
         */test/*
         $GPHOME/lib/python/pygresql/*
+        $GPHOME/lib/python/pg.py
+        $GPHOME/lib/python/pgdb.py
         $GPHOME/lib/python/yaml/*
         $GPHOME/lib/python/sitecustomize.py
         $GPHOME/lib/python/subprocess32.py
