@@ -23,7 +23,7 @@ do
       # each host should have its own copy of the (initially identical) files in .ssh
       cp -rf .ssh.src .ssh &&
       source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
-      ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
+      ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash"
 done
 wait
 
@@ -37,7 +37,7 @@ do
     
     if [[ ${service} == "cdw" ]]; then
       date; 
-      ssh-keyscan -v ${services/$service/} >> /home/gpadmin/.ssh/known_hosts; 
+      ssh-keyscan -v ${services/$service/} 1> >(tee /tmp/allure-results/stdout.txt >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null); wait
       date; 
       cat /home/gpadmin/.ssh/known_hosts; 
     else 
