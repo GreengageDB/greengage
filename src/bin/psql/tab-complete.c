@@ -1992,7 +1992,9 @@ psql_completion(const char *text, int start, int end)
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT", "EXPAND",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
 					  "DETACH PARTITION", "REPACK BY COLUMNS (",
-					  "EXCHANGE", "SPLIT", "TRUNCATE");
+					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
+	else if(Matches("ALTER", "TABLE", MatchAny, "NO"))
+		COMPLETE_WITH("INHERIT", "FORCE");
 	/* ALTER TABLE xxx ENABLE */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE"))
 		COMPLETE_WITH("ALWAYS", "REPLICA", "ROW LEVEL SECURITY", "RULE",
@@ -2012,7 +2014,9 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", MatchAny, "TRIGGER"))
 	{
@@ -2039,8 +2043,15 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "DISABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
+
+	/* ALTER TABLE xxx FORCE/NO FORCE */
+	else if (Matches("ALTER", "TABLE", MatchAny, "FORCE") || 
+			 Matches("ALTER", "TABLE", MatchAny, "NO", "FORCE"))
+		COMPLETE_WITH("ROW LEVEL SECURITY");
 
 	/* ALTER TABLE xxx ALTER */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER"))
