@@ -37,7 +37,7 @@ do
     
     if [[ ${service} == "cdw" ]]; then
       date; 
-      ssh-keyscan -v ${services/$service/} 1> >(tee /tmp/allure-results/stdout.txt >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null); wait
+      ssh-keyscan -v ${services/$service/} 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null); wait
       date; 
       cat /home/gpadmin/.ssh/known_hosts; 
     else 
