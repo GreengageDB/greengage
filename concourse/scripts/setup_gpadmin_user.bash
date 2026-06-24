@@ -152,10 +152,13 @@ workaround_before_concourse_stops_stripping_suid_bits() {
 }
 
 _main() {
+  echo "scrip started $(hostname)"
   TEST_OS=$(determine_os)
   setup_gpadmin_user
+  echo "i'm not finished yet"
   setup_sshd
   workaround_before_concourse_stops_stripping_suid_bits
+  echo "i have finished $(hostname)"
 }
 
 [ "${BASH_SOURCE[0]}" = "$0" ] && _main "$@"
