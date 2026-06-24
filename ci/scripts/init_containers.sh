@@ -40,16 +40,17 @@ do
 
     if [[ ${service} == "cdw" ]]; then
       date; 
-      ssh-keyscan -vvv sdw1 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null);
+      ssh-keyscan -vvv sdw1 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined1.txt >/dev/null);
       echo "Pause"
-      ssh-keyscan -vvv sdw2 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null);
+      ssh-keyscan -vvv sdw2 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined2.txt >/dev/null);
       echo "Pause"
-      ssh-keyscan -vvv sdw3 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null);
+      ssh-keyscan -vvv sdw3 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined3.txt >/dev/null);
       echo "Pause"
-      ssh-keyscan -vvv sdw4 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null);
+      ssh-keyscan -vvv sdw4 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined4.txt >/dev/null);
       echo "Pause"
-      ssh-keyscan -vvv sdw5  1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null);
+      ssh-keyscan -vvv sdw5  1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined5.txt >/dev/null);
       echo "Pause"
+      ssh-keyscan -vvv sdw6  1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined6.txt >/dev/null);
       date; 
       cat /home/gpadmin/.ssh/known_hosts; 
     else 
