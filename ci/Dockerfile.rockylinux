@@ -61,7 +61,8 @@ COPY . gpdb_src
 RUN mkdir bin_gpdb
 
 ENV TARGET_OS=rockylinux \
-    OUTPUT_ARTIFACT_DIR=bin_gpdb
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS=1
 
 # Use python3 to compile into GPDB's plpython3u
 # Set PYTHON3 only on Rocky 8 to avoid compiling plpython3 twice

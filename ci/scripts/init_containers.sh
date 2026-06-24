@@ -23,7 +23,7 @@ do
       # each host should have its own copy of the (initially identical) files in .ssh
       cp -rf .ssh.src .ssh &&
       source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
-      ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash"
+      ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
 done
 wait
 
@@ -34,7 +34,11 @@ for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "
-    
+    if [[ ${service} == "cdw" || ${service} == "sdw5" ]]; then
+      ssh -Q HostKeyAlgorithms;
+    else  
+    fi
+
     if [[ ${service} == "cdw" ]]; then
       date; 
       ssh-keyscan -vvv ${services/$service/} 1> >(tee /home/gpadmin/.ssh/known_hosts >/dev/null >> combined.txt) 2> >(tee -a /tmp/allure-results/combined.txt >/dev/null); wait
@@ -42,7 +46,6 @@ do
       cat /home/gpadmin/.ssh/known_hosts; 
     else 
       ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts; 
-    
     fi
     
     " &
