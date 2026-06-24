@@ -35,8 +35,7 @@ do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "
     if [[ ${service} == "cdw" || ${service} == "sdw5" ]]; then
-      ssh -Q HostKeyAlgorithms;
-    else  
+      ssh -Q HostKeyAlgorithms; 
     fi
 
     if [[ ${service} == "cdw" ]]; then
