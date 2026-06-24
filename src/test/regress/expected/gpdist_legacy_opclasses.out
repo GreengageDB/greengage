@@ -2,6 +2,7 @@
 -- Tests for legacy cdbhash opclasses
 --
 drop schema if exists gpdist_legacy_opclasses;
+NOTICE:  schema "gpdist_legacy_opclasses" does not exist, skipping
 create schema gpdist_legacy_opclasses;
 set search_path to gpdist_legacy_opclasses;
 -- Basic sanity check of all the legacy hash opclasses. Create a table that
@@ -145,6 +146,8 @@ insert into all_legacy_types values (
 -- Test that CTAS honors the gp_use_legacy_hashops GUC
 -- Note: When ORCA is on, the distribution is RANDOM.
 create table legacy_hashops_ctas as select 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select gpdp.distkey, pgopc.opcname
   from gp_distribution_policy gpdp, pg_opclass pgopc
   where gpdp.localoid='legacy_hashops_ctas'::regclass and pgopc.oid::text = gpdp.distclass::text;
@@ -314,9 +317,9 @@ explain (costs off) select * from legacy_enum a inner join legacy_enum b on a.co
 select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
  color | color 
 -------+-------
+ green | green
  blue  | blue
  red   | red
- green | green
 (3 rows)
 
 --
@@ -421,19 +424,16 @@ analyze try_distinct_array;
 insert into try_distinct_array select 'n',string_to_array('1~1','~')::int[];
 -- Aggregate with grouping column that does not have legacy hashop
 explain (costs off) select distinct test_array from try_distinct_array;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: test_array
-   ->  Unique
-         Group Key: test_array
-         ->  Sort
-               Sort Key: test_array
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: test_array
-                     ->  Seq Scan on try_distinct_array
+                    QUERY PLAN                    
+--------------------------------------------------
+ HashAggregate
+   Group Key: test_array
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  HashAggregate
+               Group Key: test_array
+               ->  Seq Scan on try_distinct_array
  Optimizer: Postgres query optimizer
-(10 rows)
+(7 rows)
 
 select distinct test_array from try_distinct_array;
  test_array 
