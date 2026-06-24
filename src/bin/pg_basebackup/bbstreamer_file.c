@@ -58,7 +58,8 @@ static void bbstreamer_extractor_finalize(bbstreamer *streamer);
 static void bbstreamer_extractor_free(bbstreamer *streamer);
 static void extract_directory(const char *filename, mode_t mode,
 							  bool forceoverwrite);
-static void extract_link(const char *filename, const char *linktarget);
+static void extract_link(const char *filename, const char *linktarget,
+						 bool forceoverwrite);
 static FILE *create_file_for_extract(const char *filename, mode_t mode);
 
 const bbstreamer_ops bbstreamer_extractor_ops = {
@@ -238,7 +239,8 @@ bbstreamer_extractor_content(bbstreamer *streamer, bbstreamer_member *member,
 
 				if (mystreamer->link_map)
 					linktarget = mystreamer->link_map(linktarget);
-				extract_link(mystreamer->filename, linktarget);
+				extract_link(mystreamer->filename, linktarget,
+							 mystreamer->forceoverwrite);
 			}
 			else
 				mystreamer->file =
@@ -328,8 +330,20 @@ extract_directory(const char *filename, mode_t mode, bool forceoverwrite)
  * undocumented feature that you can map them too.)
  */
 static void
-extract_link(const char *filename, const char *linktarget)
+extract_link(const char *filename, const char *linktarget, bool forceoverwrite)
 {
+	/*
+	 * GPDB: with --force-overwrite the backup is extracted into an existing
+	 * data directory (e.g. an in-place gprecoverseg full recovery of a segment
+	 * that has tablespaces).  In that case a pg_tblspc symlink may already
+	 * exist, pointing at the old location; unlike upstream, extract_directory
+	 * only tolerates EEXIST rather than clearing the directory, so the stale
+	 * symlink would otherwise survive and symlink() below fails with EEXIST,
+	 * aborting the recovery.  Remove any existing link first.
+	 */
+	if (forceoverwrite)
+		unlink(filename);
+
 	if (symlink(linktarget, filename) != 0)
 		pg_fatal("could not create symbolic link from \"%s\" to \"%s\": %m",
 				 filename, linktarget);
