@@ -4816,6 +4816,22 @@ create_ordinary_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 									extra);
 }
 
+
+static double
+calculate_num_groups(Path *path, double dNumGroupsTotal)
+{
+	/*
+	 * dNumGroupsTotal is the total number of groups across all segments. If the
+	 * Aggregate is distributed, then the number of groups in one segment
+	 * is only a fraction of the total.
+	 */
+
+	if (CdbPathLocus_IsPartitioned(path->locus))
+		return clamp_row_est(dNumGroupsTotal / 
+			CdbPathLocus_NumSegments(path->locus));
+	return dNumGroupsTotal;	
+}
+
 /*
  * For a given input path, consider the possible ways of doing grouping sets on
  * it, by combinations of hashing and sorting.  This can be called multiple
@@ -4862,16 +4878,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 											   parse->groupClause,
 											   gd->rollups);
 
-		/*
-		 * dNumGroupsTotal is the total number of groups across all segments. If the
-		 * Aggregate is distributed, then the number of groups in one segment
-		 * is only a fraction of the total.
-		 */
-		if (CdbPathLocus_IsPartitioned(path->locus))
-			dNumGroups = clamp_row_est(dNumGroupsTotal /
-									   CdbPathLocus_NumSegments(path->locus));
-		else
-			dNumGroups = dNumGroupsTotal;
+		dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 		srd = make_new_rollups_for_hash_grouping_set(root, path, gd);
 
@@ -4930,20 +4937,12 @@ consider_groupingsets_paths(PlannerInfo *root,
 										   path,
 										   path->pathtarget,
 										   root->group_pathkeys,
+										   NO_INCREMENTAL_SORT,
 										   -1.0,
 										   parse->groupClause,
 										   gd->rollups);
 
-	/*
-	 * dNumGroupsTotal is the total number of groups across all segments. If the
-	 * Aggregate is distributed, then the number of groups in one segment
-	 * is only a fraction of the total.
-	 */
-	if (CdbPathLocus_IsPartitioned(path->locus))
-		dNumGroups = clamp_row_est(dNumGroupsTotal /
-								   CdbPathLocus_NumSegments(path->locus));
-	else
-		dNumGroups = dNumGroupsTotal;
+	dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 	/*
 	 * Given sorted input, we try and make two paths: one sorted and one mixed
@@ -5246,41 +5245,18 @@ create_one_window_path(PlannerInfo *root,
 	{
 		WindowClause *wc = lfirst_node(WindowClause, l);
 		List	   *window_pathkeys;
-#if 0 /* GPDB_14_MERGE_FIXME: enable incremental sort */
 		int			presorted_keys;
 		bool		is_sorted;
-#endif
 
 		window_pathkeys = make_pathkeys_for_window(root,
 												   wc,
 												   root->processed_tlist);
 
-		/*
-		 * Unless the PARTITION BY in the window happens to match the
-		 * current distribution, we need a motion. Each partition
-		 * needs to be handled in the same segment.
-		 *
-		 * If there is no PARTITION BY, then all rows form a single
-		 * partition, so we need to gather all the tuples to a single
-		 * node. But we'll do that after the Sort, so that the Sort
-		 * is parallelized.
-		 *
-		 * This is the same logic that is used for sorted Aggregates.
-		 */
-		path = cdb_prepare_path_for_sorted_agg(root,
-											   pathkeys_contained_in(window_pathkeys, path->pathkeys),
-											   window_rel,
-											   path,
-											   path->pathtarget,
-											   window_pathkeys,
-											   -1.0,
-											   wc->partitionClause,
-											   NIL);
-#if 0 /* GPDB_14_MERGE_FIXME: enable incremental sort */
 		is_sorted = pathkeys_count_contained_in(window_pathkeys,
 												path->pathkeys,
 												&presorted_keys);
 
+#if 0 /* PostgreSQL */
 		/* Sort if necessary */
 		if (!is_sorted)
 		{
@@ -5308,6 +5284,28 @@ create_one_window_path(PlannerInfo *root,
 			}
 		}
 #endif
+		/*
+		 * Unless the PARTITION BY in the window happens to match the
+		 * current distribution, we need a motion. Each partition
+		 * needs to be handled in the same segment.
+		 *
+		 * If there is no PARTITION BY, then all rows form a single
+		 * partition, so we need to gather all the tuples to a single
+		 * node. But we'll do that after the Sort, so that the Sort
+		 * is parallelized.
+		 *
+		 * This is the same logic that is used for sorted Aggregates.
+		 */
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   enable_incremental_sort ? presorted_keys : NO_INCREMENTAL_SORT,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
 
 		if (lnext(activeWindows, l))
 		{
@@ -5458,6 +5456,7 @@ create_distinct_paths(PlannerInfo *root,
 													   distinct_rel,
 													   path, path->pathtarget,
 													   needed_pathkeys,
+													   NO_INCREMENTAL_SORT,
 													   -1.0,
 													   parse->distinctClause,
 													   NIL);
@@ -5489,13 +5488,20 @@ create_distinct_paths(PlannerInfo *root,
 			needed_pathkeys = root->distinct_pathkeys;
 
 		path = cheapest_input_path;
-
+#if 0 /* PostgreSQL */
+		if (!pathkeys_contained_in(needed_pathkeys, path->pathkeys))
+			path = (Path *) create_sort_path(root, distinct_rel,
+											 path,
+											 needed_pathkeys,
+											 -1.0);
+#endif
 		path = cdb_prepare_path_for_sorted_agg(root,
 											   pathkeys_contained_in(needed_pathkeys, cheapest_input_path->pathkeys),
 											   distinct_rel,
 											   cheapest_input_path,
 											   cheapest_input_path->pathtarget,
 											   needed_pathkeys,
+											   NO_INCREMENTAL_SORT,
 											   -1.0,
 											   parse->distinctClause,
 											   NIL);
@@ -7374,11 +7380,10 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 		foreach(lc, input_rel->pathlist)
 		{
 			Path	   *path = (Path *) lfirst(lc);
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			Path	   *path_original = path;
-#endif
 			bool		is_sorted;
 			int			presorted_keys;
+			double		dNumGroups;
 
 			is_sorted = pathkeys_count_contained_in(root->group_pathkeys,
 													path->pathkeys,
@@ -7386,8 +7391,15 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 
 			if (path == cheapest_path || is_sorted)
 			{
-				double		dNumGroups;
-
+#if 0 /* PostgreSQL */
+				/* Sort the cheapest-total path if it isn't already sorted */
+				if (!is_sorted)
+					path = (Path *) create_sort_path(root,
+													 grouped_rel,
+													 path,
+													 root->group_pathkeys,
+													 -1.0);
+#endif
 				/*
 				 * Sort the cheapest-total path if it isn't already sorted.
 				 * This also adds a Motion to redistribute it if needed.
@@ -7398,20 +7410,12 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 													   path,
 													   path->pathtarget,
 													   root->group_pathkeys,
+													   NO_INCREMENTAL_SORT,
 													   -1.0,
 													   parse->groupClause,
 													   gd ? gd->rollups : NIL);
 
-				/*
-				 * dNumGroupsTotal is the total number of groups across all segments. If the
-				 * Aggregate is distributed, then the number of groups in one segment
-				 * is only a fraction of the total.
-				 */
-				if (CdbPathLocus_IsPartitioned(path->locus))
-					dNumGroups = clamp_row_est(dNumGroupsTotal /
-											   CdbPathLocus_NumSegments(path->locus));
-				else
-					dNumGroups = dNumGroupsTotal;
+				dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 				/* Now decide what to stick atop it */
 				if (parse->groupingSets)
@@ -7468,7 +7472,6 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				}
 			}
 
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			/*
 			 * Now we may consider incremental sort on this path, but only
 			 * when the path is not already sorted and when incremental sort
@@ -7490,12 +7493,28 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			 */
 			Assert(list_length(root->group_pathkeys) != 1);
 
+/* Use cdb_prepare_path_for_sorted_agg instead */
+#if 0
 			path = (Path *) create_incremental_sort_path(root,
 														 grouped_rel,
 														 path,
 														 root->group_pathkeys,
 														 presorted_keys,
 														 -1.0);
+#endif
+
+			path = cdb_prepare_path_for_sorted_agg(root,
+												   is_sorted,
+												   grouped_rel,
+												   path,
+												   path->pathtarget,
+												   root->group_pathkeys,
+												   presorted_keys,
+												   -1.0,
+												   parse->groupClause,
+												   gd ? gd->rollups : NIL);
+
+			dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 			/* Now decide what to stick atop it */
 			if (parse->groupingSets)
@@ -7504,11 +7523,12 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 											path, true, can_hash,
 											gd, agg_costs, dNumGroups);
 			}
-			else if (parse->hasAggs)
+			else if (parse->hasAggs || parse->groupClause)
 			{
 				/*
 				 * We have aggregation, possibly with plain GROUP BY. Make an
 				 * AggPath.
+				 * Since group nodes are not used in GPDB, use just agg_path instead.
 				 */
 				add_path(grouped_rel, (Path *)
 						 create_agg_path(root,
@@ -7517,11 +7537,14 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 										 grouped_rel->reltarget,
 										 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 										 AGGSPLIT_SIMPLE,
+										 false, /* streaming */
 										 parse->groupClause,
 										 havingQual,
 										 agg_costs,
 										 dNumGroups));
 			}
+			/* Group nodes are not used in GPDB */
+#if 0
 			else if (parse->groupClause)
 			{
 				/*
@@ -7536,12 +7559,12 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 										   havingQual,
 										   dNumGroups));
 			}
+#endif
 			else
 			{
 				/* Other cases should have been handled above */
 				Assert(false);
 			}
-#endif
 		}
 
 		/*
@@ -7553,9 +7576,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			foreach(lc, partially_grouped_rel->pathlist)
 			{
 				Path	   *path = (Path *) lfirst(lc);
-#if  0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 				Path	   *path_original = path;
-#endif
 				bool		is_sorted;
 				int			presorted_keys;
 				double		dNumGroups;
@@ -7572,6 +7593,13 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				{
 					if (path != partially_grouped_rel->cheapest_total_path)
 						continue;
+#if 0 /* PostgreSQL */
+					path = (Path *) create_sort_path(root,
+													 grouped_rel,
+													 path,
+													 root->group_pathkeys,
+													 -1.0);
+#endif
 				}
 
 				path = cdb_prepare_path_for_sorted_agg(root,
@@ -7580,20 +7608,12 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 													   path,
 													   path->pathtarget,
 													   root->group_pathkeys,
+													   NO_INCREMENTAL_SORT,
 													   -1.0,
 													   parse->groupClause,
 													   NIL);
 
-				/*
-				 * dNumGroupsTotal is the total number of groups across all segments. If the
-				 * Aggregate is distributed, then the number of groups in one segment
-				 * is only a fraction of the total.
-				 */
-				if (CdbPathLocus_IsPartitioned(path->locus))
-					dNumGroups = clamp_row_est(dNumGroupsTotal /
-											   CdbPathLocus_NumSegments(path->locus));
-				else
-					dNumGroups = dNumGroupsTotal;
+				dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 				//if (parse->hasAggs)
 				{
@@ -7622,7 +7642,6 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 											   dNumGroups));
 #endif
 
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 				/*
 				 * Now we may consider incremental sort on this path, but only
 				 * when the path is not already sorted and when incremental
@@ -7645,12 +7664,28 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				 */
 				Assert(list_length(root->group_pathkeys) != 1);
 
+/* Use cdb_prepare_path_for_sorted_agg instead */
+#if 0				
 				path = (Path *) create_incremental_sort_path(root,
-															 grouped_rel,
-															 path,
-															 root->group_pathkeys,
-															 presorted_keys,
-															 -1.0);
+												grouped_rel,
+												path,
+												root->group_pathkeys,
+												presorted_keys,
+												-1.0);
+#endif
+
+				path = cdb_prepare_path_for_sorted_agg(root,
+													   is_sorted,
+													   grouped_rel,
+													   path,
+													   path->pathtarget,
+													   root->group_pathkeys,
+													   presorted_keys,
+													   -1.0,
+													   parse->groupClause,
+													   NIL);
+
+				dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 				if (parse->hasAggs)
 					add_path(grouped_rel, (Path *)
@@ -7660,10 +7695,13 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 											 grouped_rel->reltarget,
 											 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 											 AGGSPLIT_FINAL_DESERIAL,
+											 false, /* streaming */
 											 parse->groupClause,
 											 havingQual,
 											 agg_final_costs,
 											 dNumGroups));
+				/* Group nodes are not used in GPDB */
+#if 0
 				else
 					add_path(grouped_rel, (Path *)
 							 create_group_path(root,
@@ -7700,17 +7738,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 												   parse->groupClause,
 												   NIL);
 
-			/*
-			 * dNumGroupsTotal is the total number of groups across all segments. If the
-			 * Aggregate is distributed, then the number of groups in one segment
-			 * is only a fraction of the total.
-			 */
-			if (CdbPathLocus_IsPartitioned(path->locus))
-				dNumGroups = clamp_row_est(dNumGroupsTotal /
-										   CdbPathLocus_NumSegments(path->locus));
-			else
-				dNumGroups = dNumGroupsTotal;
-
+			dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 			/*
 			 * Generate a HashAgg Path.  We just need an Agg over the
 			 * cheapest-total input path, since input order won't matter.
@@ -7743,16 +7771,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 												   parse->groupClause,
 												   NIL);
 
-			/*
-			 * dNumGroupsTotal is the total number of groups across all segments. If the
-			 * Aggregate is distributed, then the number of groups in one segment
-			 * is only a fraction of the total.
-			 */
-			if (CdbPathLocus_IsPartitioned(path->locus))
-				dNumGroups = clamp_row_est(dNumGroupsTotal /
-										   CdbPathLocus_NumSegments(path->locus));
-			else
-				dNumGroups = dNumGroupsTotal;
+			dNumGroups = calculate_num_groups(path, dNumGroupsTotal);
 
 			add_path(grouped_rel, (Path *)
 					 create_agg_path(root,
@@ -8079,7 +8098,6 @@ create_partial_grouping_paths(PlannerInfo *root,
 			}
 		}
 
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 		/*
 		 * Consider incremental sort on all partial paths, if enabled.
 		 *
@@ -8122,10 +8140,13 @@ create_partial_grouping_paths(PlannerInfo *root,
 											 partially_grouped_rel->reltarget,
 											 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 											 AGGSPLIT_INITIAL_SERIAL,
+											 false, /* streaming */
 											 parse->groupClause,
 											 NIL,
 											 agg_partial_costs,
 											 dNumPartialGroups));
+			/* Group nodes are not used in GPDB */
+#if 0
 				else
 					add_path(partially_grouped_rel, (Path *)
 							 create_group_path(root,
@@ -8134,9 +8155,9 @@ create_partial_grouping_paths(PlannerInfo *root,
 											   parse->groupClause,
 											   NIL,
 											   dNumPartialGroups));
+#endif
 			}
 		}
-#endif
 	}
 
 	if (can_sort && cheapest_partial_path != NULL)
@@ -8145,9 +8166,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 		foreach(lc, input_rel->partial_pathlist)
 		{
 			Path	   *path = (Path *) lfirst(lc);
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			Path	   *path_original = path;
-#endif
 			bool		is_sorted;
 			int			presorted_keys;
 
@@ -8193,7 +8212,6 @@ create_partial_grouping_paths(PlannerInfo *root,
 #endif
 			}
 
-#if 0 /* GPDB_13_MERGE_FIXME: enable incremental sort */
 			/*
 			 * Now we may consider incremental sort on this path, but only
 			 * when the path is not already sorted and when incremental sort
@@ -8230,10 +8248,13 @@ create_partial_grouping_paths(PlannerInfo *root,
 												 partially_grouped_rel->reltarget,
 												 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 												 AGGSPLIT_INITIAL_SERIAL,
+												 false, /* streaming */
 												 parse->groupClause,
 												 NIL,
 												 agg_partial_costs,
 												 dNumPartialPartialGroups));
+			/* Group nodes are not used in GPDB */
+#if 0
 			else
 				add_partial_path(partially_grouped_rel, (Path *)
 								 create_group_path(root,

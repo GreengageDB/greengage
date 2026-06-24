@@ -2302,6 +2302,12 @@ fetch_single_dqa_info(PlannerInfo *root,
  * is already sorted, we prefer to gather it to a single node to make
  * use of the pre-existing order, instead of redistributing and resorting
  * it.
+ * 
+ * The presorted_keys parameter is the number of keys by which the input path 
+ * is known to be sorted. 
+ * If this parameter is greater than 0 (NO_INCREMENTAL_SORT), the input is 
+ * considered to be partially sorted and incremental sort is applied.
+ * Otherwise, a full sort is used. 
  */
 Path *
 cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
@@ -2311,6 +2317,7 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 								Path *subpath,
 								PathTarget *target,
 								List *group_pathkeys,
+								int presorted_keys,
 								double limit_tuples,
 								/* extra arguments */
 								List *groupClause,
@@ -2344,11 +2351,23 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 	{
 		if (!is_sorted)
 		{
-			subpath = (Path *) create_sort_path(root,
-												rel,
-												subpath,
-												group_pathkeys,
-												-1.0);
+			if (presorted_keys == NO_INCREMENTAL_SORT)
+			{
+				subpath = (Path *) create_sort_path(root,
+													rel,
+													subpath,
+													group_pathkeys,
+													-1.0);
+			} 
+			else
+			{
+				subpath = (Path *) create_incremental_sort_path(root,
+																rel,
+																subpath,
+																group_pathkeys,
+																presorted_keys,
+																-1.0);
+			}
 		}
 		return subpath;
 	}
@@ -2380,14 +2399,42 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 		 * to merge the inputs.
 		 */
 		if (CdbPathLocus_IsPartitioned(locus))
-			subpath = cdbpath_create_motion_path(root, subpath, NIL,
-												 false, locus);
+		{
+			Path *motion_path = cdbpath_create_motion_path(root, subpath, subpath->pathkeys,
+												 presorted_keys != NO_INCREMENTAL_SORT, locus);
 
-		subpath = (Path *) create_sort_path(root,
-											rel,
-											subpath,
-											group_pathkeys,
-											-1.0);
+			
+			/*
+			 * We can not return NULL here, so make a possibly redundant path with 
+			 * no incremental sort
+			 */
+			if (motion_path == NULL) 
+			{
+				presorted_keys = NO_INCREMENTAL_SORT;
+				motion_path = cdbpath_create_motion_path(root, subpath, NIL,
+													false, locus);
+			}
+			Assert(motion_path != NULL);
+			subpath = motion_path;
+		}
+
+		if (presorted_keys == NO_INCREMENTAL_SORT)
+		{
+			subpath = (Path *) create_sort_path(root,
+												rel,
+												subpath,
+												group_pathkeys,
+												-1.0);
+		}
+		else
+		{
+			subpath = (Path *) create_incremental_sort_path(root,
+															rel,
+															subpath,
+															group_pathkeys,
+															presorted_keys,
+															-1.0);
+		}
 
 		if (!CdbPathLocus_IsPartitioned(locus))
 			subpath = cdbpath_create_motion_path(root, subpath,

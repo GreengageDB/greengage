@@ -16,6 +16,8 @@
 
 #include "nodes/pathnodes.h"
 
+#define NO_INCREMENTAL_SORT 0
+
 extern void cdb_create_multistage_grouping_paths(PlannerInfo *root,
 												 RelOptInfo *input_rel,
 												 RelOptInfo *output_rel,
@@ -43,6 +45,7 @@ extern Path *cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 											 Path *subpath,
 											 PathTarget *target,
 											 List *group_pathkeys,
+											 int presorted_keys,
 											 double limit_tuples,
 											 List *groupClause,
 											 List *rollups);

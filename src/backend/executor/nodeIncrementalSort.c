@@ -115,6 +115,7 @@
 		} \
 	} while (0)
 
+static void ExecEagerFreeIncrementalSort(IncrementalSortState *node);
 
 /* ----------------------------------------------------------------
  * instrumentSortedGroup
@@ -977,6 +978,12 @@ ExecIncrementalSort(PlanState *pstate)
 	slot = node->ss.ps.ps_ResultTupleSlot;
 	(void) tuplesort_gettupleslot(read_sortstate, ScanDirectionIsForward(dir),
 								  false, slot, NULL);
+
+	if (TupIsNull(slot) && !node->delayEagerFree)
+	{
+		ExecEagerFreeIncrementalSort(node);
+	}
+
 	return slot;
 }
 
@@ -1047,6 +1054,11 @@ ExecInitIncrementalSort(IncrementalSort *node, EState *estate, int eflags)
 	 */
 
 	/*
+	 * If eflag contains EXEC_FLAG_REWIND then this node is not eager free safe.
+	 */
+	incrsortstate->delayEagerFree = ((eflags & (EXEC_FLAG_REWIND)) != 0);
+
+	/*
 	 * Initialize child nodes.
 	 *
 	 * Incremental sort does not support backwards scans and mark/restore, so
@@ -1055,6 +1067,15 @@ ExecInitIncrementalSort(IncrementalSort *node, EState *estate, int eflags)
 	 * nodes may be able to do something more useful.
 	 */
 	outerPlanState(incrsortstate) = ExecInitNode(outerPlan(node), estate, eflags);
+
+
+	/*
+	 * If the child node is a Motion, then this node is not eager free safe.
+	 */
+	if (IsA(outerPlan((Plan *)node), Motion))
+	{
+		incrsortstate->delayEagerFree = true;
+	}
 
 	/*
 	 * Initialize scan slot and type.
@@ -1093,27 +1114,7 @@ ExecEndIncrementalSort(IncrementalSortState *node)
 {
 	SO_printf("ExecEndIncrementalSort: shutting down sort node\n");
 
-	/* clean out the scan tuple */
-	ExecClearTuple(node->ss.ss_ScanTupleSlot);
-	/* must drop pointer to sort result tuple */
-	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
-	/* must drop standalone tuple slots from outer node */
-	ExecDropSingleTupleTableSlot(node->group_pivot);
-	ExecDropSingleTupleTableSlot(node->transfer_tuple);
-
-	/*
-	 * Release tuplesort resources.
-	 */
-	if (node->fullsort_state != NULL)
-	{
-		tuplesort_end(node->fullsort_state);
-		node->fullsort_state = NULL;
-	}
-	if (node->prefixsort_state != NULL)
-	{
-		tuplesort_end(node->prefixsort_state);
-		node->prefixsort_state = NULL;
-	}
+	ExecEagerFreeIncrementalSort(node);
 
 	/*
 	 * Shut down the subplan.
@@ -1184,6 +1185,52 @@ ExecReScanIncrementalSort(IncrementalSortState *node)
 	if (outerPlan->chgParam == NULL)
 		ExecReScan(outerPlan);
 }
+
+static void
+ExecEagerFreeIncrementalSort(IncrementalSortState *node)
+{
+	/* clean out the scan tuple */
+	ExecClearTuple(node->ss.ss_ScanTupleSlot);
+	/* must drop pointer to sort result tuple */
+	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
+	/* must drop standalone tuple slots from outer node */
+	if (node->group_pivot != NULL)
+	{
+		ExecDropSingleTupleTableSlot(node->group_pivot);
+		node->group_pivot = NULL;
+	}
+
+	if (node->transfer_tuple != NULL)
+	{
+		ExecDropSingleTupleTableSlot(node->transfer_tuple);
+		node->transfer_tuple = NULL;
+	}
+
+	/*
+	 * Release tuplesort resources.
+	 */
+	if (node->fullsort_state != NULL)
+	{
+		tuplesort_end(node->fullsort_state);
+		node->fullsort_state = NULL;
+	}
+	if (node->prefixsort_state != NULL)
+	{
+		tuplesort_end(node->prefixsort_state);
+		node->prefixsort_state = NULL;
+	}
+}
+
+void
+ExecSquelchIncrementalSort(IncrementalSortState *node)
+{
+	if (!node->delayEagerFree)
+	{
+		ExecEagerFreeIncrementalSort(node);
+		ExecSquelchNode(outerPlanState(node));
+	}
+}
+
 
 /* ----------------------------------------------------------------
  *						Parallel Query Support

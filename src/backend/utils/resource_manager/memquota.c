@@ -246,6 +246,7 @@ IsBlockingOperator(Node *node)
 		case T_BitmapIndexScan:
 		case T_Hash:
 		case T_Sort:
+		case T_IncrementalSort:
 			return true;
 
 		case T_Material:
@@ -295,6 +296,7 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 	{
 		case T_Material:
 		case T_Sort:
+		case T_IncrementalSort:
 		case T_ShareInputScan:
 		case T_Hash:
 		case T_BitmapIndexScan:
