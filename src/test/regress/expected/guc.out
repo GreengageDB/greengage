@@ -998,10 +998,9 @@ SELECT name FROM tab_settings_flags
 SELECT name FROM tab_settings_flags
   WHERE NOT category = 'Preset Options' AND runtime_computed
   ORDER BY 1;
-        name        
---------------------
- checkpoint_timeout
-(1 row)
+ name 
+------
+(0 rows)
 
 -- Preset GUCs are flagged as NOT_IN_SAMPLE.
 SELECT name FROM tab_settings_flags
