@@ -20,6 +20,7 @@
 #include <sys/file.h>
 
 #include "access/aomd.h"
+#include "access/xact.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "cdb/cdbappendonlyxlog.h"
@@ -52,6 +53,18 @@ xlog_ao_insert(RelFileNode relFileNode, int32 segmentFileNum,
 	SIMPLE_FAULT_INJECTOR("xlog_ao_insert");
 
 	XLogInsert(RM_APPEND_ONLY_ID, XLOG_APPENDONLY_INSERT);
+
+	/*
+	 * Append-optimized segfiles are not buffer pages, so this record carries
+	 * no block references and would not be noticed by the block-reference
+	 * check in XLogInsert_Internal().  Mark the durable permanent-relation
+	 * write explicitly so the two-phase commit decision does not silently
+	 * depend on the pg_aoseg/pg_aocsseg heap update that currently
+	 * accompanies every AO write in the same transaction.  All callers
+	 * already check RelationNeedsWAL, so this is never reached for
+	 * non-permanent relations.
+	 */
+	MarkWalWriteForPermanentRel();
 
 	wait_to_avoid_large_repl_lag();
 }
@@ -122,6 +135,9 @@ void xlog_ao_truncate(RelFileNode relFileNode, int32 segmentFileNum, int64 offse
 	XLogRegisterData((char*) &xlaotruncate, sizeof(xl_ao_truncate));
 
 	XLogInsert(RM_APPEND_ONLY_ID, XLOG_APPENDONLY_TRUNCATE);
+
+	/* See xlog_ao_insert: no block references, mark the write explicitly. */
+	MarkWalWriteForPermanentRel();
 }
 
 static void

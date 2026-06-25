@@ -1,0 +1,189 @@
+-- Tests for the WAL-based one-phase / two-phase commit decision.
+--
+-- At COMMIT the QD broadcasts PREPARE only when some QE reported a durable
+-- change to a permanent relation: a WAL record carrying registered block
+-- references logged under an assigned xid, or an append-optimized write
+-- record (see MarkWalWriteForPermanentRel()).  A transaction whose QEs
+-- emitted only lock / invalidation / read-only-maintenance WAL commits with
+-- the cheaper one-phase protocol.
+
+create table dtx_phase_heap(a int) distributed by (a);
+CREATE TABLE
+create table dtx_phase_ao(a int) with (appendonly=true) distributed by (a);
+CREATE TABLE
+create table dtx_phase_aocs(a int) with (appendonly=true, orientation=column) distributed by (a);
+CREATE TABLE
+create table dtx_phase_prune(a int) distributed by (a);
+CREATE TABLE
+-- Enough rows to fill heap pages completely on every segment: opportunistic
+-- pruning of a page requires its free space to be below BLCKSZ/10, which
+-- holds for fully packed pages.
+insert into dtx_phase_prune select i from generate_series(1, 30000) i;
+INSERT 0 30000
+delete from dtx_phase_prune;
+DELETE 30000
+
+-- Case 1: a multi-segment heap write takes the two-phase path.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_heap select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('before_xlog_xact_prepare', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 2: a multi-segment append-optimized row write takes the two-phase
+-- path.  AO write WAL records carry no block references (AO segfiles are not
+-- buffer pages), so this guards the explicit MarkWalWriteForPermanentRel()
+-- call in xlog_ao_insert() against relying on the pg_aoseg heap update alone.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_ao select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('before_xlog_xact_prepare', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 3: same for a column-oriented append-optimized write.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_aocs select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('before_xlog_xact_prepare', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 4: a transaction whose only WAL is standby-lock records takes the
+-- one-phase path.  LOCK TABLE emits XLOG_STANDBY_LOCK under an assigned xid
+-- but registers no blocks; under the old any-WAL-under-xid predicate this
+-- forced a needless full two-phase commit.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: lock table dtx_phase_heap in access exclusive mode;
+LOCK TABLE
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('start_performDtxProtocolCommitOnePhase', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 5: a read-only transaction stays on the one-phase path even when its
+-- scans emit block-carrying maintenance WAL: opportunistic page pruning
+-- (XLOG_HEAP2_CLEAN) and hint-bit full-page images (XLOG_FPI_FOR_HINT) are
+-- logged without an xid and must not count as durable transaction work.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: select count(*) from dtx_phase_prune;
+ count 
+-------
+ 0     
+(1 row)
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('start_performDtxProtocolCommitOnePhase', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 6: the durable-work report is sticky across aborted subtransactions:
+-- permanent work rolled back to a savepoint still forces the two-phase path.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: savepoint sp1;
+SAVEPOINT
+1: insert into dtx_phase_heap select i from generate_series(101, 200) i;
+INSERT 0 100
+1: rollback to savepoint sp1;
+ROLLBACK
+1: commit;
+COMMIT
+select gp_wait_until_triggered_fault('before_xlog_xact_prepare', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+1q: ... <quitting>
+drop table dtx_phase_heap;
+DROP TABLE
+drop table dtx_phase_ao;
+DROP TABLE
+drop table dtx_phase_aocs;
+DROP TABLE
+drop table dtx_phase_prune;
+DROP TABLE
