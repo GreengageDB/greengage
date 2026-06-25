@@ -476,6 +476,17 @@ XLogInsert_Internal(RmgrId rmid, uint8 info, TransactionId headerXid)
 		EndPos = XLogInsertRecord(rdt, fpw_lsn, curinsert_flags, num_fpw);
 	} while (EndPos == InvalidXLogRecPtr);
 
+	/*
+	 * A record carrying block references modifies one or more relation pages.
+	 * Temporary and unlogged relations never emit such records (their data is
+	 * not WAL-logged), so this implies a durable change to a permanent
+	 * relation.  Remember it so the dispatcher can tell a transaction that did
+	 * real work (which needs a two-phase commit) apart from one that only
+	 * touched temporary objects (which can use a one-phase commit).
+	 */
+	if (max_registered_block_id > 0)
+		MarkWalWriteForPermanentRel();
+
 	XLogResetInsertion();
 
 	return EndPos;
