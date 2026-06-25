@@ -2409,19 +2409,22 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "WITH",
 					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
-					  "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
+					  "LOG ERRORS", "ON SEGMENT", "ESCAPE", "HEADER",
+					  "IGNORE EXTERNAL PARTITIONS");
 	else if (Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
-		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS",
-					  "WITH", "NEWLINE", "ON SEGMENT",
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "WITH", "NEWLINE", "ON SEGMENT", "LOG ERRORS",
 					  "IGNORE EXTERNAL PARTITIONS");
 
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "WITH"))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
 					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
-					  "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
+					  "LOG ERRORS","ON SEGMENT", "HEADER", "ESCAPE",
+					  "IGNORE EXTERNAL PARTITIONS");
 	else if (Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "WITH"))
 		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS",
-					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
+					  "NEWLINE", "ON SEGMENT", "LOG ERRORS", "ESCAPE",
+					  "IGNORE EXTERNAL PARTITIONS");
 
 	/* Handle COPY [BINARY] <sth> FROM filename CSV */
 	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV"))
@@ -2433,6 +2436,12 @@ psql_completion(const char *text, int start, int end)
 	/* Handle COPY [BINARY] <sth> TO filename CSV */
 	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "CSV"))
 		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE");
+
+	else if(HeadMatches("COPY|\\copy", MatchAny) && TailMatches("LOG", "ERRORS"))
+		COMPLETE_WITH("", "SEGMENT REJECT LIMIT");
+	else if(HeadMatches("COPY|\\copy", MatchAny) &&
+			TailMatches("LOG", "ERRORS", "SEGMENT", "REJECT", "LIMIT", MatchAny))
+		COMPLETE_WITH("ROWS", "PERCENT");
 
 
 	/* CREATE ACCESS METHOD */
