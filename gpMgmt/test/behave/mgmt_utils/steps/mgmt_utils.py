@@ -957,7 +957,7 @@ def impl(context):
     sleeptime = 10
     result = gpsubprocess.check_output(['gpstate', '-e'])
     with open('/tmp/allure-results/logs.log', 'a') as f:
-        f.write("%s: beginning result of syncing process: %s" % (datetime.datetime.now(), result))
+        f.write("%s: beginning result of syncing process: %s" % (datetime.now(), result))
     for i in range(times):
         if are_segments_synchronized():
             return
@@ -965,7 +965,7 @@ def impl(context):
 
     result = gpsubprocess.check_output(['gpstate', '-e'])
     with open('/tmp/allure-results/logs.log', 'a') as f:
-        f.write("%s: failed ending result of syncing process: %s" % (datetime.datetime.now(), result))
+        f.write("%s: failed ending result of syncing process: %s" % (datetime.now(), result))
     raise Exception('segments are not in sync after %d seconds' % (times * sleeptime))
 
 
