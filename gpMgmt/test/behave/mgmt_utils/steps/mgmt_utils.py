@@ -955,17 +955,27 @@ def impl(context, command, ret_code):
 def impl(context):
     times = 60
     sleeptime = 10
-    result = gpsubprocess.check_output(['gpstate', '-e'])
-    with open('/tmp/allure-results/logs.log', 'a') as f:
-        f.write("%s: beginning result of syncing process: %s" % (datetime.now(), result))
+    try:
+        result = gpsubprocess.check_output(['/usr/local/greengage-db-devel/bin/gpstate', '-e'])
+        with open('/tmp/allure-results/logs.log', 'a') as f:
+            f.write("%s: beginning result of syncing process: %s" % (datetime.now(), result))
+    except Exception as e:
+        with open('/tmp/allure-results/logs.log', 'a') as f:
+            f.write("%s: returncode: (%s), cmd: (%s), output: (%s)" % (datetime.now(), e.returncode, e.cmd, e.output))
+    
     for i in range(times):
         if are_segments_synchronized():
             return
         time.sleep(sleeptime)
 
-    result = gpsubprocess.check_output(['gpstate', '-e'])
-    with open('/tmp/allure-results/logs.log', 'a') as f:
-        f.write("%s: failed ending result of syncing process: %s" % (datetime.now(), result))
+    try:
+        result = gpsubprocess.check_output(['/usr/local/greengage-db-devel/bin/gpstate', '-e'])
+        with open('/tmp/allure-results/logs.log', 'a') as f:
+            f.write("%s: end result of syncing process: %s" % (datetime.now(), result))
+    except Exception as e:
+        with open('/tmp/allure-results/logs.log', 'a') as f:
+            f.write("%s: returncode: (%s), cmd: (%s), output: (%s)" % (datetime.now(), e.returncode, e.cmd, e.output))
+    
     raise Exception('segments are not in sync after %d seconds' % (times * sleeptime))
 
 
