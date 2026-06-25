@@ -94,6 +94,8 @@ setup_sshd() {
 
   echo "MaxStartups 100:30:200" >> /etc/ssh/sshd_config
 
+  echo "LogLevel DEBUG3" >> /etc/ssh/sshd_config
+
   case "$TEST_OS" in
     centos6 | sles*)
       test -e /etc/ssh/ssh_host_key || ssh-keygen -f /etc/ssh/ssh_host_key -N '' -t rsa1
