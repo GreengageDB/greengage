@@ -80,6 +80,16 @@ run_feature() {
       "
 EOF
 
+
+  for service in $services
+  do
+    docker compose -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
+      cp -r /data/gpdata /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs" &
+  done
+  wait
+
+  
+
   if [[ -z $CI ]]; then
     docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
   fi
