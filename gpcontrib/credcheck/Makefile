@@ -24,9 +24,6 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
 PG_CONFIG = pg_config
 
-# Extract the major version number
-PG_MAJORVERSION := $(shell $(PG_CONFIG) --version | sed -e 's/^[a-zA-Z ]*//' -e 's/\..*//')
-
 TAP_TESTS = 1
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
