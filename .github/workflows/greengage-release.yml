@@ -14,20 +14,24 @@ jobs:
         - target_os: ubuntu
           target_os_version: '22.04'
           extensions:  deb ddeb
-          artifact_prefix: deb-packages
         - target_os: ubuntu
           target_os_version: '24.04'
           extensions:  deb ddeb
-          artifact_prefix: deb-packages
+        - target_os: rockylinux
+          target_os_version: '8'
+          extensions:  rpm
+        - target_os: rockylinux
+          target_os_version: '9'
+          extensions:  rpm
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       actions: read
     steps:
       - name: Upload packages to release
-        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5861
+        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@CI-5654
         with:
           extensions:        ${{ matrix.extensions }}
-          artifact_prefix:   ${{ matrix.artifact_prefix }}
           target_os:         ${{ matrix.target_os }}
           target_os_version: ${{ matrix.target_os_version }}
+          artifact_prefix:   Package

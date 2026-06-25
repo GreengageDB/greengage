@@ -144,7 +144,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # Rebuild prod-redy version without debug extensions and pack it to deb
+  # Rebuild prod-redy version without debug extensions and pack it to deb and rpm
   package:
     needs: build
     strategy:
@@ -154,11 +154,15 @@ jobs:
           - target_os: ubuntu
           - target_os: ubuntu
             target_os_version: "24.04"
+          - target_os: rockylinux
+            target_os_version: "8"
+          - target_os: rockylinux
+            target_os_version: "9"
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v38
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@CI-5654
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
