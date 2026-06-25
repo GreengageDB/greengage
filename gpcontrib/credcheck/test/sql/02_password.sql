@@ -122,6 +122,9 @@ CREATE USER nocheck1;
 DROP USER IF EXISTS nocheck2;
 CREATE USER nocheck2 WITH PASSWORD 'aaaa';
 ALTER USER nocheck2 WITH PASSWORD 'bbbb';
+SET credcheck.whitelist = '';
+SELECT pg_check_password('nocheck2', 'nocheck2');
+SELECT pg_check_password('nocheck2', 'aaaaaaaa');
 DROP USER IF EXISTS nocheck1;
 DROP USER IF EXISTS nocheck2;
 

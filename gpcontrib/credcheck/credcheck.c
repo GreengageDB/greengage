@@ -2872,6 +2872,47 @@ pg_password_history_timestamp(PG_FUNCTION_ARGS)
         PG_RETURN_INT32(num_changed);
 }
 
+PG_FUNCTION_INFO_V1(pg_check_password);
+
+/*
+ * SQL-callable wrapper exposing the internal check_password() routine so a
+ * user can validate a candidate password against the configured credcheck
+ * username/password policy *without* actually creating or altering a role.
+ */
+Datum
+pg_check_password(PG_FUNCTION_ARGS)
+{
+	char	   *username;
+	char	   *password;
+	bool		save_has_password;
+
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("username and password must not be NULL")));
+
+	username = NameStr(*(PG_GETARG_NAME(0)));
+	password = text_to_cstring(PG_GETARG_TEXT_PP(1));
+
+	/*
+	 * check_password() and username_check() set the module-global
+	 * statement_has_password flag so that fix_log() can redact the password
+	 * from the server log. On the error path that redaction is desirable
+	 * (the SELECT carries the plain-text password as a literal and the flag
+	 * is consumed/reset by fix_log()). On the success path there is no log
+	 * hook to consume it, so save and restore the previous value to avoid
+	 * leaking log suppression into a subsequent statement.
+	 */
+	save_has_password = statement_has_password;
+
+	check_password(username, password, PASSWORD_TYPE_PLAINTEXT,
+				   (Datum) 0, true);
+
+	statement_has_password = save_has_password;
+
+	PG_RETURN_BOOL(true);
+}
+
 static void
 fix_log(ErrorData *edata)
 {
