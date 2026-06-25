@@ -626,6 +626,8 @@ def are_segments_synchronized():
     segments = gparray.getDbList()
     for seg in segments:
         if seg.mode != MODE_SYNCHRONIZED and not seg.isSegmentMaster(True):
+            with open('/tmp/allure-results/logs.log', 'a') as f:
+                f.write("%s: Segment with hostname %s role = %s preffered_role = %s and status = %s is unsync" % (datetime.datetime.now(), seg.hostname, seg.role, seg.preferred_role, seg.status))
             return False
     return True
 
