@@ -33,7 +33,7 @@ def impl(context, segment):
 
     context.standby_hostname = 'cdw-2'
     with open('/tmp/allure-results/logs.log', 'a') as f:
-                f.write("%s: We are in before everything " % (datetime.datetime.now()))
+        f.write("%s: We are in before everything " % (datetime.datetime.now()))
     context.execute_steps(u"""
     Given the segments are synchronized
      Then replication connections can be made from the acting {segment}
@@ -42,7 +42,7 @@ def impl(context, segment):
     """.format(segment=segment))
 
     with open('/tmp/allure-results/logs.log', 'a') as f:
-                f.write("%s: We went frist " % (datetime.datetime.now()))
+        f.write("%s: We went frist " % (datetime.datetime.now()))
     # For the 'standby' case, we set PGHOST back to its original value instead
     # of 'cdw-1'.  When the function impl() is called, PGHOST is initially unset
     # by the test framework, and we want to respect that.
@@ -63,7 +63,7 @@ def impl(context, segment):
 
     else: # mirrors
         with open('/tmp/allure-results/logs.log', 'a') as f:
-                f.write("%s: We before second: mirrors " % (datetime.datetime.now()))
+            f.write("%s: We before second: mirrors " % (datetime.datetime.now()))
         context.execute_steps(u"""
         Given user stops all primary processes
           And user can start transactions
@@ -71,7 +71,8 @@ def impl(context, segment):
          Then gprecoverseg should return a return code of 0
         """)
 
-    f.write("%s: We are after mirrors gorecoverseg " % (datetime.datetime.now()))
+    with open('/tmp/allure-results/logs.log', 'a') as f:
+        f.write("%s: We are after mirrors gorecoverseg " % (datetime.datetime.now()))
     context.execute_steps(u"""
      Then the segments are synchronized
       And the tablespace is valid
@@ -113,7 +114,8 @@ def impl(context, segment):
          Then gprecoverseg should return a return code of 0
         """)
 
-    f.write("%s: We are after mirrors gorecoverseg -ra (second time) " % (datetime.datetime.now()))
+    with open('/tmp/allure-results/logs.log', 'a') as f:
+        f.write("%s: We are after mirrors gorecoverseg " % (datetime.datetime.now()))
     context.execute_steps(u"""
      Then the segments are synchronized
       And the tablespace is valid

@@ -2,7 +2,6 @@ import socket
 import subprocess
 import tempfile
 import platform
-import sys
 
 from behave import given, when, then
 
