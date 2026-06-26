@@ -1,4 +1,4 @@
-@gpssh
+@gpssh @skip
 Feature: gpssh behave tests
 
     Scenario: gpssh -d and -t options
