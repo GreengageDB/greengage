@@ -1100,8 +1100,6 @@ datumstreamread_block_info(DatumStreamRead * acc)
 
 	Assert(acc);
 
-	//acc->noBlocksRead = false;
-
 	readOK = AppendOnlyStorageRead_GetBlockInfo(
 												&acc->ao_read,
 												&acc->getBlockInfo.contentLen,
@@ -1307,8 +1305,6 @@ datumstreamread_block(DatumStreamRead * acc,
 	bool		readOK = false;
 
 	Assert(acc);
-
-	//acc->noBlocksRead = false;
 
 	acc->blockFirstRowNum += acc->blockRowCount;
 
