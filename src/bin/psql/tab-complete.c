@@ -2143,6 +2143,15 @@ psql_completion(const char *text, int start, int end)
 					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED",
 					  "SUBPARTITION TEMPLATE (");
 
+	/* ALTER TABLE xxx SET WITH ( */
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "("))
+		COMPLETE_WITH("reorganize =");
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(", "reorganize", "="))
+		COMPLETE_WITH("true )", "false )");
+	
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)"))
+		COMPLETE_WITH("DISTRIBUTED");
+
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
 			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
 		COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
