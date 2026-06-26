@@ -26,15 +26,7 @@ psql \
 done
 
 mkdir -pm 777 sqldump
-echo "-----------------------------------------------------------------"
-echo "Starting 'pg_dumpall'"
-echo "-----------------------------------------------------------------"
-pg_dumpall -f ./sqldump/dump.sql -v || pg_dumpall_exit_code=$?
-pg_dumpall_exit_code=${pg_dumpall_exit_code:-0}
-echo "-----------------------------------------------------------------"
-echo "Finished 'pg_dumpall' with exit code: '$pg_dumpall_exit_code'"
-echo "-----------------------------------------------------------------"
+pg_dumpall -f ./sqldump/dump.sql
 if [[ -z "${CI:-}" ]]; then
     xz -z ./sqldump/dump.sql
 fi
-exit "$pg_dumpall_exit_code"
