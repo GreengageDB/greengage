@@ -154,7 +154,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-	//(void)err;
 
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
@@ -199,7 +198,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 									  attno,
 									  &dirEntry,
 									  scan->columnScanInfo.attnum_to_rownum);
-				//(void)res;
 				Assert(res);
 
 				Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
@@ -212,7 +210,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			{
 				bool read_ok PG_USED_FOR_ASSERTS_ONLY;
 				read_ok = datumstreamread_block_info(ds);
-				//(void)read_ok;
 				Assert(read_ok);
 
 				if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
