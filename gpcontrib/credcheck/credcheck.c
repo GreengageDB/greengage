@@ -54,6 +54,7 @@
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
 #include "tcop/utility.h"
+#include "tcop/tcopprot.h"	/* debug_query_string */
 #if PG_VERSION_NUM >= 190000
 #include "storage/fd.h"
 #endif
@@ -160,7 +161,6 @@ static RmgrData credcheck_rmgr = {
 };
 #endif		/* PG_VERSION_NUM >= 150000 */
 
-static bool statement_has_password = false;
 static bool no_password_logging    = true;
 
 #if PG_VERSION_NUM < 120000
@@ -447,9 +447,6 @@ username_check(const char *username, const char *password)
 	char *tmp_user = NULL;
 	char *tmp_contains = NULL;
 	char *tmp_not_contains = NULL;
-
-	if (strcasestr(debug_query_string, "PASSWORD") != NULL)
-		statement_has_password = true;
 
 	/* checks has to be done by ignoring case */
 	if (username_ignore_case)
@@ -1701,7 +1698,6 @@ check_password(const char *username, const char *password,
 			if (is_in_whitelist((char *)username, username_whitelist))
 				break;
 
-			statement_has_password = true;
 			username_check(username, password);
 			if (password != NULL)
 			{
@@ -1752,7 +1748,8 @@ _PG_init(void)
 	}
 
 	DefineCustomBoolVariable("credcheck.no_password_logging",
-				gettext_noop("prevent exposing the password in error messages logged"),
+				gettext_noop("mask the password literal (PASSWORD '...') in statements"
+					"written to the server log"),
 				NULL, &no_password_logging, true, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
@@ -1904,7 +1901,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("you must change your password first."))));
 		}
-		statement_has_password = false;
 
 		switch (nodeTag(parsetree))
 		{
@@ -1982,7 +1978,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				/* check the password set */
 				if (dpassword && dpassword->arg)
 				{
-					statement_has_password = true;
 					password = strVal(dpassword->arg);
 					save_password = check_password_reuse(stmt->role->rolename, password);
 				}
@@ -2103,7 +2098,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 #if PG_VERSION_NUM >= 120000
 				if (dpassword && dpassword->arg)
 				{
-					statement_has_password = true;
 					password = strVal(dpassword->arg);
 					save_password = check_password_reuse(stmt->role, password);
 				}
@@ -2884,7 +2878,6 @@ pg_check_password(PG_FUNCTION_ARGS)
 {
 	char	   *username;
 	char	   *password;
-	bool		save_has_password;
 
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 		ereport(ERROR,
@@ -2894,43 +2887,292 @@ pg_check_password(PG_FUNCTION_ARGS)
 	username = NameStr(*(PG_GETARG_NAME(0)));
 	password = text_to_cstring(PG_GETARG_TEXT_PP(1));
 
-	/*
-	 * check_password() and username_check() set the module-global
-	 * statement_has_password flag so that fix_log() can redact the password
-	 * from the server log. On the error path that redaction is desirable
-	 * (the SELECT carries the plain-text password as a literal and the flag
-	 * is consumed/reset by fix_log()). On the success path there is no log
-	 * hook to consume it, so save and restore the previous value to avoid
-	 * leaking log suppression into a subsequent statement.
-	 */
-	save_has_password = statement_has_password;
-
 	check_password(username, password, PASSWORD_TYPE_PLAINTEXT,
 				   (Datum) 0, true);
 
-	statement_has_password = save_has_password;
-
 	PG_RETURN_BOOL(true);
+}
+
+/*
+ * Cheap, case-insensitive test for the substring "passw", used to avoid
+ * lexing every single log line when there cannot be a password to redact.
+ */
+static bool
+query_has_password(const char *s)
+{
+	if (s == NULL)
+		return false;
+
+	for (; *s; s++)
+	{
+		if ((s[0] == 'p' || s[0] == 'P') &&
+			(s[1] == 'a' || s[1] == 'A') &&
+			(s[2] == 's' || s[2] == 'S') &&
+			(s[3] == 's' || s[3] == 'S') &&
+			(s[4] == 'w' || s[4] == 'W'))
+			return true;
+	}
+	return false;
+}
+
+/* Advance past whitespace. */
+static char *
+skip_ws(char *p)
+{
+	while (*p && isspace((unsigned char) *p))
+		p++;
+	return p;
+}
+
+/* Skip constant SQL string literal.*/
+static char *
+skip_string(char *p, bool estr)
+{
+	p++;  /* skip opening quote */
+	while (*p)
+	{
+		if (estr && *p == '\\' && p[1] != '\0')
+		{
+			p += 2;
+			continue;
+		}
+		if (*p == '\'')
+		{
+			if (p[1] == '\'')
+			{
+				p += 2;
+				continue;
+			}
+			return p + 1;  /* closing quote */
+		}
+		p++;
+	}
+	return p;
+}
+
+/*
+ * Overwrite the interior of an SQL string literal with '.', preserving the
+ * quotes and the literal's overall length. 'p' points at the opening quote.
+ * Returns the position just past the closing quote.
+ */
+static char *
+mask_string_literal(char *p, bool estr)
+{
+	p++;  /* keep opening quote */
+	while (*p)
+	{
+		if (estr && *p == '\\' && p[1] != '\0')
+		{
+			*p = '.';
+			p[1] = '.';
+			p += 2;
+			continue;
+		}
+		if (*p == '\'')
+		{
+			if (p[1] == '\'')  /* doubled quote -> embedded ' */
+			{
+				*p = '.';
+				p[1] = '.';
+				p += 2;
+				continue;
+			}
+			return p + 1;  /* keep closing quote */
+		}
+		*p = '.';
+		p++;
+	}
+	return p;
+}
+
+/*
+ * Mask, in place, the value of every PASSWORD '<literal>' (and FDW-style
+ * "password '<literal>'") clause found in the SQL text 's'. A small lexer is
+ * used so that the PASSWORD keyword is only matched as real SQL: string
+ * literals, dollar-quoted strings, quoted identifiers and comments are skipped
+ * so the word "password" appearing inside ordinary data never triggers a
+ * (corrupting) match.
+ */
+static void
+mask_passwords(char *s)
+{
+	char *p = s;
+
+	if (s == NULL)
+		return;
+
+	while (*p)
+	{
+		unsigned char c = (unsigned char) *p;
+
+		/* line comment */
+		if (c == '-' && p[1] == '-')
+		{
+			p += 2;
+			while (*p && *p != '\n')
+				p++;
+			continue;
+		}
+
+		/* block comment (PostgreSQL allows nesting) */
+		if (c == '/' && p[1] == '*')
+		{
+			int depth = 1;
+
+			p += 2;
+			while (*p && depth > 0)
+			{
+				if (p[0] == '/' && p[1] == '*')
+				{
+					depth++;
+					p += 2;
+				}
+				else if (p[0] == '*' && p[1] == '/')
+				{
+					depth--;
+					p += 2;
+				}
+				else
+					p++;
+			}
+			continue;
+		}
+
+		/* quoted identifier */
+		if (c == '"')
+		{
+			p++;
+			while (*p)
+			{
+				if (*p == '"')
+				{
+					if (p[1] == '"')
+					{
+						p += 2;
+						continue;
+					}
+					p++;
+					break;
+				}
+				p++;
+			}
+			continue;
+		}
+
+		/* dollar-quoted string: $tag$ ... $tag$ */
+		if (c == '$')
+		{
+			char       *tagend = p + 1;
+
+			while (*tagend &&
+				   (*tagend == '_' || isalnum((unsigned char) *tagend)))
+				tagend++;
+
+			if (*tagend == '$')
+			{
+				size_t          taglen = (size_t) (tagend - p) + 1;
+				char       *body = tagend + 1;
+
+				for (; *body; body++)
+				{
+					if (*body == '$' && strncmp(body, p, taglen) == 0)
+					{
+						body += taglen;
+						break;
+					}
+				}
+				p = body;
+				continue;
+			}
+			/* not a dollar quote */
+			p++;
+			continue;
+		}
+
+		/* ordinary string literal */
+		if (c == '\'')
+		{
+			p = skip_string(p, false);
+			continue;
+		}
+
+		/* identifier or keyword */
+		if (c == '_' || isalpha(c))
+		{
+			char       *start = p;
+			size_t          len;
+
+			p++;
+			while (*p == '_' || *p == '$' || isalnum((unsigned char) *p))
+				p++;
+			len = (size_t) (p - start);
+
+			/* E'...' / e'...' escape string constant */
+			if (len == 1 && (start[0] == 'E' || start[0] == 'e') &&
+				*p == '\'')
+			{
+				p = skip_string(p, true);
+				continue;
+			}
+
+			if (len == 8 && pg_strncasecmp(start, "password", 8) == 0)
+			{
+				char       *lit = skip_ws(p);
+				bool            estr = false;
+
+				if ((*lit == 'E' || *lit == 'e') && lit[1] == '\'')
+				{
+					estr = true;
+					lit++;
+				}
+
+				if (*lit == '\'')
+				{
+					/* PASSWORD 'secret'  ->  PASSWORD '......' */
+					p = mask_string_literal(lit, estr);
+					continue;
+				}
+				/* PASSWORD NULL / PASSWORD $n / etc: nothing to mask */
+			}
+			continue;
+		}
+		p++;
+	}
 }
 
 static void
 fix_log(ErrorData *edata)
 {
-	if (edata->elevel != ERROR)
+        /* Do not expose the password in the log. */
+	if (no_password_logging)
 	{
-		/* Continue chain to previous hook */
-		if (prev_log_hook)
-			(*prev_log_hook) (edata);
-		return;
+		/*
+		 * Mask the password literal anywhere it could reach the log, for every
+		 * log level: log_statement / log_min_duration_statement emit at LOG,
+		 * policy violations and other failures at ERROR.
+		 */
+		if (query_has_password(edata->message))
+			mask_passwords(edata->message);
+		if (query_has_password(edata->detail))
+			mask_passwords(edata->detail);
+		if (query_has_password(edata->detail_log))
+			mask_passwords(edata->detail_log);
+		if (query_has_password(edata->context))
+			mask_passwords(edata->context);
+		if (query_has_password(edata->internalquery))
+			mask_passwords(edata->internalquery);
+
+		/*
+		 * The "STATEMENT: ..." line attached to an error is printed by
+		 * send_message_to_server_log() straight from debug_query_string, not
+		 * from edata, so mask it there too. The cast is safe: masking is
+		 * length-preserving and the backend resets this buffer to the next
+		 * statement's text on the following command.
+		 */
+		if (debug_query_string != NULL &&
+			query_has_password(debug_query_string))
+			mask_passwords((char *) debug_query_string);
 	}
-
-        /*
-	 * Error should not expose the password in the log.
-	 */
-	if (statement_has_password && no_password_logging)
-		edata->hide_stmt = true;
-
-	statement_has_password = false;
 
 	/* Continue chain to previous hook */
 	if (prev_log_hook)
