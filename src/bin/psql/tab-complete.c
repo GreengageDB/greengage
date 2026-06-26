@@ -2209,14 +2209,26 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
-	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "("))
-		COMPLETE_WITH_ATTR(prev5_wd, "");
-	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "("))
-		COMPLETE_WITH_ATTR(prev7_wd, "");
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*") ||
+			!HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
+	else if(HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*") ||
+		   !HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
 
 	/* ALTER TABLE xxx REPACK BY COLUMN ( */
-	else if (Matches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "("))
-		COMPLETE_WITH_ATTR(prev5_wd, "");
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*") ||
+			!HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
 
 	/* ALTER TABLESPACE <foo> with RENAME TO, OWNER TO, SET, RESET */
 	else if (Matches("ALTER", "TABLESPACE", MatchAny))
