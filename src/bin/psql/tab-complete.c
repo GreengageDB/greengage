@@ -2212,6 +2212,11 @@ psql_completion(const char *text, int start, int end)
 	else if(Matches("ALTER", "TABLE", MatchAny, MatchAny, "DEFAULT"))
 		COMPLETE_WITH("PARTITION");
 
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "PARTITION", MatchAny))
+		COMPLETE_WITH("TO");
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
+		COMPLETE_WITH("TO");
+
 	/* ALTER TABLE xxx yyy PARTITION */
 	else if(Matches("ALTER", "TABLE", MatchAny, MatchAnyExcept("ADD"), "PARTITION"))
 	{
