@@ -1990,7 +1990,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny))
 		COMPLETE_WITH("ADD", "ALTER", "CLUSTER ON", "DISABLE", "DROP",
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
-					  "OWNER TO", "SET", "VALIDATE CONSTRAINT", "EXPAND",
+					  "OWNER TO", "SET", "VALIDATE CONSTRAINT",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
 					  "DETACH PARTITION", "REPACK BY COLUMNS (",
 					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
@@ -2028,11 +2028,6 @@ psql_completion(const char *text, int start, int end)
 		completion_info_charp = prev4_wd;
 		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
 	}
-	/* ALTER TABLE xxx EXPAND */
-	else if (Matches("ALTER", "TABLE", MatchAny, "EXPAND"))
-		COMPLETE_WITH("TABLE", "PARTITION");
-	else if (Matches("ALTER", "TABLE", MatchAny, "EXPAND", "PARTITION"))
-		COMPLETE_WITH("PREPARE");
 	/* ALTER TABLE xxx INHERIT */
 	else if (Matches("ALTER", "TABLE", MatchAny, "INHERIT"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, "");
