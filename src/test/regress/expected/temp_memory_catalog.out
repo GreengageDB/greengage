@@ -263,6 +263,31 @@ SELECT relname, relpersistence
 
 DROP TABLE tempcat_permanent;
 -- ============================================================
+-- TEMP CATALOG is still respected when switched off
+-- ============================================================
+SET gp_enable_temp_memory_catalog = off;
+CREATE TEMP TABLE tempcat_test2 (id int);
+ERROR:  relation "tempcat_test2" already exists
+SELECT * FROM tempcat_test2 ORDER BY a;
+ a |   b   |  c   | d 
+---+-------+------+---
+ 1 | hello | 3.14 | t
+ 2 | world | 2.72 | f
+(2 rows)
+
+DROP TABLE tempcat_test2;
+SELECT * FROM tempcat_test2 ORDER BY a;
+ERROR:  relation "tempcat_test2" does not exist
+LINE 1: SELECT * FROM tempcat_test2 ORDER BY a;
+                      ^
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_test2 (id int);
+SELECT * FROM tempcat_test2 ORDER BY id;
+ id 
+----
+(0 rows)
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 DROP TABLE IF EXISTS tempcat_test2;

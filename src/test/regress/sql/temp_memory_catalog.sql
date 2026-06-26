@@ -173,6 +173,23 @@ SELECT relname, relpersistence
 DROP TABLE tempcat_permanent;
 
 -- ============================================================
+-- TEMP CATALOG is still respected when switched off
+-- ============================================================
+
+SET gp_enable_temp_memory_catalog = off;
+
+CREATE TEMP TABLE tempcat_test2 (id int);
+SELECT * FROM tempcat_test2 ORDER BY a;
+
+DROP TABLE tempcat_test2;
+SELECT * FROM tempcat_test2 ORDER BY a;
+
+SET gp_enable_temp_memory_catalog = on;
+
+CREATE TEMP TABLE tempcat_test2 (id int);
+SELECT * FROM tempcat_test2 ORDER BY id;
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 DROP TABLE IF EXISTS tempcat_test2;

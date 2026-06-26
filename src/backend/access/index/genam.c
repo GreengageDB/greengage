@@ -373,7 +373,6 @@ systable_beginscan(Relation heapRelation,
 	sysscan->heap_rel = heapRelation;
 	sysscan->irel = irel;
 	sysscan->slot = table_slot_create(heapRelation, NULL);
-	sysscan->tempscan = NULL;
 
 	if (snapshot == NULL)
 	{
@@ -388,8 +387,7 @@ systable_beginscan(Relation heapRelation,
 		sysscan->snapshot = NULL;
 	}
 
-	if (enable_temp_memory_catalog)
-		sysscan->tempscan = tempcat_beginscan(heapRelation, nkeys, key);
+	sysscan->tempscan = tempcat_beginscan(heapRelation, nkeys, key);
 
 	if (irel)
 	{
