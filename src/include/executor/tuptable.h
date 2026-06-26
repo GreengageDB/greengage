@@ -221,11 +221,12 @@ struct TupleTableSlotOps
  * same are used to identify the type of a given slot.
  */
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsVirtual;
+extern PGDLLIMPORT const TupleTableSlotOps TTSOpsVirtualAOCS;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
-#define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
+#define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual || (slot)->tts_ops == &TTSOpsVirtualAOCS)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
@@ -240,6 +241,13 @@ typedef struct VirtualTupleTableSlot
 
 	char	   *data;			/* data for materialized slots */
 } VirtualTupleTableSlot;
+
+typedef struct VirtualTupleTableSlotAOCS
+{
+	VirtualTupleTableSlot base;
+
+	void * current_scan;
+} VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
 {

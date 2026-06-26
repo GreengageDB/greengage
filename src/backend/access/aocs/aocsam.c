@@ -24,6 +24,7 @@
 #include "access/hio.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
+#include "catalog/aoblkdir.h"
 #include "catalog/catalog.h"
 #include "catalog/gp_fastsequence.h"
 #include "catalog/index.h"
@@ -48,6 +49,7 @@
 #include "utils/builtins.h"
 #include "utils/datumstream.h"
 #include "utils/faultinjector.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -742,7 +744,9 @@ aocs_beginscan_internal(Relation relation,
 		 * Initialize a AOBlkdirScan only if we are doing sampling and if we
 		 * have a blkdir relation.
 		 */
-		if ((flags & SO_TYPE_ANALYZE) != 0 || (flags & SO_TYPE_SAMPLESCAN) != 0)
+		if ((flags & SO_TYPE_ANALYZE) != 0 ||
+			(flags & SO_TYPE_SAMPLESCAN) != 0 ||
+			(flags & SO_TYPE_SEQSCAN) != 0)
 		{
 			if (OidIsValid(blkdirrelid) && gp_enable_blkdir_sampling)
 				aocs_blkdirscan_init(scan);
@@ -1369,7 +1373,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int64		nthInBlock;
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
-	AttrNumber	natts;
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 
 	Assert(ScanDirectionIsForward(direction));
 
@@ -1385,8 +1389,128 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
-	natts = slot->tts_tupleDescriptor->natts;
-	Assert(natts <= scan->columnScanInfo.relationTupleDesc->natts);
+	if (gp_aocs_scan_shortpass &&
+		!gp_select_invisible &&
+		scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
+		!scan->blockDirectory && scan->aocsfetch)
+	{
+		/*
+		 * Short pass via visibility map and block directory for cases when
+		 * there is no actual need to access tables data, for ex. for queries
+		 * like "SELECT COUNT(*) FROM some_table;".
+		 */
+
+		typedef struct Context
+		{
+			SysScanDesc					scan_blkdir;
+			MinipagePerColumnGroup		curr_minipage;
+			MinipageEntry				*minipage_entry;
+			bool						curr_minipage_valid;
+			int							curr_minipage_entry_idx;
+			int							segno;
+		} Context;
+
+		static Context context =
+		{
+			.scan_blkdir = NULL,
+			.minipage_entry = NULL,
+			.curr_minipage_valid = false,
+			.curr_minipage_entry_idx = 0,
+			.segno = -1
+		};
+
+		while(1)
+		{
+			if (likely(context.minipage_entry &&
+					  scan->segrowsprocessed < context.minipage_entry->rowCount))
+			{
+				Assert(context.segno >= 0);
+				scan->segrowsprocessed++;
+				AOTupleIdInit(&aoTupleId, context.segno, context.minipage_entry->firstRowNum + scan->segrowsprocessed-1);
+				if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
+				{
+					/* The tuple is invisible */
+					continue;
+				}
+				slot->tts_nvalid = 0;
+				slot->tts_tid = *((ItemPointer) &aoTupleId);
+				return true;
+			}
+
+			if (likely(context.curr_minipage_valid))
+			{
+				Assert(context.curr_minipage_entry_idx < context.curr_minipage.numMinipageEntries);
+
+				context.minipage_entry = &context.curr_minipage.minipage->entry[context.curr_minipage_entry_idx];
+				scan->segrowsprocessed = 0;
+
+				context.curr_minipage_entry_idx++;
+				context.curr_minipage_valid =
+					(context.curr_minipage_entry_idx != context.curr_minipage.numMinipageEntries);
+				continue;
+			}
+
+			if (unlikely(context.scan_blkdir == NULL))
+			{
+				static ScanKeyData scanKey;
+				ScanKeyInit(&scanKey,
+							Anum_pg_aoblkdir_columngroupno,
+							BTEqualStrategyNumber,
+							F_INT4EQ,
+							Int32GetDatum(scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]));
+
+				context.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
+												   InvalidOid,
+												   true,// false,
+												   scan->rs_base.rs_snapshot,
+												   1,
+												   &scanKey);
+				context.curr_minipage.minipage = palloc0(minipage_size(NUM_MINIPAGE_ENTRIES));
+				context.curr_minipage_valid = false;
+				context.minipage_entry = NULL;
+			}
+
+			if (!context.curr_minipage_valid)
+			{
+				Datum	minipage_datum;
+				bool	minipageNull;
+				bool	segnoNull;
+
+				if (!HeapTupleIsValid(systable_getnext(context.scan_blkdir)))
+				{
+					/* No more seg, we are at the end */
+					systable_endscan(context.scan_blkdir);
+					context.scan_blkdir = NULL;
+					pfree(context.curr_minipage.minipage);
+					context.curr_minipage.minipage = NULL;
+					context.curr_minipage_valid = false;
+					context.minipage_entry = NULL;
+					context.curr_minipage_entry_idx = 0;
+
+					ExecClearTuple(slot);
+					scan->cur_seg = -1;
+					slotAocs->current_scan = NULL;
+					return false;
+				}
+
+				TupleTableSlot *blkdir_slot = context.scan_blkdir->slot;
+
+				slot_getallattrs(blkdir_slot);
+
+				context.segno = DatumGetInt32(slot_getattr(blkdir_slot, Anum_pg_aoblkdir_segno, &segnoNull));
+
+				minipage_datum = slot_getattr(blkdir_slot, Anum_pg_aoblkdir_minipage, &minipageNull);
+				context.curr_minipage_valid = !minipageNull;
+				if (context.curr_minipage_valid)
+				{
+					copy_out_minipage(&context.curr_minipage, minipage_datum, false);
+					context.curr_minipage_entry_idx = 0;
+				}
+			}
+		}
+	}
+	else
+	{
 
 	while (1)
 	{
@@ -1401,7 +1525,10 @@ ReadNext:
 			 * Placing here in order to have less impact on the hot path. 
 			 */
 			if (scan->columnScanInfo.num_proj_atts == 0)
+			{
+				slotAocs->current_scan = NULL;
 				return false;
+			}
 
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -1409,6 +1536,7 @@ ReadNext:
 				/* No more seg, we are at the end */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
+				slotAocs->current_scan = NULL;
 				return false;
 			}
 			scan->segrowsprocessed = 0;
@@ -1420,10 +1548,15 @@ ReadNext:
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
 
+		AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
+		int tts_nvalid = anchor_attr+1;
 		/* Read from cur_seg */
 		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
 		{
 			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+			if (attno > anchor_attr)
+				break;
 
 			/*
 			 * Check missing value before reading from data files.
@@ -1517,9 +1650,13 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = natts;
+		slot->tts_nvalid = tts_nvalid;
+
 		slot->tts_tid = scan->cdb_fake_ctid;
+
+		slotAocs->current_scan = (void*)scan;
 		return true;
+	}
 	}
 
 	Assert(!"Never here");
@@ -2206,6 +2343,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	bool		found = true;
 	bool		isSnapshotAny = (aocsFetchDesc->snapshot == SnapshotAny);
 	bool 		valmissing;
+	int 		tts_nvalid = 0;
 
 	Assert(aocsFetchDesc->relation->rd_att->natts > 0);
 
@@ -2237,6 +2375,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	for (int i = 0; i < aocsFetchDesc->blockDirectory.num_proj_atts; i++)
 	{
 		colno = aocsFetchDesc->blockDirectory.proj_atts[i];
+		tts_nvalid = Max(tts_nvalid, colno + 1);
 
 		DatumStreamFetchDesc datumStreamFetchDesc = aocsFetchDesc->datumStreamFetchDesc[colno];
 
@@ -2424,7 +2563,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	{
 		if (slot != NULL)
 		{
-			slot->tts_nvalid = colno;
+			slot->tts_nvalid = tts_nvalid;
 			slot->tts_tid = *(ItemPointer)(aoTupleId);
 		}
 	}
@@ -3399,7 +3538,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 	 */
 	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
 	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * Initialize expression context for evaluating values and
@@ -3493,6 +3632,7 @@ aocs_writecol_rewritesegfiles(
 	/* Loop over each row in the segment. */
 	while (aocs_getnext(scanDesc, ForwardScanDirection, oldslot))
 	{
+		slot_getallattrs(oldslot);
 		if (scanDesc->columnScanInfo.ds[colno]->ao_read.current.hasFirstRowNum)
 		{
 			if (expectedFRN == -1)
@@ -3673,8 +3813,8 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			/* expr already planned */
 			ex->exprstate = ExecInitExpr((Expr *) ex->expr, NULL);
 		}
-		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtual);
-		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtualAOCS);
+		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * GENERATED expressions might reference the
