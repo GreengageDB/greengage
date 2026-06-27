@@ -1916,13 +1916,6 @@ from
  4 | -1 |   |   
 (12 rows)
 
--- GPDB: the deeply-nested explicit-PLAN form below
---   plan(p outer ((pb inner pb1) cross (pc outer pc1)))
--- trips a MemoryContext assertion (aset.c "firstchild") during nested
--- sibling-join execution under --enable-cassert.  Commented out pending a
--- fix so the json parallel group stays crash-free; the simpler nested-PLAN
--- variants above still exercise JSON_TABLE nested plans.
-/*
 select
 	jt.*, b1 + 100 as b
 from
@@ -1952,7 +1945,30 @@ from
 		--plan default(outer, cross)
 		plan(p outer ((pb inner pb1) cross (pc outer pc1)))
 	) jt;
-*/
+ n | a |      b       | b1  |  c   | c1 |  b  
+---+---+--------------+-----+------+----+-----
+ 1 | 1 | [1, 10]      |   1 | 1    |    | 101
+ 1 | 1 | [1, 10]      |   1 | null |    | 101
+ 1 | 1 | [1, 10]      |   1 | 2    |    | 101
+ 1 | 1 | [1, 10]      |  10 | 1    |    | 110
+ 1 | 1 | [1, 10]      |  10 | null |    | 110
+ 1 | 1 | [1, 10]      |  10 | 2    |    | 110
+ 1 | 1 | [2]          |   2 | 1    |    | 102
+ 1 | 1 | [2]          |   2 | null |    | 102
+ 1 | 1 | [2]          |   2 | 2    |    | 102
+ 1 | 1 | [3, 30, 300] |   3 | 1    |    | 103
+ 1 | 1 | [3, 30, 300] |   3 | null |    | 103
+ 1 | 1 | [3, 30, 300] |   3 | 2    |    | 103
+ 1 | 1 | [3, 30, 300] |  30 | 1    |    | 130
+ 1 | 1 | [3, 30, 300] |  30 | null |    | 130
+ 1 | 1 | [3, 30, 300] |  30 | 2    |    | 130
+ 1 | 1 | [3, 30, 300] | 300 | 1    |    | 400
+ 1 | 1 | [3, 30, 300] | 300 | null |    | 400
+ 1 | 1 | [3, 30, 300] | 300 | 2    |    | 400
+ 2 | 2 |              |     |      |    |    
+ 3 |   |              |     |      |    |    
+(20 rows)
+
 -- Should succeed (JSON arguments are passed to root and nested paths)
 SELECT *
 FROM

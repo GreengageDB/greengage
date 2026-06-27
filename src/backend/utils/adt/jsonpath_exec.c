@@ -322,7 +322,8 @@ static int	compareDatetime(Datum val1, Oid typid1, Datum val2, Oid typid2,
 
 
 static JsonTableJoinState *JsonTableInitPlanState(JsonTableContext *cxt,
-												  Node *plan, JsonTableScanState *parent);
+												  Node *plan, JsonTableScanState *parent,
+												  MemoryContext mcxt);
 static bool JsonTableNextRow(JsonTableScanState *scan);
 
 
@@ -3175,7 +3176,7 @@ JsonTableInitScanState(JsonTableContext *cxt, JsonTableScanState *scan,
 	scan->mcxt = AllocSetContextCreate(mcxt, "JsonTableContext",
 									   ALLOCSET_DEFAULT_SIZES);
 	scan->nested = node->child ?
-		JsonTableInitPlanState(cxt, node->child, scan) : NULL;
+		JsonTableInitPlanState(cxt, node->child, scan, mcxt) : NULL;
 	scan->current = PointerGetDatum(NULL);
 	scan->currentIsNull = true;
 
@@ -3186,7 +3187,7 @@ JsonTableInitScanState(JsonTableContext *cxt, JsonTableScanState *scan,
 /* Recursively initialize JSON_TABLE scan state */
 static JsonTableJoinState *
 JsonTableInitPlanState(JsonTableContext *cxt, Node *plan,
-					   JsonTableScanState *parent)
+					   JsonTableScanState *parent, MemoryContext mcxt)
 {
 	JsonTableJoinState *state = palloc0(sizeof(*state));
 
@@ -3196,8 +3197,8 @@ JsonTableInitPlanState(JsonTableContext *cxt, Node *plan,
 
 		state->is_join = true;
 		state->u.join.cross = join->cross;
-		state->u.join.left = JsonTableInitPlanState(cxt, join->larg, parent);
-		state->u.join.right = JsonTableInitPlanState(cxt, join->rarg, parent);
+		state->u.join.left = JsonTableInitPlanState(cxt, join->larg, parent, mcxt);
+		state->u.join.right = JsonTableInitPlanState(cxt, join->rarg, parent, mcxt);
 	}
 	else
 	{
@@ -3205,8 +3206,22 @@ JsonTableInitPlanState(JsonTableContext *cxt, Node *plan,
 
 		state->is_join = false;
 
+		/*
+		 * GPDB: create every scan's reset context as a sibling under the
+		 * per-table context that the root scan also uses (threaded down as
+		 * mcxt), rather than nesting each scan's context inside its parent
+		 * scan's context.  JsonTableResetContextItem() resets a scan's context
+		 * per row with MemoryContextResetOnly(), and GPDB's memory accounting
+		 * forbids resetting a context that still has children (aset.c
+		 * AllocSetReset asserts firstchild == NULL).  With the original nested
+		 * layout a non-leaf nested scan -- one that owns a deeper nested scan,
+		 * e.g. "nested pb columns(nested pb1 ...)" -- would reset a context
+		 * that still has its child scan's context, tripping that assert.  A
+		 * flat sibling layout keeps every per-row reset child-free; final
+		 * cleanup still cascades when the per-table context is reset/deleted.
+		 */
 		JsonTableInitScanState(cxt, &state->u.scan, node, parent,
-							   parent->args, parent->mcxt);
+							   parent->args, mcxt);
 	}
 
 	return state;
