@@ -760,6 +760,35 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		totaldeadrows = 0;
 		numrows = 0;
 		rows = NULL;
+
+		/*
+		 * GPDB: a partitioned table's statistics are derived by merging its
+		 * children's stats (merge_leaf_stats), so no sample is taken and
+		 * totalrows would otherwise stay 0.  We must still record this
+		 * partition's tuple count here, otherwise vac_update_relstats() below
+		 * writes pg_class.reltuples = 0 and the planner treats the partition
+		 * (in particular the whole table, for the top root) as empty -- wrong
+		 * cardinality.
+		 *
+		 * reltuples is the sum of the IMMEDIATE children's reltuples, not of
+		 * all leaves: a mid-level partition that has not itself been ANALYZEd
+		 * has reltuples = -1 (get_rel_reltuples() maps that to 0), so when
+		 * optimizer_analyze_midlevel_partition is off the root legitimately
+		 * gets 0 even though the leaves hold rows.  Summing immediate children
+		 * reproduces that GUC-dependent behavior (and equals the leaf total
+		 * once every level has been analyzed).  NoLock is sufficient because we
+		 * already hold ShareUpdateExclusiveLock on this relation for ANALYZE.
+		 */
+		if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		{
+			List	   *children;
+			ListCell   *lc;
+
+			children = find_inheritance_children(RelationGetRelid(onerel), NoLock);
+			foreach(lc, children)
+				totalrows += get_rel_reltuples(lfirst_oid(lc));
+			list_free(children);
+		}
 	}
 
 	if (ctx)
