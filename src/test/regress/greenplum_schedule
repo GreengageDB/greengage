@@ -122,6 +122,11 @@ test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_grou
 # parallel-group contention from its partition DDL + concurrent matview refresh.
 test: gp_pg14_merge_regress
 
+# PG14->PG15 feature coverage + PG15->Greengage merge guards (MERGE MPP wiring,
+# WindowAgg run conditions, NULLS NOT DISTINCT, SQL/JSON, hashed ScalarArrayOp);
+# standalone for the same partition-DDL / AO-DML isolation reason.
+test: gp_pg15_merge_regress
+
 # PG14 feature coverage over MPP (GROUP BY DISTINCT, recursive CTE SEARCH/CYCLE,
 # multirange types).
 test: gp_pg14_features
