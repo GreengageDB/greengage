@@ -5222,6 +5222,8 @@ PostgresMain(const char *dbname, const char *username)
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
+		int			leaked_holdoff;
+
 		/*
 		 * NOTE: if you are tempted to add more code in this if-block,
 		 * consider the high probability that it should be in
@@ -5232,6 +5234,29 @@ PostgresMain(const char *dbname, const char *username)
 
 		/* Since not using PG_TRY, must reset error stack by hand */
 		error_context_stack = NULL;
+
+		/*
+		 * Re-establish the "no interrupts held at the idle command loop"
+		 * invariant.  errfinish() already zeroes InterruptHoldoffCount /
+		 * QueryCancelHoldoffCount before throwing an ERROR, but a PG_CATCH
+		 * handler that *restores* a previously-saved holdoff count and then
+		 * continues or re-throws (several GPDB distributed-commit and
+		 * resource-group transaction-abort callbacks in cdbtm.c / resgroup.c
+		 * do exactly this) can leave a stale, leaked count behind once the
+		 * stack has fully unwound to this top level.  By the time we reach the
+		 * outer error-recovery handler the entire call stack is gone, so no
+		 * frame can legitimately be holding an interrupt -- any non-zero value
+		 * is a leak.  This handler's own HOLD/RESUME below is balanced, so a
+		 * leaked count would otherwise persist into the next command and make
+		 * CHECK_FOR_INTERRUPTS() a permanent no-op for the session.  That in
+		 * turn wedges WaitForProcSignalBarrier() (added in PG15 to DROP/ALTER
+		 * DATABASE) into an unkillable self-deadlock: the emitter must absorb
+		 * its own ProcSignal barrier via CHECK_FOR_INTERRUPTS, which never
+		 * fires while interrupts are held.
+		 */
+		leaked_holdoff = InterruptHoldoffCount;
+		InterruptHoldoffCount = 0;
+		QueryCancelHoldoffCount = 0;
 
 		/* Prevent interrupts while cleaning up */
 		HOLD_INTERRUPTS();
@@ -5259,6 +5284,16 @@ PostgresMain(const char *dbname, const char *username)
 
 		/* Report the error to the client and/or server log */
 		EmitErrorReport();
+
+		/*
+		 * Surface (server log only) any interrupt holdoff that was leaked by a
+		 * catch-and-continue handler before we cleared it above, so the
+		 * underlying unbalanced HOLD/RESUME can still be tracked down rather
+		 * than silently papered over.
+		 */
+		if (leaked_holdoff != 0)
+			elog(LOG, "cleared leaked interrupt holdoff count (%d) during error recovery",
+				 leaked_holdoff);
 
 		/*
 		 * Make sure debug_query_string gets reset before we possibly clobber
