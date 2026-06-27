@@ -156,6 +156,32 @@ bbsink_copystream_begin_backup(bbsink *sink)
 }
 
 /*
+ * GPDB: a tablespace's on-disk location includes a trailing per-segment dbid
+ * directory (<location>/<dbid>), but the spclocation sent to the client must
+ * NOT contain the dbid -- the client appends the target segment's dbid
+ * (--target-gp-dbid) on restore.  Lop off the trailing /<dbid> for tablespaces
+ * outside PGDATA (rpath == NULL); in-PGDATA tablespaces (rpath != NULL) carry
+ * no dbid suffix.  The PG15 bbsink rewrite dropped this (it lived in
+ * basebackup.c pre-PG15); without it pg_basebackup of a cluster with
+ * tablespaces builds paths containing the SOURCE segment's dbid.
+ */
+static const char *
+bbcopy_spclocation_without_dbid(tablespaceinfo *ti)
+{
+	char	   *path;
+	char	   *sep;
+
+	if (ti->path == NULL || ti->rpath != NULL)
+		return ti->path;
+
+	path = pstrdup(ti->path);
+	sep = strrchr(path, '/');
+	if (sep != NULL)
+		*sep = '\0';
+	return path;
+}
+
+/*
  * Send a CopyData message announcing the beginning of a new archive.
  */
 static void
@@ -164,12 +190,14 @@ bbsink_copystream_begin_archive(bbsink *sink, const char *archive_name)
 	bbsink_state *state = sink->bbs_state;
 	tablespaceinfo *ti;
 	StringInfoData buf;
+	const char *spclocation;
 
 	ti = list_nth(state->tablespaces, state->tablespace_num);
+	spclocation = bbcopy_spclocation_without_dbid(ti);
 	pq_beginmessage(&buf, 'd'); /* CopyData */
 	pq_sendbyte(&buf, 'n');		/* New archive */
 	pq_sendstring(&buf, archive_name);
-	pq_sendstring(&buf, ti->path == NULL ? "" : ti->path);
+	pq_sendstring(&buf, spclocation == NULL ? "" : spclocation);
 	pq_endmessage(&buf);
 }
 
@@ -441,14 +469,16 @@ SendTablespaceList(List *tablespaces)
 		else
 		{
 			Size		len;
+			const char *spclocation = bbcopy_spclocation_without_dbid(ti);
 
 			len = strlen(ti->oid);
 			pq_sendint32(&buf, len);
 			pq_sendbytes(&buf, ti->oid, len);
 
-			len = strlen(ti->path);
+			/* GPDB: send the location without the trailing dbid (see helper) */
+			len = strlen(spclocation);
 			pq_sendint32(&buf, len);
-			pq_sendbytes(&buf, ti->path, len);
+			pq_sendbytes(&buf, spclocation, len);
 		}
 		if (ti->size >= 0)
 			send_int8_string(&buf, ti->size / 1024);

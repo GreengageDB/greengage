@@ -1201,8 +1201,18 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		 * located on the server, after applying any user-specified tablespace
 		 * mappings.
 		 */
+		/*
+		 * GPDB: extract a user-defined tablespace into its per-target-dbid
+		 * subdirectory.  get_tablespace_link_target() appends --target-gp-dbid
+		 * (the server already stripped the source segment's dbid from
+		 * spclocation), matching both the symlink target created during
+		 * extraction and the directory pre-created from the tablespace list
+		 * (verify_dir_is_empty_or_create() with GP_TABLESPACE_VERSION_DIRECTORY).
+		 * Plain get_tablespace_mapping() omits the dbid, which would write the
+		 * data one level above where the symlink points.
+		 */
 		directory = spclocation == NULL ? basedir
-			: get_tablespace_mapping(spclocation);
+			: get_tablespace_link_target(spclocation);
 		streamer = bbstreamer_extractor_new(directory,
 											get_tablespace_link_target,
 											progress_update_filename,

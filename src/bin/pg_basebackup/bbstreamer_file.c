@@ -16,6 +16,7 @@
 #include "bbstreamer.h"
 #include "common/logging.h"
 #include "common/file_perm.h"
+#include "common/relpath.h"		/* GPDB: GP_TABLESPACE_VERSION_DIRECTORY */
 #include "common/string.h"
 
 typedef struct bbstreamer_plain_writer
@@ -302,10 +303,18 @@ extract_directory(const char *filename, mode_t mode, bool forceoverwrite)
 		 * existing data directory (e.g. gprecoverseg full recovery in place),
 		 * so any pre-existing directory is expected; tolerate EEXIST for all
 		 * directories in that case.
+		 *
+		 * GPDB: for a user-defined tablespace the per-dbid version directory
+		 * (<location>/<dbid>/GP_TABLESPACE_VERSION_DIRECTORY) was already
+		 * created (empty) from the tablespace list by
+		 * verify_dir_is_empty_or_create() before streaming began, so its
+		 * archive member legitimately pre-exists -- tolerate EEXIST for it just
+		 * like pg_wal.
 		 */
 		if (!((pg_str_endswith(filename, "/pg_wal") ||
 			   pg_str_endswith(filename, "/pg_xlog") ||
 			   pg_str_endswith(filename, "/archive_status") ||
+			   pg_str_endswith(filename, GP_TABLESPACE_VERSION_DIRECTORY) ||
 			   forceoverwrite) &&
 			  errno == EEXIST))
 			pg_fatal("could not create directory \"%s\": %m",
