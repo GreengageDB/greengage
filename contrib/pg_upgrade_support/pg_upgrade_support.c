@@ -18,6 +18,16 @@
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_attrdef.h"
+#include "catalog/pg_appendonly.h"
+#include "catalog/pg_am.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_exttable.h"
+#include "catalog/pg_compression.h"
+#include "catalog/pg_resqueuecapability.h"
+#include "catalog/gp_configuration_history.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tablespace.h"
@@ -29,6 +39,8 @@
 #include "rewrite/rewriteHandler.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/syscache.h"
+#include "utils/lsyscache.h"
 
 /* THIS IS USED ONLY FOR PG >= 9.0 */
 
@@ -66,6 +78,16 @@ PG_FUNCTION_INFO_V1(view_has_removed_operators);
 PG_FUNCTION_INFO_V1(view_has_removed_functions);
 PG_FUNCTION_INFO_V1(view_has_removed_types);
 PG_FUNCTION_INFO_V1(view_has_changed_function_signatures);
+PG_FUNCTION_INFO_V1(view_has_removed_tables);
+PG_FUNCTION_INFO_V1(view_has_removed_columns);
+
+typedef struct RemovedColumnsWalkerContext RemovedColumnsWalkerContext;
+typedef struct RemovedColumnStatic RemovedColumnStatic;
+typedef struct RemovedColumnDynamic  RemovedColumnDynamic;
+typedef struct RemovedFunctionDynamic RemovedFunctionDynamic;
+
+static Oid get_function(const char *name, const Oid *args, int args_count, Oid namespace);
+static Oid get_type(const char *name, Oid namespace);
 
 static bool check_node_anyarray_walker(Node *node, void *context);
 static bool check_node_unknown_walker(Node *node, void *context);
@@ -73,6 +95,222 @@ static bool check_node_removed_operators_walker(Node *node, void *context);
 static bool check_node_removed_functions_walker(Node *node, void *context);
 static bool check_node_removed_types_walker(Node *node, void *context);
 static bool check_node_changed_function_signatures_walker(Node *node, void *context);
+static bool check_node_removed_tables_walker(Node *node, void *context);
+static bool check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *context);
+
+/*
+ * Some objects are treated as 'dynamic', because they are present in the database
+ * by default, but live outside of 'pg_catalog', inside schemas like
+ * 'gp_toolkit' and 'information_schema', which can be dropped using
+ * 'DROP SCHEMA ... CASCADE'. This means that we should check for their absence.
+ * Moreover, they can be recreated from respective sql scripts after that,
+ * changing OIDs of the objects. So, we need to ask the database for their OIDs first.
+ */
+
+struct RemovedColumnsWalkerContext
+{
+	List *rtableStack;
+};
+
+struct RemovedColumnStatic
+{
+	Oid reloid;
+	int attnum;
+};
+
+struct RemovedColumnDynamic
+{
+	const char *relnamespace;
+	const char *relname;
+	int attnum;
+};
+
+struct RemovedFunctionDynamic
+{
+	const char *pronamespace;
+	const char *name;
+	const Oid  *args;
+	const int  args_count;
+};
+
+/* Lists of objects removed from Greenage 7 */
+static Oid pg_resgroup_check_move_query_oids[]    = {23, 26};
+static Oid __gp_remove_ao_entry_from_cache_oids[] = {26};
+static Oid __gp_get_ao_entry_from_cache_oids[]    = {26};
+
+static RemovedFunctionDynamic removed_functions_dynamic[] =
+{
+	{"gp_toolkit",  "pg_resgroup_check_move_query",     pg_resgroup_check_move_query_oids,     2},
+	{"gp_toolkit",  "__gp_remove_ao_entry_from_cache",  __gp_remove_ao_entry_from_cache_oids,  1},
+	{"gp_toolkit",  "__gp_get_ao_entry_from_cache",     __gp_get_ao_entry_from_cache_oids,     1},
+
+};
+static const int num_removed_functions_dynamic = sizeof(removed_functions_dynamic) / sizeof(RemovedFunctionDynamic);
+
+static Oid __gp_aocsseg_oids[]         = {2205};
+static Oid __gp_aocsseg_history_oids[] = {2205};
+static Oid __gp_aoseg_oids[]           = {2205};
+static Oid __gp_aoseg_history_oids[]   = {2205};
+
+static RemovedFunctionDynamic functions_with_changed_signatures_dynamic[] =
+{
+	{"gp_toolkit",  "__gp_aocsseg",          __gp_aocsseg_oids,          1},
+	{"gp_toolkit",  "__gp_aocsseg_history",  __gp_aocsseg_history_oids,  1},
+	{"gp_toolkit",  " __gp_aoseg",           __gp_aoseg_oids,            1},
+	{"gp_toolkit",  "__gp_aoseg_history",     __gp_aoseg_history_oids,   1}
+};
+static const int num_functions_with_changed_signatures_dynamic = sizeof(functions_with_changed_signatures_dynamic) / sizeof(RemovedFunctionDynamic);
+
+
+static const Oid removed_tables_static[] =
+{
+	5010,  /* pg_catalog.pg_partition */
+	11786, /* pg_catalog.pg_partition_columns */
+	9903,  /* pg_catalog.pg_partition_encoding */
+	5011,  /* pg_catalog.pg_partition_rule */
+	11782, /* pg_catalog.pg_partitions */
+	11789, /* pg_catalog.pg_partition_templates */
+	11796  /* pg_catalog.pg_stat_partition_operations */
+};
+static const int num_removed_tables_static = sizeof(removed_tables_static) / sizeof(Oid);
+
+/* Assuming that all of these tables live inside gp_toolkit schema */
+static char *removed_tables_dynamic[] =
+{
+	"gp_size_of_partition_and_indexes_disk",
+	"__gp_user_data_tables"
+};
+static const int num_removed_tables_dynamic = sizeof(removed_tables_dynamic) / sizeof(char*);
+
+
+static const RemovedColumnStatic removed_columns_static[] =
+{
+	{11636,              6}, /* pg_catalog.pg_roles.rolcatupdate */
+	{11639,              5}, /* pg_catalog.pg_shadow.usecatupd  */
+	{11645,              5}, /* pg_catalog.pg_user.usecatupd */
+	{11758,             11}, /* pg_catalog.pg_stat_replication.sent_location */
+	{11758,             12}, /* pg_catalog.pg_stat_replication.write_location */
+	{11758,             13}, /* pg_catalog.pg_stat_replication.flush_location */
+	{11758,             14}, /* pg_catalog.pg_stat_replication.replay_location */
+	{11755,             15}, /* pg_catalog.pg_stat_activity.waiting */
+	{11755,             20}, /* pg_catalog.pg_stat_activity.waiting_reason */
+	{11755,             23}, /* pg_catalog.pg_stat_activity.rsgqueueduration */
+	{12345,             4},  /* pg_catalog.gp_distributed_log.distributed_id */
+	{12339,             2},  /* pg_catalog.gp_distributed_xacts.distributed_id */
+	{11764,             14}, /* pg_catalog.gp_stat_replication.flush_location */
+	{11764,             15}, /* pg_catalog.gp_stat_replication.replay_location */
+	{11764,             12}, /* pg_catalog.gp_stat_replication.sent_location */
+	{11764,             13}, /* pg_catalog.gp_stat_replication.write_location */
+	{6439,              -2}, /* pg_catalog.pg_resgroupcapability.oid */
+	{GpConfigHistoryRelationId,     Anum_gp_configuration_history_desc},
+	{ProcedureRelationId,           Anum_pg_proc_protransform},
+	{ProcedureRelationId,           Anum_pg_proc_proisagg},
+	{ProcedureRelationId,           Anum_pg_proc_proiswindow},
+	{ProcedureRelationId,           Anum_pg_proc_prodataaccess},
+	{AccessMethodRelationId,        Anum_pg_am_ambeginscan},
+	{AccessMethodRelationId,        Anum_pg_am_ambuild},
+	{AccessMethodRelationId,        Anum_pg_am_ambuildempty},
+	{AccessMethodRelationId,        Anum_pg_am_ambulkdelete},
+	{AccessMethodRelationId,        Anum_pg_am_amcanbackward},
+	{AccessMethodRelationId,        Anum_pg_am_amcanmulticol},
+	{AccessMethodRelationId,        Anum_pg_am_amcanorder},
+	{AccessMethodRelationId,        Anum_pg_am_amcanorderbyop},
+	{AccessMethodRelationId,        Anum_pg_am_amcanreturn},
+	{AccessMethodRelationId,        Anum_pg_am_amcanunique},
+	{AccessMethodRelationId,        Anum_pg_am_amclusterable},
+	{AccessMethodRelationId,        Anum_pg_am_amcostestimate},
+	{AccessMethodRelationId,        Anum_pg_am_amendscan},
+	{AccessMethodRelationId,        Anum_pg_am_amgetbitmap},
+	{AccessMethodRelationId,        Anum_pg_am_amgettuple},
+	{AccessMethodRelationId,        Anum_pg_am_aminsert},
+	{AccessMethodRelationId,        Anum_pg_am_amkeytype},
+	{AccessMethodRelationId,        Anum_pg_am_ammarkpos},
+	{AccessMethodRelationId,        Anum_pg_am_amoptionalkey},
+	{AccessMethodRelationId,        Anum_pg_am_amoptions},
+	{AccessMethodRelationId,        Anum_pg_am_ampredlocks},
+	{AccessMethodRelationId,        Anum_pg_am_amrescan},
+	{AccessMethodRelationId,        Anum_pg_am_amrestrpos},
+	{AccessMethodRelationId,        Anum_pg_am_amsearcharray},
+	{AccessMethodRelationId,        Anum_pg_am_amsearchnulls},
+	{AccessMethodRelationId,        Anum_pg_am_amstorage},
+	{AccessMethodRelationId,        Anum_pg_am_amstrategies},
+	{AccessMethodRelationId,        Anum_pg_am_amsupport},
+	{AccessMethodRelationId,        Anum_pg_am_amvacuumcleanup},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_blkdiridxid},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_blocksize},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_checksum},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_columnstore},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_compresslevel},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_compresstype},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_safefswritesize},
+	{AppendOnlyRelationId,          Anum_pg_appendonly_visimapidxid},
+	{AttrDefaultRelationId,         Anum_pg_attrdef_adsrc},
+	{AuthIdRelationId,              Anum_pg_authid_rolcatupdate},
+	{RelationRelationId,            Anum_pg_class_relhasoids},
+	{RelationRelationId,            Anum_pg_class_relhaspkey},
+	{RelationRelationId,            Anum_pg_class_relstorage},
+	{ConstraintRelationId,          Anum_pg_constraint_consrc},
+	{CompressionRelationId,         -2 /* oid */},
+	{ExtTableRelationId,            -8 /* gp_segment_id */},
+	{ExtTableRelationId,            -7 /* tableoid */},
+	{ExtTableRelationId,            -6 /* cmax */},
+	{ExtTableRelationId,            -5 /* xmax */},
+	{ExtTableRelationId,            -4 /* cmin */},
+	{ExtTableRelationId,            -3 /* xmin */},
+	{ExtTableRelationId,            -1 /* ctid*/},
+	{ResQueueCapabilityRelationId,  -2 /* oid */}
+};
+static const int num_removed_columns_static = sizeof(removed_columns_static) / sizeof(RemovedColumnStatic);
+
+static const RemovedColumnDynamic removed_columns_dynamic[] =
+{
+	{"gp_toolkit", "gp_locks_on_resqueue",            9  /* lorwaiting */},
+	{"gp_toolkit", "gp_resgroup_config",              4  /* cpu_rate_limit */},
+	{"gp_toolkit", "gp_resgroup_config",              8  /* memory_auditor */},
+	{"gp_toolkit", "gp_resgroup_config",              6  /* memory_shared_quota */},
+	{"gp_toolkit", "gp_resgroup_config",              7  /* memory_spill_ratio */},
+	{"gp_toolkit", "gp_resgroup_status",              8  /* cpu_usage */},
+	{"gp_toolkit", "gp_resgroup_status",              9  /* memory_usage */},
+	{"gp_toolkit", "gp_resgroup_status",              1  /* rsgname */ },
+	{"gp_toolkit", "gp_resgroup_status_per_host",     4  /* cpu */ },
+	{"gp_toolkit", "gp_resgroup_status_per_host",     6  /* memory_available */ },
+	{"gp_toolkit", "gp_resgroup_status_per_host",     8  /* memory_quota_available */},
+	{"gp_toolkit", "gp_resgroup_status_per_host",     7  /* memory_quota_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_host",     10 /* memory_shared_available */},
+	{"gp_toolkit", "gp_resgroup_status_per_host",     9  /* memory_shared_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_host",     5  /* memory_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_host",     1  /* rsgname */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  5  /* cpu */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  3  /* hostname */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  7  /* memory_available */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  9  /* memory_quota_available */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  8  /* memory_quota_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  11 /* memory_shared_available */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  10 /* memory_shared_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  6  /* memory_used */},
+	{"gp_toolkit", "gp_resgroup_status_per_segment",  1  /* rsgname */},
+	{"gp_toolkit", "__gp_user_tables",                9  /* autrelstorage */ },
+	{"gp_toolkit", "__gp_user_data_tables_readable",  9  /* autrelstorage */ },
+	{"information_schema", "routines",                65 /* result_cast_character_set_name */},
+	{"information_schema", "routines",                43 /* sql_data_access */},
+	{"gp_toolkit", "__gp_log_master_ext",             -8 /* gp_segment_id */},
+	{"gp_toolkit", "__gp_log_master_ext",             -7 /* tableoid */},
+	{"gp_toolkit", "__gp_log_master_ext",             -6 /* cmax */},
+	{"gp_toolkit", "__gp_log_master_ext",             -5 /* xmax */},
+	{"gp_toolkit", "__gp_log_master_ext",             -4 /* cmin */},
+	{"gp_toolkit", "__gp_log_master_ext",             -3 /* xmin */},
+	{"gp_toolkit", "__gp_log_master_ext",             -1 /* ctid */}
+};
+static const int num_removed_columns_dynamic = sizeof(removed_columns_dynamic) / sizeof(RemovedColumnDynamic);
+
+
+static const char* removed_types_gp_toolkit[] =
+{
+	"gp_size_of_partition_and_indexes_disk",
+	"__gp_user_data_tables"
+};
+static const int num_removed_types_gp_toolkit = sizeof(removed_types_gp_toolkit) / sizeof (char*);
+
 
 Datum
 set_next_pg_type_oid(PG_FUNCTION_ARGS)
@@ -490,6 +728,24 @@ view_has_removed_functions(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(found);
 }
 
+/* Helper functions to get object OIDs by their signatures */
+Oid
+get_function(const char *name, const Oid *args, int args_count, Oid namespace)
+{
+	return GetSysCacheOid3(PROCNAMEARGSNSP,
+						   PointerGetDatum(name),
+						   PointerGetDatum(buildoidvector(args, args_count)),
+						   ObjectIdGetDatum(namespace));
+}
+
+Oid
+get_type(const char *name, Oid namespace)
+{
+	return GetSysCacheOid2(TYPENAMENSP,
+						   PointerGetDatum(name),
+						   ObjectIdGetDatum(namespace));
+}
+
 static bool
 check_node_removed_functions_walker(Node *node, void *context)
 {
@@ -500,11 +756,9 @@ check_node_removed_functions_walker(Node *node, void *context)
 
 	if (IsA(node, FuncExpr))
 	{
+		Oid schema_oid;
 		Oid func_oid = ((FuncExpr *)node)->funcid;
-		if (func_oid == 12512 || // gp_toolkit.__gp_get_ao_entry_from_cache
-			func_oid == 12511 || // gp_toolkit.__gp_remove_ao_entry_from_cache
-			func_oid == 12498 || // gp_toolkit.pg_resgroup_check_move_query
-			func_oid ==  7188 || // pg_catalog.bmbeginscan
+		if (func_oid ==  7188 || // pg_catalog.bmbeginscan
 			func_oid ==  7193 || // pg_catalog.bmbuild
 			func_oid ==  7011 || // pg_catalog.bmbuildempty
 			func_oid ==  7194 || // pg_catalog.bmbulkdelete
@@ -633,6 +887,22 @@ check_node_removed_functions_walker(Node *node, void *context)
 			func_oid ==  3097)   // pg_catalog.varchar_transform
 			return true;
 
+		for (int i = 0; i < num_removed_functions_dynamic; ++i)
+		{
+			schema_oid = GetSysCacheOid(NAMESPACENAME,
+										CStringGetDatum(removed_functions_dynamic[i].pronamespace),
+										0, 0, 0);
+
+			if (OidIsValid(schema_oid))
+			{
+				if (func_oid == get_function(removed_functions_dynamic[i].name,
+											 removed_functions_dynamic[i].args,
+											 removed_functions_dynamic[i].args_count,
+											 schema_oid))
+					return true;
+			}
+		}
+
 		return false;
 	}
 	else if (IsA(node, Query))
@@ -680,15 +950,14 @@ check_node_removed_types_walker(Node *node, void *context)
 
 	if (IsA(node, Var) || IsA(node, Const))
 	{
+		Oid gp_toolkit_oid;
 		Oid type_oid;
 		if IsA(node, Var)
 			type_oid = ((Var *)node)->vartype;
 		else
 			type_oid = ((Const *)node)->consttype;
 
-		if (type_oid == 12475 || // gp_toolkit.gp_size_of_partition_and_indexes_disk
-			type_oid == 12366 || // gp_toolkit.__gp_user_data_tables
-			type_oid ==  1023 || // pg_catalog._abstime
+		if (type_oid ==  1023 || // pg_catalog._abstime
 			type_oid ==   702 || // pg_catalog.abstime
 			type_oid == 11612 || // pg_catalog.pg_partition
 			type_oid == 11787 || // pg_catalog.pg_partition_columns
@@ -703,6 +972,20 @@ check_node_removed_types_walker(Node *node, void *context)
 			type_oid ==  1025 || // pg_catalog._tinterval
 			type_oid ==   704)   // pg_catalog.tinterval
 			return true;
+
+		gp_toolkit_oid = GetSysCacheOid(NAMESPACENAME,
+										CStringGetDatum("gp_toolkit"),
+										0, 0, 0);
+
+		if (OidIsValid(gp_toolkit_oid))
+		{
+			for (int i = 0; i < num_removed_types_gp_toolkit; i++)
+			{
+				if (type_oid == get_type(removed_types_gp_toolkit[i],
+										 gp_toolkit_oid))
+					return true;
+			}
+		}
 
 		return false;
 	}
@@ -750,12 +1033,9 @@ check_node_changed_function_signatures_walker(Node *node, void *context)
 
 	if (IsA(node, FuncExpr))
 	{
+		Oid schema_oid;
 		Oid func_oid = ((FuncExpr *)node)->funcid;
-		if (func_oid == 12501 || // gp_toolkit.__gp_aocsseg
-			func_oid == 12502 || // gp_toolkit.__gp_aocsseg_history
-			func_oid == 12506 || // gp_toolkit.__gp_aoseg
-			func_oid == 12500 || // gp_toolkit.__gp_aoseg_history
-			func_oid ==  2335 || // pg_catalog.array_agg
+		if (func_oid ==  2335 || // pg_catalog.array_agg
 			func_oid ==  2334 || // pg_catalog.array_agg_finalfn
 			func_oid ==  2333 || // pg_catalog.array_agg_transfn
 			func_oid ==  3484 || // pg_catalog.gin_consistent_jsonb
@@ -812,6 +1092,22 @@ check_node_changed_function_signatures_walker(Node *node, void *context)
 			func_oid ==  3493)   // pg_catalog.to_regtype
 			return true;
 
+		for (int i = 0; i < num_functions_with_changed_signatures_dynamic; i++)
+		{
+			schema_oid = GetSysCacheOid(NAMESPACENAME,
+										CStringGetDatum(functions_with_changed_signatures_dynamic[i].pronamespace),
+										0, 0, 0);
+
+			if (OidIsValid(schema_oid))
+			{
+				if (func_oid == get_function(functions_with_changed_signatures_dynamic[i].name,
+											 functions_with_changed_signatures_dynamic[i].args,
+											 functions_with_changed_signatures_dynamic[i].args_count,
+											 schema_oid))
+					return true;
+			}
+		}
+
 		return false;
 	}
 	else if (IsA(node, Query))
@@ -822,4 +1118,185 @@ check_node_changed_function_signatures_walker(Node *node, void *context)
 	}
 
 	return expression_tree_walker(node, check_node_changed_function_signatures_walker, context);
+}
+
+static bool is_removed_table(Oid reloid)
+{
+	Oid gp_toolkit_oid;
+
+	for (int i = 0; i < num_removed_tables_static; i++)
+	{
+		if (reloid == removed_tables_static[i])
+			return true;
+	}
+
+	gp_toolkit_oid = GetSysCacheOid(NAMESPACENAME,
+									CStringGetDatum("gp_toolkit"),
+									0, 0, 0);
+
+	if (OidIsValid(gp_toolkit_oid))
+	{
+		for (int i = 0; i < num_removed_tables_dynamic; i++)
+		{
+			if (reloid == get_relname_relid(removed_tables_dynamic[i], gp_toolkit_oid))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool check_node_removed_tables_walker(Node *node, void *context)
+{
+	Assert(context == NULL);
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+		return is_removed_table(rte->relid);
+	}
+	else if(IsA(node, Query))
+	{
+		/*
+		 * Recurse into (sub)queries to look for removed tables.
+		 */
+		return query_tree_walker((Query *) node,
+								 check_node_removed_tables_walker,
+								 NULL,
+								 QTW_EXAMINE_RTES);
+	}
+
+	/*
+	 * This ensures that we look for removed tables embedded inside
+	 * expressions (e.g. CTEs, sublinks etc.) which can contain range tables.
+	 */
+	return expression_tree_walker(node, check_node_removed_tables_walker, context);
+}
+
+Datum
+view_has_removed_tables(PG_FUNCTION_ARGS)
+{
+	Oid			view_oid = PG_GETARG_OID(0);
+	Relation 	rel = try_relation_open(view_oid, AccessShareLock, false);
+	Query		*viewquery;
+	bool		found;
+
+	if (!RelationIsValid(rel))
+		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
+
+	if(rel->rd_rel->relkind == RELKIND_VIEW)
+	{
+		viewquery = get_view_query(rel);
+		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
+	}
+	else
+		found = false;
+
+	relation_close(rel, AccessShareLock);
+
+	PG_RETURN_BOOL(found);
+}
+
+static bool is_removed_column(Oid reloid, int attnum)
+{
+	Oid schema_oid;
+
+	for (int i = 0; i < num_removed_columns_static; i++)
+	{
+		if (reloid == removed_columns_static[i].reloid &&
+			attnum == removed_columns_static[i].attnum)
+			return true;
+	}
+
+	for (int i = 0; i < num_removed_columns_dynamic; i++)
+	{
+		schema_oid = GetSysCacheOid(NAMESPACENAME,
+									CStringGetDatum(removed_columns_dynamic[i].relnamespace),
+									0, 0, 0);
+
+		if (OidIsValid(schema_oid))
+		{
+			if (reloid == get_relname_relid(removed_columns_dynamic[i].relname, schema_oid) &&
+				attnum == removed_columns_dynamic[i].attnum)
+				return true;
+		}
+	}
+
+	return false;
+}
+
+bool
+check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *context)
+{
+	Assert(context != NULL);
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var * var = (Var *) node;
+		List *rtable = (List *) list_nth(context->rtableStack, var->varlevelsup);
+		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
+		return is_removed_column(rte->relid, var->varattno);
+
+	}
+	else if (IsA(node, Query))
+	{
+		/*
+		 * Recurse into (sub)queries to search for removed columns.
+		 *
+		 * Pass QTW_IGNORE_JOINALIASES to avoid unnecessarily recursing into a
+		 * join RTE's joinaliasvars, since we already recurse into the query's
+		 * jointree expression. This is sufficient to handle joins with
+		 * removed columns in the ON/USING clauses, along with NATURAL JOINs.
+		 */
+		bool	retval;
+		Query	*query = (Query *) node;
+		context->rtableStack = lcons(query->rtable, context->rtableStack);
+		retval = query_tree_walker(query,
+								 check_node_removed_columns_walker,
+								 context,
+								 QTW_IGNORE_JOINALIASES);
+		context->rtableStack = list_delete_first(context->rtableStack);
+		return retval;
+	}
+
+	/*
+	 * This ensures we look at all expressions, including entities that contain
+	 * subqueries (such as CTEs and sublinks)
+	 */
+	return expression_tree_walker(node, check_node_removed_columns_walker, context);
+}
+
+Datum
+view_has_removed_columns(PG_FUNCTION_ARGS)
+{
+	Oid			view_oid = PG_GETARG_OID(0);
+	Relation 	rel = try_relation_open(view_oid, AccessShareLock, false);
+	Query		*viewquery;
+	bool		found;
+	RemovedColumnsWalkerContext context;
+
+	if (!RelationIsValid(rel))
+		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
+
+	if(rel->rd_rel->relkind == RELKIND_VIEW)
+	{
+		viewquery = get_view_query(rel);
+		context.rtableStack = NIL;
+		found = check_node_removed_columns_walker((Node *) viewquery, &context);
+	}
+	else
+		found = false;
+
+	relation_close(rel, AccessShareLock);
+
+	PG_RETURN_BOOL(found);
 }
