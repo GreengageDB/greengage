@@ -210,6 +210,7 @@ SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv');
  Foreign Scan on public.agg_csv
    Output: a, b
    Foreign File: .../agg.csv
+ Optimizer: Postgres query optimizer
 
 \t off
 PREPARE st(int) AS SELECT * FROM agg_csv WHERE a = $1;
@@ -257,10 +258,10 @@ ERROR:  cannot insert into foreign table "agg_csv"
 -- constraint exclusion tests
 \t on
 SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0');
- Foreign Scan on public.agg_csv
+ Result
    Output: a, b
-   Filter: (agg_csv.a < 0)
-   Foreign File: .../agg.csv
+   One-Time Filter: false
+ Optimizer: Postgres query optimizer
 
 \t off
 SELECT * FROM agg_csv WHERE a < 0;
@@ -453,6 +454,7 @@ SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_text WHE
    Output: a, b
    Filter: (agg_text.a > 0)
    Foreign File: .../agg.data
+ Optimizer: Postgres query optimizer
 
 \t off
 -- file FDW allows foreign tables to be accessed without user mapping
