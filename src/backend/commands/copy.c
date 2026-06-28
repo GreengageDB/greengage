@@ -4956,11 +4956,61 @@ NextCopyFromRawFieldsX(CopyState cstate, char ***fields, int *nfields,
 	/* only available for text or csv input */
 	Assert(!cstate->binary);
 
-	/* on input just throw the header line away */
+	/* on input check that the header line is correct if needed */
 	if (cstate->cur_lineno == 0 && cstate->header_line)
 	{
 		cstate->cur_lineno++;
-		if (CopyReadLine(cstate))
+		done = CopyReadLine(cstate);
+
+		/*
+		 * GPDB: enforce HEADER MATCH (PG15) by validating the header column
+		 * names.  The upstream check lives in copyfromparse.c's
+		 * NextCopyFromRawFields(), but that is #if 0'd here because GPDB's live
+		 * COPY FROM parser is this function in copy.c -- so without re-grafting
+		 * it, HEADER MATCH silently behaved like a plain header skip.
+		 */
+		if (cstate->header_line == COPY_HEADER_MATCH)
+		{
+			TupleDesc	tupDesc = RelationGetDescr(cstate->rel);
+			ListCell   *cur;
+			int			fldnum;
+
+			if (cstate->csv_mode)
+				fldct = CopyReadAttributesCSV(cstate, -1);
+			else
+				fldct = CopyReadAttributesText(cstate, -1);
+
+			if (fldct != list_length(cstate->attnumlist))
+				ereport(ERROR,
+						(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
+						 errmsg("wrong number of fields in header line: field count is %d, expected %d",
+								fldct, list_length(cstate->attnumlist))));
+
+			fldnum = 0;
+			foreach(cur, cstate->attnumlist)
+			{
+				int			attnum = lfirst_int(cur);
+				char	   *colName;
+				Form_pg_attribute attr = TupleDescAttr(tupDesc, attnum - 1);
+
+				Assert(fldnum < cstate->max_fields);
+
+				colName = cstate->raw_fields[fldnum++];
+				if (colName == NULL)
+					ereport(ERROR,
+							(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
+							 errmsg("column name mismatch in header line field %d: got null value (\"%s\"), expected \"%s\"",
+									fldnum, cstate->null_print, NameStr(attr->attname))));
+
+				if (namestrcmp(&attr->attname, colName) != 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
+							 errmsg("column name mismatch in header line field %d: got \"%s\", expected \"%s\"",
+									fldnum, colName, NameStr(attr->attname))));
+			}
+		}
+
+		if (done)
 			return false;		/* done */
 	}
 
