@@ -12,6 +12,7 @@
 -- end_matchsubs
 -- start_ignore
 DROP DATABASE IF EXISTS incrementalanalyze;
+NOTICE:  database "incrementalanalyze" does not exist, skipping
 CREATE DATABASE incrementalanalyze;
 ALTER DATABASE incrementalanalyze SET lc_monetary TO 'C';
 \c incrementalanalyze
@@ -1667,7 +1668,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 ANALYZE foo_1_prt_1;
 ANALYZE FULLSCAN foo_1_prt_2;
-ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4455)
+ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4450)
 HINT:  Re-run ANALYZE or ANALYZE FULLSCAN
 -- Test merging of stats for a newly added partition
 -- Do not collect samples while merging stats
@@ -1696,7 +1697,7 @@ INSERT INTO foo SELECT i, i%9, i%100 FROM generate_series(1,500)i;
 ANALYZE VERBOSE rootpartition foo;
 INFO:  analyzing "public.foo" inheritance tree
 INFO:  column c of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58247, 400, 't');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69591, 400, 't');
 -- Testing auto merging root statistics for all columns
 -- where column attnums are differents due to dropped columns
 -- and split partitions.
@@ -1908,7 +1909,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 SELECT relname, relpages, reltuples FROM pg_class WHERE relname LIKE 'incr_analyze_test%' ORDER BY relname;
           relname          | relpages | reltuples 
 ---------------------------+----------+-----------
- incr_analyze_test         |       -1 |         0
+ incr_analyze_test         |       -1 |      1001
  incr_analyze_test_1_prt_1 |        1 |         1
  incr_analyze_test_1_prt_2 |        2 |      1000
  incr_analyze_test_1_prt_3 |        1 |         0
@@ -1979,9 +1980,9 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO foo values (5),(15);
 ANALYZE (verbose, rootpartition off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58433, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58430, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
 -- root should not have stats
 SELECT count(*) from pg_statistic where starelid='foo'::regclass;
  count 
@@ -2003,16 +2004,16 @@ ANALYZE (verbose, fullscan on) foo;
 INFO:  analyzing "public.foo_1_prt_2"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_2 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58433, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_1 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58430, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
 ANALYZE (verbose, fullscan off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58433, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58430, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
 reset optimizer_analyze_root_partition;
 -- Test merging of stats after the last partition is analyzed. Merging should
 -- be done for root without taking a sample from root if one of the column
@@ -2026,10 +2027,10 @@ ALTER TABLE foo ALTER COLUMN c SET STATISTICS 0;
 INSERT INTO foo SELECT i,i%2+1, NULL FROM generate_series(1,100)i;
 ANALYZE VERBOSE foo_1_prt_1;
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58439, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69783, 400, 'f');
 ANALYZE VERBOSE foo_1_prt_2;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58444, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69788, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
@@ -2049,11 +2050,11 @@ create table foo (a int, b date) distributed by (a) partition by range(b) (parti
 insert into foo select a, '20210101'::date+a from (select generate_series(1,80) a) t1;
 analyze verbose foo;
 INFO:  analyzing "public.foo_1_prt_20210301"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58458, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69802, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58455, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69799, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210101"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58452, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69796, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 -- we should see "analyzing "public.foo" inheritance tree" in the output below
 begin;
@@ -2061,7 +2062,7 @@ truncate foo_1_prt_20210201;
 insert into foo select a, '20210101'::date+a from (select generate_series(31,40) a) t1;
 analyze verbose foo_1_prt_20210201;
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(58455, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69799, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 rollback;
 -- test behavior of "analyze_hll_non_part_table" create table option
