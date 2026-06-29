@@ -1711,23 +1711,23 @@ SetupTCPInterconnect(EState *estate)
 		 * receive the REGISTER message.  this is why they are all in a single
 		 * list.
 		 *
-		 * NOTE: we don't use foreach() here because we want to trim from the
-		 * list as we go.
+		 * We trim entries from the list as we register them.  In PostgreSQL's
+		 * array-based List a deletion shifts the underlying element array, so
+		 * we must use foreach_delete_current() to remove the current cell
+		 * instead of advancing the cell ourselves before deleting -- the old
+		 * linked-list idiom would leave a dangling cell and trip the lnext()
+		 * bounds assertion (it crashed the backend during SetupTCPInterconnect).
 		 *
-		 * We used to bail out of the while loop when incoming_count hit
+		 * We used to bail out of the loop when incoming_count hit
 		 * expectedTotalIncoming, but that causes problems if some connections
 		 * are left over -- better to just process them here.
 		 */
-		cell = list_head(interconnect_context->incompleteConns);
-		while (n > 0 && cell != NULL)
+		foreach(cell, interconnect_context->incompleteConns)
 		{
-			conn = (MotionConn *) lfirst(cell);
+			if (n <= 0)
+				break;
 
-			/*
-			 * we'll get the next cell ready now in case we need to delete the
-			 * cell that corresponds to our MotionConn
-			 */
-			cell = lnext(interconnect_context->incompleteConns, cell);
+			conn = (MotionConn *) lfirst(cell);
 
 			if (MPP_FD_ISSET(conn->sockfd, &rset))
 			{
@@ -1739,7 +1739,8 @@ SetupTCPInterconnect(EState *estate)
 					 * (and has been dropped), or we've added it to the
 					 * appropriate hash table)
 					 */
-					interconnect_context->incompleteConns = list_delete_ptr(interconnect_context->incompleteConns, conn);
+					interconnect_context->incompleteConns =
+						foreach_delete_current(interconnect_context->incompleteConns, cell);
 
 					/* is the connection ready ? */
 					if (conn->sockfd != -1)
