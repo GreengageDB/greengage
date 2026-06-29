@@ -152,12 +152,16 @@ jobs:
       matrix:
         include:
           - target_os: ubuntu
+            test_deploy: true
           - target_os: ubuntu
             target_os_version: "24.04"
+            test_deploy: true
           - target_os: rockylinux
             target_os_version: "8"
+            test_deploy: false
           - target_os: rockylinux
             target_os_version: "9"
+            test_deploy: false
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -167,6 +171,6 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
       target_os_version: ${{ matrix.target_os_version }}
-      test_docker: ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
+      test_deploy: ${{ matrix.test_deploy }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
