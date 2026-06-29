@@ -2007,7 +2007,7 @@ def impl(context, type):
         result = curs.fetchall()
         segment_info = [(result[s][0], result[s][1]) for s in range(len(result))]
     except Exception as e:
-        raise Exception("Could not retrieve segment information: %s" % e.message)
+        raise Exception("Could not retrieve segment information: %s" % str(e))
     finally:
         conn.close()
 
@@ -2050,7 +2050,7 @@ def impl(context, filename, some, output):
         result = curs.fetchall()
         segment_info = [(result[s][0], result[s][1]) for s in range(len(result))]
     except Exception as e:
-        raise Exception("Could not retrieve segment information: %s" % e.message)
+        raise Exception("Could not retrieve segment information: %s" % str(e))
     finally:
         conn.close()
 
@@ -2096,7 +2096,7 @@ def impl(context, filename, contain, output):
         result = curs.fetchall()
         segment_info = [(result[s][0], result[s][1]) for s in range(len(result))]
     except Exception as e:
-        raise Exception("Could not retrieve segment information: %s" % e.message)
+        raise Exception("Could not retrieve segment information: %s" % str(e))
     finally:
         conn.close()
 
