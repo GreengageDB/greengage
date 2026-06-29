@@ -89,6 +89,8 @@ typedef struct RemovedFunctionDynamic RemovedFunctionDynamic;
 static Oid get_function(const char *name, const Oid *args, int args_count, Oid namespace);
 static Oid get_type(const char *name, Oid namespace);
 
+static Query *get_matview_query(Relation matview);
+
 static bool check_node_anyarray_walker(Node *node, void *context);
 static bool check_node_unknown_walker(Node *node, void *context);
 static bool check_node_removed_operators_walker(Node *node, void *context);
@@ -311,6 +313,43 @@ static const char* removed_types_gp_toolkit[] =
 };
 static const int num_removed_types_gp_toolkit = sizeof(removed_types_gp_toolkit) / sizeof (char*);
 
+/*
+ * Helper function like get_view_query, but for materialized views.
+ * It works similarly to ExecRefreshMatView.
+ */
+static Query *
+get_matview_query(Relation matview)
+{
+	RewriteRule *rule;
+	List	    *actions;
+
+	Assert(matview->rd_rel->relkind == RELKIND_MATVIEW);
+
+	if (matview->rd_rel->relhasrules == false ||
+		matview->rd_rules->numLocks < 1)
+		elog(ERROR,
+			 "materialized view \"%s\" is missing rewrite information",
+			 RelationGetRelationName(matview));
+
+	if (matview->rd_rules->numLocks > 1)
+	elog(ERROR,
+		 "materialized view \"%s\" has too many rules",
+		 RelationGetRelationName(matview));
+
+	rule = matview->rd_rules->rules[0];
+	if (rule->event != CMD_SELECT || !(rule->isInstead))
+		elog(ERROR,
+			 "the rule for materialized view \"%s\" is not a SELECT INSTEAD OF rule",
+			 RelationGetRelationName(matview));
+
+	actions = rule->actions;
+	if (list_length(actions) != 1)
+		elog(ERROR,
+			 "the rule for materialized view \"%s\" is not a single action",
+			 RelationGetRelationName(matview));
+
+	return (Query *) linitial(rule->actions);
+}
 
 Datum
 set_next_pg_type_oid(PG_FUNCTION_ARGS)
@@ -549,6 +588,11 @@ view_has_anyarray_casts(PG_FUNCTION_ARGS)
 		viewquery = get_view_query(rel);
 		found = query_tree_walker(viewquery, check_node_anyarray_walker, NULL, 0);
 	}
+	else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
+		found = query_tree_walker(viewquery, check_node_anyarray_walker, NULL, 0);
+	}
 	else
 		found = false;
 
@@ -604,6 +648,11 @@ view_has_unknown_casts(PG_FUNCTION_ARGS)
 	if(rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
+		found = query_tree_walker(viewquery, check_node_unknown_walker, NULL, 0);
+	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
 		found = query_tree_walker(viewquery, check_node_unknown_walker, NULL, 0);
 	}
 	else
@@ -670,6 +719,12 @@ view_has_removed_operators(PG_FUNCTION_ARGS)
 		viewquery = get_view_query(rel);
 		found = query_tree_walker(viewquery, check_node_removed_operators_walker, NULL, 0);
 	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
+		found = query_tree_walker(viewquery, check_node_removed_operators_walker, NULL, 0);
+	}
+
 	else
 		found = false;
 
@@ -720,6 +775,12 @@ view_has_removed_functions(PG_FUNCTION_ARGS)
 		viewquery = get_view_query(rel);
 		found = query_tree_walker(viewquery, check_node_removed_functions_walker, NULL, 0);
 	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
+		found = query_tree_walker(viewquery, check_node_removed_functions_walker, NULL, 0);
+	}
+
 	else
 		found = false;
 
@@ -932,6 +993,11 @@ view_has_removed_types(PG_FUNCTION_ARGS)
 		viewquery = get_view_query(rel);
 		found = query_tree_walker(viewquery, check_node_removed_types_walker, NULL, 0);
 	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
+		found = query_tree_walker(viewquery, check_node_removed_types_walker, NULL, 0);
+	}
 	else
 		found = false;
 
@@ -1013,6 +1079,11 @@ view_has_changed_function_signatures(PG_FUNCTION_ARGS)
 	if(rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
+		found = query_tree_walker(viewquery, check_node_changed_function_signatures_walker, NULL, 0);
+	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
 		found = query_tree_walker(viewquery, check_node_changed_function_signatures_walker, NULL, 0);
 	}
 	else
@@ -1193,6 +1264,11 @@ view_has_removed_tables(PG_FUNCTION_ARGS)
 		viewquery = get_view_query(rel);
 		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
 	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
+		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
+	}
 	else
 		found = false;
 
@@ -1290,6 +1366,12 @@ view_has_removed_columns(PG_FUNCTION_ARGS)
 	if(rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
+		context.rtableStack = NIL;
+		found = check_node_removed_columns_walker((Node *) viewquery, &context);
+	}
+	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		viewquery = get_matview_query(rel);
 		context.rtableStack = NIL;
 		found = check_node_removed_columns_walker((Node *) viewquery, &context);
 	}
