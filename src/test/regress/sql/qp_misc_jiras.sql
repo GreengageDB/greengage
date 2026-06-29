@@ -1332,6 +1332,13 @@ select count(a.*) from qp_misc_jiras.tbl7616_test a inner join qp_misc_jiras.tbl
 select count(a.b) from qp_misc_jiras.tbl7616_test a inner join qp_misc_jiras.tbl7616_test b using (a);
 drop table qp_misc_jiras.tbl7616_test;
 
+-- The statement_mem='1000kB' set above (for the count-distinct DQA test) leaks
+-- into the incidental \d/\d+ describes below; under PG15 the heavier describe
+-- catalog query trips the auto-policy per-operator memory floor ("insufficient
+-- memory reserved for statement").  Run the describes at normal memory; the low
+-- setting is restored before the later mem-sensitive EXPLAINs (tbl5994).
+reset statement_mem;
+
 create table qp_misc_jiras.tbl6874 (a int, b text) distributed by (a);
 \d+ qp_misc_jiras.tbl6874
 insert into qp_misc_jiras.tbl6874 values (generate_series(1,10),'test_1');
@@ -1841,6 +1848,8 @@ reset enable_seqscan;
 reset gp_enable_agg_distinct; 
 reset gp_enable_agg_distinct_pruning;
 
+-- restore the low statement_mem for the mem-sensitive count-distinct EXPLAINs
+set statement_mem='1000kB';
 -- both queries should use hashagg
 explain select count(distinct j) from (select t1.* from qp_misc_jiras.tbl5994_test t1, qp_misc_jiras.tbl5994_test t2 where t1.j = t2.j) tmp group by j;
 explain select count(distinct j) from (select t1.* from qp_misc_jiras.tbl5994_test t1, qp_misc_jiras.tbl5994_test t2 where t1.i = t2.i) tmp group by j;

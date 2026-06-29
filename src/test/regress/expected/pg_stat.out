@@ -1,6 +1,9 @@
 set optimizer to off;
 drop table  if exists pg_stat_test;
+NOTICE:  table "pg_stat_test" does not exist, skipping
 create table pg_stat_test(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select
     schemaname, relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins, n_tup_upd,
     n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup
@@ -47,16 +50,20 @@ select count(*) from pg_stat_test;
 delete from pg_stat_test where a < 10;
 update pg_stat_test set a = 1000 where a > 90;
 set enable_seqscan to off;
+select * from pg_stat_test where a = 1;
+ a 
+---
+(0 rows)
+
+-- Let the QE pgstat timer flush the index-scan counters to shared memory before
+-- reading them.  PG15 throttles shared-memory stats updates (PGSTAT_MIN_INTERVAL)
+-- instead of the prompt per-message send PG14 used, so the sleep must come AFTER
+-- the indexed query, not before it, or idx_scan reads back as 0.
 select pg_sleep(10);
  pg_sleep 
 ----------
  
 (1 row)
-
-select * from pg_stat_test where a = 1;
- a 
----
-(0 rows)
 
 reset enable_seqscan;
 select

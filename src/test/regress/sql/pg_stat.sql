@@ -32,9 +32,13 @@ update pg_stat_test set a = 1000 where a > 90;
 
 set enable_seqscan to off;
 
-select pg_sleep(10);
-
 select * from pg_stat_test where a = 1;
+
+-- Let the QE pgstat timer flush the index-scan counters to shared memory before
+-- reading them.  PG15 throttles shared-memory stats updates (PGSTAT_MIN_INTERVAL)
+-- instead of the prompt per-message send PG14 used, so the sleep must come AFTER
+-- the indexed query, not before it, or idx_scan reads back as 0.
+select pg_sleep(10);
 
 reset enable_seqscan;
 
