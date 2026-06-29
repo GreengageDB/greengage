@@ -1996,7 +1996,7 @@ psql_completion(const char *text, int start, int end)
 					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
 
 	else if (Matches("ALTER", "TABLE", MatchAny, "ADD"))
-		COMPLETE_WITH("CONSTRAINT", "COLUMN", "PARTITION", "DEFAULT");
+		COMPLETE_WITH("CONSTRAINT", "COLUMN", "PARTITION", "DEFAULT PARTITION");
 
 	else if(Matches("ALTER", "TABLE", MatchAny, "NO"))
 		COMPLETE_WITH("INHERIT", "FORCE");
@@ -2060,7 +2060,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_ATTR(prev2_wd,
 						   " UNION SELECT 'COLUMN'"
 						   " UNION SELECT 'CONSTRAINT'"
-						   " UNION SELECT 'DEFAULT'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
 						   " UNION SELECT 'PARTITION'");
 
 	/* ALTER TABLE xxx RENAME */
@@ -2069,7 +2069,7 @@ psql_completion(const char *text, int start, int end)
 						   " UNION SELECT 'COLUMN'"
 						   " UNION SELECT 'CONSTRAINT'"
 						   " UNION SELECT 'TO'"
-						   " UNION SELECT 'DEFAULT'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
 						   " UNION SELECT 'PARTITION'");
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER|RENAME", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
@@ -2084,7 +2084,7 @@ psql_completion(const char *text, int start, int end)
 
 	/* If we have ALTER TABLE <sth> DROP, provide COLUMN or CONSTRAINT */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP"))
-		COMPLETE_WITH("COLUMN", "CONSTRAINT", "DEFAULT", "PARTITION");
+		COMPLETE_WITH("COLUMN", "CONSTRAINT", "PARTITION", "DEFAULT PARTITION");
 	/* If we have ALTER TABLE <sth> DROP COLUMN, provide list of columns */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
@@ -2198,12 +2198,8 @@ psql_completion(const char *text, int start, int end)
 	else if (TailMatches("ATTACH", "PARTITION", MatchAny, "FOR", "VALUES"))
 		COMPLETE_WITH("FROM (", "IN (", "WITH (");
 
-	else if (Matches("ALTER", "TABLE", MatchAny, "EXCHANGE"))
-		COMPLETE_WITH("PARTITION", "DEFAULT");
-	else if (Matches("ALTER", "TABLE", MatchAny, "SPLIT"))
-		COMPLETE_WITH("PARTITION", "DEFAULT");
-	else if (Matches("ALTER", "TABLE", MatchAny, "TRUNCATE"))
-		COMPLETE_WITH("PARTITION", "DEFAULT");
+	else if (Matches("ALTER", "TABLE", MatchAny, "EXCHANGE|SPLIT|TRUNCATE"))
+		COMPLETE_WITH("PARTITION", "DEFAULT PARTITION");
 	else if(Matches("ALTER", "TABLE", MatchAny, MatchAny, "DEFAULT"))
 		COMPLETE_WITH("PARTITION");
 
