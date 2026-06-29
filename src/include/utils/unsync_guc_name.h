@@ -152,6 +152,7 @@
 		"gp_enable_agg_distinct_pruning",
 		"gp_enable_direct_dispatch",
 		"gp_enable_explain_allstat",
+		"gp_enable_explain_rows_out",
 		"gp_enable_fast_sri",
 		"gp_enable_global_deadlock_detector",
 		"gp_enable_groupext_distinct_gather",
