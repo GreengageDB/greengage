@@ -2208,13 +2208,6 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
 		COMPLETE_WITH("TO");
 
-	/* ALTER TABLE xxx yyy PARTITION */
-	else if(Matches("ALTER", "TABLE", MatchAny, MatchAnyExcept("ADD"), "PARTITION"))
-	{
-		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_partition_of_table);
-	}
-
 	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
 	else if (HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*") ||
 			!HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*)"))
