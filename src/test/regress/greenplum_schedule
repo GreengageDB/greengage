@@ -21,6 +21,7 @@
 # double-load the shared read-only tables, breaking later tests.
 
 test: pg_dump_binary_upgrade
+test: pg_dump_gp_roundtrip
 
 test: gp_dispatch_keepalives
 
