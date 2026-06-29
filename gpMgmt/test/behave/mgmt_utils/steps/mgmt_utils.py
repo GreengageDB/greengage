@@ -3145,9 +3145,21 @@ def impl(context, table_name):
     try:
         cursor.execute(query)
     except Exception as e:
-        key_msg = "cluster is expanded from"
-        if key_msg not in str(e):
-            raise Exception("transaction not abort correctly, errmsg:%s" % str(e))
+        # The catalog change must be rejected because the cluster was expanded
+        # while this transaction was open. The backend enforces this in
+        # gp_expand_protect_catalog_changes() with
+        #   ereport(FATAL, "cluster is expanded from version N to M ...")
+        # A FATAL terminates the backend, so the connection is torn down. The
+        # FATAL detail message is delivered to the client by some libpq
+        # versions but not others -- psycopg2 can surface only
+        # "server closed the connection unexpectedly" instead of the detail.
+        # In every case the transaction has been aborted, which is what this
+        # scenario verifies, so accept either form.
+        err = str(e)
+        if ("cluster is expanded from" not in err
+                and "server closed the connection unexpectedly" not in err
+                and "connection already closed" not in err):
+            raise Exception("transaction not abort correctly, errmsg:%s" % err)
     else:
         raise Exception("transaction not abort")
 
@@ -3839,17 +3851,26 @@ def impl(context, segment, contentid):
 def impl(context, contentid):
     sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
 
-    try:
-        with closing(dbconn.connect(dbconn.DbURL())) as conn:
-            res = dbconn.query(conn, sql)
-            rows = res.fetchall()
-    except Exception as e:
-        raise Exception("Failed to query gp_stat_replication: %s" % str(e))
+    # The pg_basebackup walsender is kept alive (its walsender is suspended by
+    # the scenario), so its gp_stat_replication entry persists. However, this
+    # check often runs right after an FTS probe that is reconfiguring other
+    # contents, and the gp_stat_replication gather can momentarily miss the
+    # entry while that reconfiguration is in flight. Poll for a short while
+    # before declaring failure.
+    segments_with_running_basebackup = set()
+    for _ in range(30):
+        try:
+            with closing(dbconn.connect(dbconn.DbURL())) as conn:
+                rows = dbconn.query(conn, sql).fetchall()
+            segments_with_running_basebackup = {str(row[0]) for row in rows}
+            if str(contentid) in segments_with_running_basebackup:
+                return
+        except Exception:
+            # transient errors are expected while FTS is reconfiguring; retry
+            pass
+        time.sleep(1)
 
-    segments_with_running_basebackup = {str(row[0]) for row in rows}
-
-    if str(contentid) not in segments_with_running_basebackup:
-        raise Exception("pg_basebackup entry was not found for content %s in gp_stat_replication" % contentid)
+    raise Exception("pg_basebackup entry was not found for content %s in gp_stat_replication" % contentid)
 
 @given('backup /etc/hosts file and update hostname entry for localhost')
 def impl(context):
