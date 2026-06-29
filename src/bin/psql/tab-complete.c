@@ -2204,7 +2204,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("PARTITION");
 
 	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "PARTITION", MatchAny) ||
-	Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
+			 Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
 		COMPLETE_WITH("TO");
 
 	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
