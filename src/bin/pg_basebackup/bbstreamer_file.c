@@ -61,7 +61,8 @@ static void extract_directory(const char *filename, mode_t mode,
 							  bool forceoverwrite);
 static void extract_link(const char *filename, const char *linktarget,
 						 bool forceoverwrite);
-static FILE *create_file_for_extract(const char *filename, mode_t mode);
+static FILE *create_file_for_extract(const char *filename, mode_t mode,
+									 bool forceoverwrite);
 
 const bbstreamer_ops bbstreamer_extractor_ops = {
 	.content = bbstreamer_extractor_content,
@@ -246,7 +247,8 @@ bbstreamer_extractor_content(bbstreamer *streamer, bbstreamer_member *member,
 			else
 				mystreamer->file =
 					create_file_for_extract(mystreamer->filename,
-											member->mode);
+											member->mode,
+											mystreamer->forceoverwrite);
 
 			/* Report output file change. */
 			if (mystreamer->report_output_file)
@@ -364,9 +366,20 @@ extract_link(const char *filename, const char *linktarget, bool forceoverwrite)
  * Return the resulting handle so we can write the content to the file.
  */
 static FILE *
-create_file_for_extract(const char *filename, mode_t mode)
+create_file_for_extract(const char *filename, mode_t mode, bool forceoverwrite)
 {
 	FILE	   *file;
+
+	/*
+	 * GPDB: with --force-overwrite the target file may already exist and be
+	 * read-only (e.g. a chmod'd append-only segfile during gprecoverseg full
+	 * recovery), which makes fopen(..., "wb") fail with EACCES.  Remove it
+	 * first, the same way extract_directory()/extract_link() honor
+	 * forceoverwrite.  The PG15 bbsink/bbstreamer rewrite dropped this for the
+	 * regular-file path (the directory/link paths were re-grafted earlier).
+	 */
+	if (forceoverwrite)
+		unlink(filename);
 
 	file = fopen(filename, "wb");
 	if (file == NULL)
