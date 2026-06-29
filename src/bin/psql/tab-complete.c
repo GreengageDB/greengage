@@ -2407,25 +2407,42 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename */
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny))
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny))
 		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "WITH",
 					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
-					  "LOG ERRORS", "ON SEGMENT", "ESCAPE", "HEADER",
-					  "IGNORE EXTERNAL PARTITIONS");
-	else if (Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
+					  "LOG ERRORS", "SEGMENT REJECT LIMIT", "ON SEGMENT",
+					  "ESCAPE", "HEADER", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny))
 		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
 					  "WITH", "NEWLINE", "ON SEGMENT", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "WITH",
+					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
+					  "ON SEGMENT", "ESCAPE", "HEADER",
+					  "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "TO", MatchAny))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "WITH", "NEWLINE", "ON SEGMENT",
 					  "IGNORE EXTERNAL PARTITIONS");
 
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "WITH"))
-		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
-					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
-					  "LOG ERRORS","ON SEGMENT", "HEADER", "ESCAPE",
+	/* Handle COPY [BINARY] <sth> FROM|TO filename WITH */
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "WITH"))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "ENCODING",
+					  "FREEZE", "FILL MISSING FIELDS", "NEWLINE", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "ON SEGMENT", "ESCAPE", "HEADER",
 					  "IGNORE EXTERNAL PARTITIONS");
-	else if (Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "WITH"))
-		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS",
-					  "NEWLINE", "ON SEGMENT", "LOG ERRORS", "ESCAPE",
-					  "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny, "WITH"))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "NEWLINE", "ON SEGMENT", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "WITH"))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "ENCODING",
+					  "FREEZE", "FILL MISSING FIELDS", "NEWLINE", "ON SEGMENT",
+					  "ESCAPE", "HEADER", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "TO", MatchAny, "WITH"))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
 
 	/* Handle COPY [BINARY] <sth> FROM filename CSV */
 	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV"))
@@ -2438,10 +2455,13 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "CSV"))
 		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE");
 
-	else if(HeadMatches("COPY|\\copy", MatchAny) && TailMatches("LOG", "ERRORS"))
-		COMPLETE_WITH("", "SEGMENT REJECT LIMIT");
-	else if(HeadMatches("COPY|\\copy", MatchAny) &&
-			TailMatches("LOG", "ERRORS", "SEGMENT", "REJECT", "LIMIT", MatchAny))
+	else if((HeadMatches("COPY|\\copy", MatchAny, "FROM") ||
+			 HeadMatches("COPY", "BINARY", MatchAny, "FROM")) &&
+			 TailMatches("LOG", "ERRORS"))
+		COMPLETE_WITH("SEGMENT REJECT LIMIT");
+	else if((HeadMatches("COPY|\\copy", MatchAny, "FROM") ||
+			 HeadMatches("COPY", "BINARY", MatchAny, "FROM")) &&
+			 TailMatches("SEGMENT", "REJECT", "LIMIT", MatchAny))
 		COMPLETE_WITH("ROWS", "PERCENT");
 
 
