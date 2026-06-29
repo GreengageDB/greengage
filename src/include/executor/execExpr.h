@@ -283,6 +283,8 @@ typedef struct ExprEvalStep
 		{
 			/* attribute number up to which to fetch (inclusive) */
 			int			last_var;
+			/* all required att numbers (if NIL, use `last_var`) */
+			List	   *all_vars;
 			/* will the type of slot be the same for every invocation */
 			bool		fixed;
 			/* tuple descriptor, if known */

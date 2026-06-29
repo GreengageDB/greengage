@@ -1389,6 +1389,10 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
+	//elog(LOG, "[RELOG][%s] slot %p", __FUNCTION__, slot);
+
+	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
+
 	if (gp_aocs_scan_shortpass &&
 		!gp_select_invisible &&
 		scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
@@ -1457,7 +1461,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 							Anum_pg_aoblkdir_columngroupno,
 							BTEqualStrategyNumber,
 							F_INT4EQ,
-							Int32GetDatum(scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]));
+							Int32GetDatum(anchor_attr));
 
 				context.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
 												   InvalidOid,
@@ -1516,6 +1520,13 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	{
 		AOCSFileSegInfo *curseginfo;
 
+		// TODO: check if we need to simply call tts_virtual_aocs_clear
+		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		{
+			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+			slotAocs->tts_is_valid[attno] = false;
+		}
+
 ReadNext:
 		/* If necessary, open next seg */
 		if (scan->cur_seg < 0 || err < 0)
@@ -1548,8 +1559,10 @@ ReadNext:
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
 
-		AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 		int tts_nvalid = anchor_attr+1;
+
+		// TODO: read only anchor column
+
 		/* Read from cur_seg */
 		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
 		{
@@ -1565,7 +1578,7 @@ ReadNext:
 			 * In fact, we cannot do that either because we don't have the
 			 * row number until we've scanned the anchor column.
 			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			if (attno != anchor_attr)
 			{
 				Assert(rowNum > 0);
 				if (AO_ATTR_VAL_IS_MISSING(rowNum,

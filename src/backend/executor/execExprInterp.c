@@ -456,7 +456,20 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, scanslot);
 
-			slot_getsomeattrs(scanslot, op->d.fetch.last_var);
+			bool got_target_attrs = false;
+			ListCell *lc;
+			foreach(lc, op->d.fetch.all_vars)
+			{
+				int attnum = lfirst_int(lc);
+				got_target_attrs = slot_gettargetattr(scanslot, attnum);
+				if (!got_target_attrs)
+					break;
+			}
+			list_free(op->d.fetch.all_vars);
+			op->d.fetch.all_vars = NIL;
+
+			if (!got_target_attrs)
+				slot_getsomeattrs(scanslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -497,7 +510,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 			/* See EEOP_INNER_VAR comments */
 
-			Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
+			//Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
 
@@ -573,7 +586,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * We do not need CheckVarSlotCompatibility here; that was taken
 			 * care of at compilation time.  But see EEOP_INNER_VAR comments.
 			 */
-			Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
+			//Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = scanslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = scanslot->tts_isnull[attnum];

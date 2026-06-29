@@ -214,6 +214,12 @@ struct TupleTableSlotOps
 	 * consumed by the slot.
 	 */
 	MinimalTuple (*copy_minimal_tuple) (TupleTableSlot *slot);
+
+	/*
+	 * Fill up target attnum entry of tts_values and tts_isnull arrays with
+	 * values from the tuple contained in the slot.
+	 */
+	void		(*gettargetattr) (TupleTableSlot *slot, int attnum);
 };
 
 /*
@@ -227,6 +233,7 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual || (slot)->tts_ops == &TTSOpsVirtualAOCS)
+#define TTS_IS_VIRTUAL_AOCS(slot) ((slot)->tts_ops == &TTSOpsVirtualAOCS)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
@@ -247,6 +254,7 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;
+	bool	*tts_is_valid; /* per-attribute valid flag*/
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
@@ -336,6 +344,7 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
+extern bool slot_gettargetattr_int(TupleTableSlot *slot, int attnum);
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);
@@ -366,6 +375,19 @@ slot_getallattrs(TupleTableSlot *slot)
 	slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
 }
 
+
+/*
+ * This function forces the specific entry of the slot's Datum/isnull arrays to be
+ * valid.
+ */
+static inline bool
+slot_gettargetattr(TupleTableSlot *slot, int attnum)
+{
+	/* if somebody has already called slot_getsomeattrs, just return */
+	if (slot->tts_nvalid >= attnum)
+		return true;
+	return slot_gettargetattr_int(slot, attnum);
+}
 
 /*
  * slot_attisnull
