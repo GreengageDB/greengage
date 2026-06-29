@@ -12,6 +12,8 @@ expected/idle_gang_cleaner.out
 sql/idle_gang_cleaner.sql
 expected/resgroup/resgroup_io_limit.out
 sql/resgroup/resgroup_io_limit.sql
+expected/resgroup/resgroup_io_limit_alter_in_transaction.out
+sql/resgroup/resgroup_io_limit_alter_in_transaction.sql
 expected/resgroup/resgroup_views.out
 sql/resgroup/resgroup_views.sql
 
