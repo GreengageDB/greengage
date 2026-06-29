@@ -13,6 +13,10 @@ Feature: gprecoverseg tests involving migrating to a new host
       And the segments are synchronized
       And database "gptest" exists
       And the user runs gpconfig sets guc "wal_sender_timeout" with "15s"
+      And the user runs gpconfig sets guc "gp_log_fts" with "VERBOSE"
+      And the user runs gpconfig sets guc "gp_log_interconnect" with "verbose"
+      And the user runs gpconfig sets guc "log_min_messages" with "DEBUG3"
+      And the user runs gpconfig sets guc "log_min_error_statement" with "DEBUG3"
       And the user runs "gpstop -air"
       And the cluster configuration is saved for "before"
       And segment hosts <down> are disconnected from the cluster and from the spare segment hosts <spare>
