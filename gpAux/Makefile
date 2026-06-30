@@ -45,14 +45,14 @@ ifneq "$(BLD_BITS)" ""
 export NO_M64=1
 endif
 
-$(warning )
-$(warning PATH=$(PATH))
-$(warning LD_LIBRARY_PATH=$(LD_LIBRARY_PATH))
-$(warning )
-$(warning BLD_ARCH=$(BLD_ARCH))
-$(warning BLD_BITS=$(BLD_BITS))
-$(warning BLD_CFLAGS=$(BLD_CFLAGS))
-$(warning )
+#$(warning )
+#$(warning PATH=$(PATH))
+#$(warning LD_LIBRARY_PATH=$(LD_LIBRARY_PATH))
+#$(warning )
+#$(warning BLD_ARCH=$(BLD_ARCH))
+#$(warning BLD_BITS=$(BLD_BITS))
+#$(warning BLD_CFLAGS=$(BLD_CFLAGS))
+#$(warning )
 
 BLD_CXX_LIB_DIR=$($(BLD_ARCH)_CXX_LIB_DIR)
 
