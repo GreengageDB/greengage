@@ -621,6 +621,20 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_IncrementalSort:
+			{
+				IncrementalSort	   *sort = (IncrementalSort *) node;
+				IncrementalSort	   *newsort;
+
+				FLATCOPY(newsort, sort, IncrementalSort);
+				PLANMUTATE(newsort, sort);
+				COPYARRAY(&newsort->sort, &sort->sort, numCols, sortColIdx);
+				COPYARRAY(&newsort->sort, &sort->sort, numCols, sortOperators);
+				COPYARRAY(&newsort->sort, &sort->sort, numCols, nullsFirst);
+				return (Node *) newsort;
+			}
+			break;
+
 		case T_Agg:
 			{
 				Agg		   *agg = (Agg *) node;

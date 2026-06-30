@@ -2486,6 +2486,10 @@ typedef struct IncrementalSortState
 	TupleTableSlot *transfer_tuple;
 	bool		am_worker;		/* are we a worker? */
 	SharedIncrementalSortInfo *shared_info; /* one entry per worker */
+
+	bool		delayEagerFree;		/* is it safe to free memory used by this node,
+									 * when this node has outputted its last row? */
+
 } IncrementalSortState;
 
 /* ---------------------

@@ -2934,10 +2934,9 @@ select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t
 ------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000014.65..10000000014.75 rows=7 width=24) (actual rows=5 loops=1)
    Merge Key: pt.ptid, t.sk
-   ->  Sort  (cost=10000000014.65..10000000014.66 rows=2 width=24) (actual rows=2 loops=1)
+   ->  Incremental Sort  (cost=10000000008.18..10000000014.74 rows=2 width=24) (actual rows=2 loops=1)
          Sort Key: pt.ptid, t.sk
-         Sort Method:  quicksort  Memory: 75kB
-         Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
+         Presorted Key: pt.ptid
          ->  Merge Join  (cost=10000000003.00..10000000014.64 rows=2 width=24) (actual rows=2 loops=1)
                Merge Cond: (pt.ptid = t.tid)
                Join Filter: (pt.dist = t.dist)
@@ -2956,5 +2955,5 @@ select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t
                      ->  Partition Selector (selector id: $0)  (cost=10000000000.00..10000000001.33 rows=33 width=12) (actual rows=37 loops=1)
                            ->  Seq Scan on t  (cost=10000000000.00..10000000001.33 rows=33 width=12) (actual rows=37 loops=1)
  Optimizer: Postgres query optimizer
-(22 rows)
+(23 rows)
 

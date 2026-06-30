@@ -521,6 +521,7 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 			break;
 		case T_Material:
 		case T_Sort:
+		case T_IncrementalSort:
 		case T_Agg:
 		case T_TupleSplit:
 		case T_Unique:

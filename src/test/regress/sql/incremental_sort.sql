@@ -9,12 +9,12 @@ explain (costs off)
 select * from (select * from tenk1 order by four) t order by four, ten
 limit 1;
 
--- When work_mem is not enough to sort the entire table, incremental sort
+-- When working memory is not enough to sort the entire table, incremental sort
 -- may be faster if individual groups still fit into work_mem.
-set work_mem to '2MB';
+set planner_work_mem=280;
 explain (costs off)
 select * from (select * from tenk1 order by four) t order by four, ten;
-reset work_mem;
+reset planner_work_mem;
 
 create table t(a integer, b integer);
 
@@ -158,7 +158,7 @@ set local enable_mergejoin = off;
 set local enable_material = off;
 set local enable_sort = off;
 explain (costs off) select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2);
-select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2);
+select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2); -- order none
 rollback;
 -- Test EXPLAIN ANALYZE with both fullsort and presorted groups.
 select explain_analyze_without_memory('select * from (select * from t order by a) s order by a, b limit 70');
@@ -206,7 +206,7 @@ set parallel_tuple_cost = 0;
 set max_parallel_workers_per_gather = 2;
 
 create table t (a int, b int, c int);
-insert into t select mod(i,10),mod(i,10),i from generate_series(1,10000) s(i);
+insert into t select mod(i,30),mod(i,30),i from generate_series(1,30000) s(i);
 create index on t (a);
 analyze t;
 
@@ -219,6 +219,34 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
 -- Incremental sort vs. set operations with varno 0
 set enable_hashagg to off;
 explain (costs off) select * from t union select * from t order by 1,3;
+
+drop table t;
+
+-- Incremental sort shall not be an input for redistribute motion
+create table t1 (a int, b int) distributed randomly;
+create index ON t1 (a);
+-- 10 times
+insert into t1 select a, a from generate_series(1, 10000) cross join generate_series(1, 10) as gs(a);
+analyze t1;
+set enable_hashagg = off;
+explain select a, b, count(*) as res from t1 group by a, b;
+
+drop table t1;
+
+-- Rescan over incremental sort
+create table t (a int, b int, c int);
+insert into t select mod(i,30),mod(i,30),i from generate_series(1,30000) s(i);
+create index on t (a);
+analyze t;
+explain (costs off) with cte as (
+    select * from t order by a
+)
+select a, b from t where t.a = (select b from cte where cte.b >= t.b order by a, b limit 1) order by a limit 1;
+
+with cte as (
+    select * from t order by a
+)
+select a, b from t where t.a = (select b from cte where cte.b >= t.b order by a, b limit 1) order by a limit 1;
 
 drop table t;
 
