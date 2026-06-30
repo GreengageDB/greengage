@@ -1591,6 +1591,7 @@ ReadNext:
 					 * getmissingattr? The performance gain seems not much though. 
 					 */
 					d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+					slotAocs->tts_is_valid[attno] = true;
 					continue;
 				}
 			}
@@ -1623,6 +1624,7 @@ ReadNext:
 			 * should still be hot in CPU data cache memory.
 			 */
 			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
+			slotAocs->tts_is_valid[attno] = true;
 
 			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 			if (rowNum == InvalidAORowNum &&
