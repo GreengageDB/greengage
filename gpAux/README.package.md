@@ -2,9 +2,9 @@
 
 ## Overview
 
-This documentation describes the Debian packaging system for Greengage Database
-located in the `gpAux/` subdirectory. The system builds Debian packages using a
-custom Makefile and `debian/rules` file.
+This documentation describes the packaging system for Greengage Database
+located in the `gpAux/` subdirectory: Debian packages (`pkg-deb`, using
+`debian/rules`) and RPM packages (`pkg-rpm`, using `rpm/greengage6.spec`).
 
 ## Location and Structure
 
@@ -22,6 +22,9 @@ The main components are:
 - `debian/control` - Package metadata and dependencies
 - `debian/copyright` - Copyright information
 - `debian/lintian-overrides` - Lintian warning overrides
+- `rpm/greengage6.spec` - RPM spec file defining package metadata and build steps
+- `rpm/greengage6.rpmlintrc` - rpmlint warning overrides, analogous to
+  `debian/lintian-overrides`
 
 ## Key Components
 
@@ -37,6 +40,8 @@ The main components are:
    - `pkg`: Default target (aliases to `pkg-deb`)
    - `pkg-deb`: Builds Debian package, preserves environment variables, and
      collects artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`)
+   - `pkg-rpm`: Builds RPM package via `rpmbuild` and collects the
+     resulting `.rpm` artifact
    - `changelog`: Generates `debian/changelog` (not stored in repo)
    - `debian/install`: Creates installation manifest (not stored in repo)
 
@@ -60,14 +65,43 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
    - Injects Python dependencies via `-VpythonRequires`, `-VpythonConflicts`
    options in `dh_gencontrol`
 
+### RPM Spec File
+
+The `rpm/greengage6.spec` file defines the RPM build:
+
+1. **Distribution-specific Dependencies**:
+   - `python3` required on RHEL/Rocky 9 and newer
+   - `python2` required on RHEL/Rocky 8 and older
+
+2. **Build Process**:
+   - `%install` invokes the project's `make dist` target with `DESTDIR`
+     set to `%{buildroot}`
+   - Excludes `check-buildroot` from `__os_install_post`/`__spec_install_post`,
+     and shebang mangling for files under the install prefix (Python/Perl
+     scripts intentionally use bare/`env` interpreters)
+   - Strips debug info from shared libraries (`*.so`) to avoid leaking
+     BUILDROOT paths into compiled extensions (e.g., PyGreSQL's `_pg.so`),
+     which would otherwise fail RPM's `check-buildroot` validation
+   - Removes the executable bit from Python/Perl/Bash files without a
+     shebang and from `*.md` files, mirroring `debian/rules`' `dh_fixperms`
+     override
+
 ## Usage
 
-### Building the Package
+### Building the Debian Package
 
 From the project root directory, run:
 
 ```bash
 make -C ./gpAux pkg-deb
+```
+
+### Building the RPM Package
+
+From the project root directory, run:
+
+```bash
+make -C ./gpAux pkg-rpm
 ```
 
 ### Custom Installation Paths
@@ -76,6 +110,7 @@ To customize installation paths, set environment variables:
 
 ```bash
 make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
+make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 ```
 
 ### Environment Variables
@@ -84,9 +119,14 @@ make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
 - `GPDIR`: Subdirectory under `GPROOT` (default: same as `PACKAGE_NAME`)
 - `PACKAGE_NAME`: Package name (default: from `Package:` in `debian/control`,
    e.g., `greengage6`)
-- `ARTIFACTS_DIR`: Directory for artifacts (default: `$(CURDIR)/../Package`)
+- `ARTIFACTS_DIR`: Directory for artifacts (default: `$(CURDIR)/../Package`,
+  shared between `.deb` and `.rpm` outputs)
+- `RPM_TOPDIR`: Temporary `rpmbuild` working directory used only by
+  `pkg-rpm` (default: `$(CURDIR)/../RPM`, removed after the build)
 
 ## Build Process Details
+
+### Debian Package
 
 1. **Version Generation**:
    - Runs `../getversion` to create `../VERSION`
@@ -104,11 +144,51 @@ make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
    - Uses `make dist` for installation into `debian/tmp/$(PACKAGE_NAME)`
    - Generates file manifest in `debian/install`
 
+### RPM Package
+
+1. **Version Generation**:
+   - Reuses `version-vars` (same as Debian) to derive `PACKAGE_VERSION`,
+     normalized for RPM (`+`/`-` replaced with `.`) and passed to
+     `rpmbuild` via `--define gpdb_version`
+
+2. **Package Building**:
+   - Sets up a temporary `rpmbuild` tree under `RPM_TOPDIR`
+   - Runs `rpmbuild -bb rpm/greengage6.spec` with `gproot`, `gpdir`, and
+     `sourcedir` passed via `--define`
+   - Collects the resulting `.rpm` into `ARTIFACTS_DIR`, then removes
+     `RPM_TOPDIR`
+
+3. **Installation**:
+   - Uses `make dist` inside `%install`, installing into `%{buildroot}`
+
+## Build Dependencies
+
+Both `pkg-deb` and `pkg-rpm` assume that all build dependencies and the
+GPDB build itself (`make dist`) are already satisfied/buildable on the
+host — neither target builds GPDB from scratch; they package an already
+configured and built source tree.
+
+To get a complete environment with all dependencies installed, use the
+provided Docker images instead of installing dependencies manually:
+
+- `ci/Dockerfile.ubuntu` - Ubuntu 22.04/24.04
+- `ci/Dockerfile.rockylinux` - Rocky Linux 8/9
+
+See [ci/readme.md](../ci/readme.md) for instructions on building and
+using these images. To install dependencies directly on a host without
+Docker, see `README.linux.md` together with `README.ubuntu.bash` (Ubuntu)
+or `README.Rhel-Rocky.bash` (RHEL/Rocky Linux).
+
 ## Dependencies
 
-Package dependencies and conflicts are defined in `debian/control`.
-Python dependencies and conflicts are dynamically detected in `debian/rules` and
-injected via `${pythonRequires}` and `${pythonConflicts}` substitution variables.
+Package dependencies and conflicts for the Debian package are defined in
+`debian/control`. Python dependencies and conflicts are dynamically
+detected in `debian/rules` and injected via `${pythonRequires}` and
+`${pythonConflicts}` substitution variables.
+
+Package dependencies for the RPM package are defined directly in
+`rpm/greengage6.spec` via `Requires:`/`Conflicts:` tags, including a
+conditional on `%{?rhel}` for the Python version requirement.
 
 ## Maintenance
 
@@ -119,6 +199,10 @@ Edit `debian/control` to update:
 - Package description
 - Maintainer information
 - General dependencies
+
+Edit `rpm/greengage6.spec` to update the equivalent metadata for the
+RPM package (`Summary`, `License`, `URL`, `Requires`, `Conflicts`,
+`%description`).
 
 ### Adding Distribution Support
 
@@ -138,7 +222,20 @@ else
 endif
 ```
 
+For RPM, add distribution-specific conditionals in `rpm/greengage6.spec`,
+for example:
+
+```spec
+%if 0%{?rhel} >= 9
+Requires: python3
+%else
+Requires: python2
+%endif
+```
+
 ## Notes
+
+### Debian
 
 - Skips tests (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
 - Unsets compiler flags to avoid conflicts with the project's build system
@@ -150,3 +247,14 @@ endif
 - Custom `dh_fixperms` removes executable bit from Python/Perl/Bash files
   without shebang and `*.md` files
 - Generated `debian/{changelog,install}` is not committed to the repository
+
+### RPM
+
+- Builds without signing for development convenience
+- Strips debug info from `*.so` files to avoid RPM's `check-buildroot`
+  failing on BUILDROOT paths embedded in compiled extensions
+- Excludes `check-buildroot` and shebang mangling from the standard
+  post-install brp scripts (`__os_install_post`/`__spec_install_post`)
+- Collects only the resulting `.rpm` into `$(CURDIR)/../Package`
+- The temporary `rpmbuild` tree (`$(CURDIR)/../RPM`) is removed after
+  every build, successful or not
