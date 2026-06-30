@@ -30,7 +30,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@CI-5910
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v42
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -152,25 +152,25 @@ jobs:
       matrix:
         include:
           - target_os: ubuntu
-            test_deploy: true
+            test_install: true
           - target_os: ubuntu
             target_os_version: "24.04"
-            test_deploy: true
+            test_install: true
           - target_os: rockylinux
             target_os_version: "8"
-            test_deploy: false
+            test_install: false
           - target_os: rockylinux
             target_os_version: "9"
-            test_deploy: false
+            test_install: false
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@CI-5654
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v47
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
       target_os_version: ${{ matrix.target_os_version }}
-      test_deploy: ${{ matrix.test_deploy }}
+      test_install: ${{ matrix.test_install }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
