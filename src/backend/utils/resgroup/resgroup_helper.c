@@ -16,11 +16,13 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "catalog/pg_resgroup.h"
+#include "catalog/pg_resgroupcapability_d.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
 #include "commands/resgroupcmds.h"
 #include "storage/procarray.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/resgroup.h"
@@ -479,6 +481,30 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 							(errmsg("cannot move myself"))));
+		/*
+		 * Fail if any resource group is being edited.
+		 * ALTER holds ExclusiveLock until end of transaction.
+		 * RowShareLock allows concurrent moves but conflicts with it.
+		 * A move into the group the session already occupies reads no
+		 * capability values, so it succeeds without the lock.
+		 */
+		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
+										RowShareLock))
+		{
+			groupId = get_resgroup_oid(groupName, true);
+			sessionId = GetSessionIdByPid(pid);
+
+			if (groupId == InvalidOid ||
+				groupId == SYSTEMRESGROUP_OID ||
+				sessionId == -1 ||
+				IsResGroupBypassedBySessionId(sessionId) ||
+				ResGroupGetGroupIdBySessionId(sessionId) != groupId)
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_IN_USE),
+						(errmsg("cannot move query while a resource group is being edited"))));
+
+			PG_RETURN_BOOL(true);
+		}
 
 		groupId = get_resgroup_oid(groupName, false);
 		sessionId = GetSessionIdByPid(pid);
@@ -503,10 +529,11 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
 							(errmsg("process %d is in IDLE state", pid))));
-		if (currentGroupId == groupId)
-			PG_RETURN_BOOL(true);
 
-		ResGroupMoveQuery(sessionId, groupId, groupName);
+		if (currentGroupId != groupId)
+			ResGroupMoveQuery(sessionId, groupId, groupName);
+
+		UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
 	}
 	else if (Gp_role == GP_ROLE_EXECUTE)
 	{
