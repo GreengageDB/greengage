@@ -293,6 +293,7 @@ static char *format_function_arguments(const FuncInfo *finfo, const char *funcar
 									   bool is_agg);
 static char *format_function_signature(Archive *fout,
 									   const FuncInfo *finfo, bool honor_quotes);
+static char *make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout);
 static char *convertRegProcReference(const char *proc);
 static char *getFormattedOperatorName(const char *oproid);
 static char *convertTSFunction(Archive *fout, Oid funcOid);
@@ -4917,7 +4918,9 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 
 		pg_type_array_oid = next_possible_free_oid;
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
-		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
+		pg_type_array_name = make_array_type_name(tyinfo->dobj.name, 
+													  tyinfo->dobj.namespace->dobj.catId.oid,
+													  fout);
 	}
 
 	if (OidIsValid(pg_type_array_oid))
@@ -12651,6 +12654,57 @@ format_function_signature(Archive *fout, const FuncInfo *finfo, bool honor_quote
 	return fn.data;
 }
 
+/*
+ * make_array_type_name
+ * 		given a base type name, make an array type name for it
+ * 
+ * 	Analogous to makeArrayTypeName() from pg_type.c, but does not use
+ * 	backend functions.
+ */
+static char *
+make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
+{
+    char *arr;
+    int namelen = strlen(typeName);
+    PGresult *res;
+    PQExpBuffer query = createPQExpBuffer();
+	bool is_dup;
+    int i;
+
+    arr = (char *) pg_malloc(NAMEDATALEN);
+
+    for (i = 1; i < NAMEDATALEN - 1; i++)
+    {
+        arr[i - 1] = '_';
+        if (i + namelen < NAMEDATALEN)
+            strcpy(arr + i, typeName);
+        else
+        {
+            memcpy(arr + i, typeName, NAMEDATALEN - i - 1);
+            arr[NAMEDATALEN - 1] = '\0';
+        }
+
+        /* Check if this name already exists in the target namespace */
+        printfPQExpBuffer(query,
+                          "SELECT EXISTS(SELECT 1 "
+                          "FROM pg_catalog.pg_type "
+                          "WHERE typname = '%s' AND typnamespace = '%u'::pg_catalog.oid);",
+                          arr, typeNamespace);
+        res = ExecuteSqlQueryForSingleRow(fout, query->data);
+        is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
+        PQclear(res);
+
+        if (!is_dup)
+            break;
+    }
+
+    destroyPQExpBuffer(query);
+
+    if (i >= NAMEDATALEN - 1)
+        fatal("could not form array type name for type \"%s\"", typeName);
+
+    return arr;
+}
 
 /*
  * dumpFunc:
