@@ -8144,34 +8144,35 @@ EXPLAIN SELECT count(*) over (PARTITION BY a ORDER BY b, c, d) as count1,
        count(*) over (PARTITION BY a ORDER BY c, b) as count2,
        count(*) over (PARTITION BY a ORDER BY c, b, d) as count3
 FROM foo;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=4.06..4.68 rows=10 width=16)
-   ->  WindowAgg  (cost=4.06..4.68 rows=4 width=16)
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1995.51..7105.97 rows=71100 width=64)
+   ->  WindowAgg  (cost=1995.51..6157.97 rows=23700 width=64)
          Partition By: a
          Order By: b
-         ->  WindowAgg  (cost=4.06..4.51 rows=4 width=16)
+         ->  WindowAgg  (cost=1995.51..5743.22 rows=23700 width=56)
                Partition By: a
                Order By: b, c
-               ->  WindowAgg  (cost=4.06..4.31 rows=4 width=16)
+               ->  WindowAgg  (cost=1995.51..5269.22 rows=23700 width=48)
                      Partition By: a
                      Order By: b, c, d
-                     ->  Sort  (cost=4.06..4.08 rows=4 width=16)
+                     ->  Incremental Sort  (cost=1995.51..4735.97 rows=23700 width=40)
                            Sort Key: a, b, c, d
-                           ->  WindowAgg  (cost=3.27..3.89 rows=4 width=16)
+                           Presorted Key: a
+                           ->  WindowAgg  (cost=1993.11..3474.36 rows=23700 width=40)
                                  Partition By: a
                                  Order By: c
-                                 ->  WindowAgg  (cost=3.27..3.72 rows=4 width=16)
+                                 ->  WindowAgg  (cost=1993.11..3059.61 rows=23700 width=32)
                                        Partition By: a
                                        Order By: c, b
-                                       ->  WindowAgg  (cost=3.27..3.52 rows=4 width=16)
+                                       ->  WindowAgg  (cost=1993.11..2585.61 rows=23700 width=24)
                                              Partition By: a
                                              Order By: c, b, d
-                                             ->  Sort  (cost=3.27..3.29 rows=4 width=16)
+                                             ->  Sort  (cost=1993.11..2052.36 rows=23700 width=16)
                                                    Sort Key: a, c, b, d
-                                                   ->  Seq Scan on foo  (cost=0.00..3.10 rows=4 width=16)
+                                                   ->  Seq Scan on foo  (cost=0.00..271.00 rows=23700 width=16)
  Optimizer: Postgres query optimizer
-(25 rows)
+(26 rows)
 
 drop table foo;
 -- test predicate push down in subqueries for quals containing windowref nodes

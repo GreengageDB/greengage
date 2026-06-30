@@ -1485,6 +1485,7 @@ motion_sanity_walker(Node *node, sanity_result_t *result)
 		case T_SetOp:
 		case T_Limit:
 		case T_Sort:
+		case T_IncrementalSort:
 		case T_Material:
 		case T_ForeignScan:
 			if (plan_tree_walker(node, motion_sanity_walker, result, true))

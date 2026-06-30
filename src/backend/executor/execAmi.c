@@ -832,6 +832,10 @@ ExecSquelchNode(PlanState *node)
 			ExecSquelchSort((SortState *) node);
 			break;
 
+		case T_IncrementalSortState:
+			ExecSquelchIncrementalSort((IncrementalSortState *) node);
+			break;
+
 		case T_AggState:
 			ExecSquelchAgg((AggState*) node);
 			break;

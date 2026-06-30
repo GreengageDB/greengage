@@ -1082,6 +1082,9 @@ _outNode(StringInfo str, void *obj)
 			case T_Sort:
 				_outSort(str, obj);
 				break;
+			case T_IncrementalSort:
+				_outIncrementalSort(str, obj);
+				break;
 			case T_Unique:
 				_outUnique(str, obj);
 				break;
