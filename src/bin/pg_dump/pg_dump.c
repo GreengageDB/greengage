@@ -7421,11 +7421,58 @@ getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
 	appendPQExpBufferChar(tbloids, '}');
 	resetPQExpBuffer(query);
 
+	/*
+	 * Collect partitions via build-in function,
+	 * and partition templates using handmade query,
+	 * because pg_get_partition_template_def may use
+	 * syntax not compatible with Greengage 7
+	 * (for example, RANK(1) clause)
+	 */
 	appendPQExpBuffer(query,
+						"WITH templates_per_level AS ("
+						"	SELECT src,"
+						"		entry.level,"
+						"		FORMAT ("
+						"			'ALTER TABLE %%s.%%s SET SUBPARTITION TEMPLATE\n(\n%%s\n)',"
+						"			pg_catalog.quote_ident(nspname),"
+						"			pg_catalog.quote_ident(name),"
+						"			string_agg(bounds, E',\n' ORDER BY entry.position)"
+						"		) parttemplate"
+						"	FROM ("
+						"		SELECT src.tbloid src,"
+						"			template.partitionlevel level,"
+						"			template.partitionboundary bounds,"
+						"			template.partitionposition position,"
+						"			COALESCE(part.name, src_table.relname) name,"
+						"			COALESCE(part.nspname, nsp.nspname) nspname"
+						"		FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)"
+						"			JOIN pg_class src_table ON src_table.oid = src.tbloid"
+						"			JOIN pg_namespace nsp ON src_table.relnamespace = nsp.oid"
+						"			JOIN pg_partition_templates template ON template.tablename = src_table.relname"
+						"				AND template.schemaname = nsp.nspname"
+						"			LEFT JOIN LATERAL ("
+						"				SELECT"
+						"					MIN(part.partitiontablename) name,"
+						"					MIN(part.partitionschemaname) nspname"
+						"				FROM pg_partitions part"
+						"				WHERE part.tablename = src_table.relname"
+						"					AND part.schemaname = nsp.nspname"
+						"					AND template.partitionlevel = part.partitionlevel + 2"
+						"				GROUP BY (part.schemaname, part.tablename, part.partitionlevel)"
+						"			) part ON TRUE"
+						"	) entry"
+						"	GROUP BY (entry.name, entry.nspname, entry.src, entry.level)"
+						"),"
+						"templates AS ("
+						"	SELECT level.src,"
+						"		string_agg(level.parttemplate, ';\n' ORDER BY level.level DESC) parttemplate"
+						"	FROM templates_per_level level"
+						"	GROUP BY (level.src)"
+						")"
 						"SELECT src.oid,\n"
 						"(SELECT pg_get_partition_def(src.oid, true, true)) AS partclause,\n"
-						"(SELECT pg_get_partition_template_def(src.oid, true, true)) AS parttemplate\n"
-						"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n", tbloids->data);
+						"(SELECT parttemplate FROM templates WHERE src.oid = templates.src) AS parttemplate\n"
+						"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n", tbloids->data, tbloids->data);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
