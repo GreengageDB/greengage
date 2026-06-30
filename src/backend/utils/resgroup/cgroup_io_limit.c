@@ -520,12 +520,32 @@ compare_iostat(const void *x, const void *y)
 	return 0;
 }
 
+/*
+ * Order a list of TblSpcIOLimit by tablespace so two lists that hold the same
+ * entries in a different order dump to the same string.
+ */
+int
+compare_tablespace_oid(const void *x, const void *y)
+{
+	TblSpcIOLimit *a = (TblSpcIOLimit *) lfirst(*(ListCell **) x);
+	TblSpcIOLimit *b = (TblSpcIOLimit *) lfirst(*(ListCell **) y);
+
+	if (a->tablespace_oid == b->tablespace_oid)
+		return 0;
+
+	if (a->tablespace_oid < b->tablespace_oid)
+		return -1;
+
+	return 1;
+}
+
 char *
 io_limit_dump(List *limit_list)
 {
 	ListCell *cell;
+	StringInfoData result;
 
-	StringInfo result = makeStringInfo();
+	initStringInfo(&result);
 
 	foreach(cell, limit_list)
 	{
@@ -535,26 +555,26 @@ io_limit_dump(List *limit_list)
 		uint64 *value = (uint64 *) limit->ioconfig;
 
 		if (limit->tablespace_oid != InvalidOid)
-			appendStringInfo(result, "%u:", limit->tablespace_oid);
+			appendStringInfo(&result, "%u:", limit->tablespace_oid);
 		else
-			appendStringInfo(result, "*:");
+			appendStringInfo(&result, "*:");
 
 		for(i = 0; i < fields_length; i++)
 		{
 			if ((*(value + i) != IO_LIMIT_MAX) && (*(value + i) != IO_LIMIT_EMPTY))
-				appendStringInfo(result, "%s=%lu", IOconfigFields[i], *(value + i));
+				appendStringInfo(&result, "%s=%lu", IOconfigFields[i], *(value + i));
 			else
-				appendStringInfo(result, "%s=max", IOconfigFields[i]);
+				appendStringInfo(&result, "%s=max", IOconfigFields[i]);
 
 			if (i + 1 != fields_length)
-				appendStringInfo(result, ",");
+				appendStringInfo(&result, ",");
 		}
 
 		if (cell != limit_list->tail)
-			appendStringInfo(result, ";");
+			appendStringInfo(&result, ";");
 	}
 
-	return result->data;
+	return result.data;
 }
 
 void
