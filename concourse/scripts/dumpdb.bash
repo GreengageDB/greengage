@@ -25,5 +25,8 @@ psql \
     echo ""
 done
 
+mkdir -pm 777 sqldump
 pg_dumpall -f ./sqldump/dump.sql
-xz -z ./sqldump/dump.sql
+if [[ -z "${CI:-}" ]]; then
+    xz -z ./sqldump/dump.sql
+fi
