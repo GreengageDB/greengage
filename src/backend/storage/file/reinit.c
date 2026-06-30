@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "catalog/catalog.h"
 #include "catalog/pg_tablespace.h"
@@ -334,6 +335,17 @@ ResetUnloggedRelationsInDbspaceDir(const char *dbspacedirname, int op)
 			snprintf(dstpath, sizeof(dstpath), "%s/%s%s",
 					 dbspacedirname, oidbuf, de->d_name + oidchars + 1 +
 					 strlen(forkNames[INIT_FORKNUM]));
+
+			/*
+			 * Sometimes, before recovery there is not init fork, but there is
+			 * main fork. So at cleanup it was not removed. Next, at
+			 * recovery init fork will be created and if we will not remove main
+			 * fork here, function copy_file will return error. Let's check main
+			 * fork here and remove if it is presented.
+			 */
+			struct stat statbuf;
+			if (lstat(dstpath, &statbuf) == 0)
+				unlink(dstpath);
 
 			/* OK, we're ready to perform the actual copy. */
 			elog(DEBUG2, "copying %s to %s", srcpath, dstpath);
