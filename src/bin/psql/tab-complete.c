@@ -2139,9 +2139,16 @@ psql_completion(const char *text, int start, int end)
 	{
 		/* Enforce no completion here, as an integer has to be specified */
 	}
-	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(") ||
-			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "("))
-			COMPLETE_WITH("compresslevel =", "compresstype =", "blocksize =");
+	else if((HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*") &&
+		    !HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*)")) ||
+			(HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*)")))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_UNUSED_OPTIONS("compresslevel", "compresstype", "blocksize");
+		else if(TailMatches("compresslevel|compresstype|blocksize"))
+			COMPLETE_WITH("=");
+	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> DROP */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "DROP") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "DROP"))
