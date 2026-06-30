@@ -720,6 +720,11 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 	if (aocs_getnext(aoscan, direction, slot))
 	{
 		ExecStoreVirtualTuple(slot);
+
+		// TODO: add comments here
+		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY)
+			slot->tts_nvalid = 0;
+
 		pgstat_count_heap_getnext(aoscan->rs_base.rs_rd);
 
 		return true;

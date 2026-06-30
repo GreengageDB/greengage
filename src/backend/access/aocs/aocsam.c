@@ -1389,8 +1389,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
-	//elog(LOG, "[RELOG][%s] slot %p", __FUNCTION__, slot);
-
 	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 
 	if (gp_aocs_scan_shortpass &&
@@ -1515,9 +1513,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	}
 	else
 	{
-
-	while (1)
-	{
 		AOCSFileSegInfo *curseginfo;
 
 		// TODO: check if we need to simply call tts_virtual_aocs_clear
@@ -1559,92 +1554,44 @@ ReadNext:
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
 
-		int tts_nvalid = anchor_attr+1;
-
-		// TODO: read only anchor column
-
 		/* Read from cur_seg */
-		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		AttrNumber	attno = anchor_attr;
+
+		err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+		Assert(err >= 0);
+		if (err == 0)
 		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-			if (attno > anchor_attr)
-				break;
-
-			/*
-			 * Check missing value before reading from data files.
-			 * 
-			 * We don't need to check the missing value for the anchor column.
-			 * In fact, we cannot do that either because we don't have the
-			 * row number until we've scanned the anchor column.
-			 */
-			if (attno != anchor_attr)
+			err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+			if (err < 0)
 			{
-				Assert(rowNum > 0);
-				if (AO_ATTR_VAL_IS_MISSING(rowNum,
-															attno,
-															curseginfo->segno,
-															scan->columnScanInfo.attnum_to_rownum))
-				{
-					/*
-					 * XXX: should we temporarily store the missing value to avoid repeatedly calling
-					 * getmissingattr? The performance gain seems not much though. 
-					 */
-					d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-					slotAocs->tts_is_valid[attno] = true;
-					continue;
-				}
+				/*
+				 * Ha, cannot read next block, we need to go to next seg
+				 */
+				close_cur_scan_seg(scan);
+				goto ReadNext;
 			}
 
-			/* otherwise, read from data file */
+			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+
 			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-			Assert(err >= 0);
-			if (err == 0)
-			{
-				err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
-				if (err < 0)
-				{
-					/*
-					 * Ha, cannot read next block, we need to go to next seg
-					 */
-					close_cur_scan_seg(scan);
-					goto ReadNext;
-				}
+			Assert(err > 0);
+		}
 
-				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-											RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+		/*
+		 * Get the column's datum right here since the data structures
+		 * should still be hot in CPU data cache memory.
+		 */
+		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
+		slotAocs->tts_is_valid[attno] = true;
 
-				err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-				Assert(err > 0);
-			}
-
-			/*
-			 * Get the column's datum right here since the data structures
-			 * should still be hot in CPU data cache memory.
-			 */
-			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
-			slotAocs->tts_is_valid[attno] = true;
-
-			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
-			if (rowNum == InvalidAORowNum &&
-				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
-			}
-#ifdef USE_ASSERT_CHECKING
-			/*
-			 * the row number from every column should match
-			 * XXX: the first assert is repeated code, we should move it outside of
-			 * the if/else block if we can be sure blockFirstRowNum cannot be -1 here.
-			 */
-			else if (scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				Assert(rowNum == scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock);
-			}
-#endif
+		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+		if (rowNum == InvalidAORowNum &&
+			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+		{
+			Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+			rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
 		}
 
 		scan->segrowsprocessed++;
@@ -1665,13 +1612,13 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = tts_nvalid;
+		// TODO: add comments here as it might confuse
+		slot->tts_nvalid = 0;
 
 		slot->tts_tid = scan->cdb_fake_ctid;
 
 		slotAocs->current_scan = (void*)scan;
 		return true;
-	}
 	}
 
 	Assert(!"Never here");

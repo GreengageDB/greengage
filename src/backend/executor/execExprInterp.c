@@ -465,8 +465,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 				if (!got_target_attrs)
 					break;
 			}
-			list_free(op->d.fetch.all_vars);
-			op->d.fetch.all_vars = NIL;
+			// TODO: where to free 'all_vars'?...
+			//list_free(op->d.fetch.all_vars);
+			//op->d.fetch.all_vars = NIL;
 
 			if (!got_target_attrs)
 				slot_getsomeattrs(scanslot, op->d.fetch.last_var);

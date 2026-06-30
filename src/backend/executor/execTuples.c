@@ -131,10 +131,8 @@ tts_virtual_aocs_init(TupleTableSlot *slot)
 {
 	VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
 
-	//elog(LOG, "[RELOG][%s] slot %p", __FUNCTION__, slot);
 	if (slot->tts_tupleDescriptor)
 	{
-		//elog(LOG, "[RELOG][%s] slot %p, palloc0 for natts %d", __FUNCTION__, slot, slot->tts_tupleDescriptor->natts);
 		vslot_aocs->tts_is_valid = palloc0(
 			slot->tts_tupleDescriptor->natts * sizeof(bool));
 	}
@@ -144,7 +142,6 @@ static void
 tts_virtual_aocs_release(TupleTableSlot *slot)
 {
 	VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
-	//elog(LOG, "[RELOG][%s] slot %p, vslot_aocs->tts_is_valid %p", __FUNCTION__, slot, vslot_aocs->tts_is_valid);
 	if (vslot_aocs->tts_is_valid)
 	{
 		pfree(vslot_aocs->tts_is_valid);
@@ -160,8 +157,6 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	tts_virtual_clear(slot);
 
 	vslot_aocs->current_scan = NULL;
-
-	//elog(LOG, "[RELOG][%s] slot %p, vslot_aocs->tts_is_valid %p, slot->tts_tupleDescriptor %p", __FUNCTION__, slot, vslot_aocs->tts_is_valid, slot->tts_tupleDescriptor);
 
 	if (vslot_aocs->tts_is_valid && slot->tts_tupleDescriptor)
 		for (int i = 0; i < slot->tts_tupleDescriptor->natts; i++)
@@ -194,8 +189,6 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
-
-	//elog(LOG, "[RELOG][%s] slot %p, natts = %d, slot->tts_nvalid %d", __FUNCTION__, slot, natts, slot->tts_nvalid);
 
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
@@ -304,8 +297,6 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, int attnum)
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-
-	//elog(LOG, "[RELOG][%s] attnum = %d", __FUNCTION__, attnum);
 
 	// TODO: fix the ugly naming fusion
 	AttrNumber	attno = attnum - 1;
@@ -582,14 +573,10 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
 	}
 
-	//elog(LOG, "[RELOG][%s] dstslot %p, srcslot %p [is_aocs %u]", __FUNCTION__, dstslot, srcslot, TTS_IS_VIRTUAL_AOCS(srcslot));
-
 	if (TTS_IS_VIRTUAL_AOCS(srcslot))
 	{
 		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
 		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
-
-		//elog(LOG, "[RELOG][%s] srcslot_aocs->tts_is_valid %p, srcdesc->natts %d", __FUNCTION__, srcslot_aocs->tts_is_valid, srcdesc->natts);
 
 		if (srcslot_aocs->tts_is_valid)
 		{
@@ -611,7 +598,6 @@ static HeapTuple
 tts_virtual_copy_heap_tuple(TupleTableSlot *slot)
 {
 	Assert(!TTS_EMPTY(slot));
-
 	return heap_form_tuple(slot->tts_tupleDescriptor,
 						   slot->tts_values,
 						   slot->tts_isnull);
@@ -621,7 +607,6 @@ static MinimalTuple
 tts_virtual_copy_minimal_tuple(TupleTableSlot *slot)
 {
 	Assert(!TTS_EMPTY(slot));
-
 	return heap_form_minimal_tuple(slot->tts_tupleDescriptor,
 								   slot->tts_values,
 								   slot->tts_isnull);
