@@ -96,13 +96,13 @@ typedef struct
 	int			objsubid;		/* subobject (table column #) */
 } SecLabelItem;
 
-typedef struct TypeNamesCache {
+typedef struct TypeNamesList {
 	Oid 	schema_oid;
 	char  **names;
 	int 	count;
 	int 	capacity;
-	struct 	TypeNamesCache *next;
-} TypeNamesCache;
+	struct 	TypeNamesList *next;
+} TypeNamesList;
 
 typedef enum OidOptions
 {
@@ -12715,15 +12715,15 @@ format_function_signature(Archive *fout, const FuncInfo *finfo, bool honor_quote
  * 
  * Analogous to makeArrayTypeName() from pg_type.c, but does not use
  * backend functions.
- * Also manages its own cache of assigned names, which lives till
+ * Also manages its own list of assigned names, which lives till
  * the end of pg_dump.
  */
 static char *
 make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 {
-	static TypeNamesCache *type_names_cache = NULL;
-	TypeNamesCache *cache = NULL;
-	TypeNamesCache *prev = NULL;
+	static TypeNamesList *type_names_list = NULL;
+	TypeNamesList *list = NULL;
+	TypeNamesList *prev = NULL;
 	char 		   *arr;
 	int 			namelen = strlen(typeName);
 	int 			i;
@@ -12737,14 +12737,14 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	if (!arr)
 		fatal("out of memory");
 
-	/* Search for schema's cache */
-	cache = type_names_cache;
-	while (cache)
+	/* Search for schema's list */
+	list = type_names_list;
+	while (list)
 	{
-		if (cache->schema_oid == typeNamespace)
+		if (list->schema_oid == typeNamespace)
 			break;
-		prev = cache;
-		cache = cache->next;
+		prev = list;
+		list = list->next;
 	}
 
 	/* Try to find a unique name */
@@ -12772,9 +12772,9 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 
 		/* Check if dump already assigned such name for this schema */
 		is_assigned = false;
-		for (j = 0; cache && j < cache->count; j++)
+		for (j = 0; list && j < list->count; j++)
 		{
-			if (strcmp(cache->names[j], arr) == 0)
+			if (strcmp(list->names[j], arr) == 0)
 			{
 				is_assigned = true;
 				break;
@@ -12789,37 +12789,37 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	if (i >= NAMEDATALEN - 1)
 		fatal("could not form array type name for type \"%s\"", typeName);
 
-	/* If no cache found for this schema, create one */
-	if (!cache)
+	/* If no list found for this schema, create one */
+	if (!list)
 	{
-		cache = (TypeNamesCache *) pg_malloc0(sizeof(TypeNamesCache));
-		if (!cache)
+		list = (TypeNamesList *) pg_malloc0(sizeof(TypeNamesList));
+		if (!list)
 			fatal("out of memory");
-		cache->schema_oid = typeNamespace;
-		cache->capacity = 16;
-		cache->count = 0;
-		cache->names = (char **) pg_malloc(cache->capacity * sizeof(char *));
-		if (!cache->names)
+		list->schema_oid = typeNamespace;
+		list->capacity = 16;
+		list->count = 0;
+		list->names = (char **) pg_malloc(list->capacity * sizeof(char *));
+		if (!list->names)
 			fatal("out of memory");
-		cache->next = NULL;
+		list->next = NULL;
 
 		/* Add to linked list */
 		if (prev)
-			prev->next = cache;
+			prev->next = list;
 		else
-			type_names_cache = cache;
+			type_names_list = list;
 	}
 
-	if (cache->count == cache->capacity)
+	if (list->count == list->capacity)
 	{
-		cache->capacity = cache->capacity * 2;
-		cache->names = (char **) pg_realloc(cache->names,
-											cache->capacity * sizeof(char *));
-		if (!cache->names)
+		list->capacity = list->capacity * 2;
+		list->names = (char **) pg_realloc(list->names,
+											list->capacity * sizeof(char *));
+		if (!list->names)
 			fatal("out of memory");
 	}
-	cache->names[cache->count] = arr;
-	cache->count++;
+	list->names[list->count] = arr;
+	list->count++;
 
 	return arr;
 }
