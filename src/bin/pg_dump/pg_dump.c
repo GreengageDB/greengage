@@ -96,6 +96,14 @@ typedef struct
 	int			objsubid;		/* subobject (table column #) */
 } SecLabelItem;
 
+typedef struct TypeNamesCache {
+	Oid 	schema_oid;
+	char  **names;
+	int 	count;
+	int 	capacity;
+	struct 	TypeNamesCache *next;
+} TypeNamesCache;
+
 typedef enum OidOptions
 {
 	zeroAsOpaque = 1,
@@ -4919,8 +4927,8 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 		pg_type_array_oid = next_possible_free_oid;
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
 		pg_type_array_name = make_array_type_name(tyinfo->dobj.name, 
-													  tyinfo->dobj.namespace->dobj.catId.oid,
-													  fout);
+												  tyinfo->dobj.namespace->dobj.catId.oid,
+												  fout);
 	}
 
 	if (OidIsValid(pg_type_array_oid))
@@ -12705,33 +12713,51 @@ format_function_signature(Archive *fout, const FuncInfo *finfo, bool honor_quote
  * make_array_type_name
  * 		given a base type name, make an array type name for it
  * 
- * 	Analogous to makeArrayTypeName() from pg_type.c, but does not use
- * 	backend functions.
+ * Analogous to makeArrayTypeName() from pg_type.c, but does not use
+ * backend functions.
+ * Also manages its own cache of assigned names, which lives till
+ * the end of pg_dump.
  */
 static char *
 make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 {
-    char *arr;
-    int namelen = strlen(typeName);
-    PGresult *res;
-    PQExpBuffer query = createPQExpBuffer();
-	bool is_dup;
-    int i;
+	static TypeNamesCache *type_names_cache = NULL;
+	TypeNamesCache *cache = NULL;
+	TypeNamesCache *prev = NULL;
+	char 		   *arr;
+	int 			namelen = strlen(typeName);
+	int 			i;
+	int 			j;
+	PGresult 	   *res;
+	PQExpBuffer 	query;
+	bool 			is_dup;
+	bool 			is_assigned;
 
     arr = (char *) pg_malloc(NAMEDATALEN);
+	if (!arr)
+		fatal("out of memory");
 
+	/* Search for schema's cache */
+	cache = type_names_cache;
+	while (cache)
+	{
+		if (cache->schema_oid == typeNamespace)
+			break;
+		prev = cache;
+		cache = cache->next;
+	}
+
+	/* Try to find a unique name */
     for (i = 1; i < NAMEDATALEN - 1; i++)
     {
         arr[i - 1] = '_';
         if (i + namelen < NAMEDATALEN)
             strcpy(arr + i, typeName);
         else
-        {
-            memcpy(arr + i, typeName, NAMEDATALEN - i - 1);
-            arr[NAMEDATALEN - 1] = '\0';
-        }
+			strlcpy(arr + i, typeName, NAMEDATALEN - i);
 
-        /* Check if this name already exists in the target namespace */
+		/* Check existence in pg_type */
+		query = createPQExpBuffer();
         printfPQExpBuffer(query,
                           "SELECT EXISTS(SELECT 1 "
                           "FROM pg_catalog.pg_type "
@@ -12740,15 +12766,60 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
         res = ExecuteSqlQueryForSingleRow(fout, query->data);
         is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
         PQclear(res);
+		destroyPQExpBuffer(query);
+		if (is_dup)
+			continue;
 
-        if (!is_dup)
-            break;
-    }
+		/* Check if dump already assigned such name for this schema */
+		is_assigned = false;
+		for (j = 0; cache && j < cache->count; j++)
+		{
+			if (strcmp(cache->names[j], arr) == 0)
+			{
+				is_assigned = true;
+				break;
+			}
+		}
+		if (is_assigned)
+			continue;
 
-    destroyPQExpBuffer(query);
+		break;
+	}
 
     if (i >= NAMEDATALEN - 1)
         fatal("could not form array type name for type \"%s\"", typeName);
+
+	/* If no cache found for this schema, create one */
+	if (!cache)
+	{
+		cache = (TypeNamesCache *) pg_malloc0(sizeof(TypeNamesCache));
+		if (!cache)
+			fatal("out of memory");
+		cache->schema_oid = typeNamespace;
+		cache->capacity = 16;
+		cache->count = 0;
+		cache->names = (char **) pg_malloc(cache->capacity * sizeof(char *));
+		if (!cache->names)
+			fatal("out of memory");
+		cache->next = NULL;
+
+		/* Add to linked list */
+		if (prev)
+			prev->next = cache;
+		else
+			type_names_cache = cache;
+	}
+
+	if (cache->count == cache->capacity)
+	{
+		cache->capacity = cache->capacity * 2;
+		cache->names = (char **) pg_realloc(cache->names,
+											cache->capacity * sizeof(char *));
+		if (!cache->names)
+			fatal("out of memory");
+	}
+	cache->names[cache->count] = arr;
+	cache->count++;
 
     return arr;
 }
