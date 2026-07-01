@@ -12,6 +12,34 @@ from steps.gpconfig_mgmt_utils import GpConfigContext
 from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
+from gppylib.gparray import GpArray
+
+
+def _contains_live_segment_datadir(path):
+    """
+    Scenarios that drive gpmovemirrors/gprecoverseg can permanently relocate a
+    mirror INTO a temp directory created by make_temp_dir (which leaves
+    context.temp_base_dir pointing at the last such directory). Deleting that
+    directory would wipe a live segment's data directory: the segment keeps
+    running on open file descriptors for a short while, so the scenario's own
+    checks still pass, and the cluster is left silently degraded for every
+    subsequent scenario (FTS only notices on its next probe).
+    """
+    path = os.path.realpath(path)
+    try:
+        gparray = GpArray.initFromCatalog(dbconn.DbURL())
+        for seg in gparray.getDbList():
+            datadir = os.path.realpath(seg.getSegmentDataDirectory())
+            if datadir == path or datadir.startswith(path + os.sep):
+                return True
+    except Exception:
+        # Cannot read the catalog; be conservative and keep anything that
+        # looks like a segment data directory.
+        for root, dirs, files in os.walk(path):
+            if 'postmaster.pid' in files or 'PG_VERSION' in files:
+                return True
+    return False
+
 
 def before_all(context):
     if list(map(int, behave.__version__.split('.'))) < [1,2,6]:
@@ -157,8 +185,12 @@ def after_scenario(context, scenario):
     tags_to_cleanup = ['gpmovemirrors', 'gpssh-exkeys']
     if set(context.feature.tags).intersection(tags_to_cleanup) and "skip_cleanup" not in scenario.effective_tags:
         if 'temp_base_dir' in context and os.path.exists(context.temp_base_dir):
-            os.chmod(context.temp_base_dir, 0o700)
-            shutil.rmtree(context.temp_base_dir)
+            if _contains_live_segment_datadir(context.temp_base_dir):
+                print("after_scenario: not removing %s - it hosts a registered "
+                      "segment data directory" % context.temp_base_dir)
+            else:
+                os.chmod(context.temp_base_dir, 0o700)
+                shutil.rmtree(context.temp_base_dir)
 
     tags_to_not_restart_db = ['analyzedb', 'gpssh-exkeys']
     if not set(context.feature.tags).intersection(tags_to_not_restart_db):

@@ -1,5 +1,5 @@
 from contextlib import redirect_stderr
-from mock import call, Mock, patch, ANY
+from mock import call, mock_open, Mock, patch, ANY
 import io
 import sys
 
@@ -18,6 +18,7 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock()
         self.apply_patches([
             patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
+            patch('gpsegrecovery.open', mock_open(read_data='port=50000\n'), create=True),
             patch('gpsegrecovery.start_segment', return_value=Mock()),
             patch('gppylib.commands.pg.PgRewind.__init__', return_value=None),
             patch('gppylib.commands.pg.PgRewind.run')
@@ -127,6 +128,7 @@ class FullRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warn', 'exception'])
         self.apply_patches([
             patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
+            patch('gpsegrecovery.open', mock_open(read_data='port=50000\n'), create=True),
             patch('gpsegrecovery.start_segment', return_value=Mock()),
             patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None),
             patch('gpsegrecovery.PgBaseBackup.run')
@@ -288,6 +290,10 @@ class SegRecoveryTestCase(GpTestCase):
         self.apply_patches([
             patch('gpsegrecovery.SegmentStart.__init__', return_value=None),
             patch('gpsegrecovery.SegmentStart.run'),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
+            patch('gpsegrecovery.open',
+                  mock_open(read_data='port=5001\nport=5002\nport=5003\nport=5004\n'),
+                  create=True),
         ])
         self.mock_segment_start_init = self.get_mock_from_apply_patch('__init__')
 

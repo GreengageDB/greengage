@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 
 from gppylib.recoveryinfo import RecoveryErrorType
 from gppylib.commands.pg import PgBaseBackup, PgRewind
@@ -93,10 +94,22 @@ def start_segment(recovery_info, logger, era):
 
 def update_port_in_conf(recovery_info, logger):
     logger.info("Updating %s/postgresql.conf" % recovery_info.target_datadir)
+    conf_file = "{}/{}".format(recovery_info.target_datadir, 'postgresql.conf')
     modifyConfCmd = ModifyConfSetting('Updating %s/postgresql.conf' % recovery_info.target_datadir,
-                                      "{}/{}".format(recovery_info.target_datadir, 'postgresql.conf'),
+                                      conf_file,
                                       'port', recovery_info.target_port, optType='number')
     modifyConfCmd.run(validateAfter=True)
+
+    # ModifyConfSetting's in-place substitution reports success even when its
+    # pattern matched nothing. If the port is left at the basebackup source's
+    # value, the segment still starts fine (pg_ctl is pointed at the catalog
+    # port) but the config on disk is silently wrong. Fail the recovery loudly
+    # instead.
+    port_pattern = re.compile(r'^\s*port\s*=\s*{}(\D|$)'.format(int(recovery_info.target_port)))
+    with open(conf_file) as fd:
+        if not any(port_pattern.match(line) for line in fd):
+            raise Exception("Failed to update port to {} in {}".format(
+                recovery_info.target_port, conf_file))
 
 
 #FIXME we may not need this class
