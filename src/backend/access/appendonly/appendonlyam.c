@@ -688,8 +688,11 @@ AppendOnlyExecutorReadBlock_GetBlockInfo(AppendOnlyStorageRead *storageRead,
 	executorReadBlock->headerOffsetInFile =
 		AppendOnlyStorageRead_CurrentHeaderOffsetInFile(storageRead);
 
-	/* Start curLargestAttnum from 1, this will be updated in AppendOnlyExecutorReadBlock_BindingInit() */
-	executorReadBlock->curLargestAttnum = 1;
+	/*
+	 * Start curLargestAttnum from 0, memtuple can have no physical attributes.
+	 * This will be updated in AppendOnlyExecutorReadBlock_BindingInit().
+	 */
+	executorReadBlock->curLargestAttnum = 0;
 
 	/* mt_bind should be recreated for the new block */
 	if (executorReadBlock->mt_bind)
@@ -826,8 +829,6 @@ AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorRea
 	int largestAttnum = executorReadBlock->curLargestAttnum;
 	MemoryContext oldContext;
 
-	/* for any row to be read, there's at least one column data in the row */
-	Assert(largestAttnum > 0);
 	Assert(executorReadBlock->attnum_to_rownum != NULL);
 
 	/* Find the number of attributes that are not missing in the row. */
