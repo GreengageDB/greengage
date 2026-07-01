@@ -140,6 +140,16 @@ Feature: Tests for gpinitstandby feature
         Then gpinitstandby should return a return code of 0
         And verify that pg_hba.conf file has "standby" entries in each segment (primary and mirror) data directories
 
+    Scenario: gpinitstandby on dir with trailing slash
+        Given the database is running
+          And the standby is not initialized
+
+         When the user runs gpinitstandby with options "-S /tmp/standby_data/"
+         Then gpinitstandby should return a return code of 0
+          And verify the standby coordinator entries in catalog
+         When execute sql "select datadir from gp_segment_configuration where content = -1 and role = 'm'" in db "postgres" and store result in the context
+         Then validate that "/tmp/standby_data/" is in the stored rows
+
     @backup_restore_bashrc
     Scenario: gpinitstandby should not throw error when banner exists on the host
         Given the database is running
