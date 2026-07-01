@@ -70,22 +70,16 @@ from basictest;
 (3 rows)
 
 -- check that union/case/coalesce type resolution handles domains properly
-select coalesce(4::domainint4, 7) is of (int4) as t;
- t 
----
- t
+select pg_typeof(coalesce(4::domainint4, 7));
+ pg_typeof 
+-----------
+ integer
 (1 row)
 
-select coalesce(4::domainint4, 7) is of (domainint4) as f;
- f 
----
- f
-(1 row)
-
-select coalesce(4::domainint4, 7::domainint4) is of (domainint4) as t;
- t 
----
- t
+select pg_typeof(coalesce(4::domainint4, 7::domainint4));
+ pg_typeof  
+------------
+ domainint4
 (1 row)
 
 drop table basictest;
@@ -321,17 +315,13 @@ NOTICE:  drop cascades to type dcomptype
 create type comptype as (r float8, i float8);
 create domain dcomptypea as comptype[];
 create table dcomptable (d1 dcomptypea unique);
-ERROR:  data type dcomptypea has no default operator class for access method "hash"
-HINT:  You must specify an operator class or define a default operator class for the data type.
--- GPDB: marking the column as 'unique' fails, because a unique column needs
--- to be part of the distribution key, and composite types can't be used as
--- distribution keys because they have no hash opclasses.
-create table dcomptable (d1 dcomptypea /*unique*/);
 create index on dcomptable (d1);
 insert into dcomptable values (array[row(1,2)]::dcomptypea);
 insert into dcomptable values (array[row(3,4), row(5,6)]::comptype[]);
 insert into dcomptable values (array[row(7,8)::comptype, row(9,10)::comptype]);
---insert into dcomptable values (array[row(1,2)]::dcomptypea);  -- fail on uniqueness
+insert into dcomptable values (array[row(1,2)]::dcomptypea);  -- fail on uniqueness
+DETAIL:  Key (d1)=({"(1,2)"}) already exists.
+ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"
 insert into dcomptable (d1[1]) values(row(9,10));
 insert into dcomptable (d1[1].r) values(11);
 select * from dcomptable;
@@ -411,12 +401,16 @@ explain (verbose, costs off)
                                                           QUERY PLAN                                                           
 -------------------------------------------------------------------------------------------------------------------------------
  Update on public.dcomptable
-   ->  Seq Scan on public.dcomptable
-         Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
-         Filter: (dcomptable.d1[1].i > '0'::double precision)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, (DMLAction)
+         ->  Split
+               Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, DMLAction
+               ->  Seq Scan on public.dcomptable
+                     Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
+                     Filter: (dcomptable.d1[1].i > '0'::double precision)
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
-(6 rows)
+(10 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
@@ -428,11 +422,12 @@ create rule silly as on delete to dcomptable do instead
  d1     | dcomptypea |           |          |         | extended |              | 
 Indexes:
     "dcomptable_d1_idx" btree (d1)
+    "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
     silly AS
     ON DELETE TO dcomptable DO INSTEAD  UPDATE dcomptable SET d1[1].r = dcomptable.d1[1].r - 1::double precision, d1[1].i = dcomptable.d1[1].i + 1::double precision
   WHERE dcomptable.d1[1].i > 0::double precision
-Distributed randomly
+Distributed by: (d1)
 
 drop table dcomptable;
 drop type comptype cascade;

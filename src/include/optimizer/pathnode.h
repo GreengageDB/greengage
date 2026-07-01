@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/pathnode.h
@@ -220,17 +220,17 @@ extern ProjectSetPath *create_set_projection_path(PlannerInfo *root,
 												  RelOptInfo *rel,
 												  Path *subpath,
 												  PathTarget *target);
-extern SortPath *create_incremental_sort_path(PlannerInfo *root,
-											  RelOptInfo *rel,
-											  Path *subpath,
-											  List *pathkeys,
-											  int presorted_keys,
-											  double limit_tuples);
 extern SortPath *create_sort_path(PlannerInfo *root,
 								  RelOptInfo *rel,
 								  Path *subpath,
 								  List *pathkeys,
 								  double limit_tuples);
+extern IncrementalSortPath *create_incremental_sort_path(PlannerInfo *root,
+														 RelOptInfo *rel,
+														 Path *subpath,
+														 List *pathkeys,
+														 int presorted_keys,
+														 double limit_tuples);								  
 #if 0 /* Group nodes are not used in GPDB */
 extern GroupPath *create_group_path(PlannerInfo *root,
 									RelOptInfo *rel,

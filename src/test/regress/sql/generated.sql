@@ -46,10 +46,15 @@ CREATE TABLE gtest_err_9a (a int, b int GENERATED ALWAYS AS (a * 2) STORED) DIST
 CREATE TABLE gtest_err_9b (a int GENERATED ALWAYS AS (b * 2) STORED, b int);
 
 INSERT INTO gtest1 VALUES (1);
-INSERT INTO gtest1 VALUES (2, DEFAULT);
+INSERT INTO gtest1 VALUES (2, DEFAULT);  -- ok
 INSERT INTO gtest1 VALUES (3, 33);  -- error
+INSERT INTO gtest1 VALUES (3, 33), (4, 44);  -- error
+INSERT INTO gtest1 VALUES (3, DEFAULT), (4, 44);  -- error
+INSERT INTO gtest1 VALUES (3, 33), (4, DEFAULT);  -- error
+INSERT INTO gtest1 VALUES (3, DEFAULT), (4, DEFAULT);  -- ok
 
 SELECT * FROM gtest1 ORDER BY a;
+DELETE FROM gtest1 WHERE a >= 3;
 
 UPDATE gtest1 SET b = DEFAULT WHERE a = 1;
 UPDATE gtest1 SET b = 11 WHERE a = 1;  -- error
@@ -80,7 +85,19 @@ SELECT * FROM gtest1 ORDER BY a;
 -- views
 CREATE VIEW gtest1v AS SELECT * FROM gtest1;
 SELECT * FROM gtest1v;
-INSERT INTO gtest1v VALUES (4, 8);  -- fails
+INSERT INTO gtest1v VALUES (4, 8);  -- error
+INSERT INTO gtest1v VALUES (5, DEFAULT);  -- ok
+INSERT INTO gtest1v VALUES (6, 66), (7, 77);  -- error
+INSERT INTO gtest1v VALUES (6, DEFAULT), (7, 77);  -- error
+INSERT INTO gtest1v VALUES (6, 66), (7, DEFAULT);  -- error
+INSERT INTO gtest1v VALUES (6, DEFAULT), (7, DEFAULT);  -- ok
+
+ALTER VIEW gtest1v ALTER COLUMN b SET DEFAULT 100;
+INSERT INTO gtest1v VALUES (8, DEFAULT);  -- error
+INSERT INTO gtest1v VALUES (8, DEFAULT), (9, DEFAULT);  -- error
+
+SELECT * FROM gtest1v;
+DELETE FROM gtest1v WHERE a >= 5;
 DROP VIEW gtest1v;
 
 -- CTEs

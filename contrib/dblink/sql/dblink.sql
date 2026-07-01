@@ -449,6 +449,17 @@ SELECT * from
  dblink_send_query('dtest1', 'select * from foo where f1 < 3') as t1;
 -- end_ignore
 
+-- Newer libpq speculatively tags conn->errorMessage with "could not
+-- connect to socket ...:" as soon as it identifies the connection
+-- target, even when the connection subsequently succeeds. The async
+-- send above never actually runs (dblink_send_query() does not exist
+-- in GPDB), so nothing resets the buffer before dblink_error_message()
+-- reads it, and that leftover text becomes visible here. The socket
+-- path is environment-dependent, so mask it out.
+-- start_matchsubs
+-- m/could not connect to socket "[^"]*": /
+-- s/could not connect to socket "[^"]*": /could not connect to socket "SOCKET": /
+-- end_matchsubs
 SELECT dblink_cancel_query('dtest1');
 SELECT dblink_error_message('dtest1');
 SELECT dblink_disconnect('dtest1');

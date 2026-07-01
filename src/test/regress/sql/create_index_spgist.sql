@@ -48,9 +48,9 @@ SELECT count(*) FROM quad_point_tbl WHERE p << '(5000, 4000)';
 
 SELECT count(*) FROM quad_point_tbl WHERE p >> '(5000, 4000)';
 
-SELECT count(*) FROM quad_point_tbl WHERE p <^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p <<| '(5000, 4000)';
 
-SELECT count(*) FROM quad_point_tbl WHERE p >^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p |>> '(5000, 4000)';
 
 SELECT count(*) FROM quad_point_tbl WHERE p ~= '(4585, 365)';
 
@@ -129,12 +129,12 @@ SELECT count(*) FROM quad_point_tbl WHERE p >> '(5000, 4000)';
 SELECT count(*) FROM quad_point_tbl WHERE p >> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM quad_point_tbl WHERE p <^ '(5000, 4000)';
-SELECT count(*) FROM quad_point_tbl WHERE p <^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p <<| '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p <<| '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM quad_point_tbl WHERE p >^ '(5000, 4000)';
-SELECT count(*) FROM quad_point_tbl WHERE p >^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p |>> '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p |>> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM quad_point_tbl WHERE p ~= '(4585, 365)';
@@ -187,12 +187,12 @@ SELECT count(*) FROM kd_point_tbl WHERE p >> '(5000, 4000)';
 SELECT count(*) FROM kd_point_tbl WHERE p >> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM kd_point_tbl WHERE p <^ '(5000, 4000)';
-SELECT count(*) FROM kd_point_tbl WHERE p <^ '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p <<| '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p <<| '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM kd_point_tbl WHERE p >^ '(5000, 4000)';
-SELECT count(*) FROM kd_point_tbl WHERE p >^ '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p |>> '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p |>> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM kd_point_tbl WHERE p ~= '(4585, 365)';
@@ -324,12 +324,12 @@ SELECT count(*) FROM quad_point_tbl WHERE p >> '(5000, 4000)';
 SELECT count(*) FROM quad_point_tbl WHERE p >> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM quad_point_tbl WHERE p <^ '(5000, 4000)';
-SELECT count(*) FROM quad_point_tbl WHERE p <^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p <<| '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p <<| '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM quad_point_tbl WHERE p >^ '(5000, 4000)';
-SELECT count(*) FROM quad_point_tbl WHERE p >^ '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p |>> '(5000, 4000)';
+SELECT count(*) FROM quad_point_tbl WHERE p |>> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM quad_point_tbl WHERE p ~= '(4585, 365)';
@@ -352,12 +352,12 @@ SELECT count(*) FROM kd_point_tbl WHERE p >> '(5000, 4000)';
 SELECT count(*) FROM kd_point_tbl WHERE p >> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM kd_point_tbl WHERE p <^ '(5000, 4000)';
-SELECT count(*) FROM kd_point_tbl WHERE p <^ '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p <<| '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p <<| '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM kd_point_tbl WHERE p >^ '(5000, 4000)';
-SELECT count(*) FROM kd_point_tbl WHERE p >^ '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p |>> '(5000, 4000)';
+SELECT count(*) FROM kd_point_tbl WHERE p |>> '(5000, 4000)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM kd_point_tbl WHERE p ~= '(4585, 365)';

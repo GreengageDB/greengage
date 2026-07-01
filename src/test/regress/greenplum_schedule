@@ -35,6 +35,10 @@ test: gp_toolkit
 # test gp_fastsequence allocation (early in schedule as log grepping is expensive)
 test: uao_dml/gp_fastsequence_row uao_dml/gp_fastsequence_column
 test: python_processed64bit
+# brin_detoast's VACUUM must actually remove TOAST rows, which requires no
+# concurrent transactions holding back the xmin horizon: keep it alone in its
+# group, inside the autovacuum-disabled bracket (see the test header)
+test: brin_detoast
 test: enable_autovacuum
 
 test: log_guc

@@ -62,7 +62,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -2634,7 +2634,8 @@ cost_agg(Path *path, PlannerInfo *root,
 		 * than or equal to one, all groups are expected to fit in memory;
 		 * otherwise we expect to spill.
 		 */
-		hashentrysize = hash_agg_entry_size(aggcosts->numAggs, input_width,
+		hashentrysize = hash_agg_entry_size(list_length(root->aggtransinfos),
+											input_width,
 											aggcosts->transitionSpace);
 		hash_agg_set_limits(NULL, hashentrysize, numGroups, 0, &mem_limit,
 							&ngroups_limit, &num_partitions);

@@ -18,12 +18,13 @@ OBJS = \
 	array_typanalyze.o \
 	array_userfuncs.o \
 	arrayfuncs.o \
+	arraysubs.o \
 	arrayutils.o \
 	ascii.o \
 	bool.o \
 	cash.o \
 	char.o \
-	cryptohashes.o \
+	cryptohashfuncs.o \
 	date.o \
 	datetime.o \
 	datum.o \
@@ -60,6 +61,8 @@ OBJS = \
 	mac8.o \
 	mcxtfuncs.o \
 	misc.o \
+	multirangetypes.o \
+	multirangetypes_selfuncs.o \
 	name.o \
 	network.o \
 	network_gist.o \

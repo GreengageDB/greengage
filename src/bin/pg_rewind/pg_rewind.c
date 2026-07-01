@@ -3,7 +3,7 @@
  * pg_rewind.c
  *	  Synchronizes a PostgreSQL data directory to a new timeline
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -22,21 +22,26 @@
 #include "common/restricted_token.h"
 #include "common/string.h"
 #include "fe_utils/recovery_gen.h"
-#include "fetch.h"
 #include "file_ops.h"
 #include "filemap.h"
 #include "getopt_long.h"
 #include "pg_rewind.h"
+#include "rewind_source.h"
 #include "storage/bufpage.h"
 #include "utils/palloc.h"
 
 static void usage(const char *progname);
 
+static void perform_rewind(filemap_t *filemap, rewind_source *source,
+						   XLogRecPtr chkptrec,
+						   TimeLineID chkpttli,
+						   XLogRecPtr chkptredo);
+
 static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 							  XLogRecPtr checkpointloc);
 
-static void digestControlFile(ControlFileData *ControlFile, char *source,
-							  size_t size);
+static void digestControlFile(ControlFileData *ControlFile,
+							  const char *content, size_t size);
 static void getRestoreCommand(const char *argv0);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, int *tliIndex);
@@ -46,6 +51,7 @@ static int32 get_target_dbid(const char *argv0);
 
 static ControlFileData ControlFile_target;
 static ControlFileData ControlFile_source;
+static ControlFileData ControlFile_source_after;
 
 int32 dbid_target;
 const char *progname;
@@ -71,6 +77,8 @@ int			targetNentries;
 uint64		fetch_size;
 uint64		fetch_done;
 
+static PGconn *conn;
+static rewind_source *source;
 
 static void
 usage(const char *progname)
@@ -125,13 +133,11 @@ main(int argc, char **argv)
 	XLogRecPtr	chkptrec;
 	TimeLineID	chkpttli;
 	XLogRecPtr	chkptredo;
+	XLogRecPtr	target_wal_endrec;
 	size_t		size;
 	char	   *buffer;
 	bool		no_ensure_shutdown = false;
 	bool		rewind_needed;
-	XLogRecPtr	endrec;
-	TimeLineID	endtli;
-	ControlFileData ControlFile_new;
 	bool		writerecoveryconf = false;
 	char	   *replication_slot = NULL;
 	filemap_t  *filemap;
@@ -292,19 +298,28 @@ main(int argc, char **argv)
 
 	atexit(disconnect_atexit);
 
-	/* Connect to remote server */
-	if (connstr_source)
-		libpqConnect(connstr_source);
-
 	/*
-	 * Ok, we have all the options and we're ready to start. Read in all the
-	 * information we need from both clusters.
+	 * Ok, we have all the options and we're ready to start. First, connect to
+	 * remote server.
 	 */
-	buffer = slurpFile(datadir_target, "global/pg_control", &size);
-	digestControlFile(&ControlFile_target, buffer, size);
-	pg_free(buffer);
+	if (connstr_source)
+	{
+		conn = PQconnectdb(connstr_source);
+
+		if (PQstatus(conn) == CONNECTION_BAD)
+			pg_fatal("%s", PQerrorMessage(conn));
+
+		if (showprogress)
+			pg_log_info("connected to server");
+
+		source = init_libpq_source(conn);
+	}
+	else
+		source = init_local_source(datadir_source);
 
 	/*
+	 * Check the status of the target instance.
+	 *
 	 * If the target instance was not cleanly shut down, start and stop the
 	 * target cluster once in single-user mode to enforce recovery to finish,
 	 * ensuring that the cluster can be used by pg_rewind.  Note that if
@@ -312,6 +327,10 @@ main(int argc, char **argv)
 	 * need to make sure by themselves that the target cluster is in a clean
 	 * state.
 	 */
+	buffer = slurpFile(datadir_target, "global/pg_control", &size);
+	digestControlFile(&ControlFile_target, buffer, size);
+	pg_free(buffer);
+
 	if (!no_ensure_shutdown &&
 		ControlFile_target.state != DB_SHUTDOWNED &&
 		ControlFile_target.state != DB_SHUTDOWNED_IN_RECOVERY)
@@ -323,7 +342,7 @@ main(int argc, char **argv)
 		pg_free(buffer);
 	}
 
-	buffer = fetchFile("global/pg_control", &size);
+	buffer = source->fetch_file(source, "global/pg_control", &size);
 	digestControlFile(&ControlFile_source, buffer, size);
 	pg_free(buffer);
 
@@ -332,51 +351,67 @@ main(int argc, char **argv)
 	sanityChecks();
 
 	/*
+	 * Find the common ancestor timeline between the clusters.
+	 *
 	 * If both clusters are already on the same timeline, there's nothing to
 	 * do.
 	 */
-	if (ControlFile_target.checkPointCopy.ThisTimeLineID == ControlFile_source.checkPointCopy.ThisTimeLineID)
+	if (ControlFile_target.checkPointCopy.ThisTimeLineID ==
+		ControlFile_source.checkPointCopy.ThisTimeLineID)
 	{
 		pg_log_info("source and target cluster are on the same timeline: %u",
 			   ControlFile_source.checkPointCopy.ThisTimeLineID);
 		rewind_needed = false;
+		target_wal_endrec = 0;
 	}
 	else
 	{
+		XLogRecPtr	chkptendrec;
+
 		findCommonAncestorTimeline(&divergerec, &lastcommontliIndex);
 		pg_log_info("servers diverged at WAL location %X/%X on timeline %u",
 					(uint32) (divergerec >> 32), (uint32) divergerec,
 					targetHistory[lastcommontliIndex].tli);
 
 		/*
+		 * Determine the end-of-WAL on the target.
+		 *
+		 * The WAL ends at the last shutdown checkpoint, or at
+		 * minRecoveryPoint if it was a standby. (If we supported rewinding a
+		 * server that was not shut down cleanly, we would need to replay
+		 * until we reach the first invalid record, like crash recovery does.)
+		 */
+
+		/* read the checkpoint record on the target to see where it ends. */
+		chkptendrec = readOneRecord(datadir_target,
+									ControlFile_target.checkPoint,
+									targetNentries - 1,
+									restore_command);
+
+		if (ControlFile_target.minRecoveryPoint > chkptendrec)
+		{
+			target_wal_endrec = ControlFile_target.minRecoveryPoint;
+		}
+		else
+		{
+			target_wal_endrec = chkptendrec;
+		}
+
+		/*
 		 * Check for the possibility that the target is in fact a direct
 		 * ancestor of the source. In that case, there is no divergent history
 		 * in the target that needs rewinding.
 		 */
-		if (ControlFile_target.checkPoint >= divergerec)
+		if (target_wal_endrec > divergerec)
 		{
 			rewind_needed = true;
 		}
 		else
 		{
-			XLogRecPtr	chkptendrec;
+			/* the last common checkpoint record must be part of target WAL */
+			Assert(target_wal_endrec == divergerec);
 
-			/* Read the checkpoint record on the target to see where it ends. */
-			chkptendrec = readOneRecord(datadir_target,
-										ControlFile_target.checkPoint,
-										targetNentries - 1,
-										restore_command);
-
-			/*
-			 * If the histories diverged exactly at the end of the shutdown
-			 * checkpoint record on the target, there are no WAL records in
-			 * the target that don't belong in the source's history, and no
-			 * rewind is needed.
-			 */
-			if (chkptendrec == divergerec)
-				rewind_needed = false;
-			else
-				rewind_needed = true;
+			rewind_needed = false;
 		}
 	}
 
@@ -399,11 +434,11 @@ main(int argc, char **argv)
 	filehash_init();
 
 	/*
-	 * Collect information about all files in the target and source systems.
+	 * Collect information about all files in the both data directories.
 	 */
 	if (showprogress)
 		pg_log_info("reading source file list");
-	fetchSourceFileList();
+	source->traverse_files(source, &process_source_file);
 
 	if (showprogress)
 		pg_log_info("reading target file list");
@@ -412,14 +447,12 @@ main(int argc, char **argv)
 	/*
 	 * Read the target WAL from last checkpoint before the point of fork, to
 	 * extract all the pages that were modified on the target cluster after
-	 * the fork. We can stop reading after reaching the final shutdown record.
-	 * XXX: If we supported rewinding a server that was not shut down cleanly,
-	 * we would need to replay until the end of WAL here.
+	 * the fork.
 	 */
 	if (showprogress)
 		pg_log_info("reading WAL in target");
 	extractPageMap(datadir_target, chkptrec, lastcommontliIndex,
-				   ControlFile_target.checkPoint, restore_command);
+				   target_wal_endrec, restore_command);
 
 	/*
 	 * We have collected all information we need from both systems. Decide
@@ -447,43 +480,13 @@ main(int argc, char **argv)
 	}
 
 	/*
-	 * This is the point of no return. Once we start copying things, we have
-	 * modified the target directory and there is no turning back!
-	 */
-
-	execute_file_actions(filemap);
-
-	progress_report(true);
-
-	if (showprogress)
-		pg_log_info("creating backup label and updating control file");
-	createBackupLabel(chkptredo, chkpttli, chkptrec);
-
-	/*
-	 * Update control file of target. Make it ready to perform archive
-	 * recovery when restarting.
+	 * We have now collected all the information we need from both systems,
+	 * and we are ready to start modifying the target directory.
 	 *
-	 * minRecoveryPoint is set to the current WAL insert location in the
-	 * source server. Like in an online backup, it's important that we recover
-	 * all the WAL that was generated while we copied the files over.
+	 * This is the point of no return. Once we start copying things, there is
+	 * no turning back!
 	 */
-	memcpy(&ControlFile_new, &ControlFile_source, sizeof(ControlFileData));
-
-	if (connstr_source)
-	{
-		endrec = libpqGetCurrentXlogInsertLocation();
-		endtli = ControlFile_source.checkPointCopy.ThisTimeLineID;
-	}
-	else
-	{
-		endrec = ControlFile_source.checkPoint;
-		endtli = ControlFile_source.checkPointCopy.ThisTimeLineID;
-	}
-	ControlFile_new.minRecoveryPoint = endrec;
-	ControlFile_new.minRecoveryPointTLI = endtli;
-	ControlFile_new.state = DB_IN_ARCHIVE_RECOVERY;
-	if (!dry_run)
-		update_controlfile(datadir_target, &ControlFile_new, do_sync);
+	perform_rewind(filemap, source, chkptrec, chkpttli, chkptredo);
 
 	if (writerecoveryconf)
 		WriteRecoveryConfig(conn, datadir_target,
@@ -493,13 +496,210 @@ main(int argc, char **argv)
 		pg_log_info("syncing target data directory");
 	sync_target_dir(filemap);
 
+	/* Also update the standby configuration, if requested. */
 	if (writerecoveryconf && !dry_run)
 		WriteRecoveryConfig(conn, datadir_target,
 							GenerateRecoveryConfig(conn, NULL));
 
+	/* don't need the source connection anymore */
+	source->destroy(source);
+	if (conn)
+	{
+		PQfinish(conn);
+		conn = NULL;
+	}
+
 	pg_log_info("Done!");
 
 	return 0;
+}
+
+/*
+ * Perform the rewind.
+ *
+ * We have already collected all the information we need from the
+ * target and the source.
+ */
+static void
+perform_rewind(filemap_t *filemap, rewind_source *source,
+			   XLogRecPtr chkptrec,
+			   TimeLineID chkpttli,
+			   XLogRecPtr chkptredo)
+{
+	XLogRecPtr	endrec;
+	TimeLineID	endtli;
+	ControlFileData ControlFile_new;
+	size_t		size;
+	char	   *buffer;
+
+	/*
+	 * Execute the actions in the file map, fetching data from the source
+	 * system as needed.
+	 */
+	for (int i = 0; i < filemap->nentries; i++)
+	{
+		file_entry_t *entry = filemap->entries[i];
+
+		/*
+		 * If this is a relation file, copy the modified blocks.
+		 *
+		 * This is in addition to any other changes.
+		 */
+		if (entry->target_pages_to_overwrite.bitmapsize > 0)
+		{
+			datapagemap_iterator_t *iter;
+			BlockNumber blkno;
+			off_t		offset;
+
+			iter = datapagemap_iterate(&entry->target_pages_to_overwrite);
+			while (datapagemap_next(iter, &blkno))
+			{
+				offset = blkno * BLCKSZ;
+				source->queue_fetch_range(source, entry->path, offset, BLCKSZ);
+			}
+			pg_free(iter);
+		}
+
+		switch (entry->action)
+		{
+			case FILE_ACTION_NONE:
+				/* nothing else to do */
+				break;
+
+			case FILE_ACTION_COPY:
+				/* Truncate the old file out of the way, if any */
+				open_target_file(entry->path, true);
+				source->queue_fetch_range(source, entry->path,
+										  0, entry->source_size);
+				break;
+
+			case FILE_ACTION_TRUNCATE:
+				truncate_target_file(entry->path, entry->source_size);
+				break;
+
+			case FILE_ACTION_COPY_TAIL:
+				source->queue_fetch_range(source, entry->path,
+										  entry->target_size,
+										  entry->source_size - entry->target_size);
+				break;
+
+			case FILE_ACTION_REMOVE:
+				remove_target(entry);
+				break;
+
+			case FILE_ACTION_CREATE:
+				create_target(entry);
+				break;
+
+			case FILE_ACTION_UNDECIDED:
+				pg_fatal("no action decided for \"%s\"", entry->path);
+				break;
+		}
+	}
+
+	/* Complete any remaining range-fetches that we queued up above. */
+	source->finish_fetch(source);
+
+	close_target_file();
+
+	progress_report(true);
+
+	/*
+	 * Fetch the control file from the source last. This ensures that the
+	 * minRecoveryPoint is up-to-date.
+	 */
+	buffer = source->fetch_file(source, "global/pg_control", &size);
+	digestControlFile(&ControlFile_source_after, buffer, size);
+	pg_free(buffer);
+
+	/*
+	 * Sanity check: If the source is a local system, the control file should
+	 * not have changed since we started.
+	 *
+	 * XXX: We assume it hasn't been modified, but actually, what could go
+	 * wrong? The logic handles a libpq source that's modified concurrently,
+	 * why not a local datadir?
+	 */
+	if (datadir_source &&
+		memcmp(&ControlFile_source, &ControlFile_source_after,
+			   sizeof(ControlFileData)) != 0)
+	{
+		pg_fatal("source system was modified while pg_rewind was running");
+	}
+
+	if (showprogress)
+		pg_log_info("creating backup label and updating control file");
+
+	/*
+	 * Create a backup label file, to tell the target where to begin the WAL
+	 * replay. Normally, from the last common checkpoint between the source
+	 * and the target. But if the source is a standby server, it's possible
+	 * that the last common checkpoint is *after* the standby's restartpoint.
+	 * That implies that the source server has applied the checkpoint record,
+	 * but hasn't perfomed a corresponding restartpoint yet. Make sure we
+	 * start at the restartpoint's redo point in that case.
+	 *
+	 * Use the old version of the source's control file for this. The server
+	 * might have finished the restartpoint after we started copying files,
+	 * but we must begin from the redo point at the time that started copying.
+	 */
+	if (ControlFile_source.checkPointCopy.redo < chkptredo)
+	{
+		chkptredo = ControlFile_source.checkPointCopy.redo;
+		chkpttli = ControlFile_source.checkPointCopy.ThisTimeLineID;
+		chkptrec = ControlFile_source.checkPoint;
+	}
+	createBackupLabel(chkptredo, chkpttli, chkptrec);
+
+	/*
+	 * Update control file of target, to tell the target how far it must
+	 * replay the WAL (minRecoveryPoint).
+	 */
+	if (connstr_source)
+	{
+		/*
+		 * The source is a live server. Like in an online backup, it's
+		 * important that we recover all the WAL that was generated while we
+		 * were copying files.
+		 */
+		if (ControlFile_source_after.state == DB_IN_ARCHIVE_RECOVERY)
+		{
+			/*
+			 * Source is a standby server. We must replay to its
+			 * minRecoveryPoint.
+			 */
+			endrec = ControlFile_source_after.minRecoveryPoint;
+			endtli = ControlFile_source_after.minRecoveryPointTLI;
+		}
+		else
+		{
+			/*
+			 * Source is a production, non-standby, server. We must replay to
+			 * the last WAL insert location.
+			 */
+			if (ControlFile_source_after.state != DB_IN_PRODUCTION)
+				pg_fatal("source system was in unexpected state at end of rewind");
+
+			endrec = source->get_current_wal_insert_lsn(source);
+			endtli = ControlFile_source_after.checkPointCopy.ThisTimeLineID;
+		}
+	}
+	else
+	{
+		/*
+		 * Source is a local data directory. It should've shut down cleanly,
+		 * and we must replay to the latest shutdown checkpoint.
+		 */
+		endrec = ControlFile_source_after.checkPoint;
+		endtli = ControlFile_source_after.checkPointCopy.ThisTimeLineID;
+	}
+
+	memcpy(&ControlFile_new, &ControlFile_source_after, sizeof(ControlFileData));
+	ControlFile_new.minRecoveryPoint = endrec;
+	ControlFile_new.minRecoveryPointTLI = endtli;
+	ControlFile_new.state = DB_IN_ARCHIVE_RECOVERY;
+	if (!dry_run)
+		update_controlfile(datadir_target, &ControlFile_new, do_sync);
 }
 
 static void
@@ -659,7 +859,7 @@ getTimelineHistory(ControlFileData *controlFile, int *nentries)
 
 		/* Get history file from appropriate source */
 		if (controlFile == &ControlFile_source)
-			histfile = fetchFile(path, NULL);
+			histfile = source->fetch_file(source, path, NULL);
 		else if (controlFile == &ControlFile_target)
 			histfile = slurpFile(datadir_target, path, NULL);
 		else
@@ -815,16 +1015,18 @@ checkControlFile(ControlFileData *ControlFile)
 }
 
 /*
- * Verify control file contents in the buffer src, and copy it to *ControlFile.
+ * Verify control file contents in the buffer 'content', and copy it to
+ * *ControlFile.
  */
 static void
-digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
+digestControlFile(ControlFileData *ControlFile, const char *content,
+				  size_t size)
 {
 	if (size != PG_CONTROL_FILE_SIZE)
 		pg_fatal("unexpected control file size %d, expected %d",
 				 (int) size, PG_CONTROL_FILE_SIZE);
 
-	memcpy(ControlFile, src, sizeof(ControlFileData));
+	memcpy(ControlFile, content, sizeof(ControlFileData));
 
 	/* set and validate WalSegSz */
 	WalSegSz = ControlFile->xlog_seg_size;

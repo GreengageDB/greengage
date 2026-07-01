@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
+#include "common/hex_decode.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "utils/builtins.h"

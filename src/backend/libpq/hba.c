@@ -5,7 +5,7 @@
  *	  wherein you authenticate a user by seeing what IP address the system
  *	  says he comes from and choosing authentication method based on it).
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -857,7 +857,8 @@ check_same_host_or_net(SockAddr *raddr, IPCompareMethod method)
 	errno = 0;
 	if (pg_foreach_ifaddr(check_network_callback, &cn) < 0)
 	{
-		elog(LOG, "error enumerating network interfaces: %m");
+		ereport(LOG,
+				(errmsg("error enumerating network interfaces: %m")));
 		return false;
 	}
 
@@ -1444,19 +1445,6 @@ parse_hba_line(TokenizedLine *tok_line, int elevel)
 				 errcontext("line %d of configuration file \"%s\"",
 							line_num, HbaFileName)));
 		*err_msg = "gssapi authentication is not supported on local sockets";
-		return NULL;
-	}
-	if (parsedline->conntype == ctHostGSS &&
-		parsedline->auth_method != uaGSS &&
-		parsedline->auth_method != uaReject &&
-		parsedline->auth_method != uaTrust)
-	{
-		ereport(elevel,
-				(errcode(ERRCODE_CONFIG_FILE_ERROR),
-				 errmsg("GSSAPI encryption only supports gss, trust, or reject authentication"),
-				 errcontext("line %d of configuration file \"%s\"",
-							line_num, HbaFileName)));
-		*err_msg = "GSSAPI encryption only supports gss, trust, or reject authentication";
 		return NULL;
 	}
 
@@ -2148,9 +2136,11 @@ check_hba(hbaPort *port)
 
 			/* Check GSSAPI state */
 #ifdef ENABLE_GSS
-			if (port->gss->enc && hba->conntype == ctHostNoGSS)
+			if (port->gss && port->gss->enc &&
+				hba->conntype == ctHostNoGSS)
 				continue;
-			else if (!port->gss->enc && hba->conntype == ctHostGSS)
+			else if (!(port->gss && port->gss->enc) &&
+					 hba->conntype == ctHostGSS)
 				continue;
 #else
 			if (hba->conntype == ctHostGSS)

@@ -3,7 +3,7 @@
  * collationcmds.c
  *	  collation-related commands support code
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -27,6 +27,7 @@
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "common/string.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
@@ -308,23 +309,6 @@ pg_collation_actual_version(PG_FUNCTION_ARGS)
 #define READ_LOCALE_A_OUTPUT
 #endif
 
-#if defined(READ_LOCALE_A_OUTPUT) || defined(USE_ICU)
-/*
- * Check a string to see if it is pure ASCII
- */
-static bool
-is_all_ascii(const char *str)
-{
-	while (*str)
-	{
-		if (IS_HIGHBIT_SET(*str))
-			return false;
-		str++;
-	}
-	return true;
-}
-#endif							/* READ_LOCALE_A_OUTPUT || USE_ICU */
-
 #ifdef READ_LOCALE_A_OUTPUT
 /*
  * "Normalize" a libc locale name, stripping off encoding tags such as
@@ -423,7 +407,7 @@ get_icu_language_tag(const char *localename)
 	UErrorCode	status;
 
 	status = U_ZERO_ERROR;
-	uloc_toLanguageTag(localename, buf, sizeof(buf), TRUE, &status);
+	uloc_toLanguageTag(localename, buf, sizeof(buf), true, &status);
 	if (U_FAILURE(status))
 		ereport(ERROR,
 				(errmsg("could not convert locale name \"%s\" to language tag: %s",
@@ -454,7 +438,7 @@ get_icu_locale_comment(const char *localename)
 	if (U_FAILURE(status))
 		return NULL;			/* no good reason to raise an error */
 
-	/* Check for non-ASCII comment (can't use is_all_ascii for this) */
+	/* Check for non-ASCII comment (can't use pg_is_ascii for this) */
 	for (i = 0; i < len_uchar; i++)
 	{
 		if (displayname[i] > 127)
@@ -539,7 +523,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			 * interpret the non-ASCII characters. We can't do much with
 			 * those, so we filter them out.
 			 */
-			if (!is_all_ascii(localebuf))
+			if (!pg_is_ascii(localebuf))
 			{
 				elog(DEBUG1, "locale name has non-ASCII characters, skipped: \"%s\"", localebuf);
 				continue;
@@ -695,7 +679,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			 * Be paranoid about not allowing any non-ASCII strings into
 			 * pg_collation
 			 */
-			if (!is_all_ascii(langtag) || !is_all_ascii(collcollate))
+			if (!pg_is_ascii(langtag) || !pg_is_ascii(collcollate))
 				continue;
 
 			collid = CollationCreate(psprintf("%s-x-icu", langtag),

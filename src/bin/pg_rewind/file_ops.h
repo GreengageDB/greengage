@@ -3,7 +3,7 @@
  * file_ops.h
  *	  Helper functions for operating on files
  *
- * Copyright (c) 2013-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2021, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -22,5 +22,8 @@ extern void remove_target(file_entry_t *t);
 extern void sync_target_dir(filemap_t *filemap);
 
 extern char *slurpFile(const char *datadir, const char *path, size_t *filesize);
+
+typedef void (*process_file_callback_t) (const char *path, file_type_t type, size_t size, const char *link_target);
+extern void traverse_datadir(const char *datadir, process_file_callback_t callback);
 
 #endif							/* FILE_OPS_H */

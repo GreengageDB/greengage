@@ -3,7 +3,7 @@
  * pg_publication.h
  *	  definition of the "publication" system catalog (pg_publication)
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_publication.h
@@ -62,6 +62,11 @@ CATALOG(pg_publication,6107,PublicationRelationId)
  * ----------------
  */
 typedef FormData_pg_publication *Form_pg_publication;
+
+DECLARE_UNIQUE_INDEX(pg_publication_oid_index, 6110, on pg_publication using btree(oid oid_ops));
+#define PublicationObjectIndexId 6110
+DECLARE_UNIQUE_INDEX(pg_publication_pubname_index, 6111, on pg_publication using btree(pubname name_ops));
+#define PublicationNameIndexId 6111
 
 typedef struct PublicationActions
 {

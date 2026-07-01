@@ -21,7 +21,7 @@
  * are loaded near the end of initdb.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_init_privs.h
@@ -61,6 +61,11 @@ CATALOG(pg_init_privs,3394,InitPrivsRelationId)
  * ----------------
  */
 typedef FormData_pg_init_privs * Form_pg_init_privs;
+
+DECLARE_TOAST(pg_init_privs, 4155, 4156);
+
+DECLARE_UNIQUE_INDEX(pg_init_privs_o_c_o_index, 3395, on pg_init_privs using btree(objoid oid_ops, classoid oid_ops, objsubid int4_ops));
+#define InitPrivsObjIndexId  3395
 
 /*
  * It is important to know if the initial privileges are from initdb or from an

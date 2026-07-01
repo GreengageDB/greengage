@@ -1423,6 +1423,18 @@ explain (costs off) select * from t union select * from t order by 1,3;
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
 
+-- Full sort, not just incremental sort can be pushed below a gather merge path
+-- by generate_useful_gather_paths.
+explain (costs off) select distinct a,b from t;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a, b
+         ->  Seq Scan on t
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
 drop table t;
 -- Incremental sort shall not be an input for redistribute motion
 create table t1 (a int, b int) distributed randomly;
@@ -1567,6 +1579,56 @@ order by 1, 2;
  Optimizer: Postgres query optimizer
 (8 rows)
 
+-- Parallel sort but with expression (correlated subquery) that
+-- is prohibited in parallel plans.
+explain (costs off) select distinct
+  unique1,
+  (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
+from tenk1 t, generate_series(1, 1000);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: tenk1.unique1, (SubPlan 1)
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on tenk1
+               ->  Function Scan on generate_series
+               SubPlan 1
+                 ->  Result
+                       ->  Result
+                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
+
+explain (costs off) select
+  unique1,
+  (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
+from tenk1 t, generate_series(1, 1000)
+order by 1, 2;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: tenk1.unique1, ((SubPlan 1))
+   ->  Sort
+         Sort Key: tenk1.unique1, ((SubPlan 1))
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on tenk1
+               ->  Function Scan on generate_series
+               SubPlan 1
+                 ->  Result
+                       ->  Result
+                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(16 rows)
+
 -- Parallel sort but with expression not available until the upper rel.
 explain (costs off) select distinct sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
@@ -1597,5 +1659,19 @@ order by 1, 2;
                ->  Index Scan using tenk1_unique1 on tenk1
                ->  Function Scan on generate_series
  Optimizer: Postgres query optimizer
+(8 rows)
+
+-- Disallow pushing down sort when pathkey is an SRF.
+explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: (unnest('{1,2}'::anyarray))
+         ->  Sort
+               Sort Key: (unnest('{1,2}'::anyarray))
+               ->  ProjectSet
+                     ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 

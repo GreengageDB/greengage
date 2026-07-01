@@ -22,7 +22,7 @@
  * The Windows implementation uses Windows events that are inherited by all
  * postmaster child processes. There's no need for the self-pipe trick there.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1836,7 +1836,11 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 
 	if (cur_event->events == WL_LATCH_SET)
 	{
-		if (!ResetEvent(set->latch->event))
+		/*
+		 * We cannot use set->latch->event to reset the fired event if we
+		 * aren't waiting on this latch now.
+		 */
+		if (!ResetEvent(set->handles[cur_event->pos + 1]))
 			elog(ERROR, "ResetEvent failed: error code %lu", GetLastError());
 
 		if (set->latch && set->latch->is_set)

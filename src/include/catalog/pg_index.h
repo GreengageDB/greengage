@@ -4,7 +4,7 @@
  *	  definition of the "index" system catalog (pg_index)
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_index.h
@@ -72,6 +72,11 @@ FOREIGN_KEY(indrelid REFERENCES pg_class(oid));
  * ----------------
  */
 typedef FormData_pg_index *Form_pg_index;
+
+DECLARE_INDEX(pg_index_indrelid_index, 2678, on pg_index using btree(indrelid oid_ops));
+#define IndexIndrelidIndexId  2678
+DECLARE_UNIQUE_INDEX(pg_index_indexrelid_index, 2679, on pg_index using btree(indexrelid oid_ops));
+#define IndexRelidIndexId  2679
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 

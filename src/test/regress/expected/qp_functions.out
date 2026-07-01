@@ -513,7 +513,7 @@ select fun_is_greater(7,5);
 
 create or replace function invalid_func() returns anyelement as $$ select 1; $$ language sql;
 ERROR:  cannot determine result data type
-DETAIL:  A result of type anyelement requires at least one input of type anyelement, anyarray, anynonarray, anyenum, or anyrange.
+DETAIL:  A result of type anyelement requires at least one input of type anyelement, anyarray, anynonarray, anyenum, anyrange, or anymultirange.
 create or replace function fun_dup(f1 anyelement, OUT f2 anyelement, OUT f3 anyarray) AS 'select $1, array[$1,$1]' language sql;
 select * from fun_dup(22);
  f2 |   f3    

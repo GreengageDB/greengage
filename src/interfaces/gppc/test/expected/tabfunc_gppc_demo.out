@@ -2998,6 +2998,7 @@ typispreferred | f
 typisdefined   | t
 typdelim       | ,
 typrelid       | 0
+typsubscript   | -
 typelem        | 0
 typarray       | 0
 typinput       | anytable_in

@@ -3808,7 +3808,7 @@ create table pp_recpart_23 partition of pp_recpart for values in ('(2,3)');
 explain (costs off) select * from pp_recpart where a = '(1,1)'::pp_rectype;
                  QUERY PLAN                 
 --------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on pp_recpart_11 pp_recpart
          Filter: (a = '(1,1)'::pp_rectype)
  Optimizer: Postgres query optimizer

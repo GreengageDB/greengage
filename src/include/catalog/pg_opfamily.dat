@@ -3,7 +3,7 @@
 # pg_opfamily.dat
 #    Initial contents of the pg_opfamily system catalog.
 #
-# Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/include/catalog/pg_opfamily.dat
@@ -76,6 +76,8 @@
   opfmethod => 'hash', opfname => 'oidvector_ops' },
 { oid => '2994',
   opfmethod => 'btree', opfname => 'record_ops' },
+{ oid => '9611',
+  opfmethod => 'hash', opfname => 'record_ops' },
 { oid => '3194',
   opfmethod => 'btree', opfname => 'record_image_ops' },
 { oid => '1994', oid_symbol => 'TEXT_BTREE_FAM_OID',
@@ -230,6 +232,12 @@
   opfmethod => 'spgist', opfname => 'box_ops' },
 { oid => '5008',
   opfmethod => 'spgist', opfname => 'poly_ops' },
+{ oid => '4199',
+  opfmethod => 'btree', opfname => 'multirange_ops' },
+{ oid => '4225',
+  opfmethod => 'hash', opfname => 'multirange_ops' },
+{ oid => '8021',
+  opfmethod => 'gist', opfname => 'multirange_ops' },
 { oid => '6221',
   opfmethod => 'btree', opfname => 'complex_ops' },
 { oid => '6224',

@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/bin/psql/common.c
  */
@@ -785,6 +785,13 @@ StoreQueryTuple(const PGresult *result)
 
 			/* concatenate prefix and column name */
 			varname = psprintf("%s%s", pset.gset_prefix, colname);
+
+			if (VariableHasHook(pset.vars, varname))
+			{
+				pg_log_warning("attempt to \\gset into specially treated variable \"%s\" ignored",
+							   varname);
+				continue;
+			}
 
 			if (!PQgetisnull(result, 0, i))
 				value = PQgetvalue(result, 0, i);

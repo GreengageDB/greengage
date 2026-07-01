@@ -3,7 +3,7 @@
  *
  *	Definitions for the PostgreSQL statistics collector daemon.
  *
- *	Copyright (c) 2001-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2001-2021, PostgreSQL Global Development Group
  *
  *	src/include/pgstat.h
  * ----------
@@ -477,6 +477,9 @@ typedef struct PgStat_MsgBgWriter
 typedef struct PgStat_MsgWal
 {
 	PgStat_MsgHdr m_hdr;
+	PgStat_Counter m_wal_records;
+	PgStat_Counter m_wal_fpi;
+	uint64		m_wal_bytes;
 	PgStat_Counter m_wal_buffers_full;
 } PgStat_MsgWal;
 
@@ -859,6 +862,9 @@ typedef struct PgStat_GlobalStats
  */
 typedef struct PgStat_WalStats
 {
+	PgStat_Counter wal_records;
+	PgStat_Counter wal_fpi;
+	uint64		wal_bytes;
 	PgStat_Counter wal_buffers_full;
 	TimestampTz stat_reset_timestamp;
 } PgStat_WalStats;
@@ -1154,7 +1160,8 @@ typedef enum ProgressCommandType
 	PROGRESS_COMMAND_ANALYZE,
 	PROGRESS_COMMAND_CLUSTER,
 	PROGRESS_COMMAND_CREATE_INDEX,
-	PROGRESS_COMMAND_BASEBACKUP
+	PROGRESS_COMMAND_BASEBACKUP,
+	PROGRESS_COMMAND_COPY
 } ProgressCommandType;
 
 #define PGSTAT_NUM_PROGRESS_PARAM	20

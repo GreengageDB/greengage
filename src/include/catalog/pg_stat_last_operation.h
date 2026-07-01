@@ -62,4 +62,8 @@ FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_statlastop *Form_pg_statlastop;
 
+/* MPP-6929: metadata tracking */
+DECLARE_UNIQUE_INDEX(pg_statlastop_classid_objid_staactionname_index, 6054, on pg_stat_last_operation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
+#define StatLastOpClassidObjidStaactionnameIndexId  6054
+
 #endif   /* PG_STAT_LAST_OPERATION_H */

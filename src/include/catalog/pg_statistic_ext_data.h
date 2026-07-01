@@ -6,7 +6,7 @@
  *
  * This catalog stores the statistical data for extended statistics objects.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_statistic_ext_data.h
@@ -48,5 +48,10 @@ CATALOG(pg_statistic_ext_data,3429,StatisticExtDataRelationId)
  * ----------------
  */
 typedef FormData_pg_statistic_ext_data * Form_pg_statistic_ext_data;
+
+DECLARE_TOAST(pg_statistic_ext_data, 3430, 3431);
+
+DECLARE_UNIQUE_INDEX(pg_statistic_ext_data_stxoid_index, 3433, on pg_statistic_ext_data using btree(stxoid oid_ops));
+#define StatisticExtDataStxoidIndexId 3433
 
 #endif							/* PG_STATISTIC_EXT_DATA_H */

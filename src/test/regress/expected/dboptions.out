@@ -40,9 +40,17 @@ select pg_reload_conf();
  t
 (1 row)
 
+-- Newer libpq prefixes connection failures with "could not connect to
+-- socket ...:" even when the failure is a FATAL from the server
+-- during startup. The socket path is environment-dependent, so mask
+-- it out.
+-- start_matchsubs
+-- m/could not connect to socket "[^"]*":/
+-- s/could not connect to socket "[^"]*":/could not connect to socket "SOCKET":/
+-- end_matchsubs
 -- should fail, because the connection limit is 0
 \! psql limitdb -c "select 'connected'" -U connlimit_test_user
-psql: error: FATAL:  too many connections for database "limitdb"
+psql: error: could not connect to socket "SOCKET": FATAL:  too many connections for database "limitdb"
 -- Test ALLOW_CONNECTIONS
 create database limitdb2 allow_connections = true;
 select -1 as gp_segment_id, datconnlimit, datallowconn from pg_database where datname='limitdb2'
@@ -72,7 +80,7 @@ order by gp_segment_id;
 
 -- should fail, as we have disallowed connections
 \! psql limitdb2 -c "select 'connected'" -U connlimit_test_user
-psql: error: FATAL:  database "limitdb2" is not currently accepting connections
+psql: error: could not connect to socket "SOCKET": FATAL:  database "limitdb2" is not currently accepting connections
 -- Test IS_TEMPLATE
 create database templatedb is_template=true;
 select -1 as gp_segment_id, datistemplate from pg_database where datname = 'templatedb'

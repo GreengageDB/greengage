@@ -68,15 +68,26 @@ errdetail_internal_impl(const char* fmt, ...)
 #include "../dfmgr.c"
 
 #define EXPECT_EREPORT(LOG_LEVEL)     \
-	expect_any(errstart, elevel); \
-	expect_any(errstart, domain); \
+	if (__builtin_constant_p(LOG_LEVEL) && (LOG_LEVEL) >= ERROR) \
+	{ \
+		expect_any(errstart_cold, elevel); \
+		expect_any(errstart_cold, domain); \
+	} \
+	else \
+	{ \
+		expect_any(errstart, elevel); \
+		expect_any(errstart, domain); \
+	} \
 	if (LOG_LEVEL < ERROR) \
 	{ \
     	will_return(errstart, false); \
 	} \
     else \
     { \
-    	will_return(errstart, true);\
+		if (__builtin_constant_p(LOG_LEVEL)) \
+			will_return(errstart_cold, true);\
+		else \
+			will_return(errstart, true);\
     } \
 
 

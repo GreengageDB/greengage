@@ -23,6 +23,14 @@ create user connlimit_test_user;
 \! echo "local    all         connlimit_test_user         trust" >> $COORDINATOR_DATA_DIRECTORY/pg_hba.conf
 select pg_reload_conf();
 
+-- Newer libpq prefixes connection failures with "could not connect to
+-- socket ...:" even when the failure is a FATAL from the server
+-- during startup. The socket path is environment-dependent, so mask
+-- it out.
+-- start_matchsubs
+-- m/could not connect to socket "[^"]*":/
+-- s/could not connect to socket "[^"]*":/could not connect to socket "SOCKET":/
+-- end_matchsubs
 -- should fail, because the connection limit is 0
 \! psql limitdb -c "select 'connected'" -U connlimit_test_user
 

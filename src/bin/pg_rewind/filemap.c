@@ -16,7 +16,7 @@
  * for each file.  Finally, it sorts the array to the final order that the
  * actions should be executed in.
  *
- * Copyright (c) 2013-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2021, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -358,17 +358,20 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 
 		Assert(entry->isrelfile);
 
-		if (entry->target_type != FILE_TYPE_REGULAR)
-			pg_fatal("unexpected page modification for non-regular file \"%s\"",
-					 entry->path);
-
-		if (entry->target_exists && entry->source_exists)
+		if (entry->target_exists)
 		{
-			off_t		end_offset;
+			if (entry->target_type != FILE_TYPE_REGULAR)
+				pg_fatal("unexpected page modification for non-regular file \"%s\"",
+						 entry->path);
 
-			end_offset = (blkno_inseg + 1) * BLCKSZ;
-			if (end_offset <= entry->source_size && end_offset <= entry->target_size)
-				datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
+			if (entry->source_exists)
+			{
+				off_t		end_offset;
+
+				end_offset = (blkno_inseg + 1) * BLCKSZ;
+				if (end_offset <= entry->source_size && end_offset <= entry->target_size)
+					datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
+			}
 		}
 	}
 }

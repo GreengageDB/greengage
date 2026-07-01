@@ -3,7 +3,7 @@
  * extended_stats_internal.h
  *	  POSTGRES extended statistics internal declarations
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -99,6 +99,11 @@ extern SortItem *build_sorted_items(int numrows, int *nitems, HeapTuple *rows,
 extern bool examine_clause_args(List *args, Var **varp,
 								Const **cstp, bool *varonleftp);
 
+extern Selectivity mcv_combine_selectivities(Selectivity simple_sel,
+											 Selectivity mcv_sel,
+											 Selectivity mcv_basesel,
+											 Selectivity mcv_totalsel);
+
 extern Selectivity mcv_clauselist_selectivity(PlannerInfo *root,
 											  StatisticExtInfo *stat,
 											  List *clauses,
@@ -108,5 +113,15 @@ extern Selectivity mcv_clauselist_selectivity(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  Selectivity *basesel,
 											  Selectivity *totalsel);
+
+extern Selectivity mcv_clause_selectivity_or(PlannerInfo *root,
+											 StatisticExtInfo *stat,
+											 MCVList *mcv,
+											 Node *clause,
+											 bool **or_matches,
+											 Selectivity *basesel,
+											 Selectivity *overlap_mcvsel,
+											 Selectivity *overlap_basesel,
+											 Selectivity *totalsel);
 
 #endif							/* EXTENDED_STATS_INTERNAL_H */

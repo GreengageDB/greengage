@@ -731,7 +731,13 @@ extract_nodes_walker(Node *node, extract_context *context)
 List *extract_nodes_expression(Node *node, int nodeTag, bool descendIntoSubqueries)
 {
 	extract_context context;
-	Assert(node);
+	/*
+	 * A NULL expression is valid input and yields an empty result, matching
+	 * extract_nodes() above (whose walker handles NULL the same way).  Do not
+	 * assert non-NULL: ORCA's Agg translation extracts Aggrefs from both the
+	 * targetlist and the frequently-NIL qual, so an assert build would
+	 * otherwise crash on e.g. "SELECT count(*)" with no HAVING clause.
+	 */
 	context.base.node = NULL;
 	context.nodes = NULL;
 	context.nodeTag = nodeTag;

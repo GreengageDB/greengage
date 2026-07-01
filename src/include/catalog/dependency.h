@@ -4,7 +4,7 @@
  *	  Routines to support inter-object dependencies.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/dependency.h
@@ -230,9 +230,9 @@ extern long changeDependencyFor(Oid classId, Oid objectId,
 								Oid refClassId, Oid oldRefObjectId,
 								Oid newRefObjectId);
 
-long changeDependenciesOf(Oid classId, Oid oldObjectId,
+extern long changeDependenciesOf(Oid classId, Oid oldObjectId,
 								 Oid newObjectId);
-long changeDependenciesOn(Oid refClassId, Oid oldRefObjectId,
+extern long changeDependenciesOn(Oid refClassId, Oid oldRefObjectId,
 								 Oid newRefObjectId);
 
 extern Oid	getExtensionOfObject(Oid classId, Oid objectId);
@@ -241,8 +241,6 @@ extern List *getAutoExtensionsOfObject(Oid classId, Oid objectId);
 extern bool sequenceIsOwned(Oid seqId, char deptype, Oid *tableId, int32 *colId);
 extern List *getOwnedSequences(Oid relid);
 extern Oid	getIdentitySequence(Oid relid, AttrNumber attnum, bool missing_ok);
-
-extern Oid	get_constraint_index(Oid constraintId);
 
 extern Oid	get_index_constraint(Oid indexId);
 

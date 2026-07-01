@@ -24,7 +24,6 @@
 #define COPYOUT_CHUNK_SIZE 16 * 1024
 
 struct CdbDispatcherState;
-struct CopyStateData;
 
 typedef struct CdbCopy
 {
@@ -42,7 +41,9 @@ typedef struct CdbCopy
 
 
 /* global function declarations */
-extern CdbCopy *makeCdbCopy(struct CopyStateData *cstate, bool copy_in);
+struct GpPolicy;
+extern CdbCopy *makeCdbCopy(struct GpPolicy *policy, bool on_segment,
+							bool copy_in);
 extern void cdbCopyStart(CdbCopy *cdbCopy, CopyStmt *stmt, int file_encoding);
 extern void cdbCopySendDataToAll(CdbCopy *c, const char *buffer, int nbytes);
 extern void cdbCopySendData(CdbCopy *c, int target_seg, const char *buffer, int nbytes);

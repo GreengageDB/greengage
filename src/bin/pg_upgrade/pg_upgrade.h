@@ -4,7 +4,7 @@
  *	pg_upgrade.h
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.h
  */
 
@@ -440,12 +440,10 @@ void		check_and_dump_old_cluster(bool live_check, char **sequence_script_file_na
 void		check_new_cluster(void);
 void		report_clusters_compatible(void);
 void		issue_warnings_and_set_wal_level(char *sequence_script_file_name);
-void		output_completion_banner(char *analyze_script_file_name,
-									 char *deletion_script_file_name);
+void		output_completion_banner(char *deletion_script_file_name);
 void		check_cluster_versions(void);
 void		check_cluster_compatibility(bool live_check);
 void		create_script_for_old_cluster_deletion(char **deletion_script_file_name);
-void		create_script_for_cluster_analyze(char **analyze_script_file_name);
 
 
 /* controldata.c */
@@ -548,7 +546,6 @@ void		prep_status(const char *fmt,...) pg_attribute_printf(1, 2);
 void		check_ok(void);
 unsigned int str2uint(const char *str);
 uint64		str2uint64(const char *str);
-void		pg_putenv(const char *var, const char *val);
 void 		gp_fatal_log(const char *fmt,...) pg_attribute_printf(1, 2);
 
 

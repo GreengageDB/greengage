@@ -3,7 +3,7 @@
  * dependencies.c
  *	  POSTGRES functional dependencies
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1074,9 +1074,8 @@ clauselist_apply_dependencies(PlannerInfo *root, List *clauses,
 			}
 		}
 
-		simple_sel = clauselist_selectivity_simple(root, attr_clauses, varRelid,
-												   jointype, sjinfo, NULL,
-												   false); /* no damping */
+		simple_sel = clauselist_selectivity_ext(root, attr_clauses, varRelid,
+												jointype, sjinfo, false, false);
 		attr_sel[attidx++] = simple_sel;
 	}
 

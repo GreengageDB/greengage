@@ -58,4 +58,7 @@ FOREIGN_KEY(authid REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_auth_time_constraint *Form_pg_auth_time_constraint;
 
+DECLARE_INDEX(pg_auth_time_constraint_authid_index, 6449, on pg_auth_time_constraint using btree(authid oid_ops));
+#define AuthTimeConstraintAuthIdIndexId	6449
+
 #endif   /* PG_AUTH_TIME_CONSTRAINT_H */

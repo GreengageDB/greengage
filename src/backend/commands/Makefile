@@ -27,6 +27,9 @@ OBJS = \
 	constraint.o \
 	conversioncmds.o \
 	copy.o \
+	copyfrom.o \
+	copyfromparse.o \
+	copyto.o \
 	createas.o \
 	dbcommands.o \
 	define.o \

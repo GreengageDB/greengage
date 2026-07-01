@@ -4,7 +4,7 @@
  *	  interface routines for the postgres GiST index access method.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1167,8 +1167,9 @@ gistfixsplit(GISTInsertState *state, GISTSTATE *giststate)
 	Page		page;
 	List	   *splitinfo = NIL;
 
-	elog(LOG, "fixing incomplete split in index \"%s\", block %u",
-		 RelationGetRelationName(state->r), stack->blkno);
+	ereport(LOG,
+			(errmsg("fixing incomplete split in index \"%s\", block %u",
+					RelationGetRelationName(state->r), stack->blkno)));
 
 	Assert(GistFollowRight(stack->page));
 	Assert(OffsetNumberIsValid(stack->downlinkoffnum));

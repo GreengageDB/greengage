@@ -54,4 +54,11 @@ FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_statlastshop *Form_pg_statlastshop;
 
+/* Note: no dbid */
+DECLARE_INDEX(pg_statlastshop_classid_objid_index, 6057, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops));
+#define StatLastShOpClassidObjidIndexId  6057
+
+DECLARE_UNIQUE_INDEX(pg_statlastshop_classid_objid_staactionname_index, 6058, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
+#define StatLastShOpClassidObjidStaactionnameIndexId  6058
+
 #endif   /* PG_STAT_LAST_SHOPERATION_H */

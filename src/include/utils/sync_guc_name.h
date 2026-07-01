@@ -75,6 +75,7 @@
 		"gp_workfile_limit_files_per_query",
 		"gp_workfile_limit_per_query",
 		"idle_in_transaction_session_timeout",
+		"idle_session_timeout",
 		"IntervalStyle",
 		"jit",
 		"jit_above_cost",

@@ -564,10 +564,6 @@ _outAExpr(StringInfo str, A_Expr *node)
 
 			WRITE_NODE_FIELD(name);
 			break;
-		case AEXPR_OF:
-
-			WRITE_NODE_FIELD(name);
-			break;
 		case AEXPR_IN:
 
 			WRITE_NODE_FIELD(name);
@@ -599,9 +595,6 @@ _outAExpr(StringInfo str, A_Expr *node)
 		case AEXPR_NOT_BETWEEN_SYM:
 
 			WRITE_NODE_FIELD(name);
-			break;
-		case AEXPR_PAREN:
-
 			break;
 
 		default:
@@ -742,6 +735,15 @@ _outAlterEnumStmt(StringInfo str, AlterEnumStmt *node)
 	WRITE_STRING_FIELD(newValNeighbor);
 	WRITE_BOOL_FIELD(newValIsAfter);
 	WRITE_BOOL_FIELD(skipIfNewValExists);
+}
+
+static void
+_outAlterTypeStmt(StringInfo str, AlterTypeStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERTYPESTMT");
+
+	WRITE_NODE_FIELD(typeName);
+	WRITE_NODE_FIELD(options);
 }
 
 static void
@@ -1385,6 +1387,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AlterEnumStmt:
 				_outAlterEnumStmt(str, obj);
+				break;
+			case T_AlterTypeStmt:
+				_outAlterTypeStmt(str, obj);
 				break;
 
 			case T_CreateCastStmt:

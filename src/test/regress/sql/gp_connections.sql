@@ -40,6 +40,15 @@ SELECT port FROM gp_segment_configuration
 			WHERE content <> -1 AND role = 'p'
 			LIMIT 1
 \gset
+
+-- Newer libpq prefixes connection failures with "could not connect to
+-- host ..., port ...:" even when the failure is a FATAL from the server
+-- during startup. The host/ip/port are environment-dependent, so mask
+-- them out.
+-- start_matchsubs
+-- m/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/
+-- s/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/could not connect to host "HOST", port PORT:/
+-- end_matchsubs
 \connect - - - :port
 
 -- DON'T PUT ANYTHING BELOW THIS TEST! It'll be ignored since the above \connect

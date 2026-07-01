@@ -18,6 +18,8 @@
 #include "access/url.h"
 #include "catalog/pg_extprotocol.h"
 #include "commands/copy.h"
+#include "commands/copyfrom_internal.h"
+#include "commands/copyto_internal.h"
 #include "utils/memutils.h"
 
 /*
@@ -38,14 +40,13 @@ static int32
 InvokeExtProtocol(void *ptr,
                   size_t nbytes,
                   URL_CUSTOM_FILE *file,
-                  CopyState pstate,
+                  Relation rel,
                   bool last_call);
 
 URL_FILE *
 url_custom_fopen(char *url,
                  bool forwrite,
                  extvar_t *ev,
-                 CopyState pstate,
                  ExternalSelectDesc desc)
 {
 	/* we're using a custom protocol */
@@ -135,26 +136,26 @@ url_custom_ferror(URL_FILE *file, int bytesread, char *ebuf, int ebuflen)
 }
 
 size_t
-url_custom_fread(void *ptr, size_t size, URL_FILE *file, CopyState pstate)
+url_custom_fread(void *ptr, size_t size, URL_FILE *file, CopyFromState pstate)
 {
 	URL_CUSTOM_FILE   *cfile = (URL_CUSTOM_FILE *) file;
 
-	return (size_t) InvokeExtProtocol(ptr, size, cfile, pstate, false);
+	return (size_t) InvokeExtProtocol(ptr, size, cfile, pstate->rel, false);
 }
 
 size_t
-url_custom_fwrite(void *ptr, size_t size, URL_FILE *file, CopyState pstate)
+url_custom_fwrite(void *ptr, size_t size, URL_FILE *file, CopyToState pstate)
 {
 	URL_CUSTOM_FILE   *cfile = (URL_CUSTOM_FILE *) file;
 
-	return (size_t) InvokeExtProtocol(ptr, size, cfile, pstate, false);
+	return (size_t) InvokeExtProtocol(ptr, size, cfile, pstate->rel, false);
 }
 
 static int32
 InvokeExtProtocol(void *ptr,
                   size_t nbytes,
                   URL_CUSTOM_FILE *file,
-                  CopyState pstate,
+                  Relation rel,
                   bool last_call)
 {
 	LOCAL_FCINFO(fcinfo, 0);
@@ -168,7 +169,7 @@ InvokeExtProtocol(void *ptr,
 
 	extprotocol->type           = T_ExtProtocolData;
 	extprotocol->prot_url       = file->common.url;
-	extprotocol->prot_relation  = (last_call ? NULL : pstate->rel);
+	extprotocol->prot_relation  = (last_call ? NULL : rel);
 	extprotocol->prot_databuf   = (last_call ? NULL : (char *) ptr);
 	extprotocol->prot_maxbytes  = nbytes;
 	extprotocol->prot_last_call = last_call;

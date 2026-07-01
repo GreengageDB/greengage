@@ -1904,7 +1904,7 @@ typedef enum GppcReportLevel
 	GPPC_INFO				= 17,
 	GPPC_NOTICE				= 18,
 	GPPC_WARNING			= 19,
-	GPPC_ERROR				= 20,
+	GPPC_ERROR				= 21,
 } GppcReportLevel;
 
 #ifndef PG_PRINTF_ATTRIBUTE

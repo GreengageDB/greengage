@@ -4,7 +4,7 @@
  *	  XML data type support.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/utils/adt/xml.c
@@ -4556,13 +4556,7 @@ XmlTableFetchRow(TableFuncScanState *state)
 
 	xtCxt = GetXmlTableBuilderPrivateData(state, "XmlTableFetchRow");
 
-	/*
-	 * XmlTable returns table - set of composite values. The error context, is
-	 * used for producement more values, between two calls, there can be
-	 * created and used another libxml2 error context. It is libxml2 global
-	 * value, so it should be refreshed any time before any libxml2 usage,
-	 * that is finished by returning some value.
-	 */
+	/* Propagate our own error context to libxml2 */
 	xmlSetStructuredErrorFunc((void *) xtCxt->xmlerrcxt, xml_errorHandler);
 
 	if (xtCxt->xpathobj == NULL)
@@ -4616,7 +4610,7 @@ XmlTableGetValue(TableFuncScanState *state, int colnum,
 		   xtCxt->xpathobj->type == XPATH_NODESET &&
 		   xtCxt->xpathobj->nodesetval != NULL);
 
-	/* Propagate context related error context to libxml2 */
+	/* Propagate our own error context to libxml2 */
 	xmlSetStructuredErrorFunc((void *) xtCxt->xmlerrcxt, xml_errorHandler);
 
 	*isnull = false;
@@ -4759,7 +4753,7 @@ XmlTableDestroyOpaque(TableFuncScanState *state)
 
 	xtCxt = GetXmlTableBuilderPrivateData(state, "XmlTableDestroyOpaque");
 
-	/* Propagate context related error context to libxml2 */
+	/* Propagate our own error context to libxml2 */
 	xmlSetStructuredErrorFunc((void *) xtCxt->xmlerrcxt, xml_errorHandler);
 
 	if (xtCxt->xpathscomp != NULL)

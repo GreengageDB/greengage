@@ -50,6 +50,15 @@ sub test_recovery_standby
 my $node_primary = get_new_node('primary');
 $node_primary->init(has_archiving => 1, allows_streaming => 1);
 
+# Bump the transaction ID epoch.  This is useful to stress the portability
+# of recovery_target_xid parsing.
+# pg_resetwal prompts for confirmation on stdin before proceeding on GPDB,
+# so feed it "yes" to run non-interactively.
+run_log(
+	[ 'pg_resetwal', '--epoch', '1', $node_primary->data_dir ],
+	'<', \"yes\n")
+  or BAIL_OUT("pg_resetwal failed");
+
 # Start it
 $node_primary->start;
 

@@ -4,7 +4,7 @@
  * bootscanner.l
  *	  a lexical scanner for the bootstrap parser
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -109,7 +109,7 @@ _null_			{ return NULLVAL; }
 [\n]			{ yyline++; }
 [\r\t ]			;
 
-^\#[^\n]* 		;		/* drop everything after "#" for comments */
+^\#[^\n]*		;		/* drop everything after "#" for comments */
 
 declare			{ yylval.kw = "declare"; return XDECLARE; }
 build			{ yylval.kw = "build"; return XBUILD; }

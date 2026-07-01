@@ -5,7 +5,7 @@
  *	  infrastructure for selectivity and cost estimation.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/selfuncs.h
@@ -41,6 +41,9 @@
 
 /* default selectivity estimate for range inequalities "A > b AND A < c" */
 #define DEFAULT_RANGE_INEQ_SEL	(10 * DEFAULT_EQ_SEL)               /*CDB*/
+
+/* default selectivity estimate for multirange inequalities "A > b AND A < c" */
+#define DEFAULT_MULTIRANGE_INEQ_SEL	0.005
 
 /* default selectivity estimate for pattern-match operators such as LIKE */
 #define DEFAULT_MATCH_SEL	    (50 * DEFAULT_EQ_SEL)               /*CDB*/
@@ -206,7 +209,7 @@ extern void estimate_hash_bucket_stats(PlannerInfo *root,
 									   Node *hashkey, double nbuckets,
 									   Selectivity *mcv_freq,
 									   Selectivity *bucketsize_frac);
-extern double estimate_hashagg_tablesize(Path *path,
+extern double estimate_hashagg_tablesize(PlannerInfo *root, Path *path,
 										 const AggClauseCosts *agg_costs,
 										 double dNumGroups);
 

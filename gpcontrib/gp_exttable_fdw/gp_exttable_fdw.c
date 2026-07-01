@@ -37,6 +37,7 @@
 #include "catalog/pg_foreign_table.h"
 #include "commands/defrem.h"
 #include "commands/copy.h"
+#include "commands/copyfrom_internal.h"
 #include "cdb/cdbsreh.h"
 #include "foreign/fdwapi.h"
 #include "funcapi.h"
@@ -849,7 +850,7 @@ exttable_EndForeignScan(ForeignScanState *node)
 	 * in cdbdisp_sumRejectedRows()
 	*/
 	if (Gp_role == GP_ROLE_DISPATCH) {
-		CopyState cstate = fdw_state->ess_ScanDesc->fs_pstate;
+		CopyFromState cstate = fdw_state->ess_ScanDesc->fs_pstate;
 		if (cstate && cstate->cdbsreh)
 		{
 			CdbSreh	 *cdbsreh = cstate->cdbsreh;

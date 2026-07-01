@@ -4,7 +4,7 @@
  *	  Routines to multiplex SIGALRM interrupts for multiple timeout reasons.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/timeout.h
@@ -33,6 +33,7 @@ typedef enum TimeoutId
 	IDLE_IN_TRANSACTION_SESSION_TIMEOUT,
 	IDLE_GANG_TIMEOUT,
 	CLIENT_CONNECTION_CHECK_TIMEOUT,
+	IDLE_SESSION_TIMEOUT,
 	/* First user-definable timeout reason */
 	USER_TIMEOUT,
 	/* Maximum number of timeout reasons */

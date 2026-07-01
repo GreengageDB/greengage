@@ -16,7 +16,7 @@
  * writing is the INET type, where IPv6 values cannot be merged with IPv4
  * values.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -378,7 +378,6 @@ brin_inclusion_consistent(PG_FUNCTION_ARGS)
 
 		case RTOverlapStrategyNumber:
 		case RTContainsStrategyNumber:
-		case RTOldContainsStrategyNumber:
 		case RTContainsElemStrategyNumber:
 		case RTSubStrategyNumber:
 		case RTSubEqualStrategyNumber:
@@ -399,7 +398,6 @@ brin_inclusion_consistent(PG_FUNCTION_ARGS)
 			 */
 
 		case RTContainedByStrategyNumber:
-		case RTOldContainedByStrategyNumber:
 		case RTSuperStrategyNumber:
 		case RTSuperEqualStrategyNumber:
 			finfo = inclusion_get_strategy_procinfo(bdesc, attno, subtype,

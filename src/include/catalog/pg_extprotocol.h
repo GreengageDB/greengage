@@ -51,6 +51,13 @@ FOREIGN_KEY(ptcvalidatorfn REFERENCES pg_proc(oid));
  */
 typedef FormData_pg_extprotocol *Form_pg_extprotocol;
 
+DECLARE_TOAST(pg_extprotocol, 7173, 7174);
+
+DECLARE_UNIQUE_INDEX(pg_extprotocol_oid_index, 7156, on pg_extprotocol using btree(oid oid_ops));
+#define ExtprotocolOidIndexId	7156
+DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, on pg_extprotocol using btree(ptcname name_ops));
+#define ExtprotocolPtcnameIndexId	7177
+
 /*
  * Different type of functions that can be 
  * specified for a given external protocol.

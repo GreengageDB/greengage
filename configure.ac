@@ -28,7 +28,7 @@ dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version
 dnl Untested combinations of 'autoconf' and PostgreSQL versions are not
 dnl recommended.  You can remove the check from 'configure.ac' but it is then
 dnl your responsibility whether the result works or not.])])
-AC_COPYRIGHT([Copyright (c) 1996-2020, PostgreSQL Global Development Group])
+AC_COPYRIGHT([Copyright (c) 1996-2021, PostgreSQL Global Development Group])
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
 AC_CONFIG_AUX_DIR(config)
 AC_PREFIX_DEFAULT(/usr/local/gpdb)
@@ -1051,10 +1051,10 @@ fi
 
 if test "$with_uuid" = bsd ; then
   AC_DEFINE([HAVE_UUID_BSD], 1, [Define to 1 if you have BSD UUID support.])
-  UUID_EXTRA_OBJS="md5.o sha1.o"
+  UUID_EXTRA_OBJS="sha1.o"
 elif test "$with_uuid" = e2fs ; then
   AC_DEFINE([HAVE_UUID_E2FS], 1, [Define to 1 if you have E2FS UUID support.])
-  UUID_EXTRA_OBJS="md5.o sha1.o"
+  UUID_EXTRA_OBJS="sha1.o"
 elif test "$with_uuid" = ossp ; then
   AC_DEFINE([HAVE_UUID_OSSP], 1, [Define to 1 if you have OSSP UUID support.])
   UUID_EXTRA_OBJS=""
@@ -1592,6 +1592,7 @@ AC_CHECK_HEADERS(m4_normalize([
 	sys/shm.h
 	sys/sockio.h
 	sys/tas.h
+	sys/uio.h
 	sys/un.h
 	termios.h
 	ucred.h
@@ -2013,9 +2014,14 @@ AC_CHECK_FUNCS(m4_normalize([
 	poll
 	posix_fallocate
 	ppoll
+	pread
+	preadv
 	pstat
 	pthread_is_threaded_np
+	pwrite
+	pwritev
 	readlink
+	readv
 	setproctitle
 	setproctitle_fast
 	setsid
@@ -2026,6 +2032,7 @@ AC_CHECK_FUNCS(m4_normalize([
 	sync_file_range
 	uselocale
 	wcstombs_l
+	writev
 ]))
 
 # For upstream Postgres, the getifaddrs() symbol is optional, but the GPDB
@@ -2097,8 +2104,6 @@ AC_REPLACE_FUNCS(m4_normalize([
 	inet_aton
 	link
 	mkdtemp
-	pread
-	pwrite
 	random
 	srandom
 	strlcat
@@ -2121,11 +2126,13 @@ fi
 case $host_os in
         # Windows uses a specialised env handler
         mingw*)
+                AC_DEFINE(HAVE_SETENV, 1, [Define to 1 because replacement version used.])
                 AC_DEFINE(HAVE_UNSETENV, 1, [Define to 1 because replacement version used.])
+                ac_cv_func_setenv=yes
                 ac_cv_func_unsetenv=yes
                 ;;
         *)
-                AC_REPLACE_FUNCS([unsetenv])
+                AC_REPLACE_FUNCS([setenv unsetenv])
                 ;;
 esac
 
@@ -2545,40 +2552,23 @@ else
   SHMEM_IMPLEMENTATION="src/backend/port/win32_shmem.c"
 fi
 
-# Select random number source
-#
-# You can override this logic by setting the appropriate USE_*RANDOM flag to 1
-# in the template or configure command line.
-
-# If not selected manually, try to select a source automatically.
-if test x"$USE_OPENSSL_RANDOM" = x"" && test x"$USE_WIN32_RANDOM" = x"" && test x"$USE_DEV_URANDOM" = x"" ; then
-  if test x"$with_openssl" = x"yes" ; then
-    USE_OPENSSL_RANDOM=1
-  elif test "$PORTNAME" = "win32" ; then
-    USE_WIN32_RANDOM=1
-  else
-    AC_CHECK_FILE([/dev/urandom], [], [])
-
-    if test x"$ac_cv_file__dev_urandom" = x"yes" ; then
-      USE_DEV_URANDOM=1
-    fi
-  fi
-fi
-
+# Select random number source. If a TLS library is used then it will be the
+# first choice, else the native platform sources (Windows API or /dev/urandom)
+# will be used.
 AC_MSG_CHECKING([which random number source to use])
-if test x"$USE_OPENSSL_RANDOM" = x"1" ; then
-  AC_DEFINE(USE_OPENSSL_RANDOM, 1, [Define to use OpenSSL for random number generation])
+if test x"$with_openssl" = x"yes" ; then
   AC_MSG_RESULT([OpenSSL])
-elif test x"$USE_WIN32_RANDOM" = x"1" ; then
-  AC_DEFINE(USE_WIN32_RANDOM, 1, [Define to use native Windows API for random number generation])
+elif test x"$PORTNAME" = x"win32" ; then
   AC_MSG_RESULT([Windows native])
-elif test x"$USE_DEV_URANDOM" = x"1" ; then
-  AC_DEFINE(USE_DEV_URANDOM, 1, [Define to use /dev/urandom for random number generation])
-  AC_MSG_RESULT([/dev/urandom])
 else
-  AC_MSG_ERROR([
+  AC_MSG_RESULT([/dev/urandom])
+  AC_CHECK_FILE([/dev/urandom], [], [])
+
+  if test x"$ac_cv_file__dev_urandom" = x"no" ; then
+    AC_MSG_ERROR([
 no source of strong random numbers was found
-PostgreSQL can use OpenSSL or /dev/urandom as a source of random numbers.])
+PostgreSQL can use OpenSSL, native Windows API or /dev/urandom as a source of random numbers.])
+  fi
 fi
 
 # If not set in template file, set bytes to use libc memset()
@@ -2798,8 +2788,10 @@ AC_SUBST(PG_VERSION_NUM)
 # literally, so that it's possible to override it at build time using
 # a command like "make ... PG_SYSROOT=path".  This has to be done after
 # we've finished all configure checks that depend on CPPFLAGS.
+# The same for LDFLAGS, too.
 if test x"$PG_SYSROOT" != x; then
   CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+  LDFLAGS=`echo "$LDFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
 fi
 AC_SUBST(PG_SYSROOT)
 

@@ -48,6 +48,9 @@ FOREIGN_KEY(localoid REFERENCES pg_class(oid));
  */
 typedef FormData_gp_distribution_policy *Form_gp_distribution_policy;
 
+DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 8103, on gp_distribution_policy using btree(localoid oid_ops));
+#define GpPolicyLocalOidIndexId  8103
+
 /*
  * Symbolic values for Anum_gp_distribution_policy_type column
  */
