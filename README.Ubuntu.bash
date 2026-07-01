@@ -55,7 +55,6 @@ apt-get install -y \
 	python3-yaml \
 	rsync \
 	sudo \
-	python3-transitions \
 	zlib1g-dev
 
 tee -a /etc/sysctl.conf << EOF
