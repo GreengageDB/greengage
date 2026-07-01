@@ -253,10 +253,9 @@ typedef struct VirtualTupleTableSlotAOCS
 {
 	VirtualTupleTableSlot base;
 
+	// TODO: can we remove current_scan from tuple table slot?
 	void * current_scan;
-	// TODO: rework to bitmap?
-	// TODO: rework api to get target attrs
-	//bool	*tts_is_valid; /* per-attribute valid flag*/
+
 	Bitmapset *tts_is_valid; /* per-attribute valid flag*/
 } VirtualTupleTableSlotAOCS;
 
