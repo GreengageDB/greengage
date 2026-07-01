@@ -30,6 +30,7 @@ class GpExpand(GpTestCase):
 
         # All we're doing here is checking files using open, which doesn't seem worth the effort to fully mock out
         self.subject.is_gpexpand_running = Mock(return_value=False)
+        self.subject.is_ggrebalance_running = Mock(return_value=False)
 
         self.gparray = self.createGpArrayWith2Primary2Mirrors()
         self.apply_patches([

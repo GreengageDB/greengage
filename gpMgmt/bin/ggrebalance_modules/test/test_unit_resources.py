@@ -975,7 +975,7 @@ class TestResourceEstimator(GpTestCase):
     @patch('ggrebalance_modules.planner.DiskSpaceChecker')
     @patch('ggrebalance_modules.planner.HostResolver.resolve_hostname')
     @patch('ggrebalance_modules.planner.HostResolver.get_address')
-    @patch('ggrebalance_modules.planner.GreedySolver')
+    @patch('ggrebalance_modules.planner.LNS')
     @patch('ggrebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
     @patch('ggrebalance_modules.planner.dbconn')
     def test_planner_with_resource_estimation(self, mock_dbconn, mock_schema, mock_solver, 

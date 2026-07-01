@@ -28,10 +28,20 @@ def rebalance_only(numsegs):
         return wrapper
     return inner
 
-def check_query(conn, query):
-    if  "SELECT COUNT(1) FROM pg_namespace WHERE nspname =" in query:
+def make_mock_cursor(rowcount=0, rows=None):
+    cursor = MagicMock()
+    cursor.rowcount = rowcount
+    cursor.fetchone.return_value = rows[0] if rows else None
+    cursor.__iter__ = Mock(return_value=iter(rows or []))
+    return cursor
+
+def mock_queryRow(conn, query):
+    if "COUNT(1)" in query or "COUNT(*)" in query:
         return [0]
-    return None
+    return ["dummy"]
+
+def mock_query(conn, query_string):
+    return make_mock_cursor(rowcount=0)
 
 class TestRebalanceUtilityCLI(GpTestCase):
     def setUp(self):
@@ -46,6 +56,7 @@ class TestRebalanceUtilityCLI(GpTestCase):
             spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal', 'exception'])
 
         self.subject.check_running_gputils = Mock(return_value=False)
+        self.subject.remove_pid_file = Mock()
 
         self.apply_patches([
             patch('builtins.open', mock_open(), create=True),
@@ -78,53 +89,92 @@ class TestRebalanceUtilityCLI(GpTestCase):
         sys.argv = self.old_sys_argv
         super(TestRebalanceUtilityCLI, self).tearDown()
 
+    @patch('gppylib.db.dbconn.query', side_effect=mock_query)
+    @patch('gppylib.db.dbconn.execSQL')
+    @patch('gppylib.db.dbconn.connect', return_value=MagicMock())
+    @patch('gppylib.db.dbconn.queryRow', side_effect=mock_queryRow)
     @patch('ggrebalance.GpArray.initFromCatalog',
-           return_value=initGparrayFromFile("balanced_grouped_6"))
-    @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
-    @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
-    @patch('ggrebalance.check_down_segments')
-    @rebalance_only(numsegs = 6)
-    def test_already_balanced_grouped(self, mockCatalog, mockOsPath, mockCursor, mock_down):
+            return_value=initGparrayFromFile("balanced_grouped_6"))
+    @patch('os.path.exists',
+            side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
+    @rebalance_only(numsegs=6)
+    def test_already_balanced_grouped(self,
+                                      mockOsPath,
+                                      mockArray,
+                                      mockQueryRow,
+                                      mockConnect,
+                                      mockExecSQL,
+                                      mockQuery):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.info.assert_any_call(
             "Cluster is already balanced, no segment moves will be held.")
     
-    @patch('ggrebalance.GpArray.initFromCatalog',
-           return_value=initGparrayFromFile("seg_down"))
-    @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
-    @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
-    @patch('ggrebalance.check_down_segments')
-    @rebalance_only(numsegs = 4)
-    def test_segment_down(self, mockCatalog, mockOsPath, mockCursor, mock_down):
+    @patch('gppylib.db.dbconn.execSQL')
+    @patch('gppylib.db.dbconn.connect', return_value=MagicMock())
+    @patch('gppylib.db.dbconn.queryRow', side_effect=lambda conn, query: [1])
+    @patch('os.path.exists',
+            side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
+    @rebalance_only(numsegs=6)
+    def test_segment_down(self,
+                          mockOsPath,
+                          mockQueryRow,
+                          mockConnect,
+                          mockExecSQL):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(
-            "ggrebalance failed: Some segments in 'down' status. ggrebalance can't proceed further \n\nExiting...")
+            "ggrebalance failed: Detected some primary segments are down, please recover manually \n\nExiting...")
 
+    @patch('gppylib.db.dbconn.query',    side_effect=mock_query)
+    @patch('gppylib.db.dbconn.execSQL')
+    @patch('gppylib.db.dbconn.connect',  return_value=MagicMock())
+    @patch('gppylib.db.dbconn.queryRow', side_effect=mock_queryRow)
+    @patch('ggrebalance.check_running_gputils')
     @patch('ggrebalance.GpArray.initFromCatalog',
-           return_value=initGparrayFromFile("balanced_spread_24"))
-    @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
-    @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+            return_value=initGparrayFromFile("balanced_spread_24"))
+    @patch('os.path.exists',
+            side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('ggrebalance.check_down_segments')
-    @rebalance_only(numsegs = 24)
-    def test_invalid_target_datadir(self, mockCatalog, mockOsPath, mockCursor, mock_down):
-        self.options.target_hosts = "sdw1, sdw2, sdw3"
+    @rebalance_only(numsegs=24)
+    def test_invalid_target_datadir(self,
+                                    mockCheckDown,
+                                    mockOsPath,
+                                    mockArray,
+                                    mockCheckRunning,
+                                    mockQueryRow,
+                                    mockConnect,
+                                    mockExecSQL,
+                                    mockQuery):
+        self.options.target_hosts   = "sdw1, sdw2, sdw3"
         self.options.target_datadirs = '/data/primary/gpseg{content}'
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(
             'ggrebalance failed: --target-datadirs should have format: '
-                '"/data/primary/gpseg{content}, /data/mirror/gpseg{content}". '
-                'Available templated parameters: {hostname}, {content} \n\nExiting...')
+            '"/data/primary/gpseg{content}, /data/mirror/gpseg{content}". '
+            'Available templated parameters: {hostname}, {content} \n\nExiting...')
     
+    @patch('gppylib.db.dbconn.query',    side_effect=mock_query)
+    @patch('gppylib.db.dbconn.execSQL')
+    @patch('gppylib.db.dbconn.connect',  return_value=MagicMock())
+    @patch('gppylib.db.dbconn.queryRow', side_effect=mock_queryRow)
+    @patch('ggrebalance.check_running_gputils')
     @patch('ggrebalance.GpArray.initFromCatalog',
-           return_value=initGparrayFromFile("role_mismatch"))
-    @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
-    @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+            return_value=initGparrayFromFile("role_mismatch"))
+    @patch('os.path.exists',
+            side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('ggrebalance.check_down_segments')
-    @rebalance_only(numsegs = 4)
-    def test_role_mistmatch(self, mockCatalog, mockOsPath, mockCursor, mock_down):
+    @rebalance_only(numsegs=4)
+    def test_role_mistmatch(self,
+                            mockCheckDown,
+                            mockOsPath,
+                            mockArray,
+                            mockCheckRunning,
+                            mockQueryRow,
+                            mockConnect,
+                            mockExecSQL,
+                            mockQuery):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(
