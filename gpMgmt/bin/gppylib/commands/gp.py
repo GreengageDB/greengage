@@ -67,6 +67,7 @@ RECOVERY_REWIND_APPNAME = '__gprecoverseg_pg_rewind__'
 PGDATABASE_FOR_COMMON_USE= 'postgres'
 
 def get_postmaster_pid_locally(datadir):
+    datadir = os.path.normpath(datadir)
     cmdStr = "ps -ef | grep 'postgres -D %s' | grep -v grep" % (datadir)
     name = "get postmaster"
     cmd = Command(name, cmdStr)
@@ -78,6 +79,7 @@ def get_postmaster_pid_locally(datadir):
         return -1
 
 def getPostmasterPID(hostname, datadir):
+    datadir = os.path.normpath(datadir)
     cmdStr="echo 'START_CMD_OUTPUT';ps -ef | grep 'postgres -D %s' | grep -v grep" % (datadir)
     name="get postmaster pid"
     cmd=Command(name,cmdStr,ctxt=REMOTE,remoteHost=hostname)
@@ -1454,6 +1456,8 @@ def check_pid_file(coordinator_data_directory, pid_filename):
 def start_standbycoordinator(host, datadir, port, era=None,
                         wrapper=None, wrapper_args=None):
     logger.info("Starting standby coordinator")
+
+    datadir = os.path.normpath(datadir)
 
     logger.info("Checking if standby coordinator is running on host: %s  in directory: %s" % (host,datadir))
     cmd = Command("recovery_startup",

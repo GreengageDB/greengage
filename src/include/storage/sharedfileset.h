@@ -41,5 +41,7 @@ extern File SharedFileSetOpen(SharedFileSet *fileset, const char *name);
 extern bool SharedFileSetDelete(SharedFileSet *fileset, const char *name,
 								bool error_on_failure);
 extern void SharedFileSetDeleteAll(SharedFileSet *fileset);
+extern void SharedFileSetPin(SharedFileSet *fileset);
+extern void SharedFileSetUnpin(SharedFileSet *fileset);
 
 #endif

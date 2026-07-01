@@ -319,7 +319,8 @@ static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 bool force_array_type);
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
-													const TableInfo *tblinfo);
+													const TableInfo *tblinfo,
+													bool force_array_type);
 static void binary_upgrade_set_pg_class_oids(Archive *fout,
 											 PQExpBuffer upgrade_buffer,
 											 Oid pg_class_oid, bool is_index);
@@ -4937,11 +4938,12 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 static void
 binary_upgrade_set_type_oids_by_rel(Archive *fout,
 										PQExpBuffer upgrade_buffer,
-										const TableInfo *tblinfo)
+										const TableInfo *tblinfo,
+										bool force_array_type)
 {
 	TypeInfo *typinfo = findTypeByOid(tblinfo->reltype);
 	binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-											 typinfo, false);
+											 typinfo, force_array_type);
 }
 
 static void
@@ -4949,6 +4951,11 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 								 PQExpBuffer upgrade_buffer, Oid pg_class_oid,
 								 bool is_index)
 {
+	PGresult *res;
+	PQExpBuffer gpdb6_partition_query;
+	bool gpdb6_partitioned_table;
+	bool aoco;
+
 	if (!is_index)
 	{
 		TableInfo *tblinfo = findTableByOid(pg_class_oid);
@@ -4963,10 +4970,38 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 		 * Starting GPDB7 CO tables no longer have TOAST tables. Hence, ignore
 		 * toast OIDs for CO tables to avoid upgrade failures.
 		 */
-		if ((OidIsValid(tblinfo->toast_oid) && !tblinfo->aotbl) ||
-					(OidIsValid(tblinfo->toast_oid) &&
-					tblinfo->aotbl &&
-					strncmp(tblinfo->amname, "ao_row", 6) == 0))
+		aoco = tblinfo->aotbl && strncmp(tblinfo->amname, "ao_column", 6) == 0;
+
+		/* Starting from Greengage 7, only leafs of a partition hierarchy
+		 * have TOAST tables.
+		 */
+		gpdb6_partitioned_table = false;
+		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+		{
+			gpdb6_partition_query = createPQExpBuffer();
+			appendPQExpBuffer(gpdb6_partition_query,
+				"WITH gpdb6_partitioned_tables (oid) AS ("
+				"	SELECT oid FROM pg_catalog.pg_class c WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition p WHERE c.oid = p.parrelid"
+				"	)"
+				"	UNION ALL"
+				"	SELECT parchildrelid FROM pg_catalog.pg_partition_rule parent WHERE EXISTS ("
+				"		SELECT 1 FROM pg_catalog.pg_partition_rule child WHERE child.parparentrule = parent.oid"
+				"	)"
+				")"
+				"SELECT EXISTS ("
+				"	SELECT 1 FROM gpdb6_partitioned_tables p"
+				"		WHERE p.oid = %u::pg_catalog.oid );",
+				tblinfo->dobj.catId.oid);
+
+			res = ExecuteSqlQueryForSingleRow(fout, gpdb6_partition_query->data);
+			if (strcmp(PQgetvalue(res, 0, 0), "t") == 0)
+				gpdb6_partitioned_table = true;
+
+			destroyPQExpBuffer(gpdb6_partition_query);
+		}
+
+		if (OidIsValid(tblinfo->toast_oid) && !aoco && !gpdb6_partitioned_table)
 			binary_upgrade_set_toast_oids_by_rel(fout, upgrade_buffer, tblinfo);
 
 		/* Set up any AO auxiliary tables with preallocated OIDs as well. */
@@ -7383,11 +7418,58 @@ getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
 	appendPQExpBufferChar(tbloids, '}');
 	resetPQExpBuffer(query);
 
+	/*
+	 * Collect partitions via build-in function,
+	 * and partition templates using handmade query,
+	 * because pg_get_partition_template_def may use
+	 * syntax not compatible with Greengage 7
+	 * (for example, RANK(1) clause)
+	 */
 	appendPQExpBuffer(query,
+						"WITH templates_per_level AS ("
+						"	SELECT src,"
+						"		entry.level,"
+						"		FORMAT ("
+						"			'ALTER TABLE %%s.%%s SET SUBPARTITION TEMPLATE\n(\n%%s\n)',"
+						"			pg_catalog.quote_ident(nspname),"
+						"			pg_catalog.quote_ident(name),"
+						"			string_agg(bounds, E',\n' ORDER BY entry.position)"
+						"		) parttemplate"
+						"	FROM ("
+						"		SELECT src.tbloid src,"
+						"			template.partitionlevel level,"
+						"			template.partitionboundary bounds,"
+						"			template.partitionposition position,"
+						"			COALESCE(part.name, src_table.relname) name,"
+						"			COALESCE(part.nspname, nsp.nspname) nspname"
+						"		FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)"
+						"			JOIN pg_class src_table ON src_table.oid = src.tbloid"
+						"			JOIN pg_namespace nsp ON src_table.relnamespace = nsp.oid"
+						"			JOIN pg_partition_templates template ON template.tablename = src_table.relname"
+						"				AND template.schemaname = nsp.nspname"
+						"			LEFT JOIN LATERAL ("
+						"				SELECT"
+						"					MIN(part.partitiontablename) name,"
+						"					MIN(part.partitionschemaname) nspname"
+						"				FROM pg_partitions part"
+						"				WHERE part.tablename = src_table.relname"
+						"					AND part.schemaname = nsp.nspname"
+						"					AND template.partitionlevel = part.partitionlevel + 2"
+						"				GROUP BY (part.schemaname, part.tablename, part.partitionlevel)"
+						"			) part ON TRUE"
+						"	) entry"
+						"	GROUP BY (entry.name, entry.nspname, entry.src, entry.level)"
+						"),"
+						"templates AS ("
+						"	SELECT level.src,"
+						"		string_agg(level.parttemplate, ';\n' ORDER BY level.level DESC) parttemplate"
+						"	FROM templates_per_level level"
+						"	GROUP BY (level.src)"
+						")"
 						"SELECT src.oid,\n"
 						"(SELECT pg_get_partition_def(src.oid, true, true)) AS partclause,\n"
-						"(SELECT pg_get_partition_template_def(src.oid, true, true)) AS parttemplate\n"
-						"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n", tbloids->data);
+						"(SELECT parttemplate FROM templates WHERE src.oid = templates.src) AS parttemplate\n"
+						"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n", tbloids->data, tbloids->data);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -16906,7 +16988,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					   qrelname);
 
 	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo);
+		binary_upgrade_set_type_oids_by_rel(fout, q, 	tbinfo, false);
 
 	/* Is it a table or a view? */
 	if (tbinfo->relkind == RELKIND_VIEW)
@@ -17067,12 +17149,26 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					{
 						Oid part_oid = atooid(PQgetvalue(partres, i, 0));
 						TableInfo *tbinfo = findTableByOid(part_oid);
+						bool force_array_type = false;
 
 						if (tbinfo->relstorage == 'x')
 							hasExternalPartitions = true;
 
+						if (!tbinfo->aotbl)
+						{
+							/*
+							 * Array types for children of a partitioned table are created
+							 * only starting from Greengage 7, so pick unused OIDs for
+							 * them.
+							 *
+							 * Also, don't do it for AO tables, array types are not created
+							 * for them.
+							 */
+							force_array_type = true;
+						}
+
 						binary_upgrade_set_pg_class_oids(fout, q, part_oid, false);
-						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo);
+						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo, force_array_type);
 					}
 				}
 
@@ -17539,7 +17635,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 					appendStringLiteralAH(q, tbinfo->attnames[j], fout);
 
 					/* GPDB partitioning */
-					if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					if (fout->remoteVersion < GPDB6_MAJOR_PGVERSION)
 					{
 						/*
 						 * Do for all descendants of a partition table.
@@ -17555,6 +17651,30 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 										  "pr.paroid = p.oid AND p.parrelid = ");
 						appendStringLiteralAH(q, qualrelname, fout);
 						appendPQExpBufferStr(q, "::pg_catalog.regclass);\n");
+					}
+					else if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION)
+					{
+						/*
+						 * Case for 6.x -> 7.x migration
+						 *
+						 * Target version (i.e. Greengage 7.x)
+						 * uses PostgreSQL partitions, and its catalog doesn't have
+						 * 'pg_partition' and 'pg_partition_rule',
+						 * but because we are dumping from Greengage 6.x,
+						 * the rest of the code expects that we will deal
+						 * with partitions here (in 7.x each partition
+						 * updates its attributes separately).
+						 *
+						 * Use pg_partition_tree() to find partition children.
+						 * For non-partitioned tables it returns no rows,
+						 * so include the root relation explicitly.
+						 */
+						appendPQExpBufferStr(q, "\n  AND attrelid IN (SELECT ");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass ");
+						appendPQExpBufferStr(q, "UNION SELECT relid FROM pg_partition_tree(");
+						appendStringLiteralAH(q, qualrelname, fout);
+						appendPQExpBufferStr(q, "::pg_catalog.regclass));\n");
 					}
 					else
 					{

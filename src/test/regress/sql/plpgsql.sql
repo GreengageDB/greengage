@@ -4150,3 +4150,54 @@ begin
   v_test := 0 || v_test;  -- fail
 end;
 $$;
+
+-- Test consistency and passage of SET LOCAL GUC to writing commands
+--start_ignore
+drop schema if exists s cascade;
+--end_ignore
+
+create schema s;
+
+do $$
+begin
+  set local search_path to s;
+  create table test_table(a int) distributed by (a);
+  drop table test_table;
+end $$;
+
+-- check existence on master and segments
+with c as (
+    select gp_segment_id, relname, relkind, relnamespace from pg_class
+    union all
+    select gp_segment_id, relname, relkind, relnamespace from gp_dist_random('pg_class')
+) select gp_segment_id from c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relname = 'test_table' and c.relkind = 'r' and n.nspname = 's';
+
+-- test recovery of GUC after SET LOCAL and transaction control commands inside DO
+do $$
+declare
+    result_1 text;
+    result_2 text;
+    result_3 text;
+    result_4 text;
+begin
+    select string_agg(setting, '|') into result_1 from gp_dist_random('pg_settings') where name = 'search_path';
+    set local search_path = 'test';
+    select string_agg(setting, '|') into result_2 from gp_dist_random('pg_settings') where name = 'search_path';
+    commit;
+    select string_agg(setting, '|') into result_3 from gp_dist_random('pg_settings') where name = 'search_path';
+
+    set local search_path = 'test';
+    rollback;
+    select string_agg(setting, '|') into result_4 from gp_dist_random('pg_settings') where name = 'search_path';
+
+    raise notice '
+    before SET LOCAL: %
+    after SET LOCAL:  %
+    after commit:  %
+    after rollback:  %', 
+    result_1, result_2, result_3, result_4;
+end $$;
+
+drop schema s cascade;

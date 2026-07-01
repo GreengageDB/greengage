@@ -264,7 +264,7 @@ static bool groupIsDropped(ResGroupInfo *pGroupInfo);
 
 static void resgroupDumpGroup(StringInfo str, ResGroupData *group);
 static void resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue);
-static void resgroupDumpCaps(StringInfo str, ResGroupCap *caps);
+static void resgroupDumpCaps(StringInfo str, ResGroupCaps *caps);
 static void resgroupDumpSlots(StringInfo str);
 static void resgroupDumpFreeSlots(StringInfo str);
 
@@ -272,6 +272,8 @@ static void sessionSetSlot(ResGroupSlotData *slot);
 static void sessionResetSlot(ResGroupSlotData *slot);
 static ResGroupSlotData *sessionGetSlot(void);
 
+static void resGroupCapFieldApply(ResGroupCaps *dst,
+							const ResourceGroupCallbackContext *callbackCtx);
 static void cpusetOperation(char *cpuset1,
 							const char *cpuset2,
 							int len,
@@ -763,13 +765,79 @@ ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 }
 
 /*
- * Apply the new resgroup caps.
+ * Apply only the field changed by callbackCtx->limittype to the target
+ * capability snapshot.
+ *
+ * The set of fields installed per limit type must stay equal to the set
+ * resGroupCapFieldMatches in resgroupcmds.c compares at PRE_COMMIT, otherwise
+ * a kept callback writes a field that was never validated against the final
+ * state.
+ */
+static void
+resGroupCapFieldApply(ResGroupCaps *dst,
+					  const ResourceGroupCallbackContext *callbackCtx)
+{
+	const ResGroupCaps *src = &callbackCtx->caps;
+
+	switch (callbackCtx->limittype)
+	{
+		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
+			dst->concurrency = src->concurrency;
+			return;
+
+		case RESGROUP_LIMIT_TYPE_CPU:
+			dst->cpuMaxPercent = src->cpuMaxPercent;
+			StrNCpy(dst->cpuset, src->cpuset, sizeof(dst->cpuset));
+			return;
+
+		case RESGROUP_LIMIT_TYPE_CPU_SHARES:
+			dst->cpuWeight = src->cpuWeight;
+			return;
+
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			dst->cpuMaxPercent = src->cpuMaxPercent;
+			dst->cpuWeight = src->cpuWeight;
+			StrNCpy(dst->cpuset, src->cpuset, sizeof(dst->cpuset));
+			return;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_LIMIT:
+			dst->memory_limit = src->memory_limit;
+			return;
+
+		case RESGROUP_LIMIT_TYPE_MIN_COST:
+			dst->min_cost = src->min_cost;
+			return;
+
+		case RESGROUP_LIMIT_TYPE_IO_LIMIT:
+			dst->io_limit = src->io_limit;
+			return;
+
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
+			break;
+	}
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			(errmsg("invalid resource group limit type: %d",
+					 callbackCtx->limittype))));
+}
+
+/*
+ * Apply the new resgroup caps and update dependent runtime state.
+ *
+ * Each callback keeps a full capability snapshot, but only its limittype is
+ * installed over the current shared-memory state. This lets multiple callbacks
+ * from one transaction update different fields without overwriting each other.
  */
 void
 ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 {
 	ResGroupData	*group;
+	ResGroupCaps	oldCaps;
+	ResGroupCaps	newCaps;
 	volatile int	savedInterruptHoldoffCount;
+
+	SIMPLE_FAULT_INJECTOR("resgroup_alter_on_commit");
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
@@ -778,12 +846,24 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		savedInterruptHoldoffCount = InterruptHoldoffCount;
 		group = groupHashFind(callbackCtx->groupid, true);
 
-		group->caps = callbackCtx->caps;
+		oldCaps = group->caps;
+		newCaps = oldCaps;
+
+		resGroupCapFieldApply(&newCaps, callbackCtx);
+
+		group->caps = newCaps;
+
+		/*
+		 * Remove local pointers, as createGroup does. The io_limit list
+		 * lives in this backend's TopMemoryContext and is freed right after
+		 * the apply, so the shared copy must not keep it.
+		 */
+		group->caps.io_limit = NIL;
 
 		if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU)
 		{
 			cgroupOpsRoutine->setcpulimit(callbackCtx->groupid,
-										callbackCtx->caps.cpuMaxPercent);
+										newCaps.cpuMaxPercent);
 
 			/* We should set cpuset to the default value */
 			char *cpuset = (char *) palloc(MaxCpuSetLength);
@@ -793,13 +873,13 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 		else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPU_SHARES)
 		{
 			cgroupOpsRoutine->setcpuweight(callbackCtx->groupid,
-										   callbackCtx->caps.cpuWeight);
+										   newCaps.cpuWeight);
 		}
 		else if (callbackCtx->limittype == RESGROUP_LIMIT_TYPE_CPUSET)
 		{
 			if (gp_resource_group_enable_cgroup_cpuset)
 			{
-				char *cpuset = getCpuSetByRole(callbackCtx->caps.cpuset);
+				char *cpuset = getCpuSetByRole(newCaps.cpuset);
 				cgroupOpsRoutine->setcpuset(callbackCtx->groupid,
 									        cpuset);
 			}
@@ -816,11 +896,11 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 			 * When alter io_limit, caps.io_limit is nil means this resource group's io_limit should be clear.
 			 */
 			cgroupOpsRoutine->cleario(callbackCtx->groupid);
-			cgroupOpsRoutine->setio(callbackCtx->groupid, callbackCtx->caps.io_limit);
+			cgroupOpsRoutine->setio(callbackCtx->groupid, newCaps.io_limit);
 		}
 
 		/* reset default group if cpuset has changed */
-		if (strcmp(callbackCtx->oldCaps.cpuset, callbackCtx->caps.cpuset) &&
+		if (strcmp(oldCaps.cpuset, newCaps.cpuset) &&
 			gp_resource_group_enable_cgroup_cpuset)
 		{
 			char defaultCpusetGroup[MaxCpuSetLength];
@@ -830,8 +910,8 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 								  MaxCpuSetLength);
 			/* Add old value to default group
 			 * sub new value from default group */
-			char *cpuset= getCpuSetByRole(callbackCtx->caps.cpuset);
-			char *oldcpuset = getCpuSetByRole(callbackCtx->oldCaps.cpuset);
+			char *cpuset= getCpuSetByRole(newCaps.cpuset);
+			char *oldcpuset = getCpuSetByRole(oldCaps.cpuset);
 			CpusetUnion(defaultCpusetGroup,
 						oldcpuset,
 						MaxCpuSetLength);
@@ -1386,7 +1466,11 @@ addTotalQueueDuration(ResGroupData *group)
 	if (group == NULL)
 		return;
 
-	group->totalQueuedTimeMs += (groupWaitEnd - groupWaitStart);
+	/*
+	 * Note: groupWaitEnd and groupWaitStart are in microseconds, but
+	 * totalQueuedTimeMs is in milliseconds. We should convert it here.
+	 */
+	group->totalQueuedTimeMs += ((groupWaitEnd - groupWaitStart) / 1000);
 }
 
 /*
@@ -1544,9 +1628,6 @@ ShouldUnassignResGroup(void)
 void
 AssignResGroupOnCoordinator(void)
 {
-	ResGroupSlotData	*slot;
-	ResGroupInfo		groupInfo;
-
 	Assert(Gp_role == GP_ROLE_DISPATCH);
 
 	/*
@@ -1555,6 +1636,8 @@ AssignResGroupOnCoordinator(void)
 	 */
 	if (shouldBypassQuery(debug_query_string))
 	{
+		ResGroupInfo		groupInfo;
+
 		/*
 		 * If it's the first query in the connection (make sure tab completion
 		 * is not triggered otherwise it will run some implicit query before
@@ -1587,6 +1670,20 @@ AssignResGroupOnCoordinator(void)
 
 		return;
 	}
+
+	AttachResGroupSlot();
+}
+
+/*
+ * Acquire a slot from the resource group and attach the process to them.
+ */
+void
+AttachResGroupSlot(void)
+{
+	ResGroupSlotData	*slot;
+	ResGroupInfo		groupInfo;
+
+	Assert(Gp_role == GP_ROLE_DISPATCH);
 
 	PG_TRY();
 	{
@@ -2720,8 +2817,6 @@ shouldBypassQuery(const char *query_string)
 	MemoryContext oldcontext = NULL;
 	MemoryContext tmpcontext = NULL;
 	List *parsetree_list; 
-	ListCell *parsetree_item;
-	Node *parsetree;
 	bool		bypass;
 
 	if (gp_resource_group_bypass)
@@ -2763,7 +2858,27 @@ shouldBypassQuery(const char *query_string)
 
 	/* Only bypass SET/RESET/SHOW command and SELECT with only catalog tables
 	 * for now */
-	bypass = true;
+	bypass = ShouldBypassQueryFromParseTree(parsetree_list);
+
+	list_free_deep(parsetree_list);
+
+	if (tmpcontext)
+		MemoryContextDelete(tmpcontext);
+
+	return bypass;
+}
+
+/*
+ * Should the query bypass the resgroup assignment?
+ * Basically SET/SHOW and SELECT from catalog tables
+ * are allowed to bypass.
+ */
+bool
+ShouldBypassQueryFromParseTree(List *parsetree_list)
+{
+	ListCell *parsetree_item;
+	Node *parsetree;
+
 	foreach(parsetree_item, parsetree_list)
 	{
 		parsetree = (Node *) lfirst(parsetree_item);
@@ -2774,25 +2889,15 @@ shouldBypassQuery(const char *query_string)
 		if (IsA(parsetree, SelectStmt))
 		{
 			if (!shouldBypassSelectQuery(parsetree))
-			{
-				bypass = false;
-				break;
-			}
+				return false;
 		}
 		else if (nodeTag(parsetree) != T_VariableSetStmt &&
 			nodeTag(parsetree) != T_VariableShowStmt)
 		{
-			bypass = false;
-			break;
+			return false;
 		}
 	}
-
-	list_free_deep(parsetree_list);
-
-	if (tmpcontext)
-		MemoryContextDelete(tmpcontext);
-
-	return bypass;
+	return true;
 }
 
 /*
@@ -2853,7 +2958,7 @@ resgroupDumpGroup(StringInfo str, ResGroupData *group)
 	appendStringInfo(str, "\"locked_for_drop\":%d,", group->lockedForDrop);
 
 	resgroupDumpWaitQueue(str, &group->waitProcs);
-	resgroupDumpCaps(str, (ResGroupCap*)(&group->caps));
+	resgroupDumpCaps(str, &group->caps);
 
 	appendStringInfo(str, "}");
 }
@@ -2894,17 +2999,39 @@ resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue)
 	appendStringInfo(str, "]},");
 }
 
+/*
+ * Dump resource group capabilities.
+ *
+ * IO_LIMIT is reported as the default value. ResGroupCaps is shared state,
+ * but io_limit is a backend-local List * pointer. Status dump may read this
+ * state from a different backend, where the pointer is invalid.
+ */
 static void
-resgroupDumpCaps(StringInfo str, ResGroupCap *caps)
+resgroupDumpCaps(StringInfo str, ResGroupCaps *caps)
 {
-	int i;
 	appendStringInfo(str, "\"caps\":[");
-	for (i = 1; i < RESGROUP_LIMIT_TYPE_COUNT; i++)
-	{
-		appendStringInfo(str, "{\"%d\":%d}", i, caps[i]);
-		if (i < RESGROUP_LIMIT_TYPE_COUNT - 1)
-			appendStringInfo(str, ",");
-	}
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CONCURRENCY,
+					 caps->concurrency);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CPU,
+					 caps->cpuMaxPercent);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_CPU_SHARES,
+					 caps->cpuWeight);
+	appendStringInfo(str, "{\"%d\":\"%s\"},",
+					 RESGROUP_LIMIT_TYPE_CPUSET,
+					 caps->cpuset);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_MEMORY_LIMIT,
+					 caps->memory_limit);
+	appendStringInfo(str, "{\"%d\":%d},",
+					 RESGROUP_LIMIT_TYPE_MIN_COST,
+					 caps->min_cost);
+	appendStringInfo(str, "{\"%d\":\"%s\"}",
+					 RESGROUP_LIMIT_TYPE_IO_LIMIT,
+					 DefaultIOLimit);
+
 	appendStringInfo(str, "]");
 }
 
@@ -2925,7 +3052,7 @@ resgroupDumpSlots(StringInfo str)
 		appendStringInfo(str, "\"groupId\":%u,", slot->groupId);
 		appendStringInfo(str, "\"nProcs\":%d,", slot->nProcs);
 		appendStringInfo(str, "\"next\":%d,", slotGetId(slot->next));
-		resgroupDumpCaps(str, (ResGroupCap*)(&slot->caps));
+		resgroupDumpCaps(str, &slot->caps);
 		appendStringInfo(str, "}");
 		if (i < RESGROUP_MAX_SLOTS - 1)
 			appendStringInfo(str, ",");
@@ -3701,6 +3828,31 @@ ResGroupGetGroupIdBySessionId(int sessionId)
 }
 
 /*
+ * is resource group bypassed by session id
+ */
+bool
+IsResGroupBypassedBySessionId(int sessionId)
+{
+	bool bypassed = false;
+	SessionState *curSessionState;
+
+	LWLockAcquire(SessionStateLock, LW_SHARED);
+	curSessionState = AllSessionStateEntries->usedList;
+	while (curSessionState != NULL)
+	{
+		if (curSessionState->sessionId == sessionId)
+		{
+			bypassed = curSessionState->bypassResGroupId != InvalidOid;
+			break;
+		}
+		curSessionState = curSessionState->next;
+	}
+	LWLockRelease(SessionStateLock);
+
+	return bypassed;
+}
+
+/*
  * In resource group mode, how much memory should a query take in bytes.
  */
 uint64
@@ -3797,9 +3949,20 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 	pgstat_report_resgroup(bypassedGroup->groupId);
 	bypassedSlot.group = groupInfo.group;
 	bypassedSlot.groupId = groupInfo.groupId;
+	/*
+	 * SessionStateLock is required since IsResGroupBypassedBySessionId will
+	 * traverse the current session array and check corresponding
+	 * bypassResGroupId with shared lock on SessionStateLock.
+	 */
+	LWLockAcquire(SessionStateLock, LW_EXCLUSIVE);
+	/* Share bypassed group id for prohibit moving. */
+	MySessionState->bypassResGroupId = groupInfo.groupId;
+	LWLockRelease(SessionStateLock);
 
 	cgroupOpsRoutine->attachcgroup(bypassedGroup->groupId, MyProcPid,
 								   bypassedGroup->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
+
+	SIMPLE_FAULT_INJECTOR("check_and_unassign_from_resgroup_entry_bypassed");
 }
 
 /*

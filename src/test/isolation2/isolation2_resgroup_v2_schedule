@@ -11,6 +11,7 @@ test: resgroup/resgroup_bypass_catalog
 test: resgroup/resgroup_views
 test: resgroup/resgroup_syntax
 test: resgroup/resgroup_transaction
+test: resgroup/resgroup_alter_in_transaction
 test: resgroup/resgroup_name_convention
 
 # fault injection tests
@@ -31,6 +32,7 @@ test: resgroup/resgroup_cancel_terminate_concurrency
 test: resgroup/resgroup_memory_limit
 test: resgroup/resgroup_move_query
 test: resgroup/resgroup_io_limit
+test: resgroup/resgroup_io_limit_alter_in_transaction
 
 # regression tests
 test: resgroup/resgroup_recreate
@@ -48,5 +50,7 @@ test: resgroup/resgroup_large_group_id
 
 # parallel retrieve cursor integration
 test: resgroup/resgroup_parallel_retrieve
+
+test: resgroup/resgroup_oom
 
 test: resgroup/resgroup_disable_resgroup

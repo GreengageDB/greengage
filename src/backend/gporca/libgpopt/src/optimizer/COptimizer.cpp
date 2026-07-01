@@ -319,8 +319,9 @@ COptimizer::PdxlnOptimize(
 			GPOS_CHECK_ABORT;
 
 			// translate plan into DXL
-			pdxlnPlan = CreateDXLNode(mp, md_accessor, pexprPlan,
-									  pqc->PdrgPcr(), pdrgpmdname, ulHosts);
+			pdxlnPlan =
+				CreateDXLNode(mp, md_accessor, pexprPlan, pqc->PdrgPcr(),
+							  pdrgpmdname, ulHosts, ulSessionId);
 			GPOS_CHECK_ABORT;
 
 			if (fMinidump)
@@ -450,7 +451,8 @@ COptimizer::PexprOptimize(CMemoryPool *mp, CQueryContext *pqc,
 CDXLNode *
 COptimizer::CreateDXLNode(CMemoryPool *mp, CMDAccessor *md_accessor,
 						  CExpression *pexpr, CColRefArray *colref_array,
-						  CMDNameArray *pdrgpmdname, ULONG ulHosts)
+						  CMDNameArray *pdrgpmdname, ULONG ulHosts,
+						  ULONG ulSessionId)
 {
 	GPOS_ASSERT(0 < ulHosts);
 	IntPtrArray *pdrgpiHosts = GPOS_NEW(mp) IntPtrArray(mp);
@@ -460,7 +462,8 @@ COptimizer::CreateDXLNode(CMemoryPool *mp, CMDAccessor *md_accessor,
 		pdrgpiHosts->Append(GPOS_NEW(mp) INT(ul));
 	}
 
-	CTranslatorExprToDXL ptrexprtodxl(mp, md_accessor, pdrgpiHosts);
+	CTranslatorExprToDXL ptrexprtodxl(mp, md_accessor, pdrgpiHosts,
+									  ulSessionId);
 	CDXLNode *pdxlnPlan =
 		ptrexprtodxl.PdxlnTranslate(pexpr, colref_array, pdrgpmdname);
 

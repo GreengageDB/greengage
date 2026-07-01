@@ -46,6 +46,25 @@ select distkey, distclass from gp_distribution_policy where localoid = 'distpol'
 (1 row)
 
 drop table distpol;
+-- Make sure that we don't end up distributing by resjunk when
+-- no explicit distribution key is present.
+create table resjunk_test as
+    with cte as (select point(1, 2) as a, random() as b)
+    select a from cte order by b;
+select policytype, distkey, distclass from
+    gp_distribution_policy where localoid = 'resjunk_test'::regclass;
+ policytype | distkey | distclass 
+------------+---------+-----------
+ p          |         | 
+(1 row)
+
+select * from resjunk_test;
+   a   
+-------
+ (1,2)
+(1 row)
+
+drop table resjunk_test;
 -- if the datatype of the index column is not hashable, can't update distribution
 -- key to it.
 create table distpol_ts (i int4, t tsvector) distributed by (i);

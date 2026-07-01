@@ -798,6 +798,9 @@ COptTasks::OptimizeTask(void *ptr)
 			CMDAccessor mda(mp, CMDCache::Pcache(), default_sysid,
 							relcache_provider);
 
+			// For some unknown reason the code below assumes that the following values are
+			// unsigned ints, when in reality they are signed.
+			// It easier to do calculation this way, though, so let it be.
 			ULONG num_segments = gpdb::GetGPSegmentCount();
 			ULONG num_segments_for_costing = optimizer_segments;
 			if (0 == num_segments_for_costing)
@@ -839,8 +842,9 @@ COptTasks::OptimizeTask(void *ptr)
 
 			plan_dxl = COptimizer::PdxlnOptimize(
 				mp, &mda, query_dxl, query_output_dxlnode_array,
-				cte_dxlnode_array, expr_evaluator, num_segments, gp_session_id,
-				MyProc->queryCommandId, search_strategy_arr, optimizer_config);
+				cte_dxlnode_array, expr_evaluator, num_segments,
+				(ULONG) gp_session_id, MyProc->queryCommandId,
+				search_strategy_arr, optimizer_config);
 
 			if (opt_ctxt->m_should_serialize_plan_dxl)
 			{

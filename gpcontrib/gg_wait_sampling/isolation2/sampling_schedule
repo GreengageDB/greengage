@@ -1,0 +1,2 @@
+test: lock_wait_events
+test: teardown

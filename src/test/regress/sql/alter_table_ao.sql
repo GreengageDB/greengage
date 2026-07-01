@@ -628,11 +628,16 @@ execute checkrelfilenodediff('addexp_nonvolatile', 't_addcol');
 -- results are expected
 select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2 from t_addcol;
 -- volatile expression, expecting a rewrite
-execute capturerelfilenodebefore('addexp_volatile', 't_addcol');
-alter table t_addcol add column defexp3 int default random()*1000::int;
-execute checkrelfilenodediff('addexp_volatile', 't_addcol');
+create table t_addcol_volatile with (appendonly=true) as select * from t_addcol distributed by (a);
+
+execute capturerelfilenodebefore('addexp_volatile', 't_addcol_volatile');
+alter table t_addcol_volatile add column defexp3 int default random()*1000::int;
+execute checkrelfilenodediff('addexp_volatile', 't_addcol_volatile');
+
 -- results are expected
-select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol;
+select a, def10, defnull1, defnull2, char_length(deflarge1), char_length(deflarge2), defexp1, defexp2 <= current_timestamp as expected_defexp2, defexp3 >=0 and defexp3 <= 1000 as expected_defexp3 from t_addcol_volatile;
+
+drop table t_addcol_volatile;
 
 --
 -- truncate
@@ -673,6 +678,50 @@ select sum(a), sum(b), sum(c) from t_addcol_part;
 execute checkattributeencoding('t_addcol');
 execute checkattributeencoding('t_addcol_p1');
 execute checkattributeencoding('t_addcol_p2');
+
+--
+-- zero-column table
+--
+
+create table t_addcol_zero_col_default () using ao_row distributed randomly;
+
+-- rows exist, but there are no user columns
+insert into t_addcol_zero_col_default
+select from generate_series(1, 3);
+
+select count(*) from t_addcol_zero_col_default;
+
+execute capturerelfilenodebefore('zero column default 42', 't_addcol_zero_col_default');
+alter table t_addcol_zero_col_default add column a int default 42;
+execute checkrelfilenodediff('zero column default 42', 't_addcol_zero_col_default');
+
+-- existing zero-column rows get the missing/default value
+select * from t_addcol_zero_col_default;
+
+-- new rows after add column
+insert into t_addcol_zero_col_default default values;
+insert into t_addcol_zero_col_default values (7);
+
+select * from t_addcol_zero_col_default;
+
+create table t_addcol_zero_col_null () using ao_row distributed randomly;
+
+insert into t_addcol_zero_col_null
+select from generate_series(1, 3);
+
+select count(*) from t_addcol_zero_col_null;
+
+execute capturerelfilenodebefore('zero column null default', 't_addcol_zero_col_null');
+alter table t_addcol_zero_col_null add column a int;
+execute checkrelfilenodediff('zero column null default', 't_addcol_zero_col_null');
+
+-- existing zero-column rows get NULL for the new column
+select * from t_addcol_zero_col_null;
+
+insert into t_addcol_zero_col_null default values;
+insert into t_addcol_zero_col_null values (7);
+
+select * from t_addcol_zero_col_null;
 
 
 --- test SET ACCESS METHOD ao_column for tables with many columns

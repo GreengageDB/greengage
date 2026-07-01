@@ -966,3 +966,51 @@ create table part_column_drop_1_10 partition of
 \d part_column_drop
 \d part_column_drop_1_10
 drop table part_column_drop;
+
+-- Test that creating replicated table with default value as 
+-- volatile function in some column fails.
+-- https://github.com/GreengageDB/greengage/pull/321
+-- start_ignore
+DROP TABLE IF EXISTS dist_replicated;
+DROP TABLE IF EXISTS parent_vol;
+DROP TABLE IF EXISTS parent_val;
+DROP TABLE IF EXISTS child;
+DROP FUNCTION IF EXISTS fn_vol CASCADE;
+DROP FUNCTION IF EXISTS fn_val CASCADE;
+-- end_ignore
+CREATE FUNCTION fn_vol()
+        RETURNS int
+        LANGUAGE plpgsql
+        VOLATILE
+AS $$
+BEGIN
+	RETURN floor(random() * 100 + 1);
+END;
+$$
+EXECUTE ON ANY;
+CREATE FUNCTION fn_val()
+        RETURNS int
+        LANGUAGE plpgsql
+        IMMUTABLE
+AS $$
+BEGIN
+	RETURN 42;
+END;
+$$
+EXECUTE ON ANY;
+
+CREATE TABLE dist_replicated(id int, x int DEFAULT fn_vol()) DISTRIBUTED REPLICATED;
+CREATE TABLE dist_replicated(id int, x int DEFAULT (fn_vol() + 1) * (42 + 42)) DISTRIBUTED REPLICATED;
+CREATE TABLE dist_replicated(id int, x int DEFAULT fn_val()) DISTRIBUTED REPLICATED;
+
+CREATE TABLE parent_vol (a int DEFAULT fn_vol()) DISTRIBUTED BY (a);
+CREATE TABLE parent_val (a int DEFAULT fn_val()) DISTRIBUTED BY (a);
+CREATE TABLE child (LIKE parent_vol INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
+CREATE TABLE child (LIKE parent_val INCLUDING DEFAULTS) DISTRIBUTED REPLICATED;
+
+DROP TABLE dist_replicated;
+DROP TABLE parent_vol;
+DROP TABLE parent_val;
+DROP TABLE child;
+DROP FUNCTION fn_vol;
+DROP FUNCTION fn_val;

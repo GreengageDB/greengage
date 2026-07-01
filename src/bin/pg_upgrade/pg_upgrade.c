@@ -231,15 +231,37 @@ main(int argc, char **argv)
 		create_new_objects();
 	}
 
-	/*
-	 * In a segment, the data directory already contains all the objects,
-	 * because the segment is initialized by taking a physical copy of the
-	 * upgraded QD data directory. The auxiliary AO tables - containing
-	 * information about the segment files, are different in each server,
-	 * however. So we still need to restore those separately on each
-	 * server.
-	 */
-	restore_aosegment_tables();
+	if (!is_greengage_dispatcher_mode())
+	{
+		/*
+		 * In a segment, the data directory already contains all the objects,
+		 * because the segment is initialized by taking a physical copy of the
+		 * upgraded QD data directory. The auxiliary AO tables - containing
+		 * information about the segment files, are different in each server,
+		 * however. So we still need to restore those separately on each
+		 * server.
+		 *
+		 * Because we are concerned with 6.x -> 7.x (or further) migration here,
+		 * this step should be done only for segments, because starting from
+		 * Greengage 7, pg_aoseg table entries are almost never created
+		 * on the coordinator.
+		 *
+		 * 'restore_aosegment_tables' function also deals with other tables,
+		 * so, in total, when upgrading the coordinator:
+		 *
+		 * Don't copy pg_aoseg tables.
+		 *
+		 * Don't copy pg_aoblkdir and pg_aovisimap tables, because they should
+		 * be empty too.
+		 *
+		 * Don't copy gp_fastsequence table, it will be filled when recreating
+		 * AO tables.
+		 *
+		 * (the difference between versions comes mainly from
+		 *  the commit 5778f31124d5737e18d76f8d06f07f96c31c8be7)
+		 */
+		restore_aosegment_tables();
+	}
 
 	if (is_greengage_dispatcher_mode())
 	{

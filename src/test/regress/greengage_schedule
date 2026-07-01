@@ -370,5 +370,7 @@ test: cancel_cleanup
 
 test: gp_orphaned_files
 
+test: libpq
+
 test: alter_rebalance
 # end of tests

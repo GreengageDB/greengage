@@ -34,6 +34,13 @@ CREATE ROLE role_move_query_small RESOURCE GROUP rg_move_query_small;
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 
 
+-- test0: cannot move bypassed sessions
+1: SELECT gp_inject_fault('check_and_unassign_from_resgroup_entry_bypassed', 'suspend', 1, current_setting('gp_session_id')::int);
+1&: SELECT pg_sleep(1);
+SELECT gp_wait_until_triggered_fault('check_and_unassign_from_resgroup_entry_bypassed', 1, 1);
+SELECT pg_resgroup_move_query(pid, 'default_group') FROM pg_stat_activity WHERE query LIKE '%pg_sleep(1)%' AND sess_id != current_setting('gp_session_id')::int;
+SELECT gp_inject_fault('check_and_unassign_from_resgroup_entry_bypassed', 'reset', 1);
+1<:
 
 -- test1: cannot move IDLE sessions
 1: SET ROLE role_move_query;

@@ -111,6 +111,7 @@ extern int gp_resource_group_move_timeout;
 extern bool gp_resource_group_bypass_direct_dispatch;
 extern char *gp_resource_group_cgroup_parent;
 extern bool gp_resource_group_retrieve;
+extern bool gp_resource_group_enable_alter_in_transaction;
 
 /*
  * Non-GUC global variables.
@@ -149,8 +150,9 @@ typedef struct
 	ResGroupCaps		caps;
 	ResGroupCaps		oldCaps;	/* last config value, alter operation need to
  										* check last config for recycling */
-
 	List				*ioLimit;
+	SubTransactionId	subXactId;	/* the subtransaction that queued this
+									 * ALTER callback */
 } ResourceGroupCallbackContext;
 
 /* Shared memory and semaphores */
@@ -172,6 +174,8 @@ extern void DeserializeResGroupInfo(struct ResGroupCaps *capsOut,
 
 extern bool ShouldAssignResGroupOnCoordinator(void);
 extern bool ShouldUnassignResGroup(void);
+extern bool ShouldBypassQueryFromParseTree(List *parse_tree);
+extern void AttachResGroupSlot(void);
 extern void AssignResGroupOnCoordinator(void);
 extern void UnassignResGroup(void);
 extern void SwitchResGroupOnSegment(const char *buf, int len);
@@ -218,6 +222,7 @@ extern Oid SessionGetResGroupId(SessionState *session);
 extern void HandleMoveResourceGroup(void);
 extern void ResGroupMoveQuery(int sessionId, Oid groupId, const char *groupName);
 extern Oid ResGroupGetGroupIdBySessionId(int sessionId);
+extern bool IsResGroupBypassedBySessionId(int sessionId);
 extern char *getCpuSetByRole(const char *cpuset);
 extern void checkCpuSetByRole(const char *cpuset);
 extern bool checkTablespaceInIOlimit(Oid tblspcid, bool errout);

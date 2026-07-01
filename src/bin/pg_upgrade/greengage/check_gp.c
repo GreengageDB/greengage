@@ -15,7 +15,9 @@
  */
 
 #include "pg_upgrade_greengage.h"
+#include "catalog/pg_magic_oid.h"
 #include "catalog/pg_class_d.h"
+#include "access/nbtree.h"
 
 #define RELSTORAGE_EXTERNAL	'x'
 
@@ -31,6 +33,9 @@ static void check_views_with_removed_operators(void);
 static void check_views_with_removed_functions(void);
 static void check_views_with_removed_types(void);
 static void check_for_disallowed_pg_operator(void);
+static void check_views_with_changed_function_signatures(void);
+static void check_execute_on_master_functions(void);
+static void check_for_missing_support_function_for_partitions(void);
 
 /*
  *	check_greengage
@@ -55,6 +60,9 @@ check_greengage(void)
 	check_views_with_removed_functions();
 	check_views_with_removed_types();
 	check_for_disallowed_pg_operator();
+	check_views_with_changed_function_signatures();
+	check_execute_on_master_functions();
+	check_for_missing_support_function_for_partitions();
 }
 
 /*
@@ -1150,4 +1158,292 @@ check_for_disallowed_pg_operator(void)
 	}
 	else
 		check_ok();
+}
+
+static void
+check_views_with_changed_function_signatures()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_viewname;
+
+	prep_status("Checking for views with functions having changed signatures");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "views_with_changed_function_signatures.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+		bool		db_used = false;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
+		/* Install check support function */
+		PQclear(executeQueryOrDie(conn,
+								  "CREATE OR REPLACE FUNCTION "
+								  "public.view_has_changed_function_signatures(OID) "
+								  "RETURNS BOOL "
+								  "AS '$libdir/pg_upgrade_support' "
+								  "LANGUAGE C STRICT;"));
+		res = executeQueryOrDie(conn,
+								"SELECT pg_catalog.quote_ident(n.nspname) "
+								"|| '.' || pg_catalog.quote_ident(c.relname) AS badviewname "
+								"FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n on c.relnamespace=n.oid "
+								"WHERE c.relkind = 'v' "
+								"AND c.oid >= %d "
+								"AND public.view_has_changed_function_signatures(c.oid) = TRUE;", FirstNormalObjectId);
+
+		PQclear(executeQueryOrDie(conn, "DROP FUNCTION public.view_has_changed_function_signatures(OID);"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		i_viewname = PQfnumber(res, "badviewname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s\n", PQgetvalue(res, rowno, i_viewname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains views that use\n"
+			"| functions with changed signatures.\n"
+			"| These functions are present on the target version but with\n"
+			"| different arguments and/or return values.\n"
+			"| These views must be updated to use functions supported in the\n"
+			"| target version or removed before upgrade can continue. A list\n"
+			"| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_execute_on_master_functions()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	prep_status("Checking EXECUTE ON MASTER functions");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "execute_on_master_functions_not_returning_setof_rows.txt");
+
+	for (int dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult *res;
+		int		  ntups;
+		int		  rowno;
+		DbInfo	 *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	 *conn;
+		int		  i_proname;
+		int		  i_args;
+		int		  i_nspname;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* track_counts is disables for the same reason as above */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+		res = executeQueryOrDie(conn,
+								"SELECT pg_catalog.quote_ident(p.proname) proname,"
+								"       pg_catalog.pg_get_function_arguments(p.oid) args,"
+								"       pg_catalog.quote_ident(n.nspname) nspname "
+								"FROM pg_catalog.pg_proc p "
+								"JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid "
+								"WHERE proretset = false AND proexeclocation = 'm' and p.oid >= %d",
+								FirstNormalObjectId);
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		if (ntups == 0)
+		{
+			PQclear(res);
+			PQfinish(conn);
+			continue;
+		}
+		found = true;
+
+		if (!script)
+		{
+			/*
+			 * This is the first database that has affected functions,
+			 * try to open the output file
+			 */
+			script = fopen(output_path, "w");
+			if (!script)
+				pg_fatal("could not open file \"%s\": %s\n",
+					output_path, strerror(errno));
+		}
+
+		fprintf(script, "Database: %s\n", active_db->db_name);
+
+		i_proname = PQfnumber(res, "proname");
+		i_args = PQfnumber(res, "args");
+		i_nspname = PQfnumber(res, "nspname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			fprintf(script, "%s.%s(%s)\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_proname),
+					PQgetvalue(res, rowno, i_args));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains functions marked as\n"
+			"| EXECUTE ON MASTER that return a single row.\n"
+			"| Starting from Greengage 7, such functions should always\n"
+			"| return SETOF rows.\n"
+			"| A list of the problem functions is in the file:\n\t%s\n\n", output_path);
+	}
+
+	check_ok();
+}
+
+static void
+check_for_missing_support_function_for_partitions()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+
+	prep_status("Checking for missing support function for partitions");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "parititons_with_missing_support_function.txt");
+
+	for (int dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult *res;
+		int		  ntups;
+		int		  rowno;
+		DbInfo	 *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	 *conn;
+		int		  i_relname;
+		int		  i_opcname;
+		int		  i_opfname;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* track_counts is disables for the same reason as above */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+		res = executeQueryOrDie(conn,
+								"SELECT rel.relname, opc.opcname, opf.opfname"
+								"	FROM pg_partition par"
+								"	JOIN pg_class     rel ON par.parrelid = rel.oid"
+								"	JOIN pg_opclass   opc ON opc.oid = ANY(par.parclass)"
+								"	JOIN pg_opfamily  opf ON opc.opcfamily = opf.oid"
+								"	WHERE par.oid >= %d AND NOT EXISTS ("
+								"		SELECT 1 FROM pg_amproc amproc"
+								"		WHERE amproc.amprocnum = %d"
+								"		AND amproc.amprocfamily = opf.oid"
+								"		AND amproc.amproclefttype = opc.opcintype"
+								"		AND amproc.amprocrighttype = opc.opcintype);",
+								FirstNormalObjectId, BTORDER_PROC);
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		if (ntups == 0)
+		{
+			PQclear(res);
+			PQfinish(conn);
+			continue;
+		}
+		found = true;
+
+		if (!script)
+		{
+			/*
+			 * This is the first database that has affected functions,
+			 * try to open the output file
+			 */
+			script = fopen(output_path, "w");
+			if (!script)
+				pg_fatal("could not open file \"%s\": %s\n",
+					output_path, strerror(errno));
+		}
+
+		fprintf(script, "Database: %s\n", active_db->db_name);
+
+		i_relname = PQfnumber(res, "relname");
+		i_opcname = PQfnumber(res, "opcname");
+		i_opfname = PQfnumber(res, "opfname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			fprintf(script, "Partitioned table: %s, opclass: %s, opfamily: %s\n",
+					PQgetvalue(res, rowno, i_relname),
+					PQgetvalue(res, rowno, i_opcname),
+					PQgetvalue(res, rowno, i_opfname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains tables partitioned by\n"
+			"| types without required support routines.\n"
+			"| Starting from Greengage 7, each type specified in\n"
+			"| PARTITION BY LIST clause should define support\n"
+			"| routine number 1 in its opfamily.\n"
+			"| A list of the problem objects is in the file:\n\t%s\n\n", output_path);
+	}
+
+	check_ok();
 }

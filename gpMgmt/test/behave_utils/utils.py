@@ -22,10 +22,7 @@ from gppylib.utils import escape_string
 PARTITION_START_DATE = '2010-01-01'
 PARTITION_END_DATE = '2013-01-01'
 
-coordinator_data_dir = get_coordinatordatadir()
-if coordinator_data_dir is None:
-    raise Exception('COORDINATOR_DATA_DIRECTORY is not set')
-
+coordinator_data_dir = None
 
 # query_sql returns a cursor object, so the caller is responsible for closing
 # the dbconn connection.
@@ -185,10 +182,12 @@ def check_return_code(context, ret_code):
 
 
 def check_database_is_running(context):
-    if not 'PGPORT' in os.environ:
-        raise Exception('PGPORT should be set')
+    if 'PGPORT' not in os.environ or 'COORDINATOR_DATA_DIRECTORY' not in os.environ:
+        return False
 
     pgport = int(os.environ['PGPORT'])
+    global coordinator_data_dir
+    coordinator_data_dir = os.environ['COORDINATOR_DATA_DIRECTORY']
 
     running_status = chk_local_db_running(get_coordinatordatadir(), pgport)
     gpdb_running = running_status[0] and running_status[1] and running_status[2] and running_status[3]
