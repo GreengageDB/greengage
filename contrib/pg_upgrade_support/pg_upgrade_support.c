@@ -158,7 +158,7 @@ static RemovedFunctionDynamic functions_with_changed_signatures_dynamic[] =
 {
 	{"gp_toolkit",  "__gp_aocsseg",          __gp_aocsseg_oids,          1},
 	{"gp_toolkit",  "__gp_aocsseg_history",  __gp_aocsseg_history_oids,  1},
-	{"gp_toolkit",  " __gp_aoseg",           __gp_aoseg_oids,            1},
+	{"gp_toolkit",  "__gp_aoseg",           __gp_aoseg_oids,            1},
 	{"gp_toolkit",  "__gp_aoseg_history",     __gp_aoseg_history_oids,   1}
 };
 static const int num_functions_with_changed_signatures_dynamic = sizeof(functions_with_changed_signatures_dynamic) / sizeof(RemovedFunctionDynamic);
