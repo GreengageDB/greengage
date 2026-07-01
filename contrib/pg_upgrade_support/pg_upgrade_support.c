@@ -158,8 +158,8 @@ static RemovedFunctionDynamic functions_with_changed_signatures_dynamic[] =
 {
 	{"gp_toolkit",  "__gp_aocsseg",          __gp_aocsseg_oids,          1},
 	{"gp_toolkit",  "__gp_aocsseg_history",  __gp_aocsseg_history_oids,  1},
-	{"gp_toolkit",  "__gp_aoseg",           __gp_aoseg_oids,            1},
-	{"gp_toolkit",  "__gp_aoseg_history",     __gp_aoseg_history_oids,   1}
+	{"gp_toolkit",  "__gp_aoseg",            __gp_aoseg_oids,            1},
+	{"gp_toolkit",  "__gp_aoseg_history",    __gp_aoseg_history_oids,    1}
 };
 static const int num_functions_with_changed_signatures_dynamic = sizeof(functions_with_changed_signatures_dynamic) / sizeof(RemovedFunctionDynamic);
 
@@ -1317,11 +1317,10 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 
 	if (IsA(node, Var))
 	{
-		Var * var = (Var *) node;
+		Var *var = (Var *) node;
 		List *rtable = (List *) list_nth(context->rtableStack, var->varlevelsup);
 		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
 		return is_removed_column(rte->relid, var->varattno);
-
 	}
 	else if (IsA(node, Query))
 	{
