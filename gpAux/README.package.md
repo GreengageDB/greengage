@@ -76,15 +76,15 @@ The `rpm/greengage6.spec` file defines the RPM build:
 2. **Build Process**:
    - `%install` invokes the project's `make dist` target with `DESTDIR`
      set to `%{buildroot}`
-   - Excludes `check-buildroot` from `__os_install_post`/`__spec_install_post`,
-     and shebang mangling for files under the install prefix (Python/Perl
-     scripts intentionally use bare/`env` interpreters)
-   - Strips debug info from shared libraries (`*.so`) to avoid leaking
-     BUILDROOT paths into compiled extensions (e.g., PyGreSQL's `_pg.so`),
-     which would otherwise fail RPM's `check-buildroot` validation
+   - Excludes the entire install prefix from `brp-mangle-shebangs` via
+     `__brp_mangle_shebangs_exclude_from` — scripts intentionally use
+     `#!/usr/bin/env python` and `#!/usr/bin/env perl`; rewriting shebangs
+     would diverge package contents from the source and mask issues
+   - Strips debug info from `*.so` files via `strip --strip-debug` to
+     remove BUILDROOT paths embedded by the compiler (e.g., PyGreSQL's
+     `_pg.so`), which would otherwise fail `check-buildroot` validation
    - Removes the executable bit from Python/Perl/Bash files without a
-     shebang and from `*.md` files, mirroring `debian/rules`' `dh_fixperms`
-     override
+     shebang and from `*.md` files, mirroring `debian/rules` `dh_fixperms`
 
 ## Usage
 
