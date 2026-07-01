@@ -1374,6 +1374,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	MemoryContext oldContext;
 
 	Assert(ScanDirectionIsForward(direction));
 
@@ -1516,11 +1517,8 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		AOCSFileSegInfo *curseginfo;
 
 		// TODO: check if we need to simply call tts_virtual_aocs_clear
-		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
-		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-			slotAocs->tts_is_valid[attno] = false;
-		}
+		bms_free(slotAocs->tts_is_valid);
+		slotAocs->tts_is_valid = NULL;
 
 ReadNext:
 		/* If necessary, open next seg */
@@ -1584,7 +1582,10 @@ ReadNext:
 		 * should still be hot in CPU data cache memory.
 		 */
 		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
-		slotAocs->tts_is_valid[attno] = true;
+
+		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+		MemoryContextSwitchTo(oldContext);
 
 		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 		if (rowNum == InvalidAORowNum &&

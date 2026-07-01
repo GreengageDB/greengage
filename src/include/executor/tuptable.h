@@ -219,7 +219,7 @@ struct TupleTableSlotOps
 	 * Fill up target attnum entry of tts_values and tts_isnull arrays with
 	 * values from the tuple contained in the slot.
 	 */
-	void		(*gettargetattr) (TupleTableSlot *slot, int attnum);
+	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
 };
 
 /*
@@ -254,7 +254,10 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;
-	bool	*tts_is_valid; /* per-attribute valid flag*/
+	// TODO: rework to bitmap?
+	// TODO: rework api to get target attrs
+	//bool	*tts_is_valid; /* per-attribute valid flag*/
+	Bitmapset *tts_is_valid; /* per-attribute valid flag*/
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
@@ -344,7 +347,7 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
-extern bool slot_gettargetattr_int(TupleTableSlot *slot, int attnum);
+extern bool slot_gettargetattr_int(TupleTableSlot *slot, Bitmapset *attrs);
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);
@@ -381,12 +384,9 @@ slot_getallattrs(TupleTableSlot *slot)
  * valid.
  */
 static inline bool
-slot_gettargetattr(TupleTableSlot *slot, int attnum)
+slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 {
-	/* if somebody has already called slot_getsomeattrs, just return */
-	if (slot->tts_nvalid >= attnum)
-		return true;
-	return slot_gettargetattr_int(slot, attnum);
+	return slot_gettargetattr_int(slot, attrs);
 }
 
 /*

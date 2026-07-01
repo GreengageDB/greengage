@@ -456,20 +456,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, scanslot);
 
-			bool got_target_attrs = false;
-			ListCell *lc;
-			foreach(lc, op->d.fetch.all_vars)
-			{
-				int attnum = lfirst_int(lc);
-				got_target_attrs = slot_gettargetattr(scanslot, attnum);
-				if (!got_target_attrs)
-					break;
-			}
-			// TODO: where to free 'all_vars'?...
-			//list_free(op->d.fetch.all_vars);
-			//op->d.fetch.all_vars = NIL;
-
-			if (!got_target_attrs)
+			if (!slot_gettargetattr(scanslot, op->d.fetch.all_vars))
 				slot_getsomeattrs(scanslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
