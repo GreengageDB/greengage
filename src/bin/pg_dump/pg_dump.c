@@ -12733,7 +12733,7 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	bool 			is_dup;
 	bool 			is_assigned;
 
-    arr = (char *) pg_malloc(NAMEDATALEN);
+	arr = (char *) pg_malloc(NAMEDATALEN);
 	if (!arr)
 		fatal("out of memory");
 
@@ -12748,24 +12748,24 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	}
 
 	/* Try to find a unique name */
-    for (i = 1; i < NAMEDATALEN - 1; i++)
-    {
-        arr[i - 1] = '_';
-        if (i + namelen < NAMEDATALEN)
-            strcpy(arr + i, typeName);
-        else
+	for (i = 1; i < NAMEDATALEN - 1; i++)
+	{
+		arr[i - 1] = '_';
+		if (i + namelen < NAMEDATALEN)
+			strcpy(arr + i, typeName);
+		else
 			strlcpy(arr + i, typeName, NAMEDATALEN - i);
 
 		/* Check existence in pg_type */
 		query = createPQExpBuffer();
-        printfPQExpBuffer(query,
-                          "SELECT EXISTS(SELECT 1 "
-                          "FROM pg_catalog.pg_type "
-                          "WHERE typname = '%s' AND typnamespace = '%u'::pg_catalog.oid);",
-                          arr, typeNamespace);
-        res = ExecuteSqlQueryForSingleRow(fout, query->data);
-        is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
-        PQclear(res);
+		printfPQExpBuffer(query,
+						  "SELECT EXISTS(SELECT 1 "
+						  "FROM pg_catalog.pg_type "
+						  "WHERE typname = '%s' AND typnamespace = '%u'::pg_catalog.oid);",
+						  arr, typeNamespace);
+		res = ExecuteSqlQueryForSingleRow(fout, query->data);
+		is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
+		PQclear(res);
 		destroyPQExpBuffer(query);
 		if (is_dup)
 			continue;
@@ -12786,8 +12786,8 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 		break;
 	}
 
-    if (i >= NAMEDATALEN - 1)
-        fatal("could not form array type name for type \"%s\"", typeName);
+	if (i >= NAMEDATALEN - 1)
+		fatal("could not form array type name for type \"%s\"", typeName);
 
 	/* If no cache found for this schema, create one */
 	if (!cache)
@@ -12821,7 +12821,7 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	cache->names[cache->count] = arr;
 	cache->count++;
 
-    return arr;
+	return arr;
 }
 
 /*
