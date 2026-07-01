@@ -2,9 +2,10 @@
 # FILE:    README.Rhel-Rocky.bash
 # CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build
 # PURPOSE: Install build dependencies, compile zstd static library,
-#          Install Python based on OS version
+#          Install Python based on OS version with `python' symlink,
+#          Install Python packages based on Python and OS versions
 
-set -eux
+set -euxo pipefail
 
 dnf -y install epel-release
 
@@ -14,17 +15,21 @@ export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-rele
 case "$OS_VERSION" in
     8)
         dnf config-manager --set-enabled powertools
-        python_packages="python2 python2-devel python2-setuptools \
-                         python3 python3-devel python3-setuptools"
+        python_version="2"
+        python_packages="python2 python2-devel python2-setuptools python2-pip \
+                         python3 python3-devel python3-setuptools python3-pip"
         perl_packages="perl-Env perl-ExtUtils-Embed \
                        perl-IPC-Run perl-JSON perl-Test-Base"
+        pip_packages="future==0.16"
         ;;
     9)
         dnf config-manager --set-enabled crb
-        python_packages="python3.11 python3.11-devel python3.11-setuptools"
+        python_version="3.11"
+        python_packages="python3.11 python3.11-devel python3.11-setuptools python3.11-pip"
         perl_packages="perl-Env perl-ExtUtils-Embed \
                        perl-IPC-Run perl-JSON perl-Test-Base \
                        perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
+        pip_packages="future==1.0.0"
         ;;
     *)
         echo "Unsupported Rocky Linux version: $OS_VERSION"
@@ -81,6 +86,12 @@ dnf -y install \
     xerces-c-devel \
     zlib-devel \
     $python_packages $perl_packages
+
+# Create Python symlink
+ln -sf /usr/bin/python$python_version /usr/bin/python
+
+# Install Python packages
+python -m pip install --no-cache-dir $pip_packages
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
