@@ -2011,7 +2011,14 @@ psql_completion(const char *text, int start, int end)
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
-					  "DETACH PARTITION");
+					  "DETACH PARTITION", "REPACK BY COLUMNS (",
+					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "ADD"))
+		COMPLETE_WITH("CONSTRAINT", "COLUMN", "PARTITION", "DEFAULT PARTITION");
+
+	else if(Matches("ALTER", "TABLE", MatchAny, "NO"))
+		COMPLETE_WITH("INHERIT", "FORCE");
 	/* ALTER TABLE xxx ENABLE */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE"))
 		COMPLETE_WITH("ALWAYS", "REPLICA", "ROW LEVEL SECURITY", "RULE",
@@ -2031,7 +2038,9 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", MatchAny, "TRIGGER"))
 	{
@@ -2055,21 +2064,37 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "DISABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
+
+	/* ALTER TABLE xxx FORCE/NO FORCE */
+	else if (Matches("ALTER", "TABLE", MatchAny, "FORCE") ||
+			 Matches("ALTER", "TABLE", MatchAny, "NO", "FORCE"))
+		COMPLETE_WITH("ROW LEVEL SECURITY");
 
 	/* ALTER TABLE xxx ALTER */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
+						   " UNION SELECT 'PARTITION'");
 
 	/* ALTER TABLE xxx RENAME */
 	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT' UNION SELECT 'TO'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'TO'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
+						   " UNION SELECT 'PARTITION'");
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER|RENAME", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
 
 	/* ALTER TABLE xxx RENAME yyy */
-	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO")))
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO|DEFAULT|PARTITION")))
 		COMPLETE_WITH("TO");
 
 	/* ALTER TABLE xxx RENAME COLUMN/CONSTRAINT yyy */
@@ -2078,7 +2103,7 @@ psql_completion(const char *text, int start, int end)
 
 	/* If we have ALTER TABLE <sth> DROP, provide COLUMN or CONSTRAINT */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP"))
-		COMPLETE_WITH("COLUMN", "CONSTRAINT");
+		COMPLETE_WITH("COLUMN", "CONSTRAINT", "PARTITION", "DEFAULT PARTITION");
 	/* If we have ALTER TABLE <sth> DROP COLUMN, provide list of columns */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
@@ -2094,12 +2119,12 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny) ||
-			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny))
+			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAnyExcept("DEFAULT|PARTITION")))
 		COMPLETE_WITH("TYPE", "SET", "RESET", "RESTART", "ADD", "DROP");
 	/* ALTER TABLE ALTER [COLUMN] <foo> SET */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET"))
-		COMPLETE_WITH("(", "DEFAULT", "NOT NULL", "STATISTICS", "STORAGE");
+		COMPLETE_WITH("(", "DEFAULT", "NOT NULL", "STATISTICS", "STORAGE", "ENCODING (");
 	/* ALTER TABLE ALTER [COLUMN] <foo> SET ( */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "(") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "("))
@@ -2114,6 +2139,16 @@ psql_completion(const char *text, int start, int end)
 	{
 		/* Enforce no completion here, as an integer has to be specified */
 	}
+	else if((HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*") &&
+		    !HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*)")) ||
+			(HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*)")))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_UNUSED_OPTIONS("compresslevel", "compresstype", "blocksize");
+		else if(TailMatches("compresslevel|compresstype|blocksize"))
+			COMPLETE_WITH("=");
+	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> DROP */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "DROP") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "DROP"))
@@ -2127,9 +2162,22 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* If we have ALTER TABLE <sth> SET, provide list of attributes and '(' */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET"))
-		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA",
-					  "TABLESPACE", "UNLOGGED", "WITH", "WITHOUT");
+		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA", "TABLESPACE",
+					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED",
+					  "SUBPARTITION TEMPLATE (");
 
+	/* ALTER TABLE xxx SET WITH ( */
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "("))
+		COMPLETE_WITH("reorganize =");
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(", "reorganize", "="))
+		COMPLETE_WITH("true )", "false )");
+	
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)"))
+		COMPLETE_WITH("DISTRIBUTED");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
+			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
+		COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
 	/*
 	 * If we have ALTER TABLE <smt> SET ACCESS METHOD provide a list of table
 	 * AMs.
@@ -2173,17 +2221,38 @@ psql_completion(const char *text, int start, int end)
 	/* Limited completion support for partition bound specification */
 	else if (TailMatches("ATTACH", "PARTITION", MatchAny))
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
-	else if (TailMatches("FOR", "VALUES"))
+	else if (TailMatches("ATTACH", "PARTITION", MatchAny, "FOR", "VALUES"))
 		COMPLETE_WITH("FROM (", "IN (", "WITH (");
 
-	/*
-	 * If we have ALTER TABLE <foo> DETACH PARTITION, provide a list of
-	 * partitions of <foo>.
-	 */
-	else if (Matches("ALTER", "TABLE", MatchAny, "DETACH", "PARTITION"))
+	else if (Matches("ALTER", "TABLE", MatchAny, "EXCHANGE|SPLIT|TRUNCATE"))
+		COMPLETE_WITH("PARTITION", "DEFAULT PARTITION");
+	else if(Matches("ALTER", "TABLE", MatchAny, MatchAny, "DEFAULT"))
+		COMPLETE_WITH("PARTITION");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "PARTITION", MatchAny) ||
+			 Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
+		COMPLETE_WITH("TO");
+
+	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*)"))
 	{
-		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_partition_of_table);
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
+	else if(HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*") &&
+		   !HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
+
+	/* ALTER TABLE xxx REPACK BY COLUMN ( */
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
 	}
 
 	/* ALTER TABLESPACE <foo> with RENAME TO, OWNER TO, SET, RESET */
