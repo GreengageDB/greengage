@@ -9,7 +9,6 @@
 # Perl test scripts use /usr/bin/env perl for portability across environments
 # where Perl is not at /usr/bin/perl — see commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
 %global __brp_mangle_shebangs_exclude_from ^%{prefix}/.*$
-%global __os_install_post %(echo '%{__os_install_post}' | sed -e 's|/usr/lib/rpm/check-buildroot||g')
 
 Name:    greengage6
 Version: %{gpdb_version}
