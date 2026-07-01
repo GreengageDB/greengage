@@ -63,6 +63,9 @@ find %{buildroot}%{prefix} -type f \
 find %{buildroot}%{prefix} -name "*.md" -executable \
     -exec chmod -x {} +
 
+# Remove debug info from *.so
+find %{buildroot}%{prefix} -type f -name "*.so" -exec strip --strip-debug {} \;
+
 %files
 %{prefix}
 
