@@ -11,27 +11,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - target_os: ubuntu
+        - version: 6
+          target_os: ubuntu
           target_os_version: '22.04'
           extensions:  deb ddeb
-        - target_os: ubuntu
+          package_dir: deb-packages
+        - version: 6
+          target_os: ubuntu
           target_os_version: '24.04'
           extensions:  deb ddeb
-        - target_os: rockylinux
-          target_os_version: '8'
-          extensions:  rpm
-        - target_os: rockylinux
-          target_os_version: '9'
-          extensions:  rpm
+          package_dir: deb-packages
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       actions: read
     steps:
       - name: Upload packages to release
-        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@v47
+        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@v38
         with:
+          version:           ${{ matrix.version }}
           extensions:        ${{ matrix.extensions }}
+          package_dir:       ${{ matrix.package_dir }}
           target_os:         ${{ matrix.target_os }}
           target_os_version: ${{ matrix.target_os_version }}
-          artifact_prefix:   Package
