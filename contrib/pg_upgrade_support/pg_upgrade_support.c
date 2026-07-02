@@ -1305,6 +1305,52 @@ static bool is_removed_column(Oid reloid, int attnum)
 	return false;
 }
 
+static bool table_has_removed_columns(Oid reloid)
+{
+	Oid schema_oid;
+
+	for (int i = 0; i < num_removed_columns_static; i++)
+	{
+		if (reloid == removed_columns_static[i].reloid)
+			return true;
+	}
+
+	for (int i = 0; i < num_removed_columns_dynamic; i++)
+	{
+		schema_oid = GetSysCacheOid(NAMESPACENAME,
+									CStringGetDatum(removed_columns_dynamic[i].relnamespace),
+									0, 0, 0);
+
+		if (OidIsValid(schema_oid))
+		{
+			if (reloid == get_relname_relid(removed_columns_dynamic[i].relname, schema_oid))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * Check whether a query contains a reference to a removed column, or a whole
+ * row reference to a table with removed columns.
+ *
+ * The first case will always cause pg_upgrade to fail, while the second is more
+ * complicated. Whole row references by themselves won't cause upgrade to fail,
+ * because row type will be taken from the target cluster. For examples,
+ * the following view won't cause any troubles:
+ *
+ * CREATE VIEW view1 AS SELECT pg_class FROM pg_class;
+ *
+ * However, there could be another view that references specific columns from the
+ * previous one:
+ *
+ * CREATE VIEW view2 AS SELECT (pg_class).relhasoids FROM view1;
+ *
+ * and this columns may be indeed absent in the new version. Because of that,
+ * conservatively report any whole row references to any table with removed
+ * columns.
+ */
 bool
 check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *context)
 {
@@ -1318,19 +1364,97 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 	if (IsA(node, Var))
 	{
 		Var *var = (Var *) node;
+		if (var->varlevelsup >= list_length(context->rtableStack))
+			elog(ERROR, "invalid varlevelsup %d", var->varlevelsup);
+
 		List *rtable = (List *) list_nth(context->rtableStack, var->varlevelsup);
+		if (var->varno <= 0 || var->varno > list_length(rtable))
+			elog(ERROR, "invalid varno %d", var->varno);
+
 		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
-		return is_removed_column(rte->relid, var->varattno);
+		if (rte->rtekind == RTE_RELATION)
+		{
+			/*
+			 * It's a plain relation, simply check that Var doesn't reference
+			 * removed column(s)
+			 */
+
+			if (var->varattno == InvalidAttrNumber)
+			{
+				/*
+				 * For a whole row reference, check that this table
+				 * doesn't have removed columns
+				 */
+				return table_has_removed_columns(rte->relid);
+			}
+			/* Regular attribute */
+			return is_removed_column(rte->relid, var->varattno);
+		}
+		else if (rte->rtekind == RTE_JOIN)
+		{
+			/*
+			 * It's a join entry, we need to recursively go through
+			 * the RTE tree to get to the source entry for this attribute
+			 */
+			List *save_rtables = context->rtableStack;
+			context->rtableStack = list_copy_tail(context->rtableStack,
+												  var->varlevelsup);
+
+			if (var->varattno == InvalidAttrNumber)
+			{
+				/*
+				 * For a whole table reference, check every column of the RTE
+				 */
+				bool res = false;
+				for (int i = 0; i < list_length(rte->joinaliasvars); i++)
+				{
+					res = check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars, i),
+															context);
+					if (res)
+						break;
+				}
+
+				list_free(context->rtableStack);
+				context->rtableStack = save_rtables;
+
+				return res;
+			}
+			/* Regular attribute */
+			if (var->varattno <= 0 ||
+				var->varattno > list_length(rte->joinaliasvars))
+				elog(ERROR, "invalid varattno %d", var->varattno);
+			bool res = check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars,
+																		   var->varattno - 1),
+														 context);
+			list_free(context->rtableStack);
+			context->rtableStack = save_rtables;
+			return res;
+		}
+
+		/*
+		 * Don't do anything special for other RTE kinds. Most notably, RTE_SUBQUERY,
+		 * because subqueries will be handled when we recurse into them.
+		 */
+		return false;
 	}
 	else if (IsA(node, Query))
 	{
 		/*
 		 * Recurse into (sub)queries to search for removed columns.
 		 *
-		 * Pass QTW_IGNORE_JOINALIASES to avoid unnecessarily recursing into a
-		 * join RTE's joinaliasvars, since we already recurse into the query's
-		 * jointree expression. This is sufficient to handle joins with
-		 * removed columns in the ON/USING clauses, along with NATURAL JOINs.
+		 * Pass QTW_IGNORE_JOINALIASES to avoid recursing into a join RTE's
+		 * joinaliasvars, as they always contain every unique column from
+		 * the joined tables. Without this flag, each join with a table
+		 * with removed columns will cause this check to trigger.
+		 * For example:
+		 *
+		 * CREATE VIEW err AS SELECT jn.relname FROM (pg_class JOIN pg_namespace ON true) jn;
+		 *
+		 * will be erroneously reported as referencing removed columns. Legit cases like:
+		 *
+		 * CREATE VIEW rte_join SELECT jn.relhasoids FROM (pg_class JOIN pg_namespace ON true) jn;
+		 *
+		 * are handled when processing Var nodes, for them (rte->rtekind == RTE_JOIN)
 		 */
 		bool	retval;
 		Query	*query = (Query *) node;
