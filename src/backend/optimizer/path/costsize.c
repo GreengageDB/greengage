@@ -2554,8 +2554,9 @@ cost_agg(Path *path, PlannerInfo *root,
 		 */
 		hashentrysize = hash_agg_entry_size(
 			aggcosts->numAggs, input_width, aggcosts->transitionSpace);
-		hash_agg_set_limits(NULL, hashentrysize, numGroups, 0, &mem_limit,
-							&ngroups_limit, &num_partitions);
+		mem_limit = hash_agg_set_limits2(NULL, hashentrysize, numGroups, 0,
+										 global_work_mem(root), &ngroups_limit,
+										 &num_partitions);
 
 		nbatches = Max( (numGroups * hashentrysize) / mem_limit,
 						numGroups / ngroups_limit );

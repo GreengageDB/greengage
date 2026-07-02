@@ -95,5 +95,17 @@ RESET temp_tablespaces;
 RESET statement_mem;
 RESET gp_workfile_compression;
 
+-- Check that the value of work_mem does not affect spill.
+-- start_ignore
+DROP TABLE IF EXISTS t1;
+-- end_ignore
+CREATE TABLE t1 (a int, b int) DISTRIBUTED BY (a);
+
+INSERT INTO t1 SELECT a, a FROM generate_series(1, 100000)a;
+ANALYSE t1;
+
+SET work_mem = '512kB';
+SELECT * FROM hashagg_spill.is_workfile_created('explain (analyze, verbose) SELECT avg(a) FROM t1 GROUP BY b;');
+RESET work_mem;
 
 drop schema hashagg_spill cascade;
