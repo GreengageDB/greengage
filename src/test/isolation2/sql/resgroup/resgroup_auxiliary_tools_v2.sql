@@ -280,6 +280,7 @@ $$ LANGUAGE plpython3u;
     postgres = ctypes.CDLL(None)
     get_bdi_of_path = postgres['get_bdi_of_path']
     get_tablespace_path = postgres['get_tablespace_path']
+    get_tablespace_path.restype = ctypes.c_char_p
     get_tablespace_oid = postgres['get_tablespace_oid']
 
     # get group oid
@@ -291,9 +292,9 @@ $$ LANGUAGE plpython3u;
 
     # get path of tablespace
     spcoid = get_tablespace_oid(tablespace_name.encode('utf-8'), False)
-    location = ctypes.cast(get_tablespace_path(spcoid), ctypes.c_char_p).value
+    location = get_tablespace_path(spcoid)
 
-    if location == "":
+    if not location:
         return False
 
     bdi = get_bdi_of_path(location)

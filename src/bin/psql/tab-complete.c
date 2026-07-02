@@ -1819,6 +1819,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "USER|ROLE", MatchAny) &&
 			 !TailMatches("USER", "MAPPING"))
 		COMPLETE_WITH("BYPASSRLS", "CONNECTION LIMIT", "CREATEDB", "CREATEROLE",
+					  "DENY", "DROP DENY FOR",
 					  "ENCRYPTED PASSWORD", "INHERIT", "LOGIN", "NOBYPASSRLS",
 					  "NOCREATEDB", "NOCREATEROLE", "NOINHERIT",
 					  "NOLOGIN", "NOREPLICATION", "NOSUPERUSER", "PASSWORD",
@@ -1829,11 +1830,29 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "USER|ROLE", MatchAny, "WITH"))
 		/* Similar to the above, but don't complete "WITH" again. */
 		COMPLETE_WITH("BYPASSRLS", "CONNECTION LIMIT", "CREATEDB", "CREATEROLE",
+					  "DENY", "DENY BETWEEN", "DROP DENY FOR",
 					  "ENCRYPTED PASSWORD", "INHERIT", "LOGIN", "NOBYPASSRLS",
 					  "NOCREATEDB", "NOCREATEROLE", "NOINHERIT",
 					  "NOLOGIN", "NOREPLICATION", "NOSUPERUSER", "PASSWORD",
 					  "RENAME TO", "REPLICATION", "RESET", "SET", "SUPERUSER",
 					  "VALID UNTIL");
+
+	else if (TailMatches("DENY") && !TailMatches("DROP", "DENY"))
+		COMPLETE_WITH("DAY", "BETWEEN DAY");
+	else if (TailMatches("DROP", "DENY", "FOR"))
+		COMPLETE_WITH("DAY");
+	else if (TailMatches("DAY"))
+		COMPLETE_WITH("'Monday'", "'Tuesday'", "'Wednesday'", "'Thursday'",
+					  "'Friday'", "'Saturday'", "'Sunday'");
+	else if (TailMatches("DENY", "DAY", MatchAny) ||
+			TailMatches("AND", "DAY", MatchAny) ||
+			TailMatches("FOR", "DAY", MatchAny))
+		COMPLETE_WITH("TIME");
+	else if (TailMatches("DENY", "BETWEEN", "DAY", MatchAny))
+		COMPLETE_WITH("AND DAY", "TIME");
+	else if (TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*'") ||
+			TailMatches("DENY", "BETWEEN", "DAY", MatchAny, "TIME", "'*", "PM'|AM'"))
+		COMPLETE_WITH("AND DAY");
 
 	/* ALTER DEFAULT PRIVILEGES */
 	else if (Matches("ALTER", "DEFAULT", "PRIVILEGES"))
@@ -1992,7 +2011,14 @@ psql_completion(const char *text, int start, int end)
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
-					  "DETACH PARTITION");
+					  "DETACH PARTITION", "REPACK BY COLUMNS (",
+					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "ADD"))
+		COMPLETE_WITH("CONSTRAINT", "COLUMN", "PARTITION", "DEFAULT PARTITION");
+
+	else if(Matches("ALTER", "TABLE", MatchAny, "NO"))
+		COMPLETE_WITH("INHERIT", "FORCE");
 	/* ALTER TABLE xxx ENABLE */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE"))
 		COMPLETE_WITH("ALWAYS", "REPLICA", "ROW LEVEL SECURITY", "RULE",
@@ -2012,7 +2038,9 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE", MatchAny, "TRIGGER"))
 	{
@@ -2036,21 +2064,37 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TABLE", MatchAny, "DISABLE", "TRIGGER"))
 	{
 		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_trigger_of_table);
+		COMPLETE_WITH_QUERY(Query_for_trigger_of_table
+							" UNION SELECT 'ALL'"
+							" UNION SELECT 'USER'");
 	}
+
+	/* ALTER TABLE xxx FORCE/NO FORCE */
+	else if (Matches("ALTER", "TABLE", MatchAny, "FORCE") ||
+			 Matches("ALTER", "TABLE", MatchAny, "NO", "FORCE"))
+		COMPLETE_WITH("ROW LEVEL SECURITY");
 
 	/* ALTER TABLE xxx ALTER */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
+						   " UNION SELECT 'PARTITION'");
 
 	/* ALTER TABLE xxx RENAME */
 	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME"))
-		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT' UNION SELECT 'TO'");
+		COMPLETE_WITH_ATTR(prev2_wd,
+						   " UNION SELECT 'COLUMN'"
+						   " UNION SELECT 'CONSTRAINT'"
+						   " UNION SELECT 'TO'"
+						   " UNION SELECT 'DEFAULT PARTITION'"
+						   " UNION SELECT 'PARTITION'");
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER|RENAME", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
 
 	/* ALTER TABLE xxx RENAME yyy */
-	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO")))
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", MatchAnyExcept("CONSTRAINT|TO|DEFAULT|PARTITION")))
 		COMPLETE_WITH("TO");
 
 	/* ALTER TABLE xxx RENAME COLUMN/CONSTRAINT yyy */
@@ -2059,7 +2103,7 @@ psql_completion(const char *text, int start, int end)
 
 	/* If we have ALTER TABLE <sth> DROP, provide COLUMN or CONSTRAINT */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP"))
-		COMPLETE_WITH("COLUMN", "CONSTRAINT");
+		COMPLETE_WITH("COLUMN", "CONSTRAINT", "PARTITION", "DEFAULT PARTITION");
 	/* If we have ALTER TABLE <sth> DROP COLUMN, provide list of columns */
 	else if (Matches("ALTER", "TABLE", MatchAny, "DROP", "COLUMN"))
 		COMPLETE_WITH_ATTR(prev3_wd, "");
@@ -2075,12 +2119,12 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny) ||
-			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny))
+			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAnyExcept("DEFAULT|PARTITION")))
 		COMPLETE_WITH("TYPE", "SET", "RESET", "RESTART", "ADD", "DROP");
 	/* ALTER TABLE ALTER [COLUMN] <foo> SET */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET"))
-		COMPLETE_WITH("(", "DEFAULT", "NOT NULL", "STATISTICS", "STORAGE");
+		COMPLETE_WITH("(", "DEFAULT", "NOT NULL", "STATISTICS", "STORAGE", "ENCODING (");
 	/* ALTER TABLE ALTER [COLUMN] <foo> SET ( */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "(") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "("))
@@ -2095,6 +2139,16 @@ psql_completion(const char *text, int start, int end)
 	{
 		/* Enforce no completion here, as an integer has to be specified */
 	}
+	else if((HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*") &&
+		    !HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "SET", "ENCODING", "(*)")) ||
+			(HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "SET", "ENCODING", "(*)")))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_UNUSED_OPTIONS("compresslevel", "compresstype", "blocksize");
+		else if(TailMatches("compresslevel|compresstype|blocksize"))
+			COMPLETE_WITH("=");
+	}
 	/* ALTER TABLE ALTER [COLUMN] <foo> DROP */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ALTER", "COLUMN", MatchAny, "DROP") ||
 			 Matches("ALTER", "TABLE", MatchAny, "ALTER", MatchAny, "DROP"))
@@ -2108,9 +2162,22 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* If we have ALTER TABLE <sth> SET, provide list of attributes and '(' */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET"))
-		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA",
-					  "TABLESPACE", "UNLOGGED", "WITH", "WITHOUT");
+		COMPLETE_WITH("(", "ACCESS METHOD", "LOGGED", "SCHEMA", "TABLESPACE",
+					  "UNLOGGED", "WITH", "WITHOUT", "DISTRIBUTED",
+					  "SUBPARTITION TEMPLATE (");
 
+	/* ALTER TABLE xxx SET WITH ( */
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "("))
+		COMPLETE_WITH("reorganize =");
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(", "reorganize", "="))
+		COMPLETE_WITH("true )", "false )");
+	
+	else if(Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)"))
+		COMPLETE_WITH("DISTRIBUTED");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED") ||
+			 Matches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED"))
+		COMPLETE_WITH("BY (", "RANDOMLY", "REPLICATED");
 	/*
 	 * If we have ALTER TABLE <smt> SET ACCESS METHOD provide a list of table
 	 * AMs.
@@ -2154,17 +2221,38 @@ psql_completion(const char *text, int start, int end)
 	/* Limited completion support for partition bound specification */
 	else if (TailMatches("ATTACH", "PARTITION", MatchAny))
 		COMPLETE_WITH("FOR VALUES", "DEFAULT");
-	else if (TailMatches("FOR", "VALUES"))
+	else if (TailMatches("ATTACH", "PARTITION", MatchAny, "FOR", "VALUES"))
 		COMPLETE_WITH("FROM (", "IN (", "WITH (");
 
-	/*
-	 * If we have ALTER TABLE <foo> DETACH PARTITION, provide a list of
-	 * partitions of <foo>.
-	 */
-	else if (Matches("ALTER", "TABLE", MatchAny, "DETACH", "PARTITION"))
+	else if (Matches("ALTER", "TABLE", MatchAny, "EXCHANGE|SPLIT|TRUNCATE"))
+		COMPLETE_WITH("PARTITION", "DEFAULT PARTITION");
+	else if(Matches("ALTER", "TABLE", MatchAny, MatchAny, "DEFAULT"))
+		COMPLETE_WITH("PARTITION");
+
+	else if (Matches("ALTER", "TABLE", MatchAny, "RENAME", "PARTITION", MatchAny) ||
+			 Matches("ALTER", "TABLE", MatchAny, "RENAME", "DEFAULT", "PARTITION"))
+		COMPLETE_WITH("TO");
+
+	/* ALTER TABLE xxx SET DISTRIBUTED BY ( */
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "SET", "DISTRIBUTED", "BY", "(*)"))
 	{
-		completion_info_charp = prev3_wd;
-		COMPLETE_WITH_QUERY(Query_for_partition_of_table);
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
+	else if(HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*") &&
+		   !HeadMatches("ALTER", "TABLE", MatchAny, "SET", "WITH", "(*)", "DISTRIBUTED", "BY", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
+	}
+
+	/* ALTER TABLE xxx REPACK BY COLUMN ( */
+	else if (HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*") &&
+			!HeadMatches("ALTER", "TABLE", MatchAny, "REPACK", "BY", "COLUMNS", "(*)"))
+	{
+		if(ends_with(prev_wd, ',') || ends_with(prev_wd, '('))
+			COMPLETE_WITH_ATTR(previous_words[previous_words_count - 3], "");
 	}
 
 	/* ALTER TABLESPACE <foo> with RENAME TO, OWNER TO, SET, RESET */
@@ -2193,11 +2281,13 @@ psql_completion(const char *text, int start, int end)
 	/* complete ALTER TYPE <foo> with actions */
 	else if (Matches("ALTER", "TYPE", MatchAny))
 		COMPLETE_WITH("ADD ATTRIBUTE", "ADD VALUE", "ALTER ATTRIBUTE",
-					  "DROP ATTRIBUTE",
-					  "OWNER TO", "RENAME", "SET SCHEMA");
+					  "DROP ATTRIBUTE", "OWNER TO", "RENAME", "SET SCHEMA",
+					  "SET DEFAULT ENCODING (");
 	/* complete ALTER TYPE <foo> ADD with actions */
 	else if (Matches("ALTER", "TYPE", MatchAny, "ADD"))
 		COMPLETE_WITH("ATTRIBUTE", "VALUE");
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET"))
+		COMPLETE_WITH_SUPPRESS_APPEND("SCHEMA ", "DEFAULT ENCODING (");
 	/* ALTER TYPE <foo> RENAME	*/
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME"))
 		COMPLETE_WITH("ATTRIBUTE", "TO", "VALUE");
@@ -2230,13 +2320,31 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("ALTER", "TYPE", MatchAny, "RENAME", "VALUE"))
 		COMPLETE_WITH_ENUM_VALUE(prev3_wd);
 
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "("))
+		COMPLETE_WITH("COMPRESSTYPE =", "COMPRESSLEVEL =", "BLOCKSIZE =");
+	else if (Matches("ALTER", "TYPE", MatchAny, "SET", "DEFAULT", "ENCODING", "(", "COMPRESSTYPE", "="))
+		COMPLETE_WITH("ZLIB", "ZSTD", "RLE_TYPE", "NONE");
+
 /*
  * ANALYZE [ ( option [, ...] ) ] [ table_and_columns [, ...] ]
- * ANALYZE [ VERBOSE ] [ table_and_columns [, ...] ]
+ * ANALYZE [ VERBOSE ] [ ROOTPARTITION ] [ table_and_columns [, ...] ]
  */
 	else if (Matches("ANALYZE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
-								   " UNION SELECT 'VERBOSE'");
+								   " UNION SELECT 'VERBOSE'"
+								   " UNION SELECT 'ROOTPARTITION'"
+								   " UNION SELECT 'ROOTPARTITION ALL'"
+								   " UNION SELECT 'FULLSCAN'"
+								   " UNION SELECT '('");
+	else if (Matches("ANALYZE", "VERBOSE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
+								   " UNION SELECT 'ROOTPARTITION'"
+								   " UNION SELECT 'ROOTPARTITION ALL'"
+								   " UNION SELECT 'FULLSCAN'");
+	else if (Matches("ANALYZE", "ROOTPARTITION") ||
+			 Matches("ANALYZE", "VERBOSE", "ROOTPARTITION"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables,
+								   " UNION SELECT 'ALL'");
 	else if (HeadMatches("ANALYZE", "(*") &&
 			 !HeadMatches("ANALYZE", "(*)"))
 	{
@@ -2246,15 +2354,13 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("VERBOSE", "SKIP_LOCKED");
-		else if (TailMatches("VERBOSE|SKIP_LOCKED"))
+			COMPLETE_WITH_UNUSED_OPTIONS("VERBOSE", "SKIP_LOCKED", "FULLSCAN", "ROOTPARTITION");
+		else if (TailMatches("VERBOSE|SKIP_LOCKED|FULLSCAN|ROOTPARTITION"))
 			COMPLETE_WITH("ON", "OFF");
 	}
 	else if (HeadMatches("ANALYZE") && TailMatches("("))
 		/* "ANALYZE (" should be caught above, so assume we want columns */
 		COMPLETE_WITH_ATTR(prev2_wd, "");
-	else if (HeadMatches("ANALYZE"))
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_analyzables, NULL);
 
 /* BEGIN */
 	else if (Matches("BEGIN"))
@@ -2305,6 +2411,7 @@ psql_completion(const char *text, int start, int end)
 					  "DATABASE", "EVENT TRIGGER", "EXTENSION",
 					  "FOREIGN DATA WRAPPER", "FOREIGN TABLE", "SERVER",
 					  "INDEX", "LANGUAGE", "POLICY", "PUBLICATION", "RULE",
+					  "RESOURCE GROUP", "RESOURCE QUEUE",
 					  "SCHEMA", "SEQUENCE", "STATISTICS", "SUBSCRIPTION",
 					  "TABLE", "TYPE", "VIEW", "MATERIALIZED VIEW",
 					  "COLUMN", "AGGREGATE", "FUNCTION",
@@ -2315,6 +2422,12 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_access_methods);
 	else if (Matches("COMMENT", "ON", "FOREIGN"))
 		COMPLETE_WITH("DATA WRAPPER", "TABLE");
+	else if (Matches("COMMENT", "ON", "RESOURCE"))
+		COMPLETE_WITH("GROUP", "QUEUE");
+	else if (Matches("COMMENT", "ON", "RESOURCE", "GROUP"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
+	else if (Matches("COMMENT", "ON", "RESOURCE", "QUEUE"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_resqueues);
 	else if (Matches("COMMENT", "ON", "TEXT", "SEARCH"))
 		COMPLETE_WITH("CONFIGURATION", "DICTIONARY", "PARSER", "TEMPLATE");
 	else if (Matches("COMMENT", "ON", "CONSTRAINT"))
@@ -2363,16 +2476,63 @@ psql_completion(const char *text, int start, int end)
 	}
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename */
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny) ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
-		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
-					  "ENCODING");
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "WITH",
+					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
+					  "LOG ERRORS", "SEGMENT REJECT LIMIT", "ON SEGMENT",
+					  "ESCAPE", "HEADER", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "WITH", "NEWLINE", "ON SEGMENT", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "WITH",
+					  "ENCODING", "FREEZE", "FILL MISSING FIELDS", "NEWLINE",
+					  "ON SEGMENT", "ESCAPE", "HEADER",
+					  "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "TO", MatchAny))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "WITH", "NEWLINE", "ON SEGMENT",
+					  "IGNORE EXTERNAL PARTITIONS");
 
-	/* Handle COPY [BINARY] <sth> FROM|TO filename CSV */
-	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny, "CSV") ||
-			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny, "CSV"))
-		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE",
+	/* Handle COPY [BINARY] <sth> FROM|TO filename WITH */
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "WITH"))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "ENCODING",
+					  "FREEZE", "FILL MISSING FIELDS", "NEWLINE", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "ON SEGMENT", "ESCAPE", "HEADER",
+					  "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "FROM", MatchAny, "WITH"))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "NEWLINE", "ON SEGMENT", "LOG ERRORS",
+					  "SEGMENT REJECT LIMIT", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "WITH"))
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV", "ENCODING",
+					  "FREEZE", "FILL MISSING FIELDS", "NEWLINE", "ON SEGMENT",
+					  "ESCAPE", "HEADER", "IGNORE EXTERNAL PARTITIONS");
+	else if (Matches("COPY", "BINARY", MatchAny, "TO", MatchAny, "WITH"))
+		COMPLETE_WITH("ENCODING", "FREEZE", "FILL MISSING FIELDS", "ESCAPE",
+					  "NEWLINE", "ON SEGMENT", "IGNORE EXTERNAL PARTITIONS");
+
+	/* Handle COPY [BINARY] <sth> FROM filename CSV */
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV"))
+		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE NULL",
 					  "FORCE NOT NULL");
+	else if (Matches("COPY|\\copy", MatchAny, "FROM", MatchAny, "CSV", "FORCE"))
+		COMPLETE_WITH("NULL", "NOT NULL");
+
+	/* Handle COPY [BINARY] <sth> TO filename CSV */
+	else if (Matches("COPY|\\copy", MatchAny, "TO", MatchAny, "CSV"))
+		COMPLETE_WITH("HEADER", "QUOTE", "ESCAPE", "FORCE QUOTE");
+
+	else if((HeadMatches("COPY|\\copy", MatchAny, "FROM") ||
+			 HeadMatches("COPY", "BINARY", MatchAny, "FROM")) &&
+			 TailMatches("LOG", "ERRORS"))
+		COMPLETE_WITH("SEGMENT REJECT LIMIT");
+	else if((HeadMatches("COPY|\\copy", MatchAny, "FROM") ||
+			 HeadMatches("COPY", "BINARY", MatchAny, "FROM")) &&
+			 TailMatches("SEGMENT", "REJECT", "LIMIT", MatchAny))
+		COMPLETE_WITH("ROWS", "PERCENT");
+
 
 	/* CREATE ACCESS METHOD */
 	/* Complete "CREATE ACCESS METHOD <name>" */
@@ -3334,7 +3494,7 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("ANALYZE", "VERBOSE", "COSTS", "SETTINGS",
+			COMPLETE_WITH_UNUSED_OPTIONS("ANALYZE", "VERBOSE", "COSTS", "SETTINGS",
 						  "BUFFERS", "TIMING", "SUMMARY", "FORMAT");
 		else if (TailMatches("ANALYZE|VERBOSE|COSTS|SETTINGS|BUFFERS|TIMING|SUMMARY"))
 			COMPLETE_WITH("ON", "OFF");
@@ -3619,10 +3779,10 @@ psql_completion(const char *text, int start, int end)
 
 	/* For the following, handle the case of a single table only for now */
 
-	/* Complete LOCK [TABLE] <table> with "IN" */
+	/* Complete LOCK [TABLE] <table> with "IN", "NOWAIT" */
 	else if (Matches("LOCK", MatchAnyExcept("TABLE")) ||
 			 Matches("LOCK", "TABLE", MatchAny))
-		COMPLETE_WITH("IN");
+		COMPLETE_WITH("IN", "NOWAIT");
 
 	/* Complete LOCK [TABLE] <table> IN with a lock mode */
 	else if (Matches("LOCK", MatchAny, "IN") ||
@@ -3643,6 +3803,20 @@ psql_completion(const char *text, int start, int end)
 			 Matches("LOCK", "TABLE", MatchAny, "IN", "SHARE"))
 		COMPLETE_WITH("MODE", "ROW EXCLUSIVE MODE",
 					  "UPDATE EXCLUSIVE MODE");
+	
+	/* Complete LOCK [TABLE] <table> IN ACESS SHARE MODE with "NOWAIT", "MASTER ONLY", "COORDINATOR ONLY" */
+	else if (Matches("LOCK", MatchAny, "IN", "ACCESS", "SHARE", "MODE") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS", "SHARE", "MODE"))
+		COMPLETE_WITH("NOWAIT", "COORDINATOR ONLY");
+
+	else if (Matches("LOCK", MatchAny, "IN", "ACCESS", "SHARE", "MODE", "NOWAIT") ||
+			 Matches("LOCK", "TABLE", MatchAny, "IN", "ACCESS", "SHARE", "MODE", "NOWAIT"))
+		COMPLETE_WITH("COORDINATOR ONLY");
+
+	else if ((HeadMatches("LOCK", "TABLE", MatchAny, "IN") ||
+			  HeadMatches("LOCK", MatchAnyExcept("TABLE"), "IN")) &&
+			  TailMatches("MODE"))
+		COMPLETE_WITH("NOWAIT");
 
 /* NOTIFY --- can be inside EXPLAIN, RULE, etc */
 	else if (TailMatches("NOTIFY"))
@@ -3928,7 +4102,8 @@ psql_completion(const char *text, int start, int end)
 								   " UNION SELECT 'FULL'"
 								   " UNION SELECT 'FREEZE'"
 								   " UNION SELECT 'ANALYZE'"
-								   " UNION SELECT 'VERBOSE'");
+								   " UNION SELECT 'VERBOSE'"
+								   " UNION SELECT '('");
 	else if (Matches("VACUUM", "FULL"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
 								   " UNION SELECT 'FREEZE'"
@@ -3944,6 +4119,11 @@ psql_completion(const char *text, int start, int end)
 			 Matches("VACUUM", "FULL", "FREEZE", "VERBOSE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables,
 								   " UNION SELECT 'ANALYZE'");
+	else if (Matches("VACUUM", "ANALYZE") ||
+			 Matches("VACUUM", "FULL|FREEZE|VERBOSE", "ANALYZE") ||
+			 Matches("VACUUM", "FULL|FREEZE", "FREEZE|VERBOSE", "ANALYZE") ||
+			 Matches("VACUUM", "FULL", "FREEZE", "VERBOSE", "ANALYZE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_vacuumables, NULL);
 	else if (HeadMatches("VACUUM", "(*") &&
 			 !HeadMatches("VACUUM", "(*)"))
 	{
@@ -3953,11 +4133,11 @@ psql_completion(const char *text, int start, int end)
 		 * one word, so the above test is correct.
 		 */
 		if (ends_with(prev_wd, '(') || ends_with(prev_wd, ','))
-			COMPLETE_WITH("FULL", "FREEZE", "ANALYZE", "VERBOSE",
+			COMPLETE_WITH_UNUSED_OPTIONS("FULL", "FREEZE", "ANALYZE", "VERBOSE", "AO_AUX_ONLY",
 						  "DISABLE_PAGE_SKIPPING", "SKIP_LOCKED",
 						  "INDEX_CLEANUP", "TRUNCATE", "PARALLEL", "SKIP_DATABASE_STATS",
 						  "ONLY_DATABASE_STATS");
-		else if (TailMatches("FULL|FREEZE|ANALYZE|VERBOSE|DISABLE_PAGE_SKIPPING|SKIP_LOCKED|TRUNCATE|SKIP_DATABASE_STATS|ONLY_DATABASE_STATS"))
+		else if (TailMatches("FULL|FREEZE|ANALYZE|VERBOSE|AO_AUX_ONLY|DISABLE_PAGE_SKIPPING|SKIP_LOCKED|TRUNCATE|SKIP_DATABASE_STATS|ONLY_DATABASE_STATS"))
 			COMPLETE_WITH("ON", "OFF");
 	}
 	else if (HeadMatches("VACUUM") && TailMatches("("))
