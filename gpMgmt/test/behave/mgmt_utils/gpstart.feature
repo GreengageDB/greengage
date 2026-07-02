@@ -203,6 +203,23 @@ Feature: gpstart behave tests
           And gpcheckcat should not print "Number of segments which failed to start:.*" to stdout
 
     @demo_cluster
+    Scenario: gpstart on dir with trailing slash
+        Given the database is running
+          And the standby is not initialized
+
+         When the user runs gpinitstandby with options "-S /tmp/standby_data/"
+         Then gpinitstandby should return a return code of 0
+         Then verify the standby coordinator entries in catalog
+        
+         When the coordinator goes down
+          And the user runs "gpstart -a"
+         Then gpstart should return a return code of 0
+          And verify the standby coordinator entries in catalog
+        
+         When execute sql "select datadir from gp_segment_configuration where content = -1 and role = 'm'" in db "postgres" and store result in the context
+         Then validate that "/tmp/standby_data/" is in the stored rows
+
+    @demo_cluster
     Scenario: gpstart succeeds when cluster shut down during segment promotion
         Given the database is running
           And the user runs psql with "-c "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"" against database "postgres"
