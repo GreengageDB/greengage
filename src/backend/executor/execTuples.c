@@ -277,6 +277,13 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 }
 
 static bool
+tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
+{
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	return bms_is_member(attnum, slotAocs->tts_is_valid);
+}
+
+static bool
 tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 {
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
@@ -1350,7 +1357,8 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
 
-	.gettargetattr = NULL
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsVirtualAOCS = {
@@ -1372,7 +1380,8 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
 
-	.gettargetattr = tts_virtual_aocs_gettargetattr
+	.gettargetattr = tts_virtual_aocs_gettargetattr,
+	.is_attr_valid = tts_virtual_aocs_is_attr_valid
 };
 
 const TupleTableSlotOps TTSOpsHeapTuple = {
@@ -1391,7 +1400,8 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	.copy_heap_tuple = tts_heap_copy_heap_tuple,
 	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
 
-	.gettargetattr = NULL
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsMinimalTuple = {
@@ -1410,7 +1420,8 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.copy_heap_tuple = tts_minimal_copy_heap_tuple,
 	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
 
-	.gettargetattr = NULL
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsBufferHeapTuple = {
@@ -1429,7 +1440,8 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	.copy_heap_tuple = tts_buffer_heap_copy_heap_tuple,
 	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
 
-	.gettargetattr = NULL
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 
@@ -2262,16 +2274,6 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 		slot->tts_nvalid = attnum;
 	}
 }
-
-bool
-slot_gettargetattr_int(TupleTableSlot *slot, Bitmapset *attrs)
-{
-	if (NULL == slot->tts_ops->gettargetattr)
-		return false;
-
-	return slot->tts_ops->gettargetattr(slot, attrs);
-}
-
 
 /* ----------------------------------------------------------------
  *		ExecTypeFromTL
