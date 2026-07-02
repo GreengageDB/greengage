@@ -408,6 +408,8 @@ heap_create(const char *relname,
 		isAppendOnly = (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS);
 
 		RelationOpenSmgr(rel);
+		if (relpersistence == RELPERSISTENCE_UNLOGGED)
+			smgrcreate(rel->rd_smgr, INIT_FORKNUM, false);
 		RelationCreateStorage(rel->rd_node, relpersistence, relstorage);
 
 		/*
@@ -1555,21 +1557,6 @@ heap_create_with_catalog(const char *relname,
 	Assert(relid == RelationGetRelid(new_rel_desc));
 
 	/*
-	 * If this is an unlogged relation, it needs an init fork so that it can
-	 * be correctly reinitialized on restart. Since we're going to do an
-	 * immediate sync, we only need to xlog this if archiving or streaming is
-	 * enabled. And the immediate sync is required, because otherwise there's
-	 * no guarantee that this will hit the disk before the next checkpoint
-	 * moves the redo pointer.
-	 */
-	if (relpersistence == RELPERSISTENCE_UNLOGGED)
-	{
-		Assert(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
-			   relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind));
-		heap_create_init_fork(new_rel_desc);
-	}
-
-	/*
 	 * Decide whether to create an array type over the relation's rowtype. We
 	 * do not create any array types for system catalogs (ie, those made
 	 * during initdb). We do not create them where the use of a relation as
@@ -1869,6 +1856,21 @@ heap_create_with_catalog(const char *relname,
 							   relid, GetUserId(), /* not ownerid */
 							   "CREATE", subtyp
 					);
+	}
+
+	/*
+	 * If this is an unlogged relation, it needs an init fork so that it can
+	 * be correctly reinitialized on restart. Since we're going to do an
+	 * immediate sync, we only need to xlog this if archiving or streaming is
+	 * enabled. And the immediate sync is required, because otherwise there's
+	 * no guarantee that this will hit the disk before the next checkpoint
+	 * moves the redo pointer.
+	 */
+	if (relpersistence == RELPERSISTENCE_UNLOGGED)
+	{
+		Assert(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
+			   relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind));
+		heap_create_init_fork(new_rel_desc);
 	}
 
 	/*
