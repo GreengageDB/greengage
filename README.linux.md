@@ -6,21 +6,11 @@
   ```
   Note: CentOS 7 is EOL — configure `yum` to use a valid repo (e.g., `vault.centos.org`) before installing dependencies.
 
-## For RHEL/Rocky 8:
+## For RHEL/Rocky (versions 8 or 9):
 
 - Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
   ./README.Rhel-Rocky.bash
-  ```
-
-- Build and install zstd with static library, e.g.:
-  ```bash
-  cd /tmp
-  curl -LO https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz
-  tar -xf zstd-1.4.4.tar.gz
-  cd zstd-1.4.4
-  make -j$(nproc)
-  sudo make install PREFIX=/usr/local
   ```
 
 - Create symbolic link to Python 2 in `/usr/bin`:

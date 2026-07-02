@@ -92,6 +92,7 @@ setup_sshd() {
   # Disable password authentication so builds never hang given bad keys
   sed -ri 's/PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config
 
+  echo "MaxStartups 100:30:200" >> /etc/ssh/sshd_config
 
   case "$TEST_OS" in
     centos6 | sles*)
