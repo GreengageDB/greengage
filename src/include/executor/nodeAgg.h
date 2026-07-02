@@ -345,6 +345,9 @@ extern Size hash_agg_entry_size(int numTrans, Size tupleWidth,
 extern void hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_groups,
 								int used_bits, Size *mem_limit,
 								uint64 *ngroups_limit, int *num_partitions);
+extern Size hash_agg_set_limits2(AggState *aggstate, double hashentrysize, double input_groups,
+								int used_bits, Size mem_limit,
+								uint64 *ngroups_limit, int *num_partitions);
 
 extern Datum aggregate_dummy(PG_FUNCTION_ARGS);
 
