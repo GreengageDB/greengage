@@ -1569,6 +1569,8 @@ aoco_relation_cluster_internals(Relation OldHeap, Relation NewHeap, TupleDesc ol
 		SIMPLE_FAULT_INJECTOR("cluster_ao_scanning_tuples");
 		tuplesort_putheaptuple(tuplesort, tuple);
 		heap_freetuple(tuple);
+
+		ExecClearTuple(slot);
 	}
 
 	ExecDropSingleTupleTableSlot(slot);

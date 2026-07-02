@@ -1515,11 +1515,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	else
 	{
 		AOCSFileSegInfo *curseginfo;
-
-		// TODO: check if we need to simply call tts_virtual_aocs_clear
-		bms_free(slotAocs->tts_is_valid);
-		slotAocs->tts_is_valid = NULL;
-
 ReadNext:
 		/* If necessary, open next seg */
 		if (scan->cur_seg < 0 || err < 0)
@@ -3684,6 +3679,8 @@ aocs_writecol_rewritesegfiles(
 		ResetExprContext(econtext);
 		CHECK_FOR_INTERRUPTS();
 		expectedFRN++;
+
+		ExecClearTuple(oldslot);
 	}
 }
 
