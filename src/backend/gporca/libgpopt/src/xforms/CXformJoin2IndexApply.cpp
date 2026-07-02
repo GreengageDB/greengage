@@ -242,6 +242,7 @@ CXformJoin2IndexApply::CreateAlternativesForBtreeIndex(
 		switch (joinOp->Eopid())
 		{
 			case COperator::EopLogicalInnerJoin:
+			case COperator::EopLogicalLeftSemiJoin:
 				isOuterJoin = false;
 				break;
 

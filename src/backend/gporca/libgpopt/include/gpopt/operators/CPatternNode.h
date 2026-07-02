@@ -98,6 +98,7 @@ public:
 		{
 			case EmtMatchInnerOrLeftOuterJoin:
 				return COperator::EopLogicalInnerJoin == opid ||
+					   COperator::EopLogicalLeftSemiJoin == opid ||
 					   COperator::EopLogicalLeftOuterJoin == opid;
 
 			default:
