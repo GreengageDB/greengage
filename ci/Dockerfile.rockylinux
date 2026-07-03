@@ -20,7 +20,7 @@ RUN set -eux; \
     case "$OS_VERSION" in \
         8) \
             ln -sf /usr/bin/python2 /usr/bin/python; \
-            PIP_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3'; \
+            PIP_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3 future==0.16'; \
             ;; \
         9) \
             ln -sf /usr/bin/python3.11 /usr/bin/python; \

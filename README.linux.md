@@ -13,11 +13,12 @@
   sudo ./README.Rhel-Rocky.bash
   ```
 
-- Create a symbolic link to Python in `/usr/bin`:
+- Create a symbolic link to Python in `/usr/bin` and install `future` v0.16:
 
   - Rocky 8:
     ```bash
     sudo ln -s python2 /usr/bin/python
+    sudo python -m pip install --no-cache-dir future==0.16
     ```
 
   - Rocky 9:
