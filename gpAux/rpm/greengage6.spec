@@ -31,8 +31,8 @@ Requires: rsync
 Requires: zip
 
 %if 0%{?rhel} >= 9
-Requires: python3.11
-Requires: python3.11-pip
+Requires: python3
+Requires: python3-pip
 %else
 Requires: python2
 Requires: python3
