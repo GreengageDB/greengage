@@ -727,7 +727,14 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	Assert(glob->finalrteperminfos == NIL);
 	Assert(glob->finalrowmarks == NIL);
 	Assert(glob->resultRelations == NIL);
-	Assert(parse == root->parse);
+	/*
+	 * GPDB: we can no longer assert (parse == root->parse).  PG16's outer-join
+	 * "nullingrels" refactor made reduce_outer_joins()/remove_useless_result_rtes()
+	 * rewrite the query via remove_nulling_relids(), which returns a fresh Query
+	 * and reassigns root->parse.  The scalar fields we still read from the
+	 * original 'parse' below (commandType, queryId, stmt_len, intoPolicy, ...)
+	 * are invariant under that rewrite, matching upstream's own use of 'parse'.
+	 */
 	Assert(glob->appendRelations == NIL);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -5440,7 +5447,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 		path = cdb_prepare_path_for_hashed_agg(root,
 											   path,
 											   path->pathtarget,
-											   parse->groupClause,
+											   root->processed_groupClause,
 											   gd->rollups);
 
 		/*
@@ -5483,7 +5490,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 		path = cdb_prepare_path_for_hashed_agg(root,
 											   path,
 											   path->pathtarget,
-											   parse->groupClause,
+											   root->processed_groupClause,
 											   srd->new_rollups);
 
 
@@ -5513,7 +5520,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 										   path->pathtarget,
 										   root->group_pathkeys,
 										   -1.0,
-										   parse->groupClause,
+										   root->processed_groupClause,
 										   gd->rollups);
 
 	/*
@@ -6336,7 +6343,7 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 														  sorted_path->pathtarget,
 														  needed_pathkeys,
 														  -1.0,
-														  parse->distinctClause,
+														  root->processed_distinctClause,
 														  NIL);
 
 			if (root->distinct_pathkeys == NIL)
@@ -6404,7 +6411,7 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		path = cdb_prepare_path_for_hashed_agg(root,
 											   cheapest_input_path,
 											   cheapest_input_path->pathtarget,
-											   parse->distinctClause,
+											   root->processed_distinctClause,
 											   NIL);
 
 		if (CdbPathLocus_IsPartitioned(path->locus))
@@ -8543,7 +8550,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			path = cdb_prepare_path_for_hashed_agg(root,
 												   cheapest_path,
 												   cheapest_path->pathtarget,
-												   parse->groupClause,
+												   root->processed_groupClause,
 												   NIL);
 
 			/*
@@ -8586,7 +8593,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 			path = cdb_prepare_path_for_hashed_agg(root,
 												   path,
 												   path->pathtarget,
-												   parse->groupClause,
+												   root->processed_groupClause,
 												   NIL);
 
 			/*

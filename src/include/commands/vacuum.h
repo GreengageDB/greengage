@@ -203,14 +203,22 @@ typedef struct VacAttrStats
 #define VACOPT_ONLY_DATABASE_STATS 0x400	/* only vac_update_datfrozenxid() */
 #define VACOPT_SKIP_PRIVS 0x800 /* skip privilege checks */
 
-/* Extra GPDB options */
-#define VACOPT_ROOTONLY (1 << 10)
-#define VACOPT_FULLSCAN (1 << 11)
+/*
+ * Extra GPDB options.
+ *
+ * NB: keep these above the highest upstream VACOPT_* bit (currently
+ * VACOPT_SKIP_PRIVS = 0x800 = bit 11).  PG16 added VACOPT_ONLY_DATABASE_STATS
+ * (bit 10) and VACOPT_SKIP_PRIVS (bit 11), which used to collide with the GPDB
+ * flags below when they lived at bits 10/11 -- e.g. VACUUM (ONLY_DATABASE_STATS)
+ * spuriously set VACOPT_ROOTONLY and tripped the assert in vacuum().
+ */
+#define VACOPT_ROOTONLY (1 << 12)
+#define VACOPT_FULLSCAN (1 << 13)
 
 /* AO vacuum phases. Mutually exclusive */
-#define VACOPT_AO_PRE_CLEANUP_PHASE (1 << 12)
-#define VACOPT_AO_COMPACT_PHASE (1 << 13)
-#define VACOPT_AO_POST_CLEANUP_PHASE (1 << 14)
+#define VACOPT_AO_PRE_CLEANUP_PHASE (1 << 14)
+#define VACOPT_AO_COMPACT_PHASE (1 << 15)
+#define VACOPT_AO_POST_CLEANUP_PHASE (1 << 16)
 
 #define VACUUM_AO_PHASE_MASK (VACOPT_AO_PRE_CLEANUP_PHASE | \
 							  VACOPT_AO_COMPACT_PHASE | \

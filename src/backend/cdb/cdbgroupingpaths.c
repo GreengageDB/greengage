@@ -318,7 +318,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	ctx.strat = strat;
 
 	ctx.hasAggs = parse->hasAggs;
-	ctx.groupClause = parse->groupClause;
+	ctx.groupClause = root->processed_groupClause;
 	ctx.groupingSets = parse->groupingSets;
 	ctx.havingQual = havingQual;
 	ctx.partial_rel = fetch_upper_rel(root, UPPERREL_CDB_FIRST_STAGE_GROUP_AGG, NULL);
@@ -338,7 +338,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	ctx.partial_sort_pathkeys = root->group_pathkeys;
 
 	ctx.group_tles = get_common_group_tles(target,
-										   parse->groupClause,
+										   root->processed_groupClause,
 										   ctx.rollups);
 
 	/*
@@ -428,7 +428,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	else
 	{
 		ctx.partial_grouping_target = partial_grouping_target;
-		ctx.final_groupClause = parse->groupClause;
+		ctx.final_groupClause = root->processed_groupClause;
 		ctx.final_needed_pathkeys = root->group_pathkeys;
 		ctx.gsetid_sortref = 0;
 	}
@@ -574,8 +574,8 @@ cdb_create_twostage_distinct_paths(PlannerInfo *root,
 	ctx.hasAggs = false;
 	ctx.groupingSets = NIL;
 	ctx.havingQual = NULL;
-	ctx.groupClause = parse->distinctClause;
-	ctx.group_tles = get_common_group_tles(target, parse->distinctClause, NIL);
+	ctx.groupClause = root->processed_distinctClause;
+	ctx.group_tles = get_common_group_tles(target, root->processed_distinctClause, NIL);
 	ctx.final_groupClause = ctx.groupClause;
 	ctx.final_group_tles = ctx.group_tles;
 	ctx.gsetid_sortref = 0;
@@ -896,8 +896,15 @@ static void
 											  ctx->agg_partial_costs);
 		add_path(ctx->partial_rel, first_stage_agg_path);
 	}
-	else if (ctx->hasAggs || ctx->groupClause)
+	else
 	{
+		/*
+		 * GPDB: this also covers the degenerate case where the grouping
+		 * collapsed to a single (empty) group with no aggregates -- e.g.
+		 * "SELECT b GROUP BY b HAVING b = 3", where PG16 removes the sole,
+		 * provably-constant grouping column from processed_groupClause.  A
+		 * plain single-group Agg over the input is the correct first stage.
+		 */
 		add_path(ctx->partial_rel,
 			(Path *) create_agg_path(root,
 									 ctx->partial_rel,
@@ -911,10 +918,6 @@ static void
 									 ctx->agg_partial_costs,
 									 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 																	path->rows, path->locus)));
-	}
-	else
-	{
-		Assert(false);
 	}
 }
 

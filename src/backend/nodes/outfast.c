@@ -2581,6 +2581,7 @@ _outAlterTableCmd(StringInfo str, const AlterTableCmd *node)
 	WRITE_NODE_FIELD(transform);
 	WRITE_ENUM_FIELD(behavior, DropBehavior);
 	WRITE_BOOL_FIELD(missing_ok);
+	WRITE_BOOL_FIELD(recurse);
 
 	WRITE_INT_FIELD(backendId);
 	WRITE_NODE_FIELD(policy);
@@ -3618,6 +3619,14 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 		case RTE_SUBQUERY:
 			WRITE_NODE_FIELD(subquery);
 			WRITE_BOOL_FIELD(security_barrier);
+			/*
+			 * GPDB: view-derived subquery RTEs re-use these RELATION fields
+			 * (PG16 keeps relkind == RELKIND_VIEW so the view's ACL is still
+			 * checked via the RTEPermissionInfo).  Must be dispatched to QEs.
+			 */
+			WRITE_OID_FIELD(relid);
+			WRITE_CHAR_FIELD(relkind);
+			WRITE_INT_FIELD(rellockmode);
 			break;
 		case RTE_JOIN:
 			WRITE_ENUM_FIELD(jointype, JoinType);

@@ -380,6 +380,32 @@ _copyOidAssignment(const OidAssignment *from)
 	return newnode;
 }
 
+/*
+ * GPDB: PathTarget is excluded from generated copy support upstream
+ * (pg_node_attr no_copy_equal), but Greenplum's grouping-set planner
+ * (cdbgroupingpaths.c) copyObject()'s a PathTarget, so provide a copy
+ * function by hand.  Deep-copies exprs, matching the prior behavior.
+ */
+static PathTarget *
+_copyPathTarget(const PathTarget *from)
+{
+	PathTarget *newnode = makeNode(PathTarget);
+
+	COPY_NODE_FIELD(exprs);
+	if (from->sortgrouprefs)
+	{
+		int			numCols = list_length(from->exprs);
+
+		if (numCols > 0)
+			COPY_POINTER_FIELD(sortgrouprefs, numCols * sizeof(Index));
+	}
+	COPY_SCALAR_FIELD(cost);
+	COPY_SCALAR_FIELD(width);
+	COPY_SCALAR_FIELD(has_volatile_expr);
+
+	return newnode;
+}
+
 
 /*
  * copyObjectImpl -- implementation of copyObject(); see nodes/nodes.h
@@ -423,6 +449,14 @@ copyObjectImpl(const void *from)
 			 */
 		case T_OidAssignment:
 			retval = (Node *) _copyOidAssignment(from);
+			break;
+
+			/*
+			 * GPDB: PathTarget is excluded from generated copy support, but
+			 * the grouping-set planner copyObject's one; copy it by hand.
+			 */
+		case T_PathTarget:
+			retval = (Node *) _copyPathTarget(from);
 			break;
 
 		default:

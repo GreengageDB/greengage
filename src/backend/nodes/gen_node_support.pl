@@ -901,9 +901,15 @@ _equal${n}(const $n *a, const $n *b)
 		}
 		# GPDB: a lone PlanSlice* field (Motion.senderSliceInfo) is shallow
 		# struct-copied (palloc+memcpy), matching the old hand-written _copyMotion.
+		# The source pointer is usually NULL (only set on certain motions), so
+		# NULL-guard it -- COPY_POINTER_FIELD would otherwise memcpy from NULL.
 		elsif ($t eq 'struct PlanSlice*' || $t eq 'PlanSlice*')
 		{
-			print $cff "\tCOPY_POINTER_FIELD($f, sizeof(PlanSlice));\n" unless $copy_ignore;
+			print $cff "\tif (from->$f)\n\t{\n"
+			  . "\t\tnewnode->$f = palloc(sizeof(PlanSlice));\n"
+			  . "\t\tmemcpy(newnode->$f, from->$f, sizeof(PlanSlice));\n"
+			  . "\t}\n"
+			  unless $copy_ignore;
 		}
 		else
 		{

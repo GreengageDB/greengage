@@ -2143,7 +2143,7 @@ GrantRole(ParseState *pstate, GrantRoleStmt *stmt)
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
-									NIL,
+									GetAssignedOidsForDispatch(),
 									NULL);
 }
 
@@ -2532,8 +2532,9 @@ AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 			}
 
 			/* get an OID for the new row and insert it */
-			objectId = GetNewOidWithIndex(pg_authmem_rel, AuthMemOidIndexId,
-										  Anum_pg_auth_members_oid);
+			objectId = GetNewOidForAuthMember(pg_authmem_rel, AuthMemOidIndexId,
+											  Anum_pg_auth_members_oid,
+											  roleid, memberid, grantorId);
 			new_record[Anum_pg_auth_members_oid - 1] = objectId;
 			tuple = heap_form_tuple(pg_authmem_dsc,
 									new_record, new_record_nulls);

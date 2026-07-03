@@ -535,7 +535,22 @@ float8in_internal(char *num, char **endptr_p,
 		 pg_strncasecmp(num, "+Infinity", 9) != 0 && pg_strncasecmp(num, "+Inf", 4) != 0 )
 		literal_inf = false;
 
-	CHECKFLOATVAL((double) val, literal_inf, !(val > 0 || val < 0));
+	/*
+	 * GPDB: detect overflow/underflow from the long double -> double narrowing.
+	 * Honor the soft-error context (escontext) so that pg_input_is_valid() and
+	 * friends get a soft failure instead of a hard ERROR, matching upstream's
+	 * float8in_internal contract.  When escontext is not an ErrorSaveContext
+	 * (e.g. a plain cast), ereturn() behaves like ereport(ERROR).
+	 */
+	if (isinf((double) val) && !literal_inf)
+		ereturn(escontext, 0,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("value out of range: overflow")));
+
+	if ((double) val == 0.0 && (val > 0 || val < 0))
+		ereturn(escontext, 0,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("value out of range: underflow")));
 
 	return val;
 }

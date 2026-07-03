@@ -25,6 +25,7 @@
 #include "catalog/pg_type.h"
 #include "fmgr.h"
 #include "libpq/pqformat.h"
+#include "nodes/miscnodes.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/complex_type.h"
@@ -54,7 +55,7 @@
  * to the end of valid float, so that the caller can continue processing.
  */
 static double
-complex_decode_double(char **num_p)
+complex_decode_double(char **num_p, Node *escontext)
 {
 	char	   *num = *num_p;
 	char	   *orig_num;
@@ -77,7 +78,7 @@ complex_decode_double(char **num_p)
 	 * strtod() on different platforms.
 	 */
 	if (*num == '\0')
-		ereport(ERROR,
+		ereturn(escontext, 0,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 			 errmsg("invalid input syntax for type complex: \"%s\"",
 					orig_num)));
@@ -145,13 +146,13 @@ complex_decode_double(char **num_p)
 			 * to see if the result is zero or huge.
 			 */
 			if (val == 0.0 || val >= HUGE_VAL || val <= -HUGE_VAL)
-				ereport(ERROR,
+				ereturn(escontext, 0,
 						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				   errmsg("\"%s\" is out of range for type double precision",
 						  orig_num)));
 		}
 		else
-			ereport(ERROR,
+			ereturn(escontext, 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 			 errmsg("invalid input syntax for type complex: \"%s\"",
 					orig_num)));
@@ -195,6 +196,7 @@ Datum
 complex_in(PG_FUNCTION_ARGS)
 {
 	char	   *num = PG_GETARG_CSTRING(0);
+	Node	   *escontext = fcinfo->context;
 	double		val = 0;
 	double		re = 0;
 	double		im = 0;
@@ -204,11 +206,13 @@ complex_in(PG_FUNCTION_ARGS)
 
 	if ('\0' == *num)
 	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+		ereturn(escontext, (Datum) 0, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						errmsg("invalid input syntax for type complex: \"%s\"", orig_num)));
 	}
 
-	val = complex_decode_double(&num);
+	val = complex_decode_double(&num, escontext);
+	if (SOFT_ERROR_OCCURRED(escontext))
+		return (Datum) 0;
 	/* first part is the imaginary part, so there is only imaginary */
 	if ('i' == *num)
 	{
@@ -242,7 +246,9 @@ complex_in(PG_FUNCTION_ARGS)
 				num++;
 			}
 			/* get the imaginary part */
-			im = complex_decode_double(&num);
+			im = complex_decode_double(&num, escontext);
+			if (SOFT_ERROR_OCCURRED(escontext))
+				return (Datum) 0;
 			if ('i' == *num)
 			{
 				/* store the sign of the imaginary with the imaginary part */
@@ -251,7 +257,7 @@ complex_in(PG_FUNCTION_ARGS)
 			}
 			else
 			{
-				ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				ereturn(escontext, (Datum) 0, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								errmsg("invalid input syntax for type complex: \"%s\"", orig_num)));
 			}
 		}
@@ -265,7 +271,7 @@ complex_in(PG_FUNCTION_ARGS)
 
 	if ('\0' != *num)
 	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+		ereturn(escontext, (Datum) 0, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						errmsg("invalid input syntax for type complex: \"%s\"", orig_num)));
 	}
 

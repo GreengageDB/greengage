@@ -930,6 +930,7 @@ _readAlterTableCmd(void)
 	READ_NODE_FIELD(transform);
 	READ_ENUM_FIELD(behavior, DropBehavior);
 	READ_BOOL_FIELD(missing_ok);
+	READ_BOOL_FIELD(recurse);
 
 	READ_INT_FIELD(backendId);
 	READ_NODE_FIELD(policy);
@@ -2224,6 +2225,10 @@ _readRangeTblEntry(void)
 		case RTE_SUBQUERY:
 			READ_NODE_FIELD(subquery);
 			READ_BOOL_FIELD(security_barrier);
+			/* GPDB: view-derived subquery RTEs re-use these RELATION fields */
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
 			break;
 		case RTE_JOIN:
 			READ_ENUM_FIELD(jointype, JoinType);

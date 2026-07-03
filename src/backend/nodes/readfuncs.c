@@ -675,6 +675,14 @@ _readRangeTblEntry(void)
 		case RTE_RESULT:
 			/* no extra fields */
 			break;
+		case RTE_TABLEFUNCTION:	/* GPDB */
+			READ_NODE_FIELD(subquery);
+			READ_NODE_FIELD(functions);
+			READ_BOOL_FIELD(funcordinality);
+			break;
+		case RTE_VOID:			/* GPDB: deleted RTE */
+			/* no extra fields */
+			break;
 		default:
 			elog(ERROR, "unrecognized RTE kind: %d",
 				 (int) local_node->rtekind);

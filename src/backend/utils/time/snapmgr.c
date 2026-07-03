@@ -2593,8 +2593,17 @@ XidInMVCCSnapshot_Local(TransactionId xid, Snapshot snapshot)
 		 */
 		if (!snapshot->suboverflowed)
 		{
-			/* we have full data, so search subxip */
-			if (pg_lfind32(xid, snapshot->subxip, snapshot->subxcnt))
+			/*
+			 * we have full data, so search subxip.
+			 *
+			 * GPDB: reader-gang snapshots copied via copyLocalSnapshot()
+			 * carry subxcnt == -1 as a "no subxact data" sentinel.  The old
+			 * scan loop (for j < subxcnt) naturally skipped it, but
+			 * pg_lfind32() takes an unsigned nelem, so -1 would scan ~4
+			 * billion entries of a NULL array.  Guard with subxcnt > 0.
+			 */
+			if (snapshot->subxcnt > 0 &&
+				pg_lfind32(xid, snapshot->subxip, snapshot->subxcnt))
 				return true;
 
 			/* not there, fall through to search xip[] */
@@ -2650,7 +2659,15 @@ XidInMVCCSnapshot_Local(TransactionId xid, Snapshot snapshot)
 		 * indeterminate xid. We don't know whether it's top level or subxact
 		 * but it doesn't matter. If it's present, the xid is visible.
 		 */
-		if (pg_lfind32(xid, snapshot->subxip, snapshot->subxcnt))
+		/*
+		 * GPDB: reader-gang snapshots copied via copyLocalSnapshot() carry
+		 * subxcnt == -1 as a "no subxact data" sentinel.  The old scan loop
+		 * (for j < subxcnt) naturally skipped it, but pg_lfind32() takes an
+		 * unsigned nelem, so -1 would scan ~4 billion entries of a NULL array.
+		 * Guard with subxcnt > 0 to preserve the old skip-on-empty behavior.
+		 */
+		if (snapshot->subxcnt > 0 &&
+			pg_lfind32(xid, snapshot->subxip, snapshot->subxcnt))
 			return true;
 	}
 

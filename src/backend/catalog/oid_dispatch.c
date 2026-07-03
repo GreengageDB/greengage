@@ -85,6 +85,7 @@
 #include "catalog/pg_amproc.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_auth_members.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
@@ -565,6 +566,29 @@ GetNewOidForAuthId(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	memset(&key, 0, sizeof(OidAssignment));
 	key.type = T_OidAssignment;
 	key.objname = rolname;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+}
+
+/*
+ * pg_auth_members gained an OID column in PG16.  A membership row is uniquely
+ * identified by (roleid, member, grantor), so key the OID assignment on all
+ * three so the QEs reuse the OID the QD allocated.
+ */
+Oid
+GetNewOidForAuthMember(Relation relation, Oid indexId, AttrNumber oidcolumn,
+					   Oid roleid, Oid member, Oid grantorId)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == AuthMemRelationId);
+	Assert(indexId == AuthMemOidIndexId);
+	Assert(oidcolumn == Anum_pg_auth_members_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.keyOid1 = roleid;
+	key.keyOid2 = member;
+	key.namespaceOid = grantorId;
 	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
 }
 
