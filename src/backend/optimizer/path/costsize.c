@@ -158,7 +158,16 @@ bool		enable_partitionwise_aggregate = false;
 bool		enable_parallel_append = true;
 bool		enable_parallel_hash = true;
 bool		enable_partition_pruning = true;
-bool		enable_presorted_aggregate = true;
+/*
+ * GPDB: PG16's presorted-aggregate feature adds a pathkey on the
+ * ORDER BY / DISTINCT aggregate's argument to root->group_pathkeys so the
+ * input is pre-sorted.  The MPP multi-stage grouping planner does not carry
+ * that column through every intermediate tlist, so a Sort built from those
+ * pathkeys can reference a column absent from its subplan ("could not find
+ * pathkey item to sort").  Disable it, as with enable_memoize /
+ * enable_incremental_sort, until the MPP planner supports it.
+ */
+bool		enable_presorted_aggregate = false;
 bool		enable_async_append = true;
 
 typedef struct

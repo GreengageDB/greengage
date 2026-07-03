@@ -3674,6 +3674,16 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 			/* no extra fields */
 			break;
         case RTE_VOID:                                                  /*CDB*/
+			/*
+			 * GPDB: an RTE the planner pulled up is marked RTE_VOID but keeps
+			 * its relid/relkind (and perminfoindex, written below) so the
+			 * dispatched RTE still matches its RTEPermissionInfo on the QE
+			 * (ExecCheckPermissions asserts perminfo->relid == rte->relid).
+			 * A pulled-up view RTE has a valid relid; a plain subquery has 0.
+			 */
+			WRITE_OID_FIELD(relid);
+			WRITE_CHAR_FIELD(relkind);
+			WRITE_INT_FIELD(rellockmode);
             break;
 		default:
 			elog(ERROR, "unrecognized RTE kind: %d", (int) node->rtekind);

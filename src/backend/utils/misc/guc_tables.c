@@ -1040,7 +1040,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_presorted_aggregate,
-		true,
+		false,					/* GPDB: unsupported in MPP planner, see costsize.c */
 		NULL, NULL, NULL
 	},
 	{

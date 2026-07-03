@@ -2285,6 +2285,10 @@ _readRangeTblEntry(void)
 			/* no extra fields */
 			break;
         case RTE_VOID:                                                  /*CDB*/
+			/* GPDB: read the relid/relkind kept for the pulled-up RTE (see outfast.c) */
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
             break;
 		default:
 			elog(ERROR, "unrecognized RTE kind: %d",

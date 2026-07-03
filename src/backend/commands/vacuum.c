@@ -3244,6 +3244,30 @@ vacuum_params_to_options_list(VacuumParams *params)
 										   -1));
 	optmask &= ~VACOPT_PROCESS_MAIN;
 
+	/*
+	 * VACOPT_SKIP_DATABASE_STATS / VACOPT_ONLY_DATABASE_STATS (new in PG16)
+	 * are ordinary boolean options (default off), so only dispatch them when
+	 * set.  ExecVacuum() parses them back into the mask on the segment.
+	 */
+	if (optmask & VACOPT_SKIP_DATABASE_STATS)
+	{
+		options = lappend(options, makeDefElem("skip_database_stats", (Node *) makeInteger(1), -1));
+		optmask &= ~VACOPT_SKIP_DATABASE_STATS;
+	}
+	if (optmask & VACOPT_ONLY_DATABASE_STATS)
+	{
+		options = lappend(options, makeDefElem("only_database_stats", (Node *) makeInteger(1), -1));
+		optmask &= ~VACOPT_ONLY_DATABASE_STATS;
+	}
+
+	/*
+	 * VACOPT_SKIP_PRIVS (new in PG16) is an internal bypass set when vacuum
+	 * recurses into a relation's TOAST/main child after checking privileges
+	 * on the parent.  Each node re-derives it during its own vacuum_rel()
+	 * recursion, so it must not be dispatched; just clear it from the mask.
+	 */
+	optmask &= ~VACOPT_SKIP_PRIVS;
+
 	if (optmask & VACUUM_AO_PHASE_MASK)
 	{
 		options = lappend(options, makeDefElem("ao_phase",
