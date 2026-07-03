@@ -278,6 +278,11 @@ tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 static void
 tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 {
+	/*
+	 * The content of this function is almost similar to
+	 * tts_virtual_aocs_gettargetattr(), but we do not remove this duplication
+	 * due to performance reasons.
+	 */
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
@@ -297,11 +302,10 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
-		if (bms_is_member(attno, slotAocs->tts_is_valid))
+		if (unlikely((attno < slot->tts_nvalid) ||
+					bms_is_member(attno, slotAocs->tts_is_valid)))
 			continue;
 
-		if (unlikely(attno < slot->tts_nvalid))
-			continue;
 		if (unlikely(attno >= natts))
 			break;
 
