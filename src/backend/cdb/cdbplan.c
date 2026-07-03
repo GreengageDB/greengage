@@ -620,6 +620,34 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_IncrementalSort:
+			{
+				IncrementalSort *isort = (IncrementalSort *) node;
+				IncrementalSort *newisort;
+
+				FLATCOPY(newisort, isort, IncrementalSort);
+				PLANMUTATE(newisort, isort);
+				COPYARRAY(newisort, isort, sort.numCols, sort.sortColIdx);
+				COPYARRAY(newisort, isort, sort.numCols, sort.sortOperators);
+				COPYARRAY(newisort, isort, sort.numCols, sort.nullsFirst);
+				return (Node *) newisort;
+			}
+			break;
+
+		case T_Memoize:
+			{
+				Memoize    *memoize = (Memoize *) node;
+				Memoize    *newmemoize;
+
+				FLATCOPY(newmemoize, memoize, Memoize);
+				PLANMUTATE(newmemoize, memoize);
+				COPYARRAY(newmemoize, memoize, numKeys, hashOperators);
+				COPYARRAY(newmemoize, memoize, numKeys, collations);
+				MUTATE(newmemoize->param_exprs, memoize->param_exprs, List *);
+				return (Node *) newmemoize;
+			}
+			break;
+
 		case T_Agg:
 			{
 				Agg		   *agg = (Agg *) node;

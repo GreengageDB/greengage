@@ -739,6 +739,14 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 		case RTE_RESULT:
 			/* no extra fields */
 			break;
+		case RTE_TABLEFUNCTION:	/* GPDB */
+			WRITE_NODE_FIELD(subquery);
+			WRITE_NODE_FIELD(functions);
+			WRITE_BOOL_FIELD(funcordinality);
+			break;
+		case RTE_VOID:			/* GPDB: deleted RTE */
+			/* no extra fields */
+			break;
 		default:
 			elog(ERROR, "unrecognized RTE kind: %d", (int) node->rtekind);
 			break;
