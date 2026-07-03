@@ -13,10 +13,16 @@
   ./README.Rhel-Rocky.bash
   ```
 
-- Create symbolic link to Python 2 in `/usr/bin`:
+- For RHEL/Rocky 8 create symbolic link to Python 2 in `/usr/bin`:
 
   ```bash
   sudo ln -s python2 /usr/bin/python
+  ```
+
+- For RHEL/Rocky 9 create symbolic link to Python 3 in `/usr/bin`:
+
+  ```bash
+  sudo ln -s python3.11 /usr/bin/python
   ```
 
 ## For Ubuntu (versions 22.04 or 24.04):

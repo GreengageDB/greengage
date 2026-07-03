@@ -70,8 +70,9 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
 The `rpm/greengage6.spec` file defines the RPM build:
 
 1. **Distribution-specific Dependencies**:
-   - `python3` required on RHEL/Rocky 9 and newer
-   - `python2` required on RHEL/Rocky 8 and older
+   - `python3.11` and `python3.11-pip` required on RHEL/Rocky 9 and newer
+   - `python2`, `python2-pip`, `python3`, `python3-pip` required on
+     RHEL/Rocky 8 and older
 
 2. **Build Process**:
    - `%install` invokes the project's `make dist` target with `DESTDIR`
@@ -226,9 +227,13 @@ for example:
 
 ```spec
 %if 0%{?rhel} >= 9
-Requires: python3
+Requires: python3.11
+Requires: python3.11-pip
 %else
 Requires: python2
+Requires: python3
+Requires: python2-pip
+Requires: python3-pip
 %endif
 ```
 
@@ -250,9 +255,9 @@ Requires: python2
 ### RPM
 
 - Builds without signing for development convenience
-- Strips debug info from `*.so` files to avoid RPM's `check-buildroot`
-  failing on BUILDROOT paths embedded in compiled extensions
-- Excludes `check-buildroot` and shebang mangling from the standard
-  post-install brp scripts (`__os_install_post`/`__spec_install_post`)
+- Strips debug info from `*.so` files to remove BUILDROOT paths embedded
+  by the compiler, which would otherwise fail `check-buildroot` validation
+- Excludes the entire install prefix from shebang mangling via
+  `__brp_mangle_shebangs_exclude_from`
 - Collects only the resulting `.rpm` into `$(CURDIR)/../Package`
-
+- `RPM_TOPDIR` is kept after the build for inspection

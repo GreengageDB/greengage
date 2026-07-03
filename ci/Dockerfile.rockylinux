@@ -16,13 +16,16 @@ COPY gpMgmt/bin/gpload_test/pytest_requirement.txt ./
 RUN set -eux; \
     ./README.Rhel-Rocky.bash; \
     rm README.Rhel-Rocky.bash; \
-# Define Python test packages based on OS version
+# Set Python as default based on OS version
     case "$OS_VERSION" in \
         8) \
-            PIP_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3'; \
+            ln -sf /usr/bin/python2 /usr/bin/python; \
+            PIP_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3 future==0.16'; \
             ;; \
         9) \
-            PIP_PACKAGES='allure-behave==2.4.0'; \
+            ln -sf /usr/bin/python3.11 /usr/bin/python; \
+            python -m ensurepip --upgrade; \
+            PIP_PACKAGES='allure-behave==2.4.0 future==1.0.0'; \
             ;; \
         *) \
             echo "Unsupported Rocky Linux version: $OS_VERSION"; \

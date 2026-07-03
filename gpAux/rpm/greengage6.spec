@@ -17,6 +17,8 @@ Summary: Greengage MPP database engine
 License: ASL 2.0
 URL:     https://greengagedb.org
 
+Requires: findutils
+Requires: glibc-langpack-en
 Requires: iproute
 Requires: iputils
 Requires: less
@@ -24,13 +26,18 @@ Requires: net-tools
 Requires: openssh-clients
 Requires: openssh-server
 Requires: openssl
+Requires: procps-ng
 Requires: rsync
 Requires: zip
 
 %if 0%{?rhel} >= 9
-Requires: python3
+Requires: python3.11
+Requires: python3.11-pip
 %else
 Requires: python2
+Requires: python3
+Requires: python2-pip
+Requires: python3-pip
 %endif
 
 Conflicts: greengage-loaders
