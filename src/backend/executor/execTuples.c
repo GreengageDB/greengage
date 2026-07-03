@@ -149,6 +149,132 @@ tts_virtual_getsomeattrs(TupleTableSlot *slot, int natts)
 	elog(ERROR, "getsomeattrs is not required to be called on a virtual tuple table slot");
 }
 
+static bool
+tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+	int			err PG_USED_FOR_ASSERTS_ONLY;
+	MemoryContext oldContext;
+
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
+	if (unlikely(scan == NULL))
+		return false;
+
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
+
+ 	AttrNumber	attno = -1;
+	while ((attno = bms_next_member(attrs, attno)) >= 0)
+	{
+		if (unlikely(bms_is_member(attno, slotAocs->tts_is_valid)))
+			continue;
+
+		if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
+								attno,
+								curseginfo->segno,
+								scan->columnScanInfo.attnum_to_rownum)))
+		{
+			d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+
+			oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+			slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+			MemoryContextSwitchTo(oldContext);
+
+			continue;
+		}
+
+		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+		Assert(ds);
+
+		if (unlikely(ds->noBlocksRead || rowNum > ds->blockFirstRowNum + ds->blockRowCount - 1))
+		{
+			if (!scan->blockDirectory && scan->aocsfetch)
+			{
+				AppendOnlyBlockDirectoryEntry dirEntry;
+				bool res PG_USED_FOR_ASSERTS_ONLY;
+				res = AppendOnlyBlockDirectory_GetEntry(
+									  &scan->aocsfetch->blockDirectory,
+									  tid,
+									  attno,
+									  &dirEntry,
+									  scan->columnScanInfo.attnum_to_rownum);
+				Assert(res);
+
+				Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
+				AppendOnlyStorageRead_SetTemporaryStart(&ds->ao_read,
+														dirEntry.range.fileOffset,
+														dirEntry.range.afterFileOffset);
+			}
+
+			while (true)
+			{
+				bool read_ok PG_USED_FOR_ASSERTS_ONLY;
+				read_ok = datumstreamread_block_info(ds);
+				Assert(read_ok);
+
+				if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
+				{
+					int64 blocksRead;
+					/* read a new buffer to consume */
+					datumstreamread_block_content(ds);
+
+					if (scan->blockDirectory)
+					{
+						AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
+															 attno,
+															 ds->blockFirstRowNum,
+															 ds->blockFileOffset,
+															 ds->blockRowCount);
+					}
+
+					AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+					blocksRead =
+						RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
+					pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+												blocksRead);
+
+					break;
+				}
+				else
+				{
+					bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+					gp_appendonly_verify_block_checksums = false;
+					AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+					gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+				}
+			}
+		}
+
+		err = datumstreamread_advance(ds);
+		Assert(err >= 0);
+
+		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
+		while (rowNumInBlock > datumstreamread_nth(ds))
+		{
+			err = datumstreamread_advance(ds);
+			Assert(err > 0);
+		}
+
+		datumstreamread_get(ds, &d[attno], &null[attno]);
+
+		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+		MemoryContextSwitchTo(oldContext);
+	}
+	return true;
+}
+
+static bool
+tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
+{
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	return bms_is_member(attnum, slotAocs->tts_is_valid);
+}
+
 static void
 tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 {
@@ -270,136 +396,9 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
 		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
 		MemoryContextSwitchTo(oldContext);
-
 	}
 
 	slot->tts_nvalid = natts;
-}
-
-static bool
-tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
-{
-	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	return bms_is_member(attnum, slotAocs->tts_is_valid);
-}
-
-static bool
-tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
-{
-	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
-	if (unlikely(scan == NULL))
-		return false;
-
- 	AttrNumber	attno = -1;
-	while ((attno = bms_next_member(attrs, attno)) >= 0)
-	{
-		Datum	   *d = slot->tts_values;
-		bool	   *null = slot->tts_isnull;
-		int			err PG_USED_FOR_ASSERTS_ONLY;
-		MemoryContext oldContext;
-
-		if (bms_is_member(attno, slotAocs->tts_is_valid))
-			continue;
-
-		AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-		AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
-		int64		rowNum = AOTupleIdGet_rowNum(tid);
-		Assert(rowNum != InvalidAORowNum);
-
-		if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
-								attno,
-								curseginfo->segno,
-								scan->columnScanInfo.attnum_to_rownum)))
-		{
-			d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-
-			oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-			slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-			MemoryContextSwitchTo(oldContext);
-
-			continue;
-		}
-
-		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
-		Assert(ds);
-
-		if (unlikely(ds->noBlocksRead || rowNum > ds->blockFirstRowNum + ds->blockRowCount - 1))
-		{
-			if (!scan->blockDirectory && scan->aocsfetch)
-			{
-				AppendOnlyBlockDirectoryEntry dirEntry;
-				bool res PG_USED_FOR_ASSERTS_ONLY;
-				res = AppendOnlyBlockDirectory_GetEntry(
-									  &scan->aocsfetch->blockDirectory,
-									  tid,
-									  attno,
-									  &dirEntry,
-									  scan->columnScanInfo.attnum_to_rownum);
-				Assert(res);
-
-				Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
-				AppendOnlyStorageRead_SetTemporaryStart(&ds->ao_read,
-														dirEntry.range.fileOffset,
-														dirEntry.range.afterFileOffset);
-			}
-
-			while (true)
-			{
-				bool read_ok PG_USED_FOR_ASSERTS_ONLY;
-				read_ok = datumstreamread_block_info(ds);
-				Assert(read_ok);
-
-				if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
-				{
-					int64 blocksRead;
-					/* read a new buffer to consume */
-					datumstreamread_block_content(ds);
-
-					if (scan->blockDirectory)
-					{
-						AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
-															 attno,
-															 ds->blockFirstRowNum,
-															 ds->blockFileOffset,
-															 ds->blockRowCount);
-					}
-
-					AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-					blocksRead =
-						RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
-					pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-												blocksRead);
-
-					break;
-				}
-				else
-				{
-					bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
-					gp_appendonly_verify_block_checksums = false;
-					AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
-					gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
-				}
-			}
-		}
-
-		err = datumstreamread_advance(ds);
-		Assert(err >= 0);
-
-		int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
-		while (rowNumInBlock > datumstreamread_nth(ds))
-		{
-			err = datumstreamread_advance(ds);
-			Assert(err > 0);
-		}
-
-		datumstreamread_get(ds, &d[attno], &null[attno]);
-
-		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-		MemoryContextSwitchTo(oldContext);
-	}
-	return true;
 }
 
 /*
