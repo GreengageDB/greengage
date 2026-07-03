@@ -40,6 +40,8 @@ RUN set -eux; \
     mkdir -p /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
+# Upgrade pip to support current package versions
+    python -m pip install --no-cache-dir --upgrade pip; \
 # Install allure-behave for behave tests
     python -m pip install --no-cache-dir $PIP_PACKAGES; \
 # Install pytest for gpload test
