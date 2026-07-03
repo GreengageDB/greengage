@@ -2,8 +2,7 @@
 # FILE:    README.Rhel-Rocky.bash
 # CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build
 # PURPOSE: Install build dependencies, compile zstd static library,
-#          Install Python based on OS version with `python' symlink,
-#          Install Python packages based on Python and OS versions
+#          Install Python based on OS version
 
 set -euxo pipefail
 
