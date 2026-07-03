@@ -53,6 +53,7 @@ dnf -y install \
     gperf \
     indent \
     iproute \
+    iputils \
     java-11-openjdk-devel \
     jq \
     krb5-devel \

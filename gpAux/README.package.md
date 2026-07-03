@@ -121,7 +121,7 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
    e.g., `greengage6`)
 - `ARTIFACTS_DIR`: Directory for artifacts (default: `$(CURDIR)/../Package`,
   shared between `.deb` and `.rpm` outputs)
-- `RPM_TOPDIR`: Temporary `rpmbuild` working directory used only by `pkg-rpm`
+- `RPM_TOPDIR`: `rpmbuild` working directory used only by `pkg-rpm`
   default: `$(CURDIR)/../RPM`, kept after the build for inspection
 
 ## Build Process Details
@@ -152,11 +152,10 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
      `rpmbuild` via `--define gpdb_version`
 
 2. **Package Building**:
-   - Sets up a temporary `rpmbuild` tree under `RPM_TOPDIR`
+   - Sets up `rpmbuild` tree under `RPM_TOPDIR`
    - Runs `rpmbuild -bb rpm/greengage6.spec` with `gproot`, `gpdir`, and
      `sourcedir` passed via `--define`
-   - Collects the resulting `.rpm` into `ARTIFACTS_DIR`, then removes
-     `RPM_TOPDIR`
+   - Collects the resulting `.rpm` into `ARTIFACTS_DIR`
 
 3. **Installation**:
    - Uses `make dist` inside `%install`, installing into `%{buildroot}`
