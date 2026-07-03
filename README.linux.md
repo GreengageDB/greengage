@@ -10,20 +10,32 @@
 
 - Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
-  ./README.Rhel-Rocky.bash
+  sudo ./README.Rhel-Rocky.bash
   ```
 
-- For RHEL/Rocky 8 create symbolic link to Python 2 in `/usr/bin`:
+- Create a symbolic link to Python in `/usr/bin`:
 
-  ```bash
-  sudo ln -s python2 /usr/bin/python
-  ```
+  - Rocky 8:
+    ```bash
+    sudo ln -s python2 /usr/bin/python
+    ```
 
-- For RHEL/Rocky 9 create symbolic link to Python 3 in `/usr/bin`:
+  - Rocky 9:
+    ```bash
+    sudo ln -s python3.11 /usr/bin/python
+    ```
 
-  ```bash
-  sudo ln -s python3.11 /usr/bin/python
-  ```
+- Install required Python packages:
+
+  - Rocky 8:
+    ```bash
+    pip2 install future==0.16
+    ```
+
+  - Rocky 9:
+    ```bash
+    pip3.11 install future==1.0.0
+    ```
 
 ## For Ubuntu (versions 22.04 or 24.04):
 
