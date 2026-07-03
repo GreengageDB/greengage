@@ -22,19 +22,7 @@
 
   - Rocky 9:
     ```bash
-    sudo ln -s python3.11 /usr/bin/python
-    ```
-
-- Install required Python packages:
-
-  - Rocky 8:
-    ```bash
-    pip2 install future==0.16
-    ```
-
-  - Rocky 9:
-    ```bash
-    pip3.11 install future==1.0.0
+    sudo ln -s python3 /usr/bin/python
     ```
 
 ## For Ubuntu (versions 22.04 or 24.04):

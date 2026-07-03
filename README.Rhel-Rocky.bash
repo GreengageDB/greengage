@@ -12,20 +12,17 @@ dnf -y install epel-release
 # Detect OS version if not already set
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
+perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
+python_packages="python3 python3-devel python3-setuptools python3-pip python3-future"
+
 case "$OS_VERSION" in
     8)
         dnf config-manager --set-enabled powertools
-        python_packages="python2 python2-devel python2-setuptools python2-pip \
-                         python3 python3-devel python3-setuptools python3-pip"
-        perl_packages="perl-Env perl-ExtUtils-Embed \
-                       perl-IPC-Run perl-JSON perl-Test-Base"
+        python_packages="python2 python2-devel python2-setuptools python2-pip $python_packages"
         ;;
     9)
         dnf config-manager --set-enabled crb
-        python_packages="python3.11 python3.11-devel python3.11-setuptools python3.11-pip"
-        perl_packages="perl-Env perl-ExtUtils-Embed \
-                       perl-IPC-Run perl-JSON perl-Test-Base \
-                       perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
+        perl_packages="$perl_packages perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
         ;;
     *)
         echo "Unsupported Rocky Linux version: $OS_VERSION"
