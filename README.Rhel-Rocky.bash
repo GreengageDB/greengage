@@ -45,6 +45,7 @@ dnf -y install \
     bzip2-devel \
     cmake \
     expat-devel \
+    findutils \
     flex \
     gcc-c++ \
     git \
