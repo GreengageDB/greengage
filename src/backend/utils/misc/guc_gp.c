@@ -152,7 +152,7 @@ bool		Debug_datumstream_block_read_check_integrity = false;
 bool		Debug_datumstream_block_write_check_integrity = false;
 bool		Debug_datumstream_read_print_varlena_info = false;
 bool		Debug_datumstream_write_use_small_initial_buffers = false;
-bool		gp_create_table_random_default_distribution = true;
+bool		gp_create_table_random_default_distribution = false;
 bool		gp_allow_non_uniform_partitioning_ddl = true;
 bool		gp_print_create_gang_time = false;
 int			dtx_phase2_retry_second = 0;
@@ -186,7 +186,7 @@ int			Debug_dtm_action = DEBUG_DTM_ACTION_NONE;
 
 int			Debug_dtm_action_target = DEBUG_DTM_ACTION_TARGET_DEFAULT;
 
-#define DEBUG_DTM_ACTION_PROTOCOL_DEFAULT DTX_PROTOCOL_COMMAND_COMMIT_PREPARED
+#define DEBUG_DTM_ACTION_PROTOCOL_DEFAULT DTX_PROTOCOL_COMMAND_NONE
 
 int			Debug_dtm_action_protocol = DEBUG_DTM_ACTION_PROTOCOL_DEFAULT;
 
@@ -268,12 +268,12 @@ bool		gp_eager_two_phase_agg = false;
 /* Optimizer related gucs */
 bool		optimizer;
 bool		optimizer_log;
-int			optimizer_log_failure;
+int			optimizer_log_failure = OPTIMIZER_UNEXPECTED_FAIL;
 bool		optimizer_control = true;
 bool		optimizer_trace_fallback;
 bool		optimizer_partition_selection_log;
 int			optimizer_minidump;
-int			optimizer_cost_model;
+int			optimizer_cost_model = OPTIMIZER_GPDB_CALIBRATED;
 bool		optimizer_metadata_caching;
 int			optimizer_mdcache_size;
 bool		optimizer_use_gpdb_allocators;
@@ -364,7 +364,7 @@ double		optimizer_sort_factor;
 int			optimizer_join_arity_for_associativity_commutativity;
 int         optimizer_array_expansion_threshold;
 int         optimizer_join_order_threshold;
-int			optimizer_join_order;
+int			optimizer_join_order = JOIN_ORDER_EXHAUSTIVE2_SEARCH;
 int			optimizer_cte_inlining_bound;
 int			optimizer_push_group_by_below_setop_threshold;
 int			optimizer_xform_bind_threshold;
@@ -1071,7 +1071,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"gp_debug_resqueue_priority", PGC_USERSET, RESOURCES_MGM,
 			gettext_noop("Print out debugging information about backoff calls."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_debug_resqueue_priority,
 		false,
@@ -3803,7 +3803,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_local_interval", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("A measure of how often a backend process must consider backing off."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_local_interval,
 		100000, 500, INT_MAX,
@@ -3822,7 +3822,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_inactivity_timeout", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("If a backend does not report progress in this time (in ms), it is deemed inactive."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_inactivity_timeout,
 		2000, 500, INT_MAX,
@@ -3832,7 +3832,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_grouping_timeout", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("A backend gives up on finding a better group leader after this timeout (in ms)."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_grouping_timeout,
 		1000, 1000, INT_MAX,
@@ -4441,7 +4441,7 @@ struct config_string ConfigureNamesString_gp[] =
 		{"gp_resqueue_priority_default_value", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Default weight when one cannot be associated with a statement."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_default_value,
 		"MEDIUM",
@@ -4531,7 +4531,7 @@ struct config_string ConfigureNamesString_gp[] =
 		{"gp_interconnect_proxy_addresses", PGC_SIGHUP, GP_ARRAY_CONFIGURATION,
 			gettext_noop("Sets the ic-proxy addresses as \"content:ip:port ...\", must be ordered by content, the port is ignored at the moment."),
 			gettext_noop("e.g. \"-1:10.0.0.1:2000 0:10.0.0.2:2000 1:10.0.0.2:2001\""),
-			GUC_NO_SHOW_ALL | GUC_GPDB_NO_SYNC
+			GUC_NO_SHOW_ALL | GUC_GPDB_NO_SYNC | GUC_NOT_IN_SAMPLE
 		},
 		&gp_interconnect_proxy_addresses,
 		"",
@@ -5025,12 +5025,20 @@ check_gp_default_storage_options(char **newval, void **extra, GucSource source)
 {
 	/* Value of "appendonly" option if one is specified. */
 	StdRdOptions *newopts;
+	char	   *optstr;
 
-	newopts = calloc(sizeof(*newopts), 1);
-	if (!newopts)
-		ereport(ERROR,
-				(errcode(ERRCODE_OUT_OF_MEMORY),
-				 errmsg("out of memory")));
+	/*
+	 * The replacement value string and the "extra" struct we hand back are
+	 * released by the GUC machinery with guc_free() (pfree from
+	 * GUCMemoryContext).  Since PG16 (upstream commit reworking GUC memory
+	 * management), guc_strdup()/guc_malloc() allocate in GUCMemoryContext, so
+	 * we must use them here rather than libc malloc/calloc/free -- mixing the
+	 * two corrupts the heap ("munmap_chunk(): invalid pointer").
+	 */
+	newopts = (StdRdOptions *) guc_malloc(LOG, sizeof(*newopts));
+	if (newopts == NULL)
+		return false;
+	memset(newopts, 0, sizeof(*newopts));
 
 	resetAOStorageOpts(newopts);
 
@@ -5051,9 +5059,15 @@ check_gp_default_storage_options(char **newval, void **extra, GucSource source)
 	 * All validations succeeded, it is safe to update global
 	 * appendonly storage options.
 	 */
-
-	free(*newval);
-	*newval = storageOptToString(newopts);
+	optstr = storageOptToString(newopts);
+	guc_free(*newval);
+	*newval = guc_strdup(LOG, optstr);
+	free(optstr);
+	if (*newval == NULL)
+	{
+		guc_free(newopts);
+		return false;
+	}
 	*extra = newopts;
 
 	return true;

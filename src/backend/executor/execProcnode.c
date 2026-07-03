@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -166,6 +166,7 @@ static TupleTableSlot *ExecProcNodeFirst(PlanState *node);
 static TupleTableSlot *ExecProcNodeInstr(PlanState *node);
 #endif
 static TupleTableSlot *ExecProcNodeGPDB(PlanState *node);
+static bool ExecShutdownNode_walker(PlanState *node, void *context);
 
 
 /* ------------------------------------------------------------------------
@@ -1326,8 +1327,14 @@ planstate_walk_kids(PlanState *planstate,
  * Give execution nodes a chance to stop asynchronous resource consumption
  * and release any resources still held.
  */
-bool
+void
 ExecShutdownNode(PlanState *node)
+{
+	(void) ExecShutdownNode_walker(node, NULL);
+}
+
+static bool
+ExecShutdownNode_walker(PlanState *node, void *context)
 {
 	if (node == NULL)
 		return false;
@@ -1347,7 +1354,7 @@ ExecShutdownNode(PlanState *node)
 	if (node->instrument && node->instrument->running)
 		InstrStartNode(node->instrument);
 
-	planstate_tree_walker(node, ExecShutdownNode, NULL);
+	planstate_tree_walker(node, ExecShutdownNode_walker, context);
 
 	switch (nodeTag(node))
 	{

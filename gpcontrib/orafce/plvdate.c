@@ -14,6 +14,7 @@
 #define PLVDATE_VERSION  "PostgreSQL PLVdate, version 3.7, October 2018"
 
 #include "postgres.h"
+#include "varatt.h"
 #include "utils/date.h"
 #include "utils/builtins.h"
 #include <sys/time.h>

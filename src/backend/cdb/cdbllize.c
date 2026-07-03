@@ -1368,9 +1368,77 @@ is_plan_node(Node *node)
 	if (node == NULL)
 		return false;
 
-	if (nodeTag(node) >= T_Plan_Start && nodeTag(node) < T_Plan_End)
-		return true;
-	return false;
+	/*
+	 * GPDB_16_MERGE_FIXME: PG16's gen_node_support.pl generates the NodeTag
+	 * enum from the node headers, so the old contiguous [T_Plan_Start,
+	 * T_Plan_End) range no longer exists -- plannodes.h interleaves non-Plan
+	 * helper structs (NestLoopParam, PlanSlice, ExternalScanInfo, ...) among
+	 * the Plan subclasses.  Test the Plan-derived node tags explicitly; keep
+	 * this in sync with the Plan/Scan/Join subclasses in nodes/plannodes.h.
+	 */
+	switch (nodeTag(node))
+	{
+		case T_Plan:
+		case T_Result:
+		case T_ProjectSet:
+		case T_ModifyTable:
+		case T_Append:
+		case T_MergeAppend:
+		case T_Sequence:
+		case T_RecursiveUnion:
+		case T_BitmapAnd:
+		case T_BitmapOr:
+		case T_Scan:
+		case T_SeqScan:
+		case T_SampleScan:
+		case T_IndexScan:
+		case T_DynamicIndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapIndexScan:
+		case T_DynamicBitmapIndexScan:
+		case T_BitmapHeapScan:
+		case T_DynamicBitmapHeapScan:
+		case T_DynamicSeqScan:
+		case T_TidScan:
+		case T_TidRangeScan:
+		case T_SubqueryScan:
+		case T_FunctionScan:
+		case T_TableFunctionScan:
+		case T_ValuesScan:
+		case T_TableFuncScan:
+		case T_CteScan:
+		case T_NamedTuplestoreScan:
+		case T_WorkTableScan:
+		case T_ForeignScan:
+		case T_CustomScan:
+		case T_Join:
+		case T_NestLoop:
+		case T_MergeJoin:
+		case T_HashJoin:
+		case T_ShareInputScan:
+		case T_Material:
+		case T_Memoize:
+		case T_Sort:
+		case T_IncrementalSort:
+		case T_Group:
+		case T_Agg:
+		case T_TupleSplit:
+		case T_WindowAgg:
+		case T_Unique:
+		case T_Gather:
+		case T_GatherMerge:
+		case T_Hash:
+		case T_SetOp:
+		case T_LockRows:
+		case T_Limit:
+		case T_Motion:
+		case T_AssertOp:
+		case T_PartitionSelector:
+		case T_SplitUpdate:
+			return true;
+		default:
+			return false;
+	}
 }
 
 #define SANITY_MOTION 0x1

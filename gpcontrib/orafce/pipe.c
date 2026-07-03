@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 #include "funcapi.h"
 #include "fmgr.h"
 #include "access/htup_details.h"

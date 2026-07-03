@@ -16,6 +16,7 @@
 
 #include "common/relpath.h"
 #include "storage/backendid.h"
+#include "storage/relfilelocator.h"
 
 /*
  * RelFileNode must provide all that we need to know to physically access
@@ -107,21 +108,21 @@ inline static bool RelFileNode_IsEmpty(
 /*
  * Augmenting a relfilenode with a SMGR implementation identifier provides a
  * way to make optimal decisions in smgr and md layer. This is purposefully
- * kept out of RelFileNode for performance concerns where RelFileNode used in
+ * kept out of RelFileLocator for performance concerns where RelFileLocator is used in
  * a hotpath for BufferTag hashing. The isTempRelation flag is necessary to
  * support file-system removal of temporary relations on a two-phase
  * commit/abort.
  */
 typedef struct RelFileNodePendingDelete
 {
-	RelFileNode node;
+	RelFileLocator node;		/* PG16: RelFileLocator (spcOid/dbOid/relNumber) */
 	int smgr_which; /* which SMGR implementation to use */
 	bool isTempRelation;
 } RelFileNodePendingDelete;
 
 typedef struct RelFileNodePendingSync
 {
-	RelFileNode node;
+	RelFileLocator node;		/* PG16: RelFileLocator (spcOid/dbOid/relNumber) */
 	int smgr_which; /* which SMGR implementation to use */
 } RelFileNodePendingSync;
 

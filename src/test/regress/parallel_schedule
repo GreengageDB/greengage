@@ -29,7 +29,8 @@ test: boolean char name varchar text int2 int4 int8 oid float4 float8 bit numeri
 # strings depends on char, varchar and text
 # numerology depends on int2, int4, int8, float4, float8
 # ----------
-test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 tstypes xid
+test: strings md5 numerology point lseg line box path polygon circle
+test: date time timetz timestamp timestamptz interval inet macaddr macaddr8 tstypes xid
 
 # ----------
 # Another group of parallel tests
@@ -50,7 +51,7 @@ test: copy copyselect copydml insert insert_conflict
 # More groups of parallel tests
 # Note: many of the tests in later groups depend on create_index
 # ----------
-test: create_function_c create_misc create_operator create_procedure create_table create_type
+test: create_function_c create_misc create_operator create_procedure create_table create_type create_schema
 test: create_index create_index_spgist create_view index_including index_including_gist
 # Depends on things setup for create_index
 test: gp_gin_index
@@ -75,9 +76,6 @@ test: enable_autovacuum
 # Disabled in GPDB. FIXME: why?
 # ----------
 #test: sanity_check
-
-# Note: the ignore: line does not skip random, just mark it as ignorable
-ignore: random
 
 # ----------
 # Another group of parallel tests
@@ -115,7 +113,7 @@ test: create_table_like alter_generic alter_operator misc async dbsize misc_func
 # incremental_sort
 
 # collate.*.utf8 tests cannot be run in parallel with each other
-test: psql psql_crosstab amutils stats_ext collate.linux.utf8
+test: psql psql_crosstab amutils stats_ext collate.linux.utf8 collate.windows.win1252
 #
 # 'rules' test is disabled in GPDB. Maintaining the list of views in it is
 # too painful, and there are also errors because of cross-segment UPDATEs
@@ -150,7 +148,7 @@ test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch 
 # ----------
 # Another group of parallel tests (JSON related)
 # ----------
-test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath sqljson json_sqljson jsonb_sqljson
+test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath sqljson
 
 # ----------
 # Another group of parallel tests

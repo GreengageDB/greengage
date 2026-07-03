@@ -1042,7 +1042,7 @@ aoco_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 
 	aocs_insert(insertDesc, slot);
 
-	pgstat_count_heap_update(relation, false);
+	pgstat_count_heap_update(relation, false, false);
 	/* No HOT updates with AO tables. */
 	*update_indexes = true;
 
@@ -1151,8 +1151,8 @@ aoco_compute_xid_horizon_for_tuples(Relation rel,
  * ------------------------------------------------------------------------
  */
 static void
-aoco_relation_set_new_filenode(Relation rel,
-							   const RelFileNode *newrnode,
+aoco_relation_set_new_filelocator(Relation rel,
+							   const RelFileLocator *newrlocator,
 							   char persistence,
 							   TransactionId *freezeXid,
 							   MultiXactId *minmulti)
@@ -1172,7 +1172,7 @@ aoco_relation_set_new_filenode(Relation rel,
 	 *
 	 * Segment files will be created when / if needed.
 	 */
-	srel = RelationCreateStorage(*newrnode, persistence, SMGR_AO, true);
+	srel = RelationCreateStorage(*newrlocator, persistence, SMGR_AO, true);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -1189,7 +1189,7 @@ aoco_relation_set_new_filenode(Relation rel,
 			   rel->rd_rel->relkind == RELKIND_MATVIEW ||
 			   rel->rd_rel->relkind == RELKIND_TOASTVALUE);
 		smgrcreate(srel, INIT_FORKNUM, false);
-		log_smgrcreate(newrnode, INIT_FORKNUM, SMGR_AO);
+		log_smgrcreate(newrlocator, INIT_FORKNUM, SMGR_AO);
 		smgrimmedsync(srel, INIT_FORKNUM);
 	}
 
@@ -1230,15 +1230,17 @@ aoco_relation_nontransactional_truncate(Relation rel)
 }
 
 static void
-aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
+aoco_relation_copy_data(Relation rel, const RelFileLocator *newrlocator)
 {
 	SMgrRelation dstrel;
+	RelFileNode srcnode;
+	RelFileNode dstnode;
 
 	/*
 	 * Use the "AO-specific" (non-shared buffers backed storage) SMGR
 	 * implementation
 	 */
-	dstrel = smgropen(*newrnode, rel->rd_backend, SMGR_AO);
+	dstrel = smgropen(*newrlocator, rel->rd_backend, SMGR_AO);
 	RelationOpenSmgr(rel);
 
 	/*
@@ -1248,9 +1250,15 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * NOTE: any conflict in relfilenode value will be caught in
 	 * RelationCreateStorage().
 	 */
-	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO, true);
+	RelationCreateStorage(*newrlocator, rel->rd_rel->relpersistence, SMGR_AO, true);
 
-	copy_append_only_data(rel->rd_node, *newrnode, rel->rd_backend, rel->rd_rel->relpersistence);
+	srcnode.spcNode = rel->rd_locator.spcOid;
+	srcnode.dbNode = rel->rd_locator.dbOid;
+	srcnode.relNode = rel->rd_locator.relNumber;
+	dstnode.spcNode = newrlocator->spcOid;
+	dstnode.dbNode = newrlocator->dbOid;
+	dstnode.relNode = newrlocator->relNumber;
+	copy_append_only_data(srcnode, dstnode, rel->rd_backend, rel->rd_rel->relpersistence);
 
 	/*
 	 * For append-optimized tables, no forks other than the main fork should
@@ -1267,7 +1275,7 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 		 */
 		smgrcreate(dstrel, INIT_FORKNUM, false);
 
-		log_smgrcreate(newrnode, INIT_FORKNUM, SMGR_AO);
+		log_smgrcreate(newrlocator, INIT_FORKNUM, SMGR_AO);
 	}
 
 	/* drop old relation, and close new one */
@@ -1304,8 +1312,9 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Datum	   *values;
 	bool	   *isnull;
 	TransactionId FreezeXid;
-	MultiXactId OldestMxact;
 	MultiXactId MultiXactCutoff;
+	struct VacuumCutoffs cutoffs;
+	VacuumParams vacuum_params;
 	Tuplesortstate *tuplesort;
 	PGRUsage	ru0;
 
@@ -1368,9 +1377,14 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 * Compute sane values for FreezeXid and CutoffMulti with regular
 	 * VACUUM machinery to avoidconfising existing CLUSTER code.
 	 */
-	vacuum_set_xid_limits(OldHeap, 0, 0, 0, 0,
-						  &OldestXmin, &OldestMxact, &FreezeXid,
-						  &MultiXactCutoff);
+	memset(&vacuum_params, 0, sizeof(vacuum_params));
+	vacuum_params.freeze_min_age = 0;
+	vacuum_params.freeze_table_age = 0;
+	vacuum_params.multixact_freeze_min_age = 0;
+	vacuum_params.multixact_freeze_table_age = 0;
+	vacuum_get_cutoffs(OldHeap, &vacuum_params, &cutoffs);
+	FreezeXid = cutoffs.FreezeLimit;
+	MultiXactCutoff = cutoffs.MultiXactCutoff;
 
 	/*
 	 * FreezeXid will become the table's new relfrozenxid, and that mustn't go
@@ -2167,7 +2181,7 @@ static const TableAmRoutine ao_column_methods = {
 	.tuple_satisfies_snapshot = aoco_tuple_satisfies_snapshot,
 	.index_delete_tuples = NULL,
 
-	.relation_set_new_filenode = aoco_relation_set_new_filenode,
+	.relation_set_new_filelocator = aoco_relation_set_new_filelocator,
 	.relation_nontransactional_truncate = aoco_relation_nontransactional_truncate,
 	.relation_copy_data = aoco_relation_copy_data,
 	.relation_copy_for_cluster = aoco_relation_copy_for_cluster,

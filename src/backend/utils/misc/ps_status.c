@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2000-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2023, PostgreSQL Global Development Group
  * various details abducted from various places
  *--------------------------------------------------------------------
  */
@@ -17,13 +17,6 @@
 #include "postgres.h"
 
 #include <unistd.h>
-#ifdef HAVE_SYS_PSTAT_H
-#include <sys/pstat.h>			/* for HP-UX */
-#endif
-#ifdef HAVE_PS_STRINGS
-#include <machine/vmparam.h>	/* for old BSD */
-#include <sys/exec.h>
-#endif
 #if defined(__darwin__)
 #include <crt_externs.h>
 #endif
@@ -38,27 +31,19 @@
 
 extern char **environ;
 extern int PostPortNumber; /* GPDB: Helps identify child processes */
-bool		update_process_title = true;
 
+/* GUC variable */
+bool		update_process_title = DEFAULT_UPDATE_PROCESS_TITLE;
 
 /*
  * Alternative ways of updating ps display:
  *
  * PS_USE_SETPROCTITLE_FAST
  *	   use the function setproctitle_fast(const char *, ...)
- *	   (newer FreeBSD systems)
+ *	   (FreeBSD)
  * PS_USE_SETPROCTITLE
  *	   use the function setproctitle(const char *, ...)
- *	   (newer BSD systems)
- * PS_USE_PSTAT
- *	   use the pstat(PSTAT_SETCMD, )
- *	   (HPUX)
- * PS_USE_PS_STRINGS
- *	   assign PS_STRINGS->ps_argvstr = "string"
- *	   (some BSD systems)
- * PS_USE_CHANGE_ARGV
- *	   assign argv[0] = "string"
- *	   (some other BSD systems)
+ *	   (other BSDs)
  * PS_USE_CLOBBER_ARGV
  *	   write over the argv and environment area
  *	   (Linux and most SysV-like systems)
@@ -72,13 +57,7 @@ bool		update_process_title = true;
 #define PS_USE_SETPROCTITLE_FAST
 #elif defined(HAVE_SETPROCTITLE)
 #define PS_USE_SETPROCTITLE
-#elif defined(HAVE_PSTAT) && defined(PSTAT_SETCMD)
-#define PS_USE_PSTAT
-#elif defined(HAVE_PS_STRINGS)
-#define PS_USE_PS_STRINGS
-#elif (defined(BSD) || defined(__hurd__)) && !defined(__darwin__)
-#define PS_USE_CHANGE_ARGV
-#elif defined(__linux__) || defined(_AIX) || defined(__sgi) || (defined(sun) && !defined(BSD)) || defined(__svr5__) || defined(__darwin__)
+#elif defined(__linux__) || defined(_AIX) || defined(__sun) || defined(__darwin__)
 #define PS_USE_CLOBBER_ARGV
 #elif defined(WIN32)
 #define PS_USE_WIN32
@@ -112,6 +91,14 @@ static size_t ps_buffer_cur_len;	/* nominal strlen(ps_buffer) */
 
 static size_t ps_buffer_fixed_size; /* size of the constant prefix */
 static char     ps_username[NAMEDATALEN];        /*CDB*/
+
+/*
+ * Length of ps_buffer before the suffix was appended to the end, or 0 if we
+ * didn't set a suffix.
+ */
+static size_t ps_buffer_nosuffix_len;
+
+static void flush_ps_display(void);
 
 #endif							/* not PS_USE_NONE */
 
@@ -207,9 +194,6 @@ save_ps_display_args(int argc, char **argv)
 		new_environ[i] = NULL;
 		environ = new_environ;
 	}
-#endif							/* PS_USE_CLOBBER_ARGV */
-
-#if defined(PS_USE_CHANGE_ARGV) || defined(PS_USE_CLOBBER_ARGV)
 
 	/*
 	 * If we're going to change the original argv[] then make a copy for
@@ -247,15 +231,15 @@ save_ps_display_args(int argc, char **argv)
 #if defined(__darwin__)
 
 		/*
-		 * macOS (and perhaps other NeXT-derived platforms?) has a static copy
-		 * of the argv pointer, which we may fix like so:
+		 * macOS has a static copy of the argv pointer, which we may fix like
+		 * so:
 		 */
 		*_NSGetArgv() = new_argv;
 #endif
 
 		argv = new_argv;
 	}
-#endif							/* PS_USE_CHANGE_ARGV or PS_USE_CLOBBER_ARGV */
+#endif							/* PS_USE_CLOBBER_ARGV */
 
 	return argv;
 }
@@ -292,25 +276,10 @@ init_ps_display(const char *fixed_part)
 	/* If ps_buffer is a pointer, it might still be null */
 	if (!ps_buffer)
 		return;
-#endif
 
-	/*
-	 * Overwrite argv[] to point at appropriate space, if needed
-	 */
-
-#ifdef PS_USE_CHANGE_ARGV
-	save_argv[0] = ps_buffer;
-	save_argv[1] = NULL;
-#endif							/* PS_USE_CHANGE_ARGV */
-
-#ifdef PS_USE_CLOBBER_ARGV
-	{
-		int			i;
-
-		/* make extra argv slots point at end_of_area (a NUL) */
-		for (i = 1; i < save_argc; i++)
-			save_argv[i] = ps_buffer + ps_buffer_size;
-	}
+	/* make extra argv slots point at end_of_area (a NUL) */
+	for (int i = 1; i < save_argc; i++)
+		save_argv[i] = ps_buffer + ps_buffer_size;
 #endif							/* PS_USE_CLOBBER_ARGV */
 
 	/*
@@ -354,36 +323,144 @@ init_ps_display(const char *fixed_part)
 #endif							/* not PS_USE_NONE */
 }
 
-
-
-/*
- * Call this to update the ps status display to a fixed prefix plus an
- * indication of what you're currently doing passed in the argument.
- */
-void
-set_ps_display(const char *activity)
-{
 #ifndef PS_USE_NONE
-	char	   *cp = ps_buffer + ps_buffer_fixed_size;
-	char	   *ep = ps_buffer + ps_buffer_size;
-
+/*
+ * update_ps_display_precheck
+ *		Helper function to determine if updating the process title is
+ *		something that we need to do.
+ */
+static bool
+update_ps_display_precheck(void)
+{
 	/* update_process_title=off disables updates */
 	if (!update_process_title)
-		return;
+		return false;
 
 	/* no ps display for stand-alone backend */
 	if (!IsUnderPostmaster)
-		return;
+		return false;
 
 #ifdef PS_USE_CLOBBER_ARGV
 	/* If ps_buffer is a pointer, it might still be null */
 	if (!ps_buffer)
-		return;
+		return false;
 #endif
+
+	return true;
+}
+#endif							/* not PS_USE_NONE */
+
+/*
+ * set_ps_display_suffix
+ *		Adjust the process title to append 'suffix' onto the end with a space
+ *		between it and the current process title.
+ */
+void
+set_ps_display_suffix(const char *suffix)
+{
+#ifndef PS_USE_NONE
+	size_t		len;
+
+	/* first, check if we need to update the process title */
+	if (!update_ps_display_precheck())
+		return;
+
+	/* if there's already a suffix, overwrite it */
+	if (ps_buffer_nosuffix_len > 0)
+		ps_buffer_cur_len = ps_buffer_nosuffix_len;
+	else
+		ps_buffer_nosuffix_len = ps_buffer_cur_len;
+
+	len = strlen(suffix);
+
+	/* check if we have enough space to append the suffix */
+	if (ps_buffer_cur_len + len + 1 >= ps_buffer_size)
+	{
+		/* not enough space.  Check the buffer isn't full already */
+		if (ps_buffer_cur_len < ps_buffer_size - 1)
+		{
+			/* append a space before the suffix */
+			ps_buffer[ps_buffer_cur_len++] = ' ';
+
+			/* just add what we can and fill the ps_buffer */
+			memcpy(ps_buffer + ps_buffer_cur_len, suffix,
+				   ps_buffer_size - ps_buffer_cur_len - 1);
+			ps_buffer[ps_buffer_size - 1] = '\0';
+			ps_buffer_cur_len = ps_buffer_size - 1;
+		}
+	}
+	else
+	{
+		ps_buffer[ps_buffer_cur_len++] = ' ';
+		memcpy(ps_buffer + ps_buffer_cur_len, suffix, len + 1);
+		ps_buffer_cur_len = ps_buffer_cur_len + len;
+	}
+
+	Assert(strlen(ps_buffer) == ps_buffer_cur_len);
+
+	/* and set the new title */
+	flush_ps_display();
+#endif							/* not PS_USE_NONE */
+}
+
+/*
+ * set_ps_display_remove_suffix
+ *		Remove the process display suffix added by set_ps_display_suffix
+ */
+void
+set_ps_display_remove_suffix(void)
+{
+#ifndef PS_USE_NONE
+	/* first, check if we need to update the process title */
+	if (!update_ps_display_precheck())
+		return;
+
+	/* check we added a suffix */
+	if (ps_buffer_nosuffix_len == 0)
+		return;					/* no suffix */
+
+	/* remove the suffix from ps_buffer */
+	ps_buffer[ps_buffer_nosuffix_len] = '\0';
+	ps_buffer_cur_len = ps_buffer_nosuffix_len;
+	ps_buffer_nosuffix_len = 0;
+
+	Assert(ps_buffer_cur_len == strlen(ps_buffer));
+
+	/* and set the new title */
+	flush_ps_display();
+#endif							/* not PS_USE_NONE */
+}
+
+/*
+ * Call this to update the ps status display to a fixed prefix plus an
+ * indication of what you're currently doing passed in the argument.
+ *
+ * 'len' must be the same as strlen(activity)
+ */
+void
+set_ps_display_with_len(const char *activity, size_t len)
+{
+#ifndef PS_USE_NONE
+	char	   *cp;
+	char	   *ep;
+#endif
+
+	Assert(strlen(activity) == len);
+
+#ifndef PS_USE_NONE
+	/* first, check if we need to update the process title */
+	if (!update_ps_display_precheck())
+		return;
+
+	/* wipe out any suffix when the title is completely changed */
+	ps_buffer_nosuffix_len = 0;
+
+	cp = ps_buffer + ps_buffer_fixed_size;
+	ep = ps_buffer + ps_buffer_size;
 
 	Assert(cp >= ps_buffer);
 
-	/* Add client session's global id. */
+	/* GPDB: Add client session's global id. */
 	if (gp_session_id > 0 && ep - cp > 0 &&
 		strstr(ps_buffer, "dtx recovery process") == NULL &&
 		strstr(ps_buffer, "ftsprobe process") == NULL)
@@ -404,7 +481,7 @@ set_ps_display(const char *activity)
 		cp += snprintf(cp, ep - cp, "slice%d ", currentSliceId);
 
 	/*
-	 * Calculate the size preceding the actual activity string start.
+	 * GPDB: Calculate the size preceding the actual activity string start.
 	 * snprintf returns the number of bytes that *would* have been written if
 	 * enough space had been available. This means cp might go beyond, if
 	 * truncation happened. Hence need below check for Min. (ep - 1) is
@@ -413,35 +490,41 @@ set_ps_display(const char *activity)
 	 * counted. End result simply intended here is really real_act_prefix_size
 	 * = strlen(ps_buffer), for performance reasons kept this way.
 	 */
-	real_act_prefix_size = Min(cp, (ep-1)) - ps_buffer;
+	real_act_prefix_size = Min(cp, (ep - 1)) - ps_buffer;
 
-	/* Append caller's activity string. */
-	strlcpy(ps_buffer + real_act_prefix_size, activity,
-			ps_buffer_size - real_act_prefix_size);
-
-	ps_buffer_cur_len = strlen(ps_buffer);
+	/*
+	 * Update ps_buffer to contain both the fixed part (including the GPDB
+	 * "conN segN cmdN sliceN" prefix) and the activity.
+	 */
+	if (real_act_prefix_size + len >= ps_buffer_size)
+	{
+		/* handle the case where ps_buffer doesn't have enough space */
+		memcpy(ps_buffer + real_act_prefix_size, activity,
+			   ps_buffer_size - real_act_prefix_size - 1);
+		ps_buffer[ps_buffer_size - 1] = '\0';
+		ps_buffer_cur_len = ps_buffer_size - 1;
+	}
+	else
+	{
+		memcpy(ps_buffer + real_act_prefix_size, activity, len + 1);
+		ps_buffer_cur_len = real_act_prefix_size + len;
+	}
+	Assert(strlen(ps_buffer) == ps_buffer_cur_len);
 
 	/* Transmit new setting to kernel, if necessary */
+	flush_ps_display();
+#endif							/* not PS_USE_NONE */
+}
 
+#ifndef PS_USE_NONE
+static void
+flush_ps_display(void)
+{
 #ifdef PS_USE_SETPROCTITLE
 	setproctitle("%s", ps_buffer);
 #elif defined(PS_USE_SETPROCTITLE_FAST)
 	setproctitle_fast("%s", ps_buffer);
 #endif
-
-#ifdef PS_USE_PSTAT
-	{
-		union pstun pst;
-
-		pst.pst_command = ps_buffer;
-		pstat(PSTAT_SETCMD, pst, ps_buffer_cur_len, 0, 0);
-	}
-#endif							/* PS_USE_PSTAT */
-
-#ifdef PS_USE_PS_STRINGS
-	PS_STRINGS->ps_nargvstr = 1;
-	PS_STRINGS->ps_argvstr = ps_buffer;
-#endif							/* PS_USE_PS_STRINGS */
 
 #ifdef PS_USE_CLOBBER_ARGV
 	/* pad unused memory; need only clobber remainder of old status string */
@@ -469,9 +552,8 @@ set_ps_display(const char *activity)
 		ident_handle = CreateEvent(NULL, TRUE, FALSE, name);
 	}
 #endif							/* PS_USE_WIN32 */
-#endif							/* not PS_USE_NONE */
 }
-
+#endif							/* not PS_USE_NONE */
 
 /*
  * Returns what's currently in the ps display with a given starting

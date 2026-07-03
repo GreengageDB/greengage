@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 #include "funcapi.h"
 #include "assert.h"
 #include "miscadmin.h"
@@ -266,7 +267,7 @@ dbms_assert_schema_name(PG_FUNCTION_ARGS)
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
 	nspname = text_to_cstring(sname);
-	names = stringToQualifiedNameList(nspname);
+	names = stringToQualifiedNameList(nspname, NULL);
 	if (list_length(names) != 1)
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
@@ -287,7 +288,7 @@ dbms_assert_schema_name(PG_FUNCTION_ARGS)
 	if (!OidIsValid(namespaceId))
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
-	aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
@@ -394,7 +395,7 @@ dbms_assert_object_name(PG_FUNCTION_ARGS)
 
 	object_name = text_to_cstring(str);
 
-	names = stringToQualifiedNameList(object_name);
+	names = stringToQualifiedNameList(object_name, NULL);
 
 	classId = RangeVarGetRelid(makeRangeVarFromNameList(names), NoLock, true);
 	if (!OidIsValid(classId))

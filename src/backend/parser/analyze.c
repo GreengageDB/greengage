@@ -16,7 +16,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	src/backend/parser/analyze.c
@@ -30,9 +30,11 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/queryjumble.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
 #include "optimizer/tlist.h"
@@ -56,7 +58,6 @@
 #include "utils/backend_status.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
-#include "utils/queryjumble.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -166,7 +167,7 @@ parse_analyze_fixedparams(RawStmt *parseTree, const char *sourceText,
 	query = transformTopLevelStmt(pstate, parseTree);
 
 	if (IsQueryIdEnabled())
-		jstate = JumbleQuery(query, sourceText);
+		jstate = JumbleQuery(query);
 
 	if (post_parse_analyze_hook)
 		(*post_parse_analyze_hook) (pstate, query, jstate);
@@ -208,7 +209,7 @@ parse_analyze_varparams(RawStmt *parseTree, const char *sourceText,
 	check_variable_parameters(pstate, query);
 
 	if (IsQueryIdEnabled())
-		jstate = JumbleQuery(query, sourceText);
+		jstate = JumbleQuery(query);
 
 	if (post_parse_analyze_hook)
 		(*post_parse_analyze_hook) (pstate, query, jstate);
@@ -245,7 +246,7 @@ parse_analyze_withcb(RawStmt *parseTree, const char *sourceText,
 	query = transformTopLevelStmt(pstate, parseTree);
 
 	if (IsQueryIdEnabled())
-		jstate = JumbleQuery(query, sourceText);
+		jstate = JumbleQuery(query);
 
 	if (post_parse_analyze_hook)
 		(*post_parse_analyze_hook) (pstate, query, jstate);
@@ -608,6 +609,7 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 
 	/* done building the range table and jointree */
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, qual);
 
 	qry->hasSubLinks = pstate->p_hasSubLinks;
@@ -640,11 +642,12 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	List	   *exprList = NIL;
 	bool		isGeneralSelect;
 	List	   *sub_rtable;
+	List	   *sub_rteperminfos;
 	List	   *sub_namespace;
 	List	   *icolumns;
 	List	   *attrnos;
 	ParseNamespaceItem *nsitem;
-	RangeTblEntry *rte;
+	RTEPermissionInfo *perminfo;
 	ListCell   *icols;
 	ListCell   *attnos;
 	ListCell   *lc;
@@ -701,23 +704,26 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 
 	/*
 	 * If a non-nil rangetable/namespace was passed in, and we are doing
-	 * INSERT/SELECT, arrange to pass the rangetable/namespace down to the
-	 * SELECT.  This can only happen if we are inside a CREATE RULE, and in
-	 * that case we want the rule's OLD and NEW rtable entries to appear as
-	 * part of the SELECT's rtable, not as outer references for it.  (Kluge!)
-	 * The SELECT's joinlist is not affected however.  We must do this before
-	 * adding the target table to the INSERT's rtable.
+	 * INSERT/SELECT, arrange to pass the rangetable/rteperminfos/namespace
+	 * down to the SELECT.  This can only happen if we are inside a CREATE
+	 * RULE, and in that case we want the rule's OLD and NEW rtable entries to
+	 * appear as part of the SELECT's rtable, not as outer references for it.
+	 * (Kluge!) The SELECT's joinlist is not affected however.  We must do
+	 * this before adding the target table to the INSERT's rtable.
 	 */
 	if (isGeneralSelect)
 	{
 		sub_rtable = pstate->p_rtable;
 		pstate->p_rtable = NIL;
+		sub_rteperminfos = pstate->p_rteperminfos;
+		pstate->p_rteperminfos = NIL;
 		sub_namespace = pstate->p_namespace;
 		pstate->p_namespace = NIL;
 	}
 	else
 	{
 		sub_rtable = NIL;		/* not used, but keep compiler quiet */
+		sub_rteperminfos = NIL;
 		sub_namespace = NIL;
 	}
 
@@ -784,7 +790,9 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 		 * the target column's type, which we handle below.
 		 */
 		sub_pstate->p_rtable = sub_rtable;
+		sub_pstate->p_rteperminfos = sub_rteperminfos;
 		sub_pstate->p_joinexprs = NIL;	/* sub_rtable has no joins */
+		sub_pstate->p_nullingrels = NIL;
 		sub_pstate->p_namespace = sub_namespace;
 		sub_pstate->p_resolve_unknowns = false;
 
@@ -966,7 +974,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 		/*
 		 * Generate list of Vars referencing the RTE
 		 */
-		exprList = expandNSItemVars(nsitem, 0, -1, NULL);
+		exprList = expandNSItemVars(pstate, nsitem, 0, -1, NULL);
 
 		/*
 		 * Re-apply any indirection on the target column specs to the Vars
@@ -1009,7 +1017,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	 * Generate query's target list using the computed list of expressions.
 	 * Also, mark all the target columns as needing insert permissions.
 	 */
-	rte = pstate->p_target_nsitem->p_rte;
+	perminfo = pstate->p_target_nsitem->p_perminfo;
 	qry->targetList = NIL;
 	Assert(list_length(exprList) <= list_length(icolumns));
 	forthree(lc, exprList, icols, icolumns, attnos, attrnos)
@@ -1025,8 +1033,8 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 							  false);
 		qry->targetList = lappend(qry->targetList, tle);
 
-		rte->insertedCols = bms_add_member(rte->insertedCols,
-										   attr_num - FirstLowInvalidHeapAttributeNumber);
+		perminfo->insertedCols = bms_add_member(perminfo->insertedCols,
+												attr_num - FirstLowInvalidHeapAttributeNumber);
 	}
 
 	/*
@@ -1054,7 +1062,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	 * This fixes the github issue: https://github.com/greenplum-db/gpdb/issues/9444
 	 */
 	if (isOnConflictUpdate)
-		sanity_check_on_conflict_update(rte->relid,
+		sanity_check_on_conflict_update(pstate->p_target_nsitem->p_rte->relid,
 													qry->onConflict->onConflictSet,
 													qry->onConflict->onConflictWhere);
 
@@ -1071,6 +1079,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 
 	/* done building the range table and jointree */
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, NULL);
 
 	qry->hasTargetSRFs = pstate->p_hasTargetSRFs;
@@ -1248,8 +1257,6 @@ transformOnConflictClause(ParseState *pstate,
 		 * (We'll check the actual target relation, instead.)
 		 */
 		exclRte->relkind = RELKIND_COMPOSITE_TYPE;
-		exclRte->requiredPerms = 0;
-		/* other permissions fields in exclRte are already empty */
 
 		/* Create EXCLUDED rel's targetlist for use by EXPLAIN */
 		exclRelTlist = BuildOnConflictExcludedTargetlist(targetrel,
@@ -1556,6 +1563,7 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 		resolveTargetListUnknowns(pstate, qry->targetList);
 
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, qual);
 
 	qry->hasSubLinks = pstate->p_hasSubLinks;
@@ -1788,6 +1796,7 @@ transformValuesClause(ParseState *pstate, SelectStmt *stmt)
 									  linitial(stmt->lockingClause))->strength))));
 
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, NULL);
 
 	qry->hasSubLinks = pstate->p_hasSubLinks;
@@ -2038,6 +2047,7 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->limitOption = stmt->limitOption;
 
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, NULL);
 
 	qry->hasSubLinks = pstate->p_hasSubLinks;
@@ -2798,6 +2808,7 @@ transformReturnStmt(ParseState *pstate, ReturnStmt *stmt)
 	if (pstate->p_resolve_unknowns)
 		resolveTargetListUnknowns(pstate, qry->targetList);
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, NULL);
 	qry->hasSubLinks = pstate->p_hasSubLinks;
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
@@ -2877,6 +2888,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 	qry->targetList = transformUpdateTargetList(pstate, stmt->targetList);
 
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, qual);
 
 	qry->hasTargetSRFs = pstate->p_hasTargetSRFs;
@@ -2896,7 +2908,7 @@ List *
 transformUpdateTargetList(ParseState *pstate, List *origTlist)
 {
 	List	   *tlist = NIL;
-	RangeTblEntry *target_rte;
+	RTEPermissionInfo *target_perminfo;
 	ListCell   *orig_tl;
 	ListCell   *tl;
 
@@ -2908,7 +2920,7 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 		pstate->p_next_resno = RelationGetNumberOfAttributes(pstate->p_target_relation) + 1;
 
 	/* Prepare non-junk columns for assignment to target table */
-	target_rte = pstate->p_target_nsitem->p_rte;
+	target_perminfo = pstate->p_target_nsitem->p_perminfo;
 	orig_tl = list_head(origTlist);
 
 	foreach(tl, tlist)
@@ -2949,8 +2961,8 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 							  origTarget->location);
 
 		/* Mark the target column as requiring update permissions */
-		target_rte->updatedCols = bms_add_member(target_rte->updatedCols,
-												 attrno - FirstLowInvalidHeapAttributeNumber);
+		target_perminfo->updatedCols = bms_add_member(target_perminfo->updatedCols,
+													  attrno - FirstLowInvalidHeapAttributeNumber);
 
 		orig_tl = lnext(origTlist, orig_tl);
 	}
@@ -3237,6 +3249,7 @@ transformPLAssignStmt(ParseState *pstate, PLAssignStmt *stmt)
 												   &qry->targetList);
 
 	qry->rtable = pstate->p_rtable;
+	qry->rteperminfos = pstate->p_rteperminfos;
 	qry->jointree = makeFromExpr(pstate->p_joinlist, qual);
 
 	qry->hasSubLinks = pstate->p_hasSubLinks;
@@ -3385,9 +3398,37 @@ static Query *
 transformExplainStmt(ParseState *pstate, ExplainStmt *stmt)
 {
 	Query	   *result;
+	bool		generic_plan = false;
+	Oid		   *paramTypes = NULL;
+	int			numParams = 0;
+
+	/*
+	 * If we have no external source of parameter definitions, and the
+	 * GENERIC_PLAN option is specified, then accept variable parameter
+	 * definitions (similarly to PREPARE, for example).
+	 */
+	if (pstate->p_paramref_hook == NULL)
+	{
+		ListCell   *lc;
+
+		foreach(lc, stmt->options)
+		{
+			DefElem    *opt = (DefElem *) lfirst(lc);
+
+			if (strcmp(opt->defname, "generic_plan") == 0)
+				generic_plan = defGetBoolean(opt);
+			/* don't "break", as we want the last value */
+		}
+		if (generic_plan)
+			setup_parse_variable_parameters(pstate, &paramTypes, &numParams);
+	}
 
 	/* transform contained query, allowing SELECT INTO */
 	stmt->query = (Node *) transformOptionalSelectInto(pstate, stmt->query);
+
+	/* make sure all is well with parameter types */
+	if (generic_plan)
+		check_variable_parameters(pstate, (Query *) stmt->query);
 
 	/* represent the command as a utility Query */
 	result = makeNode(Query);
@@ -3743,14 +3784,22 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 			switch (rte->rtekind)
 			{
 				case RTE_RELATION:
-					if (rel_is_external_table(rte->relid))
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
+					{
+						RTEPermissionInfo *perminfo;
 
-					applyLockingClause(qry, i, lc->strength, lc->waitPolicy,
-									   pushedDown);
-					rte->requiredPerms |= ACL_SELECT_FOR_UPDATE;
+						/* GPDB: locking clause is not supported on external tables */
+						if (rel_is_external_table(rte->relid))
+							ereport(ERROR,
+									(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
+
+						applyLockingClause(qry, i,
+										   lc->strength,
+										   lc->waitPolicy,
+										   pushedDown);
+						perminfo = getRTEPermissionInfo(qry->rteperminfos, rte);
+						perminfo->requiredPerms |= ACL_SELECT_FOR_UPDATE;
+					}
 					break;
 				case RTE_SUBQUERY:
 					applyLockingClause(qry, i, lc->strength, lc->waitPolicy,
@@ -3797,22 +3846,55 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 			foreach(rt, qry->rtable)
 			{
 				RangeTblEntry *rte = (RangeTblEntry *) lfirst(rt);
+				char	   *rtename = rte->eref->aliasname;
 
 				++i;
 				if (!rte->inFromCl)
 					continue;
-				if (strcmp(rte->eref->aliasname, thisrel->relname) == 0)
+
+				/*
+				 * A join RTE without an alias is not visible as a relation
+				 * name and needs to be skipped (otherwise it might hide a
+				 * base relation with the same name), except if it has a USING
+				 * alias, which *is* visible.
+				 *
+				 * Subquery and values RTEs without aliases are never visible
+				 * as relation names and must always be skipped.
+				 */
+				if (rte->alias == NULL)
+				{
+					if (rte->rtekind == RTE_JOIN)
+					{
+						if (rte->join_using_alias == NULL)
+							continue;
+						rtename = rte->join_using_alias->aliasname;
+					}
+					else if (rte->rtekind == RTE_SUBQUERY ||
+							 rte->rtekind == RTE_VALUES)
+						continue;
+				}
+
+				if (strcmp(rtename, thisrel->relname) == 0)
 				{
 					switch (rte->rtekind)
 					{
 						case RTE_RELATION:
-							if (rel_is_external_table(rte->relid))
-								ereport(ERROR,
-										(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
-							applyLockingClause(qry, i, lc->strength,
-											   lc->waitPolicy, pushedDown);
-							rte->requiredPerms |= ACL_SELECT_FOR_UPDATE;
+							{
+								RTEPermissionInfo *perminfo;
+
+								/* GPDB: locking clause is not supported on external tables */
+								if (rel_is_external_table(rte->relid))
+									ereport(ERROR,
+											(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+											 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
+
+								applyLockingClause(qry, i,
+												   lc->strength,
+												   lc->waitPolicy,
+												   pushedDown);
+								perminfo = getRTEPermissionInfo(qry->rteperminfos, rte);
+								perminfo->requiredPerms |= ACL_SELECT_FOR_UPDATE;
+							}
 							break;
 						case RTE_SUBQUERY:
 							applyLockingClause(qry, i, lc->strength,

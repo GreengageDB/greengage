@@ -20,7 +20,7 @@
  * step 2 ...
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/pg_resetwal/pg_resetwal.c
@@ -75,7 +75,7 @@ static Oid	set_relfilenode = 0;
 static MultiXactId set_mxid = 0;
 static MultiXactOffset set_mxoff = (MultiXactOffset) -1;
 static int32 set_data_checksum_version = -1;
-static uint32 minXlogTli = 0;
+static TimeLineID minXlogTli = 0;
 static XLogSegNo minXlogSegNo = 0;
 static int	WalSegSz;
 static int	set_wal_segsize;
@@ -1104,7 +1104,6 @@ FindEndOfXLOG(void)
 {
 	DIR		   *xldir;
 	struct dirent *xlde;
-	uint64		segs_per_xlogid;
 	uint64		xlogbytepos;
 
 	/*
@@ -1112,8 +1111,8 @@ FindEndOfXLOG(void)
 	 * old pg_control.  Note that for the moment we are working with segment
 	 * numbering according to the old xlog seg size.
 	 */
-	segs_per_xlogid = (UINT64CONST(0x0000000100000000) / ControlFile.xlog_seg_size);
-	newXlogSegNo = ControlFile.checkPointCopy.redo / ControlFile.xlog_seg_size;
+	XLByteToSeg(ControlFile.checkPointCopy.redo, newXlogSegNo,
+				ControlFile.xlog_seg_size);
 
 	/*
 	 * Scan the pg_wal directory to find existing WAL segment files. We assume
@@ -1129,18 +1128,12 @@ FindEndOfXLOG(void)
 		if (IsXLogFileName(xlde->d_name) ||
 			IsPartialXLogFileName(xlde->d_name))
 		{
-			unsigned int tli,
-						log,
-						seg;
+			TimeLineID	tli;
 			XLogSegNo	segno;
 
-			/*
-			 * Note: We don't use XLogFromFileName here, because we want to
-			 * use the segment size from the control file, not the size the
-			 * pg_resetwal binary was compiled with
-			 */
-			sscanf(xlde->d_name, "%08X%08X%08X", &tli, &log, &seg);
-			segno = ((uint64) log) * segs_per_xlogid + seg;
+			/* Use the segment size from the control file */
+			XLogFromFileName(xlde->d_name, &tli, &segno,
+							 ControlFile.xlog_seg_size);
 
 			/*
 			 * Note: we take the max of all files found, regardless of their

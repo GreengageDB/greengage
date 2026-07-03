@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -886,7 +886,9 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			if (!has_privs_of_role(GetUserId(), ROLE_PG_EXECUTE_SERVER_PROGRAM))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("must be superuser or have privileges of the pg_execute_server_program role to COPY to or from an external program"),
+						 errmsg("permission denied to COPY to or from an external program"),
+						 errdetail("Only roles with privileges of the \"%s\" role may COPY to or from an external program.",
+								   "pg_execute_server_program"),
 						 errhint("Anyone can COPY to stdout or from stdin. "
 								 "psql's \\copy command also works for anyone.")));
 		}
@@ -895,14 +897,18 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			if (is_from && !has_privs_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("must be superuser or have privileges of the pg_read_server_files role to COPY from a file"),
+						 errmsg("permission denied to COPY from a file"),
+						 errdetail("Only roles with privileges of the \"%s\" role may COPY from a file.",
+								   "pg_read_server_files"),
 						 errhint("Anyone can COPY to stdout or from stdin. "
 								 "psql's \\copy command also works for anyone.")));
 
 			if (!is_from && !has_privs_of_role(GetUserId(), ROLE_PG_WRITE_SERVER_FILES))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("must be superuser or have privileges of the pg_write_server_files role to COPY to a file"),
+						 errmsg("permission denied to COPY to a file"),
+						 errdetail("Only roles with privileges of the \"%s\" role may COPY to a file.",
+								   "pg_write_server_files"),
 						 errhint("Anyone can COPY to stdout or from stdin. "
 								 "psql's \\copy command also works for anyone.")));
 		}
@@ -912,7 +918,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	{
 		LOCKMODE	lockmode = is_from ? RowExclusiveLock : AccessShareLock;
 		ParseNamespaceItem *nsitem;
-		RangeTblEntry *rte;
+		RTEPermissionInfo *perminfo;
 		TupleDesc	tupDesc;
 		List	   *attnums;
 		ListCell   *cur;
@@ -935,8 +941,9 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
 		nsitem = addRangeTableEntryForRelation(pstate, rel, lockmode,
 											   NULL, false, false);
-		rte = nsitem->p_rte;
-		rte->requiredPerms = (is_from ? ACL_INSERT : ACL_SELECT);
+
+		perminfo = nsitem->p_perminfo;
+		perminfo->requiredPerms = (is_from ? ACL_INSERT : ACL_SELECT);
 
 		if (stmt->whereClause)
 		{
@@ -962,15 +969,15 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		attnums = CopyGetAttnums(tupDesc, rel, attnamelist);
 		foreach (cur, attnums)
 		{
-			int			attno = lfirst_int(cur) -
-			FirstLowInvalidHeapAttributeNumber;
+			int			attno;
+			Bitmapset **bms;
 
-			if (is_from)
-				rte->insertedCols = bms_add_member(rte->insertedCols, attno);
-			else
-				rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+			attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
+			bms = is_from ? &perminfo->insertedCols : &perminfo->selectedCols;
+
+			*bms = bms_add_member(*bms, attno);
 		}
-		ExecCheckRTPerms(pstate->p_rtable, true);
+		ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), true);
 
 		/*
 		 * Permission check for row security policies.
@@ -998,7 +1005,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		 * backwards-compatibility, we do the translation to "COPY (SELECT
 		 * ...)" variant automatically, just like PostgreSQL does for RLS.
 		 */
-		if (check_enable_rls(rte->relid, InvalidOid, false) == RLS_ENABLED ||
+		if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED ||
 			(!is_from && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE))
 		{
 			SelectStmt *select;
@@ -1068,11 +1075,14 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
 			/*
 			 * Build RangeVar for from clause, fully qualified based on the
-			 * relation which we have opened and locked.
+			 * relation which we have opened and locked.  Use "ONLY" so that
+			 * COPY retrieves rows from only the target table not any
+			 * inheritance children, the same as when RLS doesn't apply.
 			 */
 			from = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
 								pstrdup(RelationGetRelationName(rel)),
 								-1);
+			from->inh = false;	/* apply ONLY */
 
 			/* Build query */
 			select = makeNode(SelectStmt);
@@ -1097,6 +1107,12 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	else
 	{
 		Assert(stmt->query);
+
+		/* MERGE is allowed by parser, but unimplemented. Reject for now */
+		if (IsA(stmt->query, MergeStmt))
+			ereport(ERROR,
+					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("MERGE not supported in COPY"));
 
 		query = makeNode(RawStmt);
 		query->stmt = stmt->query;
@@ -1210,7 +1226,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		{
 			cstate = BeginCopyTo(pstate, rel, query, relid,
 								 stmt->filename, stmt->is_program,
-								 stmt->attlist, options);
+								 NULL, stmt->attlist, options);
 
 			/*
 			 * "copy t to file on segment"					CopyDispatchOnSegment
@@ -1257,7 +1273,7 @@ static CopyHeaderChoice
 defGetCopyHeaderChoice(DefElem *def, bool is_from)
 {
 	/*
-	 * If no parameter given, assume "true" is meant.
+	 * If no parameter value given, assume "true" is meant.
 	 */
 	if (def->arg == NULL)
 		return COPY_HEADER_TRUE;
@@ -1411,6 +1427,12 @@ ProcessCopyOptions(ParseState *pstate,
 			 */
 			if (!opts_out->null_print)
 				opts_out->null_print = "";
+		}
+		else if (strcmp(defel->defname, "default") == 0)
+		{
+			if (opts_out->default_print)
+				errorConflictingDefElem(defel, pstate);
+			opts_out->default_print = defGetString(defel);
 		}
 		else if (strcmp(defel->defname, "header") == 0)
 		{
@@ -1588,6 +1610,11 @@ ProcessCopyOptions(ParseState *pstate,
 
 	cstate->eol_type = EOL_UNKNOWN;
 
+	if (opts_out->binary && opts_out->default_print)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("cannot specify DEFAULT in BINARY mode")));
+
 	/* Set defaults for omitted options */
 	if (!opts_out->delim)
 		opts_out->delim = opts_out->csv_mode ? "," : "\t";
@@ -1628,6 +1655,17 @@ ProcessCopyOptions(ParseState *pstate,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("COPY null representation cannot use newline or carriage return")));
+
+	if (opts_out->default_print)
+	{
+		opts_out->default_print_len = strlen(opts_out->default_print);
+
+		if (strchr(opts_out->default_print, '\r') != NULL ||
+			strchr(opts_out->default_print, '\n') != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("COPY default representation cannot use newline or carriage return")));
+	}
 
 	/*
 	 * Disallow unsafe delimiter characters in non-CSV mode.  We can't allow
@@ -1732,6 +1770,36 @@ ProcessCopyOptions(ParseState *pstate,
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("CSV quote character must not appear in the NULL specification")));
+
+	if (opts_out->default_print)
+	{
+		if (!is_from)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("COPY DEFAULT only available using COPY FROM")));
+
+		/* Don't allow the delimiter to appear in the default string. */
+		if (strchr(opts_out->default_print, opts_out->delim[0]) != NULL &&
+			!opts_out->delim_off)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("COPY delimiter must not appear in the DEFAULT specification")));
+
+		/* Don't allow the CSV quote char to appear in the default string. */
+		if (opts_out->csv_mode &&
+			strchr(opts_out->default_print, opts_out->quote[0]) != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("CSV quote character must not appear in the DEFAULT specification")));
+
+		/* Don't allow the NULL and DEFAULT string to be the same */
+		if (opts_out->null_print_len == opts_out->default_print_len &&
+			strncmp(opts_out->null_print, opts_out->default_print,
+					opts_out->null_print_len) == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("NULL specification and DEFAULT specification cannot be the same")));
+	}
 
 	/*
 	 * DELIMITER
@@ -2450,11 +2518,23 @@ BeginCopyTo(ParseState *pstate,
 			Oid queryRelId,
 			const char *filename,
 			bool is_program,
+			copy_data_dest_cb data_dest_cb,
 			List *attnamelist,
 			List *options)
 {
 	CopyState	cstate;
 	MemoryContext oldcontext;
+
+	/*
+	 * GPDB: The data_dest_cb callback (new in PostgreSQL 16) is not wired up
+	 * in GPDB's monolithic CopyState yet; no in-tree caller passes one.
+	 * GPDB_16_MERGE_FIXME: to support it, store the callback in CopyStateData
+	 * and invoke it from CopySendEndOfRow(), like upstream copyto.c does.
+	 */
+	if (data_dest_cb != NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("COPY TO destination callback is not supported")));
 
 	if (rel != NULL && rel->rd_rel->relkind != RELKIND_RELATION)
 	{
@@ -2511,7 +2591,8 @@ BeginCopyTo(ParseState *pstate,
 	else
 		cstate->dispatch_mode = COPY_DIRECT;
 
-	bool		pipe = (filename == NULL || (Gp_role == GP_ROLE_EXECUTE && !cstate->on_segment));
+	bool		pipe = ((filename == NULL && data_dest_cb == NULL) ||
+						(Gp_role == GP_ROLE_EXECUTE && !cstate->on_segment));
 
 	if (cstate->on_segment && Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -3468,7 +3549,7 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 			cstate->cur_lineno = buffer->linenos[i];
 			recheckIndexes =
 				ExecInsertIndexTuples(resultRelInfo, buffer->slots[i], estate,
-									  false, false, NULL, NIL);
+									  false, false, NULL, NIL, false);
 			ExecARInsertTriggers(estate, resultRelInfo,
 								 slots[i], recheckIndexes,
 								 cstate->transition_capture);
@@ -3716,7 +3797,7 @@ CopyFrom(CopyState cstate)
 	 */
 	if (RELKIND_HAS_STORAGE(cstate->rel->rd_rel->relkind) &&
 		(cstate->rel->rd_createSubid != InvalidSubTransactionId ||
-		 cstate->rel->rd_firstRelfilenodeSubid != InvalidSubTransactionId))
+		 cstate->rel->rd_firstRelfilelocatorSubid != InvalidSubTransactionId))
 		ti_options |= TABLE_INSERT_SKIP_FSM;
 
 	/*
@@ -3763,7 +3844,7 @@ CopyFrom(CopyState cstate)
 					 errmsg("cannot perform COPY FREEZE because of prior transaction activity")));
 
 		if (cstate->rel->rd_createSubid != GetCurrentSubTransactionId() &&
-			cstate->rel->rd_newRelfilenodeSubid != GetCurrentSubTransactionId())
+			cstate->rel->rd_newRelfilelocatorSubid != GetCurrentSubTransactionId())
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 errmsg("cannot perform COPY FREEZE because the table was not created or truncated in the current subtransaction")));
@@ -3792,7 +3873,7 @@ CopyFrom(CopyState cstate)
 
 	estate->es_result_relation_info = resultRelInfo;
 
-	ExecInitRangeTable(estate, cstate->range_table);
+	ExecInitRangeTable(estate, cstate->range_table, cstate->rteperminfos);
 
 	/*
 	 * Set up a ModifyTableState so we can let FDW(s) init themselves for
@@ -4283,7 +4364,7 @@ CopyFrom(CopyState cstate)
 			 * We might need to convert from the root rowtype to the partition
 			 * rowtype.
 			 */
-			map = resultRelInfo->ri_RootToPartitionMap;
+			map = ExecGetRootToChildMap(resultRelInfo, estate);
 			if (insertMethod == CIM_SINGLE || !leafpart_use_multi_insert)
 			{
 				/* non batch insert */
@@ -4460,7 +4541,8 @@ CopyFrom(CopyState cstate)
 																   false,
 																   false,
 																   NULL,
-																   NIL);
+																   NIL,
+																   false);
 					}
 
 					/* AFTER ROW INSERT Triggers */
@@ -4689,6 +4771,8 @@ BeginCopyFrom(ParseState *pstate,
 	/* Assign range table, we'll need it in CopyFrom. */
 	if (pstate)
 		cstate->range_table = pstate->p_rtable;
+	if (pstate)
+		cstate->rteperminfos = pstate->p_rteperminfos;
 
 	tupDesc = RelationGetDescr(cstate->rel);
 	num_phys_attrs = tupDesc->natts;

@@ -99,14 +99,19 @@ open_all_datumstreamread_segfiles(Relation rel,
 								  AttrNumber num_proj_atts,
 								  AppendOnlyBlockDirectory *blockDirectory)
 {
-	char	   *basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	char	   *basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
+	RelFileNode relnode;
+
+	relnode.spcNode = rel->rd_locator.spcOid;
+	relnode.dbNode = rel->rd_locator.dbOid;
+	relnode.relNode = rel->rd_locator.relNumber;
 
 	Assert(proj_atts);
 	for (AttrNumber i = 0; i < num_proj_atts; i++)
 	{
 		AttrNumber	attno = proj_atts[i];
 
-		open_datumstreamread_segfile(basepath, rel->rd_node, segInfo, ds[attno], attno);
+		open_datumstreamread_segfile(basepath, relnode, segInfo, ds[attno], attno);
 		datumstreamread_block(ds[attno], blockDirectory, attno);
 	}
 
@@ -863,9 +868,11 @@ OpenAOCSDatumStreams(AOCSInsertDesc desc)
 
 	desc->rowCount = seginfo->total_tupcount;
 
-	rnode.node = desc->aoi_rel->rd_node;
+	rnode.node.spcNode = desc->aoi_rel->rd_locator.spcOid;
+	rnode.node.dbNode = desc->aoi_rel->rd_locator.dbOid;
+	rnode.node.relNode = desc->aoi_rel->rd_locator.relNumber;
 	rnode.backend = desc->aoi_rel->rd_backend;
-	basepath = relpath(rnode, MAIN_FORKNUM);
+	basepath = relpathbackend(desc->aoi_rel->rd_locator, desc->aoi_rel->rd_backend, MAIN_FORKNUM);
 
 	for (i = 0; i < nvp; ++i)
 	{
@@ -1285,7 +1292,12 @@ openFetchSegmentFile(AOCSFetchDesc aocsFetchDesc,
 	if (logicalEof == 0)
 		return false;
 
-	open_datumstreamread_segfile(aocsFetchDesc->basepath, aocsFetchDesc->relation->rd_node,
+	RelFileNode relnode;
+
+	relnode.spcNode = aocsFetchDesc->relation->rd_locator.spcOid;
+	relnode.dbNode = aocsFetchDesc->relation->rd_locator.dbOid;
+	relnode.relNode = aocsFetchDesc->relation->rd_locator.relNumber;
+	open_datumstreamread_segfile(aocsFetchDesc->basepath, relnode,
 								 fsInfo,
 								 datumStreamFetchDesc->datumStream,
 								 colNo);
@@ -1322,7 +1334,7 @@ aocs_fetch_init(Relation relation,
 {
 	AOCSFetchDesc aocsFetchDesc;
 	int			colno;
-	char	   *basePath = relpathbackend(relation->rd_node, relation->rd_backend, MAIN_FORKNUM);
+	char	   *basePath = relpathbackend(relation->rd_locator, relation->rd_backend, MAIN_FORKNUM);
 	TupleDesc	tupleDesc = RelationGetDescr(relation);
 	StdRdOptions **opts = RelationGetAttributeOptions(relation);
 	int			segno;
@@ -1486,7 +1498,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %u.",
-				 		rowNum, segmentFileNum, aocsFetchDesc->relation->rd_node.relNode)));
+				 		rowNum, segmentFileNum, aocsFetchDesc->relation->rd_locator.relNumber)));
 
 	/*
 	 * if the rowNum is bigger than lastsequence, skip it.

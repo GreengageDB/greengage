@@ -122,8 +122,8 @@ _bitmap_create_lov_heapandindex(Relation rel,
 		lovHeap = table_open(heapid, AccessExclusiveLock);
 		lovIndex = index_open(idxid, AccessExclusiveLock);
 
-		RelationSetNewRelfilenode(lovHeap, lovHeap->rd_rel->relpersistence);
-		RelationSetNewRelfilenode(lovIndex, lovIndex->rd_rel->relpersistence);
+		RelationSetNewRelfilenumber(lovHeap, lovHeap->rd_rel->relpersistence);
+		RelationSetNewRelfilenumber(lovIndex, lovIndex->rd_rel->relpersistence);
 
 		/*
 		 * After creating the new relfilenode for a btee index, this is not

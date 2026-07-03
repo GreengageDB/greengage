@@ -11,6 +11,7 @@
 
 #include "fmgr.h"
 #include "libpq/pqformat.h"		/* needed for send/recv functions */
+#include "varatt.h"				/* PG16: varlena VAR* macros moved here */
 
 
 PG_MODULE_MAGIC;

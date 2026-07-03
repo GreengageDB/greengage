@@ -172,7 +172,16 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 		bytestotal += byteswritten;
 
 		if (file_extend_hook)
-			(*file_extend_hook)(bufferedAppend->relFileNode);
+		{
+			RelFileLocatorBackend rlocator;
+
+			/* PG16: file_extend_hook takes a RelFileLocatorBackend. */
+			rlocator.locator.spcOid = bufferedAppend->relFileNode.node.spcNode;
+			rlocator.locator.dbOid = bufferedAppend->relFileNode.node.dbNode;
+			rlocator.locator.relNumber = bufferedAppend->relFileNode.node.relNode;
+			rlocator.backend = bufferedAppend->relFileNode.backend;
+			(*file_extend_hook)(rlocator);
+		}
 	}
 
 	elogif(Debug_appendonly_print_append_block, LOG,

@@ -4,7 +4,7 @@
  *	  postgres transaction system definitions
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/xact.h
@@ -19,7 +19,8 @@
 #include "datatype/timestamp.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
+#include "storage/relfilenode.h"	/* GPDB: RelFileNodePendingDelete */
 #include "storage/sinval.h"
 #include "storage/dbdirnode.h"
 
@@ -115,6 +116,19 @@ extern PGDLLIMPORT int MyXactFlags;
 #define XACT_FLAGS_ACQUIREDACCESSEXCLUSIVELOCK	(1U << 1)
 
 /*
+ * XACT_FLAGS_NEEDIMMEDIATECOMMIT - records whether the top level statement
+ * is one that requires immediate commit, such as CREATE DATABASE.
+ */
+#define XACT_FLAGS_NEEDIMMEDIATECOMMIT			(1U << 2)
+
+/*
+ * XACT_FLAGS_PIPELINING - set when we complete an extended-query-protocol
+ * Execute message.  This is useful for detecting that an implicit transaction
+ * block has been created via pipelining.
+ */
+#define XACT_FLAGS_PIPELINING					(1U << 3)
+
+/*
  *	start- and end-of-transaction callbacks for dynamically loaded modules
  */
 typedef enum
@@ -182,7 +196,7 @@ typedef struct SavedTransactionCharacteristics
  */
 #define XACT_XINFO_HAS_DBINFO			(1U << 0)
 #define XACT_XINFO_HAS_SUBXACTS			(1U << 1)
-#define XACT_XINFO_HAS_RELFILENODES		(1U << 2)
+#define XACT_XINFO_HAS_RELFILELOCATORS	(1U << 2)
 #define XACT_XINFO_HAS_INVALS			(1U << 3)
 #define XACT_XINFO_HAS_TWOPHASE			(1U << 4)
 #define XACT_XINFO_HAS_ORIGIN			(1U << 5)
@@ -267,12 +281,19 @@ typedef struct xl_xact_subxacts
 } xl_xact_subxacts;
 #define MinSizeOfXactSubxacts offsetof(xl_xact_subxacts, subxacts)
 
-typedef struct xl_xact_relfilenodes
+typedef struct xl_xact_relfilelocators
 {
 	int			nrels;			/* number of relations */
-	RelFileNodePendingDelete xnodes[FLEXIBLE_ARRAY_MEMBER];
-} xl_xact_relfilenodes;
-#define MinSizeOfXactRelfilenodes offsetof(xl_xact_relfilenodes, xnodes)
+
+	/*
+	 * GPDB: unlike upstream, the WAL record carries a
+	 * RelFileNodePendingDelete per relation (not a bare RelFileLocator), so
+	 * that replay knows which SMGR implementation to unlink with (e.g.
+	 * append-optimized tables) and whether the relation was temporary.
+	 */
+	RelFileNodePendingDelete xlocators[FLEXIBLE_ARRAY_MEMBER];
+} xl_xact_relfilelocators;
+#define MinSizeOfXactRelfileLocators offsetof(xl_xact_relfilelocators, xlocators)
 
 /*
  * A transactionally dropped statistics entry.
@@ -328,13 +349,14 @@ typedef struct xl_xact_commit
 	/* xl_xact_xinfo follows if XLOG_XACT_HAS_INFO */
 	/* xl_xact_dbinfo follows if XINFO_HAS_DBINFO */
 	/* xl_xact_subxacts follows if XINFO_HAS_SUBXACT */
-	/* xl_xact_relfilenodes follows if XINFO_HAS_RELFILENODES */
+	/* xl_xact_relfilelocators follows if XINFO_HAS_RELFILELOCATORS */
 	/* xl_xact_stats_items follows if XINFO_HAS_DROPPED_STATS */
 	/* xl_xact_invals follows if XINFO_HAS_INVALS */
 	/* xl_xact_deldbs follows if XACT_XINFO_HAS_DELDBS */
 	/* xl_xact_twophase follows if XINFO_HAS_TWOPHASE */
 	/* twophase_gid follows if XINFO_HAS_GID. As a null-terminated string. */
 	/* xl_xact_origin follows if XINFO_HAS_ORIGIN, stored unaligned! */
+	/* GPDB: xl_xact_distrib follows if XINFO_HAS_DISTRIB, stored unaligned! */
 } xl_xact_commit;
 #define MinSizeOfXactCommit sizeof(xl_xact_commit) 
 
@@ -346,7 +368,7 @@ typedef struct xl_xact_abort
 	/* xl_xact_xinfo follows if XLOG_XACT_HAS_INFO */
 	/* xl_xact_dbinfo follows if XINFO_HAS_DBINFO */
 	/* xl_xact_subxacts follows if XINFO_HAS_SUBXACT */
-	/* xl_xact_relfilenodes follows if XINFO_HAS_RELFILENODES */
+	/* xl_xact_relfilelocators follows if XINFO_HAS_RELFILELOCATORS */
 	/* xl_xact_deldbs follows if XACT_XINFO_HAS_DELDBS */
 	/* xl_xact_stats_items follows if XINFO_HAS_DROPPED_STATS */
 	/* No invalidation messages needed. */
@@ -399,7 +421,7 @@ typedef struct xl_xact_parsed_commit
 	TransactionId *subxacts;
 
 	int			nrels;
-	RelFileNodePendingDelete *xnodes;
+	RelFileNodePendingDelete *xlocators;
 
 	int			nstats;
 	xl_xact_stats_item *stats;
@@ -413,7 +435,7 @@ typedef struct xl_xact_parsed_commit
 	TransactionId twophase_xid; /* only for 2PC */
 	char		twophase_gid[GIDSIZE];	/* only for 2PC */
 	int			nabortrels;		/* only for 2PC */
-	RelFileNodePendingDelete *abortnodes;	/* only for 2PC */
+	RelFileNodePendingDelete *abortlocators;	/* only for 2PC */
 	int			nabortstats;	/* only for 2PC */
 	xl_xact_stats_item *abortstats; /* only for 2PC */
 
@@ -438,7 +460,7 @@ typedef struct xl_xact_parsed_abort
 	TransactionId *subxacts;
 
 	int			nrels;
-	RelFileNodePendingDelete *xnodes;
+	RelFileNodePendingDelete *xlocators;
 
 	int			ndeldbs;
 	DbDirNode	*deldbs;
@@ -555,8 +577,8 @@ extern XLogRecPtr XactLogCommitRecord(TimestampTz commit_time,
 									  Oid tablespace_oid_to_delete_on_commit,
 									  int nsubxacts, TransactionId *subxacts,
 									  int nrels, RelFileNodePendingDelete *rels,
-									  int nstats,
-									  xl_xact_stats_item *stats,
+									  int ndroppedstats,
+									  xl_xact_stats_item *droppedstats,
 									  int nmsgs, SharedInvalidationMessage *msgs,
 									  int ndeldbs, DbDirNode *deldbs,
 									  bool relcacheInval, int xactflags,
@@ -568,8 +590,8 @@ extern XLogRecPtr XactLogAbortRecord(TimestampTz abort_time,
 									 int nsubxacts, TransactionId *subxacts,
 									 int nrels, RelFileNodePendingDelete *rels,
 									 int ndeldbs, DbDirNode *deldbs,
-									 int nstats,
-									 xl_xact_stats_item *stats,
+									 int ndroppedstats,
+									 xl_xact_stats_item *droppedstats,
 									 int xactflags, TransactionId twophase_xid,
 									 const char *twophase_gid);
 extern void xact_redo(XLogReaderState *record);

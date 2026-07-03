@@ -13,7 +13,7 @@
  *
  * Author: Andreas Pflug <pgadmin@pse-consulting.de>
  *
- * Copyright (c) 2004-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2004-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -81,7 +81,7 @@ char	   *Log_directory = NULL;
 char	   *Log_filename = NULL;
 bool		Log_truncate_on_rotation = false;
 int			Log_file_mode = S_IRUSR | S_IWUSR;
-int         gp_log_format = 0; /* Text format */
+int         gp_log_format = 1; /* CSV format (matches GUC boot_val) */
 
 extern bool redirection_done;
 
@@ -294,12 +294,12 @@ SysLoggerMain(int argc, char *argv[])
 		 * if they fail then presumably the file descriptors are closed and
 		 * any writes will go into the bitbucket anyway.
 		 */
-		close(fileno(stdout));
-		close(fileno(stderr));
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
 		if (fd != -1)
 		{
-			(void) dup2(fd, fileno(stdout));
-			(void) dup2(fd, fileno(stderr));
+			(void) dup2(fd, STDOUT_FILENO);
+			(void) dup2(fd, STDERR_FILENO);
 			close(fd);
 		}
 	}
@@ -310,7 +310,7 @@ SysLoggerMain(int argc, char *argv[])
 	 * SubPostmasterMain).
 	 */
 #ifdef WIN32
-	_setmode(_fileno(stderr),_O_TEXT);
+	_setmode(STDERR_FILENO, _O_TEXT);
 #endif
 
 	redirection_done = true;
@@ -353,7 +353,7 @@ SysLoggerMain(int argc, char *argv[])
 	 */
 	pqsignal(SIGCHLD, SIG_DFL);
 
-	PG_SETMASK(&UnBlockSig);
+	sigprocmask(SIG_SETMASK, &UnBlockSig, NULL);
 
 #ifdef WIN32
 	/* Fire up separate data transfer thread */
@@ -930,12 +930,12 @@ SysLogger_Start(void)
 
 #ifndef WIN32
 				fflush(stdout);
-				if (dup2(syslogPipe[1], fileno(stdout)) < 0)
+				if (dup2(syslogPipe[1], STDOUT_FILENO) < 0)
 					ereport(FATAL,
 							(errcode_for_file_access(),
 							 errmsg("could not redirect stdout: %m")));
 				fflush(stderr);
-				if (dup2(syslogPipe[1], fileno(stderr)) < 0)
+				if (dup2(syslogPipe[1], STDERR_FILENO) < 0)
 					ereport(FATAL,
 							(errcode_for_file_access(),
 							 errmsg("could not redirect stderr: %m")));
@@ -952,12 +952,12 @@ SysLogger_Start(void)
 				fflush(stderr);
 				fd = _open_osfhandle((intptr_t) syslogPipe[1],
 									 _O_APPEND | _O_BINARY);
-				if (dup2(fd, _fileno(stderr)) < 0)
+				if (dup2(fd, STDERR_FILENO) < 0)
 					ereport(FATAL,
 							(errcode_for_file_access(),
 							 errmsg("could not redirect stderr: %m")));
 				close(fd);
-				_setmode(_fileno(stderr), _O_BINARY);
+				_setmode(STDERR_FILENO, _O_BINARY);
 
 				/*
 				 * Now we are done with the write end of the pipe.

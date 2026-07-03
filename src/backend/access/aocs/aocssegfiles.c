@@ -553,7 +553,11 @@ MarkAOCSFileSegInfoAwaitingDrop(Relation prel, int segno)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	{
+		TU_UpdateIndexes update_indexes;
+
+		simple_heap_update(segrel, &oldtup->t_self, newtup, &update_indexes);
+	}
 
 	pfree(newtup);
 
@@ -665,7 +669,11 @@ ClearAOCSFileSegInfo(Relation prel, int segno)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	{
+		TU_UpdateIndexes update_indexes;
+
+		simple_heap_update(segrel, &oldtup->t_self, newtup, &update_indexes);
+	}
 
 	pfree(newtup);
 	pfree(vpinfo);
@@ -800,7 +808,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		{
 			elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
-				 RelationGetRelationName(prel), prel->rd_node.relNode,
+				 RelationGetRelationName(prel), prel->rd_locator.relNumber,
 				 idesc->cur_segno, i, idesc->ds[i]->eof, oldvpinfo->entry[i].eof);
 		}
 
@@ -812,7 +820,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		{
 			elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
-				 RelationGetRelationName(prel), prel->rd_node.relNode,
+				 RelationGetRelationName(prel), prel->rd_locator.relNumber,
 				 idesc->cur_segno, i, idesc->ds[i]->eofUncompress, oldvpinfo->entry[i].eof_uncompressed);
 		}
 	}
@@ -828,7 +836,11 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	{
+		TU_UpdateIndexes update_indexes;
+
+		simple_heap_update(segrel, &oldtup->t_self, newtup, &update_indexes);
+	}
 
 	pfree(newtup);
 	pfree(vpinfo);
@@ -976,7 +988,11 @@ AOCSFileSegInfoAddVpe(Relation prel, int32 segno,
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	{
+		TU_UpdateIndexes update_indexes;
+
+		simple_heap_update(segrel, &oldtup->t_self, newtup, &update_indexes);
+	}
 
 	pfree(newtup);
 	pfree(newvpinfo);
@@ -1074,7 +1090,11 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	{
+		TU_UpdateIndexes update_indexes;
+
+		simple_heap_update(segrel, &oldtup->t_self, newtup, &update_indexes);
+	}
 
 	heap_freetuple(newtup);
 

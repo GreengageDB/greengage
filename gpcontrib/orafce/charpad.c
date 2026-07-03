@@ -7,6 +7,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 #include "utils/builtins.h"
 #include "utils/formatting.h"
 #include "mb/pg_wchar.h"

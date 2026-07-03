@@ -79,8 +79,8 @@ InitSerTupInfo(TupleDesc tupdesc, SerTupInfo *pSerInfo)
 	int			i,
 				numAttrs;
 
-	AssertArg(tupdesc != NULL);
-	AssertArg(pSerInfo != NULL);
+	Assert(tupdesc != NULL);
+	Assert(pSerInfo != NULL);
 
 	if (s_tupSerMemCtxt == NULL)
 	{
@@ -169,7 +169,7 @@ InitSerTupInfo(TupleDesc tupdesc, SerTupInfo *pSerInfo)
 void
 CleanupSerTupInfo(SerTupInfo *pSerInfo)
 {
-	AssertArg(pSerInfo != NULL);
+	Assert(pSerInfo != NULL);
 
 	/*
 	 * Free any old data.
@@ -216,9 +216,9 @@ addByteStringToChunkList(TupleChunkList tcList, char *data, int datalen, TupleCh
 				copyLen;
 	char	   *pos;
 
-	AssertArg(tcList != NULL);
-	AssertArg(tcList->p_last != NULL);
-	AssertArg(data != NULL);
+	Assert(tcList != NULL);
+	Assert(tcList->p_last != NULL);
+	Assert(data != NULL);
 
 	/* Add onto last chunk, lists always start with one chunk */
 	tcItem = tcList->p_last;
@@ -278,8 +278,8 @@ SerializeRecordCacheIntoChunks(SerTupInfo *pSerInfo,
 	int			size = -1;
 	char	   *buf = NULL;
 
-	AssertArg(tcList != NULL);
-	AssertArg(pSerInfo != NULL);
+	Assert(tcList != NULL);
+	Assert(pSerInfo != NULL);
 
 	/* get ready to go */
 	tcList->p_first = NULL;
@@ -295,7 +295,7 @@ SerializeRecordCacheIntoChunks(SerTupInfo *pSerInfo,
 	tcItem->chunk_length = TUPLE_CHUNK_HEADER_SIZE;
 	appendChunkToTCList(tcList, tcItem);
 
-	AssertState(s_tupSerMemCtxt != NULL);
+	Assert(s_tupSerMemCtxt != NULL);
 
 	/*
 	 * To avoid inconsistency of record cache between sender and receiver in
@@ -381,8 +381,8 @@ SerializeTuple(TupleTableSlot *slot, SerTupInfo *pSerInfo, struct directTranspor
 	unsigned int       tuplen;
 	bool               hasExternalAttr = false;
 
-	AssertArg(pSerInfo != NULL);
-	AssertArg(b != NULL);
+	Assert(pSerInfo != NULL);
+	Assert(b != NULL);
 
 	tupdesc = pSerInfo->tupdesc;
 	natts = tupdesc->natts;
@@ -493,7 +493,7 @@ SerializeTuple(TupleTableSlot *slot, SerTupInfo *pSerInfo, struct directTranspor
 	tcItem->chunk_length = TUPLE_CHUNK_HEADER_SIZE;
 	appendChunkToTCList(tcList, tcItem);
 
-	AssertState(s_tupSerMemCtxt != NULL);
+	Assert(s_tupSerMemCtxt != NULL);
 
 	addByteStringToChunkList(tcList, (char *) &tupbodylen, sizeof(tupbodylen), &pSerInfo->chunkCache);
 	addByteStringToChunkList(tcList, tupbody, tupbodylen, &pSerInfo->chunkCache);
@@ -552,9 +552,9 @@ CvtChunksToTup(TupleChunkList tcList, SerTupInfo *pSerInfo, TupleRemapper *remap
 	MinimalTuple tup;
 	TupleChunkType tcType;
 
-	AssertArg(tcList != NULL);
-	AssertArg(tcList->p_first != NULL);
-	AssertArg(pSerInfo != NULL);
+	Assert(tcList != NULL);
+	Assert(tcList->p_first != NULL);
+	Assert(pSerInfo != NULL);
 
 	/*
 	 * Parse the first chunk, and reassemble the chunks if needed.

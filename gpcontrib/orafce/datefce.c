@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 #include "access/xact.h"
 #include "commands/variable.h"
 #include "mb/pg_wchar.h"

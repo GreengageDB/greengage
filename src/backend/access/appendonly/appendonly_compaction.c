@@ -240,7 +240,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof)
 		   get_namespace_name(RelationGetNamespace(aorel)),
 		   relname,
 		   aorel->rd_id,
-		   aorel->rd_node.relNode,
+		   aorel->rd_locator.relNumber,
 		   segno,
 		   segeof);
 
@@ -255,7 +255,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof)
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   segno,
 			   segeof);
 	}
@@ -266,7 +266,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof)
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   segno,
 			   segeof);
 	}
@@ -306,7 +306,8 @@ AppendOnlyMoveTuple(TupleTableSlot *slot,
 							  false, /* update */
 							  false, /* noDupError */
 							  NULL, /* specConflict */
-							  NIL /* arbiterIndexes */);
+							  NIL, /* arbiterIndexes */
+							  false /* onlySummarizing */);
 		ResetPerTupleExprContext(estate);
 	}
 

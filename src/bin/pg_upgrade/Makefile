@@ -19,7 +19,7 @@ OBJS = \
 	option.o \
 	parallel.o \
 	pg_upgrade.o \
-	relfilenode.o \
+	relfilenumber.o \
 	server.o \
 	tablespace.o \
 	util.o \
@@ -69,6 +69,8 @@ greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_f
 # let installcheck be a no-op, so "make -C src/bin/ installcheck" does nothing on
 # src/bin/pg_upgrade, the real test of pg_upgrade will be triggered by
 # "make check" in the end of installcheck-world, see GNUmakefile.in
+
+export with_icu
 
 check:
 	$(prove_check)

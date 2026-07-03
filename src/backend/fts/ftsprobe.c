@@ -31,6 +31,14 @@
 #include "postmaster/postmaster.h"
 #include "utils/snapmgr.h"
 
+/*
+ * libpq-int.h #undef's the backend translation macro _().  This is backend
+ * code that wants the server's own message catalog, so restore _().
+ */
+#ifndef _
+#define _(x) gettext(x)
+#endif
+
 
 static struct pollfd *PollFds;
 

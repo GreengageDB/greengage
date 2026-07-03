@@ -3,7 +3,7 @@
  * twophase.c
  *		Two-phase commit support functions.
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -105,6 +105,7 @@
 #include "storage/sinvaladt.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 
@@ -477,7 +478,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	/* Initialize the PGPROC entry */
 	MemSet(proc, 0, sizeof(PGPROC));
 	proc->pgprocno = gxact->pgprocno;
-	SHMQueueElemInit(&(proc->links));
+	dlist_node_init(&proc->links);
 	proc->waitStatus = PROC_WAIT_STATUS_OK;
 	if (LocalTransactionIdIsValid(MyProc->lxid))
 	{
@@ -502,7 +503,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	proc->tempNamespaceId = InvalidOid;
 	proc->isBackgroundWorker = false;
 	proc->mppSessionId = gp_session_id;
-	proc->lwWaiting = false;
+	proc->lwWaiting = LW_WS_NOT_WAITING;
 	proc->lwWaitMode = 0;
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
@@ -511,7 +512,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 
 	pg_atomic_init_u64(&proc->waitStart, 0);
 	for (i = 0; i < NUM_LOCK_PARTITIONS; i++)
-		SHMQueueInit(&(proc->myProcLocks[i]));
+		dlist_init(&proc->myProcLocks[i]);
 	/* subxid data must be filled later by GXactLoadSubxactData */
 	proc->subxidStatus.overflowed = false;
 	proc->subxidStatus.count = 0;
@@ -813,8 +814,8 @@ pg_prepared_xact(PG_FUNCTION_ARGS)
 	{
 		GlobalTransaction gxact = &status->array[status->currIdx++];
 		PGPROC	   *proc = &ProcGlobal->allProcs[gxact->pgprocno];
-		Datum		values[5];
-		bool		nulls[5];
+		Datum		values[5] = {0};
+		bool		nulls[5] = {0};
 		HeapTuple	tuple;
 		Datum		result;
 
@@ -824,8 +825,6 @@ pg_prepared_xact(PG_FUNCTION_ARGS)
 		/*
 		 * Form tuple with appropriate data.
 		 */
-		MemSet(values, 0, sizeof(values));
-		MemSet(nulls, 0, sizeof(nulls));
 
 		values[0] = TransactionIdGetDatum(proc->xid);
 		values[1] = CStringGetTextDatum(gxact->gid);
@@ -992,7 +991,7 @@ TwoPhaseGetDummyProc(TransactionId xid, bool lock_held)
  *	8. TwoPhaseRecordOnDisk
  *	9. ...
  *	10. TwoPhaseRecordOnDisk (end sentinel, rmid == TWOPHASE_RM_END_ID)
- *	11. CRC32
+ *	11. checksum (CRC-32C)
  *
  * Each segment except the final checksum is MAXALIGN'd.
  */

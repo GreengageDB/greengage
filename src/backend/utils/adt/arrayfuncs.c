@@ -3,7 +3,7 @@
  * arrayfuncs.c
  *	  Support functions for arrays.
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -92,14 +92,15 @@ typedef struct ArrayIteratorData
 }			ArrayIteratorData;
 
 static bool array_isspace(char ch);
-static int	ArrayCount(const char *str, int *dim, char typdelim);
-static void ReadArrayStr(char *arrayStr, const char *origStr,
+static int	ArrayCount(const char *str, int *dim, char typdelim,
+					   Node *escontext);
+static bool ReadArrayStr(char *arrayStr, const char *origStr,
 						 int nitems, int ndim, int *dim,
 						 FmgrInfo *inputproc, Oid typioparam, int32 typmod,
 						 char typdelim,
 						 int typlen, bool typbyval, char typalign,
 						 Datum *values, bool *nulls,
-						 bool *hasnulls, int32 *nbytes);
+						 bool *hasnulls, int32 *nbytes, Node *escontext);
 static void ReadArrayBinary(StringInfo buf, int nitems,
 							FmgrInfo *receiveproc, Oid typioparam, int32 typmod,
 							int typlen, bool typbyval, char typalign,
@@ -179,6 +180,7 @@ array_in(PG_FUNCTION_ARGS)
 	Oid			element_type = PG_GETARG_OID(1);	/* type of an array
 													 * element */
 	int32		typmod = PG_GETARG_INT32(2);	/* typmod for array elements */
+	Node	   *escontext = fcinfo->context;
 	int			typlen;
 	bool		typbyval;
 	char		typalign;
@@ -260,7 +262,7 @@ array_in(PG_FUNCTION_ARGS)
 			break;				/* no more dimension items */
 		p++;
 		if (ndim >= MAXDIM)
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("number of array dimensions (%d) exceeds the maximum allowed (%d)",
 							ndim + 1, MAXDIM)));
@@ -268,7 +270,7 @@ array_in(PG_FUNCTION_ARGS)
 		for (q = p; isdigit((unsigned char) *q) || (*q == '-') || (*q == '+'); q++)
 			 /* skip */ ;
 		if (q == p)				/* no digits? */
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("\"[\" must introduce explicitly-specified array dimensions.")));
@@ -282,7 +284,7 @@ array_in(PG_FUNCTION_ARGS)
 			for (q = p; isdigit((unsigned char) *q) || (*q == '-') || (*q == '+'); q++)
 				 /* skip */ ;
 			if (q == p)			/* no digits? */
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("malformed array literal: \"%s\"", string),
 						 errdetail("Missing array dimension value.")));
@@ -293,7 +295,7 @@ array_in(PG_FUNCTION_ARGS)
 			lBound[ndim] = 1;
 		}
 		if (*q != ']')
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("Missing \"%s\" after array dimensions.",
@@ -303,7 +305,7 @@ array_in(PG_FUNCTION_ARGS)
 		ub = atoi(p);
 		p = q + 1;
 		if (ub < lBound[ndim])
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
 					 errmsg("upper bound cannot be less than lower bound")));
 
@@ -315,11 +317,13 @@ array_in(PG_FUNCTION_ARGS)
 	{
 		/* No array dimensions, so intuit dimensions from brace structure */
 		if (*p != '{')
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("Array value must start with \"{\" or dimension information.")));
-		ndim = ArrayCount(p, dim, typdelim);
+		ndim = ArrayCount(p, dim, typdelim, escontext);
+		if (ndim < 0)
+			PG_RETURN_NULL();
 		for (i = 0; i < ndim; i++)
 			lBound[i] = 1;
 	}
@@ -330,7 +334,7 @@ array_in(PG_FUNCTION_ARGS)
 
 		/* If array dimensions are given, expect '=' operator */
 		if (strncmp(p, ASSGN, strlen(ASSGN)) != 0)
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("Missing \"%s\" after array dimensions.",
@@ -344,20 +348,22 @@ array_in(PG_FUNCTION_ARGS)
 		 * were given
 		 */
 		if (*p != '{')
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("Array contents must start with \"{\".")));
-		ndim_braces = ArrayCount(p, dim_braces, typdelim);
+		ndim_braces = ArrayCount(p, dim_braces, typdelim, escontext);
+		if (ndim_braces < 0)
+			PG_RETURN_NULL();
 		if (ndim_braces != ndim)
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", string),
 					 errdetail("Specified array dimensions do not match array contents.")));
 		for (i = 0; i < ndim; ++i)
 		{
 			if (dim[i] != dim_braces[i])
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("malformed array literal: \"%s\"", string),
 						 errdetail("Specified array dimensions do not match array contents.")));
@@ -374,8 +380,11 @@ array_in(PG_FUNCTION_ARGS)
 #endif
 
 	/* This checks for overflow of the array dimensions */
-	nitems = ArrayGetNItems(ndim, dim);
-	ArrayCheckBounds(ndim, dim, lBound);
+	nitems = ArrayGetNItemsSafe(ndim, dim, escontext);
+	if (nitems < 0)
+		PG_RETURN_NULL();
+	if (!ArrayCheckBoundsSafe(ndim, dim, lBound, escontext))
+		PG_RETURN_NULL();
 
 	/* Empty array? */
 	if (nitems == 0)
@@ -383,13 +392,14 @@ array_in(PG_FUNCTION_ARGS)
 
 	dataPtr = (Datum *) palloc(nitems * sizeof(Datum));
 	nullsPtr = (bool *) palloc(nitems * sizeof(bool));
-	ReadArrayStr(p, string,
-				 nitems, ndim, dim,
-				 &my_extra->proc, typioparam, typmod,
-				 typdelim,
-				 typlen, typbyval, typalign,
-				 dataPtr, nullsPtr,
-				 &hasnulls, &nbytes);
+	if (!ReadArrayStr(p, string,
+					  nitems, ndim, dim,
+					  &my_extra->proc, typioparam, typmod,
+					  typdelim,
+					  typlen, typbyval, typalign,
+					  dataPtr, nullsPtr,
+					  &hasnulls, &nbytes, escontext))
+		PG_RETURN_NULL();
 	if (hasnulls)
 	{
 		dataoffset = ARR_OVERHEAD_WITHNULLS(ndim, nitems);
@@ -453,9 +463,12 @@ array_isspace(char ch)
  *
  * Returns number of dimensions as function result.  The axis lengths are
  * returned in dim[], which must be of size MAXDIM.
+ *
+ * If we detect an error, fill *escontext with error details and return -1
+ * (unless escontext isn't provided, in which case errors will be thrown).
  */
 static int
-ArrayCount(const char *str, int *dim, char typdelim)
+ArrayCount(const char *str, int *dim, char typdelim, Node *escontext)
 {
 	int			nest_level = 0,
 				i;
@@ -490,11 +503,10 @@ ArrayCount(const char *str, int *dim, char typdelim)
 			{
 				case '\0':
 					/* Signal a premature end of the string */
-					ereport(ERROR,
+					ereturn(escontext, -1,
 							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							 errmsg("malformed array literal: \"%s\"", str),
 							 errdetail("Unexpected end of input.")));
-					break;
 				case '\\':
 
 					/*
@@ -506,7 +518,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 						parse_state != ARRAY_ELEM_STARTED &&
 						parse_state != ARRAY_QUOTED_ELEM_STARTED &&
 						parse_state != ARRAY_ELEM_DELIMITED)
-						ereport(ERROR,
+						ereturn(escontext, -1,
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed array literal: \"%s\"", str),
 								 errdetail("Unexpected \"%c\" character.",
@@ -517,7 +529,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 					if (*(ptr + 1))
 						ptr++;
 					else
-						ereport(ERROR,
+						ereturn(escontext, -1,
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed array literal: \"%s\"", str),
 								 errdetail("Unexpected end of input.")));
@@ -532,7 +544,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 					if (parse_state != ARRAY_LEVEL_STARTED &&
 						parse_state != ARRAY_QUOTED_ELEM_STARTED &&
 						parse_state != ARRAY_ELEM_DELIMITED)
-						ereport(ERROR,
+						ereturn(escontext, -1,
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed array literal: \"%s\"", str),
 								 errdetail("Unexpected array element.")));
@@ -553,14 +565,14 @@ ArrayCount(const char *str, int *dim, char typdelim)
 						if (parse_state != ARRAY_NO_LEVEL &&
 							parse_state != ARRAY_LEVEL_STARTED &&
 							parse_state != ARRAY_LEVEL_DELIMITED)
-							ereport(ERROR,
+							ereturn(escontext, -1,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"", str),
 									 errdetail("Unexpected \"%c\" character.",
 											   '{')));
 						parse_state = ARRAY_LEVEL_STARTED;
 						if (nest_level >= MAXDIM)
-							ereport(ERROR,
+							ereturn(escontext, -1,
 									(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 									 errmsg("number of array dimensions (%d) exceeds the maximum allowed (%d)",
 											nest_level + 1, MAXDIM)));
@@ -583,14 +595,14 @@ ArrayCount(const char *str, int *dim, char typdelim)
 							parse_state != ARRAY_QUOTED_ELEM_COMPLETED &&
 							parse_state != ARRAY_LEVEL_COMPLETED &&
 							!(nest_level == 1 && parse_state == ARRAY_LEVEL_STARTED))
-							ereport(ERROR,
+							ereturn(escontext, -1,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"", str),
 									 errdetail("Unexpected \"%c\" character.",
 											   '}')));
 						parse_state = ARRAY_LEVEL_COMPLETED;
 						if (nest_level == 0)
-							ereport(ERROR,
+							ereturn(escontext, -1,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"", str),
 									 errdetail("Unmatched \"%c\" character.", '}')));
@@ -598,7 +610,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 
 						if (nelems_last[nest_level] != 0 &&
 							nelems[nest_level] != nelems_last[nest_level])
-							ereport(ERROR,
+							ereturn(escontext, -1,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"", str),
 									 errdetail("Multidimensional arrays must have "
@@ -632,7 +644,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 								parse_state != ARRAY_ELEM_COMPLETED &&
 								parse_state != ARRAY_QUOTED_ELEM_COMPLETED &&
 								parse_state != ARRAY_LEVEL_COMPLETED)
-								ereport(ERROR,
+								ereturn(escontext, -1,
 										(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 										 errmsg("malformed array literal: \"%s\"", str),
 										 errdetail("Unexpected \"%c\" character.",
@@ -655,7 +667,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 							if (parse_state != ARRAY_LEVEL_STARTED &&
 								parse_state != ARRAY_ELEM_STARTED &&
 								parse_state != ARRAY_ELEM_DELIMITED)
-								ereport(ERROR,
+								ereturn(escontext, -1,
 										(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 										 errmsg("malformed array literal: \"%s\"", str),
 										 errdetail("Unexpected array element.")));
@@ -675,7 +687,7 @@ ArrayCount(const char *str, int *dim, char typdelim)
 	while (*ptr)
 	{
 		if (!array_isspace(*ptr++))
-			ereport(ERROR,
+			ereturn(escontext, -1,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"", str),
 					 errdetail("Junk after closing right brace.")));
@@ -715,11 +727,16 @@ ArrayCount(const char *str, int *dim, char typdelim)
  *	*hasnulls: set true iff there are any null elements.
  *	*nbytes: set to total size of data area needed (including alignment
  *		padding but not including array header overhead).
+ *	*escontext: if this points to an ErrorSaveContext, details of
+ *		any error are reported there.
+ *
+ * Result:
+ *	true for success, false for failure (if escontext is provided).
  *
  * Note that values[] and nulls[] are allocated by the caller, and must have
  * nitems elements.
  */
-static void
+static bool
 ReadArrayStr(char *arrayStr,
 			 const char *origStr,
 			 int nitems,
@@ -735,7 +752,8 @@ ReadArrayStr(char *arrayStr,
 			 Datum *values,
 			 bool *nulls,
 			 bool *hasnulls,
-			 int32 *nbytes)
+			 int32 *nbytes,
+			 Node *escontext)
 {
 	int			i,
 				nest_level = 0;
@@ -744,11 +762,10 @@ ReadArrayStr(char *arrayStr,
 	bool		eoArray = false;
 	bool		hasnull;
 	int32		totbytes;
-	int			indx[MAXDIM],
+	int			indx[MAXDIM] = {0},
 				prod[MAXDIM];
 
 	mda_get_prod(ndim, dim, prod);
-	MemSet(indx, 0, sizeof(indx));
 
 	/* Initialize is-null markers to true */
 	memset(nulls, true, nitems * sizeof(bool));
@@ -787,7 +804,7 @@ ReadArrayStr(char *arrayStr,
 			{
 				case '\0':
 					/* Signal a premature end of the string */
-					ereport(ERROR,
+					ereturn(escontext, false,
 							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							 errmsg("malformed array literal: \"%s\"",
 									origStr)));
@@ -796,7 +813,7 @@ ReadArrayStr(char *arrayStr,
 					/* Skip backslash, copy next character as-is. */
 					srcptr++;
 					if (*srcptr == '\0')
-						ereport(ERROR,
+						ereturn(escontext, false,
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed array literal: \"%s\"",
 										origStr)));
@@ -826,7 +843,7 @@ ReadArrayStr(char *arrayStr,
 					if (!in_quotes)
 					{
 						if (nest_level >= ndim)
-							ereport(ERROR,
+							ereturn(escontext, false,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"",
 											origStr)));
@@ -841,7 +858,7 @@ ReadArrayStr(char *arrayStr,
 					if (!in_quotes)
 					{
 						if (nest_level == 0)
-							ereport(ERROR,
+							ereturn(escontext, false,
 									(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 									 errmsg("malformed array literal: \"%s\"",
 											origStr)));
@@ -894,7 +911,7 @@ ReadArrayStr(char *arrayStr,
 		*dstendptr = '\0';
 
 		if (i < 0 || i >= nitems)
-			ereport(ERROR,
+			ereturn(escontext, false,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed array literal: \"%s\"",
 							origStr)));
@@ -903,14 +920,20 @@ ReadArrayStr(char *arrayStr,
 			pg_strcasecmp(itemstart, "NULL") == 0)
 		{
 			/* it's a NULL item */
-			values[i] = InputFunctionCall(inputproc, NULL,
-										  typioparam, typmod);
+			if (!InputFunctionCallSafe(inputproc, NULL,
+									   typioparam, typmod,
+									   escontext,
+									   &values[i]))
+				return false;
 			nulls[i] = true;
 		}
 		else
 		{
-			values[i] = InputFunctionCall(inputproc, itemstart,
-										  typioparam, typmod);
+			if (!InputFunctionCallSafe(inputproc, itemstart,
+									   typioparam, typmod,
+									   escontext,
+									   &values[i]))
+				return false;
 			nulls[i] = false;
 		}
 	}
@@ -933,7 +956,7 @@ ReadArrayStr(char *arrayStr,
 			totbytes = att_align_nominal(totbytes, typalign);
 			/* check for overflow of total request */
 			if (!AllocSizeIsValid(totbytes))
-				ereport(ERROR,
+				ereturn(escontext, false,
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 						 errmsg("array size exceeds the maximum allowed (%d)",
 								(int) MaxAllocSize)));
@@ -941,6 +964,7 @@ ReadArrayStr(char *arrayStr,
 	}
 	*hasnulls = hasnull;
 	*nbytes = totbytes;
+	return true;
 }
 
 
@@ -2461,8 +2485,7 @@ array_set_element(Datum arraydatum,
 	{
 		bits8	   *newnullbitmap = ARR_NULLBITMAP(newarray);
 
-		/* Zero the bitmap to take care of marking inserted positions null */
-		MemSet(newnullbitmap, 0, (newnitems + 7) / 8);
+		/* palloc0 above already marked any inserted positions as nulls */
 		/* Fix the inserted value */
 		if (addedafter)
 			array_set_isnull(newnullbitmap, newnitems - 1, isNull);
@@ -3078,8 +3101,7 @@ array_set_slice(Datum arraydatum,
 			bits8	   *newnullbitmap = ARR_NULLBITMAP(newarray);
 			bits8	   *oldnullbitmap = ARR_NULLBITMAP(array);
 
-			/* Zero the bitmap to handle marking inserted positions null */
-			MemSet(newnullbitmap, 0, (nitems + 7) / 8);
+			/* palloc0 above already marked any inserted positions as nulls */
 			array_bitmap_copy(newnullbitmap, addedbefore,
 							  oldnullbitmap, 0,
 							  itemsbefore);
@@ -3333,6 +3355,92 @@ construct_array(Datum *elems, int nelems,
 }
 
 /*
+ * Like construct_array(), where elmtype must be a built-in type, and
+ * elmlen/elmbyval/elmalign is looked up from hardcoded data.  This is often
+ * useful when manipulating arrays from/for system catalogs.
+ */
+ArrayType *
+construct_array_builtin(Datum *elems, int nelems, Oid elmtype)
+{
+	int			elmlen;
+	bool		elmbyval;
+	char		elmalign;
+
+	switch (elmtype)
+	{
+		case CHAROID:
+			elmlen = 1;
+			elmbyval = true;
+			elmalign = TYPALIGN_CHAR;
+			break;
+
+		case CSTRINGOID:
+			elmlen = -2;
+			elmbyval = false;
+			elmalign = TYPALIGN_CHAR;
+			break;
+
+		case FLOAT4OID:
+			elmlen = sizeof(float4);
+			elmbyval = true;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case INT2OID:
+			elmlen = sizeof(int16);
+			elmbyval = true;
+			elmalign = TYPALIGN_SHORT;
+			break;
+
+		case INT4OID:
+			elmlen = sizeof(int32);
+			elmbyval = true;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case INT8OID:
+			elmlen = sizeof(int64);
+			elmbyval = FLOAT8PASSBYVAL;
+			elmalign = TYPALIGN_DOUBLE;
+			break;
+
+		case NAMEOID:
+			elmlen = NAMEDATALEN;
+			elmbyval = false;
+			elmalign = TYPALIGN_CHAR;
+			break;
+
+		case OIDOID:
+		case REGTYPEOID:
+			elmlen = sizeof(Oid);
+			elmbyval = true;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case TEXTOID:
+			elmlen = -1;
+			elmbyval = false;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case TIDOID:
+			elmlen = sizeof(ItemPointerData);
+			elmbyval = false;
+			elmalign = TYPALIGN_SHORT;
+			break;
+
+		default:
+			elog(ERROR, "type %u not supported by construct_array_builtin()", elmtype);
+			/* keep compiler quiet */
+			elmlen = 0;
+			elmbyval = false;
+			elmalign = 0;
+	}
+
+	return construct_array(elems, nelems, elmtype, elmlen, elmbyval, elmalign);
+}
+
+/*
  * construct_md_array	--- simple method for constructing an array object
  *							with arbitrary dimensions and possible NULLs
  *
@@ -3534,9 +3642,9 @@ construct_empty_expanded_array(Oid element_type,
  * be pointers into the array object.
  *
  * NOTE: it would be cleaner to look up the elmlen/elmbval/elmalign info
- * from the system catalogs, given the elmtype.  However, in most current
- * uses the type is hard-wired into the caller and so we can save a lookup
- * cycle by hard-wiring the type info as well.
+ * from the system catalogs, given the elmtype.  However, the caller is
+ * in a better position to cache this info across multiple uses, or even
+ * to hard-wire values if the element type is hard-wired.
  */
 void
 deconstruct_array(ArrayType *array,
@@ -3597,6 +3705,75 @@ deconstruct_array(ArrayType *array,
 			}
 		}
 	}
+}
+
+/*
+ * Like deconstruct_array(), where elmtype must be a built-in type, and
+ * elmlen/elmbyval/elmalign is looked up from hardcoded data.  This is often
+ * useful when manipulating arrays from/for system catalogs.
+ */
+void
+deconstruct_array_builtin(ArrayType *array,
+						  Oid elmtype,
+						  Datum **elemsp, bool **nullsp, int *nelemsp)
+{
+	int			elmlen;
+	bool		elmbyval;
+	char		elmalign;
+
+	switch (elmtype)
+	{
+		case CHAROID:
+			elmlen = 1;
+			elmbyval = true;
+			elmalign = TYPALIGN_CHAR;
+			break;
+
+		case CSTRINGOID:
+			elmlen = -2;
+			elmbyval = false;
+			elmalign = TYPALIGN_CHAR;
+			break;
+
+		case FLOAT8OID:
+			elmlen = sizeof(float8);
+			elmbyval = FLOAT8PASSBYVAL;
+			elmalign = TYPALIGN_DOUBLE;
+			break;
+
+		case INT2OID:
+			elmlen = sizeof(int16);
+			elmbyval = true;
+			elmalign = TYPALIGN_SHORT;
+			break;
+
+		case OIDOID:
+			elmlen = sizeof(Oid);
+			elmbyval = true;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case TEXTOID:
+			elmlen = -1;
+			elmbyval = false;
+			elmalign = TYPALIGN_INT;
+			break;
+
+		case TIDOID:
+			elmlen = sizeof(ItemPointerData);
+			elmbyval = false;
+			elmalign = TYPALIGN_SHORT;
+			break;
+
+		default:
+			elog(ERROR, "type %u not supported by deconstruct_array_builtin()", elmtype);
+			/* keep compiler quiet */
+			elmlen = 0;
+			elmbyval = false;
+			elmalign = 0;
+	}
+
+	deconstruct_array(array, elmtype, elmlen, elmbyval, elmalign, elemsp, nullsp, nelemsp);
 }
 
 /*
@@ -5150,7 +5327,8 @@ initArrayResult(Oid element_type, MemoryContext rcontext, bool subcontext)
  *		to be specified.
  */
 ArrayBuildState *
-initArrayResultWithSize(Oid element_type, MemoryContext rcontext, bool subcontext, int initsize)
+initArrayResultWithSize(Oid element_type, MemoryContext rcontext,
+						bool subcontext, int initsize)
 {
 	ArrayBuildState *astate;
 	MemoryContext arr_context = rcontext;
@@ -6754,7 +6932,7 @@ trim_array(PG_FUNCTION_ARGS)
 {
 	ArrayType  *v = PG_GETARG_ARRAYTYPE_P(0);
 	int			n = PG_GETARG_INT32(1);
-	int			array_length = ARR_DIMS(v)[0];
+	int			array_length = (ARR_NDIM(v) > 0) ? ARR_DIMS(v)[0] : 0;
 	int16		elmlen;
 	bool		elmbyval;
 	char		elmalign;
@@ -6774,8 +6952,11 @@ trim_array(PG_FUNCTION_ARGS)
 	/* Set all the bounds as unprovided except the first upper bound */
 	memset(lowerProvided, false, sizeof(lowerProvided));
 	memset(upperProvided, false, sizeof(upperProvided));
-	upper[0] = ARR_LBOUND(v)[0] + array_length - n - 1;
-	upperProvided[0] = true;
+	if (ARR_NDIM(v) > 0)
+	{
+		upper[0] = ARR_LBOUND(v)[0] + array_length - n - 1;
+		upperProvided[0] = true;
+	}
 
 	/* Fetch the needed information about the element type */
 	get_typlenbyvalalign(ARR_ELEMTYPE(v), &elmlen, &elmbyval, &elmalign);

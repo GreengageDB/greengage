@@ -421,7 +421,7 @@ void GpdbEreportImpl(int xerrcode, int severitylevel, const char *xerrmsg,
 					 const char *funcname);
 #define GpdbEreport(xerrcode, severitylevel, xerrmsg, xerrhint)       \
 	gpdb::GpdbEreportImpl(xerrcode, severitylevel, xerrmsg, xerrhint, \
-						  __FILE__, __LINE__, PG_FUNCNAME_MACRO)
+						  __FILE__, __LINE__, __func__)
 
 // string representation of a node
 char *NodeToString(void *obj);

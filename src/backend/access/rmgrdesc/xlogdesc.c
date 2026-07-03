@@ -3,7 +3,7 @@
  * xlogdesc.c
  *	  rmgr descriptor routines for access/transam/xlog.c
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -289,12 +289,12 @@ XLogRecGetBlockRefInfo(XLogReaderState *record, bool pretty,
 
 	for (block_id = 0; block_id <= XLogRecMaxBlockId(record); block_id++)
 	{
-		RelFileNode rnode;
+		RelFileLocator rlocator;
 		ForkNumber	forknum;
 		BlockNumber blk;
 
 		if (!XLogRecGetBlockTagExtended(record, block_id,
-										&rnode, &forknum, &blk, NULL))
+										&rlocator, &forknum, &blk, NULL))
 			continue;
 
 		if (detailed_format)
@@ -309,7 +309,7 @@ XLogRecGetBlockRefInfo(XLogReaderState *record, bool pretty,
 			appendStringInfo(buf,
 							 "blkref #%d: rel %u/%u/%u fork %s blk %u",
 							 block_id,
-							 rnode.spcNode, rnode.dbNode, rnode.relNode,
+							 rlocator.spcOid, rlocator.dbOid, rlocator.relNumber,
 							 forkNames[forknum],
 							 blk);
 
@@ -369,7 +369,7 @@ XLogRecGetBlockRefInfo(XLogReaderState *record, bool pretty,
 				appendStringInfo(buf,
 								 ", blkref #%d: rel %u/%u/%u fork %s blk %u",
 								 block_id,
-								 rnode.spcNode, rnode.dbNode, rnode.relNode,
+								 rlocator.spcOid, rlocator.dbOid, rlocator.relNumber,
 								 forkNames[forknum],
 								 blk);
 			}
@@ -378,7 +378,7 @@ XLogRecGetBlockRefInfo(XLogReaderState *record, bool pretty,
 				appendStringInfo(buf,
 								 ", blkref #%d: rel %u/%u/%u blk %u",
 								 block_id,
-								 rnode.spcNode, rnode.dbNode, rnode.relNode,
+								 rlocator.spcOid, rlocator.dbOid, rlocator.relNumber,
 								 blk);
 			}
 
@@ -389,9 +389,9 @@ XLogRecGetBlockRefInfo(XLogReaderState *record, bool pretty,
 					*fpi_len += XLogRecGetBlock(record, block_id)->bimg_len;
 
 				if (XLogRecBlockImageApply(record, block_id))
-					appendStringInfo(buf, " FPW");
+					appendStringInfoString(buf, " FPW");
 				else
-					appendStringInfo(buf, " FPW for WAL verification");
+					appendStringInfoString(buf, " FPW for WAL verification");
 			}
 		}
 	}

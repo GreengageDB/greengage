@@ -554,43 +554,43 @@ testmode_pthread_create(const char *caller_name, pthread_t *thread,
 #undef pthread_create
 
 #define ML_CHECK_FOR_INTERRUPTS(teardownActive) \
-	testmode_check_interrupts(PG_FUNCNAME_MACRO, teardownActive)
+	testmode_check_interrupts(__func__, teardownActive)
 
 #define sendto(socket, buffer, length, flags, dest_addr, dest_len) \
-	testmode_sendto(PG_FUNCNAME_MACRO, socket, buffer, length, flags, dest_addr, dest_len)
+	testmode_sendto(__func__, socket, buffer, length, flags, dest_addr, dest_len)
 
 #define recvfrom(socket, buffer, length, flags, address, address_len) \
-	testmode_recvfrom(PG_FUNCNAME_MACRO, socket, buffer, length, flags, address, address_len)
+	testmode_recvfrom(__func__, socket, buffer, length, flags, address, address_len)
 
 #define poll(fds, nfds, timeout) \
-	testmode_poll(PG_FUNCNAME_MACRO, fds, nfds, timeout)
+	testmode_poll(__func__, fds, nfds, timeout)
 
 #define socket(domain, type, protocol) \
-	testmode_socket(PG_FUNCNAME_MACRO, domain, type, protocol)
+	testmode_socket(__func__, domain, type, protocol)
 
 #define bind(socket, address, address_len) \
-	testmode_bind(PG_FUNCNAME_MACRO, socket, address, address_len)
+	testmode_bind(__func__, socket, address, address_len)
 
 #define getsockname(socket, address, address_len) \
-	testmode_getsockname(PG_FUNCNAME_MACRO, socket, address, address_len)
+	testmode_getsockname(__func__, socket, address, address_len)
 
 #define setsockopt(socket, level, option_name, option_value, option_len) \
-	testmode_setsockopt(PG_FUNCNAME_MACRO, socket, level, option_name, option_value, option_len)
+	testmode_setsockopt(__func__, socket, level, option_name, option_value, option_len)
 
 #define pg_getaddrinfo_all(hostname, servname, hints, res) \
-	testmode_pg_getaddrinfo_all(PG_FUNCNAME_MACRO, hostname, servname, hints, res)
+	testmode_pg_getaddrinfo_all(__func__, hostname, servname, hints, res)
 
 #define malloc(size) \
-	testmode_malloc(PG_FUNCNAME_MACRO, size)
+	testmode_malloc(__func__, size)
 
 #define free(ptr) \
-	testmode_free(PG_FUNCNAME_MACRO, ptr)
+	testmode_free(__func__, ptr)
 
 #define palloc0(size) \
-	testmode_palloc0(PG_FUNCNAME_MACRO, size)
+	testmode_palloc0(__func__, size)
 
 #define pthread_create(thread, attr, start_routine, arg) \
-	testmode_pthread_create(PG_FUNCNAME_MACRO, thread, attr, start_routine, arg)
+	testmode_pthread_create(__func__, thread, attr, start_routine, arg)
 #endif
 
 #endif

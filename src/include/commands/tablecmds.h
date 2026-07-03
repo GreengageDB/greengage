@@ -4,7 +4,7 @@
  *	  prototypes for tablecmds.c.
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/tablecmds.h
@@ -75,14 +75,19 @@ extern void AlterRelationNamespaceInternal(Relation classRel, Oid relOid,
 extern void CheckTableNotInUse(Relation rel, const char *stmt);
 
 extern void ExecuteTruncate(TruncateStmt *stmt);
-extern void ExecuteTruncateGuts(List *explicit_rels, List *relids, List *relids_logged,
-								DropBehavior behavior, bool restart_seqs, TruncateStmt *stmt);
+extern void ExecuteTruncateGuts(List *explicit_rels,
+								List *relids,
+								List *relids_logged,
+								DropBehavior behavior,
+								bool restart_seqs,
+								bool run_as_table_owner,
+								TruncateStmt *stmt);
 
 extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 
 extern bool CheckRelationTableSpaceMove(Relation rel, Oid newTableSpaceId);
 extern void SetRelationTableSpace(Relation rel, Oid newTableSpaceId,
-								  Oid newRelFileNode);
+								  RelFileNumber newRelFilenumber);
 
 extern ObjectAddress renameatt(RenameStmt *stmt);
 
@@ -117,8 +122,9 @@ extern void SetSchemaAndConstraints(RangeVar *rangeVar, List **schema, List **co
 
 extern DistributedBy *make_distributedby_for_rel(Relation rel);
 
-extern void RangeVarCallbackOwnsTable(const RangeVar *relation,
-									  Oid relId, Oid oldRelId, void *arg);
+extern void RangeVarCallbackMaintainsTable(const RangeVar *relation,
+										   Oid relId, Oid oldRelId,
+										   void *arg);
 
 extern void RangeVarCallbackOwnsRelation(const RangeVar *relation,
 										 Oid relId, Oid oldRelId, void *arg);

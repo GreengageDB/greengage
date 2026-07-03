@@ -16,6 +16,7 @@
 #define BITMAP_PRIVATE_H
 
 #include "access/bitmap.h"
+#include "storage/relfilelocator.h"
 #include "access/genam.h"
 #include "access/htup.h"
 #include "utils/hsearch.h"
@@ -332,7 +333,7 @@ extern void _bitmap_log_updatewords(Relation rel,
 extern void _bitmap_log_updateword(Relation rel, Buffer bitmapBuffer, int word_no);
 
 #ifdef DUMP_BITMAPAM_INSERT_RECORDS
-extern void _dump_page(char *file, XLogRecPtr recptr, RelFileNode *relfilenode, Buffer buf);
+extern void _dump_page(char *file, XLogRecPtr recptr, RelFileLocator *relfilenode, Buffer buf);
 #endif
 
 /* bitmapsearch.c */

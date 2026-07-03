@@ -3,7 +3,7 @@
  * sync.c
  *	  File synchronization management code.
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -38,8 +38,6 @@
 #include "utils/memutils.h"
 
 #include "utils/faultinjector.h"
-
-static MemoryContext pendingOpsCxt; /* context for the pending ops state  */
 
 /*
  * In some contexts (currently, standalone backends and the checkpointer)
@@ -394,12 +392,12 @@ ProcessSyncRequests(void)
 			{
 				if (entry->tag.segno == 0)
 					elog(LOG, "checkpoint performing fsync for %d/%d/%d",
-						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
-						 entry->tag.rnode.relNode);
+						 entry->tag.rlocator.spcOid, entry->tag.rlocator.dbOid,
+						 entry->tag.rlocator.relNumber);
 				else
 					elog(LOG, "checkpoint performing fsync for %d/%d/%d.%d",
-						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
-						 entry->tag.rnode.relNode, entry->tag.segno);
+						 entry->tag.rlocator.spcOid, entry->tag.rlocator.dbOid,
+						 entry->tag.rlocator.relNumber, entry->tag.segno);
 			}
 			else
 			{
@@ -407,13 +405,13 @@ ProcessSyncRequests(void)
 				if (entry->tag.segno == 0)
 					elog(level, "non checkpoint process trying to fsync "
 						 "%d/%d/%d when fsync_counter fault is set",
-						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
-						 entry->tag.rnode.relNode);
+						 entry->tag.rlocator.spcOid, entry->tag.rlocator.dbOid,
+						 entry->tag.rlocator.relNumber);
 				else
 					elog(level, "non checkpoint process trying to fsync "
 						 "%d/%d/%d.%d when fsync_counter fault is set",
-						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
-						 entry->tag.rnode.relNode, entry->tag.segno);
+						 entry->tag.rlocator.spcOid, entry->tag.rlocator.dbOid,
+						 entry->tag.rlocator.relNumber, entry->tag.segno);
 			}
 		}
 #endif
@@ -547,7 +545,7 @@ RememberSyncRequest(const FileTag *ftag, SyncRequestType type)
 
 		/* Cancel previously entered request */
 		entry = (PendingFsyncEntry *) hash_search(pendingOps,
-												  (void *) ftag,
+												  ftag,
 												  HASH_FIND,
 												  NULL);
 		if (entry != NULL)
@@ -556,26 +554,26 @@ RememberSyncRequest(const FileTag *ftag, SyncRequestType type)
 	else if (type == SYNC_FILTER_REQUEST)
 	{
 		HASH_SEQ_STATUS hstat;
-		PendingFsyncEntry *entry;
+		PendingFsyncEntry *pfe;
 		ListCell   *cell;
 
 		/* Cancel matching fsync requests */
 		hash_seq_init(&hstat, pendingOps);
-		while ((entry = (PendingFsyncEntry *) hash_seq_search(&hstat)) != NULL)
+		while ((pfe = (PendingFsyncEntry *) hash_seq_search(&hstat)) != NULL)
 		{
-			if (entry->tag.handler == ftag->handler &&
-				syncsw[ftag->handler].sync_filetagmatches(ftag, &entry->tag))
-				entry->canceled = true;
+			if (pfe->tag.handler == ftag->handler &&
+				syncsw[ftag->handler].sync_filetagmatches(ftag, &pfe->tag))
+				pfe->canceled = true;
 		}
 
 		/* Cancel matching unlink requests */
 		foreach(cell, pendingUnlinks)
 		{
-			PendingUnlinkEntry *entry = (PendingUnlinkEntry *) lfirst(cell);
+			PendingUnlinkEntry *pue = (PendingUnlinkEntry *) lfirst(cell);
 
-			if (entry->tag.handler == ftag->handler &&
-				syncsw[ftag->handler].sync_filetagmatches(ftag, &entry->tag))
-				entry->canceled = true;
+			if (pue->tag.handler == ftag->handler &&
+				syncsw[ftag->handler].sync_filetagmatches(ftag, &pue->tag))
+				pue->canceled = true;
 		}
 	}
 	else if (type == SYNC_UNLINK_REQUEST)
@@ -603,7 +601,7 @@ RememberSyncRequest(const FileTag *ftag, SyncRequestType type)
 		Assert(type == SYNC_REQUEST);
 
 		entry = (PendingFsyncEntry *) hash_search(pendingOps,
-												  (void *) ftag,
+												  ftag,
 												  HASH_ENTER,
 												  &found);
 		/* if new entry, or was previously canceled, initialize it */

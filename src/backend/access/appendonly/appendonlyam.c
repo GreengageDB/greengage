@@ -276,9 +276,9 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 		   "Append-only scan initialize for table '%s', %u/%u/%u, segment file %u, EOF " INT64_FORMAT ", "
 		   "(compression = %s, usable blocksize %d)",
 		   NameStr(scan->aos_rd->rd_rel->relname),
-		   scan->aos_rd->rd_node.spcNode,
-		   scan->aos_rd->rd_node.dbNode,
-		   scan->aos_rd->rd_node.relNode,
+		   scan->aos_rd->rd_locator.spcOid,
+		   scan->aos_rd->rd_locator.dbOid,
+		   scan->aos_rd->rd_locator.relNumber,
 		   segno,
 		   eof,
 		   (scan->storageAttributes.compress ? "true" : "false"),
@@ -318,7 +318,9 @@ SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 	int64		varblockcount;
 	int32		fileSegNo;
 
-	rnode.node = aoInsertDesc->aoi_rel->rd_node;
+	rnode.node.spcNode = aoInsertDesc->aoi_rel->rd_locator.spcOid;
+	rnode.node.dbNode = aoInsertDesc->aoi_rel->rd_locator.dbOid;
+	rnode.node.relNode = aoInsertDesc->aoi_rel->rd_locator.relNumber;
 	rnode.backend = aoInsertDesc->aoi_rel->rd_backend;
 
 	/* Make the 'segment' file name */
@@ -696,7 +698,7 @@ AppendOnlyExecutorReadBlock_Init(AppendOnlyExecutorReadBlock *executorReadBlock,
 {
 	MemoryContext oldcontext;
 
-	AssertArg(MemoryContextIsValid(memoryContext));
+	Assert(MemoryContextIsValid(memoryContext));
 
 	oldcontext = MemoryContextSwitchTo(memoryContext);
 	executorReadBlock->uncompressedBuffer = (uint8 *) palloc0(usableBlockSize * sizeof(uint8));
@@ -2213,7 +2215,7 @@ appendonly_fetch(AppendOnlyFetchDesc aoFetchDesc,
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %u.",
-				 		rowNum, segmentFileNum, aoFetchDesc->relation->rd_node.relNode)));
+				 		rowNum, segmentFileNum, aoFetchDesc->relation->rd_locator.relNumber)));
 
 	/*
 	 * This is an improvement for brin. BRIN index stores ranges of TIDs in

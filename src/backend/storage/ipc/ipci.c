@@ -3,7 +3,7 @@
  * ipci.c
  *	  POSTGRES inter-process communication initialization code.
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -59,6 +59,7 @@
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
 #include "utils/gpexpand.h"
+#include "utils/guc.h"
 #include "utils/snapmgr.h"
 
 #include "libpq-fe.h"

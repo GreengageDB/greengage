@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/planmain.h
@@ -108,10 +108,9 @@ extern void add_base_rels_to_query(PlannerInfo *root, Node *jtnode);
 extern void add_other_rels_to_query(PlannerInfo *root);
 extern void build_base_rel_tlists(PlannerInfo *root, List *final_tlist);
 extern void add_vars_to_targetlist(PlannerInfo *root, List *vars,
-								   Relids where_needed, bool create_new_ph);
+								   Relids where_needed);
 extern void add_vars_to_targetlist_x(PlannerInfo *root, List *vars,
-									 Relids where_needed, bool create_new_ph,
-									 bool force);
+									 Relids where_needed, bool force);
 extern void find_lateral_references(PlannerInfo *root);
 extern void create_lateral_join_info(PlannerInfo *root);
 extern List *deconstruct_jointree(PlannerInfo *root);
@@ -123,9 +122,7 @@ extern RestrictInfo *process_implied_equality(PlannerInfo *root,
 											  Expr *item1,
 											  Expr *item2,
 											  Relids qualscope,
-											  Relids nullable_relids,
 											  Index security_level,
-											  bool below_outer_join,
 											  bool both_const);
 extern RestrictInfo *build_implied_join_equality(PlannerInfo *root,
 												 Oid opno,
@@ -133,7 +130,6 @@ extern RestrictInfo *build_implied_join_equality(PlannerInfo *root,
 												 Expr *item1,
 												 Expr *item2,
 												 Relids qualscope,
-												 Relids nullable_relids,
 												 Index security_level);
 extern void match_foreign_keys_to_quals(PlannerInfo *root);
 
@@ -159,7 +155,7 @@ extern Plan *set_plan_references(PlannerInfo *root, Plan *plan);
 extern bool trivial_subqueryscan(SubqueryScan *plan);
 extern void record_plan_function_dependency(PlannerInfo *root, Oid funcid);
 extern void record_plan_type_dependency(PlannerInfo *root, Oid typid);
-extern bool extract_query_dependencies_walker(Node *node, PlannerInfo *root);
+extern bool extract_query_dependencies_walker(Node *node, PlannerInfo *context);
 
 extern void cdb_extract_plan_dependencies(PlannerInfo *root, Plan *plan);
 

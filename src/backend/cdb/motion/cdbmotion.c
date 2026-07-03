@@ -255,7 +255,7 @@ UpdateMotionLayerNode(MotionLayerState *mlStates, int16 motNodeID, bool preserve
 	if (motNodeID < 1 || motNodeID > mlStates->mneCount)
 		elog(ERROR, "invalid motion node ID %d", motNodeID);
 
-	AssertArg(tupDesc != NULL);
+	Assert(tupDesc != NULL);
 
 	/*
 	 * Switch to the Motion Layer's memory-context, so that the motion node
@@ -445,7 +445,7 @@ SendTuple(MotionLayerState *mlStates,
 	MemoryContext oldCtxt;
 	SendReturnCode rc;
 
-	AssertArg(!TupIsNull(slot));
+	Assert(!TupIsNull(slot));
 
 	/*
 	 * Analyze tools.  Do not send any thing if this slice is in the bit mask
@@ -895,7 +895,7 @@ getChunkSorterEntry(MotionLayerState *mlStates,
 	MemoryContext oldCtxt;
 	ChunkSorterEntry *chunkSorterEntry = NULL;
 
-	AssertArg(motNodeEntry != NULL);
+	Assert(motNodeEntry != NULL);
 
 	Assert(srcRoute >= 0);
 	Assert(srcRoute < motNodeEntry->num_senders);
@@ -1009,7 +1009,7 @@ addChunkToSorter(ChunkTransportState *transportStates,
 {
 	TupleChunkType tcType;
 
-	AssertArg(tcItem != NULL);
+	Assert(tcItem != NULL);
 
 	/* Look at the chunk's type, to figure out what to do with it. */
 	GetChunkType(tcItem, &tcType);
@@ -1154,7 +1154,7 @@ statSendTuple(MotionLayerState *mlStates, MotionNodeEntry *pMNEntry, TupleChunkL
 {
 	int			headerOverhead;
 
-	AssertArg(pMNEntry != NULL);
+	Assert(pMNEntry != NULL);
 
 	headerOverhead = TUPLE_CHUNK_HEADER_SIZE * tcList->num_chunks;
 
@@ -1177,7 +1177,7 @@ statSendTuple(MotionLayerState *mlStates, MotionNodeEntry *pMNEntry, TupleChunkL
 static void
 statSendEOS(MotionLayerState *mlStates, MotionNodeEntry *pMNEntry)
 {
-	AssertArg(pMNEntry != NULL);
+	Assert(pMNEntry != NULL);
 
 	/* Update motion node statistics. */
 	pMNEntry->stat_total_chunks_sent++;
@@ -1191,9 +1191,9 @@ statSendEOS(MotionLayerState *mlStates, MotionNodeEntry *pMNEntry)
 static void
 statChunksProcessed(MotionLayerState *mlStates, MotionNodeEntry *pMNEntry, int chunksProcessed, int chunkBytes, int tupleBytes)
 {
-	AssertArg(chunksProcessed >= 0);
-	AssertArg(chunkBytes >= 0);
-	AssertArg(tupleBytes >= 0);
+	Assert(chunksProcessed >= 0);
+	Assert(chunkBytes >= 0);
+	Assert(tupleBytes >= 0);
 
 	/* Update Global Motion Layer Stats. */
 	mlStates->stat_total_chunks_recvd += chunksProcessed;
@@ -1212,8 +1212,8 @@ statNewTupleArrived(MotionNodeEntry *pMNEntry, ChunkSorterEntry *pCSEntry)
 {
 	uint32		tupsAvail;
 
-	AssertArg(pMNEntry != NULL);
-	AssertArg(pCSEntry != NULL);
+	Assert(pMNEntry != NULL);
+	Assert(pCSEntry != NULL);
 
 	/*
 	 * High-watermarks:  We track the number of tuples available to receive,
@@ -1233,8 +1233,8 @@ statNewTupleArrived(MotionNodeEntry *pMNEntry, ChunkSorterEntry *pCSEntry)
 static void
 statRecvTuple(MotionNodeEntry *pMNEntry, ChunkSorterEntry *pCSEntry)
 {
-	AssertArg(pMNEntry != NULL);
-	AssertArg(pCSEntry != NULL || !pMNEntry->preserve_order);
+	Assert(pMNEntry != NULL);
+	Assert(pCSEntry != NULL || !pMNEntry->preserve_order);
 
 	/* Count tuples received. */
 	pMNEntry->stat_total_recvs++;

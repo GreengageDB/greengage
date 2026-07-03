@@ -3,7 +3,7 @@
  * pg_collation.c
  *	  routines to support manipulation of the pg_collation relation
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -52,6 +52,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 				int32 collencoding,
 				const char *collcollate, const char *collctype,
 				const char *colliculocale,
+				const char *collicurules,
 				const char *collversion,
 				bool if_not_exists,
 				bool quiet)
@@ -66,10 +67,10 @@ CollationCreate(const char *collname, Oid collnamespace,
 	ObjectAddress myself,
 				referenced;
 
-	AssertArg(collname);
-	AssertArg(collnamespace);
-	AssertArg(collowner);
-	AssertArg((collcollate && collctype) || colliculocale);
+	Assert(collname);
+	Assert(collnamespace);
+	Assert(collowner);
+	Assert((collcollate && collctype) || colliculocale);
 
 	/*
 	 * Make sure there is no existing collation of same name & encoding.
@@ -78,7 +79,8 @@ CollationCreate(const char *collname, Oid collnamespace,
 	 * friendlier error message.  The unique index provides a backstop against
 	 * race conditions.
 	 */
-	oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
+	oid = GetSysCacheOid3(COLLNAMEENCNSP,
+						  Anum_pg_collation_oid,
 						  PointerGetDatum(collname),
 						  Int32GetDatum(collencoding),
 						  ObjectIdGetDatum(collnamespace));
@@ -126,12 +128,14 @@ CollationCreate(const char *collname, Oid collnamespace,
 	 * concurrent changes fooling this check.
 	 */
 	if (collencoding == -1)
-		oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
+		oid = GetSysCacheOid3(COLLNAMEENCNSP,
+							  Anum_pg_collation_oid,
 							  PointerGetDatum(collname),
 							  Int32GetDatum(GetDatabaseEncoding()),
 							  ObjectIdGetDatum(collnamespace));
 	else
-		oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
+		oid = GetSysCacheOid3(COLLNAMEENCNSP,
+							  Anum_pg_collation_oid,
 							  PointerGetDatum(collname),
 							  Int32GetDatum(-1),
 							  ObjectIdGetDatum(collnamespace));
@@ -193,6 +197,10 @@ CollationCreate(const char *collname, Oid collnamespace,
 		values[Anum_pg_collation_colliculocale - 1] = CStringGetTextDatum(colliculocale);
 	else
 		nulls[Anum_pg_collation_colliculocale - 1] = true;
+	if (collicurules)
+		values[Anum_pg_collation_collicurules - 1] = CStringGetTextDatum(collicurules);
+	else
+		nulls[Anum_pg_collation_collicurules - 1] = true;
 	if (collversion)
 		values[Anum_pg_collation_collversion - 1] = CStringGetTextDatum(collversion);
 	else

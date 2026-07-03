@@ -518,7 +518,7 @@ cdbdisp_dumpDispatchResult(CdbDispatchResult *dispatchResult)
 			 */
 			Assert(TopTransactionContext);
 			oldcontext = MemoryContextSwitchTo(TopTransactionContext);
-			errdata = errfinish_and_return(__FILE__, __LINE__, PG_FUNCNAME_MACRO);
+			errdata = errfinish_and_return(__FILE__, __LINE__, __func__);
 			MemoryContextSwitchTo(oldcontext);
 		}
 		else
@@ -564,7 +564,7 @@ cdbdisp_get_PQerror(PGresult *pgresult)
 	/* These will be overwritten below with the values from QE, if the QE sent them. */
 	char	   *filename = __FILE__;
 	int			lineno = __LINE__;
-	const char *funcname = PG_FUNCNAME_MACRO;
+	const char *funcname = __func__;
 	int			qe_errcode = ERRCODE_GP_INTERCONNECTION_ERROR;
 
 	char	   *whoami;

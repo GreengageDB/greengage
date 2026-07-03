@@ -927,7 +927,17 @@ char *yytext;
 
 #include "postgres.h"
 
+/*
+ * PG16 moved gramparse.h to backend-private src/backend/parser.  This scanner
+ * only needs the core scanner declarations (and, transitively, the keyword
+ * lookup API used via parse_keyword.h), so include the public parser/scanner.h
+ * instead.
+ */
+#if PG_VERSION_NUM >= 90600
+#include "parser/scanner.h"
+#else
 #include "parser/gramparse.h"
+#endif
 /* Not needed now that this file is compiled as part of gram.y */
 /* #include "parser/parse.h" */
 #include "parser/scansup.h"

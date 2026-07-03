@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -42,7 +42,6 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
-#include "storage/smgr.h"               /* RelationCloseSmgr -> smgrclose */
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
@@ -98,7 +97,7 @@ SeqTableKey;
 typedef struct SeqTableData
 {
 	SeqTableKey	key;			/* sequence data hash key */
-	Oid			filenode;		/* last seen relfilenode of this sequence */
+	RelFileNumber filenumber;	/* last seen relfilenumber of this sequence */
 	LocalTransactionId lxid;	/* xact in which we last did a seq op */
 	bool		last_valid;		/* do we have a valid "last" value? */
 	int64		last;			/* value last returned by nextval */
@@ -318,7 +317,7 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
  *
  * The change is made transactionally, so that on failure of the current
  * transaction, the sequence will be restored to its previous state.
- * We do that by creating a whole new relfilenode for the sequence; so this
+ * We do that by creating a whole new relfilenumber for the sequence; so this
  * works much like the rewriting forms of ALTER TABLE.
  *
  * Caller is assumed to have acquired AccessExclusiveLock on the sequence,
@@ -373,7 +372,7 @@ ResetSequence(Oid seq_relid)
 	/*
 	 * Create a new storage file for the sequence.
 	 */
-	RelationSetNewRelfilenode(seq_rel, seq_rel->rd_rel->relpersistence);
+	RelationSetNewRelfilenumber(seq_rel, seq_rel->rd_rel->relpersistence);
 
 	/*
 	 * Ensure sequence's relfrozenxid is at 0, since it won't contain any
@@ -410,9 +409,9 @@ fill_seq_with_data(Relation rel, HeapTuple tuple)
 	{
 		SMgrRelation srel;
 
-		srel = smgropen(rel->rd_node, InvalidBackendId, SMGR_MD);
+		srel = smgropen(rel->rd_locator, InvalidBackendId, SMGR_MD);
 		smgrcreate(srel, INIT_FORKNUM, false);
-		log_smgrcreate(&rel->rd_node, INIT_FORKNUM, SMGR_MD);
+		log_smgrcreate(&rel->rd_locator, INIT_FORKNUM, SMGR_MD);
 		fill_seq_fork_with_data(rel, tuple, INIT_FORKNUM);
 		FlushRelationBuffers(rel);
 		smgrclose(srel);
@@ -432,12 +431,11 @@ fill_seq_fork_with_data(Relation rel, HeapTuple tuple, ForkNumber forkNum)
 
 	/* Initialize first page of relation with special magic number */
 
-	buf = ReadBufferExtended(rel, forkNum, P_NEW, RBM_NORMAL, NULL);
+	buf = ExtendBufferedRel(EB_REL(rel), forkNum, NULL,
+							EB_LOCK_FIRST | EB_SKIP_EXTENSION_LOCK);
 	Assert(BufferGetBlockNumber(buf) == 0);
 
 	page = BufferGetPage(buf);
-
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
 
 	PageInit(page, BufferGetPageSize(buf), sizeof(sequence_magic));
 	sm = (sequence_magic *) PageGetSpecialPointer(page);
@@ -481,7 +479,7 @@ fill_seq_fork_with_data(Relation rel, HeapTuple tuple, ForkNumber forkNum)
 		XLogBeginInsert();
 		XLogRegisterBuffer(0, buf, REGBUF_WILL_INIT);
 
-		xlrec.node = rel->rd_node;
+		xlrec.locator = rel->rd_locator;
 
 		XLogRegisterData((char *) &xlrec, sizeof(xl_seq_rec));
 		XLogRegisterData((char *) tuple->t_data, tuple->t_len);
@@ -576,7 +574,7 @@ AlterSequence(ParseState *pstate, AlterSeqStmt *stmt)
 		 * Create a new storage file for the sequence, making the state
 		 * changes transactional.
 		 */
-		RelationSetNewRelfilenode(seqrel, seqrel->rd_rel->relpersistence);
+		RelationSetNewRelfilenumber(seqrel, seqrel->rd_rel->relpersistence);
 
 		/*
 		 * Ensure sequence's relfrozenxid is at 0, since it won't contain any
@@ -666,7 +664,7 @@ SequenceChangePersistence(Oid relid, char newrelpersistence)
 		GetTopTransactionId();
 
 	(void) read_seq_tuple(seqrel, &buf, &seqdatatuple);
-	RelationSetNewRelfilenode(seqrel, newrelpersistence);
+	RelationSetNewRelfilenumber(seqrel, newrelpersistence);
 	fill_seq_with_data(seqrel, &seqdatatuple);
 	UnlockReleaseBuffer(buf);
 
@@ -980,7 +978,7 @@ nextval_internal(Oid relid, bool check_permissions, bool called_from_dispatcher)
 		seq->is_called = true;
 		seq->log_cnt = 0;
 
-		xlrec.node = seqrel->rd_node;
+		xlrec.locator = seqrel->rd_locator;
 
 		XLogRegisterData((char *) &xlrec, sizeof(xl_seq_rec));
 		XLogRegisterData((char *) seqdatatuple.t_data, seqdatatuple.t_len);
@@ -1190,7 +1188,7 @@ do_setval(Oid relid, int64 next, bool iscalled)
 		XLogBeginInsert();
 		XLogRegisterBuffer(0, buf, REGBUF_WILL_INIT);
 
-		xlrec.node = seqrel->rd_node;
+		xlrec.locator = seqrel->rd_locator;
 		XLogRegisterData((char *) &xlrec, sizeof(xl_seq_rec));
 		XLogRegisterData((char *) seqdatatuple.t_data, seqdatatuple.t_len);
 
@@ -1279,7 +1277,7 @@ create_seq_hashtable(void)
 {
 	HASHCTL		ctl;
 
-	ctl.keysize = sizeof(Oid);
+	ctl.keysize = sizeof(SeqTableKey);
 	ctl.entrysize = sizeof(SeqTableData);
 
 	seqhashtab = hash_create("Sequence values", 16, &ctl,
@@ -1330,7 +1328,7 @@ init_sequence_internal(Oid _relid, SeqTable *p_elm, Relation *p_rel,
 	if (!found)
 	{
 		/* relid already filled in */
-		elm->filenode = InvalidOid;
+		elm->filenumber = InvalidRelFileNumber;
 		elm->lxid = InvalidLocalTransactionId;
 		elm->last_valid = false;
 		elm->last = elm->cached = 0;
@@ -1352,9 +1350,9 @@ init_sequence_internal(Oid _relid, SeqTable *p_elm, Relation *p_rel,
 	 * discard any cached-but-unissued values.  We do not touch the currval()
 	 * state, however.
 	 */
-	if (seqrel->rd_rel->relfilenode != elm->filenode && called_from_dispatcher)
+	if (seqrel->rd_rel->relfilenode != elm->filenumber && called_from_dispatcher)
 	{
-		elm->filenode = seqrel->rd_rel->relfilenode;
+		elm->filenumber = seqrel->rd_rel->relfilenode;
 		elm->cached = elm->last;
 	}
 
@@ -1437,7 +1435,8 @@ read_seq_tuple(Relation rel, Buffer *buf, HeapTuple seqdatatuple)
  * changed.  This allows ALTER SEQUENCE to behave transactionally.  Currently,
  * the only option that doesn't cause that is OWNED BY.  It's *necessary* for
  * ALTER SEQUENCE OWNED BY to not rewrite the sequence, because that would
- * break pg_upgrade by causing unwanted changes in the sequence's relfilenode.
+ * break pg_upgrade by causing unwanted changes in the sequence's
+ * relfilenumber.
  */
 static void
 init_params(ParseState *pstate, List *options, bool for_identity,
@@ -1807,7 +1806,7 @@ process_owned_by(Relation seqrel, List *owned_by, bool for_identity)
 		RangeVar   *rel;
 
 		/* Separate relname and attr name */
-		relname = list_truncate(list_copy(owned_by), nnames - 1);
+		relname = list_copy_head(owned_by, nnames - 1);
 		attrname = strVal(llast(owned_by));
 
 		/* Open and lock rel to ensure it won't go away meanwhile */
@@ -1941,23 +1940,8 @@ pg_sequence_parameters(PG_FUNCTION_ARGS)
 				 errmsg("permission denied for sequence %s",
 						get_rel_name(relid))));
 
-	tupdesc = CreateTemplateTupleDesc(7);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 1, "start_value",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 2, "minimum_value",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 3, "maximum_value",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 4, "increment",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 5, "cycle_option",
-					   BOOLOID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 6, "cache_size",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(tupdesc, (AttrNumber) 7, "data_type",
-					   OIDOID, -1, 0);
-
-	BlessTupleDesc(tupdesc);
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
 
 	memset(isnull, 0, sizeof(isnull));
 
@@ -2117,7 +2101,7 @@ cdb_sequence_nextval_qe(Relation	seqrel,
 	char *current;
 	int *pint32;
 	StringInfoData buf;
-	Oid dbid = seqrel->rd_node.dbNode;
+	Oid dbid = seqrel->rd_locator.dbOid;
 	Oid seq_oid = seqrel->rd_id;
 
 	/*

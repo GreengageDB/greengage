@@ -3,7 +3,7 @@
  * pgstat_xact.c
  *	  Transactional integration for the cumulative statistics system.
  *
- * Copyright (c) 2001-2022, PostgreSQL Global Development Group
+ * Copyright (c) 2001-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/activity/pgstat_xact.c
@@ -71,16 +71,13 @@ AtEOXact_PgStat_DroppedStats(PgStat_SubXactStatus *xact_state, bool isCommit)
 	dlist_mutable_iter iter;
 	int			not_freed_count = 0;
 
-	if (xact_state->pending_drops_count == 0)
-	{
-		Assert(dlist_is_empty(&xact_state->pending_drops));
+	if (dclist_count(&xact_state->pending_drops) == 0)
 		return;
-	}
 
-	dlist_foreach_modify(iter, &xact_state->pending_drops)
+	dclist_foreach_modify(iter, &xact_state->pending_drops)
 	{
 		PgStat_PendingDroppedStatsItem *pending =
-		dlist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
+			dclist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
 		xl_xact_stats_item *it = &pending->item;
 
 		if (isCommit && !pending->is_create)
@@ -102,8 +99,7 @@ AtEOXact_PgStat_DroppedStats(PgStat_SubXactStatus *xact_state, bool isCommit)
 				not_freed_count++;
 		}
 
-		dlist_delete(&pending->node);
-		xact_state->pending_drops_count--;
+		dclist_delete_from(&xact_state->pending_drops, &pending->node);
 		pfree(pending);
 	}
 
@@ -145,19 +141,18 @@ AtEOSubXact_PgStat_DroppedStats(PgStat_SubXactStatus *xact_state,
 	dlist_mutable_iter iter;
 	int			not_freed_count = 0;
 
-	if (xact_state->pending_drops_count == 0)
+	if (dclist_count(&xact_state->pending_drops) == 0)
 		return;
 
 	parent_xact_state = pgstat_get_xact_stack_level(nestDepth - 1);
 
-	dlist_foreach_modify(iter, &xact_state->pending_drops)
+	dclist_foreach_modify(iter, &xact_state->pending_drops)
 	{
 		PgStat_PendingDroppedStatsItem *pending =
-		dlist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
+			dclist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
 		xl_xact_stats_item *it = &pending->item;
 
-		dlist_delete(&pending->node);
-		xact_state->pending_drops_count--;
+		dclist_delete_from(&xact_state->pending_drops, &pending->node);
 
 		if (!isCommit && pending->is_create)
 		{
@@ -176,8 +171,7 @@ AtEOSubXact_PgStat_DroppedStats(PgStat_SubXactStatus *xact_state,
 			 * remove the stats object, the surrounding transaction might
 			 * still abort. Pass it on to the parent.
 			 */
-			dlist_push_tail(&parent_xact_state->pending_drops, &pending->node);
-			parent_xact_state->pending_drops_count++;
+			dclist_push_tail(&parent_xact_state->pending_drops, &pending->node);
 		}
 		else
 		{
@@ -185,7 +179,7 @@ AtEOSubXact_PgStat_DroppedStats(PgStat_SubXactStatus *xact_state,
 		}
 	}
 
-	Assert(xact_state->pending_drops_count == 0);
+	Assert(dclist_count(&xact_state->pending_drops) == 0);
 	if (not_freed_count > 0)
 		pgstat_request_entry_refs_gc();
 }
@@ -251,8 +245,7 @@ pgstat_get_xact_stack_level(int nest_level)
 		xact_state = (PgStat_SubXactStatus *)
 			MemoryContextAlloc(TopTransactionContext,
 							   sizeof(PgStat_SubXactStatus));
-		dlist_init(&xact_state->pending_drops);
-		xact_state->pending_drops_count = 0;
+		dclist_init(&xact_state->pending_drops);
 		xact_state->nest_level = nest_level;
 		xact_state->prev = pgStatXactStack;
 		xact_state->first = NULL;
@@ -292,20 +285,20 @@ pgstat_get_transactional_drops(bool isCommit, xl_xact_stats_item **items)
 	Assert(!isCommit || xact_state->nest_level == 1);
 	Assert(!isCommit || xact_state->prev == NULL);
 
-	*items = palloc(xact_state->pending_drops_count
+	*items = palloc(dclist_count(&xact_state->pending_drops)
 					* sizeof(xl_xact_stats_item));
 
-	dlist_foreach(iter, &xact_state->pending_drops)
+	dclist_foreach(iter, &xact_state->pending_drops)
 	{
 		PgStat_PendingDroppedStatsItem *pending =
-		dlist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
+			dclist_container(PgStat_PendingDroppedStatsItem, node, iter.cur);
 
 		if (isCommit && pending->is_create)
 			continue;
 		if (!isCommit && !pending->is_create)
 			continue;
 
-		Assert(nitems < xact_state->pending_drops_count);
+		Assert(nitems < dclist_count(&xact_state->pending_drops));
 		(*items)[nitems++] = pending->item;
 	}
 
@@ -343,7 +336,7 @@ create_drop_transactional_internal(PgStat_Kind kind, Oid dboid, Oid objoid, bool
 	int			nest_level = GetCurrentTransactionNestLevel();
 	PgStat_SubXactStatus *xact_state;
 	PgStat_PendingDroppedStatsItem *drop = (PgStat_PendingDroppedStatsItem *)
-	MemoryContextAlloc(TopTransactionContext, sizeof(PgStat_PendingDroppedStatsItem));
+		MemoryContextAlloc(TopTransactionContext, sizeof(PgStat_PendingDroppedStatsItem));
 
 	xact_state = pgstat_get_xact_stack_level(nest_level);
 
@@ -352,8 +345,7 @@ create_drop_transactional_internal(PgStat_Kind kind, Oid dboid, Oid objoid, bool
 	drop->item.dboid = dboid;
 	drop->item.objoid = objoid;
 
-	dlist_push_tail(&xact_state->pending_drops, &drop->node);
-	xact_state->pending_drops_count++;
+	dclist_push_tail(&xact_state->pending_drops, &drop->node);
 }
 
 /*
@@ -369,7 +361,7 @@ pgstat_create_transactional(PgStat_Kind kind, Oid dboid, Oid objoid)
 	if (pgstat_get_entry_ref(kind, dboid, objoid, false, NULL))
 	{
 		ereport(WARNING,
-				errmsg("resetting existing stats for type %s, db=%u, oid=%u",
+				errmsg("resetting existing statistics for kind %s, db=%u, oid=%u",
 					   (pgstat_get_kind_info(kind))->name, dboid, objoid));
 
 		pgstat_reset(kind, dboid, objoid);

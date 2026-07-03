@@ -3,7 +3,7 @@
  * syslogger.h
  *	  Exports from postmaster/syslogger.c.
  *
- * Copyright (c) 2004-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2004-2023, PostgreSQL Global Development Group
  *
  * src/include/postmaster/syslogger.h
  *
@@ -182,7 +182,7 @@ extern HANDLE syslogPipe[2];
 
 extern int	SysLogger_Start(void);
 
-extern void write_syslogger_file(const char *buffer, int count, int dest);
+extern void write_syslogger_file(const char *buffer, int count, int destination);
 
 extern void syslogger_append_timestamp(pg_time_t stamp_time, bool amsyslogger, bool append_comma);
 extern void syslogger_append_current_timestamp(bool amsyslogger);

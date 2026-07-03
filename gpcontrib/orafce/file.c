@@ -12,6 +12,7 @@
 #endif
 
 #include "postgres.h"
+#include "varatt.h"
 
 #include <errno.h>
 #include <unistd.h>

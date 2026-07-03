@@ -5,7 +5,7 @@
  *		bits of hard-wired knowledge
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -84,8 +84,14 @@ reldir_and_filename(RelFileNode node, BackendId backend, ForkNumber forknum,
 {
 	char	   *path;
 	int			i;
+	RelFileLocator rlocator;
 
-	path = relpathbackend(node, backend, forknum);
+	/* PG16: relpathbackend() now takes a RelFileLocator (spcOid/dbOid/relNumber). */
+	rlocator.spcOid = node.spcNode;
+	rlocator.dbOid = node.dbNode;
+	rlocator.relNumber = node.relNode;
+
+	path = relpathbackend(rlocator, backend, forknum);
 
 	/*
 	 * The base path is like "<path>/<rnode>". Split it into
@@ -117,8 +123,14 @@ aorelpathbackend(RelFileNode node, BackendId backend, int32 segno)
 {
 	char	   *fullpath;
 	char	   *path;
+	RelFileLocator rlocator;
 
-	path = relpathbackend(node, backend, MAIN_FORKNUM);
+	/* PG16: relpathbackend() now takes a RelFileLocator (spcOid/dbOid/relNumber). */
+	rlocator.spcOid = node.spcNode;
+	rlocator.dbOid = node.dbNode;
+	rlocator.relNumber = node.relNode;
+
+	path = relpathbackend(rlocator, backend, MAIN_FORKNUM);
 	if (segno == 0)
 		fullpath = path;
 	else
@@ -413,6 +425,8 @@ IsSharedRelation(Oid relationId)
 		relationId == AuthIdRolnameIndexId ||
 		relationId == AuthMemMemRoleIndexId ||
 		relationId == AuthMemRoleMemIndexId ||
+		relationId == AuthMemOidIndexId ||
+		relationId == AuthMemGrantorIndexId ||
 		relationId == DatabaseNameIndexId ||
 		relationId == DatabaseOidIndexId ||
 		relationId == DbRoleSettingDatidRolidIndexId ||
@@ -731,13 +745,13 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 }
 
 static bool
-GpCheckRelFileCollision(RelFileNodeBackend rnode)
+GpCheckRelFileCollision(RelFileLocatorBackend rlocator)
 {
 	char	   *rpath;
 	bool		collides;
 
 	/* Check for existing file of same name */
-	rpath = relpath(rnode, MAIN_FORKNUM);
+	rpath = relpath(rlocator, MAIN_FORKNUM);
 	if (access(rpath, F_OK) == 0)
 		collides = true;
 	else
@@ -758,14 +772,14 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
 }
 
 /*
- * GetNewRelFileNode
- *		Generate a new relfilenode number that is unique within the
+ * GetNewRelFileNumber
+ *		Generate a new relfilenumber that is unique within the
  *		database of the given tablespace.
  *
- * If the relfilenode will also be used as the relation's OID, pass the
+ * If the relfilenumber will also be used as the relation's OID, pass the
  * opened pg_class catalog, and this routine will guarantee that the result
  * is also an unused OID within pg_class.  If the result is to be used only
- * as a relfilenode for an existing relation, pass NULL for pg_class.
+ * as a relfilenumber for an existing relation, pass NULL for pg_class.
  * (in GPDB, 'pg_class' is unused, there is a different mechanism to avoid
  * clashes, across the whole cluster.)
  *
@@ -775,16 +789,16 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
  * Note: we don't support using this in bootstrap mode.  All relations
  * created by bootstrap have preassigned OIDs, so there's no need.
  */
-Oid
-GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
+RelFileNumber
+GetNewRelFileNumber(Oid reltablespace, Relation pg_class, char relpersistence)
 {
-	RelFileNodeBackend rnode;
+	RelFileLocatorBackend rlocator;
 	bool		collides;
 	BackendId	backend;
 
 	/*
 	 * If we ever get here during pg_upgrade, there's something wrong; all
-	 * relfilenode assignments during a binary-upgrade run should be
+	 * relfilenumber assignments during a binary-upgrade run should be
 	 * determined by commands in the dump script.
 	 *
 	 * GPDB: Totally OK in Greenplum. We don't use the table's OID as its
@@ -803,33 +817,35 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 			break;
 		default:
 			elog(ERROR, "invalid relpersistence: %c", relpersistence);
-			return InvalidOid;	/* placate compiler */
+			return InvalidRelFileNumber;	/* placate compiler */
 	}
 
 	/* This logic should match RelationInitPhysicalAddr */
-	rnode.node.spcNode = reltablespace ? reltablespace : MyDatabaseTableSpace;
-	rnode.node.dbNode = (rnode.node.spcNode == GLOBALTABLESPACE_OID) ? InvalidOid : MyDatabaseId;
+	rlocator.locator.spcOid = reltablespace ? reltablespace : MyDatabaseTableSpace;
+	rlocator.locator.dbOid =
+		(rlocator.locator.spcOid == GLOBALTABLESPACE_OID) ?
+		InvalidOid : MyDatabaseId;
 
 	/*
 	 * The relpath will vary based on the backend ID, so we must initialize
 	 * that properly here to make sure that any collisions based on filename
 	 * are properly detected.
 	 */
-	rnode.backend = backend;
+	rlocator.backend = backend;
 
 	do
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		/* Generate the Relfilenode */
-		rnode.node.relNode = GetNewSegRelfilenode();
+		/* Generate the relfilenumber */
+		rlocator.locator.relNumber = GetNewSegRelfilenode();
 
-		if (!IsOidAcceptable(rnode.node.relNode))
+		if (!IsOidAcceptable(rlocator.locator.relNumber))
 			continue;
 
-		collides = GpCheckRelFileCollision(rnode);
+		collides = GpCheckRelFileCollision(rlocator);
 
-		if (!collides && rnode.node.spcNode != GLOBALTABLESPACE_OID)
+		if (!collides && rlocator.locator.spcOid != GLOBALTABLESPACE_OID)
 		{
 			/*
 			 * GPDB_91_MERGE_FIXME: check again for a collision with a temp
@@ -842,15 +858,16 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 			 * buffers at all. We have to make this additional check to make
 			 * sure of that.
 			 */
-			rnode.backend = (backend == InvalidBackendId) ? TempRelBackendId
-														  : InvalidBackendId;
-			collides = GpCheckRelFileCollision(rnode);
+			rlocator.backend = (backend == InvalidBackendId) ? TempRelBackendId
+															 : InvalidBackendId;
+			collides = GpCheckRelFileCollision(rlocator);
 		}
 	} while (collides);
 
-	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %d", rnode.node.relNode);
+	elog(DEBUG1, "Calling GetNewRelFileNumber returns new relfilenumber = %u",
+		 rlocator.locator.relNumber);
 
-	return rnode.node.relNode;
+	return rlocator.locator.relNumber;
 }
 
 /*

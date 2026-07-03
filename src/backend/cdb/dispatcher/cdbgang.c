@@ -48,6 +48,14 @@
 #include "utils/builtins.h"
 
 /*
+ * libpq-int.h #undef's the backend translation macro _().  This is backend
+ * code that wants the server's own message catalog, so restore _().
+ */
+#ifndef _
+#define _(x) gettext(x)
+#endif
+
+/*
  * All QEs are managed by cdb_component_dbs in QD, QD assigned
  * a unique identifier for each QE, when a QE is created, this
  * identifier is passed along with gpqeid params, see
@@ -410,8 +418,8 @@ addOneOption(StringInfo option, StringInfo diff, struct config_generic *guc)
 void
 makeOptions(char **options, char **diff_options)
 {
-	struct config_generic **gucs = get_guc_variables();
-	int			ngucs = get_num_guc_variables();
+	int			ngucs;
+	struct config_generic **gucs = get_guc_variables(&ngucs);
 	CdbComponentDatabaseInfo *qdinfo = NULL;
 	StringInfoData optionsStr;
 	StringInfoData diffStr;

@@ -3,7 +3,7 @@
  * syncrep.h
  *	  Exports from replication/syncrep.c.
  *
- * Portions Copyright (c) 2010-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/include/replication/syncrep.h
@@ -14,7 +14,6 @@
 #define _SYNCREP_H
 
 #include "access/xlogdefs.h"
-#include "utils/guc.h"
 
 #define SyncRepRequested() \
 	(max_wal_senders > 0 && synchronous_commit > SYNCHRONOUS_COMMIT_LOCAL_FLUSH)
@@ -97,13 +96,12 @@ extern int	SyncRepGetCandidateStandbys(SyncRepStandbyData **standbys);
 /* called by checkpointer */
 extern void SyncRepUpdateSyncStandbysDefined(void);
 
-/* called by various procs */
-extern int  SyncRepWakeQueue(bool all, int mode);
-
-/* GUC infrastructure */
-extern bool check_synchronous_standby_names(char **newval, void **extra, GucSource source);
-extern void assign_synchronous_standby_names(const char *newval, void *extra);
-extern void assign_synchronous_commit(int newval, void *extra);
+/*
+ * GPDB: called by various procs (e.g. walsender on the QD wakes sync-rep
+ * waiters at exit), so this is exported here instead of being static in
+ * syncrep.c as in upstream.
+ */
+extern int	SyncRepWakeQueue(bool all, int mode);
 
 /*
  * Internal functions for parsing synchronous_standby_names grammar,
@@ -112,7 +110,7 @@ extern void assign_synchronous_commit(int newval, void *extra);
 extern int	syncrep_yyparse(void);
 extern int	syncrep_yylex(void);
 extern void syncrep_yyerror(const char *str);
-extern void syncrep_scanner_init(const char *query_string);
+extern void syncrep_scanner_init(const char *str);
 extern void syncrep_scanner_finish(void);
 
 #endif							/* _SYNCREP_H */

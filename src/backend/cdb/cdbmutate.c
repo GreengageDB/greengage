@@ -606,8 +606,11 @@ create_shareinput_producer_rte(ApplyShareInputContext *ctxt, int share_id,
 	rte->inh = false;
 	rte->inFromCl = false;
 
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
+	/*
+	 * GPDB: PG16 moved requiredPerms/checkAsUser into RTEPermissionInfo; this
+	 * synthetic CTE-scan RTE needs no permission check, so leave
+	 * perminfoindex = 0 (set by makeNode) and add no RTEPermissionInfo.
+	 */
 
 	return rte;
 }

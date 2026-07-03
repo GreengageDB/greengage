@@ -6,6 +6,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 #include "access/hash.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"

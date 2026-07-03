@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 #include <stdlib.h>
 #include <locale.h>
 #include "catalog/pg_operator.h"

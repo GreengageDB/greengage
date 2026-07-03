@@ -1,6 +1,7 @@
 #include <float.h>
 
 #include "postgres.h"
+#include "varatt.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"

@@ -4,7 +4,7 @@
  *	  POSTGRES process array definitions.
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/procarray.h
@@ -43,6 +43,7 @@ extern void ExpireTreeKnownAssignedTransactionIds(TransactionId xid,
 												  TransactionId max_xid);
 extern void ExpireAllKnownAssignedTransactionIds(void);
 extern void ExpireOldKnownAssignedTransactionIds(TransactionId xid);
+extern void KnownAssignedTransactionIdsIdleMaintenance(void);
 
 extern int	GetMaxSnapshotXidCount(void);
 extern int	GetMaxSnapshotSubxidCount(void);
@@ -65,8 +66,8 @@ extern TransactionId GetOldestSafeDecodingTransactionId(bool catalogOnly);
 extern TransactionId GetLocalOldestNonRemovableTransactionId(Relation rel);
 extern TransactionId GetLocalOldestTransactionIdConsideredRunning(void);
 
-extern void GetReplicationHorizons(TransactionId *slot_xmin, TransactionId *catalog_xmin);
-extern void GetLocalReplicationHorizons(TransactionId *slot_xmin, TransactionId *catalog_xmin);
+extern void GetReplicationHorizons(TransactionId *xmin, TransactionId *catalog_xmin);
+extern void GetLocalReplicationHorizons(TransactionId *xmin, TransactionId *catalog_xmin);
 
 extern VirtualTransactionId *GetVirtualXIDsDelayingChkpt(int *nvxids, int type);
 extern bool HaveVirtualXIDsDelayingChkpt(VirtualTransactionId *vxids,

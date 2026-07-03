@@ -214,8 +214,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 	{
 		lock->grantMask = 0;
 		lock->waitMask = 0;
-		SHMQueueInit(&(lock->procLocks));
-		ProcQueueInit(&(lock->waitProcs));
+		dlist_init(&(lock->procLocks));
+		dclist_init(&(lock->waitProcs));
 		lock->nRequested = 0;
 		lock->nGranted = 0;
 		MemSet(lock->requested, 0, sizeof(int) * MAX_LOCKMODES);
@@ -257,7 +257,7 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 			 * of shared memory, because there won't be anything to cause
 			 * anyone to release the lock object later.
 			 */
-			Assert(SHMQueueEmpty(&(lock->procLocks)));
+			Assert(dlist_is_empty(&(lock->procLocks)));
 			if (!hash_search_with_hash_value(LockMethodLockHash,
 											 (void *) &(lock->tag),
 											 hashcode,
@@ -289,10 +289,10 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		proclock->holdMask = 0;
 		proclock->releaseMask = 0;
 		/* Add proclock to appropriate lists */
-		SHMQueueInsertBefore(&lock->procLocks, &proclock->lockLink);
-		SHMQueueInsertBefore(&(MyProc->myProcLocks[partition]), &proclock->procLink);
+		dlist_push_tail(&lock->procLocks, &proclock->lockLink);
+		dlist_push_tail(&(MyProc->myProcLocks[partition]), &proclock->procLink);
 		proclock->nLocks = 0;
-		SHMQueueInit(&(proclock->portalLinks));
+		dlist_init(&(proclock->portalLinks));
 	}
 	else
 	{
@@ -1032,10 +1032,10 @@ ResCleanUpLock(LOCK *lock, PROCLOCK *proclock, uint32 hashcode, bool wakeupNeede
 		uint32		proclock_hashcode;
 
 		if (proclock->lockLink.next != NULL)
-			SHMQueueDelete(&proclock->lockLink);
+			dlist_delete_thoroughly(&proclock->lockLink);
 
 		if (proclock->procLink.next != NULL)
-			SHMQueueDelete(&proclock->procLink);
+			dlist_delete_thoroughly(&proclock->procLink);
 
 		proclock_hashcode = ProcLockHashCode(&proclock->tag, hashcode);
 		hash_search_with_hash_value(LockMethodProcLockHash, (void *) &(proclock->tag),
@@ -1048,7 +1048,7 @@ ResCleanUpLock(LOCK *lock, PROCLOCK *proclock, uint32 hashcode, bool wakeupNeede
 		 * The caller just released the last lock, so garbage-collect the lock
 		 * object.
 		 */
-		Assert(SHMQueueEmpty(&(lock->procLocks)));
+		Assert(dlist_is_empty(&(lock->procLocks)));
 
 		hash_search(LockMethodLockHash, (void *) &(lock->tag), HASH_REMOVE, NULL);
 	}
@@ -1136,9 +1136,8 @@ ResWaitOnLock(LOCALLOCK *locallock, ResourceOwner owner, ResPortalIncrement *inc
 void
 ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 {
-	PROC_QUEUE *waitQueue = &(lock->waitProcs);
-	int			queue_size = waitQueue->size;
-	PGPROC	   *proc;
+	dclist_head *waitQueue = &(lock->waitProcs);
+	dlist_mutable_iter miter;
 	uint32		hashcode;
 	LWLockId	partitionLock;
 
@@ -1152,16 +1151,20 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 	 * wait-queue).
 	 */
 
-	Assert(queue_size >= 0);
-	if (queue_size == 0)
+	if (dclist_is_empty(waitQueue))
 	{
 		return;
 	}
 
-	proc = (PGPROC *) waitQueue->links.next;
-
-	while (queue_size-- > 0)
+	/*
+	 * Walk the wait queue.  It is safe to delete the current entry (either via
+	 * the self-removal below or ResProcWakeup) while iterating, because
+	 * dclist_foreach_modify precomputes the next node before running the body.
+	 */
+	dclist_foreach_modify(miter, waitQueue)
 	{
+		PGPROC	   *proc = dlist_container(PGPROC, links, miter.cur);
+
 		/*
 		 * Get the portal we are waiting on, and then its set of increments.
 		 */
@@ -1171,15 +1174,8 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 		/* Our own process may be on our wait-queue! */
 		if (proc->pid == MyProc->pid)
 		{
-			PGPROC	   *nextproc;
-
-			nextproc = (PGPROC *) proc->links.next;
-
-			SHMQueueDelete(&(proc->links));
-			(proc->waitLock->waitProcs.size)--;
-
-			proc = nextproc;
-
+			dclist_delete_from_thoroughly(&proc->waitLock->waitProcs,
+										  &proc->links);
 			continue;
 		}
 
@@ -1198,8 +1194,8 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 		}
 
 		/*
-		 * See if it is ok to wake this guy. (note that the wakeup writes to
-		 * the wait list, and gives back a *new* next proc).
+		 * See if it is ok to wake this guy. (note that the wakeup removes it
+		 * from the wait list).
 		 */
 		status = ResLockCheckLimit(lock, proc->waitProcLock, incrementSet, true);
 		if (status == STATUS_OK)
@@ -1207,16 +1203,10 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 			ResGrantLock(lock, proc->waitProcLock);
 			ResLockUpdateLimit(lock, proc->waitProcLock, incrementSet, true, false);
 
-			proc = ResProcWakeup(proc, PROC_WAIT_STATUS_OK);
+			ResProcWakeup(proc, PROC_WAIT_STATUS_OK);
 		}
-		else
-		{
-			/* Otherwise move on to the next guy. */
-			proc = (PGPROC *) proc->links.next;
-		}
+		/* else: not ok to wake this guy, leave him on the wait queue. */
 	}
-
-	Assert(waitQueue->size >= 0);
 
 	return;
 }
@@ -1230,6 +1220,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 PGPROC *
 ResProcWakeup(PGPROC *proc, ProcWaitStatus waitStatus)
 {
+	dclist_head *waitQueue;
 	PGPROC	   *retProc;
 
 	/* Proc should be sleeping ... */
@@ -1237,12 +1228,17 @@ ResProcWakeup(PGPROC *proc, ProcWaitStatus waitStatus)
 		proc->links.next == NULL)
 		return NULL;
 
-	/* Save next process before we zap the list link */
-	retProc = (PGPROC *) proc->links.next;
+	waitQueue = &proc->waitLock->waitProcs;
+
+	/* Save next process (if any) before we zap the list link */
+	if (dclist_has_next(waitQueue, &proc->links))
+		retProc = dlist_container(PGPROC, links,
+								  dclist_next_node(waitQueue, &proc->links));
+	else
+		retProc = NULL;
 
 	/* Remove process from wait queue */
-	SHMQueueDelete(&(proc->links));
-	(proc->waitLock->waitProcs.size)--;
+	dclist_delete_from_thoroughly(waitQueue, &proc->links);
 
 	/* Clean up process' state and pass it the ok/fail signal */
 	proc->waitLock = NULL;
@@ -1277,11 +1273,10 @@ ResRemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Make sure proc is waiting */
 	Assert(proc->links.next != NULL);
 	Assert(waitLock);
-	Assert(waitLock->waitProcs.size > 0);
+	Assert(dclist_count(&waitLock->waitProcs) > 0);
 
 	/* Remove proc from lock's wait queue */
-	SHMQueueDelete(&(proc->links));
-	waitLock->waitProcs.size--;
+	dclist_delete_from_thoroughly(&waitLock->waitProcs, &proc->links);
 
 	/* Undo increments of request counts by waiting process */
 	Assert(waitLock->nRequested > 0);
@@ -1540,7 +1535,7 @@ ResIncrementAdd(ResPortalIncrement *incSet,
 		{
 			incrementSet->increments[i] = incSet->increments[i];
 		}
-		SHMQueueInsertBefore(&proclock->portalLinks, &incrementSet->portalLink);
+		dlist_push_tail(&proclock->portalLinks, &incrementSet->portalLink);
 	}
 	else
 	{
@@ -1607,7 +1602,7 @@ ResIncrementRemove(ResPortalTag *portaltag)
 		return false;
 	}
 
-	SHMQueueDelete(&incrementSet->portalLink);
+	dlist_delete(&incrementSet->portalLink);
 
 	return true;
 }

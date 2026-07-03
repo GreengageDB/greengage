@@ -107,7 +107,7 @@ int         gp_segment_connect_timeout = 180;  /* Maximum time (in seconds) allo
  * Configurable timeout for snapshot add: exceptionally busy systems may take
  * longer than our old hard-coded version -- so here is a tuneable version.
  */
-int			gp_snapshotadd_timeout = 10;
+int			gp_snapshotadd_timeout = 30;
 
 
 /*
@@ -150,7 +150,7 @@ int			gp_dtx_recovery_interval = 60;
  * Gather prepared transactions that live longer than the time to find possible
  * orphaned prepared transactions.
  */
-int			gp_dtx_recovery_prepared_period = 300;
+int			gp_dtx_recovery_prepared_period = 120;
 
 /*
  * When we have certain types of failures during gang creation which indicate
@@ -318,12 +318,12 @@ int			gp_autostats_mode;
 char	   *gp_autostats_mode_string;
 int			gp_autostats_mode_in_functions;
 char	   *gp_autostats_mode_in_functions_string;
-int			gp_autostats_on_change_threshold = 100000;
+int			gp_autostats_on_change_threshold = INT_MAX;
 bool		gp_autostats_allow_nonowner = false;
-bool		log_autostats = true;
+bool		log_autostats = false;
 
 /* GUC to toggle JIT instrumentation output for EXPLAIN */
-bool		gp_explain_jit = true;
+bool		gp_explain_jit = false;
 
 /* --------------------------------------------------------------------------------------------------
  * Server debugging
@@ -336,7 +336,7 @@ bool		gp_explain_jit = true;
  * errfinish() will sleep() for the specified number of seconds before
  * termination, to let the user attach a debugger.
  */
-int			gp_debug_linger = 30;
+int			gp_debug_linger = 0;
 
 /* ----------------
  * Non-GUC globals
@@ -426,8 +426,14 @@ check_gp_role(char **newval, void **extra, GucSource source)
 	if (!IsPostmasterEnvironment && newrole != GP_ROLE_UTILITY)
 	{
 		elog(LOG, "gp_role forced to 'utility' in single-user mode");
-		*newval = strdup("utility");
-		return true;
+		/*
+		 * PG16 allocates GUC string values in GUCMemoryContext and frees them
+		 * with guc_free() (pfree); replace *newval using the matching
+		 * allocators, not libc strdup/free, to avoid heap corruption.
+		 */
+		guc_free(*newval);
+		*newval = guc_strdup(LOG, "utility");
+		return (*newval != NULL);
 	}
 
 	if (source == PGC_S_DEFAULT)
@@ -477,7 +483,7 @@ show_gp_role(void)
  * The messages that are enabled by the TERSE and VERBOSE settings are
  * written with a severity level of LOG.
  */
-int gp_log_gang;
+int gp_log_gang = GPVARS_VERBOSITY_OFF;
 
 /*
  * gp_log_fts (string)
@@ -491,7 +497,7 @@ int gp_log_gang;
  * The messages that are enabled by the TERSE and VERBOSE settings are
  * written with a severity level of LOG.
  */
-int gp_log_fts;
+int gp_log_fts = GPVARS_VERBOSITY_TERSE;
 
 /*
  * gp_log_interconnect (string)
@@ -505,7 +511,7 @@ int gp_log_fts;
  * The messages that are enabled by the TERSE and VERBOSE settings are
  * written with a severity level of LOG.
  */
-int gp_log_interconnect;
+int gp_log_interconnect = GPVARS_VERBOSITY_TERSE;
 
 /*
  * gpvars_check_gp_resource_manager_policy

@@ -295,7 +295,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	while ((c = getopt(argc, argv, "x:dn")) != -1)
+	while ((c = getopt(argc, argv, "dnx:")) != -1)
 	{
 		switch (c)
 		{

@@ -2,7 +2,7 @@
  * dbsize.c
  *		Database object size functions, and related inquiries
  *
- * Copyright (c) 2002-2022, PostgreSQL Global Development Group
+ * Copyright (c) 2002-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/adt/dbsize.c
@@ -19,6 +19,7 @@
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_tablespace.h"
 #include "commands/dbcommands.h"
 #include "commands/tablespace.h"
@@ -33,7 +34,7 @@
 #include "utils/numeric.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
-#include "utils/relfilenodemap.h"
+#include "utils/relfilenumbermap.h"
 #include "utils/relmapper.h"
 #include "utils/syscache.h"
 
@@ -46,8 +47,6 @@
 #include "cdb/cdbvars.h"
 #include "utils/snapmgr.h"
 
-/* Divide by two and round towards positive infinity. */
-#define half_rounded(x)   (((x) + ((x) < 0 ? 0 : 1)) / 2)
 /* Divide by two and round away from zero */
 #define half_rounded(x)   (((x) + ((x) < 0 ? -1 : 1)) / 2)
 
@@ -62,7 +61,7 @@ struct size_pretty_unit
 								 * unit */
 };
 
-/* When adding units here also update the error message in pg_size_bytes */
+/* When adding units here also update the docs and the error message in pg_size_bytes */
 static const struct size_pretty_unit size_pretty_units[] = {
 	{"bytes", 10 * 1024, false, 0},
 	{"kB", 20 * 1024 - 1, true, 10},
@@ -71,6 +70,19 @@ static const struct size_pretty_unit size_pretty_units[] = {
 	{"TB", 20 * 1024 - 1, true, 40},
 	{"PB", 20 * 1024 - 1, true, 50},
 	{NULL, 0, false, 0}
+};
+
+/* Additional unit aliases accepted by pg_size_bytes */
+struct size_bytes_unit_alias
+{
+	const char *alias;
+	int			unit_index;		/* corresponding size_pretty_units element */
+};
+
+/* When adding units here also update the docs and the error message in pg_size_bytes */
+static const struct size_bytes_unit_alias size_bytes_aliases[] = {
+	{"B", 0},
+	{NULL}
 };
 
 static int64 calculate_total_relation_size(Relation rel);
@@ -194,7 +206,7 @@ calculate_database_size(Oid dbOid)
 	 * User must have connect privilege for target database or have privileges
 	 * of pg_read_all_stats
 	 */
-	aclresult = pg_database_aclcheck(dbOid, GetUserId(), ACL_CONNECT);
+	aclresult = object_aclcheck(DatabaseRelationId, dbOid, GetUserId(), ACL_CONNECT);
 	if (aclresult != ACLCHECK_OK &&
 		!has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_STATS))
 	{
@@ -305,7 +317,7 @@ calculate_tablespace_size(Oid tblspcOid)
 	if (tblspcOid != MyDatabaseTableSpace &&
 		!has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_STATS))
 	{
-		aclresult = pg_tablespace_aclcheck(tblspcOid, GetUserId(), ACL_CREATE);
+		aclresult = object_aclcheck(TableSpaceRelationId, tblspcOid, GetUserId(), ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_TABLESPACE,
 						   get_tablespace_name(tblspcOid));
@@ -433,7 +445,7 @@ calculate_relation_size(Relation rel, ForkNumber forknum)
 	if (RelationIsAppendOptimized(rel))
 		return table_relation_size(rel, forknum);
 
-	relationpath = relpathbackend(rel->rd_node, rel->rd_backend, forknum);
+	relationpath = relpathbackend(rel->rd_locator, rel->rd_backend, forknum);
 
 	/* Ordinary relation, including heap and index.
 	 * They take form of relationpath, or relationpath.%d
@@ -593,7 +605,7 @@ calculate_table_size(Relation rel)
 	/*
 	 * heap size, including FSM and VM
 	 */
-	if (rel->rd_node.relNode != 0)
+	if (rel->rd_locator.relNumber != 0)
 	{
 		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
 			size += calculate_relation_size(rel, forkNum);
@@ -817,7 +829,7 @@ pg_size_pretty(PG_FUNCTION_ARGS)
 		uint8		bits;
 
 		/* use this unit if there are no more units or we're below the limit */
-		if (unit[1].name == NULL || Abs(size) < unit->limit)
+		if (unit[1].name == NULL || i64abs(size) < unit->limit)
 		{
 			if (unit->round)
 				size = half_rounded(size);
@@ -1053,9 +1065,19 @@ pg_size_bytes(PG_FUNCTION_ARGS)
 		{
 			/* Parse the unit case-insensitively */
 			if (pg_strcasecmp(strptr, unit->name) == 0)
-			{
-				multiplier = ((int64) 1) << unit->unitbits;
 				break;
+		}
+
+		/* If not found, look in table of aliases */
+		if (unit->name == NULL)
+		{
+			for (const struct size_bytes_unit_alias *a = size_bytes_aliases; a->alias != NULL; a++)
+			{
+				if (pg_strcasecmp(strptr, a->alias) == 0)
+				{
+					unit = &size_pretty_units[a->unit_index];
+					break;
+				}
 			}
 		}
 
@@ -1065,7 +1087,9 @@ pg_size_bytes(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("invalid size: \"%s\"", text_to_cstring(arg)),
 					 errdetail("Invalid size unit: \"%s\".", strptr),
-					 errhint("Valid units are \"bytes\", \"kB\", \"MB\", \"GB\", \"TB\", and \"PB\".")));
+					 errhint("Valid units are \"bytes\", \"B\", \"kB\", \"MB\", \"GB\", \"TB\", and \"PB\".")));
+
+		multiplier = ((int64) 1) << unit->unitbits;
 
 		if (multiplier > 1)
 		{
@@ -1103,7 +1127,7 @@ Datum
 pg_relation_filenode(PG_FUNCTION_ARGS)
 {
 	Oid			relid = PG_GETARG_OID(0);
-	Oid			result;
+	RelFileNumber result;
 	HeapTuple	tuple;
 	Form_pg_class relform;
 
@@ -1117,29 +1141,29 @@ pg_relation_filenode(PG_FUNCTION_ARGS)
 		if (relform->relfilenode)
 			result = relform->relfilenode;
 		else					/* Consult the relation mapper */
-			result = RelationMapOidToFilenode(relid,
-											  relform->relisshared);
+			result = RelationMapOidToFilenumber(relid,
+												relform->relisshared);
 	}
 	else
 	{
 		/* no storage, return NULL */
-		result = InvalidOid;
+		result = InvalidRelFileNumber;
 	}
 
 	ReleaseSysCache(tuple);
 
-	if (!OidIsValid(result))
+	if (!RelFileNumberIsValid(result))
 		PG_RETURN_NULL();
 
 	PG_RETURN_OID(result);
 }
 
 /*
- * Get the relation via (reltablespace, relfilenode)
+ * Get the relation via (reltablespace, relfilenumber)
  *
  * This is expected to be used when somebody wants to match an individual file
  * on the filesystem back to its table. That's not trivially possible via
- * pg_class, because that doesn't contain the relfilenodes of shared and nailed
+ * pg_class, because that doesn't contain the relfilenumbers of shared and nailed
  * tables.
  *
  * We don't fail but return NULL if we cannot find a mapping.
@@ -1151,14 +1175,14 @@ Datum
 pg_filenode_relation(PG_FUNCTION_ARGS)
 {
 	Oid			reltablespace = PG_GETARG_OID(0);
-	Oid			relfilenode = PG_GETARG_OID(1);
+	RelFileNumber relfilenumber = PG_GETARG_OID(1);
 	Oid			heaprel;
 
-	/* test needed so RelidByRelfilenode doesn't misbehave */
-	if (!OidIsValid(relfilenode))
+	/* test needed so RelidByRelfilenumber doesn't misbehave */
+	if (!RelFileNumberIsValid(relfilenumber))
 		PG_RETURN_NULL();
 
-	heaprel = RelidByRelfilenode(reltablespace, relfilenode);
+	heaprel = RelidByRelfilenumber(reltablespace, relfilenumber);
 
 	if (!OidIsValid(heaprel))
 		PG_RETURN_NULL();
@@ -1177,7 +1201,7 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	Oid			relid = PG_GETARG_OID(0);
 	HeapTuple	tuple;
 	Form_pg_class relform;
-	RelFileNode rnode;
+	RelFileLocator rlocator;
 	BackendId	backend;
 	char	   *path;
 
@@ -1190,29 +1214,29 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	{
 		/* This logic should match RelationInitPhysicalAddr */
 		if (relform->reltablespace)
-			rnode.spcNode = relform->reltablespace;
+			rlocator.spcOid = relform->reltablespace;
 		else
-			rnode.spcNode = MyDatabaseTableSpace;
-		if (rnode.spcNode == GLOBALTABLESPACE_OID)
-			rnode.dbNode = InvalidOid;
+			rlocator.spcOid = MyDatabaseTableSpace;
+		if (rlocator.spcOid == GLOBALTABLESPACE_OID)
+			rlocator.dbOid = InvalidOid;
 		else
-			rnode.dbNode = MyDatabaseId;
+			rlocator.dbOid = MyDatabaseId;
 		if (relform->relfilenode)
-			rnode.relNode = relform->relfilenode;
+			rlocator.relNumber = relform->relfilenode;
 		else					/* Consult the relation mapper */
-			rnode.relNode = RelationMapOidToFilenode(relid,
-													 relform->relisshared);
+			rlocator.relNumber = RelationMapOidToFilenumber(relid,
+															relform->relisshared);
 	}
 	else
 	{
 		/* no storage, return NULL */
-		rnode.relNode = InvalidOid;
+		rlocator.relNumber = InvalidRelFileNumber;
 		/* some compilers generate warnings without these next two lines */
-		rnode.dbNode = InvalidOid;
-		rnode.spcNode = InvalidOid;
+		rlocator.dbOid = InvalidOid;
+		rlocator.spcOid = InvalidOid;
 	}
 
-	if (!OidIsValid(rnode.relNode))
+	if (!RelFileNumberIsValid(rlocator.relNumber))
 	{
 		ReleaseSysCache(tuple);
 		PG_RETURN_NULL();
@@ -1243,7 +1267,7 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 
 	ReleaseSysCache(tuple);
 
-	path = relpathbackend(rnode, backend, MAIN_FORKNUM);
+	path = relpathbackend(rlocator, backend, MAIN_FORKNUM);
 
 	PG_RETURN_TEXT_P(cstring_to_text(path));
 }

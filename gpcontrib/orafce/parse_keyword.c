@@ -2,7 +2,18 @@
 
 #include "parse_keyword.h"
 
+/*
+ * PG16 relocated gramparse.h to backend-private src/backend/parser and it is
+ * no longer on the contrib include path.  orafce only needs the keyword-lookup
+ * API from it: ScanKeywordTokens is declared in parser/scanner.h, while the
+ * ScanKeywords list plus ScanKeywordLookup/GetScanKeyword come from
+ * common/keywords.h (included below and pulled in transitively by scanner.h).
+ */
+#if PG_VERSION_NUM >= 90600
+#include "parser/scanner.h"
+#else
 #include "parser/gramparse.h"
+#endif
 
 #if PG_VERSION_NUM >= 90600
 

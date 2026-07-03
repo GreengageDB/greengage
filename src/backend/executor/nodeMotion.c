@@ -213,7 +213,7 @@ execMotionSender(MotionState *node)
 	gettimeofday(&time1, NULL);
 #endif
 
-	AssertState(motion->motionType == MOTIONTYPE_GATHER ||
+	Assert(motion->motionType == MOTIONTYPE_GATHER ||
 				motion->motionType == MOTIONTYPE_GATHER_SINGLE ||
 				motion->motionType == MOTIONTYPE_HASH ||
 				motion->motionType == MOTIONTYPE_BROADCAST ||
@@ -308,7 +308,7 @@ execMotionUnsortedReceiver(MotionState *node)
 	Motion	   *motion = (Motion *) node->ps.plan;
 	EState	   *estate = node->ps.state;
 
-	AssertState(motion->motionType == MOTIONTYPE_GATHER ||
+	Assert(motion->motionType == MOTIONTYPE_GATHER ||
 				motion->motionType == MOTIONTYPE_GATHER_SINGLE ||
 				motion->motionType == MOTIONTYPE_HASH ||
 				motion->motionType == MOTIONTYPE_BROADCAST ||
@@ -433,7 +433,7 @@ execMotionSortedReceiver(MotionState *node)
 	Motion	   *motion = (Motion *) node->ps.plan;
 	EState	   *estate = node->ps.state;
 
-	AssertState(motion->motionType == MOTIONTYPE_GATHER &&
+	Assert(motion->motionType == MOTIONTYPE_GATHER &&
 				motion->sendSorted &&
 				hp != NULL);
 
@@ -843,8 +843,8 @@ ExecInitMotion(Motion *node, EState *estate, int eflags)
 		{
 			SortSupport sortKey = &motionstate->sortKeys[i];
 
-			AssertArg(node->sortColIdx[i] != 0);
-			AssertArg(node->sortOperators[i] != 0);
+			Assert(node->sortColIdx[i] != 0);
+			Assert(node->sortOperators[i] != 0);
 
 			sortKey->ssup_cxt = CurrentMemoryContext;
 			sortKey->ssup_collation = node->collations[i];
@@ -1294,7 +1294,7 @@ ExecSquelchMotion(MotionState *node)
 {
 	Motion	   *motion;
 
-	AssertArg(node != NULL);
+	Assert(node != NULL);
 
 	motion = (Motion *) node->ps.plan;
 	node->stopRequested = true;

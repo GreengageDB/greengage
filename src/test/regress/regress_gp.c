@@ -2061,7 +2061,7 @@ check_shared_buffer_cache_for_dboid(PG_FUNCTION_ARGS)
 	{
 		volatile BufferDesc *bufHdr = GetBufferDescriptor(i);
 
-		if (bufHdr->tag.rnode.dbNode == databaseOid)
+		if (bufHdr->tag.dbOid == databaseOid)
 			PG_RETURN_BOOL(true);
 	}
 

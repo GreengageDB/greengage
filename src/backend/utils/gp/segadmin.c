@@ -801,7 +801,7 @@ gp_activate_standby(void)
 	}
 
 	mirroring_sanity_check(SUPERUSER | UTILITY_MODE | STANDBY_ONLY,
-						   PG_FUNCNAME_MACRO);
+						   __func__);
 
 	catalog_activate_standby(standby_dbid, master_dbid);
 

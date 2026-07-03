@@ -68,7 +68,7 @@ static inline int timeCmp(struct timeval *t1, struct timeval *t2);
 #define CONNECT_AGGRESSIVERETRY_MS	500
 
 /* listener backlog is calculated at listener-creation time */
-int			listenerBacklog = 128;
+int			listenerBacklog = 256;
 
 /* our timeout value for select() and other socket operations. */
 static struct timeval tval;

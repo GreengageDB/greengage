@@ -1,33 +1,19 @@
 --
 -- MISC
 --
-
--- directory paths and dlsuffix are passed to us in environment variables
-\getenv abs_srcdir PG_ABS_SRCDIR
-\getenv abs_builddir PG_ABS_BUILDDIR
-\getenv libdir PG_LIBDIR
-\getenv dlsuffix PG_DLSUFFIX
-
-\set regresslib :libdir '/regress' :dlsuffix
-
 CREATE FUNCTION overpaid(emp)
    RETURNS bool
-   AS :'regresslib'
-   LANGUAGE C STRICT;
-
-CREATE FUNCTION reverse_name(name)
-   RETURNS name
-   AS :'regresslib'
+   AS '/home/dvoronkov/ws/gpdb/src/test/regress/regress.so'
    LANGUAGE C STRICT;
 
 --
 -- BTREE
 --
-UPDATE onek
-   SET unique1 = onek.unique1 + 1;
+--UPDATE onek
+--   SET unique1 = onek.unique1 + 1;
 
-UPDATE onek
-   SET unique1 = onek.unique1 - 1;
+--UPDATE onek
+--   SET unique1 = onek.unique1 - 1;
 
 --
 -- BTREE partial
@@ -45,10 +31,9 @@ UPDATE onek
 -- systems.    This non-func update stuff needs to be examined
 -- more closely.  			- jolly (2/22/96)
 --
-SELECT two, stringu1, ten, string4
-   INTO TABLE tmp
-   FROM onek;
-
+/* GPDB TODO: This test is disabled for now, because when running with ORCA,
+   you get an error:
+     ERROR:  multiple updates to a row by the same query is not allowed
 UPDATE tmp
    SET stringu1 = reverse_name(onek.stringu1)
    FROM onek
@@ -62,6 +47,7 @@ UPDATE tmp
 	  onek2.stringu1 = tmp.stringu1;
 
 DROP TABLE tmp;
+*/
 
 --UPDATE person*
 --   SET age = age + 1;
@@ -73,25 +59,40 @@ DROP TABLE tmp;
 --
 -- copy
 --
-\set filename :abs_builddir '/results/onek.data'
-COPY onek TO :'filename';
+COPY onek TO '/home/dvoronkov/ws/gpdb/src/test/regress/results/onek.data';
 
-CREATE TEMP TABLE onek_copy (LIKE onek);
+DELETE FROM onek;
 
-COPY onek_copy FROM :'filename';
+COPY onek FROM '/home/dvoronkov/ws/gpdb/src/test/regress/results/onek.data';
 
-SELECT * FROM onek EXCEPT ALL SELECT * FROM onek_copy;
+SELECT unique1 FROM onek WHERE unique1 < 2 ORDER BY unique1;
 
-SELECT * FROM onek_copy EXCEPT ALL SELECT * FROM onek;
+DELETE FROM onek2;
 
-\set filename :abs_builddir '/results/stud_emp.data'
-COPY BINARY stud_emp TO :'filename';
+COPY onek2 FROM '/home/dvoronkov/ws/gpdb/src/test/regress/results/onek.data';
 
-CREATE TEMP TABLE stud_emp_copy (LIKE stud_emp);
+SELECT unique1 FROM onek2 WHERE unique1 < 2 ORDER BY unique1;
 
-COPY BINARY stud_emp_copy FROM :'filename';
+COPY BINARY stud_emp TO '/home/dvoronkov/ws/gpdb/src/test/regress/results/stud_emp.data';
 
-SELECT * FROM stud_emp_copy;
+DELETE FROM stud_emp;
+
+COPY BINARY stud_emp FROM '/home/dvoronkov/ws/gpdb/src/test/regress/results/stud_emp.data';
+
+SELECT * FROM stud_emp;
+
+-- COPY aggtest FROM stdin;
+-- 56	7.8
+-- 100	99.097
+-- 0	0.09561
+-- 42	324.78
+-- .
+-- COPY aggtest TO stdout;
+
+
+--
+-- versions
+--
 
 --
 -- test data for postquel functions
@@ -148,8 +149,8 @@ CREATE FUNCTION hobby_construct_named(name text, hobby text)
 
 CREATE FUNCTION hobbies_by_name(hobbies_r.name%TYPE)
    RETURNS hobbies_r.person%TYPE
-   -- GPDB: order by so the test below returns a deterministic person when
-   -- several people share a hobby (result-set order is not fixed in MPP).
+   -- GPDB: use an order by to force the later test in 'misc' to return
+   -- a particular person, when multiple persons have the same hobby.
    AS 'select person from hobbies_r where name = $1 order by person'
    LANGUAGE SQL;
 

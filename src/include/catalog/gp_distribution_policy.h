@@ -105,8 +105,8 @@ typedef struct GpPolicy
 
 	/* These fields apply to POLICYTYPE_PARTITIONED. */
 	int			nattrs;
-	AttrNumber *attrs;		/* array of attribute numbers  */
-	Oid		   *opclasses;	/* and their opclasses */
+	AttrNumber *attrs pg_node_attr(array_size(nattrs));	/* array of attribute numbers */
+	Oid		   *opclasses pg_node_attr(array_size(nattrs));	/* and their opclasses */
 } GpPolicy;
 
 /*

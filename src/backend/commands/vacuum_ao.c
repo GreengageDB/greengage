@@ -207,10 +207,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	bool		relhasindex;
 	int			elevel;
 	int			options = params->options;
-	TransactionId OldestXmin;
-	MultiXactId OldestMxact;
-	TransactionId FreezeLimit;
-	MultiXactId MultiXactCutoff;
+	struct VacuumCutoffs cutoffs;
 
 	if (options & VACOPT_VERBOSE)
 		elevel = INFO;
@@ -243,13 +240,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &reltuples,
 								 &relhasindex);
 
-	vacuum_set_xid_limits(onerel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &OldestXmin, &OldestMxact, &FreezeLimit,
-						  &MultiXactCutoff);
+	vacuum_get_cutoffs(onerel, params, &cutoffs);
 
 	vac_update_relstats(onerel,
 						relpages,
@@ -257,8 +248,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						0, /* AO does not currently have an equivalent to
 							  Heap's 'all visible pages' */
 						relhasindex,
-						FreezeLimit,
-						MultiXactCutoff,
+						cutoffs.FreezeLimit,
+						cutoffs.MultiXactCutoff,
 						NULL, NULL,
 						false,
 						true /* isvacuum */);

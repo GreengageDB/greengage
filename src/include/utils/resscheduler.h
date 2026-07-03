@@ -18,6 +18,7 @@
 #define RESSCHEDULER_H
 
 #include "executor/execdesc.h"
+#include "lib/ilist.h"
 #include "nodes/plannodes.h"
 #include "storage/lock.h"
 #include "storage/proc.h"
@@ -96,7 +97,7 @@ typedef struct ResPortalIncrement
 	uint32		portalId;				/* Portal Id */
 	bool		isHold;					/* Holdable cursor? */
 	bool		isCommitted;			/* 1st commit complete? */
-	SHM_QUEUE	portalLink;				/* List link in PROCLOCKS list 
+	dlist_node	portalLink;				/* List link in PROCLOCKS list
 										   of ResPortalIncrements. */
 	/* The increments - use Cost as it has a suitably large range. */
 	Cost		increments[NUM_RES_LIMIT_TYPES];

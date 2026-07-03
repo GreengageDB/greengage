@@ -3,7 +3,7 @@
  * archive.c
  *	  Common WAL archive routines
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -20,7 +20,7 @@
 #endif
 
 #include "common/archive.h"
-#include "lib/stringinfo.h"
+#include "common/percentrepl.h"
 
 /*
  * GPDB specific imports:
@@ -38,7 +38,7 @@
  * The result is a palloc'd string for the restore command built.  The
  * caller is responsible for freeing it.  If any of the required arguments
  * is NULL and that the corresponding alias is found in the command given
- * by the caller, then NULL is returned.
+ * by the caller, then an error is thrown.
  */
 char *
 BuildRestoreCommand(const char *restoreCommand,
@@ -46,89 +46,35 @@ BuildRestoreCommand(const char *restoreCommand,
 					const char *xlogfname,
 					const char *lastRestartPointFname)
 {
-	StringInfoData result;
-	const char *sp;
+	char	   *nativePath = NULL;
+	char	   *contentId = NULL;
+	char	   *result;
 
-	/*
-	 * Build the command to be executed.
-	 */
-	initStringInfo(&result);
-
-	for (sp = restoreCommand; *sp; sp++)
+	if (xlogpath)
 	{
-		if (*sp == '%')
-		{
-			switch (sp[1])
-			{
-				case 'p':
-					{
-						char	   *nativePath;
-
-						/* %p: relative path of target file */
-						if (xlogpath == NULL)
-						{
-							pfree(result.data);
-							return NULL;
-						}
-						sp++;
-
-						/*
-						 * This needs to use a placeholder to not modify the
-						 * input with the conversion done via
-						 * make_native_path().
-						 */
-						nativePath = pstrdup(xlogpath);
-						make_native_path(nativePath);
-						appendStringInfoString(&result,
-											   nativePath);
-						pfree(nativePath);
-						break;
-					}
-				case 'f':
-					/* %f: filename of desired file */
-					if (xlogfname == NULL)
-					{
-						pfree(result.data);
-						return NULL;
-					}
-					sp++;
-					appendStringInfoString(&result, xlogfname);
-					break;
-				case 'r':
-					/* %r: filename of last restartpoint */
-					if (lastRestartPointFname == NULL)
-					{
-						pfree(result.data);
-						return NULL;
-					}
-					sp++;
-					appendStringInfoString(&result,
-										   lastRestartPointFname);
-					break;
-#ifndef FRONTEND
-				case 'c':
-					/* GPDB: %c: contentId of segment */
-					Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
-					sp++;
-					appendStringInfo(&result, "%i", GpIdentity.segindex);
-					break;
-#endif
-				case '%':
-					/* convert %% to a single % */
-					sp++;
-					appendStringInfoChar(&result, *sp);
-					break;
-				default:
-					/* otherwise treat the % as not special */
-					appendStringInfoChar(&result, *sp);
-					break;
-			}
-		}
-		else
-		{
-			appendStringInfoChar(&result, *sp);
-		}
+		nativePath = pstrdup(xlogpath);
+		make_native_path(nativePath);
 	}
 
-	return result.data;
+#ifndef FRONTEND
+	/* GPDB: %c: contentId of segment */
+	Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
+	contentId = psprintf("%i", GpIdentity.segindex);
+#endif
+
+	/*
+	 * GPDB: %c (contentId of segment) is only available in the backend;
+	 * leaving it NULL in frontend makes replace_percent_placeholders()
+	 * report it as an unsupported placeholder.
+	 */
+	result = replace_percent_placeholders(restoreCommand, "restore_command", "frpc",
+										  xlogfname, lastRestartPointFname, nativePath,
+										  contentId);
+
+	if (nativePath)
+		pfree(nativePath);
+	if (contentId)
+		pfree(contentId);
+
+	return result;
 }

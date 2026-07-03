@@ -59,6 +59,7 @@
 #include <string.h>
 
 #include "postgres.h"
+#include "varatt.h"
 #include "fmgr.h"
 #include "common/base64.h"
 #include "common/pg_lzcompress.h"

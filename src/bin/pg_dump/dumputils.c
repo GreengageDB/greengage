@@ -5,7 +5,7 @@
  * Basically this is stuff that is useful in both pg_dump and pg_dumpall.
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/pg_dump/dumputils.c
@@ -99,8 +99,7 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 	/* Parse the acls array */
 	if (!parsePGArray(acls, &aclitems, &naclitems))
 	{
-		if (aclitems)
-			free(aclitems);
+		free(aclitems);
 		return false;
 	}
 
@@ -109,10 +108,8 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 	{
 		if (!parsePGArray(baseacls, &baseitems, &nbaseitems))
 		{
-			if (aclitems)
-				free(aclitems);
-			if (baseitems)
-				free(baseitems);
+			free(aclitems);
+			free(baseitems);
 			return false;
 		}
 	}
@@ -207,10 +204,13 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 	}
 	else
 	{
-		/* Scan individual REVOKE ACL items */
+		/*
+		 * Build REVOKE statements for ACLs listed in revokeitems[].
+		 */
 		for (i = 0; i < nrevokeitems; i++)
 		{
-			if (!parseAclItem(revokeitems[i], type, name, subname, remoteVersion,
+			if (!parseAclItem(revokeitems[i],
+							  type, name, subname, remoteVersion,
 							  grantee, grantor, privs, NULL))
 			{
 				ok = false;
@@ -223,19 +223,30 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 								  prefix, privs->data, type);
 				if (nspname && *nspname)
 					appendPQExpBuffer(firstsql, "%s.", fmtId(nspname));
-				appendPQExpBuffer(firstsql, "%s FROM ", name);
+				if (name && *name)
+					appendPQExpBuffer(firstsql, "%s ", name);
+				appendPQExpBufferStr(firstsql, "FROM ");
 				if (grantee->len == 0)
 					appendPQExpBufferStr(firstsql, "PUBLIC;\n");
-				else if (strncmp(grantee->data, "group ",
-								 strlen("group ")) == 0)
-					appendPQExpBuffer(firstsql, "GROUP %s;\n",
-									  fmtId(grantee->data + strlen("group ")));
 				else
 					appendPQExpBuffer(firstsql, "%s;\n",
 									  fmtId(grantee->data));
 			}
 		}
 	}
+
+	/*
+	 * At this point we have issued REVOKE statements for all initial and
+	 * default privileges that are no longer present on the object, so we are
+	 * almost ready to GRANT the privileges listed in grantitems[].
+	 *
+	 * We still need some hacking though to cover the case where new default
+	 * public privileges are added in new versions: the REVOKE ALL will revoke
+	 * them, leading to behavior different from what the old version had,
+	 * which is generally not what's wanted.  So add back default privs if the
+	 * source database is too old to have had that particular priv.  (As of
+	 * right now, no such cases exist in supported versions.)
+	 */
 
 	/*
 	 * Scan individual ACL items to be granted.
@@ -284,13 +295,11 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 									  prefix, privs->data, type);
 					if (nspname && *nspname)
 						appendPQExpBuffer(thissql, "%s.", fmtId(nspname));
-					appendPQExpBuffer(thissql, "%s TO ", name);
+					if (name && *name)
+						appendPQExpBuffer(thissql, "%s ", name);
+					appendPQExpBufferStr(thissql, "TO ");
 					if (grantee->len == 0)
 						appendPQExpBufferStr(thissql, "PUBLIC;\n");
-					else if (strncmp(grantee->data, "group ",
-									 strlen("group ")) == 0)
-						appendPQExpBuffer(thissql, "GROUP %s;\n",
-										  fmtId(grantee->data + strlen("group ")));
 					else
 						appendPQExpBuffer(thissql, "%s;\n", fmtId(grantee->data));
 				}
@@ -300,13 +309,11 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 									  prefix, privswgo->data, type);
 					if (nspname && *nspname)
 						appendPQExpBuffer(thissql, "%s.", fmtId(nspname));
-					appendPQExpBuffer(thissql, "%s TO ", name);
+					if (name && *name)
+						appendPQExpBuffer(thissql, "%s ", name);
+					appendPQExpBufferStr(thissql, "TO ");
 					if (grantee->len == 0)
 						appendPQExpBufferStr(thissql, "PUBLIC");
-					else if (strncmp(grantee->data, "group ",
-									 strlen("group ")) == 0)
-						appendPQExpBuffer(thissql, "GROUP %s",
-										  fmtId(grantee->data + strlen("group ")));
 					else
 						appendPQExpBufferStr(thissql, fmtId(grantee->data));
 					appendPQExpBufferStr(thissql, " WITH GRANT OPTION;\n");
@@ -334,14 +341,10 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 	destroyPQExpBuffer(firstsql);
 	destroyPQExpBuffer(secondsql);
 
-	if (aclitems)
-		free(aclitems);
-	if (baseitems)
-		free(baseitems);
-	if (grantitems)
-		free(grantitems);
-	if (revokeitems)
-		free(revokeitems);
+	free(aclitems);
+	free(baseitems);
+	free(grantitems);
+	free(revokeitems);
 
 	return ok;
 }
@@ -500,6 +503,7 @@ do { \
 				CONVERT_PRIV('d', "DELETE");
 				CONVERT_PRIV('t', "TRIGGER");
 				CONVERT_PRIV('D', "TRUNCATE");
+				CONVERT_PRIV('m', "MAINTAIN");
 			}
 		}
 
@@ -724,7 +728,7 @@ emitShSecLabels(PGconn *conn, PGresult *res, PQExpBuffer buffer,
  * currently known to guc.c, so that it'd be unsafe for extensions to declare
  * GUC_LIST_QUOTE variables anyway.  Lacking a solution for that, it doesn't
  * seem worth the work to do more than have this list, which must be kept in
- * sync with the variables actually marked GUC_LIST_QUOTE in guc.c.
+ * sync with the variables actually marked GUC_LIST_QUOTE in guc_tables.c.
  */
 bool
 variable_is_guc_list_quote(const char *name)

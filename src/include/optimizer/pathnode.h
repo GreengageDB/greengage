@@ -6,8 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
-* Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/pathnode.h
@@ -118,6 +117,7 @@ extern GatherMergePath *create_gather_merge_path(PlannerInfo *root,
 												 double *rows);
 extern SubqueryScanPath *create_subqueryscan_path(PlannerInfo *root,
 												  RelOptInfo *rel, Path *subpath,
+												  bool trivial_pathtarget,
 												  List *pathkeys, CdbPathLocus locus,
 												  Relids required_outer);
 extern Path *create_functionscan_path(PlannerInfo *root, RelOptInfo *rel,
@@ -350,12 +350,14 @@ extern void expand_planner_arrays(PlannerInfo *root, int add_size);
 extern RelOptInfo *build_simple_rel(PlannerInfo *root, int relid,
 									RelOptInfo *parent);
 extern RelOptInfo *find_base_rel(PlannerInfo *root, int relid);
+extern RelOptInfo *find_base_rel_ignore_join(PlannerInfo *root, int relid);
 extern RelOptInfo *find_join_rel(PlannerInfo *root, Relids relids);
 extern RelOptInfo *build_join_rel(PlannerInfo *root,
 								  Relids joinrelids,
 								  RelOptInfo *outer_rel,
 								  RelOptInfo *inner_rel,
 								  SpecialJoinInfo *sjinfo,
+								  List *pushed_down_joins,
 								  List **restrictlist_ptr);
 extern Relids min_join_parameterization(PlannerInfo *root,
 										Relids joinrelids,
@@ -379,9 +381,10 @@ extern ParamPathInfo *get_appendrel_parampathinfo(RelOptInfo *appendrel,
 												  Relids required_outer);
 extern ParamPathInfo *find_param_path_info(RelOptInfo *rel,
 										   Relids required_outer);
+extern Bitmapset *get_param_path_clause_serials(Path *path);
 extern RelOptInfo *build_child_join_rel(PlannerInfo *root,
 										RelOptInfo *outer_rel, RelOptInfo *inner_rel,
 										RelOptInfo *parent_joinrel, List *restrictlist,
-										SpecialJoinInfo *sjinfo, JoinType jointype);
+										SpecialJoinInfo *sjinfo);
 
 #endif							/* PATHNODE_H */

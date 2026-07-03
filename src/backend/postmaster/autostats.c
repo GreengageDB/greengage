@@ -19,6 +19,7 @@
 #include "postgres.h"
 
 #include "catalog/catalog.h"
+#include "catalog/pg_database.h"
 #include "cdb/cdbvars.h"
 #include "commands/vacuum.h"
 #include "executor/execdesc.h"
@@ -60,8 +61,8 @@ autostats_issue_analyze(Oid relationOid)
 		 * If this user does not own the table, then auto-stats will not issue the
 		 * analyze.  This check will be skipped if gp_autostats_allow_nonowner=true
 		 */
-		if (!(pg_class_ownercheck(relationOid, GetUserId()) ||
-			 (pg_database_ownercheck(MyDatabaseId, GetUserId()) && !IsSharedRelation(relationOid))))
+		if (!(object_ownercheck(RelationRelationId, relationOid, GetUserId()) ||
+			 (object_ownercheck(DatabaseRelationId, MyDatabaseId, GetUserId()) && !IsSharedRelation(relationOid))))
 		{
 			if (log_autostats)
 				elog(LOG, "Auto-stats did not issue ANALYZE on tableoid %d since the user does not have table-owner level permissions.",

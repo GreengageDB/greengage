@@ -1,12 +1,11 @@
 /*--------------------------------------------------------------------
  * guc.h
  *
- * External declarations pertaining to backend/utils/misc/guc.c and
- * backend/utils/misc/guc-file.l
+ * External declarations pertaining to Grand Unified Configuration.
  *
  * Portions Copyright (c) 2007-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2000-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2023, PostgreSQL Global Development Group
  * Written by Peter Eisentraut <peter_e@gmx.net>.
  *
  * src/include/utils/guc.h
@@ -214,55 +213,56 @@ typedef enum
 #define GUC_QUALIFIER_SEPARATOR '.'
 
 /*
- * bit values in "flags" of a GUC variable
+ * Bit values in "flags" of a GUC variable.  Note that these don't appear
+ * on disk, so we can reassign their values freely.
  */
-#define GUC_LIST_INPUT			0x0001	/* input can be list format */
-#define GUC_LIST_QUOTE			0x0002	/* double-quote list elements */
-#define GUC_NO_SHOW_ALL			0x0004	/* exclude from SHOW ALL */
-#define GUC_NO_RESET_ALL		0x0008	/* exclude from RESET ALL */
-#define GUC_REPORT				0x0010	/* auto-report changes to client */
-#define GUC_NOT_IN_SAMPLE		0x0020	/* not in postgresql.conf.sample */
-#define GUC_DISALLOW_IN_FILE	0x0040	/* can't set in postgresql.conf */
-#define GUC_CUSTOM_PLACEHOLDER	0x0080	/* placeholder for custom variable */
-#define GUC_SUPERUSER_ONLY		0x0100	/* show only to superusers */
-#define GUC_IS_NAME				0x0200	/* limit string to NAMEDATALEN-1 */
-#define GUC_NOT_WHILE_SEC_REST	0x0400	/* can't set if security restricted */
-#define GUC_DISALLOW_IN_AUTO_FILE 0x0800	/* can't set in
-											 * PG_AUTOCONF_FILENAME */
+#define GUC_LIST_INPUT		   0x000001 /* input can be list format */
+#define GUC_LIST_QUOTE		   0x000002 /* double-quote list elements */
+#define GUC_NO_SHOW_ALL		   0x000004 /* exclude from SHOW ALL */
+#define GUC_NO_RESET		   0x000008 /* disallow RESET and SAVE */
+#define GUC_NO_RESET_ALL	   0x000010 /* exclude from RESET ALL */
+#define GUC_EXPLAIN			   0x000020 /* include in EXPLAIN */
+#define GUC_REPORT			   0x000040 /* auto-report changes to client */
+#define GUC_NOT_IN_SAMPLE	   0x000080 /* not in postgresql.conf.sample */
+#define GUC_DISALLOW_IN_FILE   0x000100 /* can't set in postgresql.conf */
+#define GUC_CUSTOM_PLACEHOLDER 0x000200 /* placeholder for custom variable */
+#define GUC_SUPERUSER_ONLY	   0x000400 /* show only to superusers */
+#define GUC_IS_NAME			   0x000800 /* limit string to NAMEDATALEN-1 */
+#define GUC_NOT_WHILE_SEC_REST 0x001000 /* can't set if security restricted */
+#define GUC_DISALLOW_IN_AUTO_FILE \
+							   0x002000 /* can't set in PG_AUTOCONF_FILENAME */
+#define GUC_RUNTIME_COMPUTED   0x004000 /* delay processing in 'postgres -C' */
 
-#define GUC_UNIT_KB				0x1000	/* value is in kilobytes */
-#define GUC_UNIT_BLOCKS			0x2000	/* value is in blocks */
-#define GUC_UNIT_XBLOCKS		0x3000	/* value is in xlog blocks */
-#define GUC_UNIT_MB				0x4000	/* value is in megabytes */
-#define GUC_UNIT_BYTE			0x8000	/* value is in bytes */
-#define GUC_UNIT_MEMORY			0xF000	/* mask for size-related units */
+#define GUC_UNIT_KB			 0x01000000 /* value is in kilobytes */
+#define GUC_UNIT_BLOCKS		 0x02000000 /* value is in blocks */
+#define GUC_UNIT_XBLOCKS	 0x03000000 /* value is in xlog blocks */
+#define GUC_UNIT_MB			 0x04000000 /* value is in megabytes */
+#define GUC_UNIT_BYTE		 0x05000000 /* value is in bytes */
+#define GUC_UNIT_MEMORY		 0x0F000000 /* mask for size-related units */
 
-#define GUC_UNIT_MS			   0x10000	/* value is in milliseconds */
-#define GUC_UNIT_S			   0x20000	/* value is in seconds */
-#define GUC_UNIT_MIN		   0x30000	/* value is in minutes */
-#define GUC_UNIT_TIME		   0xF0000	/* mask for time-related units */
+#define GUC_UNIT_MS			 0x10000000 /* value is in milliseconds */
+#define GUC_UNIT_S			 0x20000000 /* value is in seconds */
+#define GUC_UNIT_MIN		 0x30000000 /* value is in minutes */
+#define GUC_UNIT_TIME		 0x70000000 /* mask for time-related units */
 
-#define GUC_EXPLAIN			  0x100000	/* include in explain */
-
-/*
- * GUC_RUNTIME_COMPUTED is intended for runtime-computed GUCs that are only
- * available via 'postgres -C' if the server is not running.
- */
-#define GUC_RUNTIME_COMPUTED  0x200000
-
-#define GUC_UNIT				(GUC_UNIT_MEMORY | GUC_UNIT_TIME)
+#define GUC_UNIT			 (GUC_UNIT_MEMORY | GUC_UNIT_TIME)
 
 /* GPDB speific */
 /*
- * NB: keep these above every upstream GUC_* flag bit.  GUC_DISALLOW_USER_SET
+ * NB: keep these clear of every upstream GUC_* flag bit.  GUC_DISALLOW_USER_SET
  * used to be 0x00200000, but PG15 added upstream GUC_RUNTIME_COMPUTED at that
  * very bit (0x200000); the collision made every runtime-computed GUC
  * (data_checksums, wal_segment_size, min/max_wal_size, shared_memory_size)
  * look user-disallowed, so set_config_option silently dropped even the
  * internal SetConfigOption() from ReadControlFile -- e.g. "show data_checksums"
- * reported off on a checksummed cluster.  Use a free high bit instead.
+ * reported off on a checksummed cluster.  It was then moved to 0x01000000,
+ * but PG16 repacked the flag bits and moved the GUC_UNIT_* bits up to
+ * 0x01000000..0x70000000 (GUC_UNIT_KB is 0x01000000), so that bit collided
+ * again.  In the PG16 layout the upstream flags occupy 0x000001..0x004000
+ * plus the unit masks above, leaving 0x008000..0x800000 free: put the GPDB
+ * flags there.
  */
-#define GUC_DISALLOW_USER_SET  0x01000000 /* Do not allow this GUC to be set by the user */
+#define GUC_DISALLOW_USER_SET  0x00200000 /* Do not allow this GUC to be set by the user */
 #define GUC_GPDB_NEED_SYNC     0x00400000  /* guc value is synced between master and primary */
 #define GUC_GPDB_NO_SYNC       0x00800000  /* guc value is not synced between master and primary */
 
@@ -274,7 +274,7 @@ extern List    *gp_guc_list_for_no_plan;
 extern List *gp_guc_restore_list;
 extern bool gp_guc_need_restore;
 
-/* GUC vars that are actually declared in guc.c, rather than elsewhere */
+/* GUC vars that are actually defined in guc_tables.c, rather than elsewhere */
 extern PGDLLIMPORT bool Debug_print_plan;
 extern PGDLLIMPORT bool Debug_print_parse;
 extern PGDLLIMPORT bool Debug_print_rewritten;
@@ -371,7 +371,6 @@ extern PGDLLIMPORT int log_temp_files;
 extern PGDLLIMPORT double log_statement_sample_rate;
 extern PGDLLIMPORT double log_xact_sample_rate;
 extern PGDLLIMPORT char *backtrace_functions;
-extern PGDLLIMPORT char *backtrace_symbol_list;
 
 extern PGDLLIMPORT int temp_file_limit;
 
@@ -665,7 +664,7 @@ extern void DefineCustomBoolVariable(const char *name,
 									 int flags,
 									 GucBoolCheckHook check_hook,
 									 GucBoolAssignHook assign_hook,
-									 GucShowHook show_hook);
+									 GucShowHook show_hook) pg_attribute_nonnull(1, 4);
 
 extern void DefineCustomIntVariable(const char *name,
 									const char *short_desc,
@@ -678,7 +677,7 @@ extern void DefineCustomIntVariable(const char *name,
 									int flags,
 									GucIntCheckHook check_hook,
 									GucIntAssignHook assign_hook,
-									GucShowHook show_hook);
+									GucShowHook show_hook) pg_attribute_nonnull(1, 4);
 
 extern void DefineCustomRealVariable(const char *name,
 									 const char *short_desc,
@@ -691,7 +690,7 @@ extern void DefineCustomRealVariable(const char *name,
 									 int flags,
 									 GucRealCheckHook check_hook,
 									 GucRealAssignHook assign_hook,
-									 GucShowHook show_hook);
+									 GucShowHook show_hook) pg_attribute_nonnull(1, 4);
 
 extern void DefineCustomStringVariable(const char *name,
 									   const char *short_desc,
@@ -702,7 +701,7 @@ extern void DefineCustomStringVariable(const char *name,
 									   int flags,
 									   GucStringCheckHook check_hook,
 									   GucStringAssignHook assign_hook,
-									   GucShowHook show_hook);
+									   GucShowHook show_hook) pg_attribute_nonnull(1, 4);
 
 extern void DefineCustomEnumVariable(const char *name,
 									 const char *short_desc,
@@ -714,7 +713,7 @@ extern void DefineCustomEnumVariable(const char *name,
 									 int flags,
 									 GucEnumCheckHook check_hook,
 									 GucEnumAssignHook assign_hook,
-									 GucShowHook show_hook);
+									 GucShowHook show_hook) pg_attribute_nonnull(1, 4);
 
 extern void MarkGUCPrefixReserved(const char *className);
 
@@ -729,7 +728,6 @@ extern void ProcessConfigFile(GucContext context);
 extern char *convert_GUC_name_for_parameter_acl(const char *name);
 extern bool check_GUC_name_for_parameter_acl(const char *name);
 extern void InitializeGUCOptions(void);
-extern void InitializeWalConsistencyChecking(void);
 extern bool SelectConfigFiles(const char *userDoption, const char *progname);
 extern void ResetAllOptions(void);
 extern void AtStart_GUC(void);
@@ -738,6 +736,7 @@ extern void AtEOXact_GUC(bool isCommit, int nestLevel);
 extern void BeginReportingGUCOptions(void);
 extern void ReportChangedGUCOptions(void);
 extern void ParseLongOption(const char *string, char **name, char **value);
+extern const char *get_config_unit_name(int flags);
 extern bool parse_int(const char *value, int *result, int flags,
 					  const char **hintmsg);
 extern bool parse_real(const char *value, double *result, int flags,
@@ -746,19 +745,14 @@ extern int	set_config_option(const char *name, const char *value,
 							  GucContext context, GucSource source,
 							  GucAction action, bool changeVal, int elevel,
 							  bool is_reload);
+extern int	set_config_option_ext(const char *name, const char *value,
+								  GucContext context, GucSource source,
+								  Oid srole,
+								  GucAction action, bool changeVal, int elevel,
+								  bool is_reload);
 extern void AlterSystemSetConfigFile(AlterSystemStmt *altersysstmt);
 extern char *GetConfigOptionByName(const char *name, const char **varname,
 								   bool missing_ok);
-extern void GetConfigOptionByNum(int varnum, const char **values, bool *noshow);
-extern int	GetNumConfigOptions(void);
-
-extern void SetPGVariable(const char *name, List *args, bool is_local);
-extern void SetPGVariableOptDispatch(const char *name, List *args, bool is_local, bool gp_dispatch);
-extern void GetPGVariable(const char *name, DestReceiver *dest);
-extern TupleDesc GetPGVariableResultDesc(const char *name);
-
-extern void ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel);
-extern char *ExtractSetVariableArgs(VariableSetStmt *stmt);
 
 extern void ProcessGUCArray(ArrayType *array,
 							GucContext context, GucSource source, GucAction action);
@@ -766,11 +760,12 @@ extern ArrayType *GUCArrayAdd(ArrayType *array, const char *name, const char *va
 extern ArrayType *GUCArrayDelete(ArrayType *array, const char *name);
 extern ArrayType *GUCArrayReset(ArrayType *array);
 
-extern void pg_timezone_abbrev_initialize(void);
+extern void *guc_malloc(int elevel, size_t size);
+extern pg_nodiscard void *guc_realloc(int elevel, void *old, size_t size);
+extern char *guc_strdup(int elevel, const char *src);
+extern void guc_free(void *ptr);
 
-extern struct config_generic *find_option(const char *name,
-				bool create_placeholders, bool skip_errors, int elevel);
-
+/* GPDB: in utils/misc/guc_gp.c */
 extern void set_gp_replication_config(const char *name, const char *value);
 
 #ifdef EXEC_BACKEND
@@ -782,6 +777,17 @@ extern void read_nondefault_variables(void);
 extern Size EstimateGUCStateSpace(void);
 extern void SerializeGUCState(Size maxsize, char *start_address);
 extern void RestoreGUCState(void *gucstate);
+
+/* Functions exported by guc_funcs.c */
+extern void ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel);
+extern char *ExtractSetVariableArgs(VariableSetStmt *stmt);
+extern void SetPGVariable(const char *name, List *args, bool is_local);
+/* GPDB: like SetPGVariable, but with control over dispatching to QEs */
+extern void SetPGVariableOptDispatch(const char *name, List *args, bool is_local, bool gp_dispatch);
+/* GPDB: dispatch a SET/RESET down to the QE segments (re-grafted by guc_funcs.c) */
+extern void DispatchSetPGVariable(const char *name, List *args, bool is_local);
+extern void GetPGVariable(const char *name, DestReceiver *dest);
+extern TupleDesc GetPGVariableResultDesc(const char *name);
 
 /* Support for messages reported from GUC check hooks */
 
@@ -805,23 +811,11 @@ extern void GUC_check_errcode(int sqlerrcode);
 
 
 /*
- * The following functions are not in guc.c, but are declared here to avoid
- * having to include guc.h in some widely used headers that it really doesn't
- * belong in.
+ * GPDB: The following GPDB-specific functions are not in guc.c, but are
+ * declared here to avoid having to include guc.h in some widely used headers
+ * that it really doesn't belong in.  (The upstream GUC hook declarations that
+ * used to live here moved to utils/guc_hooks.h in PG16.)
  */
-
-/* in commands/tablespace.c */
-extern bool check_default_tablespace(char **newval, void **extra, GucSource source);
-extern bool check_temp_tablespaces(char **newval, void **extra, GucSource source);
-extern void assign_temp_tablespaces(const char *newval, void *extra);
-
-/* in catalog/namespace.c */
-extern bool check_search_path(char **newval, void **extra, GucSource source);
-extern void assign_search_path(const char *newval, void *extra);
-
-/* in access/transam/xlog.c */
-extern bool check_wal_buffers(int *newval, void **extra, GucSource source);
-extern void assign_xlog_sync_method(int new_sync_method, void *extra);
 
 /* in cdb/cdbvars.c */
 extern bool check_gp_role(char **newval, void **extra, GucSource source);
@@ -834,11 +828,16 @@ extern const char *gpvars_show_gp_resource_manager_policy(void);
 extern const char *gpvars_assign_gp_resqueue_memory_policy(const char *newval, bool doit, GucSource source);
 extern const char *gpvars_show_gp_resqueue_memory_policy(void);
 extern bool gpvars_check_statement_mem(int *newval, void **extra, GucSource source);
-extern int guc_name_compare(const char *namea, const char *nameb);
-extern void DispatchSyncPGVariable(struct config_generic * gconfig);
 
-/* in access/transam/xlogprefetcher.c */
-extern bool check_recovery_prefetch(int *new_value, void **extra, GucSource source);
-extern void assign_recovery_prefetch(int new_value, void *extra);
+/*
+ * GPDB: upstream PG16 moved guc_name_compare into the backend-private
+ * utils/misc/guc_internal.h, but GPDB code outside utils/misc (e.g.
+ * libpq/auth.c) needs it too, so also declare it here.
+ */
+extern int guc_name_compare(const char *namea, const char *nameb);
+
+/* GPDB: in utils/misc/guc_gp.c */
+struct config_generic;
+extern void DispatchSyncPGVariable(struct config_generic * gconfig);
 
 #endif							/* GUC_H */

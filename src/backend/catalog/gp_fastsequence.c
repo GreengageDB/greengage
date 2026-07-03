@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "catalog/gp_fastsequence.h"
 #include "catalog/indexing.h"
+#include "utils/guc.h"
 #include "utils/relcache.h"
 #include "utils/fmgroids.h"
 #include "access/genam.h"

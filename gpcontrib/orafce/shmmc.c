@@ -6,6 +6,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 #include "shmmc.h"
 #include "stdlib.h"
 #include "string.h"

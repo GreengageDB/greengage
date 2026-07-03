@@ -15,6 +15,7 @@
 #include <stdlib.h>
 
 #include "postgres.h"
+#include "varatt.h"
 #include "catalog/pg_type.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"

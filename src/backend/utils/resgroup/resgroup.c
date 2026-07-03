@@ -90,7 +90,7 @@
 /*
  * GUC variables.
  */
-int							gp_resgroup_memory_policy = RESMANAGER_MEMORY_POLICY_NONE;
+int							gp_resgroup_memory_policy = RESMANAGER_MEMORY_POLICY_EAGER_FREE;
 bool						gp_log_resgroup_memory = false;
 int							gp_resgroup_memory_policy_auto_fixed_mem;
 bool						gp_resgroup_print_operator_memory_limits = false;
@@ -223,7 +223,7 @@ struct ResGroupData
 	int			totalExecuted;	/* total number of executed trans */
 	int			totalQueued;	/* total number of queued trans	*/
 	int64	totalQueuedTimeMs;	/* total queue time, in milliseconds */
-	PROC_QUEUE	waitProcs;		/* list of PGPROC objects waiting on this group */
+	dclist_head	waitProcs;		/* list of PGPROC objects waiting on this group */
 
 	/*
 	 * operation functions for resource group
@@ -364,7 +364,7 @@ static bool procIsWaiting(const PGPROC *proc);
 static void procWakeup(PGPROC *proc);
 static int slotGetId(const ResGroupSlotData *slot);
 static void groupWaitQueueValidate(const ResGroupData *group);
-static void groupWaitProcValidate(PGPROC *proc, PROC_QUEUE *head);
+static void groupWaitProcValidate(PGPROC *proc, dclist_head *head);
 static void groupWaitQueuePush(ResGroupData *group, PGPROC *proc);
 static PGPROC *groupWaitQueuePop(ResGroupData *group);
 static void groupWaitQueueErase(ResGroupData *group, PGPROC *proc);
@@ -375,7 +375,7 @@ static void unlockResGroupForDrop(ResGroupData *group);
 static bool groupIsDropped(ResGroupInfo *pGroupInfo);
 
 static void resgroupDumpGroup(StringInfo str, ResGroupData *group);
-static void resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue);
+static void resgroupDumpWaitQueue(StringInfo str, dclist_head *queue);
 static void resgroupDumpCaps(StringInfo str, ResGroupCap *caps);
 static void resgroupDumpSlots(StringInfo str);
 static void resgroupDumpFreeSlots(StringInfo str);
@@ -774,7 +774,7 @@ ResGroupCheckForDrop(Oid groupId, char *name)
 
 	if (group->nRunning + group->nRunningBypassed > 0)
 	{
-		int nQuery = group->nRunning + group->nRunningBypassed + group->waitProcs.size;
+		int nQuery = group->nRunning + group->nRunningBypassed + dclist_count(&group->waitProcs);
 
 		Assert(name != NULL);
 		ereport(ERROR,
@@ -1068,7 +1068,7 @@ ResGroupGetStat(Oid groupId, ResGroupStatType type)
 			result = Int32GetDatum(group->nRunning + group->nRunningBypassed);
 			break;
 		case RES_GROUP_STAT_NQUEUEING:
-			result = Int32GetDatum(group->waitProcs.size);
+			result = Int32GetDatum(dclist_count(&group->waitProcs));
 			break;
 		case RES_GROUP_STAT_TOTAL_EXECUTED:
 			result = Int32GetDatum(group->totalExecuted);
@@ -1377,7 +1377,7 @@ createGroup(Oid groupId, const ResGroupCaps *caps)
 	group->caps = *caps;
 	group->nRunning = 0;
 	group->nRunningBypassed = 0;
-	ProcQueueInit(&group->waitProcs);
+	dclist_init(&group->waitProcs);
 	group->totalExecuted = 0;
 	group->totalQueued = 0;
 	group->memGap = 0;
@@ -3524,43 +3524,46 @@ groupIsNotDropped(const ResGroupData *group)
 static void
 groupWaitQueueValidate(const ResGroupData *group)
 {
-	const PROC_QUEUE	*waitQueue;
+	const dclist_head	*waitQueue;
+	const dlist_node	*sentinel;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 
 	waitQueue = &group->waitProcs;
+	sentinel = &waitQueue->dlist.head;
 
 	if (gp_resgroup_debug_wait_queue)
 	{
-		if (waitQueue->size == 0)
+		if (dclist_count(waitQueue) == 0)
 		{
-			if (waitQueue->links.next != &waitQueue->links ||
-				waitQueue->links.prev != &waitQueue->links)
+			if (sentinel->next != sentinel ||
+				sentinel->prev != sentinel)
 				elog(PANIC, "resource group wait queue is corrupted");
 		}
 		else
 		{
-			PGPROC *nextProc = (PGPROC *)waitQueue->links.next;
-			PGPROC *prevProc = (PGPROC *)waitQueue->links.prev;
+			PGPROC *nextProc = (PGPROC *) sentinel->next;
+			PGPROC *prevProc = (PGPROC *) sentinel->prev;
 
 			if (!nextProc->mppIsWriter ||
 				!prevProc->mppIsWriter ||
-				nextProc->links.prev != &waitQueue->links ||
-				prevProc->links.next != &waitQueue->links)
+				nextProc->links.prev != sentinel ||
+				prevProc->links.next != sentinel)
 				elog(PANIC, "resource group wait queue is corrupted");
 		}
 
 		return;
 	}
 
-	AssertImply(waitQueue->size == 0,
-				waitQueue->links.next == &waitQueue->links &&
-				waitQueue->links.prev == &waitQueue->links);
+	AssertImply(dclist_count(waitQueue) == 0,
+				sentinel->next == sentinel &&
+				sentinel->prev == sentinel);
 }
 
 static void
-groupWaitProcValidate(PGPROC *proc, PROC_QUEUE *head)
+groupWaitProcValidate(PGPROC *proc, dclist_head *head)
 {
+	dlist_node *sentinel = &head->dlist.head;
 	PGPROC *nextProc = (PGPROC *)proc->links.next;
 	PGPROC *prevProc = (PGPROC *)proc->links.prev;
 
@@ -3570,8 +3573,8 @@ groupWaitProcValidate(PGPROC *proc, PROC_QUEUE *head)
 		return;
 
 	if (!proc->mppIsWriter ||
-		((PROC_QUEUE *)nextProc != head && !nextProc->mppIsWriter) ||
-		((PROC_QUEUE *)prevProc != head && !prevProc->mppIsWriter) ||
+		(&nextProc->links != sentinel && !nextProc->mppIsWriter) ||
+		(&prevProc->links != sentinel && !prevProc->mppIsWriter) ||
 		nextProc->links.prev != &proc->links ||
 		prevProc->links.next != &proc->links)
 		elog(PANIC, "resource group wait queue is corrupted");
@@ -3585,8 +3588,7 @@ groupWaitProcValidate(PGPROC *proc, PROC_QUEUE *head)
 static void
 groupWaitQueuePush(ResGroupData *group, PGPROC *proc)
 {
-	PROC_QUEUE			*waitQueue;
-	PGPROC				*headProc;
+	dclist_head			*waitQueue;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 	Assert(!procIsWaiting(proc));
@@ -3595,12 +3597,9 @@ groupWaitQueuePush(ResGroupData *group, PGPROC *proc)
 	groupWaitQueueValidate(group);
 
 	waitQueue = &group->waitProcs;
-	headProc = (PGPROC *) &waitQueue->links;
 
-	SHMQueueInsertBefore(&headProc->links, &proc->links);
+	dclist_push_tail(waitQueue, &proc->links);
 	groupWaitProcValidate(proc, waitQueue);
-
-	waitQueue->size++;
 
 	Assert(groupWaitQueueFind(group, proc));
 }
@@ -3611,7 +3610,7 @@ groupWaitQueuePush(ResGroupData *group, PGPROC *proc)
 static PGPROC *
 groupWaitQueuePop(ResGroupData *group)
 {
-	PROC_QUEUE			*waitQueue;
+	dclist_head			*waitQueue;
 	PGPROC				*proc;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
@@ -3621,14 +3620,12 @@ groupWaitQueuePop(ResGroupData *group)
 
 	waitQueue = &group->waitProcs;
 
-	proc = (PGPROC *) waitQueue->links.next;
+	proc = dlist_container(PGPROC, links, dclist_head_node(waitQueue));
 	groupWaitProcValidate(proc, waitQueue);
 	Assert(groupWaitQueueFind(group, proc));
 	Assert(proc->resSlot == NULL);
 
-	SHMQueueDelete(&proc->links);
-
-	waitQueue->size--;
+	dclist_delete_from_thoroughly(waitQueue, &proc->links);
 
 	return proc;
 }
@@ -3639,7 +3636,7 @@ groupWaitQueuePop(ResGroupData *group)
 static void
 groupWaitQueueErase(ResGroupData *group, PGPROC *proc)
 {
-	PROC_QUEUE			*waitQueue;
+	dclist_head			*waitQueue;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 	Assert(!groupWaitQueueIsEmpty(group));
@@ -3651,9 +3648,7 @@ groupWaitQueueErase(ResGroupData *group, PGPROC *proc)
 	waitQueue = &group->waitProcs;
 
 	groupWaitProcValidate(proc, waitQueue);
-	SHMQueueDelete(&proc->links);
-
-	waitQueue->size--;
+	dclist_delete_from_thoroughly(waitQueue, &proc->links);
 }
 
 /*
@@ -3662,7 +3657,7 @@ groupWaitQueueErase(ResGroupData *group, PGPROC *proc)
 static bool
 groupWaitQueueIsEmpty(const ResGroupData *group)
 {
-	const PROC_QUEUE	*waitQueue;
+	const dclist_head	*waitQueue;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 
@@ -3670,7 +3665,7 @@ groupWaitQueueIsEmpty(const ResGroupData *group)
 
 	waitQueue = &group->waitProcs;
 
-	return waitQueue->size == 0;
+	return dclist_count(waitQueue) == 0;
 }
 
 #ifdef USE_ASSERT_CHECKING
@@ -3685,23 +3680,20 @@ groupWaitQueueIsEmpty(const ResGroupData *group)
 static bool
 groupWaitQueueFind(ResGroupData *group, const PGPROC *proc)
 {
-	PROC_QUEUE			*waitQueue;
-	SHM_QUEUE			*head;
-	PGPROC				*iter;
-	Size				offset;
+	dclist_head			*waitQueue;
+	dlist_iter			iter;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 
 	groupWaitQueueValidate(group);
 
 	waitQueue = &group->waitProcs;
-	head = &waitQueue->links;
-	offset = offsetof(PGPROC, links);
 
-	for (iter = (PGPROC *) SHMQueueNext(head, head, offset); iter;
-		 iter = (PGPROC *) SHMQueueNext(head, &iter->links, offset))
+	dclist_foreach(iter, waitQueue)
 	{
-		if (iter == proc)
+		PGPROC	   *curProc = dlist_container(PGPROC, links, iter.cur);
+
+		if (curProc == proc)
 		{
 			Assert(procIsWaiting(proc));
 			return true;
@@ -3863,37 +3855,29 @@ resgroupDumpGroup(StringInfo str, ResGroupData *group)
 }
 
 static void
-resgroupDumpWaitQueue(StringInfo str, PROC_QUEUE *queue)
+resgroupDumpWaitQueue(StringInfo str, dclist_head *queue)
 {
-	PGPROC *proc;
+	dlist_iter	iter;
+	bool		first = true;
 
 	appendStringInfo(str, "\"wait_queue\":{");
-	appendStringInfo(str, "\"wait_queue_size\":%d,", queue->size);
+	appendStringInfo(str, "\"wait_queue_size\":%d,", (int) dclist_count(queue));
 	appendStringInfo(str, "\"wait_queue_content\":[");
 
-	proc = (PGPROC *)SHMQueueNext(&queue->links,
-								  &queue->links, 
-								  offsetof(PGPROC, links));
-
-	if (!ShmemAddrIsValid(&proc->links))
+	dclist_foreach(iter, queue)
 	{
-		appendStringInfo(str, "]},");
-		return;
-	}
+		PGPROC	   *proc = dlist_container(PGPROC, links, iter.cur);
 
-	while (proc)
-	{
+		if (!first)
+			appendStringInfo(str, ",");
+		first = false;
+
 		appendStringInfo(str, "{");
 		appendStringInfo(str, "\"pid\":%d,", proc->pid);
 		appendStringInfo(str, "\"resWaiting\":%s,",
 						 procIsWaiting(proc) ? "true" : "false");
 		appendStringInfo(str, "\"resSlot\":%d", slotGetId(proc->resSlot));
 		appendStringInfo(str, "}");
-		proc = (PGPROC *)SHMQueueNext(&queue->links,
-							&proc->links, 
-							offsetof(PGPROC, links));
-		if (proc)
-			appendStringInfo(str, ",");
 	}
 	appendStringInfo(str, "]},");
 }

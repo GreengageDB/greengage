@@ -512,8 +512,18 @@ cdbpath_create_motion_path(PlannerInfo *root,
         SubqueryScanPath *subqueryScanPath = (SubqueryScanPath *)subpath;
         SubqueryScanPath *newSubqueryScanPath = NULL;
         Path *motionPath = NULL;
+        bool trivial_pathtarget;
 
         subpath = subqueryScanPath->subpath;
+
+        /*
+         * PG16: create_subqueryscan_path() now takes trivial_pathtarget, which
+         * the SubqueryScanPath does not store.  Infer it the same way
+         * reparameterize_path() does: if the existing node had zero extra cost,
+         * its target must have been trivial.
+         */
+        trivial_pathtarget =
+            (subpath->total_cost == subqueryScanPath->path.total_cost);
 
         motionPath = cdbpath_create_motion_path(root,
                                                 subpath,
@@ -524,6 +534,7 @@ cdbpath_create_motion_path(PlannerInfo *root,
         newSubqueryScanPath = create_subqueryscan_path(root,
                                                        subqueryScanPath->path.parent,
                                                        motionPath,
+                                                       trivial_pathtarget,
                                                        subqueryScanPath->path.pathkeys,
                                                        locus,
                                                        subqueryScanPath->required_outer);

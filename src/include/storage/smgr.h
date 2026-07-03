@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/smgr.h
@@ -18,15 +18,19 @@
 
 #include "lib/ilist.h"
 #include "storage/block.h"
-#include "storage/relfilenode.h"
 #include "storage/dbdirnode.h"
+#include "storage/relfilelocator.h"
+#include "storage/relfilenode.h"	/* GPDB: RelFileNodeBackend for smgrcreate_ao() */
 
+/*
+ * GPDB: which SMGR implementation manages a relation's data files:
+ * upstream md.c (heap et al) or the append-optimized variant.
+ */
 typedef enum SMgrImplementation
 {
 	SMGR_MD = 0,
 	SMGR_AO = 1
 } SMgrImpl;
-
 
 /*
  * smgr.c maintains a table of SMgrRelation objects, which are essentially
@@ -52,8 +56,8 @@ struct f_smgr;
 
 typedef struct SMgrRelationData
 {
-	/* rnode is the hashtable lookup key, so it must be first! */
-	RelFileNodeBackend smgr_rnode;	/* relation physical identifier */
+	/* rlocator is the hashtable lookup key, so it must be first! */
+	RelFileLocatorBackend smgr_rlocator;	/* relation physical identifier */
 
 	/* pointer to owning pointer, or NULL if none */
 	struct SMgrRelationData **smgr_owner;
@@ -100,16 +104,18 @@ typedef struct f_smgr
 	void		(*smgr_create) (SMgrRelation reln, ForkNumber forknum,
 								bool isRedo);
 	bool		(*smgr_exists) (SMgrRelation reln, ForkNumber forknum);
-	void		(*smgr_unlink) (RelFileNodeBackend rnode, ForkNumber forknum,
+	void		(*smgr_unlink) (RelFileLocatorBackend rlocator, ForkNumber forknum,
 								bool isRedo);
 	void		(*smgr_extend) (SMgrRelation reln, ForkNumber forknum,
-								BlockNumber blocknum, char *buffer, bool skipFsync);
+								BlockNumber blocknum, const void *buffer, bool skipFsync);
+	void		(*smgr_zeroextend) (SMgrRelation reln, ForkNumber forknum,
+									BlockNumber blocknum, int nblocks, bool skipFsync);
 	bool		(*smgr_prefetch) (SMgrRelation reln, ForkNumber forknum,
 								  BlockNumber blocknum);
 	void		(*smgr_read) (SMgrRelation reln, ForkNumber forknum,
-							  BlockNumber blocknum, char *buffer);
+							  BlockNumber blocknum, void *buffer);
 	void		(*smgr_write) (SMgrRelation reln, ForkNumber forknum,
-							   BlockNumber blocknum, char *buffer, bool skipFsync);
+							   BlockNumber blocknum, const void *buffer, bool skipFsync);
 	void		(*smgr_writeback) (SMgrRelation reln, ForkNumber forknum,
 								   BlockNumber blocknum, BlockNumber nblocks);
 	BlockNumber (*smgr_nblocks) (SMgrRelation reln, ForkNumber forknum);
@@ -119,7 +125,7 @@ typedef struct f_smgr
 } f_smgr;
 
 #define SmgrIsTemp(smgr) \
-	RelFileNodeBackendIsTemp((smgr)->smgr_rnode)
+	RelFileLocatorBackendIsTemp((smgr)->smgr_rlocator)
 
 typedef void (*smgr_init_hook_type) (void);
 typedef void (*smgr_shutdown_hook_type) (void);
@@ -129,21 +135,21 @@ extern void smgr_init_standard(void);
 extern void smgr_shutdown_standard(void);
 
 
-typedef const f_smgr *(*smgr_hook_type) (BackendId backend, RelFileNode rnode, SMgrImpl which);
+typedef const f_smgr *(*smgr_hook_type) (BackendId backend, RelFileLocator rlocator, SMgrImpl which);
 extern PGDLLIMPORT smgr_hook_type smgr_hook;
-extern const f_smgr *smgr_standard(BackendId backend, RelFileNode rnode, SMgrImpl which);
+extern const f_smgr *smgr_standard(BackendId backend, RelFileLocator rlocator, SMgrImpl which);
 
-extern const f_smgr *smgr(BackendId backend, RelFileNode rnode, SMgrImpl which);
+extern const f_smgr *smgr(BackendId backend, RelFileLocator rlocator, SMgrImpl which);
 
 extern void smgrinit(void);
-extern SMgrRelation smgropen(RelFileNode rnode, BackendId backend,
-							  SMgrImpl which);
+extern SMgrRelation smgropen(RelFileLocator rlocator, BackendId backend,
+							 SMgrImpl which);
 extern bool smgrexists(SMgrRelation reln, ForkNumber forknum);
 extern void smgrsetowner(SMgrRelation *owner, SMgrRelation reln);
 extern void smgrclearowner(SMgrRelation *owner, SMgrRelation reln);
 extern void smgrclose(SMgrRelation reln);
 extern void smgrcloseall(void);
-extern void smgrclosenode(RelFileNodeBackend rnode);
+extern void smgrcloserellocator(RelFileLocatorBackend rlocator);
 extern void smgrrelease(SMgrRelation reln);
 extern void smgrreleaseall(void);
 extern void smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo);
@@ -151,13 +157,15 @@ extern void smgrcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool i
 extern void smgrdosyncall(SMgrRelation *rels, int nrels);
 extern void smgrdounlinkall(SMgrRelation *rels, int nrels, bool isRedo);
 extern void smgrextend(SMgrRelation reln, ForkNumber forknum,
-					   BlockNumber blocknum, char *buffer, bool skipFsync);
+					   BlockNumber blocknum, const void *buffer, bool skipFsync);
+extern void smgrzeroextend(SMgrRelation reln, ForkNumber forknum,
+						   BlockNumber blocknum, int nblocks, bool skipFsync);
 extern bool smgrprefetch(SMgrRelation reln, ForkNumber forknum,
 						 BlockNumber blocknum);
 extern void smgrread(SMgrRelation reln, ForkNumber forknum,
-					 BlockNumber blocknum, char *buffer);
+					 BlockNumber blocknum, void *buffer);
 extern void smgrwrite(SMgrRelation reln, ForkNumber forknum,
-					  BlockNumber blocknum, char *buffer, bool skipFsync);
+					  BlockNumber blocknum, const void *buffer, bool skipFsync);
 extern void smgrwriteback(SMgrRelation reln, ForkNumber forknum,
 						  BlockNumber blocknum, BlockNumber nblocks);
 extern BlockNumber smgrnblocks(SMgrRelation reln, ForkNumber forknum);
@@ -174,16 +182,16 @@ extern bool ProcessBarrierSmgrRelease(void);
  * For example, disk quota extension will use these hooks to
  * detect active tables.
  */
-typedef void (*file_create_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_create_hook_type)(RelFileLocatorBackend rlocator);
 extern PGDLLIMPORT file_create_hook_type file_create_hook;
 
-typedef void (*file_extend_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_extend_hook_type)(RelFileLocatorBackend rlocator);
 extern PGDLLIMPORT file_extend_hook_type file_extend_hook;
 
-typedef void (*file_truncate_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_truncate_hook_type)(RelFileLocatorBackend rlocator);
 extern PGDLLIMPORT file_truncate_hook_type file_truncate_hook;
 
-typedef void (*file_unlink_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_unlink_hook_type)(RelFileLocatorBackend rlocator);
 extern PGDLLIMPORT file_unlink_hook_type file_unlink_hook;
 
 #endif							/* SMGR_H */

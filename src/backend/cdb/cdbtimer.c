@@ -54,7 +54,7 @@ resetTimers(struct itimers *otimers)
 	/*
 	 * Block signals while capturing timers.
 	 */
-	PG_SETMASK(&BlockSig);
+	sigprocmask(SIG_SETMASK, &BlockSig, NULL);
 
 	/*
 	 * Disable all process interval timers preserving the old values if
@@ -75,7 +75,7 @@ resetTimers(struct itimers *otimers)
 	/*
 	 * Restore signal mask.
 	 */
-	PG_SETMASK(&UnBlockSig);
+	sigprocmask(SIG_SETMASK, &UnBlockSig, NULL);
 }
 
 

@@ -48,7 +48,7 @@ htfifo_cleanup(htup_fifo htf)
 {
 	MinimalTuple tup;
 
-	AssertArg(htf != NULL);
+	Assert(htf != NULL);
 
 	/* TODO:  This can be faster if we didn't reuse code, but this will work. */
 	while ((tup = htfifo_gettuple(htf)) != NULL)
@@ -99,8 +99,8 @@ htfifo_addtuple(htup_fifo htf, MinimalTuple tup)
 {
 	htf_entry	p_ent;
 
-	AssertArg(htf != NULL);
-	AssertArg(tup != NULL);
+	Assert(htf != NULL);
+	Assert(tup != NULL);
 
 	/* Serialized tuple should never have external attribute */
 	Assert(!(tup->t_infomask & HEAP_HASEXTERNAL));
@@ -121,13 +121,13 @@ htfifo_addtuple(htup_fifo htf, MinimalTuple tup)
 	/* Put the new entry at the end of the FIFO. */
 	if (htf->p_last != NULL)
 	{
-		AssertState(htf->p_first != NULL);
+		Assert(htf->p_first != NULL);
 		htf->p_last->p_next = p_ent;
 	}
 	else
 		/* htf->p_last == NULL */
 	{
-		AssertState(htf->p_first == NULL);
+		Assert(htf->p_first == NULL);
 		htf->p_first = p_ent;
 	}
 	htf->p_last = p_ent;
@@ -144,7 +144,7 @@ htfifo_gettuple(htup_fifo htf)
 	htf_entry	p_ent;
 	MinimalTuple tup;
 
-	AssertArg(htf != NULL);
+	Assert(htf != NULL);
 
 	/* Pull the first entry from the FIFO. */
 
@@ -160,7 +160,7 @@ htfifo_gettuple(htup_fifo htf)
 		p_ent->p_next = NULL;	/* Just for the sake of completeness... */
 
 		tup = p_ent->tup;
-		AssertState(tup != NULL);
+		Assert(tup != NULL);
 
 		/* Free the FIFO entry. */
 		p_ent->p_next = htf->freelist;

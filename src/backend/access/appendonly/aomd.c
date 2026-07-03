@@ -53,7 +53,7 @@ AOSegmentFilePathNameLen(Relation rel)
 	int 		len;
 		
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	/*
 	 * The basepath will be the RelFileNode number.  Optional part is dot "." plus 
@@ -124,7 +124,7 @@ MakeAOSegmentFileName(Relation rel,
 	int32   fileSegNoLocal;
 	
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	FormatAOSegmentFileName(basepath, segno, col, &fileSegNoLocal, filepathname);
 	
@@ -191,14 +191,21 @@ TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 offset)
 				(errmsg("\"%s\": failed to truncate data after eof: %m",
 					    relname)));
 	if (XLogIsNeeded() && RelationNeedsWAL(rel))
-		xlog_ao_truncate(rel->rd_node, segFileNum, offset);
+	{
+		RelFileNode node;
+
+		node.spcNode = rel->rd_locator.spcOid;
+		node.dbNode = rel->rd_locator.dbOid;
+		node.relNode = rel->rd_locator.relNumber;
+		xlog_ao_truncate(node, segFileNum, offset);
+	}
 
 	if (file_truncate_hook)
 	{
-		RelFileNodeBackend rnode;
-		rnode.node = rel->rd_node;
-		rnode.backend = rel->rd_backend;
-		(*file_truncate_hook)(rnode);
+		RelFileLocatorBackend rlocator;
+		rlocator.locator = rel->rd_locator;
+		rlocator.backend = rel->rd_backend;
+		(*file_truncate_hook)(rlocator);
 	}
 }
 
@@ -220,7 +227,15 @@ struct truncate_ao_callback_ctx
 void
 mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 {
-	const char *path = relpath(rnode, forkNumber);
+	RelFileLocatorBackend rlocator;
+	const char *path;
+
+	rlocator.locator.spcOid = rnode.node.spcNode;
+	rlocator.locator.dbOid = rnode.node.dbNode;
+	rlocator.locator.relNumber = rnode.node.relNode;
+	rlocator.backend = rnode.backend;
+
+	path = relpath(rlocator, forkNumber);
 
 	/*
 	 * Unlogged AO tables have INIT_FORK, in addition to MAIN_FORK.  It is
@@ -230,7 +245,7 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
-		path = relpath(rnode, forkNumber);
+		path = relpath(rlocator, forkNumber);
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
@@ -452,6 +467,8 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
 	char *srcPath;
 	char *dstPath;
 	bool useWal;
+	RelFileLocator srcloc;
+	RelFileLocator dstloc;
 	struct copy_append_only_data_callback_ctx copyFiles = { 0 };
 	/*
 	 * We need to log the copied data in WAL iff WAL archiving/streaming is
@@ -459,8 +476,15 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
 	 */
 	useWal = XLogIsNeeded() && relpersistence == RELPERSISTENCE_PERMANENT;
 
-	srcPath = relpathbackend(src, backendid, MAIN_FORKNUM);
-	dstPath = relpathbackend(dst, backendid, MAIN_FORKNUM);
+	srcloc.spcOid = src.spcNode;
+	srcloc.dbOid = src.dbNode;
+	srcloc.relNumber = src.relNode;
+	dstloc.spcOid = dst.spcNode;
+	dstloc.dbOid = dst.dbNode;
+	dstloc.relNumber = dst.relNode;
+
+	srcPath = relpathbackend(srcloc, backendid, MAIN_FORKNUM);
+	dstPath = relpathbackend(dstloc, backendid, MAIN_FORKNUM);
 
 	copy_file(srcPath, dstPath, dst, 0, useWal);
 
@@ -473,10 +497,10 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
 
 	if (file_extend_hook)
 	{
-		RelFileNodeBackend rnode;
-		rnode.node = dst;
-		rnode.backend = backendid;
-		(*file_extend_hook)(rnode);
+		RelFileLocatorBackend rlocator;
+		rlocator.locator = dstloc;
+		rlocator.backend = backendid;
+		(*file_extend_hook)(rlocator);
 	}
 }
 
@@ -519,7 +543,7 @@ ao_truncate_one_rel(Relation rel)
 	int pathSize;
 
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	pathSize = strlen(basepath);
 	segPath = (char *) palloc(pathSize + SEGNO_SUFFIX_LENGTH);

@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"

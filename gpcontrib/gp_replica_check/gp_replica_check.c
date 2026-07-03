@@ -537,8 +537,8 @@ get_relfilenode_map()
 		Oid rnode;
 		/* Its relmapped relation, need to fetch the mapping from relmap file */
 		if (classtuple->relfilenode == InvalidOid)
-			rnode = RelationMapOidToFilenode(classtuple->oid,
-											 classtuple->relisshared);
+			rnode = RelationMapOidToFilenumber(classtuple->oid,
+											   classtuple->relisshared);
 		else
 			rnode = classtuple->relfilenode;
 

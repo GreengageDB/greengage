@@ -923,7 +923,7 @@ _bitmap_log_metapage(Relation rel, ForkNumber fork, Page page)
 
 	xlMeta = (xl_bm_metapage *)
 		palloc(MAXALIGN(sizeof(xl_bm_metapage)));
-	xlMeta->bm_node = rel->rd_node;
+	xlMeta->bm_node = rel->rd_locator;
 	xlMeta->bm_fork = fork;
 	xlMeta->bm_lov_heapId = metapage->bm_lov_heapId;
 	xlMeta->bm_lov_indexId = metapage->bm_lov_indexId;
@@ -948,7 +948,7 @@ _bitmap_log_bitmap_lastwords(Relation rel, Buffer lovBuffer,
 	xl_bm_bitmap_lastwords	xlLastwords;
 	XLogRecPtr				recptr;
 
-	xlLastwords.bm_node = rel->rd_node;
+	xlLastwords.bm_node = rel->rd_locator;
 	xlLastwords.bm_last_compword = lovItem->bm_last_compword;
 	xlLastwords.bm_last_word = lovItem->bm_last_word;
 	xlLastwords.lov_words_header = lovItem->lov_words_header;
@@ -969,7 +969,7 @@ _bitmap_log_bitmap_lastwords(Relation rel, Buffer lovBuffer,
 	 * WAL consistency checking
 	 */
 #ifdef DUMP_BITMAPAM_INSERT_RECORDS
-	_dump_page("insert", XactLastRecEnd, &rel->rd_node, lovBuffer);
+	_dump_page("insert", XactLastRecEnd, &rel->rd_locator, lovBuffer);
 #endif
 }
 
@@ -987,7 +987,7 @@ _bitmap_log_lovitem(Relation rel, ForkNumber fork, Buffer lovBuffer, OffsetNumbe
 
 	Assert(BufferGetBlockNumber(lovBuffer) > 0);
 
-	xlLovItem.bm_node = rel->rd_node;
+	xlLovItem.bm_node = rel->rd_locator;
 	xlLovItem.bm_fork = fork;
 	xlLovItem.bm_lov_blkno = BufferGetBlockNumber(lovBuffer);
 	xlLovItem.bm_lov_offset = offset;
@@ -1041,7 +1041,7 @@ _bitmap_log_bitmapwords(Relation rel,
 
 	MemSet(&xlBitmapWords, 0, sizeof(xlBitmapWords));
 
-	xlBitmapWords.bm_node = rel->rd_node;
+	xlBitmapWords.bm_node = rel->rd_locator;
 	xlBitmapWords.bm_num_pages = list_length(xl_bm_bitmapword_pages);
 	xlBitmapWords.bm_init_first_page = init_first_page;
 
@@ -1096,10 +1096,10 @@ _bitmap_log_bitmapwords(Relation rel,
 	 * WAL consistency checking
 	 */
 #ifdef DUMP_BITMAPAM_INSERT_RECORDS
-	_dump_page("insert", XactLastRecEnd, &rel->rd_node, lovBuffer);
+	_dump_page("insert", XactLastRecEnd, &rel->rd_locator, lovBuffer);
 	foreach(lcb, bitmapBuffers)
 	{
-		_dump_page("insert", XactLastRecEnd, &rel->rd_node, (Buffer) lfirst_int(lcb));
+		_dump_page("insert", XactLastRecEnd, &rel->rd_locator, (Buffer) lfirst_int(lcb));
 	}
 #endif
 }
@@ -1119,7 +1119,7 @@ _bitmap_log_updateword(Relation rel, Buffer bitmapBuffer, int word_no)
 	bitmapPage = BufferGetPage(bitmapBuffer);
 	bitmap = (BMBitmap) PageGetContentsMaxAligned(bitmapPage);
 
-	xlBitmapWord.bm_node = rel->rd_node;
+	xlBitmapWord.bm_node = rel->rd_locator;
 	xlBitmapWord.bm_blkno = BufferGetBlockNumber(bitmapBuffer);
 	xlBitmapWord.bm_word_no = word_no;
 	xlBitmapWord.bm_cword = bitmap->cwords[word_no];
@@ -1200,7 +1200,7 @@ _bitmap_log_updatewords(Relation rel,
 		xlBitmapWords.bm_next_blkno = secondOpaque->bm_bitmap_next;
 	}
 
-	xlBitmapWords.bm_node = rel->rd_node;
+	xlBitmapWords.bm_node = rel->rd_locator;
 	xlBitmapWords.bm_lov_blkno = BufferGetBlockNumber(lovBuffer);
 	xlBitmapWords.bm_lov_offset = lovOffset;
 	xlBitmapWords.bm_new_lastpage = new_lastpage;
@@ -1255,7 +1255,7 @@ _bitmap_log_updatewords(Relation rel,
 #include "cdb/cdbvars.h"
 FILE *dump_file = NULL;
 void
-_dump_page(char *file, XLogRecPtr recptr, RelFileNode *relfilenode, Buffer buf)
+_dump_page(char *file, XLogRecPtr recptr, RelFileLocator *relfilenode, Buffer buf)
 {
 	int			i;
 	unsigned char *p;
@@ -1273,9 +1273,9 @@ _dump_page(char *file, XLogRecPtr recptr, RelFileNode *relfilenode, Buffer buf)
 
 	fprintf(dump_file, "LSN %X/%08X relfilenode %u/%u/%u blk %u\n",
 			(uint32) (recptr >> 32), (uint32) recptr,
-			relfilenode->spcNode,
-			relfilenode->dbNode,
-			relfilenode->relNode,
+			relfilenode->spcOid,
+			relfilenode->dbOid,
+			relfilenode->relNumber,
 			BufferGetBlockNumber(buf));
 
 	p = (unsigned char *) BufferGetPage(buf);

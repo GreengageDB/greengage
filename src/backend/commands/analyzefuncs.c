@@ -116,7 +116,7 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		ctx->targrows = targrows;
 		ctx->inherited = inherited;
 
-		if (!pg_class_ownercheck(relOid, GetUserId()))
+		if (!object_ownercheck(RelationRelationId, relOid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 						   get_rel_name(relOid));
 

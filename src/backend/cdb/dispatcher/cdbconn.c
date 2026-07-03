@@ -30,6 +30,14 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbgang.h"
 
+/*
+ * libpq-int.h #undef's the backend translation macro _().  This is backend
+ * code that wants the server's own message catalog, so restore _().
+ */
+#ifndef _
+#define _(x) gettext(x)
+#endif
+
 
 static uint32 cdbconn_get_motion_listener_port(PGconn *conn);
 static void cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc);

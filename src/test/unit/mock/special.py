@@ -84,6 +84,8 @@ class ByValStructs(object):
             'PossibleValueSet',
             'PrimaryMirrorModeTransitionArguments',
             'RelFileNode',
+            'RelFileLocator',
+            'RelFileLocatorBackend',
             'struct timeval',
             'VariableStatData',
             'XLogRecPtr'

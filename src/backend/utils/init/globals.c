@@ -3,7 +3,7 @@
  * globals.c
  *	  global variable declarations
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -138,15 +138,15 @@ int			IntervalStyle = INTSTYLE_POSTGRES;
 bool		enableFsync = true;
 bool		allowSystemTableMods = false;
 int			planner_work_mem = 32768;
-int			work_mem = 32768;
-int			statement_mem = 256000;
+int			work_mem = 4096;
+int			statement_mem = 128000;
 int			max_statement_mem = 2048000;
 /*
  * gp_vmem_limit_per_query set to 0 means we
  * do not enforce per-query memory limit
  */
 int			gp_vmem_limit_per_query = 0;
-double		hash_mem_multiplier = 1.0;
+double		hash_mem_multiplier = 2.0;
 int			maintenance_work_mem = 65536;
 int			max_parallel_maintenance_workers = 2;
 
@@ -156,13 +156,16 @@ int			max_parallel_maintenance_workers = 2;
  * MaxBackends is computed by PostmasterMain after modules have had a chance to
  * register background workers.
  */
-int			NBuffers = 4096;
-int			MaxConnections = 90;
-int			max_worker_processes = 8 + MaxPMAuxProc;
+int			NBuffers = 16384;
+int			MaxConnections = 100;
+int			max_worker_processes = 8;
 int			max_parallel_workers = 8;
 int			MaxBackends = 0;
 
-int			VacuumCostPageHit = 1;	/* GUC parameters for vacuum */
+/* GUC parameters for vacuum */
+int			VacuumBufferUsageLimit = 256;
+
+int			VacuumCostPageHit = 1;
 int			VacuumCostPageMiss = 2;
 int			VacuumCostPageDirty = 20;
 int			VacuumCostLimit = 200;
@@ -180,7 +183,7 @@ double		vacuum_cleanup_index_scale_factor;
 /* for pljava */
 char*	pljava_vmoptions = NULL;
 char*	pljava_classpath = NULL;
-int		pljava_statement_cache_size 	= 512;
+int		pljava_statement_cache_size 	= 0;
 bool	pljava_release_lingering_savepoints = false;
 bool	pljava_debug = false;
 bool	pljava_classpath_insecure = false;

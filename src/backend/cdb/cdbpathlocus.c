@@ -161,7 +161,6 @@ cdb_build_distribution_keys(PlannerInfo *root, Index rti, GpPolicy *policy)
 		mergeopfamilies = get_mergejoin_opfamilies(eqopoid);
 
 		eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
-										  NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
 										  mergeopfamilies,
 										  opcintype,
 										  exprCollation((Node *) expr),
@@ -265,7 +264,6 @@ cdbpathlocus_for_insert(PlannerInfo *root, GpPolicy *policy,
 		mergeopfamilies = get_mergejoin_opfamilies(eqopoid);
 
 		eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
-										  NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
 										  mergeopfamilies,
 										  opcintype,
 										  exprCollation((Node *) expr),

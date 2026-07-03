@@ -175,7 +175,7 @@ cdbdisp_getDispatchResults(struct CdbDispatcherState *ds, ErrorData **qeError)
 		{
 			errcode(ERRCODE_INTERNAL_ERROR);
 			errmsg("no dispatcher state");
-			*qeError = errfinish_and_return(__FILE__, __LINE__, PG_FUNCNAME_MACRO);
+			*qeError = errfinish_and_return(__FILE__, __LINE__, __func__);
 		}
 		else
 			pg_unreachable();

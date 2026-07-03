@@ -23,8 +23,8 @@
 void
 appendChunkToTCList(TupleChunkList tcList, TupleChunkListItem tcItem)
 {
-	AssertArg(tcList != NULL);
-	AssertArg(tcItem != NULL);
+	Assert(tcList != NULL);
+	Assert(tcItem != NULL);
 
 	/* Append the chunk to the list. */
 	tcList->num_chunks++;
@@ -89,7 +89,7 @@ clearTCList(TupleChunkListCache *cache, TupleChunkList tcList)
 	TupleChunkListItem tcItem,
 				tcNext;
 
-	AssertArg(tcList != NULL);
+	Assert(tcList != NULL);
 
 	tcItem = tcList->p_first;
 	while (tcItem != NULL)

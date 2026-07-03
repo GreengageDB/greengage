@@ -4,7 +4,7 @@
  *	  Definitions for using the POSTGRES copy command.
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/copy.h
@@ -157,6 +157,8 @@ typedef struct CopyStateData
 	char	   *null_print;		/* NULL marker string (server encoding!) */
 	int			null_print_len;	/* length of same */
 	char	   *null_print_client;	/* same converted to file encoding */
+	char	   *default_print;	/* DEFAULT marker string */
+	int			default_print_len;	/* length of same */
 	char	   *delim;			/* column delimiter (must be 1 byte) */
 	char	   *quote;			/* CSV quote char (must be 1 byte) */
 	char	   *escape;			/* CSV escape char (must be 1 byte) */
@@ -196,6 +198,7 @@ typedef struct CopyStateData
 	ExprState **defexprs;		/* array of default att expressions */
 	bool		volatile_defexprs;	/* is any of defexprs volatile? */
 	List	   *range_table;
+	List	   *rteperminfos;	/* RTEPermissionInfo list (PG16) for ExecInitRangeTable */
 	ExprState  *qualexpr;
 
 	TransitionCaptureState *transition_capture;
@@ -270,11 +273,17 @@ typedef struct
 typedef struct CopyFromStateData *CopyFromState;
 typedef struct CopyToStateData *CopyToState;
 
-extern void DoCopy(ParseState *state, const CopyStmt *stmt,
+/*
+ * GPDB: the GPDB copy_data_source_cb (with its extra 'extra' argument) is
+ * declared above, next to CopyStateData.
+ */
+typedef void (*copy_data_dest_cb) (void *data, int len);
+
+extern void DoCopy(ParseState *pstate, const CopyStmt *stmt,
 				   int stmt_location, int stmt_len,
 				   uint64 *processed);
 
-extern void ProcessCopyOptions(ParseState *pstate, CopyFormatOptions *ops_out, bool is_from, List *options);
+extern void ProcessCopyOptions(ParseState *pstate, CopyFormatOptions *opts_out, bool is_from, List *options);
 
 extern CopyState BeginCopy(ParseState *pstate, bool is_from, Relation rel,
 						   RawStmt *raw_query, Oid queryRelId,
@@ -320,9 +329,9 @@ typedef struct GpDistributionData
 /*
  * internal prototypes
  */
-extern CopyState BeginCopyTo(ParseState *pstate, Relation rel, RawStmt *query,
+extern CopyState BeginCopyTo(ParseState *pstate, Relation rel, RawStmt *raw_query,
 							 Oid queryRelId, const char *filename, bool is_program,
-							 List *attnamelist, List *options);
+							 copy_data_dest_cb data_dest_cb, List *attnamelist, List *options);
 extern void EndCopyTo(CopyState cstate, uint64 *processed);
 extern uint64 DoCopyTo(CopyState cstate);
 extern List *CopyGetAttnums(TupleDesc tupDesc, Relation rel,

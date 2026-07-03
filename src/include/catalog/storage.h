@@ -4,7 +4,7 @@
  *	  prototypes for functions in backend/catalog/storage.c
  *
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/storage.h
@@ -15,24 +15,24 @@
 #define STORAGE_H
 
 #include "storage/block.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/relcache.h"
 
 /* GUC variables */
 extern PGDLLIMPORT int wal_skip_threshold;
 
-extern SMgrRelation RelationCreateStorage(RelFileNode rnode,
+extern SMgrRelation RelationCreateStorage(RelFileLocator rlocator,
 										  char relpersistence,
 										  SMgrImpl smgr_which,
 										  bool register_delete);
 extern void RelationDropStorage(Relation rel);
-extern void RelationPreserveStorage(RelFileNode rnode, bool atCommit);
+extern void RelationPreserveStorage(RelFileLocator rlocator, bool atCommit);
 extern void RelationPreTruncate(Relation rel);
 extern void RelationTruncate(Relation rel, BlockNumber nblocks);
 extern void RelationCopyStorage(SMgrRelation src, SMgrRelation dst,
 								ForkNumber forkNum, char relpersistence);
-extern bool RelFileNodeSkippingWAL(RelFileNode rnode);
+extern bool RelFileLocatorSkippingWAL(RelFileLocator rlocator);
 extern Size EstimatePendingSyncsSpace(void);
 extern void SerializePendingSyncs(Size maxSize, char *startAddress);
 extern void RestorePendingSyncs(char *startAddress);

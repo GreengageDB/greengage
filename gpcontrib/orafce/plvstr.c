@@ -13,6 +13,7 @@
 
 
 #include "postgres.h"
+#include "varatt.h"
 #include "utils/builtins.h"
 #include "utils/numeric.h"
 #include "string.h"

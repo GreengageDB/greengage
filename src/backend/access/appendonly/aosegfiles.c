@@ -613,6 +613,7 @@ ClearFileSegInfo(Relation parentrel, int segno)
 	bool	   *new_record_repl;
 	bool		isNull;
 	Oid segrelid;
+	TU_UpdateIndexes update_indexes;
 
 	GetAppendOnlyEntryAuxOids(parentrel->rd_id, NULL, &segrelid, NULL, NULL, NULL, NULL);
 
@@ -671,7 +672,7 @@ ClearFileSegInfo(Relation parentrel, int segno)
 	new_tuple = heap_modify_tuple(tuple, pg_aoseg_dsc, new_record,
 								  new_record_nulls, new_record_repl);
 
-	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple);
+	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple, &update_indexes);
 	heap_freetuple(new_tuple);
 
 	table_endscan(aoscan);
@@ -751,6 +752,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	bool	   *new_record_repl;
 	bool		isNull;
 	Oid segrelid;
+	TU_UpdateIndexes update_indexes;
 
 	GetAppendOnlyEntryAuxOids(parentrel->rd_id, NULL, &segrelid, NULL, NULL, NULL, NULL);
 
@@ -822,7 +824,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	{
 		elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d. "
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
-			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
+			 RelationGetRelationName(parentrel), parentrel->rd_locator.relNumber,
 			 segno, eof, old_eof);
 	}
 
@@ -843,7 +845,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	{
 		elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d."
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
-			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
+			 RelationGetRelationName(parentrel), parentrel->rd_locator.relNumber,
 			 segno, eof_uncompressed, old_eof_uncompressed);
 	}
 
@@ -919,7 +921,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	new_tuple = heap_modify_tuple(tuple, pg_aoseg_dsc, new_record,
 								  new_record_nulls, new_record_repl);
 
-	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple);
+	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple, &update_indexes);
 
 	heap_freetuple(new_tuple);
 

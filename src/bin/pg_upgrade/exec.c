@@ -3,7 +3,7 @@
  *
  *	execution functions
  *
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/exec.c
  */
 
@@ -36,20 +36,26 @@ get_bin_version(ClusterInfo *cluster)
 	char		cmd[MAXPGPATH],
 				cmd_output[MAX_STRING];
 	FILE	   *output;
+	int			rc;
 	int			v1 = 0,
 				v2 = 0;
 
 	snprintf(cmd, sizeof(cmd), "\"%s/pg_ctl\" --version", cluster->bindir);
+	fflush(NULL);
 
 	if ((output = popen(cmd, "r")) == NULL ||
 		fgets(cmd_output, sizeof(cmd_output), output) == NULL)
-		pg_fatal("could not get pg_ctl version data using %s: %s\n",
+		pg_fatal("could not get pg_ctl version data using %s: %s",
 				 cmd, strerror(errno));
 
-	pclose(output);
+	rc = pclose(output);
+	if (rc != 0)
+		pg_fatal("could not get pg_ctl version data using %s: %s",
+				 cmd, wait_result_to_str(rc));
 
+	/* GPDB: binaries report "(Greenplum Database)" version strings */
 	if (sscanf(cmd_output, "%*s (Greenplum Database) %d.%d", &v1, &v2) < 1)
-		pg_fatal("could not get pg_ctl version output from %s\n", cmd);
+		pg_fatal("could not get pg_ctl version output from %s", cmd);
 
 	if (v1 < 10)
 	{
@@ -106,13 +112,13 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 	written += vsnprintf(cmd + written, MAXCMDLEN - written, fmt, ap);
 	va_end(ap);
 	if (written >= MAXCMDLEN)
-		pg_fatal("command too long\n");
+		pg_fatal("command too long");
 	written += snprintf(cmd + written, MAXCMDLEN - written,
 						" >> \"%s\" 2>&1", log_file);
 	if (written >= MAXCMDLEN)
-		pg_fatal("command too long\n");
+		pg_fatal("command too long");
 
-	pg_log(PG_VERBOSE, "%s\n", cmd);
+	pg_log(PG_VERBOSE, "%s", cmd);
 
 #ifdef WIN32
 	/*
@@ -125,7 +131,10 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 	 * the file do not see to help.
 	 */
 	if (mainThreadId != GetCurrentThreadId())
+	{
+		fflush(NULL);
 		result = system(cmd);
+	}
 #endif
 
 	log = fopen(log_file, "a");
@@ -150,7 +159,7 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 #endif
 
 	if (log == NULL)
-		pg_fatal("could not open log file \"%s\": %m\n", log_file);
+		pg_fatal("could not open log file \"%s\": %m", log_file);
 
 #ifdef WIN32
 	/* Are we printing "command:" before its output? */
@@ -174,7 +183,10 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 	/* see comment above */
 	if (mainThreadId == GetCurrentThreadId())
 #endif
+	{
+		fflush(NULL);
 		result = system(cmd);
+	}
 
 	if (result != 0 && report_error)
 	{
@@ -182,16 +194,16 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 		report_status(PG_REPORT, "\n*failure*");
 		fflush(stdout);
 
-		pg_log(PG_VERBOSE, "There were problems executing \"%s\"\n", cmd);
+		pg_log(PG_VERBOSE, "There were problems executing \"%s\"", cmd);
 		if (opt_log_file)
 			pg_log(exit_on_error ? PG_FATAL : PG_REPORT,
 				   "Consult the last few lines of \"%s\" or \"%s\" for\n"
-				   "the probable cause of the failure.\n",
+				   "the probable cause of the failure.",
 				   log_file, opt_log_file);
 		else
 			pg_log(exit_on_error ? PG_FATAL : PG_REPORT,
 				   "Consult the last few lines of \"%s\" for\n"
-				   "the probable cause of the failure.\n",
+				   "the probable cause of the failure.",
 				   log_file);
 	}
 
@@ -204,7 +216,7 @@ exec_prog(const char *log_filename, const char *opt_log_file,
 	 * log these commands to a third file, but that just adds complexity.
 	 */
 	if ((log = fopen(log_file, "a")) == NULL)
-		pg_fatal("could not write to log file \"%s\": %m\n", log_file);
+		pg_fatal("could not write to log file \"%s\": %m", log_file);
 	fprintf(log, "\n\n");
 	fclose(log);
 #endif
@@ -230,7 +242,7 @@ pid_lock_file_exists(const char *datadir)
 	{
 		/* ENOTDIR means we will throw a more useful error later */
 		if (errno != ENOENT && errno != ENOTDIR)
-			pg_fatal("could not open file \"%s\" for reading: %s\n",
+			pg_fatal("could not open file \"%s\" for reading: %s",
 					 path, strerror(errno));
 
 		return false;
@@ -257,7 +269,7 @@ verify_directories(void)
 #else
 	if (win32_check_directory_write_permissions() != 0)
 #endif
-		pg_fatal("You must have read and write access in the current directory.\n");
+		pg_fatal("You must have read and write access in the current directory.");
 
 	check_bin_dir(&old_cluster);
 	check_data_dir(&old_cluster);
@@ -314,10 +326,10 @@ check_single_dir(const char *pg_data, const char *subdir)
 			 subdir);
 
 	if (stat(subDirName, &statBuf) != 0)
-		report_status(PG_FATAL, "check for \"%s\" failed: %s\n",
+		report_status(PG_FATAL, "check for \"%s\" failed: %s",
 					  subDirName, strerror(errno));
 	else if (!S_ISDIR(statBuf.st_mode))
-		report_status(PG_FATAL, "\"%s\" is not a directory\n",
+		report_status(PG_FATAL, "\"%s\" is not a directory",
 					  subDirName);
 }
 
@@ -376,10 +388,10 @@ check_bin_dir(ClusterInfo *cluster)
 
 	/* check bindir */
 	if (stat(cluster->bindir, &statBuf) != 0)
-		report_status(PG_FATAL, "check for \"%s\" failed: %s\n",
+		report_status(PG_FATAL, "check for \"%s\" failed: %s",
 					  cluster->bindir, strerror(errno));
 	else if (!S_ISDIR(statBuf.st_mode))
-		report_status(PG_FATAL, "\"%s\" is not a directory\n",
+		report_status(PG_FATAL, "\"%s\" is not a directory",
 					  cluster->bindir);
 
 	gpdb_validate_exec(cluster->bindir, "postgres");
@@ -425,44 +437,26 @@ static void
 gpdb_validate_exec(const char *dir, const char *cmdName)
 {
 	char		path[MAXPGPATH];
-	struct stat buf;
+	char		line[MAXPGPATH];
+	char		cmd[MAXPGPATH];
 
 	snprintf(path, sizeof(path), "%s/%s", dir, cmdName);
 
-#ifdef WIN32
-	/* Windows requires a .exe suffix for stat() */
-	if (strlen(path) <= strlen(EXE_EXT) ||
-		pg_strcasecmp(path + strlen(path) - strlen(EXE_EXT), EXE_EXT) != 0)
-		strlcat(path, EXE_EXT, sizeof(path));
-#endif
+	if (validate_exec(path) != 0)
+		pg_fatal("check for \"%s\" failed: %m", path);
 
-	/*
-	 * Ensure that the file exists and is a regular file.
-	 */
-	if (stat(path, &buf) < 0)
-		pg_fatal("check for \"%s\" failed: %s\n",
-				 path, strerror(errno));
-	else if (!S_ISREG(buf.st_mode))
-		pg_fatal("check for \"%s\" failed: not a regular file\n",
+	snprintf(cmd, sizeof(cmd), "\"%s\" -V", path);
+
+	if (!pipe_read_line(cmd, line, sizeof(line)))
+		pg_fatal("check for \"%s\" failed: cannot execute",
 				 path);
 
 	/*
-	 * Ensure that the file is both executable and readable (required for
-	 * dynamic loading).
+	 * GPDB: upstream's check_exec() optionally compares the binary's "-V"
+	 * output against "<program> (PostgreSQL) " PG_VERSION.  Greenplum
+	 * binaries report "(Greenplum Database)" version strings, and pg_upgrade
+	 * must accept source-cluster binaries from older major versions, so we
+	 * do not perform that version-equality check (target-cluster checks can
+	 * also be skipped entirely, see is_skip_target_check()).
 	 */
-#ifndef WIN32
-	if (access(path, R_OK) != 0)
-#else
-	if ((buf.st_mode & S_IRUSR) == 0)
-#endif
-		pg_fatal("check for \"%s\" failed: cannot read file (permission denied)\n",
-				 path);
-
-#ifndef WIN32
-	if (access(path, X_OK) != 0)
-#else
-	if ((buf.st_mode & S_IXUSR) == 0)
-#endif
-		pg_fatal("check for \"%s\" failed: cannot execute (permission denied)\n",
-				 path);
 }

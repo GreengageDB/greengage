@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -238,7 +238,7 @@ ProcessQuery(Portal portal,
 	/*
 	 * Run the plan to completion.
 	 */
-	ExecutorRun(queryDesc, ForwardScanDirection, 0L, true);
+	ExecutorRun(queryDesc, ForwardScanDirection, 0, true);
 
 	autostats_get_cmdtype(queryDesc, &cmdType, &relationOid);
 
@@ -582,8 +582,8 @@ PortalStart(Portal portal, ParamListInfo params,
 	QueryDesc  *queryDesc;
 	int			myeflags;
 
-	AssertArg(PortalIsValid(portal));
-	AssertState(portal->status == PORTAL_DEFINED);
+	Assert(PortalIsValid(portal));
+	Assert(portal->status == PORTAL_DEFINED);
 
 	portal->hasResQueueLock = false;
     
@@ -899,7 +899,7 @@ PortalRun(Portal portal, int64 count, bool isTopLevel, bool run_once,
 	MemoryContext savePortalContext;
 	MemoryContext saveMemoryContext;
 
-	AssertArg(PortalIsValid(portal));
+	Assert(PortalIsValid(portal));
 
 	TRACE_POSTGRESQL_QUERY_EXECUTE_START();
 
@@ -1611,7 +1611,7 @@ PortalRunFetch(Portal portal,
 	MemoryContext savePortalContext;
 	MemoryContext oldContext = CurrentMemoryContext;
 
-	AssertArg(PortalIsValid(portal));
+	Assert(PortalIsValid(portal));
 
 	/*
 	 * Check for improper portal use, and mark portal active.

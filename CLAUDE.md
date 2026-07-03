@@ -7,8 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is **ArenaDatabaseDB (ADB)** — an MPP (Massively Parallel Processing) database fork of Greenplum Database (GPDB), itself built on PostgreSQL. The repo tracks upstream PostgreSQL and periodically merges new major PostgreSQL versions into GGDB-specific branches.
 
 **Key branches:**
-- `adb-6.x` — production ADB 6.x line (main branch for PRs)
-- `ai-merge-stage1` — staging branch for the current PG 8.0.0-alpha.0 → GGDB merge
+- `adb-6.x` — production ADB 6.x line (main branch for PRs); PostgreSQL 9.4-based, too old to use as a re-graft reference
+- `adb-7.x` / `adb-7.2.0` — last stable GreengageDB 7 line
+- `adb-8.x` — PG14-based line where merged bump work lands
+- `claude-merge-N` / `ai-bump-N` — per-campaign PostgreSQL major-version merge branches (PG14 → claude-merge-2 and ai-bump-1; PG15 → claude-merge-3; PG16 → claude-merge-4)
 - `gg_upgrade` — tracks upstream PostgreSQL code
 
 ## Build
@@ -95,7 +97,13 @@ GGDB/ADB-specific distributed execution concepts used throughout the codebase:
 
 ## PostgreSQL major-version merge workflow
 
-The primary ongoing task on `ai-merge-stage1` is merging upstream PostgreSQL into GGDB. The merge re-graft methodology, MPP internals, and recurring bug classes are documented in the [`greengage-internals`](./.claude/skills/greengage-internals/SKILL.md) skill; see also the build/test/debug/regen/cluster skills under [`.claude/skills/`](./.claude/skills/). Key points:
+The primary ongoing task is merging upstream PostgreSQL major versions into GGDB on per-campaign branches. The methodology lives in the reusable skills under [`.claude/skills/`](./.claude/skills/README.md):
+
+- [`greengage-pg-merge`](./.claude/skills/greengage-pg-merge/SKILL.md) — conflict resolution + phased bring-up, with per-version notes for [PG14](./.claude/skills/greengage-pg-merge/pg14-notes.md), [PG15](./.claude/skills/greengage-pg-merge/pg15-notes.md), [PG16](./.claude/skills/greengage-pg-merge/pg16-notes.md)
+- [`greengage-internals`](./.claude/skills/greengage-internals/SKILL.md) — MPP internals, Greengage-vs-vanilla-PostgreSQL differences, recurring bug classes
+- [`greengage-build`](./.claude/skills/greengage-build/SKILL.md), [`greengage-regress-tests`](./.claude/skills/greengage-regress-tests/SKILL.md), [`greengage-answer-file-regen`](./.claude/skills/greengage-answer-file-regen/SKILL.md), [`greengage-cluster-ops`](./.claude/skills/greengage-cluster-ops/SKILL.md), [`greengage-debug`](./.claude/skills/greengage-debug/SKILL.md), [`greengage-ci-triage`](./.claude/skills/greengage-ci-triage/SKILL.md)
+
+Key points:
 
 1. `git merge --no-commit --no-ff <upstream-tag>`
 2. Record conflicts: `git diff --name-only --diff-filter=U`

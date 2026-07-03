@@ -1228,6 +1228,10 @@ Number of partitions: 0
 Distributed by: (a)
 
 DROP TABLE parted_col_comment;
+-- specifying storage parameters for partitioned tables is not supported
+CREATE TABLE parted_col_comment (a int, b text) PARTITION BY LIST (a) WITH (fillfactor=100);
+ERROR:  cannot specify storage parameters for a partitioned table
+HINT:  Specify storage parameters for its leaf partitions, instead.
 -- list partitioning on array type column
 CREATE TABLE arrlp (a int[]) PARTITION BY LIST (a);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.

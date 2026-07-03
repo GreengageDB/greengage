@@ -103,7 +103,7 @@ $(call recurse,distprep coverage,doc src config contrib gpcontrib)
 # it's not built by default
 $(call recurse,clean,doc contrib gpcontrib src config)
 clean:
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 # leap over gpAux/Makefile into subdirectories to avoid circular dependency.
@@ -120,7 +120,7 @@ distclean maintainer-clean:
 	$(MAKE) -C config $@
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C src $@
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 	rm -f config.cache config.log config.status GNUmakefile
@@ -154,7 +154,7 @@ check:
 	  . $(prefix)/greenplum_path.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
 	fi
 
-$(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib,check)
+$(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin src/tools/pg_bsd_indent gpcontrib,check)
 $(call recurse,checkprep,  src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib)
 
 # This is a top-level target that runs "all" regression test suites against

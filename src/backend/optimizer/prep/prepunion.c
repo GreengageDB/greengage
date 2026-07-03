@@ -12,14 +12,9 @@
  * case, but most of the heavy lifting for that is done elsewhere,
  * notably in prepjointree.c and allpaths.c.
  *
- * There is also some code here to support planning of queries that use
- * inheritance (SELECT FROM foo*).  Inheritance trees are converted into
- * append relations, and thenceforth share code with the UNION ALL case.
- *
- *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -91,12 +86,14 @@ static List *generate_setop_tlist(List *colTypes, List *colCollations,
 								  Index varno,
 								  bool hack_constants,
 								  List *input_tlist,
-								  List *refnames_tlist);
+								  List *refnames_tlist,
+								  bool *trivial_tlist);
 static List *generate_append_tlist(List *colTypes, List *colCollations,
 								   bool flag,
 								   List *input_tlists,
 								   List *refnames_tlist);
 static List *generate_setop_grouplist(SetOperationStmt *op, List *targetlist);
+
 
 /*
  * plan_set_operations
@@ -238,6 +235,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		Path	   *subpath;
 		Path	   *path;
 		List	   *tlist;
+		bool		trivial_tlist;
 
 		Assert(subquery != NULL);
 
@@ -269,7 +267,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 									 rtr->rtindex,
 									 true,
 									 subroot->processed_tlist,
-									 refnames_tlist);
+									 refnames_tlist,
+									 &trivial_tlist);
 		rel->reltarget = create_pathtarget(root, tlist);
 
 		/* Return the fully-fledged tlist to caller, too */
@@ -311,6 +310,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		 * like in subquery_pathlist()
 		 */
 		path = (Path *) create_subqueryscan_path(root, rel, subpath,
+												 trivial_tlist,
 												 NIL, subpath->locus, NULL);
 
 		add_path(rel, path);
@@ -329,6 +329,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 			partial_subpath = linitial(final_rel->partial_pathlist);
 			partial_path = (Path *)
 				create_subqueryscan_path(root, rel, partial_subpath,
+										 trivial_tlist,
 										 NIL, partial_subpath->locus, NULL);
 			add_partial_path(rel, partial_path);
 		}
@@ -396,6 +397,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 			!tlist_same_collations(*pTargetList, colCollations, junkOK))
 		{
 			PathTarget *target;
+			bool		trivial_tlist;
 			ListCell   *lc;
 
 			*pTargetList = generate_setop_tlist(colTypes, colCollations,
@@ -403,7 +405,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 												0,
 												false,
 												*pTargetList,
-												refnames_tlist);
+												refnames_tlist,
+												&trivial_tlist);
 			target = create_pathtarget(root, *pTargetList);
 
 			/* Apply projection to each path */
@@ -584,7 +587,7 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 	}
 
 	/*
-	 * And make the plan node.
+	 * And make the path node.
 	 */
 	/*
 	 * GPDB: if the recursive term ended up in a single process but the
@@ -671,6 +674,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 	 * nodes and compute their children's paths.
 	 */
 	rellist = plan_union_children(root, op, refnames_tlist, &tlist_list);
+
 	/*
 	 * Generate tlist for Append plan node.
 	 *
@@ -748,15 +752,15 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 	if (partial_paths_valid)
 	{
 		Path	   *ppath;
-		ListCell   *lc;
 		int			parallel_workers = 0;
 
 		/* Find the highest number of workers requested for any subpath. */
 		foreach(lc, partial_pathlist)
 		{
-			Path	   *path = lfirst(lc);
+			Path	   *subpath = lfirst(lc);
 
-			parallel_workers = Max(parallel_workers, path->parallel_workers);
+			parallel_workers = Max(parallel_workers,
+								   subpath->parallel_workers);
 		}
 		Assert(parallel_workers > 0);
 
@@ -770,7 +774,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 		if (enable_parallel_append)
 		{
 			parallel_workers = Max(parallel_workers,
-								   fls(list_length(partial_pathlist)));
+								   pg_leftmost_one_pos32(list_length(partial_pathlist)) + 1);
 			parallel_workers = Min(parallel_workers,
 								   max_parallel_workers_per_gather);
 		}
@@ -1284,6 +1288,7 @@ choose_hashed_setop(PlannerInfo *root, List *groupClauses,
  * hack_constants: true to copy up constants (see comments in code)
  * input_tlist: targetlist of this node's input node
  * refnames_tlist: targetlist to take column names from
+ * trivial_tlist: output parameter, set to true if targetlist is trivial
  */
 static List *
 generate_setop_tlist(List *colTypes, List *colCollations,
@@ -1291,7 +1296,8 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 					 Index varno,
 					 bool hack_constants,
 					 List *input_tlist,
-					 List *refnames_tlist)
+					 List *refnames_tlist,
+					 bool *trivial_tlist)
 {
 	List	   *tlist = NIL;
 	int			resno = 1;
@@ -1301,6 +1307,8 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 			   *rtlc;
 	TargetEntry *tle;
 	Node	   *expr;
+
+	*trivial_tlist = true;		/* until proven differently */
 
 	forfour(ctlc, colTypes, cclc, colCollations,
 			itlc, input_tlist, rtlc, refnames_tlist)
@@ -1327,6 +1335,9 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 		 * this only at the first level of subquery-scan plans; we don't want
 		 * phony constants appearing in the output tlists of upper-level
 		 * nodes!
+		 *
+		 * Note that copying a constant doesn't in itself require us to mark
+		 * the tlist nontrivial; see trivial_subqueryscan() in setrefs.c.
 		 */
 		if (hack_constants && inputtle->expr && IsA(inputtle->expr, Const))
 			expr = (Node *) inputtle->expr;
@@ -1352,6 +1363,7 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 										 expr,
 										 colType,
 										 "UNION/INTERSECT/EXCEPT");
+			*trivial_tlist = false; /* the coercion makes it not trivial */
 		}
 
 		/*
@@ -1366,9 +1378,12 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 		 * will reach the executor without any further processing.
 		 */
 		if (exprCollation(expr) != colColl)
+		{
 			expr = applyRelabelType(expr,
 									exprType(expr), exprTypmod(expr), colColl,
 									COERCE_IMPLICIT_CAST, -1, false);
+			*trivial_tlist = false; /* the relabel makes it not trivial */
+		}
 
 		tle = makeTargetEntry((Expr *) expr,
 							  (AttrNumber) resno++,
@@ -1401,6 +1416,7 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 							  pstrdup("flag"),
 							  true);
 		tlist = lappend(tlist, tle);
+		*trivial_tlist = false; /* the extra entry makes it not trivial */
 	}
 
 	return tlist;

@@ -27,13 +27,8 @@
  */
 #include "postgres.h"
 
-#ifndef HAVE_GETRUSAGE
-#include "rusagestub.h"
-#else
 #include <sys/time.h>
 #include <sys/resource.h>
-#endif
-#include <sys/time.h>
 #include <signal.h>
 #include <math.h>
 
