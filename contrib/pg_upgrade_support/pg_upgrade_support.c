@@ -79,12 +79,13 @@ PG_FUNCTION_INFO_V1(view_has_removed_functions);
 PG_FUNCTION_INFO_V1(view_has_removed_types);
 PG_FUNCTION_INFO_V1(view_has_changed_function_signatures);
 PG_FUNCTION_INFO_V1(view_has_removed_tables);
-PG_FUNCTION_INFO_V1(view_has_removed_columns);
+PG_FUNCTION_INFO_V1(get_removed_columns);
 
 typedef struct RemovedColumnsWalkerContext RemovedColumnsWalkerContext;
 typedef struct RemovedColumnStatic RemovedColumnStatic;
 typedef struct RemovedColumnDynamic  RemovedColumnDynamic;
 typedef struct RemovedFunctionDynamic RemovedFunctionDynamic;
+typedef struct ReportedColumn ReportedColumn;
 
 static Oid get_function(const char *name, const Oid *args, int args_count, Oid namespace);
 static Oid get_type(const char *name, Oid namespace);
@@ -98,6 +99,8 @@ static bool check_node_removed_functions_walker(Node *node, void *context);
 static bool check_node_removed_types_walker(Node *node, void *context);
 static bool check_node_changed_function_signatures_walker(Node *node, void *context);
 static bool check_node_removed_tables_walker(Node *node, void *context);
+static void report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum);
+static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *context, Oid reloid, int attnum);
 static bool check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *context);
 
 /*
@@ -112,6 +115,8 @@ static bool check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerCo
 struct RemovedColumnsWalkerContext
 {
 	List *rtableStack;
+	List **removedColumns;
+	bool inside_whole_row_reference;
 };
 
 struct RemovedColumnStatic
@@ -132,7 +137,14 @@ struct RemovedFunctionDynamic
 	const char *pronamespace;
 	const char *name;
 	const Oid  *args;
-	const int  args_count;
+	const int   args_count;
+};
+
+struct ReportedColumn
+{
+	Oid  attrelid;
+	int  attnum;
+	bool comes_from_whole_row_reference;
 };
 
 /* Lists of objects removed from Greenage 7 */
@@ -1251,20 +1263,20 @@ static bool check_node_removed_tables_walker(Node *node, void *context)
 Datum
 view_has_removed_tables(PG_FUNCTION_ARGS)
 {
-	Oid			view_oid = PG_GETARG_OID(0);
-	Relation 	rel = try_relation_open(view_oid, AccessShareLock, false);
-	Query		*viewquery;
-	bool		found;
+	Oid                     view_oid = PG_GETARG_OID(0);
+	Relation        rel = try_relation_open(view_oid, AccessShareLock, false);
+	Query           *viewquery;
+	bool            found;
 
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
 
-	if(rel->rd_rel->relkind == RELKIND_VIEW)
+	if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
 		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
 	}
-	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
 	{
 		viewquery = get_matview_query(rel);
 		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
@@ -1277,42 +1289,55 @@ view_has_removed_tables(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(found);
 }
 
-static bool is_removed_column(Oid reloid, int attnum)
+
+static void report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
 {
-	Oid schema_oid;
+	bool            already_reported;
+	ListCell       *lc;
+	List           *reported_columns;
+	ReportedColumn *already_reported_column;
+	ReportedColumn *column;
 
-	for (int i = 0; i < num_removed_columns_static; i++)
+	/*
+	 * Go through already reported columns in nested loop manner
+	 * to remove duplicates. This should be fine, because the
+	 * number of removed columns is not that large
+	 * (currently, 110), and most view wouldn't have all of them.
+	 * But it is hard to tell without user data.
+	 */
+	already_reported = false;
+	reported_columns = *(context->removedColumns);
+	foreach (lc, reported_columns)
 	{
-		if (reloid == removed_columns_static[i].reloid &&
-			attnum == removed_columns_static[i].attnum)
-			return true;
-	}
-
-	for (int i = 0; i < num_removed_columns_dynamic; i++)
-	{
-		schema_oid = GetSysCacheOid(NAMESPACENAME,
-									CStringGetDatum(removed_columns_dynamic[i].relnamespace),
-									0, 0, 0);
-
-		if (OidIsValid(schema_oid))
+		already_reported_column = lfirst(lc);
+		if (reloid == already_reported_column->attrelid &&
+			attnum == already_reported_column->attnum &&
+			context->inside_whole_row_reference == already_reported_column->comes_from_whole_row_reference)
 		{
-			if (reloid == get_relname_relid(removed_columns_dynamic[i].relname, schema_oid) &&
-				attnum == removed_columns_dynamic[i].attnum)
-				return true;
+			return;
 		}
 	}
 
-	return false;
+	column = palloc(sizeof(ReportedColumn));
+	column->attrelid = reloid;
+	column->attnum = attnum;
+	column->comes_from_whole_row_reference = context->inside_whole_row_reference;
+
+	reported_columns = lappend(reported_columns, column);
+	*(context->removedColumns) = reported_columns;
 }
 
-static bool table_has_removed_columns(Oid reloid)
+static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
 {
 	Oid schema_oid;
+	int removed_column_attnum;
 
 	for (int i = 0; i < num_removed_columns_static; i++)
 	{
-		if (reloid == removed_columns_static[i].reloid)
-			return true;
+		removed_column_attnum = removed_columns_static[i].attnum;
+		if (reloid == removed_columns_static[i].reloid &&
+			(attnum == removed_column_attnum || attnum == InvalidAttrNumber))
+			report_removed_column(context, reloid, removed_column_attnum);
 	}
 
 	for (int i = 0; i < num_removed_columns_dynamic; i++)
@@ -1323,8 +1348,10 @@ static bool table_has_removed_columns(Oid reloid)
 
 		if (OidIsValid(schema_oid))
 		{
-			if (reloid == get_relname_relid(removed_columns_dynamic[i].relname, schema_oid))
-				return true;
+			removed_column_attnum = removed_columns_dynamic[i].attnum;
+			if (reloid == get_relname_relid(removed_columns_dynamic[i].relname, schema_oid) &&
+				(attnum == removed_column_attnum || attnum == InvalidAttrNumber))
+				report_removed_column(context, reloid, removed_column_attnum);
 		}
 	}
 
@@ -1371,6 +1398,13 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 		if (var->varno <= 0 || var->varno > list_length(rtable))
 			elog(ERROR, "invalid varno %d", var->varno);
 
+
+		bool save_inside_whole_row_reference = context->inside_whole_row_reference;
+		if (var->varattno == InvalidAttrNumber)
+		{
+			context->inside_whole_row_reference = true;
+		}
+
 		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
 		if (rte->rtekind == RTE_RELATION)
 		{
@@ -1378,17 +1412,7 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 			 * It's a plain relation, simply check that Var doesn't reference
 			 * removed column(s)
 			 */
-
-			if (var->varattno == InvalidAttrNumber)
-			{
-				/*
-				 * For a whole row reference, check that this table
-				 * doesn't have removed columns
-				 */
-				return table_has_removed_columns(rte->relid);
-			}
-			/* Regular attribute */
-			return is_removed_column(rte->relid, var->varattno);
+			check_and_report_removed_columns(context, rte->relid, var->varattno);
 		}
 		else if (rte->rtekind == RTE_JOIN)
 		{
@@ -1405,36 +1429,30 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 				/*
 				 * For a whole table reference, check every column of the RTE
 				 */
-				bool res = false;
 				for (int i = 0; i < list_length(rte->joinaliasvars); i++)
-				{
-					res = check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars, i),
-															context);
-					if (res)
-						break;
-				}
-
-				list_free(context->rtableStack);
-				context->rtableStack = save_rtables;
-
-				return res;
+					check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars, i),
+													  context);
 			}
-			/* Regular attribute */
-			if (var->varattno <= 0 ||
-				var->varattno > list_length(rte->joinaliasvars))
-				elog(ERROR, "invalid varattno %d", var->varattno);
-			bool res = check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars,
-																		   var->varattno - 1),
-														 context);
+			else
+			{
+				/* Regular attribute */
+				if (var->varattno <= 0 ||
+					var->varattno > list_length(rte->joinaliasvars))
+					elog(ERROR, "invalid varattno %d", var->varattno);
+
+				check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars,
+																	var->varattno - 1),
+												  context);
+			}
 			list_free(context->rtableStack);
 			context->rtableStack = save_rtables;
-			return res;
 		}
 
 		/*
 		 * Don't do anything special for other RTE kinds. Most notably, RTE_SUBQUERY,
 		 * because subqueries will be handled when we recurse into them.
 		 */
+		context->inside_whole_row_reference = save_inside_whole_row_reference;
 		return false;
 	}
 	else if (IsA(node, Query))
@@ -1456,15 +1474,14 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 		 *
 		 * are handled when processing Var nodes, for them (rte->rtekind == RTE_JOIN)
 		 */
-		bool	retval;
 		Query	*query = (Query *) node;
 		context->rtableStack = lcons(query->rtable, context->rtableStack);
-		retval = query_tree_walker(query,
-								 check_node_removed_columns_walker,
-								 context,
-								 QTW_IGNORE_JOINALIASES);
+		query_tree_walker(query,
+						  check_node_removed_columns_walker,
+						  context,
+						  QTW_IGNORE_JOINALIASES);
 		context->rtableStack = list_delete_first(context->rtableStack);
-		return retval;
+		return false;
 	}
 
 	/*
@@ -1475,33 +1492,79 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 }
 
 Datum
-view_has_removed_columns(PG_FUNCTION_ARGS)
+get_removed_columns(PG_FUNCTION_ARGS)
 {
-	Oid			view_oid = PG_GETARG_OID(0);
-	Relation 	rel = try_relation_open(view_oid, AccessShareLock, false);
-	Query		*viewquery;
-	bool		found;
+	Oid			    view_oid = PG_GETARG_OID(0);
+	Relation 	    rel;
+	StringInfoData  buf;
+	Oid             relnamespace;
+	ListCell       *lc1;
+	char           *nspname;
+	char           *relname;
+	char           *attname;
+	char           *comes_from_whole_row_reference_string;
+	ReportedColumn *reported_column;
+	Query	       *viewquery;
+	List           *removed_columns;
 	RemovedColumnsWalkerContext context;
 
+	rel = try_relation_open(view_oid, AccessShareLock, false);
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
 
-	if(rel->rd_rel->relkind == RELKIND_VIEW)
+	removed_columns = NIL;
+	context.rtableStack = NIL;
+	context.removedColumns = &removed_columns;
+	context.inside_whole_row_reference = false;
+	if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
-		context.rtableStack = NIL;
-		found = check_node_removed_columns_walker((Node *) viewquery, &context);
+		check_node_removed_columns_walker((Node *) viewquery, &context);
 	}
-	else if(rel->rd_rel->relkind == RELKIND_MATVIEW)
+	else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
 	{
 		viewquery = get_matview_query(rel);
-		context.rtableStack = NIL;
-		found = check_node_removed_columns_walker((Node *) viewquery, &context);
+		check_node_removed_columns_walker((Node *) viewquery, &context);
 	}
-	else
-		found = false;
 
 	relation_close(rel, AccessShareLock);
 
-	PG_RETURN_BOOL(found);
+	/*
+	 * Make a single formatted string, listing all unique removed columns.
+	 * It will be displayed to the user.
+	 */
+	initStringInfo(&buf);
+	foreach (lc1, removed_columns)
+	{
+		reported_column = lfirst(lc1);
+		relname = get_rel_name(reported_column->attrelid);
+		if (!relname)
+			elog(ERROR, "cache lookup failed for relation %u", reported_column->attrelid);
+
+		relnamespace = get_rel_namespace(reported_column->attrelid);
+		if (!OidIsValid(relnamespace))
+			elog(ERROR, "cache lookup failed for relation %u", reported_column->attrelid);
+
+		nspname = get_namespace_name(relnamespace);
+		if (!nspname)
+			elog(ERROR, "cache lookup failed for namespace %u", relnamespace);
+
+		attname = get_attname(reported_column->attrelid, reported_column->attnum);
+		if (!attname)
+			elog(ERROR, "cache lookup failed for attribute %d for relation %u",
+				 reported_column->attnum, reported_column->attrelid);
+
+		comes_from_whole_row_reference_string = "";
+		if (reported_column->comes_from_whole_row_reference)
+			comes_from_whole_row_reference_string = "(comes from a whole row reference)";
+
+		appendStringInfo(&buf, "\t%s.%s.%s %s\n", nspname, relname, attname,
+						 comes_from_whole_row_reference_string);
+
+		pfree(relname);
+		pfree(nspname);
+		pfree(attname);
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(buf.data));
 }
