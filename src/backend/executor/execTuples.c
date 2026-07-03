@@ -302,10 +302,8 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
-		if (bms_is_member(attno, slotAocs->tts_is_valid))
-			continue;
-
-		if (unlikely(attno < slot->tts_nvalid))
+		if (unlikely((attno < slot->tts_nvalid) ||
+					bms_is_member(attno, slotAocs->tts_is_valid)))
 			continue;
 
 		if (unlikely(attno >= natts))
