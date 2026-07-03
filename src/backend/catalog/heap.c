@@ -358,6 +358,11 @@ heap_create(const char *relname,
 			break;
 	}
 
+	if (relpersistence == RELPERSISTENCE_UNLOGGED &&
+		(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
+		 relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind)))
+		create_storage = false;
+
 	/*
 	 * Unless otherwise requested, the physical ID (relfilenode) is initially
 	 * the same as the logical ID (OID).  When the caller did specify a
@@ -408,8 +413,6 @@ heap_create(const char *relname,
 		isAppendOnly = (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS);
 
 		RelationOpenSmgr(rel);
-		if (relpersistence == RELPERSISTENCE_UNLOGGED)
-			smgrcreate(rel->rd_smgr, INIT_FORKNUM, false);
 		RelationCreateStorage(rel->rd_node, relpersistence, relstorage);
 
 		/*
@@ -1556,6 +1559,9 @@ heap_create_with_catalog(const char *relname,
 
 	Assert(relid == RelationGetRelid(new_rel_desc));
 
+	if (relpersistence == RELPERSISTENCE_UNLOGGED)
+		RelationOpenSmgr(new_rel_desc);
+
 	/*
 	 * Decide whether to create an array type over the relation's rowtype. We
 	 * do not create any array types for system catalogs (ie, those made
@@ -1871,6 +1877,7 @@ heap_create_with_catalog(const char *relname,
 		Assert(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
 			   relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind));
 		heap_create_init_fork(new_rel_desc);
+		RelationCreateStorage(new_rel_desc->rd_node, relpersistence, relstorage);
 	}
 
 	/*
