@@ -366,6 +366,19 @@ plan_tree_walker(Node *node,
 			/* Other fields are simple counts and lists of indexes and oids. */
 			break;
 
+		case T_IncrementalSort:
+			if (walk_plan_node_fields((Plan *) node, walker, context))
+				return true;
+			/* Other fields are simple counts/indexes (like Sort). */
+			break;
+
+		case T_Memoize:
+			if (walk_plan_node_fields((Plan *) node, walker, context))
+				return true;
+			if (walker((Node *) ((Memoize *) node)->param_exprs, context))
+				return true;
+			break;
+
 		case T_Agg:
 			if (walk_plan_node_fields((Plan *) node, walker, context))
 				return true;
