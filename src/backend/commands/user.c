@@ -1505,7 +1505,14 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,
-									NIL,
+									/*
+									 * GPDB: ALTER GROUP ... ADD/DROP USER calls
+									 * AddRoleMems, which in PG16 assigns a
+									 * pg_auth_members OID on the QD; dispatch it
+									 * so segments reuse the same OID (like
+									 * GrantRole).
+									 */
+									GetAssignedOidsForDispatch(),
 									NULL);
 	}
 
