@@ -297,6 +297,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
+	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
@@ -307,7 +308,11 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 			continue;
 
 		if (unlikely(attno >= natts))
+		{
+			if (attno < anchor_attr)
+				continue;
 			break;
+		}
 
 		if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 								attno,
