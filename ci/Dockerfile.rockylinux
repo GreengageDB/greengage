@@ -23,7 +23,6 @@ RUN set -eux; \
             PIP_PACKAGES='allure-behave==2.4.0 mock==3.0.5 psi==0.3b3'; \
             ;; \
         9) \
-            dnf -y install python3.11 python3.11-devel python3.11-setuptools python3.11-pip; \
             ln -sf /usr/bin/python3.11 /usr/bin/python; \
             python -m ensurepip --upgrade; \
             PIP_PACKAGES='allure-behave==2.4.0'; \
@@ -45,9 +44,6 @@ RUN set -eux; \
     python -m pip install --no-cache-dir --upgrade pip; \
 # Install allure-behave for behave tests
     python -m pip install --no-cache-dir $PIP_PACKAGES; \
-# Install pytest for gpload test
-    python -m pip install --no-cache-dir --requirement pytest_requirement.txt; \
-    rm pytest_requirement.txt; \
 # Cleanup to reduce image size
     dnf clean all; \
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
