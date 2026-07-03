@@ -256,5 +256,4 @@ Requires: python2
 - Excludes `check-buildroot` and shebang mangling from the standard
   post-install brp scripts (`__os_install_post`/`__spec_install_post`)
 - Collects only the resulting `.rpm` into `$(CURDIR)/../Package`
-- The temporary `rpmbuild` tree (`$(CURDIR)/../RPM`) is removed after
-  every build, successful or not
+
