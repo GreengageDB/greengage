@@ -13574,11 +13574,30 @@ validateForeignKeyConstraint(char *conname,
 	ereport(DEBUG1,
 			(errmsg_internal("validating foreign key constraint \"%s\"", conname)));
 
-	/* Greenplum Database: Ignore foreign keys for now, with a warning. */
+	/*
+	 * Greenplum Database: foreign keys are not enforced, so skip the initial
+	 * validation entirely (with a warning on the coordinator).  Besides being
+	 * pointless when the constraint will never be enforced, running the
+	 * RI_Initial_Check() probe query here is actively harmful:
+	 *
+	 *  - on a QE it would try to dispatch a query from within a slice
+	 *    ("function cannot execute on a QE slice"); this is reached when a
+	 *    dispatched ALTER TABLE re-runs phase-3 FK validation, e.g. ATTACH
+	 *    PARTITION cloning a parent FK onto the partition;
+	 *
+	 *  - on the coordinator the probe query's executor start grabs and resets
+	 *    the pending OID-assignment list (execMain.c, standard_ExecutorStart ->
+	 *    GetAssignedOidsForDispatch), stealing the pg_constraint OID that the
+	 *    same ALTER TABLE just assigned for the cloned FK, so the segments
+	 *    never receive it ("no pre-assigned OID for pg_constraint ..._fkey").
+	 *
+	 * Skipping it avoids both problems and matches the not-enforced semantics.
+	 */
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 		ereport(WARNING,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced")));
+	return;
 
 	/*
 	 * Build a trigger call structure; we'll need it either way.

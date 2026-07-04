@@ -141,6 +141,10 @@ s/\d+ was concurrently dropped/##### was concurrently dropped/
 m/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge.*/
 s/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge.*/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:XXX)/
 
+# Mask out linenumber of the erroring file (shifts whenever tablecmds.c changes)
+m/found unexpected dependency type '.' \(tablecmds\.c:\d+\)/
+s/\(tablecmds\.c:\d+\)/(tablecmds.c:XXX)/
+
 # Mask out OpenSSL behavior change in different version
 m/ERROR:  Cannot use "md5": No such hash algorithm/
 s/ERROR:  Cannot use "md5": No such hash algorithm/ERROR:  Cannot use "md5": /
