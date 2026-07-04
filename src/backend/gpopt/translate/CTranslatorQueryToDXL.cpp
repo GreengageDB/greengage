@@ -553,7 +553,8 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 	// In Orca, we only keep range table entries for the base tables in the planned statement, but not for the view itself.
 	// Since permissions are only checked during ExecutorStart, we lose track of the permissions required for the view and the select goes through successfully.
 	// We therefore need to check permissions before we go into optimization for all RTEs, including the ones not explicitly referred in the query, e.g. views.
-	CTranslatorUtils::CheckRTEPermissions(m_query->rtable);
+	CTranslatorUtils::CheckRTEPermissions(m_query->rtable,
+										  m_query->rteperminfos);
 
 	// RETURNING is not supported yet.
 	if (m_query->returningList)
@@ -777,7 +778,7 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte,
-		&m_context->m_has_distributed_tables);
+		m_query->rteperminfos, &m_context->m_has_distributed_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 
 	BOOL rel_has_constraints = CTranslatorUtils::RelHasConstraints(md_rel);
@@ -1204,7 +1205,7 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte,
-		&m_context->m_has_distributed_tables);
+		m_query->rteperminfos, &m_context->m_has_distributed_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 
 	if (md_rel->IsPartitioned())
@@ -1276,7 +1277,7 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte,
-		&m_context->m_has_distributed_tables);
+		m_query->rteperminfos, &m_context->m_has_distributed_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 
 	if (md_rel->IsPartitioned())
@@ -3369,7 +3370,7 @@ CTranslatorQueryToDXL::TranslateRTEToDXLLogicalGet(const RangeTblEntry *rte,
 	// construct table descriptor for the scan node from the range table entry
 	CDXLTableDescr *dxl_table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte,
-		&m_context->m_has_distributed_tables);
+		m_query->rteperminfos, &m_context->m_has_distributed_tables);
 
 	CDXLLogicalGet *dxl_op = nullptr;
 	const IMDRelation *md_rel =

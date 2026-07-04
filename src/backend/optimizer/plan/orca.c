@@ -571,7 +571,7 @@ transformGroupedWindows(Node *node, void *context)
 		rte->alias = NULL;			/* fill in later */
 		rte->eref = NULL;			/* fill in later */
 		rte->inFromCl = true;
-		rte->requiredPerms = ACL_SELECT;
+		/* PG16: RTE_SUBQUERY wrapper needs no RTEPermissionInfo */
 
 		/*
 		 * Default? rte->inh = 0; rte->checkAsUser = 0;

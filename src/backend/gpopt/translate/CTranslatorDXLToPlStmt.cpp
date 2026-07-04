@@ -213,6 +213,9 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	planned_stmt->planGen = PLANGEN_OPTIMIZER;
 
 	planned_stmt->rtable = m_dxl_to_plstmt_context->GetRTableEntriesList();
+	// PG16: permission-check info parallel to the rtable
+	planned_stmt->permInfos =
+		m_dxl_to_plstmt_context->GetRTEPermissionInfoList();
 	planned_stmt->subplans = m_dxl_to_plstmt_context->GetSubplanEntriesList();
 	planned_stmt->planTree = plan;
 
@@ -575,7 +578,8 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 	RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 		dxl_table_descr, index, &base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
 	// a table scan node must have 2 children: projection list and filter
@@ -766,7 +770,8 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexScan(
 		physical_idx_scan_dxlop->GetDXLTableDescr(), index,
 		&base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
 	IndexScan *index_scan = nullptr;
@@ -906,7 +911,8 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexOnlyScan(
 		physical_idx_scan_dxlop->GetDXLTableDescr(), index,
 		&base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
 	IndexOnlyScan *index_scan = MakeNode(IndexOnlyScan);
@@ -1734,8 +1740,7 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 	rte->rtekind = RTE_VALUES;
 	rte->inh = false; /* never true for values RTEs */
 	rte->inFromCl = true;
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
+	/* PG16: RTE_VALUES needs no RTEPermissionInfo (no perm check) */
 
 	Alias *alias = MakeNode(Alias);
 	alias->colnames = NIL;
@@ -3710,7 +3715,8 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 		RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 			phy_append_dxlop->GetDXLTableDesc(), index, &base_table_context);
 		GPOS_ASSERT(nullptr != rte);
-		rte->requiredPerms |= ACL_SELECT;
+		m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 
 		m_dxl_to_plstmt_context->AddRTE(rte);
 
@@ -4084,7 +4090,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 		dyn_tbl_scan_dxlop->GetDXLTableDescr(), index, &base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
@@ -4175,7 +4182,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxScan(
 	RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 		dyn_index_scan_dxlop->GetDXLTableDescr(), index, &base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
 	DynamicIndexScan *dyn_idx_scan = MakeNode(DynamicIndexScan);
@@ -4359,7 +4367,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 		table_descr, index, &base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= acl_mode;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		acl_mode;
 	m_dxl_to_plstmt_context->AddRTE(rte, true);
 
 	CDXLNode *project_list_dxlnode = (*dml_dxlnode)[0];
@@ -4816,9 +4825,13 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	GPOS_ASSERT(InvalidOid != oid);
 
 	rte->relid = oid;
-	rte->checkAsUser = table_descr->GetExecuteAsUserId();
-	rte->requiredPerms |= ACL_NO_RIGHTS;
 	rte->rellockmode = table_descr->LockMode();
+
+	// PG16: perm-check info moved from RangeTblEntry to RTEPermissionInfo
+	RTEPermissionInfo *perminfo =
+		m_dxl_to_plstmt_context->AddRTEPermissionInfo(rte);
+	perminfo->checkAsUser = table_descr->GetExecuteAsUserId();
+	perminfo->requiredPerms |= ACL_NO_RIGHTS;
 
 	// save oid and range index in translation context
 	base_table_context->SetOID(oid);
@@ -5836,7 +5849,8 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapTblScan(
 	RangeTblEntry *rte = TranslateDXLTblDescrToRangeTblEntry(
 		table_descr, index, &base_table_context);
 	GPOS_ASSERT(nullptr != rte);
-	rte->requiredPerms |= ACL_SELECT;
+	m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
+		ACL_SELECT;
 
 	m_dxl_to_plstmt_context->AddRTE(rte);
 

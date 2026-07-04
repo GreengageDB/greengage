@@ -51,6 +51,7 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_param_types_list(NIL),
 	  m_distribution_hashops(distribution_hashops),
 	  m_rtable_entries_list(nullptr),
+	  m_rte_perminfos_list(nullptr),
 	  m_partitioned_tables_list(nullptr),
 	  m_num_partition_selectors_array(nullptr),
 	  m_subplan_entries_list(nullptr),
@@ -225,6 +226,35 @@ CContextDXLToPlStmt::AddRTE(RangeTblEntry *rte, BOOL is_result_relation)
 		rte->inFromCl = false;
 		m_result_relation_index = gpdb::ListLength(m_rtable_entries_list);
 	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CContextDXLToPlStmt::AddRTEPermissionInfo
+//
+//	@doc:
+//		PG16: create an RTEPermissionInfo for a relation rte (sets
+//		rte->perminfoindex) and append it to the perminfos list.
+//
+//---------------------------------------------------------------------------
+RTEPermissionInfo *
+CContextDXLToPlStmt::AddRTEPermissionInfo(RangeTblEntry *rte)
+{
+	return gpdb::AddRTEPermissionInfo(&m_rte_perminfos_list, rte);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CContextDXLToPlStmt::GetRTEPermissionInfo
+//
+//	@doc:
+//		PG16: fetch the RTEPermissionInfo previously created for rte.
+//
+//---------------------------------------------------------------------------
+RTEPermissionInfo *
+CContextDXLToPlStmt::GetRTEPermissionInfo(RangeTblEntry *rte)
+{
+	return gpdb::GetRTEPermissionInfo(m_rte_perminfos_list, rte);
 }
 
 //---------------------------------------------------------------------------

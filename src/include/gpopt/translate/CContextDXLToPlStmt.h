@@ -105,6 +105,9 @@ private:
 	// list of all rtable entries
 	List *m_rtable_entries_list;
 
+	// PG16: list of RTEPermissionInfo (parallel perm-check info for the rtable)
+	List *m_rte_perminfos_list;
+
 	// list of oids of partitioned tables
 	List *m_partitioned_tables_list;
 
@@ -176,6 +179,13 @@ public:
 		return m_rtable_entries_list;
 	}
 
+	// PG16: return list of RTEPermissionInfo (goes into PlannedStmt->permInfos)
+	List *
+	GetRTEPermissionInfoList() const
+	{
+		return m_rte_perminfos_list;
+	}
+
 	// return list of partitioned table indexes
 	List *
 	GetPartitionedTablesList() const
@@ -206,6 +216,13 @@ public:
 
 	// add a range table entry
 	void AddRTE(RangeTblEntry *rte, BOOL is_result_relation = false);
+
+	// PG16: create and register an RTEPermissionInfo for an RTE_RELATION rte
+	// (sets rte->perminfoindex); returns it so the caller can set requiredPerms.
+	RTEPermissionInfo *AddRTEPermissionInfo(RangeTblEntry *rte);
+
+	// PG16: look up the RTEPermissionInfo previously created for rte
+	RTEPermissionInfo *GetRTEPermissionInfo(RangeTblEntry *rte);
 
 	// add a partitioned table index
 	void AddPartitionedTable(OID oid);

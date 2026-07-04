@@ -160,6 +160,7 @@ public:
 										 CMDAccessor *md_accessor,
 										 CIdGenerator *id_generator,
 										 const RangeTblEntry *rte,
+										 List *rte_perminfos,
 										 BOOL *is_distributed_table = nullptr);
 
 	// translate a RangeTableEntry into a CDXLLogicalTVF
@@ -345,7 +346,8 @@ public:
 												const IMDColumn *col);
 
 	// check required permissions for the range table
-	static void CheckRTEPermissions(List *range_table_list);
+	static void CheckRTEPermissions(List *range_table_list,
+									List *rte_perminfos);
 
 	// check if given column ids are outer references in the tree rooted by given node
 	static void MarkOuterRefs(ULONG *colid, BOOL *is_outer_ref,

@@ -114,6 +114,7 @@ CDXLTableDescr *
 CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 								CIdGenerator *id_generator,
 								const RangeTblEntry *rte,
+								List *rte_perminfos,
 								BOOL *is_distributed_table	// output
 )
 {
@@ -137,8 +138,18 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	const CWStringConst *tablename = rel->Mdname().GetMDName();
 	CMDName *table_mdname = GPOS_NEW(mp) CMDName(mp, tablename);
 
+	// PG16: the "execute as user" moved from RangeTblEntry to RTEPermissionInfo
+	Oid check_as_user = InvalidOid;
+	if (rte->perminfoindex != 0)
+	{
+		check_as_user =
+			gpdb::GetRTEPermissionInfo(rte_perminfos,
+									   const_cast<RangeTblEntry *>(rte))
+				->checkAsUser;
+	}
+
 	CDXLTableDescr *table_descr = GPOS_NEW(mp) CDXLTableDescr(
-		mp, mdid, table_mdname, rte->checkAsUser, rte->rellockmode);
+		mp, mdid, table_mdname, check_as_user, rte->rellockmode);
 
 	const ULONG len = rel->ColumnCount();
 
@@ -2189,9 +2200,10 @@ CTranslatorUtils::CreateDXLProjElemConstNULL(CMemoryPool *mp,
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorUtils::CheckRTEPermissions(List *range_table_list)
+CTranslatorUtils::CheckRTEPermissions(List *range_table_list,
+									  List *rte_perminfos)
 {
-	gpdb::CheckRTPermissions(range_table_list);
+	gpdb::CheckRTPermissions(range_table_list, rte_perminfos);
 }
 
 

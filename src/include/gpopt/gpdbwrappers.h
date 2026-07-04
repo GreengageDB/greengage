@@ -587,7 +587,13 @@ int32 CdbHashConstList(List *constants, int num_segments, Oid *hashfuncs);
 unsigned int CdbHashRandomSeg(int num_segments);
 
 // check permissions on range table
-void CheckRTPermissions(List *rtable);
+void CheckRTPermissions(List *rtable, List *rteperminfos);
+
+// PG16: create/look up RTEPermissionInfo for an rte
+RTEPermissionInfo *AddRTEPermissionInfo(List **rteperminfos,
+										RangeTblEntry *rte);
+RTEPermissionInfo *GetRTEPermissionInfo(List *rteperminfos,
+										RangeTblEntry *rte);
 
 // throw an error if table has update triggers.
 bool HasUpdateTriggers(Oid relid);
