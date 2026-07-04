@@ -76,7 +76,7 @@
  */
 bool		Logging_collector = false;
 int			Log_RotationAge = HOURS_PER_DAY * MINS_PER_HOUR;
-int			Log_RotationSize = 10 * 1024;
+int			Log_RotationSize = 1 * 1024 * 1024;		/* GPDB: match boot_val */
 char	   *Log_directory = NULL;
 char	   *Log_filename = NULL;
 bool		Log_truncate_on_rotation = false;

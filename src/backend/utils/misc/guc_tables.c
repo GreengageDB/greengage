@@ -2184,7 +2184,7 @@ struct config_int ConfigureNamesInt[] =
 			NULL
 		},
 		&MaxConnections,
-		100, 1, MAX_BACKENDS,
+		200, 10, MAX_BACKENDS,		/* GPDB: MPP needs more connections */
 		check_max_connections, NULL, NULL
 	},
 
@@ -2195,7 +2195,7 @@ struct config_int ConfigureNamesInt[] =
 			NULL
 		},
 		&SuperuserReservedConnections,
-		3, 0, MAX_BACKENDS,
+		10, RESERVED_FTS_CONNECTIONS, MAX_BACKENDS,		/* GPDB: reserve for FTS */
 		NULL, NULL, NULL
 	},
 
@@ -2343,7 +2343,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_KB | GUC_EXPLAIN
 		},
 		&work_mem,
-		4096, 64, MAX_KILOBYTES,
+		32768, 64, MAX_KILOBYTES,		/* GPDB default */
 		NULL, NULL, NULL
 	},
 
@@ -2466,7 +2466,7 @@ struct config_int ConfigureNamesInt[] =
 			NULL
 		},
 		&max_prepared_xacts,
-		0, 0, MAX_BACKENDS,
+		50, 1, MAX_BACKENDS,		/* GPDB: distributed txns use 2PC */
 		NULL, NULL, NULL
 	},
 
@@ -2607,7 +2607,7 @@ struct config_int ConfigureNamesInt[] =
 						 "transaction will need to be locked at any one time.")
 		},
 		&max_locks_per_xact,
-		64, 10, INT_MAX,
+		128, 10, INT_MAX,		/* GPDB default */
 		NULL, NULL, NULL
 	},
 
@@ -2687,7 +2687,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_MB
 		},
 		&wal_keep_size_mb,
-		0, 0, MAX_KILOBYTES,
+		DEFAULT_MIN_WAL_SEGS * (DEFAULT_XLOG_SEG_SIZE / (1024 * 1024)), 0, MAX_KILOBYTES,	/* GPDB: retain WAL for mirrors */
 		NULL, NULL, NULL
 	},
 
@@ -2837,7 +2837,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_MS
 		},
 		&wal_sender_timeout,
-		60 * 1000, 0, INT_MAX,
+		300 * 1000, 0, INT_MAX,		/* GPDB default */
 		NULL, NULL, NULL
 	},
 
@@ -3078,7 +3078,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_KB
 		},
 		&Log_RotationSize,
-		10 * 1024, 0, INT_MAX / 1024,
+		1 * 1024 * 1024, 0, INT_MAX / 1024,		/* GPDB default: 1GB */
 		NULL, NULL, NULL
 	},
 
@@ -4191,7 +4191,7 @@ struct config_string ConfigureNamesString[] =
 			GUC_SUPERUSER_ONLY
 		},
 		&Log_filename,
-		"postgresql-%Y-%m-%d_%H%M%S.log",
+		"gpdb-%Y-%m-%d_%H%M%S.csv",		/* GPDB default */
 		NULL, NULL, NULL
 	},
 

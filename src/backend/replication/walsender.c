@@ -129,7 +129,7 @@ bool		am_db_walsender = false;	/* Connected to a database? */
 int			repl_catchup_within_range = 0;
 int			max_wal_senders = 10;	/* the maximum number of concurrent
 									 * walsenders */
-int			wal_sender_timeout = 60 * 1000; /* maximum time to send one WAL
+int			wal_sender_timeout = 300 * 1000;	/* GPDB: match boot_val */ /* maximum time to send one WAL
 											 * data message */
 bool		log_replication_commands = false;
 
