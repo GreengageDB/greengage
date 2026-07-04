@@ -948,10 +948,10 @@ from (
 	from (
 		select
 			y,
-			string_agg(x::text, ',') AS t,
-			string_agg(x::text::bytea, ',') AS b,
-			array_agg(x) AS a,
-			array_agg(ARRAY[x]) AS aa
+			string_agg(x::text, ',' order by x) AS t,
+			string_agg(x::text::bytea, ',' order by x) AS b,
+			array_agg(x order by x) AS a,
+			array_agg(ARRAY[x] order by x) AS aa
 		from pagg_test
 		group by y
 	) a1
