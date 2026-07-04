@@ -516,9 +516,12 @@ vacuum_appendonly_index(Relation indexRelation,
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indexRelation;
+	/* The AO table is the "heap" the index belongs to; PG16 btree page
+	 * recycling (BTPageIsRecyclable) needs it for the xmin horizon. */
+	ivinfo.heaprel = aoRelation;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
-	/* 
+	/*
 	 * We can only provide the AO rel's reltuples as an estimate
 	 * (similar to heapam. See: lazy_vacuum_index()).
 	 */
@@ -676,9 +679,11 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indrel;
+	/* The AO table is the "heap" the index belongs to (see PG16 note above). */
+	ivinfo.heaprel = aorel;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
-	/* 
+	/*
 	 * We can only provide the AO rel's reltuples as an estimate
 	 * (similar to heapam. See: lazy_vacuum_index()).
 	 */
