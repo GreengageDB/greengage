@@ -26,6 +26,19 @@ INSERT INTO PG_LSN_TBL VALUES ('/ABCD');
 ERROR:  invalid input syntax for type pg_lsn: "/ABCD"
 LINE 1: INSERT INTO PG_LSN_TBL VALUES ('/ABCD');
                                        ^
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('16AE7F7', 'pg_lsn');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('16AE7F7', 'pg_lsn');
+                     message                     | detail | hint | sql_error_code 
+-------------------------------------------------+--------+------+----------------
+ invalid input syntax for type pg_lsn: "16AE7F7" |        |      | 22P02
+(1 row)
+
 -- Min/Max aggregation
 SELECT MIN(f1), MAX(f1) FROM PG_LSN_TBL;
  min |        max        
@@ -146,7 +159,7 @@ SELECT DISTINCT (i || '/' || j)::pg_lsn f
                            Filter: ((generate_series_1.generate_series > 0) AND (generate_series_1.generate_series <= 10))
                            ->  Function Scan on generate_series generate_series_1
                ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 
 SELECT DISTINCT (i || '/' || j)::pg_lsn f

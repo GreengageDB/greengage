@@ -44,7 +44,6 @@ select count(*)
      3
 (1 row)
 
-drop table spgist_box_tbl;
 -- The point opclass's choose method only uses the spgMatchNode action,
 -- so the other actions are not tested by the above. Create an index using
 -- text opclass, which uses the others actions.
@@ -90,3 +89,14 @@ select * from spgist_domain_tbl where f1 = 'fo';
  fo
 (1 row)
 
+-- test an unlogged table, mostly to get coverage of spgistbuildempty
+-- GPDB: 'serial' -> 'int' (unlogged sequences from the serial column are not
+-- supported in Greenplum); the unlogged table itself gives spgistbuildempty
+-- coverage, and the id column is incidental.
+create unlogged table spgist_unlogged_tbl(id int, b box);
+create index spgist_unlogged_idx on spgist_unlogged_tbl using spgist (b);
+insert into spgist_unlogged_tbl(b)
+select box(point(i,j))
+  from generate_series(1,100,5) i,
+       generate_series(1,10,5) j;
+-- leave this table around, to help in testing dump/restore

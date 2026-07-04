@@ -163,7 +163,6 @@ SELECT count(*) FROM
 -- aggregation. Force spilling in both cases by setting work_mem low.
 --
 SET work_mem='64kB';
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Produce results with sorting.
 SET enable_hashagg=FALSE;
 SET optimizer_enable_hashagg=FALSE;
@@ -185,6 +184,28 @@ SELECT DISTINCT g%1000 FROM generate_series(0,9999) g;
 SET jit_above_cost TO DEFAULT;
 CREATE TABLE distinct_group_2 AS
 SELECT DISTINCT (g%1000)::text FROM generate_series(0,9999) g;
+SET enable_seqscan = 0;
+-- Check to see we get an incremental sort plan
+EXPLAIN (costs off)
+SELECT DISTINCT hundred, two FROM tenk1;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: hundred, two
+         ->  Sort
+               Sort Key: hundred, two
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: hundred, two
+                     ->  GroupAggregate
+                           Group Key: hundred, two
+                           ->  Sort
+                                 Sort Key: hundred, two
+                                 ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+RESET enable_seqscan;
 SET enable_hashagg=TRUE;
 SET optimizer_enable_hashagg=TRUE;
 -- Produce results with hash aggregation.
@@ -207,7 +228,6 @@ CREATE TABLE distinct_hash_2 AS
 SELECT DISTINCT (g%1000)::text FROM generate_series(0,9999) g;
 SET enable_sort=TRUE;
 SET work_mem TO DEFAULT;
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Compare results
 (SELECT * FROM distinct_hash_1 EXCEPT SELECT * FROM distinct_group_1)
   UNION ALL
@@ -304,6 +324,87 @@ RESET min_parallel_table_scan_size;
 RESET parallel_setup_cost;
 RESET parallel_tuple_cost;
 --
+-- Test the planner's ability to use a LIMIT 1 instead of a Unique node when
+-- all of the distinct_pathkeys have been marked as redundant
+--
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Streaming HashAggregate
+                           Group Key: four
+                           ->  Seq Scan on tenk1
+                                 Filter: (four = 0)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
+-- Ensure the above gives us the correct result
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+ four 
+------
+    0
+(1 row)
+
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Streaming HashAggregate
+                           Group Key: four
+                           ->  Seq Scan on tenk1
+                                 Filter: ((four = 0) AND (two <> 0))
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
+-- Ensure no rows are returned
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+ four 
+------
+(0 rows)
+
+-- Ensure we get a plan with a Limit 1 when the SELECT list contains constants
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four, (1), (2), (3)
+         ->  Sort
+               Sort Key: four, (1), (2), (3)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four, (1), (2), (3)
+                     ->  Streaming HashAggregate
+                           Group Key: four, 1, 2, 3
+                           ->  Seq Scan on tenk1
+                                 Filter: (four = 0)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
+-- Ensure we only get 1 row
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
+ four | ?column? | ?column? | ?column? 
+------+----------+----------+----------
+    0 |        1 |        2 |        3
+(1 row)
+
+--
 -- Also, some tests of IS DISTINCT FROM, which doesn't quite deserve its
 -- very own regression file.
 --
@@ -316,19 +417,19 @@ INSERT INTO DISTTABLE VALUES(NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
  f1 | not 2 
 ----+-------
+  1 | t
   2 | f
   3 | t
     | t
-  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
  f1 | not null 
 ----+----------
-  1 | t
   2 | t
   3 | t
     | f
+  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1 as "false" FROM disttable;
@@ -446,8 +547,8 @@ SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinc
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
- 1 | 1
    |  
+ 1 | 1
 (2 rows)
 
 DROP TABLE distinct_1;

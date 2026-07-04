@@ -182,6 +182,73 @@ select '(a,a)'::textrange;
  empty
 (1 row)
 
+-- Also try it with non-error-throwing API
+select pg_input_is_valid('(1,4)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+select pg_input_is_valid('(1,4', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(1,4', 'int4range');
+             message             |          detail          | hint | sql_error_code 
+---------------------------------+--------------------------+------+----------------
+ malformed range literal: "(1,4" | Unexpected end of input. |      | 22P02
+(1 row)
+
+select pg_input_is_valid('(4,1)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(4,1)', 'int4range');
+                              message                              | detail | hint | sql_error_code 
+-------------------------------------------------------------------+--------+------+----------------
+ range lower bound must be less than or equal to range upper bound |        |      | 22000
+(1 row)
+
+select pg_input_is_valid('(4,zed)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(4,zed)', 'int4range');
+                   message                    | detail | hint | sql_error_code 
+----------------------------------------------+--------+------+----------------
+ invalid input syntax for type integer: "zed" |        |      | 22P02
+(1 row)
+
+select pg_input_is_valid('[1,2147483647]', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('[1,2147483647]', 'int4range');
+       message        | detail | hint | sql_error_code 
+----------------------+--------+------+----------------
+ integer out of range |        |      | 22003
+(1 row)
+
+select pg_input_is_valid('[2000-01-01,5874897-12-31]', 'daterange');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('[2000-01-01,5874897-12-31]', 'daterange');
+      message      | detail | hint | sql_error_code 
+-------------------+--------+------+----------------
+ date out of range |        |      | 22008
+(1 row)
+
 --
 -- create some test data and test the operators
 --
@@ -207,10 +274,10 @@ SELECT nr, isempty(nr), lower(nr), upper(nr) FROM numrange_test;
 SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numrange_test;
     nr     | lower_inc | lower_inf | upper_inc | upper_inf 
 -----------+-----------+-----------+-----------+-----------
- [3,)      | t         | f         | f         | t
- empty     | f         | f         | f         | f
  (,)       | f         | t         | f         | t
  (,5)      | f         | t         | f         | f
+ [3,)      | t         | f         | f         | t
+ empty     | f         | f         | f         | f
  [1.1,2.2) | t         | f         | f         | f
  [1.7,1.7] | t         | f         | t         | f
 (6 rows)
@@ -218,9 +285,9 @@ SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numra
 SELECT * FROM numrange_test WHERE range_contains(nr, numrange(1.9,1.91));
     nr     
 -----------
+ [1.1,2.2)
  (,)
  (,5)
- [1.1,2.2)
 (3 rows)
 
 SELECT * FROM numrange_test WHERE nr @> numrange(1.0,10000.1);
@@ -239,9 +306,9 @@ SELECT * FROM numrange_test WHERE range_contained_by(numrange(-1e7,-10000.1), nr
 SELECT * FROM numrange_test WHERE 1.9 <@ nr;
     nr     
 -----------
+ [1.1,2.2)
  (,)
  (,5)
- [1.1,2.2)
 (3 rows)
 
 select * from numrange_test where nr = 'empty';
@@ -285,12 +352,12 @@ select * from numrange_test where nr < numrange(0.0, 1.0,'[]');
 select * from numrange_test where nr < numrange(1000.0, 1001.0,'[]');
     nr     
 -----------
- (,5)
- (,)
- [1.1,2.2)
- [1.7,1.7]
  empty
  [3,)
+ [1.1,2.2)
+ [1.7,1.7]
+ (,5)
+ (,)
 (6 rows)
 
 select * from numrange_test where nr <= 'empty';
@@ -304,28 +371,28 @@ select * from numrange_test where nr >= 'empty';
 -----------
  (,5)
  (,)
- [1.1,2.2)
- [1.7,1.7]
  empty
  [3,)
+ [1.1,2.2)
+ [1.7,1.7]
 (6 rows)
 
 select * from numrange_test where nr > 'empty';
     nr     
 -----------
+ [1.1,2.2)
+ [1.7,1.7]
  (,5)
  (,)
  [3,)
- [1.1,2.2)
- [1.7,1.7]
 (5 rows)
 
 select * from numrange_test where nr > numrange(-1001.0, -1000.0,'[]');
     nr     
 -----------
- [3,)
  [1.1,2.2)
  [1.7,1.7]
+ [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(0.0, 1.0,'[]');
@@ -618,39 +685,39 @@ INSERT INTO textrange_test VALUES(textrange('d', 'd', '[]'));
 SELECT tr, isempty(tr), lower(tr), upper(tr) FROM textrange_test;
   tr   | isempty | lower | upper 
 -------+---------+-------+-------
- empty | t       |       | 
  [a,)  | f       | a     | 
  [b,g) | f       | b     | g
  [d,d] | f       | d     | d
  (,)   | f       |       | 
  (,q)  | f       |       | q
+ empty | t       |       | 
 (6 rows)
 
 SELECT tr, lower_inc(tr), lower_inf(tr), upper_inc(tr), upper_inf(tr) FROM textrange_test;
   tr   | lower_inc | lower_inf | upper_inc | upper_inf 
 -------+-----------+-----------+-----------+-----------
- [a,)  | t         | f         | f         | t
- [b,g) | t         | f         | f         | f
- [d,d] | t         | f         | t         | f
  (,)   | f         | t         | f         | t
  (,q)  | f         | t         | f         | f
  empty | f         | f         | f         | f
+ [a,)  | t         | f         | f         | t
+ [b,g) | t         | f         | f         | f
+ [d,d] | t         | f         | t         | f
 (6 rows)
 
 SELECT * FROM textrange_test WHERE range_contains(tr, textrange('f', 'fx'));
   tr   
 -------
- [a,)
- [b,g)
  (,)
  (,q)
+ [a,)
+ [b,g)
 (4 rows)
 
 SELECT * FROM textrange_test WHERE tr @> textrange('a', 'z');
   tr  
 ------
- [a,)
  (,)
+ [a,)
 (2 rows)
 
 SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
@@ -663,10 +730,10 @@ SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
 SELECT * FROM textrange_test WHERE 'e'::text <@ tr;
   tr   
 -------
- [a,)
- [b,g)
  (,)
  (,q)
+ [a,)
+ [b,g)
 (4 rows)
 
 select * from textrange_test where tr = 'empty';
@@ -1464,13 +1531,13 @@ insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg0 172.17.0.3:7002 pid=1071609)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg0 172.17.0.4:7002 pid=1163787)
 DETAIL:  Key (room, during)=([123,124), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (room, during)=([123,124), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 insert into test_range_excl
   values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
 insert into test_range_excl
   values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg0 172.17.0.3:7002 pid=1071609)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg0 172.17.0.4:7002 pid=1163787)
 DETAIL:  Key (speaker, during)=([1,2), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (speaker, during)=([1,2), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
@@ -1700,7 +1767,7 @@ reset enable_sort;
 --
 create type two_ints as (a int, b int);
 create type two_ints_range as range (subtype = two_ints);
--- with force_parallel_mode on, this exercises tqueue.c's range remapping
+-- with debug_parallel_query on, this exercises tqueue.c's range remapping
 select *, row_to_json(upper(t)) as u from
   (values (two_ints_range(row(1,2), row(3,4))),
           (two_ints_range(row(5,6), row(7,8)))) v(t);

@@ -113,11 +113,11 @@ SELECT ''::text AS five, unique1, unique2, stringu1
 select * from int8_tbl limit (case when random() < 0.5 then null::bigint end);
         q1        |        q2         
 ------------------+-------------------
-              123 |               456
-              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
+              123 |               456
+              123 |  4567890123456789
 (5 rows)
 
 select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
@@ -482,10 +482,10 @@ CREATE VIEW limit_thousand_v_1 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  OFFSET 10
  FETCH FIRST 5 ROWS WITH TIES;
 
@@ -497,10 +497,10 @@ CREATE VIEW limit_thousand_v_2 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  OFFSET 10
  LIMIT 5;
 
@@ -515,10 +515,10 @@ CREATE VIEW limit_thousand_v_3 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  FETCH FIRST (NULL::integer + 1) ROWS WITH TIES;
 
 CREATE VIEW limit_thousand_v_4 AS SELECT thousand FROM onek WHERE thousand < 995
@@ -529,10 +529,10 @@ CREATE VIEW limit_thousand_v_4 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  LIMIT ALL;
 
 -- leave these views

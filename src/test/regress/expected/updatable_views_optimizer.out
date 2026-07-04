@@ -200,12 +200,12 @@ UPDATE rw_view14 SET b='ROW 3' WHERE a=3; -- should be OK
 SELECT * FROM base_tbl;
  a  |   b    
 ----+--------
-  2 | Row 2
-  3 | ROW 3
  -2 | Row -2
   0 | Row 0
   1 | Row 1
  -1 | Row -1
+  2 | Row 2
+  3 | ROW 3
 (6 rows)
 
 DELETE FROM rw_view14 WHERE a=3; -- should be OK
@@ -218,12 +218,12 @@ INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT DO NOTHING; -- succeeds
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
-  2 | ROW 2
-  3 | UNSPECIFIED
- -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
+ -1 | ROW -1
+  2 | ROW 2
+  3 | UNSPECIFIED
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO NOTHING; -- succeeds
@@ -231,23 +231,23 @@ SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
  -1 | ROW -1
+  2 | ROW 2
+  3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
-  2 | ROW 2
-  3 | UNSPECIFIED
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set a = excluded.a; -- succeeds
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
+  2 | ROW 2
+  3 | UNSPECIFIED
+ -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
- -1 | ROW -1
-  2 | ROW 2
-  3 | UNSPECIFIED
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set upper = 'blarg'; -- fails
@@ -256,12 +256,12 @@ DETAIL:  View columns that are not columns of their base relation are not updata
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
+  2 | ROW 2
+  3 | UNSPECIFIED
+ -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
- -1 | ROW -1
-  2 | ROW 2
-  3 | UNSPECIFIED
 (6 rows)
 
 SELECT * FROM rw_view15;
@@ -446,8 +446,30 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE a=5;
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
+-- it's still updatable if we add a DO ALSO rule
+CREATE TABLE base_tbl_hist(ts timestamptz default now(), a int, b text);
+CREATE RULE base_tbl_log AS ON INSERT TO rw_view1 DO ALSO
+  INSERT INTO base_tbl_hist(a,b) VALUES(new.a, new.b);
+SELECT table_name, is_updatable, is_insertable_into
+  FROM information_schema.views
+ WHERE table_name = 'rw_view1';
+ table_name | is_updatable | is_insertable_into 
+------------+--------------+--------------------
+ rw_view1   | YES          | YES
+(1 row)
+
+-- Check behavior with DEFAULTs (bug #17633)
+INSERT INTO rw_view1 VALUES (9, DEFAULT), (10, DEFAULT);
+SELECT a, b FROM base_tbl_hist;
+ a  | b 
+----+---
+  9 | 
+ 10 | 
+(2 rows)
+
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
+DROP TABLE base_tbl_hist;
 -- view on top of view
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
@@ -496,9 +518,9 @@ DELETE FROM rw_view2 WHERE aaa=2;
 SELECT * FROM rw_view2;
  aaa |  bbb  
 -----+-------
+   1 | Row 1
    3 | Row 3
    4 | Row 4
-   1 | Row 1
 (3 rows)
 
 EXPLAIN (costs off) UPDATE rw_view2 SET aaa=5 WHERE aaa=4;
@@ -684,9 +706,9 @@ UPDATE rw_view2 SET b='Row three' WHERE a=3 RETURNING *;
 SELECT * FROM rw_view2;
  a |     b     
 ---+-----------
- 1 | Row 1
  2 | Row 2
  3 | Row three
+ 1 | Row 1
 (3 rows)
 
 DELETE FROM rw_view2 WHERE a=3 RETURNING *;
@@ -698,8 +720,8 @@ DELETE FROM rw_view2 WHERE a=3 RETURNING *;
 SELECT * FROM rw_view2;
  a |   b   
 ---+-------
- 1 | Row 1
  2 | Row 2
+ 1 | Row 1
 (2 rows)
 
 EXPLAIN (costs off) UPDATE rw_view2 SET a=3 WHERE a=2;
@@ -928,8 +950,8 @@ HINT:  To enable deleting from the view, provide an INSTEAD OF DELETE trigger or
 SELECT * FROM rw_view2;
  a |   b   
 ---+-------
- 2 | Row 2
  1 | Row 1
+ 2 | Row 2
 (2 rows)
 
 EXPLAIN (costs off) UPDATE rw_view2 SET a=3 WHERE a=2;
@@ -962,11 +984,11 @@ UPDATE rw_view1 v SET bb='Updated row 2' WHERE rw_view1_aa(v)=2
 SELECT * FROM base_tbl;
  a  |       b       
 ----+---------------
- -1 | Row -1
  -2 | Row -2
   0 | Row 0
   1 | Row 1
   2 | Updated row 2
+ -1 | Row -1
 (5 rows)
 
 EXPLAIN (costs off)
@@ -1021,8 +1043,8 @@ SELECT * FROM rw_view1; -- ok
 SELECT * FROM rw_view2; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 2 |  2 |  2
  Row 1 |  1 |  1
+ Row 2 |  2 |  2
 (2 rows)
 
 INSERT INTO base_tbl VALUES (3, 'Row 3', 3.0); -- not allowed
@@ -1085,8 +1107,8 @@ ERROR:  permission denied for table base_tbl
 SELECT * FROM base_tbl;
  a |   b   | c 
 ---+-------+---
- 5 | Row 5 | 5
  4 | Row 4 | 4
+ 5 | Row 5 | 5
 (2 rows)
 
 RESET SESSION AUTHORIZATION;
@@ -1468,11 +1490,11 @@ INSERT INTO rw_view1 (aa) VALUES (5);
 SELECT * FROM base_tbl;
  a |      b       | c 
 ---+--------------+---
+ 1 | Row 1        | 1
+ 5 | View default | 5
  2 | Row 2        | 2
  3 | Unspecified  | 3
  4 | Row 4        | 4
- 5 | View default | 5
- 1 | Row 1        | 1
 (5 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1497,14 +1519,14 @@ CREATE TRIGGER rw_view1_ins_trig AFTER INSERT ON base_tbl
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
 CREATE VIEW rw_view1 AS SELECT a AS aa, b AS bb FROM base_tbl;
 INSERT INTO rw_view1 VALUES (3, 'Row 3');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1165604)
 CONTEXT:  SQL statement "UPDATE base_tbl SET b=NEW.b WHERE a=1"
 PL/pgSQL function rw_view1_trig_fn() line 4 at SQL statement
 select * from base_tbl;
  a |   b   
 ---+-------
- 2 | Row 2
  1 | Row 1
+ 2 | Row 2
 (2 rows)
 
 DROP VIEW rw_view1;
@@ -1550,10 +1572,10 @@ EXPLAIN (verbose, costs off) UPDATE rw_view1 SET b = b + 1 RETURNING *;
 UPDATE rw_view1 SET b = b + 1 RETURNING *;
  a | b  
 ---+----
- 1 |  3
  4 |  6
  3 | -2
  7 | -7
+ 1 |  3
 (4 rows)
 
 SELECT * FROM rw_view1;
@@ -1575,8 +1597,8 @@ UPDATE rw_view1 SET arr[1] = 42, arr[2] = 77 WHERE a = 3;
 SELECT * FROM rw_view1;
  a |   arr   
 ---+---------
- 3 | {42,77}
  1 | {2}
+ 3 | {42,77}
 (2 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1750,10 +1772,10 @@ UPDATE rw_view1 SET id = 3000 WHERE id = 3;
 SELECT * FROM base_tbl;
   id  | idplus1 
 ------+---------
+ 3000 |    3001
     4 |       5
  2000 |    2001
     1 |       2
- 3000 |    3001
 (4 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1928,44 +1950,44 @@ CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a < b
  a      | integer |           |          |         | plain   | 
  b      | integer |           |          |         | plain   | 
 View definition:
- SELECT base_tbl.a,
-    base_tbl.b
+ SELECT a,
+    b
    FROM base_tbl
-  WHERE base_tbl.a < base_tbl.b;
+  WHERE a < b;
 Options: check_option=local
 
 SELECT * FROM information_schema.views WHERE table_name = 'rw_view1';
- table_catalog | table_schema | table_name |          view_definition           | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
----------------+--------------+------------+------------------------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
- regression    | public       | rw_view1   |  SELECT base_tbl.a,               +| LOCAL        | YES          | YES                | NO                   | NO                   | NO
-               |              |            |     base_tbl.b                    +|              |              |                    |                      |                      | 
-               |              |            |    FROM base_tbl                  +|              |              |                    |                      |                      | 
-               |              |            |   WHERE (base_tbl.a < base_tbl.b); |              |              |                    |                      |                      | 
+ table_catalog | table_schema | table_name | view_definition  | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
+---------------+--------------+------------+------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
+ regression    | public       | rw_view1   |  SELECT a,      +| LOCAL        | YES          | YES                | NO                   | NO                   | NO
+               |              |            |     b           +|              |              |                    |                      |                      | 
+               |              |            |    FROM base_tbl+|              |              |                    |                      |                      | 
+               |              |            |   WHERE (a < b); |              |              |                    |                      |                      | 
 (1 row)
 
 INSERT INTO rw_view1 VALUES(3,4); -- ok
 INSERT INTO rw_view1 VALUES(4,3); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.4:7002 pid=1165604)
 DETAIL:  Failing row contains (4, 3).
 INSERT INTO rw_view1 VALUES(5,null); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (5, null).
 UPDATE rw_view1 SET b = 5 WHERE a = 3; -- ok
 UPDATE rw_view1 SET b = -5 WHERE a = 3; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.4:7002 pid=1165604)
 DETAIL:  Failing row contains (3, -5).
 INSERT INTO rw_view1(a) VALUES (9); -- ok
 INSERT INTO rw_view1(a) VALUES (10); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (10, 10).
 SELECT * FROM base_tbl;
  a | b  
 ---+----
+ 9 | 10
  2 |  3
  3 |  5
  1 |  2
  1 | -1
- 9 | 10
 (5 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1981,25 +2003,25 @@ CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
 --------+---------+-----------+----------+---------+---------+-------------
  a      | integer |           |          |         | plain   | 
 View definition:
- SELECT rw_view1.a
+ SELECT a
    FROM rw_view1
-  WHERE rw_view1.a < 10;
+  WHERE a < 10;
 Options: check_option=cascaded
 
 SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
- table_catalog | table_schema | table_name |      view_definition       | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
----------------+--------------+------------+----------------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
- regression    | public       | rw_view2   |  SELECT rw_view1.a        +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM rw_view1          +|              |              |                    |                      |                      | 
-               |              |            |   WHERE (rw_view1.a < 10); |              |              |                    |                      |                      | 
+ table_catalog | table_schema | table_name |  view_definition  | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
+---------------+--------------+------------+-------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
+ regression    | public       | rw_view2   |  SELECT a        +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM rw_view1 +|              |              |                    |                      |                      | 
+               |              |            |   WHERE (a < 10); |              |              |                    |                      |                      | 
 (1 row)
 
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-5).
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (15).
 SELECT * FROM base_tbl;
  a 
@@ -2008,10 +2030,10 @@ SELECT * FROM base_tbl;
 (1 row)
 
 UPDATE rw_view2 SET a = a - 10; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-5).
 UPDATE rw_view2 SET a = a + 10; -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (15).
 CREATE OR REPLACE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
   WITH LOCAL CHECK OPTION;
@@ -2021,22 +2043,22 @@ CREATE OR REPLACE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
 --------+---------+-----------+----------+---------+---------+-------------
  a      | integer |           |          |         | plain   | 
 View definition:
- SELECT rw_view1.a
+ SELECT a
    FROM rw_view1
-  WHERE rw_view1.a < 10;
+  WHERE a < 10;
 Options: check_option=local
 
 SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
- table_catalog | table_schema | table_name |      view_definition       | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
----------------+--------------+------------+----------------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
- regression    | public       | rw_view2   |  SELECT rw_view1.a        +| LOCAL        | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM rw_view1          +|              |              |                    |                      |                      | 
-               |              |            |   WHERE (rw_view1.a < 10); |              |              |                    |                      |                      | 
+ table_catalog | table_schema | table_name |  view_definition  | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
+---------------+--------------+------------+-------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
+ regression    | public       | rw_view2   |  SELECT a        +| LOCAL        | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM rw_view1 +|              |              |                    |                      |                      | 
+               |              |            |   WHERE (a < 10); |              |              |                    |                      |                      | 
 (1 row)
 
 INSERT INTO rw_view2 VALUES (-10); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (20); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (20).
 SELECT * FROM base_tbl;
   a  
@@ -2050,10 +2072,10 @@ ERROR:  invalid value for enum option "check_option": here
 DETAIL:  Valid values are "local" and "cascaded".
 ALTER VIEW rw_view1 SET (check_option=local);
 INSERT INTO rw_view2 VALUES (-20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-20).
 INSERT INTO rw_view2 VALUES (30); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (30).
 ALTER VIEW rw_view2 RESET (check_option);
 \d+ rw_view2
@@ -2062,24 +2084,24 @@ ALTER VIEW rw_view2 RESET (check_option);
 --------+---------+-----------+----------+---------+---------+-------------
  a      | integer |           |          |         | plain   | 
 View definition:
- SELECT rw_view1.a
+ SELECT a
    FROM rw_view1
-  WHERE rw_view1.a < 10;
+  WHERE a < 10;
 
 SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
- table_catalog | table_schema | table_name |      view_definition       | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
----------------+--------------+------------+----------------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
- regression    | public       | rw_view2   |  SELECT rw_view1.a        +| NONE         | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM rw_view1          +|              |              |                    |                      |                      | 
-               |              |            |   WHERE (rw_view1.a < 10); |              |              |                    |                      |                      | 
+ table_catalog | table_schema | table_name |  view_definition  | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
+---------------+--------------+------------+-------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
+ regression    | public       | rw_view2   |  SELECT a        +| NONE         | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM rw_view1 +|              |              |                    |                      |                      | 
+               |              |            |   WHERE (a < 10); |              |              |                    |                      |                      | 
 (1 row)
 
 INSERT INTO rw_view2 VALUES (30); -- ok, but not in view
 SELECT * FROM base_tbl;
   a  
 -----
- -10
    5
+ -10
   30
 (3 rows)
 
@@ -2093,15 +2115,15 @@ CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WITH CHECK OPTION;
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a > 0;
 CREATE VIEW rw_view3 AS SELECT * FROM rw_view2 WITH CHECK OPTION;
 SELECT * FROM information_schema.views WHERE table_name LIKE E'rw\\_view_' ORDER BY table_name;
- table_catalog | table_schema | table_name |      view_definition      | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
----------------+--------------+------------+---------------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
- regression    | public       | rw_view1   |  SELECT base_tbl.a       +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM base_tbl;         |              |              |                    |                      |                      | 
- regression    | public       | rw_view2   |  SELECT rw_view1.a       +| NONE         | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM rw_view1         +|              |              |                    |                      |                      | 
-               |              |            |   WHERE (rw_view1.a > 0); |              |              |                    |                      |                      | 
- regression    | public       | rw_view3   |  SELECT rw_view2.a       +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
-               |              |            |    FROM rw_view2;         |              |              |                    |                      |                      | 
+ table_catalog | table_schema | table_name |  view_definition  | check_option | is_updatable | is_insertable_into | is_trigger_updatable | is_trigger_deletable | is_trigger_insertable_into 
+---------------+--------------+------------+-------------------+--------------+--------------+--------------------+----------------------+----------------------+----------------------------
+ regression    | public       | rw_view1   |  SELECT a        +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM base_tbl; |              |              |                    |                      |                      | 
+ regression    | public       | rw_view2   |  SELECT a        +| NONE         | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM rw_view1 +|              |              |                    |                      |                      | 
+               |              |            |   WHERE (a > 0);  |              |              |                    |                      |                      | 
+ regression    | public       | rw_view3   |  SELECT a        +| CASCADED     | YES          | YES                | NO                   | NO                   | NO
+               |              |            |    FROM rw_view2; |              |              |                    |                      |                      | 
 (3 rows)
 
 INSERT INTO rw_view1 VALUES (-1); -- ok
@@ -2109,7 +2131,7 @@ INSERT INTO rw_view1 VALUES (1); -- ok
 INSERT INTO rw_view2 VALUES (-2); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (2); -- ok
 INSERT INTO rw_view3 VALUES (-3); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-3).
 INSERT INTO rw_view3 VALUES (3); -- ok
 DROP TABLE base_tbl CASCADE;
@@ -2123,16 +2145,16 @@ CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a = ANY (b)
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (1, ARRAY[1,2,3]); -- ok
 INSERT INTO rw_view1 VALUES (10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (10, {4,5}).
 UPDATE rw_view1 SET b[2] = -b[2] WHERE a = 1; -- ok
 UPDATE rw_view1 SET b[1] = -b[1] WHERE a = 1; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (1, {-1,-2,3}).
 PREPARE ins(int, int[]) AS INSERT INTO rw_view1 VALUES($1, $2);
 EXECUTE ins(2, ARRAY[1,2,3]); -- ok
 EXECUTE ins(10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (10, {4,5}).
 DEALLOCATE PREPARE ins;
 DROP TABLE base_tbl CASCADE;
@@ -2148,11 +2170,11 @@ CREATE VIEW rw_view1 AS
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5); -- ok
 INSERT INTO rw_view1 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (15).
 UPDATE rw_view1 SET a = a + 5; -- ok
 UPDATE rw_view1 SET a = a + 5; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (15).
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (5);
                            QUERY PLAN                            
@@ -2208,7 +2230,7 @@ CREATE TRIGGER base_tbl_trig BEFORE INSERT OR UPDATE ON base_tbl
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a < b WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5,0); -- ok
 INSERT INTO rw_view1 VALUES (15, 20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (15, 10).
 UPDATE rw_view1 SET a = 20, b = 30; -- should fail
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
@@ -2242,7 +2264,7 @@ ERROR:  INSTEAD OF triggers are not supported in Greenplum
 CREATE VIEW rw_view2 AS
   SELECT * FROM rw_view1 WHERE a > 0 WITH LOCAL CHECK OPTION;
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-5, null).
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (50); -- ok, but not in view
@@ -2259,14 +2281,14 @@ SELECT * FROM base_tbl;
 -- Check option won't cascade down to base view with INSTEAD OF triggers
 ALTER VIEW rw_view2 SET (check_option=cascaded);
 INSERT INTO rw_view2 VALUES (100); -- ok, but not in view (doesn't fail rw_view1's check)
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (100, null).
 UPDATE rw_view2 SET a = 200 WHERE a = 5; -- ok, but not in view (doesn't fail rw_view1's check)
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
- 50 |  
   5 |  
+ 50 |  
 (2 rows)
 
 -- Neither local nor cascaded check options work with INSTEAD rules
@@ -2290,13 +2312,13 @@ UPDATE rw_view2 SET a = -5 WHERE a = 5; -- ok, but not in view (doesn't fail rw_
 SELECT * FROM base_tbl;
   a  | b  
 -----+----
- -10 | 10
   50 | 10
   20 | 10
   30 | 10
   -5 | 10
  100 | 10
  200 | 10
+ -10 | 10
 (7 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -2346,8 +2368,8 @@ END;
 $$
 LANGUAGE plpgsql STRICT IMMUTABLE LEAKPROOF;
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1165604)
  person 
 --------
  Tom
@@ -2355,13 +2377,13 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Dick  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Dick  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 ALTER VIEW rw_view1 SET (security_barrier = true);
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
@@ -2389,8 +2411,8 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1165604)
  person 
 --------
  Tom
@@ -2398,11 +2420,11 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 EXPLAIN (costs off) SELECT * FROM rw_view1 WHERE snoop(person);
                      QUERY PLAN                      
 -----------------------------------------------------
@@ -2461,10 +2483,10 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view2 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1165604)
  person 
 --------
  Tom
@@ -2472,15 +2494,15 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.3:7002 pid=1073739)
 (2 rows)
 
 UPDATE rw_view2 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 DELETE FROM rw_view2 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.3:7002 pid=1073739)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1165604)
 EXPLAIN (costs off) SELECT * FROM rw_view2 WHERE snoop(person);
                         QUERY PLAN                         
 -----------------------------------------------------------
@@ -2550,7 +2572,7 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
 (8 rows)
 
 DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
-NOTICE:  snooped value: Row 1  (seg1 172.17.0.3:7003 pid=1073738)
+NOTICE:  snooped value: Row 1  (seg1 172.17.0.4:7003 pid=1165607)
 reset enable_seqscan;
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
                                                    QUERY PLAN                                                    
@@ -2816,10 +2838,10 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
 (74 rows)
 
 UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.3:7002 pid=1073947)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.3:7002 pid=1073947)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.3:7002 pid=1073947)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.3:7002 pid=1073947)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1166234)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1166234)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1166234)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1166234)
 SELECT * FROM v1 WHERE b=8;
  a | b |  c   |  d   
 ---+---+------+------
@@ -2850,29 +2872,37 @@ END;
 $$
 LANGUAGE plpgsql COST 0.000001;
 DELETE FROM v1 WHERE snoop_five(a) AND leakproof(a); -- should not delete everything, just where a>5
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.3:7002 pid=1073739)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.3:7004 pid=1073737)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1165616)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1165604)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1165604)
 TABLE t1; -- verify all a<=5 are intact
  a | b |  c   
 ---+---+------
+ 1 | 1 | t1
+ 1 | 1 | t11
+ 1 | 1 | t12
+ 1 | 1 | t111
+ 5 | 5 | t1
+ 5 | 5 | t11
+ 5 | 5 | t12
+ 5 | 5 | t111
  2 | 2 | t1
  3 | 3 | t1
  4 | 4 | t1
@@ -2885,14 +2915,6 @@ TABLE t1; -- verify all a<=5 are intact
  2 | 2 | t111
  3 | 3 | t111
  4 | 4 | t111
- 1 | 1 | t1
- 1 | 1 | t11
- 1 | 1 | t12
- 1 | 1 | t111
- 5 | 5 | t1
- 5 | 5 | t11
- 5 | 5 | t12
- 5 | 5 | t111
 (20 rows)
 
 DROP TABLE t1, t11, t12, t111 CASCADE;
@@ -2982,17 +3004,17 @@ CREATE VIEW v2 WITH (security_barrier = true) AS
   WITH CHECK OPTION;
 INSERT INTO v2 VALUES (2, 'two', 20); -- ok
 INSERT INTO v2 VALUES (-2, 'minus two', 20); -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (-2, minus two, 20).
 INSERT INTO v2 VALUES (3, 'three', 30); -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.4:7002 pid=1165604)
 DETAIL:  Failing row contains (3, three, 30).
 UPDATE v2 SET b = 'ONE' WHERE a = 1; -- ok
 UPDATE v2 SET a = -1 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (-1, ONE, 10).
 UPDATE v2 SET c = 30 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (1, ONE, 30).
 DELETE FROM v2 WHERE a = 2; -- ok
 SELECT * FROM v2;
@@ -3006,6 +3028,41 @@ DROP VIEW v1;
 DROP TABLE t2;
 DROP TABLE t1;
 --
+-- Test sub-select in nested security barrier views, per bug #17972
+--
+CREATE TABLE t1 (a int);
+CREATE VIEW v1 WITH (security_barrier = true) AS
+  SELECT * FROM t1;
+CREATE RULE v1_upd_rule AS ON UPDATE TO v1 DO INSTEAD
+  UPDATE t1 SET a = NEW.a WHERE a = OLD.a;
+CREATE VIEW v2 WITH (security_barrier = true) AS
+  SELECT * FROM v1 WHERE EXISTS (SELECT 1);
+EXPLAIN (COSTS OFF) UPDATE v2 SET a = 1;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on t1
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Result
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Merge Join
+                     Merge Cond: (t1.a = v1.a)
+                     ->  Sort
+                           Sort Key: t1.a
+                           ->  Seq Scan on t1
+                     ->  Sort
+                           Sort Key: v1.a
+                           ->  Subquery Scan on v1
+                                 ->  Result
+                                       One-Time Filter: $0
+                                       ->  Seq Scan on t1 t1_1
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+DROP VIEW v2;
+DROP VIEW v1;
+DROP TABLE t1;
+--
 -- Test CREATE OR REPLACE VIEW turning a non-updatable view into an
 -- auto-updatable view and adding check options in a single step
 --
@@ -3014,7 +3071,7 @@ CREATE VIEW v1 AS SELECT null::int AS a;
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1 WHERE a > 0 WITH CHECK OPTION;
 INSERT INTO v1 VALUES (1, 'ok'); -- ok
 INSERT INTO v1 VALUES (-1, 'invalid'); -- should fail
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.3:7004 pid=1073737)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.4:7004 pid=1165616)
 DETAIL:  Failing row contains (-1, invalid).
 DROP VIEW v1;
 DROP TABLE t1;
@@ -3076,7 +3133,7 @@ select tableoid::regclass, * from uv_pt;
 
 create view uv_ptv_wco as select * from uv_pt where a = 0 with check option;
 insert into uv_ptv_wco values (1, 2);
-ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.4:7002 pid=1165604)
 DETAIL:  Failing row contains (1, 2, null).
 drop view uv_ptv, uv_ptv_wco;
 drop table uv_pt, uv_pt1, uv_pt11;
@@ -3087,7 +3144,7 @@ create table wcowrtest1 partition of wcowrtest for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create view wcowrtest_v as select * from wcowrtest where wcowrtest = '(2)'::wcowrtest with check option;
 insert into wcowrtest_v values (1);
-ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.3:7003 pid=1073738)
+ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.4:7003 pid=1165607)
 DETAIL:  Failing row contains (1).
 alter table wcowrtest add b text;
 create table wcowrtest2 (b text, c int, a int);
@@ -3105,7 +3162,7 @@ with check option;
 -- WITH CHECK qual will be processed with wcowrtest2's
 -- rowtype after tuple-routing
 insert into wcowrtest_v2 values (2, 'no such row in sometable');
-ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.3:7002 pid=1073739)
+ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.4:7002 pid=1165604)
 DETAIL:  Failing row contains (2, no such row in sometable).
 drop view wcowrtest_v, wcowrtest_v2;
 drop table wcowrtest, sometable;
@@ -3477,6 +3534,25 @@ select * from base_tab_def order by a, c NULLS LAST;
     | View default  | Table default | View default | 
     | View default  |               | View default | 
 (22 rows)
+
+-- Test a DO ALSO INSERT ... SELECT rule
+drop rule base_tab_def_view_ins_rule on base_tab_def_view;
+create rule base_tab_def_view_ins_rule as on insert to base_tab_def_view
+  do also insert into base_tab_def (a, b, e) select new.a, new.b, 'xxx';
+truncate base_tab_def;
+insert into base_tab_def_view values (1, default, default, default, default);
+insert into base_tab_def_view values (2, default, default, default, default),
+                                     (3, default, default, default, default);
+select * from base_tab_def order by a, e nulls first;
+ a |      b       |       c       |      d       |  e  
+---+--------------+---------------+--------------+-----
+ 1 | View default | Table default | View default | 
+ 1 | View default | Table default |              | xxx
+ 2 | View default | Table default | View default | 
+ 2 | View default | Table default |              | xxx
+ 3 | View default | Table default | View default | 
+ 3 | View default | Table default |              | xxx
+(6 rows)
 
 drop view base_tab_def_view;
 drop table base_tab_def;

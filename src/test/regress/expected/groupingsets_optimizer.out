@@ -446,10 +446,10 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
  a | d | grouping 
 ---+---+----------
- 1 | 1 |        1
- 1 | 1 |        2
  2 | 2 |        1
  2 | 2 |        2
+ 1 | 1 |        1
+ 1 | 1 |        2
 (4 rows)
 
 -- check that distinct grouping columns are kept separate
@@ -688,16 +688,16 @@ NOTICE:  view "gstest_view" will be a temporary view
 select pg_get_viewdef('gstest_view'::regclass, true);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Non-default collation
-                                pg_get_viewdef                                 
--------------------------------------------------------------------------------
-  SELECT gstest2.a,                                                           +
-     gstest2.b,                                                               +
-     GROUPING(gstest2.a, gstest2.b) AS "grouping",                            +
-     sum(gstest2.c) AS sum,                                                   +
-     count(*) AS count,                                                       +
-     max(gstest2.c) AS max                                                    +
-    FROM gstest2                                                              +
-   GROUP BY ROLLUP((gstest2.a, gstest2.b, gstest2.c), (gstest2.c, gstest2.d));
+            pg_get_viewdef             
+---------------------------------------
+  SELECT a,                           +
+     b,                               +
+     GROUPING(a, b) AS "grouping",    +
+     sum(c) AS sum,                   +
+     count(*) AS count,               +
+     max(c) AS max                    +
+    FROM gstest2                      +
+   GROUP BY ROLLUP((a, b, c), (c, d));
 (1 row)
 
 -- Nested queries with 3 or more levels of nesting
@@ -733,6 +733,12 @@ select(select (select grouping(c) from (values (1)) v2(c) GROUP BY c) from (valu
 select a, b, c, d from gstest2 group by rollup(a,b),grouping sets(c,d);
  a | b | c | d 
 ---+---+---+---
+   |   |   | 2
+   |   | 2 |  
+ 2 | 2 |   | 2
+ 2 | 2 | 2 |  
+ 2 |   |   | 2
+ 2 |   | 2 |  
    |   |   | 1
    |   | 1 |  
  1 | 1 |   | 1
@@ -745,12 +751,6 @@ select a, b, c, d from gstest2 group by rollup(a,b),grouping sets(c,d);
  1 |   |   | 2
  1 |   | 1 |  
  1 |   | 2 |  
-   |   |   | 2
-   |   | 2 |  
- 2 | 2 |   | 2
- 2 | 2 | 2 |  
- 2 |   |   | 2
- 2 |   | 2 |  
 (18 rows)
 
 select a, b from (values (1,2),(2,3)) v(a,b) group by a,b, grouping sets(a);
@@ -914,6 +914,16 @@ group by grouping sets((ten,four),(ten))
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
+   5 |   1
+   7 |   1
+   8 |   0
+   1 |   1
+   4 |   0
+   0 |   0
+   2 |   0
+   3 |   1
+   6 |   0
+   9 |   1
    4 |   2
    2 |   2
    8 |   2
@@ -929,16 +939,6 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
    8 |   2
    9 |   3
    6 |   2
-   5 |   1
-   7 |   1
-   8 |   0
-   1 |   1
-   4 |   0
-   0 |   0
-   2 |   0
-   3 |   1
-   6 |   0
-   9 |   1
 (25 rows)
 
 -- Tests around pushdown of HAVING clauses, partially testing against previous bugs
@@ -1601,10 +1601,10 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
  a | d | grouping 
 ---+---+----------
- 1 | 1 |        1
- 1 | 1 |        2
  2 | 2 |        1
  2 | 2 |        2
+ 1 | 1 |        1
+ 1 | 1 |        2
 (4 rows)
 
 explain (costs off)
@@ -2039,7 +2039,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 set enable_indexscan = false;
 set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -2152,7 +2151,6 @@ explain (costs off)
 (39 rows)
 
 set work_mem = '384kB';
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -2261,7 +2259,6 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
 RESET allow_system_table_mods;
 SET work_mem='64kB';
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Produce results with sorting.
 set enable_hashagg = false;
 set jit_above_cost = 0;
@@ -2424,7 +2421,6 @@ select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
 set enable_sort = true;
 set work_mem to default;
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set hash_mem_multiplier to default;
 -- GPDB_12_MERGE_FIXME: the following comparison query has an ORCA plan that
 -- relies on "IS NOT DISTINCT FROM" Hash Join, a variant that we likely have
@@ -2520,7 +2516,6 @@ DETAIL:  Feature not supported: Grouping function with outer references
              QUERY PLAN              
 -------------------------------------
  GroupAggregate
-   Group Key: $2
    InitPlan 1 (returns $1)
      ->  Result
    InitPlan 3 (returns $2)
@@ -2529,7 +2524,7 @@ DETAIL:  Feature not supported: Grouping function with outer references
    SubPlan 2
      ->  Result
  Optimizer: Postgres query optimizer
-(10 rows)
+(9 rows)
 
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
 INFO:  GPORCA failed to produce a plan, falling back to planner

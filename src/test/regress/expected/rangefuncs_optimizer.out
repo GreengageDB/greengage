@@ -149,9 +149,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                        definition                                       
 ----------------------------------------------------------------------------------------
-  SELECT z.a,                                                                          +
-     z.b,                                                                              +
-     z.c                                                                               +
+  SELECT a,                                                                            +
+     b,                                                                                +
+     c                                                                                 +
     FROM UNNEST(ARRAY[10, 20], ARRAY['foo'::text, 'bar'::text], ARRAY[1.0]) z(a, b, c);
 (1 row)
 
@@ -167,9 +167,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                        definition                                       
 ----------------------------------------------------------------------------------------
-  SELECT z.a,                                                                          +
-     z.b,                                                                              +
-     z.c                                                                               +
+  SELECT a,                                                                            +
+     b,                                                                                +
+     c                                                                                 +
     FROM UNNEST(ARRAY[10, 20], ARRAY['foo'::text, 'bar'::text], ARRAY[1.0]) z(a, b, c);
 (1 row)
 
@@ -185,9 +185,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                                       definition                                                      
 ----------------------------------------------------------------------------------------------------------------------
-  SELECT z.a,                                                                                                        +
-     z.b,                                                                                                            +
-     z.c                                                                                                             +
+  SELECT a,                                                                                                          +
+     b,                                                                                                              +
+     c                                                                                                               +
     FROM ROWS FROM(unnest(ARRAY[10, 20]), unnest(ARRAY['foo'::text, 'bar'::text]), generate_series(1, 2)) z(a, b, c);
 (1 row)
 
@@ -261,7 +261,7 @@ HINT:  likely caused by a function that reads or modifies data in a distributed 
 CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(1) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.3:7000 pid=1080696)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.4:7000 pid=1173087)
 CONTEXT:  SQL function "rngfunct" during startup
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = 1) ORDER BY 1,2;
@@ -610,14 +610,14 @@ select * from vw_rngfunc;
 select pg_get_viewdef('vw_rngfunc');
                                                                                 pg_get_viewdef                                                                                
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  SELECT t1.a,                                                                                                                                                               +
-     t1.b,                                                                                                                                                                   +
-     t1.c,                                                                                                                                                                   +
-     t1.d,                                                                                                                                                                   +
-     t1.e,                                                                                                                                                                   +
-     t1.f,                                                                                                                                                                   +
-     t1.g,                                                                                                                                                                   +
-     t1.n                                                                                                                                                                    +
+  SELECT a,                                                                                                                                                                  +
+     b,                                                                                                                                                                      +
+     c,                                                                                                                                                                      +
+     d,                                                                                                                                                                      +
+     e,                                                                                                                                                                      +
+     f,                                                                                                                                                                      +
+     g,                                                                                                                                                                      +
+     n                                                                                                                                                                       +
     FROM ROWS FROM(getrngfunc9(1), getrngfunc7(1) AS (rngfuncid integer, rngfuncsubid integer, rngfuncname text), getrngfunc1(1)) WITH ORDINALITY t1(a, b, c, d, e, f, g, n);
 (1 row)
 
@@ -1407,11 +1407,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: i
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      f1      |          rngfuncr          
 -------------+----------------------------
+      123456 | (123455,123456z)
+     -123456 | (-123457,-123456z)
            0 | (-1,0z)
   2147483647 | (2147483646,2147483647z)
  -2147483647 | (-2147483648,-2147483647z)
-      123456 | (123455,123456z)
-     -123456 | (-123457,-123456z)
 (5 rows)
 
 SELECT * FROM rngfuncr(42);
@@ -1656,10 +1656,10 @@ select insert_tt('fool');
 select * from tt;
  f1 |   data   
 ----+----------
+  3 | fool
   1 | foo
   2 | bar
   4 | foolfool
-  3 | fool
 (4 rows)
 
 -- setof does what's expected
@@ -1724,8 +1724,8 @@ end $$ language plpgsql;
 create trigger tnoticetrigger after insert on tt for each row
 execute procedure noticetrigger();
 select insert_tt2('foolme','barme') limit 1;
-NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.3:7002 pid=1080638)
-NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.3:7002 pid=1080638)
+NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.4:7002 pid=1172860)
+NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.4:7002 pid=1172860)
  insert_tt2 
 ------------
          11
@@ -1734,6 +1734,8 @@ NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.3:7002 pid=1080638)
 select * from tt;
  f1 |   data   
 ----+----------
+  4 | foolfool
+  5 | foolish
   1 | foo
   2 | bar
   7 | baz
@@ -1742,8 +1744,6 @@ select * from tt;
  10 | barrish
  11 | foolme
  12 | barme
-  4 | foolfool
-  5 | foolish
   3 | fool
   6 | barrish
 (12 rows)
@@ -1753,8 +1753,8 @@ create temp table tt_log(f1 int, data text);
 create rule insert_tt_rule as on insert to tt do also
   insert into tt_log values(new.*);
 select insert_tt2('foollog','barlog') limit 1;
-NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.3:7002 pid=1080638)
-NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.3:7002 pid=1080638)
+NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.4:7002 pid=1172860)
+NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.4:7002 pid=1172860)
  insert_tt2 
 ------------
          13
@@ -1794,7 +1794,6 @@ create function rngfunc1(n integer, out a text, out b text)
   language sql
   as $$ select 'foo ' || i, 'bar ' || i from generate_series(1,$1) i $$;
 set work_mem='64kB';
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 select t.a, t, t.a from rngfunc1(10000) t limit 1;
    a   |         t         |   a   
 -------+-------------------+-------
@@ -1802,7 +1801,6 @@ select t.a, t, t.a from rngfunc1(10000) t limit 1;
 (1 row)
 
 reset work_mem;
-WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 select t.a, t, t.a from rngfunc1(10000) t limit 1;
    a   |         t         |   a   
 -------+-------------------+-------
@@ -2175,8 +2173,8 @@ SELECT get_users();
 SELECT * FROM get_users();
  userid | seq | email  | moredrop | enabled 
 --------+-----+--------+----------+---------
- id     |   1 | email  |       11 | t
  id2    |   2 | email2 |       12 | t
+ id     |   1 | email  |       11 | t
 (2 rows)
 
 SELECT * FROM get_users() WITH ORDINALITY;   -- make sure ordinality copes
@@ -2219,15 +2217,48 @@ select * from usersview;
  id2    |   2 | email2 |       12 | t       |              11 |          2
 (2 rows)
 
+alter table users drop column moredrop;  -- fail, view has reference
+ERROR:  cannot drop column moredrop of table users because other objects depend on it
+DETAIL:  view usersview depends on column moredrop of table users
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- We used to have a bug that would allow the above to succeed, posing
+-- hazards for later execution of the view.  Check that the internal
+-- defenses for those hazards haven't bit-rotted, in case some other
+-- bug with similar symptoms emerges.
 begin;
+-- destroy the dependency entry that prevents the DROP:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 5
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+ERROR:  permission denied: "pg_depend" is a system catalog
 alter table users drop column moredrop;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 5 of type record has been dropped
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
+alter table users alter column seq type numeric;  -- fail, view has reference
+ERROR:  cannot alter type of a column used by a view or rule
+DETAIL:  rule _RETURN on view usersview depends on column "seq"
+-- likewise, check we don't crash if the dependency goes wrong
+begin;
+-- destroy the dependency entry that prevents the ALTER:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 2
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+ERROR:  permission denied: "pg_depend" is a system catalog
 alter table users alter column seq type numeric;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 2 of type record has wrong type
-DETAIL:  Table has type numeric, but query expects integer.
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+rollback;
 drop view usersview;
 drop function get_first_user();
 drop function get_users();
@@ -2334,11 +2365,11 @@ select x from int8_tbl, extractq2_2(int8_tbl) f(x);
 select x from int8_tbl, extractq2_2(int8_tbl) f(x);
          x         
 -------------------
-               456
-  4567890123456789
                123
   4567890123456789
  -4567890123456789
+               456
+  4567890123456789
 (5 rows)
 
 -- without the "offset 0", this function gets optimized quite differently

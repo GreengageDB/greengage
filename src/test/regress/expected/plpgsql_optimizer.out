@@ -1025,171 +1025,171 @@ insert into Room values ('106', 'Office');
 -- Second we install the wall connectors
 --
 insert into WSlot values ('WS.001.1a', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.001.1b', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.001.2a', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.001.2b', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.001.3a', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.001.3b', '001', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.1a', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.1b', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.2a', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.2b', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.3a', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.002.3b', '002', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.1a', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.1b', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.2a', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.2b', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.3a', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.003.3b', '003', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.1a', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.1b', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.2a', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.2b', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.3a', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.101.3b', '101', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.1a', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.1b', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.2a', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.2b', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.3a', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.102.3b', '102', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.1a', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.1b', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.2a', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.2b', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.3a', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.105.3b', '105', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.1a', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.1b', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.2a', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.2b', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.3a', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 insert into WSlot values ('WS.106.3b', '106', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.room"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL expression "count(*) = 0 from Room where roomno = new.roomno"
 PL/pgSQL function tg_wslot_biu() line 3 at IF
 --
@@ -1200,78 +1200,78 @@ insert into PField values ('PF0_1', 'Wallslots basement');
 -- The cables for these will be made later, so they are unconnected for now
 --
 insert into PSlot values ('PS.base.a1', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.a2', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.a3', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.a4', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.a5', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.a6', 'PF0_1', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 --
 -- These are already wired to the wall connectors
 --
 insert into PSlot values ('PS.base.b1', 'PF0_1', '', 'WS.002.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.b2', 'PF0_1', '', 'WS.002.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.b3', 'PF0_1', '', 'WS.002.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.b4', 'PF0_1', '', 'WS.002.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.b5', 'PF0_1', '', 'WS.002.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.b6', 'PF0_1', '', 'WS.002.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c1', 'PF0_1', '', 'WS.003.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c2', 'PF0_1', '', 'WS.003.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c3', 'PF0_1', '', 'WS.003.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c4', 'PF0_1', '', 'WS.003.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c5', 'PF0_1', '', 'WS.003.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.c6', 'PF0_1', '', 'WS.003.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 --
@@ -1280,148 +1280,148 @@ PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 --
 insert into PField values ('PF0_X', 'Phonelines basement');
 insert into PSlot values ('PS.base.ta1', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.ta2', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.ta3', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.ta4', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.ta5', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.ta6', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb1', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb2', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb3', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb4', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb5', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.base.tb6', 'PF0_X', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PField values ('PF1_1', 'Wallslots first floor');
 insert into PSlot values ('PS.first.a1', 'PF1_1', '', 'WS.101.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.a2', 'PF1_1', '', 'WS.101.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.a3', 'PF1_1', '', 'WS.101.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.a4', 'PF1_1', '', 'WS.101.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.a5', 'PF1_1', '', 'WS.101.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.a6', 'PF1_1', '', 'WS.101.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b1', 'PF1_1', '', 'WS.102.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b2', 'PF1_1', '', 'WS.102.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b3', 'PF1_1', '', 'WS.102.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b4', 'PF1_1', '', 'WS.102.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b5', 'PF1_1', '', 'WS.102.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.b6', 'PF1_1', '', 'WS.102.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c1', 'PF1_1', '', 'WS.105.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c2', 'PF1_1', '', 'WS.105.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c3', 'PF1_1', '', 'WS.105.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c4', 'PF1_1', '', 'WS.105.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c5', 'PF1_1', '', 'WS.105.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.c6', 'PF1_1', '', 'WS.105.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d1', 'PF1_1', '', 'WS.106.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d2', 'PF1_1', '', 'WS.106.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d3', 'PF1_1', '', 'WS.106.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d4', 'PF1_1', '', 'WS.106.2b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d5', 'PF1_1', '', 'WS.106.3a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.d6', 'PF1_1', '', 'WS.106.3b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 --
@@ -1504,51 +1504,51 @@ select * from PSlot where slotname ~ 'PS.base.a' order by slotname;
 
 insert into PField values ('PF1_2', 'Phonelines first floor');
 insert into PSlot values ('PS.first.ta1', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.ta2', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.ta3', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.ta4', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.ta5', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.ta6', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb1', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb2', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb3', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb4', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb5', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 insert into PSlot values ('PS.first.tb6', 'PF1_2', '', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pfield"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select            * from PField where name = ps.pfname"
 PL/pgSQL function tg_pslot_biu() line 6 at SQL statement
 --
@@ -1573,102 +1573,102 @@ select * from WSlot order by slotname;
 -- backlink field.
 --
 insert into PLine values ('PL.001', '-0', 'Central call', 'PS.base.ta1');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.002', '-101', '', 'PS.base.ta2');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.003', '-102', '', 'PS.base.ta3');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.004', '-103', '', 'PS.base.ta5');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.005', '-104', '', 'PS.base.ta6');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.006', '-106', '', 'PS.base.tb2');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.007', '-108', '', 'PS.base.tb3');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.008', '-109', '', 'PS.base.tb4');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.009', '-121', '', 'PS.base.tb5');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.010', '-122', '', 'PS.base.tb6');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.015', '-134', '', 'PS.first.ta1');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.016', '-137', '', 'PS.first.ta3');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.017', '-139', '', 'PS.first.ta4');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.018', '-362', '', 'PS.first.tb1');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.019', '-363', '', 'PS.first.tb2');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.020', '-364', '', 'PS.first.tb3');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.021', '-365', '', 'PS.first.tb5');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.022', '-367', '', 'PS.first.tb6');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.028', '-501', 'Fax entrance', 'PS.base.ta2');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
 insert into PLine values ('PL.029', '-502', 'Fax first floor', 'PS.first.ta1');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.pslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from PSlot where slotname = myname"
 PL/pgSQL function tg_backlink_set(character,character) line 18 at SQL statement
 PL/pgSQL function tg_backlink_a() line 7 at assignment
@@ -1677,25 +1677,25 @@ PL/pgSQL function tg_backlink_a() line 7 at assignment
 -- phone lines to the corresponding patchfield slots.
 --
 insert into PHone values ('PH.hc001', 'Hicom standard', 'WS.001.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select          * from WSlot where slotname = myname"
 PL/pgSQL function tg_slotlink_set(character,character) line 38 at SQL statement
 PL/pgSQL function tg_slotlink_a() line 7 at assignment
 update PSlot set slotlink = 'PS.base.ta1' where slotname = 'PS.base.a1';
 insert into PHone values ('PH.hc002', 'Hicom standard', 'WS.002.1a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from WSlot where slotname = myname"
 PL/pgSQL function tg_slotlink_set(character,character) line 38 at SQL statement
 PL/pgSQL function tg_slotlink_a() line 7 at assignment
 update PSlot set slotlink = 'PS.base.ta5' where slotname = 'PS.base.b1';
 insert into PHone values ('PH.hc003', 'Hicom standard', 'WS.002.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg2 172.17.0.3:7004 pid=1080354)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg2 172.17.0.4:7004 pid=1172875)
 CONTEXT:  SQL statement "select          * from WSlot where slotname = myname"
 PL/pgSQL function tg_slotlink_set(character,character) line 38 at SQL statement
 PL/pgSQL function tg_slotlink_a() line 7 at assignment
 update PSlot set slotlink = 'PS.base.tb2' where slotname = 'PS.base.b3';
 insert into PHone values ('PH.fax001', 'Canon fax', 'WS.001.2a');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg1 172.17.0.3:7003 pid=1080353)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.wslot"  (seg1 172.17.0.4:7003 pid=1172874)
 CONTEXT:  SQL statement "select          * from WSlot where slotname = myname"
 PL/pgSQL function tg_slotlink_set(character,character) line 38 at SQL statement
 PL/pgSQL function tg_slotlink_a() line 7 at assignment
@@ -1705,14 +1705,14 @@ update PSlot set slotlink = 'PS.base.ta2' where slotname = 'PS.base.a3';
 -- ethernet interface into the wall and patch it to the hub.
 --
 insert into Hub values ('base.hub1', 'Patchfield PF0_1 hub', 16);
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "insert into HSlot (slotname, hubname, slotno, slotlink)
 		values ('HS.dummy', hname, i, '')"
 PL/pgSQL function tg_hub_adjustslots(character,integer,integer) line 11 at SQL statement
 PL/pgSQL function tg_hub_a() line 7 at assignment
 insert into System values ('orion', 'PC');
 insert into IFace values ('IF', 'orion', 'eth0', 'WS.002.1b');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select             * from system where name = new.sysname"
 PL/pgSQL function tg_iface_biu() line 6 at SQL statement
 update PSlot set slotlink = 'HS.base.hub1.1' where slotname = 'PS.base.b2';
@@ -1733,7 +1733,7 @@ select * from PField_v1 where pfname = 'PF0_2' order by slotname;
 -- Finally we want errors
 --
 insert into PField values ('PF1_1', 'should fail due to unique index');
-ERROR:  duplicate key value violates unique constraint "pfield_name"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  duplicate key value violates unique constraint "pfield_name"  (seg0 172.17.0.4:7002 pid=1172872)
 DETAIL:  Key (name)=(PF1_1) already exists.
 /*
  * GPDB_96_MERGE_FIXME : should these update statements  trigger the error
@@ -1753,20 +1753,20 @@ update PSlot set slotlink = 'PS.not.there' where slotname = 'PS.base.a1';
 update PSlot set slotlink = 'XX.illegal' where slotname = 'PS.base.a1';
 --end_ignore
 insert into HSlot values ('HS', 'base.hub1', 1, '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.hub"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hub"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select             * from Hub where name = new.hubname"
 PL/pgSQL function tg_hslot_biu() line 7 at SQL statement
 insert into HSlot values ('HS', 'base.hub1', 20, '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.hub"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.hub"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select             * from Hub where name = new.hubname"
 PL/pgSQL function tg_hslot_biu() line 7 at SQL statement
 delete from HSlot;
 insert into IFace values ('IF', 'notthere', 'eth0', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select             * from system where name = new.sysname"
 PL/pgSQL function tg_iface_biu() line 6 at SQL statement
 insert into IFace values ('IF', 'orion', 'ethernet_interface_name_too_long', '');
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.3:7002 pid=1080352)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.system"  (seg0 172.17.0.4:7002 pid=1172872)
 CONTEXT:  SQL statement "select             * from system where name = new.sysname"
 PL/pgSQL function tg_iface_biu() line 6 at SQL statement
 --
@@ -1840,12 +1840,12 @@ select test_found();
 select * from found_test_tbl;
   a  
 -----
-   2
-   3
-   4
  100
    5
    6
+   2
+   3
+   4
 (6 rows)
 
 --
@@ -1883,12 +1883,12 @@ END;' language plpgsql;
 select * from test_table_func_row();
   a  
 -----
- 100
-   5
-   6
    2
    3
    4
+ 100
+   5
+   6
 (6 rows)
 
 create function test_ret_set_scalar(int,int) returns setof int as '
@@ -2994,12 +2994,12 @@ NOTICE:  x.f1 = 7, x.f2 = 8
 select * from foo;
  f1 | f2 
 ----+----
+  1 |  2
+  3 |  4
+  7 |  8
   5 |  6
   5 |  6
   9 | 10
-  3 |  4
-  7 |  8
-  1 |  2
 (6 rows)
 
 create or replace function stricttest() returns void as $$
@@ -3609,22 +3609,22 @@ select * from ret_query1();
 create type record_type as (x text, y int, z boolean);
 create or replace function ret_query2(lim int) returns setof record_type as $$
 begin
-    return query select md5(s.x::text), s.x, s.x > 0
+    return query select fipshash(s.x::text), s.x, s.x > 0
                  from generate_series(-8, lim) s (x) where s.x % 2 = 0;
 end;
 $$ language plpgsql;
 select * from ret_query2(8);
                 x                 | y  | z 
 ----------------------------------+----+---
- a8d2ec85eaf98407310b72eb73dda247 | -8 | f
- 596a3d04481816330f07e4f97510c28f | -6 | f
- 0267aaf632e87a63288a08331f22c7c3 | -4 | f
- 5d7b9adcbe1c629ec722529dd12e5129 | -2 | f
- cfcd208495d565ef66e7dff9f98764da |  0 | f
- c81e728d9d4c2f636f067f89cc14862c |  2 | t
- a87ff679a2f3e71d9181a67b7542122c |  4 | t
- 1679091c5a880faf6fb5e6087eb1b2dc |  6 | t
- c9f0f895fb98ab9159f51fd0297e236d |  8 | t
+ e91592205d3881e3ea35d66973bb4898 | -8 | f
+ 03b26944890929ff751653acb2f2af79 | -6 | f
+ e5e0093f285a4fb94c3fcc2ad7fd04ed | -4 | f
+ cf3bae39dd692048a8bf961182e6a34d | -2 | f
+ 5feceb66ffc86f38d952786c6d696c79 |  0 | f
+ d4735e3a265e16eee03f59718b9b5d03 |  2 | t
+ 4b227777d4dd1fc61c6f884f48641d02 |  4 | t
+ e7f6c011776e8db7cd330b54174fd76f |  6 | t
+ 2c624232cdd221771294dfbb310aca00 |  8 | t
 (9 rows)
 
 -- test EXECUTE USING
@@ -3687,6 +3687,9 @@ declare
   c2 cursor
        for select * from generate_series(41,43) i;
 begin
+  -- assign portal names to cursors to get stable output
+  c := 'c';
+  c2 := 'c2';
   for r in c(5,7) loop
     raise notice '% from %', r.i, c;
   end loop;
@@ -3829,6 +3832,22 @@ select i, j from forc_test;
 (10 rows)
 
 drop function forc01();
+-- it's okay to re-use a cursor variable name, even when bound
+do $$
+declare cnt int := 0;
+  c1 cursor for select * from forc_test;
+begin
+  for r1 in c1 loop
+    declare c1 cursor for select * from forc_test;
+    begin
+      for r2 in c1 loop
+        cnt := cnt + 1;
+      end loop;
+    end;
+  end loop;
+  raise notice 'cnt = %', cnt;
+end $$;
+NOTICE:  cnt = 100
 -- fail because cursor has no query bound to it
 create or replace function forc_bad() returns void as $$
 declare
@@ -3873,10 +3892,10 @@ $$ language plpgsql;
 select * from returnqueryf();
  a  | b  | c  | d  
 ----+----+----+----
- 50 | 60 | 70 | 80
  10 | 20 | 30 | 40
  50 | 60 | 70 | 80
  10 | 20 | 30 | 40
+ 50 | 60 | 70 | 80
 (4 rows)
 
 alter table tabwithcols drop column b;
@@ -3885,8 +3904,8 @@ select * from returnqueryf();
 ----+----+----
  50 | 70 | 80
  10 | 30 | 40
- 50 | 70 | 80
  10 | 30 | 40
+ 50 | 70 | 80
 (4 rows)
 
 alter table tabwithcols drop column d;
@@ -3905,8 +3924,8 @@ select * from returnqueryf();
 ----+----+---
  10 | 30 |  
  50 | 70 |  
- 10 | 30 |  
  50 | 70 |  
+ 10 | 30 |  
 (4 rows)
 
 drop function returnqueryf();
@@ -5417,7 +5436,7 @@ NOTICE:  outer_func() done
                20
 (1 row)
 
--- repeated call should to work
+-- repeated call should work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
 NOTICE:  calling down into inner_func()
@@ -5499,7 +5518,7 @@ NOTICE:  outer_func() done
                20
 (1 row)
 
--- repeated call should to work
+-- repeated call should work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
 NOTICE:  calling down into inner_func()
@@ -5520,6 +5539,33 @@ NOTICE:  outer_func() done
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+-- Test pg_routine_oid
+create function current_function(text)
+returns regprocedure as $$
+declare
+  fn_oid regprocedure;
+begin
+  get diagnostics fn_oid = pg_routine_oid;
+  return fn_oid;
+end;
+$$ language plpgsql;
+select current_function('foo');
+    current_function    
+------------------------
+ current_function(text)
+(1 row)
+
+drop function current_function(text);
+-- shouldn't fail in DO, even though there's no useful data
+do $$
+declare
+  fn_oid oid;
+begin
+  get diagnostics fn_oid = pg_routine_oid;
+  raise notice 'pg_routine_oid = %', fn_oid;
+end;
+$$;
+NOTICE:  pg_routine_oid = 0
 --
 -- Test ASSERT
 --

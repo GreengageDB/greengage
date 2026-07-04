@@ -81,9 +81,9 @@ CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
 SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
- x    |      5
- z    |     11
  y    |     12
+ z    |     11
+ x    |      5
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
@@ -124,10 +124,10 @@ CREATE INDEX mvtest_aa ON mvtest_bb (grandtot);
  type   | text    |           |          |         | extended |             |              | 
  totamt | numeric |           |          |         | main     |             |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed randomly
 
 \d+ mvtest_tvm
@@ -137,10 +137,10 @@ Distributed randomly
  type   | text    |           |          |         | extended |             |              | 
  totamt | numeric |           |          |         | main     |             |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed randomly
 
 \d+ mvtest_tvvm
@@ -149,7 +149,7 @@ Distributed randomly
 ----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
  grandtot | numeric |           |          |         | main    |             |              | 
 View definition:
- SELECT mvtest_tvv.grandtot
+ SELECT grandtot
    FROM mvtest_tvv;
 Distributed randomly
 
@@ -161,7 +161,7 @@ Distributed randomly
 Indexes:
     "mvtest_aa" btree (grandtot)
 View definition:
- SELECT mvtest_tvvmv.grandtot
+ SELECT grandtot
    FROM mvtest_tvvmv;
 Distributed randomly
 
@@ -177,7 +177,7 @@ ALTER MATERIALIZED VIEW mvtest_tvm SET SCHEMA mvtest_mvschema;
 Indexes:
     "mvtest_tvmm_pred" UNIQUE, btree (grandtot) WHERE grandtot < 0::numeric
 View definition:
- SELECT sum(mvtest_tvm.totamt) AS grandtot
+ SELECT sum(totamt) AS grandtot
    FROM mvtest_mvschema.mvtest_tvm;
 
 SET search_path = mvtest_mvschema, public;
@@ -188,10 +188,10 @@ SET search_path = mvtest_mvschema, public;
  type   | text    |           |          |         | extended |             |              | 
  totamt | numeric |           |          |         | main     |             |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed randomly
 
 -- modify the underlying table data
@@ -431,7 +431,7 @@ CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a)
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.3:7003 pid=1077203)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.4:7003 pid=1169179)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -569,21 +569,21 @@ DELETE FROM mvtest_v WHERE EXISTS ( SELECT * FROM mvtest_mv_v WHERE mvtest_mv_v.
 SELECT * FROM mvtest_v;
  a  
 ----
+  7
+ 10
   6
   8
- 10
-  7
   9
 (5 rows)
 
 SELECT * FROM mvtest_mv_v;
  a 
 ---
- 4
  3
- 5
- 2
  1
+ 4
+ 2
+ 5
 (5 rows)
 
 DROP TABLE mvtest_v CASCADE;
@@ -597,10 +597,10 @@ SET ROLE regress_user_mvtest;
 -- duplicate all the aliases used in those queries
 CREATE TABLE mvtest_foo_data AS SELECT i,
   i+1 AS tid,
-  md5(random()::text) AS mv,
-  md5(random()::text) AS newdata,
-  md5(random()::text) AS newdata2,
-  md5(random()::text) AS diff
+  fipshash(random()::text) AS mv,
+  fipshash(random()::text) AS newdata,
+  fipshash(random()::text) AS newdata2,
+  fipshash(random()::text) AS diff
   FROM generate_series(1, 10) i;
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);

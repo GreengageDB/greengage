@@ -30,6 +30,12 @@ SELECT * FROM ((SELECT 1 AS x)) ss;
  1
 (1 row)
 
+SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
+ x | y 
+---+---
+ 1 | 2
+(1 row)
+
 (SELECT 2) UNION SELECT 2;
  ?column? 
 ----------
@@ -89,14 +95,14 @@ INSERT INTO SUBSELECT_TBL VALUES (8, 9, NULL);
 SELECT * FROM SUBSELECT_TBL;
  f1 | f2 | f3 
 ----+----+----
-  1 |  2 |  3
-  1 |  1 |  1
   2 |  3 |  4
   3 |  4 |  5
   2 |  2 |  2
   3 |  3 |  3
   8 |  9 |   
   6 |  7 |  8
+  1 |  2 |  3
+  1 |  1 |  1
 (8 rows)
 
 -- Uncorrelated subselects
@@ -112,12 +118,12 @@ SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL);
  Uncorrelated Field 
 --------------------
+                  1
+                  1
                   2
                   3
                   2
                   3
-                  1
-                  1
 (6 rows)
 
 SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
@@ -125,12 +131,12 @@ SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
     f2 IN (SELECT f1 FROM SUBSELECT_TBL));
  Uncorrelated Field 
 --------------------
-                  1
-                  1
                   2
                   3
                   2
                   3
+                  1
+                  1
 (6 rows)
 
 SELECT f1, f2
@@ -139,9 +145,9 @@ SELECT f1, f2
                          WHERE f3 IS NOT NULL);
  f1 | f2 
 ----+----
+  6 |  7
   8 |  9
   1 |  2
-  6 |  7
 (3 rows)
 
 -- Correlated subselects
@@ -150,12 +156,12 @@ SELECT f1 AS "Correlated Field", f2 AS "Second Field"
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE f1 = upper.f1);
  Correlated Field | Second Field 
 ------------------+--------------
+                1 |            2
+                1 |            1
                 2 |            3
                 3 |            4
                 2 |            2
                 3 |            3
-                1 |            2
-                1 |            1
 (6 rows)
 
 SELECT f1 AS "Correlated Field", f3 AS "Second Field"
@@ -196,6 +202,73 @@ SELECT f1 AS "Correlated Field"
                 1
 (5 rows)
 
+-- Subselects without aliases
+SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+   f1   | column1 
+--------+---------
+ 123456 |  123456
+(1 row)
+
+CREATE VIEW view_unnamed_ss AS
+SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
+              (SELECT * FROM int8_tbl)
+  WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
+SELECT * FROM view_unnamed_ss;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ a1 |        q1        |        q2         
+----+------------------+-------------------
+  0 |              123 |               456
+  0 |              123 |  4567890123456789
+  0 | 4567890123456789 | -4567890123456789
+  0 | 4567890123456789 |               123
+  0 | 4567890123456789 |  4567890123456789
+(5 rows)
+
+\sv view_unnamed_ss
+CREATE OR REPLACE VIEW public.view_unnamed_ss AS
+ SELECT unnamed_subquery.a1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT unnamed_subquery_2.a1
+           FROM ( SELECT abs(int4_tbl.f1) AS a1
+                   FROM int4_tbl) unnamed_subquery_2) unnamed_subquery,
+    ( SELECT int8_tbl.q1,
+            int8_tbl.q2
+           FROM int8_tbl) unnamed_subquery_1
+  WHERE unnamed_subquery.a1 < 10 AND unnamed_subquery_1.q1 > unnamed_subquery.a1
+  ORDER BY unnamed_subquery_1.q1, unnamed_subquery_1.q2
+DROP VIEW view_unnamed_ss;
+-- Test matching of locking clause to correct alias
+CREATE VIEW view_unnamed_ss_locking AS
+SELECT * FROM (SELECT * FROM int4_tbl), int8_tbl AS unnamed_subquery
+  WHERE f1 = q1
+  FOR UPDATE OF unnamed_subquery;
+\sv view_unnamed_ss_locking
+CREATE OR REPLACE VIEW public.view_unnamed_ss_locking AS
+ SELECT unnamed_subquery.f1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT int4_tbl.f1
+           FROM int4_tbl) unnamed_subquery,
+    int8_tbl unnamed_subquery_1
+  WHERE unnamed_subquery.f1 = unnamed_subquery_1.q1
+ FOR UPDATE OF unnamed_subquery_1
+DROP VIEW view_unnamed_ss_locking;
 --
 -- Use some existing tables in the regression test
 --
@@ -494,9 +567,6 @@ FROM orderstest ord;
 SELECT * FROM orders_view;
  approver_ref | po_ref | ordercanceled | Approved |  Status  | Status_OK 
 --------------+--------+---------------+----------+----------+-----------
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
            66 |      5 | f             | Approved | PO       | PO
            66 |      6 | f             | Approved | PO       | PO
            66 |      7 | f             | Approved | PO       | PO
@@ -505,6 +575,9 @@ SELECT * FROM orders_view;
            66 |      1 | f             | Approved | Approved | Approved
            77 |      1 | f             | Approved | Approved | Approved
            66 |      1 | f             | Approved | Approved | Approved
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
 (11 rows)
 
 DROP TABLE orderstest cascade;
@@ -603,19 +676,19 @@ select * from float_table
   where float_col in (select num_col from numeric_table);
  float_col 
 -----------
-         2
          1
          3
+         2
 (3 rows)
 
 select * from numeric_table
   where num_col in (select float_col from float_table);
          num_col         
 -------------------------
+                       2
                        1
  1.000000000000000000001
                        3
-                       2
 (4 rows)
 
 --
@@ -1067,10 +1140,10 @@ select * from exists_tbl t1
   where (exists(select 1 from exists_tbl t2 where t1.c1 = t2.c2) or c3 < 0);
  c1 | c2 | c3 
 ----+----+----
-  5 |  2 |  6
   2 |  1 |  3
   3 |  1 |  4
   4 |  2 |  5
+  5 |  2 |  6
   0 |  0 |  1
   1 |  0 |  2
 (6 rows)
@@ -1456,8 +1529,8 @@ select (select q from
 from int4_tbl;
      q     
 -----------
- (1,2,3)
  (4,5,6.0)
+ (1,2,3)
  (4,5,6.0)
  (1,2,3)
  (4,5,6.0)
