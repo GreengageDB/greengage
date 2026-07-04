@@ -1,0 +1,14 @@
+LOAD '/home/dvoronkov/ws/gpdb/src/test/regress/hooktest/test_hook.so';
+ERROR:  incompatible library "/home/dvoronkov/ws/gpdb/src/test/regress/hooktest/test_hook.so": ABI mismatch (dfmgr.c:388)
+DETAIL:  Server has ABI "PostgreSQL", library has ";@".
+-----------------------------------
+-- Test planner hook
+-----------------------------------
+SET client_min_messages='log';
+SELECT 1 AS a;
+LOG:  statement: SELECT 1 AS a;
+ a 
+---
+ 1
+(1 row)
+

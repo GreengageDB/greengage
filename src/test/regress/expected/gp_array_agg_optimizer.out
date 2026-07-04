@@ -20,8 +20,6 @@ create table mergeappend_test ( a int, b int, x int ) distributed by (a,b);
 insert into mergeappend_test select g/100, g/100, g from generate_series(1, 500) g;
 analyze mergeappend_test;
 create table pagg_test (x int, y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pagg_test
 select (case x % 4 when 1 then null else x end), x % 10
 from generate_series(1,5000) x;
@@ -146,31 +144,30 @@ select null, null, array_dims(gp_array_agg(x)) from mergeappend_test r
 order by 1,2;
                                                                                  QUERY PLAN                                                                                  
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.06 rows=22 width=16) (actual time=2.204..2.206 rows=7 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.07 rows=22 width=16) (actual time=1.970..1.976 rows=7 loops=1)
    Merge Key: mergeappend_test.a, mergeappend_test.b
-   ->  Sort  (cost=0.00..862.06 rows=8 width=16) (actual time=1.839..1.855 rows=5 loops=1)
+   ->  Sort  (cost=0.00..862.06 rows=8 width=16) (actual time=1.558..1.570 rows=5 loops=1)
          Sort Key: mergeappend_test.a, mergeappend_test.b
-         Sort Method:  quicksort  Memory: 150kB
+         Sort Method:  quicksort  Memory: 75kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
-         ->  Append  (cost=0.00..862.06 rows=8 width=16) (actual time=0.333..1.826 rows=5 loops=1)
-               ->  HashAggregate  (cost=0.00..431.05 rows=7 width=16) (actual time=0.332..0.341 rows=4 loops=1)
+         ->  Append  (cost=0.00..862.06 rows=8 width=16) (actual time=0.243..1.545 rows=5 loops=1)
+               ->  HashAggregate  (cost=0.00..431.05 rows=7 width=16) (actual time=0.242..0.250 rows=4 loops=1)
                      Group Key: mergeappend_test.a, mergeappend_test.b
-                     Peak Memory Usage: 0 kB
-                     ->  Seq Scan on mergeappend_test  (cost=0.00..431.00 rows=167 width=12) (actual time=0.103..0.144 rows=301 loops=1)
-               ->  Result  (cost=0.00..431.01 rows=1 width=16) (actual time=1.481..1.483 rows=1 loops=1)
-                     ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..431.01 rows=1 width=8) (actual time=1.477..1.477 rows=1 loops=1)
-                           ->  Aggregate  (cost=0.00..431.01 rows=1 width=8) (actual time=1.579..1.579 rows=1 loops=1)
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.01 rows=500 width=4) (actual time=1.284..1.451 rows=500 loops=1)
-                                       ->  Seq Scan on mergeappend_test mergeappend_test_1  (cost=0.00..431.00 rows=167 width=4) (actual time=0.087..0.152 rows=301 loops=1)
- Planning Time: 57.856 ms
-   (slice0)    Executor memory: 56K bytes.
-   (slice1)    Executor memory: 41K bytes avg x 3 workers, 42K bytes max (seg0).  Work_mem: 26K bytes max.
-   (slice2)    Executor memory: 58K bytes (entry db).
-   (slice3)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
- Memory used:  128000kB
+                     ->  Seq Scan on mergeappend_test  (cost=0.00..431.00 rows=167 width=12) (actual time=0.044..0.123 rows=301 loops=1)
+               ->  Result  (cost=0.00..431.01 rows=1 width=16) (actual time=1.287..1.289 rows=1 loops=1)
+                     ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..431.01 rows=1 width=8) (actual time=1.280..1.281 rows=1 loops=1)
+                           ->  Aggregate  (cost=0.00..431.01 rows=1 width=8) (actual time=1.505..1.506 rows=1 loops=1)
+                                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.01 rows=500 width=4) (actual time=1.363..1.435 rows=500 loops=1)
+                                       ->  Seq Scan on mergeappend_test mergeappend_test_1  (cost=0.00..431.00 rows=167 width=4) (actual time=0.029..0.129 rows=301 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
- Execution Time: 2.943 ms
-(24 rows)
+ Planning Time: 21.728 ms
+   (slice0)    Executor memory: 116K bytes.
+   (slice1)    Executor memory: 116K bytes avg x 3 workers, 116K bytes max (seg0).  Work_mem: 26K bytes max.
+   (slice2)    Executor memory: 30K bytes (entry db).
+   (slice3)    Executor memory: 111K bytes avg x 3 workers, 111K bytes max (seg0).
+ Memory used:  128000kB
+ Execution Time: 3.181 ms
+(23 rows)
 
 set optimizer_trace_fallback = off;
 select * from
@@ -185,8 +182,8 @@ or stats_name = 'workmem_wanted_lines'
 order by stats_name;
       stats_name      | stats_value 
 ----------------------+-------------
- workmem_wanted_lines |           0
  executor_mem_lines   |           1
+ workmem_wanted_lines |           0
 (2 rows)
 
 set optimizer_trace_fallback = on;
@@ -243,18 +240,18 @@ DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disab
                Sort Key: pagg_test.y
                ->  Result
                      ->  ProjectSet
-                           ->  HashAggregate
+                           ->  Finalize HashAggregate
                                  Group Key: pagg_test.y
                                  ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: pagg_test.y
-                                       ->  Seq Scan on pagg_test
+                                       ->  Partial HashAggregate
+                                             Group Key: pagg_test.y
+                                             ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- Test array_agg(anyarray)
 create table int_array_table (a int, arr int[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into int_array_table select i, array[i, i] from generate_series(1, 5)i;
 insert into int_array_table select 6, '{6, NULL}'::int[];
 insert into int_array_table select 7, '{6, NULL}'::int[];
