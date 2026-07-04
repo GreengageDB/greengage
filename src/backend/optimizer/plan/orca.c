@@ -539,6 +539,15 @@ transformGroupedWindows(Node *node, void *context)
 
 		/* Core of subquery input table expression: */
 		subq->rtable = qry->rtable; /* before windowing */
+		/*
+		 * PG16: the base-table RTEs move into the subquery, so their
+		 * RTEPermissionInfos must move with them -- perminfoindex is local to
+		 * each Query's rteperminfos.  The outer query Q' keeps only the
+		 * subquery-wrapper RTE (which references no perminfo), so it gets an
+		 * empty list below.  Leaving the perminfos on Q' would orphan them and
+		 * trip the ExecCheckPermissions bijection assert (execMain.c).
+		 */
+		subq->rteperminfos = qry->rteperminfos;	/* before windowing */
 		subq->jointree = qry->jointree; /* before windowing */
 		subq->targetList = NIL;		/* fill in later */
 
@@ -597,6 +606,7 @@ transformGroupedWindows(Node *node, void *context)
 
 		/* Core of outer query input table expression: */
 		qry->rtable = list_make1(rte);
+		qry->rteperminfos = NIL;	/* perminfos moved to the subquery above */
 		qry->jointree = (FromExpr *) makeNode(FromExpr);
 		qry->jointree->fromlist = list_make1(ref);
 		qry->jointree->quals = NULL;

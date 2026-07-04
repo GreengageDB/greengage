@@ -1583,6 +1583,25 @@ CTranslatorDXLToPlStmt::TranslateDXLTvf(
 	}
 	func_scan->functions = ListMake1(rtfunc);
 
+	// GPDB: the RangeTblFunction stored on the plan node (above) carries the
+	// column-definition metadata, but the one on the RTE does not.  ruleutils
+	// (EXPLAIN VERBOSE deparse) resolves a function scan's output column names
+	// through expandRTE() on the *RTE*, which truncates rte->eref->colnames to
+	// rtfunc->funccolcount for a record-returning function with a column
+	// definition list.  Since TranslateDXLTvfToRangeTblEntry() leaves the RTE's
+	// funccolcount at 0 and its funccol* lists empty, expandRTE() would yield
+	// zero columns and get_variable() would raise "invalid attnum".  Mirror the
+	// planner (addRangeTableEntryForFunction) by populating the RTE's
+	// RangeTblFunction with the same column metadata.  (Execution is unaffected;
+	// it uses the plan node's RangeTblFunction, not the RTE's.)
+	RangeTblFunction *rte_rtfunc =
+		(RangeTblFunction *) linitial(rte->functions);
+	rte_rtfunc->funccolnames = rtfunc->funccolnames;
+	rte_rtfunc->funccoltypes = rtfunc->funccoltypes;
+	rte_rtfunc->funccoltypmods = rtfunc->funccoltypmods;
+	rte_rtfunc->funccolcollations = rtfunc->funccolcollations;
+	rte_rtfunc->funccolcount = (int) gpdb::ListLength(target_list);
+
 	SetParamIds(plan);
 
 	return (Plan *) func_scan;
