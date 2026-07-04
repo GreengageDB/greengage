@@ -310,6 +310,31 @@ LINE 1: SELECT '{
 DETAIL:  Expected JSON value, but found "}".
 CONTEXT:  JSON data, line 4: ...yveryveryveryveryveryveryveryverylongfieldname":}
 -- ERROR missing value for last field
+-- test non-error-throwing input
+select pg_input_is_valid('{"a":true}', 'jsonb');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+select pg_input_is_valid('{"a":true', 'jsonb');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('{"a":true', 'jsonb');
+              message               |                detail                | hint | sql_error_code 
+------------------------------------+--------------------------------------+------+----------------
+ invalid input syntax for type json | The input string ended unexpectedly. |      | 22P02
+(1 row)
+
+select * from pg_input_error_info('{"a":1e1000000}', 'jsonb');
+            message             | detail | hint | sql_error_code 
+--------------------------------+--------+------+----------------
+ value overflows numeric format |        |      | 22003
+(1 row)
+
 -- make sure jsonb is passed through json generators without being escaped
 SELECT array_to_json(ARRAY [jsonb '{"a":1}', jsonb '{"b":[2,3]}']);
       array_to_json       
@@ -549,9 +574,9 @@ SELECT test_json ->> 2 FROM test_jsonb WHERE json_type = 'object';
 (1 row)
 
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'scalar';
-ERROR:  cannot call jsonb_object_keys on a scalar  (seg2 slice1 172.17.0.3:7004 pid=1080178)
+ERROR:  cannot call jsonb_object_keys on a scalar  (seg2 slice1 172.17.0.4:7004 pid=1224683)
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'array';
-ERROR:  cannot call jsonb_object_keys on an array  (seg0 slice1 172.17.0.3:7002 pid=1080177)
+ERROR:  cannot call jsonb_object_keys on an array  (seg0 slice1 172.17.0.4:7002 pid=1224681)
 SELECT jsonb_object_keys(test_json) FROM test_jsonb WHERE json_type = 'object';
  jsonb_object_keys 
 -------------------
@@ -4956,8 +4981,8 @@ update test_jsonb_subscript set test_json['a'] = '1' where id = 1;
 select * from test_jsonb_subscript;
  id |    test_json     
 ----+------------------
-  1 | {"a": 1}
   2 | {"key": "value"}
+  1 | {"a": 1}
 (2 rows)
 
 -- update jsonb with some data
@@ -4965,8 +4990,8 @@ update test_jsonb_subscript set test_json['a'] = '1' where id = 2;
 select * from test_jsonb_subscript;
  id |        test_json         
 ----+--------------------------
-  1 | {"a": 1}
   2 | {"a": 1, "key": "value"}
+  1 | {"a": 1}
 (2 rows)
 
 -- replace jsonb
@@ -4974,8 +4999,8 @@ update test_jsonb_subscript set test_json['a'] = '"test"';
 select * from test_jsonb_subscript;
  id |           test_json           
 ----+-------------------------------
-  1 | {"a": "test"}
   2 | {"a": "test", "key": "value"}
+  1 | {"a": "test"}
 (2 rows)
 
 -- replace by object
@@ -4983,8 +5008,8 @@ update test_jsonb_subscript set test_json['a'] = '{"b": 1}'::jsonb;
 select * from test_jsonb_subscript;
  id |            test_json            
 ----+---------------------------------
-  1 | {"a": {"b": 1}}
   2 | {"a": {"b": 1}, "key": "value"}
+  1 | {"a": {"b": 1}}
 (2 rows)
 
 -- replace by array
@@ -4992,8 +5017,8 @@ update test_jsonb_subscript set test_json['a'] = '[1, 2, 3]'::jsonb;
 select * from test_jsonb_subscript;
  id |            test_json             
 ----+----------------------------------
-  1 | {"a": [1, 2, 3]}
   2 | {"a": [1, 2, 3], "key": "value"}
+  1 | {"a": [1, 2, 3]}
 (2 rows)
 
 -- use jsonb subscription in where clause
@@ -5015,7 +5040,7 @@ select * from test_jsonb_subscript where test_json['key'] = '"wrong_value"';
 
 -- NULL
 update test_jsonb_subscript set test_json[NULL] = '1';
-ERROR:  jsonb subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=1080177)
+ERROR:  jsonb subscript in assignment must not be null  (seg0 172.17.0.4:7002 pid=1224681)
 update test_jsonb_subscript set test_json['another_key'] = NULL;
 select * from test_jsonb_subscript;
  id |                       test_json                       
@@ -5030,9 +5055,9 @@ update test_jsonb_subscript set test_json['a'] = '1' where id = 3;
 select * from test_jsonb_subscript;
  id |                       test_json                       
 ----+-------------------------------------------------------
+  1 | {"a": [1, 2, 3], "another_key": null}
   2 | {"a": [1, 2, 3], "key": "value", "another_key": null}
   3 | {"a": 1}
-  1 | {"a": [1, 2, 3], "another_key": null}
 (3 rows)
 
 update test_jsonb_subscript set test_json = NULL where id = 3;
@@ -5063,7 +5088,7 @@ select * from test_jsonb_subscript;
 (1 row)
 
 update test_jsonb_subscript set test_json[-8] = '1';
-ERROR:  path element at position 1 is out of range: -8  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  path element at position 1 is out of range: -8  (seg1 172.17.0.4:7003 pid=1224682)
 select * from test_jsonb_subscript;
  id |          test_json          
 ----+-----------------------------
@@ -5184,29 +5209,63 @@ select * from test_jsonb_subscript;
 delete from test_jsonb_subscript;
 insert into test_jsonb_subscript values (1, '{"a": 1}');
 update test_jsonb_subscript set test_json['a']['b'] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a']['b']['c'] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0]['c'] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json['a'][0][0] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 -- trying replace assuming a composite object, but it's a raw scalar
 delete from test_jsonb_subscript;
 insert into test_jsonb_subscript values (1, 'null');
 update test_jsonb_subscript set test_json[0] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
 update test_jsonb_subscript set test_json[0][0] = '1';
-ERROR:  cannot replace existing key  (seg1 172.17.0.3:7003 pid=1080179)
+ERROR:  cannot replace existing key  (seg1 172.17.0.4:7003 pid=1224682)
 DETAIL:  The path assumes key is a composite object, but it is a scalar value.
+-- try some things with short-header and toasted subscript values
+drop table test_jsonb_subscript;
+create temp table test_jsonb_subscript (
+       id text,
+       test_json jsonb
+);
+insert into test_jsonb_subscript values('foo', '{"foo": "bar"}');
+insert into test_jsonb_subscript
+  select s, ('{"' || s || '": "bar"}')::jsonb from repeat('xyzzy', 500) s;
+select length(id), test_json[id] from test_jsonb_subscript;
+ length | test_json 
+--------+-----------
+      3 | "bar"
+   2500 | "bar"
+(2 rows)
+
+update test_jsonb_subscript set test_json[id] = '"baz"';
+select length(id), test_json[id] from test_jsonb_subscript;
+ length | test_json 
+--------+-----------
+      3 | "baz"
+   2500 | "baz"
+(2 rows)
+
+\x
+select * from test_jsonb_subscript order by id;
+-[ RECORD 1 ]--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id        | foo
+test_json | {"foo": "baz"}
+-[ RECORD 2 ]--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id        | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzy
+test_json | {"xyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzyxyzzy": "baz"}
+
+\x
 -- jsonb to tsvector
 select to_tsvector('{"a": "aaa bbb ddd ccc", "b": ["eee fff ggg"], "c": {"d": "hhh iii"}}'::jsonb);
                                 to_tsvector                                

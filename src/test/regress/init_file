@@ -115,6 +115,12 @@ s/pg_aovisimap_\d+/pg_aovisimap_OID/
 m/pg_aoblkdir_\d+/
 s/pg_aoblkdir_\d+/pg_aoblkdir_OID/
 
+# Mask out the db-oid/relfilenode in "could not create file" errors, which vary
+# from run to run (e.g. GPDB's "ALTER COLUMN ... SET DATA TYPE on an indexed
+# column is not supported" surfaces as could not create file "base/N/N").
+m/could not create file "base\/\d+\/\d+"/
+s/could not create file "base\/\d+\/\d+"/could not create file "base\/OID\/OID"/
+
 # Mask out some numbers (parts of partition names) that vary from run to run.
 m/overlaps existing partition "r\d+"/
 s/overlaps existing partition "r\d+"/partition "r##########"/
