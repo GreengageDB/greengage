@@ -65,7 +65,7 @@
 #include "utils/guc.h"
 
 /* GUC parameter */
-int			constraint_exclusion = CONSTRAINT_EXCLUSION_PARTITION;
+int			constraint_exclusion = CONSTRAINT_EXCLUSION_ON;		/* GPDB default: ON (match boot_val) */
 
 /* Hook for plugins to get control in get_relation_info() */
 get_relation_info_hook_type get_relation_info_hook = NULL;

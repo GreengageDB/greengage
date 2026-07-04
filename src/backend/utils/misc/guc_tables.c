@@ -943,7 +943,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_nestloop,
-		true,
+		false,			/* GPDB: MPP discourages nestloop joins by default */
 		NULL, NULL, NULL
 	},
 	{
@@ -953,7 +953,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_mergejoin,
-		true,
+		false,			/* GPDB: MPP discourages mergejoin (Sort/mark-restore over Motion is unsafe) */
 		NULL, NULL, NULL
 	},
 	{
@@ -1061,7 +1061,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_geqo,
-		true,
+		false,			/* GPDB: geqo disabled by default */
 		NULL, NULL, NULL
 	},
 	{
@@ -1669,7 +1669,7 @@ struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&Logging_collector,
-		false,
+		true,			/* GPDB: capture segment stderr/csvlog by default */
 		NULL, NULL, NULL
 	},
 	{
@@ -1815,7 +1815,7 @@ struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&EnableHotStandby,
-		true,
+		false,			/* GPDB: mirrors sit in recovery; hot_standby off by default */
 		NULL, NULL, NULL
 	},
 
@@ -1944,7 +1944,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&jit_enabled,
-		true,
+		false,			/* GPDB: JIT disabled by default */
 		NULL, NULL, NULL
 	},
 
@@ -2084,7 +2084,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&from_collapse_limit,
-		8, 1, INT_MAX,
+		20, 1, INT_MAX,		/* GPDB: wider join-order search than upstream's 8 */
 		NULL, NULL, NULL
 	},
 	{
@@ -2097,7 +2097,7 @@ struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&join_collapse_limit,
-		8, 1, INT_MAX,
+		20, 1, INT_MAX,		/* GPDB: wider join-order search than upstream's 8 */
 		NULL, NULL, NULL
 	},
 	{
@@ -4591,7 +4591,7 @@ struct config_enum ConfigureNamesEnum[] =
 			GUC_EXPLAIN
 		},
 		&constraint_exclusion,
-		CONSTRAINT_EXCLUSION_PARTITION, constraint_exclusion_options,
+		CONSTRAINT_EXCLUSION_ON, constraint_exclusion_options,	/* GPDB default: ON */
 		NULL, NULL, NULL
 	},
 
