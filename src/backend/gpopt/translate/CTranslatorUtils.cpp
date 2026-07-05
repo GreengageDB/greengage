@@ -113,8 +113,7 @@ CTranslatorUtils::GetIndexDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 CDXLTableDescr *
 CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 								CIdGenerator *id_generator,
-								const RangeTblEntry *rte,
-								List *rte_perminfos,
+								const RangeTblEntry *rte, List *rte_perminfos,
 								BOOL *is_distributed_table	// output
 )
 {
@@ -142,14 +141,13 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	Oid check_as_user = InvalidOid;
 	if (rte->perminfoindex != 0)
 	{
-		check_as_user =
-			gpdb::GetRTEPermissionInfo(rte_perminfos,
-									   const_cast<RangeTblEntry *>(rte))
-				->checkAsUser;
+		check_as_user = gpdb::GetRTEPermissionInfo(
+							rte_perminfos, const_cast<RangeTblEntry *>(rte))
+							->checkAsUser;
 	}
 
-	CDXLTableDescr *table_descr = GPOS_NEW(mp) CDXLTableDescr(
-		mp, mdid, table_mdname, check_as_user, rte->rellockmode);
+	CDXLTableDescr *table_descr = GPOS_NEW(mp)
+		CDXLTableDescr(mp, mdid, table_mdname, check_as_user, rte->rellockmode);
 
 	const ULONG len = rel->ColumnCount();
 

@@ -3735,7 +3735,7 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 			phy_append_dxlop->GetDXLTableDesc(), index, &base_table_context);
 		GPOS_ASSERT(nullptr != rte);
 		m_dxl_to_plstmt_context->GetRTEPermissionInfo(rte)->requiredPerms |=
-		ACL_SELECT;
+			ACL_SELECT;
 
 		m_dxl_to_plstmt_context->AddRTE(rte);
 
