@@ -1,17 +1,3 @@
--- When we have to sort the entire table, incremental sort will
--- be slower than plain sort, so it should not be used.
-explain (costs off)
-select * from (select * from tenk1 order by four) t order by four, ten;
-                QUERY PLAN                
-------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: four, ten
-   ->  Sort
-         Sort Key: four, ten
-         ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
-
 -- When there is a LIMIT clause, incremental sort is beneficial because
 -- it only has to sort some of the groups, and not the entire table.
 explain (costs off)
@@ -46,6 +32,8 @@ select * from (select * from tenk1 order by four) t order by four, ten;
 
 reset planner_work_mem;
 create table t(a integer, b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function explain_analyze_without_memory(query text)
 returns table (out_line text) language plpgsql
 as
@@ -541,8 +529,8 @@ select * from (select * from t order by a) s order by a, b limit 55;
 
 -- Test EXPLAIN ANALYZE with only a fullsort group.
 select explain_analyze_without_memory('select * from (select * from t order by a) s order by a, b limit 55');
-                        explain_analyze_without_memory                         
--------------------------------------------------------------------------------
+                     explain_analyze_without_memory                      
+-------------------------------------------------------------------------
  Limit (actual rows=55 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=55 loops=1)
          Merge Key: a, b
@@ -550,10 +538,9 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                ->  Sort (actual rows=55 loops=1)
                      Sort Key: a, b
                      Sort Method:  top-N heapsort  Memory: NNkB
-                     Executor Memory: NNkB  Segments: 3  Max: NNkB (segment 0)
                      ->  Seq Scan on t (actual rows=400 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(9 rows)
 
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 55'));
  jsonb_pretty 
@@ -660,6 +647,33 @@ select * from (select * from t order by a) s order by a, b limit 70;
  9 | 70
 (70 rows)
 
+-- Checks case where we hit a group boundary at the last tuple of a batch.
+-- Because the full sort state is bounded, we scan 64 tuples (the mode
+-- transition point) but only retain 5. Thus when we transition modes, all
+-- tuples in the full sort state have different prefix keys.
+explain (costs off) select * from (select * from t order by a) s order by a, b limit 5;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: a, b
+         ->  Limit
+               ->  Sort
+                     Sort Key: a, b
+                     ->  Seq Scan on t
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select * from (select * from t order by a) s order by a, b limit 5;
+ a | b 
+---+---
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 9 | 5
+(5 rows)
+
 -- Test rescan.
 begin;
 -- We force the planner to choose a plan with incremental sort on the right side
@@ -685,15 +699,15 @@ explain (costs off) select * from t left join (select * from (select * from t or
 select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2); -- order none
  a | b | a | b 
 ---+---+---+---
- 2 | 2 | 2 | 2
  1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
 (2 rows)
 
 rollback;
 -- Test EXPLAIN ANALYZE with both fullsort and presorted groups.
 select explain_analyze_without_memory('select * from (select * from t order by a) s order by a, b limit 70');
-                        explain_analyze_without_memory                         
--------------------------------------------------------------------------------
+                     explain_analyze_without_memory                      
+-------------------------------------------------------------------------
  Limit (actual rows=70 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=70 loops=1)
          Merge Key: a, b
@@ -702,10 +716,9 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                      Sort Key: a, b
                      Sort Method:  top-N heapsort  Memory: NNkB
                      Sort Method:  quicksort  Memory: NNkB
-                     Executor Memory: NNkB  Segments: 3  Max: NNkB (segment 2)
                      ->  Seq Scan on t (actual rows=996 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(10 rows)
 
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 70'));
  jsonb_pretty 
@@ -1371,6 +1384,8 @@ set parallel_setup_cost = 0;
 set parallel_tuple_cost = 0;
 set max_parallel_workers_per_gather = 2;
 create table t (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select mod(i,30),mod(i,30),i from generate_series(1,30000) s(i);
 create index on t (a);
 analyze t;
@@ -1422,6 +1437,18 @@ explain (costs off) select * from t union select * from t order by 1,3;
                      ->  Seq Scan on t t_1
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
+
+-- Full sort, not just incremental sort can be pushed below a gather merge path
+-- by generate_useful_gather_paths.
+explain (costs off) select distinct a,b from t;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a, b
+         ->  Seq Scan on t
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 drop table t;
 -- Incremental sort shall not be an input for redistribute motion
@@ -1566,6 +1593,84 @@ order by 1, 2;
                ->  Function Scan on generate_series
  Optimizer: Postgres query optimizer
 (8 rows)
+
+-- Parallel sort with an aggregate that can be safely generated in parallel,
+-- but we can't sort by partial aggregate values.
+explain (costs off) select count(*)
+from tenk1 t1
+join tenk1 t2 on t1.unique1 = t2.unique2
+join tenk1 t3 on t2.unique1 = t3.unique1
+order by count(*);
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Sort
+   Sort Key: (count())
+   ->  Finalize Aggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Partial Aggregate
+                     ->  Hash Join
+                           Hash Cond: (tenk1.unique2 = tenk1_2.unique1)
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: tenk1.unique2
+                                 ->  Hash Join
+                                       Hash Cond: (tenk1.unique1 = tenk1_1.unique1)
+                                       ->  Seq Scan on tenk1
+                                       ->  Hash
+                                             ->  Seq Scan on tenk1 tenk1_1
+                           ->  Hash
+                                 ->  Seq Scan on tenk1 tenk1_2
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
+
+-- Parallel sort but with expression (correlated subquery) that
+-- is prohibited in parallel plans.
+explain (costs off) select distinct
+  unique1,
+  (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
+from tenk1 t, generate_series(1, 1000);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: tenk1.unique1, (SubPlan 1)
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on tenk1
+               ->  Function Scan on generate_series
+               SubPlan 1
+                 ->  Result
+                       ->  Result
+                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
+
+explain (costs off) select
+  unique1,
+  (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
+from tenk1 t, generate_series(1, 1000)
+order by 1, 2;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: tenk1.unique1, ((SubPlan 1))
+   ->  Sort
+         Sort Key: tenk1.unique1, ((SubPlan 1))
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on tenk1
+               ->  Function Scan on generate_series
+               SubPlan 1
+                 ->  Result
+                       ->  Result
+                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(16 rows)
 
 -- Parallel sort but with expression not available until the upper rel.
 explain (costs off) select distinct sub.unique1, stringu1 || random()::text

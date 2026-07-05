@@ -14,6 +14,8 @@ set enable_mergejoin to true;
 -- partitioned by a single column
 --
 CREATE TABLE prt1 (a int, b int, c varchar) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_p1 PARTITION OF prt1 FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_p3 PARTITION OF prt1 FOR VALUES FROM (500) TO (600);
@@ -26,6 +28,8 @@ CREATE INDEX iprt1_p2_a on prt1_p2(a);
 CREATE INDEX iprt1_p3_a on prt1_p3(a);
 ANALYZE prt1;
 CREATE TABLE prt2 (a int, b int, c varchar) PARTITION BY RANGE(b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_p1 PARTITION OF prt2 FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_p2 PARTITION OF prt2 FOR VALUES FROM (250) TO (500);
@@ -584,6 +588,8 @@ RESET enable_hashjoin;
 -- partitioned by expression
 --
 CREATE TABLE prt1_e (a int, b int, c int) PARTITION BY RANGE(((a + b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_e_p1 PARTITION OF prt1_e FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_e_p2 PARTITION OF prt1_e FOR VALUES FROM (250) TO (500);
@@ -596,6 +602,8 @@ CREATE INDEX iprt1_e_p2_ab2 on prt1_e_p2(((a+b)/2));
 CREATE INDEX iprt1_e_p3_ab2 on prt1_e_p3(((a+b)/2));
 ANALYZE prt1_e;
 CREATE TABLE prt2_e (a int, b int, c int) PARTITION BY RANGE(((b + a)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_e_p1 PARTITION OF prt2_e FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_e_p2 PARTITION OF prt2_e FOR VALUES FROM (250) TO (500);
@@ -1427,8 +1435,9 @@ SELECT t1.a, t2.b FROM (SELECT * FROM prt1 WHERE a < 450) t1 LEFT JOIN (SELECT *
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: prt1.a, prt2.b
-   ->  Sort
+   ->  Incremental Sort
          Sort Key: prt1.a, prt2.b
+         Presorted Key: prt1.a
          ->  Merge Left Join
                Merge Cond: (prt1.a = prt2.b)
                ->  Sort
@@ -1448,7 +1457,7 @@ SELECT t1.a, t2.b FROM (SELECT * FROM prt1 WHERE a < 450) t1 LEFT JOIN (SELECT *
                                  ->  Seq Scan on prt2_p3 prt2_2
                                        Filter: (b > 250)
  Optimizer: Postgres query optimizer
-(23 rows)
+(24 rows)
 
 SELECT t1.a, t2.b FROM (SELECT * FROM prt1 WHERE a < 450) t1 LEFT JOIN (SELECT * FROM prt2 WHERE b > 250) t2 ON t1.a = t2.b WHERE t1.b = 0 ORDER BY t1.a, t2.b;
   a  |  b  
@@ -1511,6 +1520,8 @@ RESET enable_nestloop;
 -- partitioned by multiple columns
 --
 CREATE TABLE prt1_m (a int, b int, c int) PARTITION BY RANGE(a, ((a + b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_m_p1 PARTITION OF prt1_m FOR VALUES FROM (0, 0) TO (250, 250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_m_p2 PARTITION OF prt1_m FOR VALUES FROM (250, 250) TO (500, 500);
@@ -1520,6 +1531,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_m SELECT i, i, i % 25 FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_m;
 CREATE TABLE prt2_m (a int, b int, c int) PARTITION BY RANGE(((b + a)/2), b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_m_p1 PARTITION OF prt2_m FOR VALUES FROM (0, 0) TO (250, 250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_m_p2 PARTITION OF prt2_m FOR VALUES FROM (250, 250) TO (500, 500);
@@ -1592,6 +1605,8 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_m WHERE prt1_m.c = 0) t1 
 -- tests for list partitioned tables.
 --
 CREATE TABLE plt1 (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_p1 PARTITION OF plt1 FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_p2 PARTITION OF plt1 FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1601,6 +1616,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE plt1;
 CREATE TABLE plt2 (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_p1 PARTITION OF plt2 FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_p2 PARTITION OF plt2 FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1613,6 +1630,8 @@ ANALYZE plt2;
 -- list partitioned by expression
 --
 CREATE TABLE plt1_e (a int, b int, c text) PARTITION BY LIST(ltrim(c, 'A'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_e_p1 PARTITION OF plt1_e FOR VALUES IN ('0000', '0003', '0004', '0010');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_e_p2 PARTITION OF plt1_e FOR VALUES IN ('0001', '0005', '0002', '0009');
@@ -1769,6 +1788,8 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1 WHERE a = 1 AND a = 2) t1
 -- tests for hash partitioned tables.
 --
 CREATE TABLE pht1 (a int, b int, c text) PARTITION BY HASH(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_p1 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_p2 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1778,6 +1799,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pht1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE pht1;
 CREATE TABLE pht2 (a int, b int, c text) PARTITION BY HASH(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht2_p1 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht2_p2 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1790,6 +1813,8 @@ ANALYZE pht2;
 -- hash partitioned by expression
 --
 CREATE TABLE pht1_e (a int, b int, c text) PARTITION BY HASH(ltrim(c, 'A'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_e_p1 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_e_p2 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 1);
@@ -1953,6 +1978,8 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
 -- multiple levels of partitioning
 --
 CREATE TABLE prt1_l (a int, b int, c varchar) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_l_p1 PARTITION OF prt1_l FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p2 PARTITION OF prt1_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
@@ -1970,6 +1997,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_l SELECT i, i % 25, to_char(i % 4, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_l;
 CREATE TABLE prt2_l (a int, b int, c varchar) PARTITION BY RANGE(b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_l_p1 PARTITION OF prt2_l FOR VALUES FROM (0) TO (250);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p2 PARTITION OF prt2_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
@@ -2309,6 +2338,8 @@ WHERE EXISTS (
 -- negative testcases
 --
 CREATE TABLE prt1_n (a int, b int, c varchar) PARTITION BY RANGE(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_n_p1 PARTITION OF prt1_n FOR VALUES FROM ('0000') TO ('0250');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_n_p2 PARTITION OF prt1_n FOR VALUES FROM ('0250') TO ('0500');
@@ -2316,6 +2347,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_n SELECT i, i, to_char(i, 'FM0000') FROM generate_series(0, 499, 2) i;
 ANALYZE prt1_n;
 CREATE TABLE prt2_n (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_n_p1 PARTITION OF prt2_n FOR VALUES IN ('0000', '0003', '0004', '0010', '0006', '0007');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_n_p2 PARTITION OF prt2_n FOR VALUES IN ('0001', '0005', '0002', '0009', '0008', '0011');
@@ -2323,6 +2356,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt2_n;
 CREATE TABLE prt3_n (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_n_p1 PARTITION OF prt3_n FOR VALUES IN ('0000', '0004', '0006', '0007');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_n_p2 PARTITION OF prt3_n FOR VALUES IN ('0001', '0002', '0008', '0010');
@@ -2332,6 +2367,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt3_n;
 CREATE TABLE prt4_n (a int, b int, c text) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt4_n_p1 PARTITION OF prt4_n FOR VALUES FROM (0) TO (300);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt4_n_p2 PARTITION OF prt4_n FOR VALUES FROM (300) TO (500);
@@ -2580,6 +2617,8 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_n t1 FULL JOIN prt1 t2 ON (t1.c = t2.c);
 --
 create temp table prtx1 (a integer, b integer, c integer)
   partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx1_1 partition of prtx1 for values from (1) to (11);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx1_2 partition of prtx1 for values from (11) to (21);
@@ -2588,6 +2627,8 @@ create temp table prtx1_3 partition of prtx1 for values from (21) to (31);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2 (a integer, b integer, c integer)
   partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx2_1 partition of prtx2 for values from (1) to (11);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2_2 partition of prtx2 for values from (11) to (21);
@@ -2697,6 +2738,8 @@ RESET enable_nestloop;
 --
 -- Tests for range-partitioned tables
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
@@ -2707,6 +2750,8 @@ CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (150);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (300);
@@ -3655,6 +3700,8 @@ ANALYZE prt1_adv;
 DROP TABLE prt2_adv_p3;
 ANALYZE prt2_adv;
 CREATE TABLE prt3_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_adv_p1 PARTITION OF prt3_adv FOR VALUES FROM (200) TO (300);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_adv_p2 PARTITION OF prt3_adv FOR VALUES FROM (300) TO (400);
@@ -3718,6 +3765,8 @@ DROP TABLE prt2_adv;
 DROP TABLE prt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
@@ -3728,6 +3777,8 @@ CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (400);
@@ -3828,6 +3879,8 @@ DROP TABLE prt1_adv;
 DROP TABLE prt2_adv;
 -- Tests for list-partitioned tables
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001', '0003');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0004', '0006');
@@ -3837,6 +3890,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002', '0003');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0004', '0006');
@@ -5182,6 +5237,8 @@ DROP TABLE plt2_adv_p2_ext;
 ALTER TABLE plt2_adv ATTACH PARTITION plt2_adv_p2 FOR VALUES IN ('0004', '0006');
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0004', '0006');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0007', '0009');
@@ -5307,6 +5364,8 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0002');
@@ -5319,6 +5378,8 @@ INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series
 INSERT INTO plt1_adv VALUES (-1, -1, NULL);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0001', '0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN (NULL);
@@ -5454,6 +5515,8 @@ DROP TABLE plt1_adv;
 DROP TABLE plt2_adv;
 -- Test the process_outer_partition() code path
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0000', '0001', '0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0003', '0004');
@@ -5461,6 +5524,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i;
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0003', '0004');
@@ -5468,6 +5533,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i WHERE i % 5 IN (2, 3, 4);
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0001');
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0003', '0004');
@@ -5591,6 +5658,8 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Tests for multi-level partitioned tables
 CREATE TABLE alpha (a double precision, b int, c text) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE alpha_neg PARTITION OF alpha FOR VALUES FROM ('-Infinity') TO (0) PARTITION BY RANGE (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos PARTITION OF alpha FOR VALUES FROM (0) TO (10.0) PARTITION BY LIST (c);
@@ -5611,6 +5680,8 @@ INSERT INTO alpha_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_se
 INSERT INTO alpha_pos SELECT  1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(100, 399) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE alpha;
 CREATE TABLE beta (a double precision, b int, c text) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE beta_neg PARTITION OF beta FOR VALUES FROM (-10.0) TO (0) PARTITION BY RANGE (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos PARTITION OF beta FOR VALUES FROM (0) TO ('Infinity') PARTITION BY LIST (c);
