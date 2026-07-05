@@ -2569,28 +2569,30 @@ run_schedule(const char *schedule, test_start_function startfunc,
 				}
 			}
 
-			if (statuses[i] != 0)
+			if (differ)
 			{
 				if (ignore)
 					test_status_ignore(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
 				else
 					test_status_failed(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
-				log_child_failure(statuses[i]);
 			}
 			else
 			{
-				if (differ)
-				{
-					if (ignore)
-						test_status_ignore(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
-					else
-						test_status_failed(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
-				}
-				else
-				{
-					test_status_ok(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
-				}
+				test_status_ok(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
 			}
+
+			/*
+			 * GPDB: a non-zero psql exit status is only logged, not treated as
+			 * a test failure.  Some Greenplum tests intentionally make psql
+			 * exit non-zero -- e.g. gp_connections ends by \connect'ing to a
+			 * primary segment, which is rejected on purpose, leaving psql with
+			 * no connection and an exit code of 2.  Pass/fail is decided by the
+			 * output diff alone, matching upstream pg_regress and the PG15
+			 * behavior (the PG16 merge had erroneously made a non-zero exit
+			 * status fail the test outright).
+			 */
+			if (statuses[i] != 0)
+				log_child_failure(statuses[i]);
 		}
 
 		for (i = 0; i < num_tests; i++)
@@ -2663,22 +2665,18 @@ run_single_test(const char *test, test_start_function startfunc,
 
 	INSTR_TIME_SUBTRACT(stoptime, starttime);
 
-	if (exit_status != 0)
+	if (differ)
 	{
 		test_status_failed(test, INSTR_TIME_GET_MILLISEC(stoptime), false);
-		log_child_failure(exit_status);
 	}
 	else
 	{
-		if (differ)
-		{
-			test_status_failed(test, INSTR_TIME_GET_MILLISEC(stoptime), false);
-		}
-		else
-		{
-			test_status_ok(test, INSTR_TIME_GET_MILLISEC(stoptime), false);
-		}
+		test_status_ok(test, INSTR_TIME_GET_MILLISEC(stoptime), false);
 	}
+
+	/* GPDB: a non-zero psql exit status is only logged, not a failure (see above). */
+	if (exit_status != 0)
+		log_child_failure(exit_status);
 }
 
 /*
