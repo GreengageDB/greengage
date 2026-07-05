@@ -99,6 +99,8 @@ static bool check_node_removed_operators_walker(Node *node, void *context);
 static bool check_node_removed_functions_walker(Node *node, void *context);
 static bool check_node_removed_types_walker(Node *node, void *context);
 static bool check_node_changed_function_signatures_walker(Node *node, void *context);
+static void report_removed_table(RemovedTablesWalkerContext *context, Oid reloid);
+static void check_and_report_removed_table(RemovedTablesWalkerContext *context, Oid reloid);
 static bool check_node_removed_tables_walker(Node *node, void *context);
 static void report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum);
 static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *context, Oid reloid, int attnum);
@@ -115,13 +117,13 @@ static bool check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerCo
 
 struct RemovedTablesWalkerContext
 {
-	List **removedTables;
+	List *removedTables;
 };
 
 struct RemovedColumnsWalkerContext
 {
 	List *rtableStack;
-	List **removedColumns;
+	List *removedColumns;
 	bool inside_whole_row_reference;
 };
 
@@ -1209,33 +1211,33 @@ check_node_changed_function_signatures_walker(Node *node, void *context)
 	return expression_tree_walker(node, check_node_changed_function_signatures_walker, context);
 }
 
-static void report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
+static void
+report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
 {
 	Oid             already_reported_table;
 	ListCell       *lc;
-	List           *reported_tables;
 
 	/*
 	 * Go thorogh already reported tables to remove
 	 * duplicates
 	 */
-	reported_tables = *(context->removedTables);
-	foreach (lc, reported_tables)
+	foreach (lc, context->removedTables)
 	{
 		already_reported_table = lfirst_oid(lc);
 		if (reloid == already_reported_table)
 			return;
 	}
 
-	reported_tables = lappend_oid(reported_tables, reloid);
-	*(context->removedTables) = reported_tables;
+	context->removedTables = lappend_oid(context->removedTables, reloid);
 }
 
-static void check_and_report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
+static void
+check_and_report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
 {
+	int i;
 	Oid gp_toolkit_oid;
 
-	for (int i = 0; i < num_removed_tables_static; i++)
+	for (i = 0; i < num_removed_tables_static; i++)
 	{
 		if (reloid == removed_tables_static[i])
 			report_removed_table(context, reloid);
@@ -1247,7 +1249,7 @@ static void check_and_report_removed_table(RemovedTablesWalkerContext *context, 
 
 	if (OidIsValid(gp_toolkit_oid))
 	{
-		for (int i = 0; i < num_removed_tables_dynamic; i++)
+		for (i = 0; i < num_removed_tables_dynamic; i++)
 		{
 			if (reloid == get_relname_relid(removed_tables_dynamic[i], gp_toolkit_oid))
 				report_removed_table(context, reloid);
@@ -1256,7 +1258,8 @@ static void check_and_report_removed_table(RemovedTablesWalkerContext *context, 
 	}
 }
 
-static bool check_node_removed_tables_walker(Node *node, void *context)
+static bool
+check_node_removed_tables_walker(Node *node, void *context)
 {
 	Assert(context != NULL);
 
@@ -1266,7 +1269,8 @@ static bool check_node_removed_tables_walker(Node *node, void *context)
 	if (IsA(node, RangeTblEntry))
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) node;
-		check_and_report_removed_table(context, rte->relid);
+		if (rte->rtekind == RTE_RELATION)
+			check_and_report_removed_table(context, rte->relid);
 		return false;
 	}
 	else if(IsA(node, Query))
@@ -1299,15 +1303,13 @@ get_removed_tables(PG_FUNCTION_ARGS)
 	char           *nspname;
 	char           *relname;
 	Query		   *viewquery;
-	List		   *removed_tables;
 	RemovedTablesWalkerContext  context;
 
 	rel = try_relation_open(view_oid, AccessShareLock, false);
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
 
-	removed_tables = NIL;
-	context.removedTables = &removed_tables;
+	context.removedTables = NIL;
 	if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
@@ -1322,11 +1324,11 @@ get_removed_tables(PG_FUNCTION_ARGS)
 	relation_close(rel, AccessShareLock);
 
 	/*
-	 * Make a single formatted string, listing all unique removed columns.
+	 * Make a single formatted string, listing all unique removed tables.
 	 * It will be displayed to the user.
 	 */
 	initStringInfo(&buf);
-	foreach (lc, removed_tables)
+	foreach (lc, context.removedTables)
 	{
 		reported_table = lfirst_oid(lc);
 		relname = get_rel_name(reported_table);
@@ -1348,22 +1350,21 @@ get_removed_tables(PG_FUNCTION_ARGS)
 }
 
 
-static void report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
+static void
+report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
 {
 	ListCell       *lc;
-	List           *reported_columns;
 	ReportedColumn *already_reported_column;
 	ReportedColumn *column;
 
 	/*
-	 * Go through already reported columns in nested loop manner
-	 * to remove duplicates. This should be fine, because the
+	 * Go through already reported columns in a nested loop manner
+	 * to remove duplicates. This should be fast enough, because the
 	 * number of removed columns is not that large
 	 * (currently, 110), and most view wouldn't have all of them.
 	 * But it is hard to tell without user data.
 	 */
-	reported_columns = *(context->removedColumns);
-	foreach (lc, reported_columns)
+	foreach (lc, context->removedColumns)
 	{
 		already_reported_column = lfirst(lc);
 		if (reloid == already_reported_column->attrelid &&
@@ -1377,16 +1378,17 @@ static void report_removed_column(RemovedColumnsWalkerContext *context, Oid relo
 	column->attnum = attnum;
 	column->comes_from_whole_row_reference = context->inside_whole_row_reference;
 
-	reported_columns = lappend(reported_columns, column);
-	*(context->removedColumns) = reported_columns;
+	context->removedColumns = lappend(context->removedColumns, column);
 }
 
-static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
+static bool
+check_and_report_removed_columns(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
 {
+	int i;
 	Oid schema_oid;
 	int removed_column_attnum;
 
-	for (int i = 0; i < num_removed_columns_static; i++)
+	for (i = 0; i < num_removed_columns_static; i++)
 	{
 		removed_column_attnum = removed_columns_static[i].attnum;
 		if (reloid == removed_columns_static[i].reloid &&
@@ -1394,7 +1396,7 @@ static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *contex
 			report_removed_column(context, reloid, removed_column_attnum);
 	}
 
-	for (int i = 0; i < num_removed_columns_dynamic; i++)
+	for (i = 0; i < num_removed_columns_dynamic; i++)
 	{
 		schema_oid = GetSysCacheOid(NAMESPACENAME,
 									CStringGetDatum(removed_columns_dynamic[i].relnamespace),
@@ -1418,18 +1420,18 @@ static bool check_and_report_removed_columns(RemovedColumnsWalkerContext *contex
  *
  * The first case will always cause pg_upgrade to fail, while the second is more
  * complicated. Whole row references by themselves won't cause upgrade to fail,
- * because row type will be taken from the target cluster. For examples,
+ * because row type will be taken from the target cluster. For example,
  * the following view won't cause any troubles:
  *
- * CREATE VIEW view1 AS SELECT pg_class FROM pg_class;
+ *  CREATE VIEW view1 AS SELECT pg_class FROM pg_class;
  *
  * However, there could be another view that references specific columns from the
  * previous one:
  *
- * CREATE VIEW view2 AS SELECT (pg_class).relhasoids FROM view1;
+ *  CREATE VIEW view2 AS SELECT (pg_class).relhasoids FROM view1;
  *
  * and this columns may be indeed absent in the new version. Because of that,
- * conservatively report any whole row references to any table with removed
+ * conservatively report any whole row reference to any table with removed
  * columns.
  */
 bool
@@ -1444,22 +1446,24 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 
 	if (IsA(node, Var))
 	{
-		Var *var = (Var *) node;
+		Var           *var;
+		List          *rtable;
+		RangeTblEntry *rte;
+		bool           save_inside_whole_row_reference;
+
+		var = (Var *) node;
 		if (var->varlevelsup >= list_length(context->rtableStack))
 			elog(ERROR, "invalid varlevelsup %d", var->varlevelsup);
 
-		List *rtable = (List *) list_nth(context->rtableStack, var->varlevelsup);
+		rtable = (List *) list_nth(context->rtableStack, var->varlevelsup);
 		if (var->varno <= 0 || var->varno > list_length(rtable))
 			elog(ERROR, "invalid varno %d", var->varno);
 
-
-		bool save_inside_whole_row_reference = context->inside_whole_row_reference;
+		save_inside_whole_row_reference = context->inside_whole_row_reference;
 		if (var->varattno == InvalidAttrNumber)
-		{
 			context->inside_whole_row_reference = true;
-		}
 
-		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
+		rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
 		if (rte->rtekind == RTE_RELATION)
 		{
 			/*
@@ -1472,9 +1476,11 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 		{
 			/*
 			 * It's a join entry, we need to recursively go through
-			 * the RTE tree to get to the source entry for this attribute
+			 * the RTE tree to get to the source entry for this attribute.
 			 */
+			int   i;
 			List *save_rtables = context->rtableStack;
+
 			context->rtableStack = list_copy_tail(context->rtableStack,
 												  var->varlevelsup);
 
@@ -1483,7 +1489,7 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 				/*
 				 * For a whole table reference, check every column of the RTE
 				 */
-				for (int i = 0; i < list_length(rte->joinaliasvars); i++)
+				for (i = 0; i < list_length(rte->joinaliasvars); i++)
 					check_node_removed_columns_walker((Node *) list_nth(rte->joinaliasvars, i),
 													  context);
 			}
@@ -1516,19 +1522,19 @@ check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerContext *conte
 		 *
 		 * Pass QTW_IGNORE_JOINALIASES to avoid recursing into a join RTE's
 		 * joinaliasvars, as they always contain every unique column from
-		 * the joined tables. Without this flag, each join with a table
-		 * with removed columns will cause this check to trigger.
+		 * the joined tables. Meaning that without this flag, each join with
+		 * a table with removed columns would trigger this check.
 		 * For example:
 		 *
-		 * CREATE VIEW err AS SELECT jn.relname FROM (pg_class JOIN pg_namespace ON true) jn;
+		 *  CREATE VIEW err AS SELECT jn.relname FROM (pg_class JOIN pg_namespace ON true) jn;
 		 *
 		 * will be erroneously reported as referencing removed columns. Legit cases like:
 		 *
-		 * CREATE VIEW rte_join SELECT jn.relhasoids FROM (pg_class JOIN pg_namespace ON true) jn;
+		 *  CREATE VIEW rte_join AS SELECT jn.relhasoids FROM (pg_class JOIN pg_namespace ON true) jn;
 		 *
 		 * are handled when processing Var nodes, for them (rte->rtekind == RTE_JOIN)
 		 */
-		Query	*query = (Query *) node;
+		Query *query = (Query *) node;
 		context->rtableStack = lcons(query->rtable, context->rtableStack);
 		query_tree_walker(query,
 						  check_node_removed_columns_walker,
@@ -1552,23 +1558,21 @@ get_removed_columns(PG_FUNCTION_ARGS)
 	Relation 	    rel;
 	StringInfoData  buf;
 	Oid             relnamespace;
-	ListCell       *lc1;
+	ListCell       *lc;
 	char           *nspname;
 	char           *relname;
 	char           *attname;
 	char           *comes_from_whole_row_reference_string;
-	ReportedColumn *reported_column;
+	ReportedColumn *removed_column;
 	Query	       *viewquery;
-	List           *removed_columns;
 	RemovedColumnsWalkerContext context;
 
 	rel = try_relation_open(view_oid, AccessShareLock, false);
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
 
-	removed_columns = NIL;
 	context.rtableStack = NIL;
-	context.removedColumns = &removed_columns;
+	context.removedColumns = NIL;
 	context.inside_whole_row_reference = false;
 	if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
@@ -1588,28 +1592,28 @@ get_removed_columns(PG_FUNCTION_ARGS)
 	 * It will be displayed to the user.
 	 */
 	initStringInfo(&buf);
-	foreach (lc1, removed_columns)
+	foreach (lc, context.removedColumns)
 	{
-		reported_column = lfirst(lc1);
-		relname = get_rel_name(reported_column->attrelid);
+		removed_column = lfirst(lc);
+		relname = get_rel_name(removed_column->attrelid);
 		if (!relname)
-			elog(ERROR, "cache lookup failed for relation %u", reported_column->attrelid);
+			elog(ERROR, "cache lookup failed for relation %u", removed_column->attrelid);
 
-		relnamespace = get_rel_namespace(reported_column->attrelid);
+		relnamespace = get_rel_namespace(removed_column->attrelid);
 		if (!OidIsValid(relnamespace))
-			elog(ERROR, "cache lookup failed for relation %u", reported_column->attrelid);
+			elog(ERROR, "cache lookup failed for relation %u", removed_column->attrelid);
 
 		nspname = get_namespace_name(relnamespace);
 		if (!nspname)
 			elog(ERROR, "cache lookup failed for namespace %u", relnamespace);
 
-		attname = get_attname(reported_column->attrelid, reported_column->attnum);
+		attname = get_attname(removed_column->attrelid, removed_column->attnum);
 		if (!attname)
 			elog(ERROR, "cache lookup failed for attribute %d for relation %u",
-				 reported_column->attnum, reported_column->attrelid);
+				 removed_column->attnum, removed_column->attrelid);
 
 		comes_from_whole_row_reference_string = "";
-		if (reported_column->comes_from_whole_row_reference)
+		if (removed_column->comes_from_whole_row_reference)
 			comes_from_whole_row_reference_string = "(comes from a whole row reference)";
 
 		appendStringInfo(&buf, "\t%s.%s.%s %s\n", nspname, relname, attname,
