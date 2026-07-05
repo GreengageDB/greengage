@@ -1,0 +1,20 @@
+# 3rd-party package installs to /opt — intentional for database software
+addFilter("dir-or-file-in-opt")
+
+# lib/python/ contains gppylib modules imported via Python's import system,
+# not executed directly. Shebangs are for developer convenience only.
+addFilter("non-executable-script")
+addFilter("script-without-shebang")
+
+# bin/, sbin/, lib/python/ use bare 'python' interpreter intentionally.
+# On Rocky 8, python -> python2; on Rocky 9, python -> python3.11.
+addFilter("python-shebang-ambiguous")
+addFilter("env-script-interpreter")
+
+# Timezone data files are hardlinked by upstream PostgreSQL build system
+# to save disk space — standard PostgreSQL behavior, not a packaging error.
+addFilter("hardlink")
+
+# plperl.so RUNPATH points to the exact Perl version this package depends on.
+addFilter("library-without-ldconfig-postin")
+addFilter("library-without-ldconfig-postun")
