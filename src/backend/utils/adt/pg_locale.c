@@ -69,6 +69,8 @@
 #include "utils/pg_locale.h"
 #include "utils/syscache.h"
 
+#include "utils/faultinjector.h"
+
 #ifdef USE_ICU
 #include <unicode/ucnv.h>
 #include <unicode/ustring.h>

@@ -3136,7 +3136,6 @@ ReindexIndex(ReindexStmt *stmt, ReindexParams *params, bool isTopLevel)
 	persistence = get_rel_persistence(indOid);
 	relkind = get_rel_relkind(indOid);
 
-
 	/*
 	 * Reindex on partitioned index will do the reindex for each index in
 	 * it's own transaction, so dispatch the statement under ReindexPartitions.

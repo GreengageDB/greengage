@@ -4198,12 +4198,6 @@ CopyFrom(CopyState cstate)
 		{
 			if (!NextCopyFromExecute(cstate, econtext, myslot->tts_values, myslot->tts_isnull))
 				break;
-
-			/*
-			 * NextCopyFromExecute set up estate->es_result_relation_info,
-			 * and stored the tuple in the correct slot.
-			 */
-			resultRelInfo = estate->es_result_relation_info;
 		}
 		else
 		{

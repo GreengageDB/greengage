@@ -114,14 +114,6 @@
  */
 #define APPEND_CPU_COST_MULTIPLIER 0.5
 
-/*
- * Maximum value for row estimates.  We cap row estimates to this to help
- * ensure that costs based on these estimates remain within the range of what
- * double can represent.  add_path() wouldn't act sanely given infinite or NaN
- * cost values.
- */
-#define MAXIMUM_ROWCOUNT 1e100
-
 double		seq_page_cost = DEFAULT_SEQ_PAGE_COST;
 double		random_page_cost = DEFAULT_RANDOM_PAGE_COST;
 double		cpu_tuple_cost = DEFAULT_CPU_TUPLE_COST;
@@ -143,8 +135,7 @@ bool		enable_indexonlyscan = true;
 bool		enable_bitmapscan = true;
 bool		enable_tidscan = true;
 bool		enable_sort = true;
-/* GPDB_13_MERGE_FIXME: enable incremental sort */
-bool		enable_incremental_sort = false;
+bool		enable_incremental_sort = true;
 bool		enable_hashagg = true;
 bool		enable_groupagg = true;
 bool		enable_nestloop = false;
@@ -6039,7 +6030,7 @@ get_foreign_key_join_selectivity(PlannerInfo *root,
 												0,
 												jointype,
 												sjinfo,
-												false);
+												false /* use_damping */);
 						if (s0 > 0)
 							fkselec /= s0;
 					}

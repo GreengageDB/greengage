@@ -483,22 +483,18 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 
 			/* Now we can check if it'll fit in hash_mem */
 			if (subpath_is_hashable(best_path))
-			subroot->curSlice = palloc0(sizeof(PlanSlice));
-			subroot->curSlice->gangType = GANGTYPE_UNALLOCATED;
-
-			plan = create_plan(subroot, best_path, subroot->curSlice);
-			/* Decorate the top node of the plan with a Flow node. */
-			plan->flow = cdbpathtoplan_create_flow(subroot, best_path->locus);
-
-			/* Now we can check if it'll fit in hash_mem */
-			/* XXX can we check this at the Path stage? */
-			if (subplan_is_hashable(plan))
 			{
 				SubPlan    *hashplan;
 				AlternativeSubPlan *asplan;
 
+				subroot->curSlice = palloc0(sizeof(PlanSlice));
+				subroot->curSlice->gangType = GANGTYPE_UNALLOCATED;
+
 				/* OK, finish planning the ANY subquery */
-				plan = create_plan(subroot, best_path, NULL);
+				plan = create_plan(subroot, best_path, subroot->curSlice);
+				/* Decorate the top node of the plan with a Flow node. */
+				plan->flow = cdbpathtoplan_create_flow(subroot,
+													   best_path->locus);
 
 				/* ... and convert to SubPlan format */
 				hashplan = castNode(SubPlan,
@@ -1000,7 +996,7 @@ subpath_is_hashable(Path *path)
 	 */
 	subquery_size = path->rows *
 		(MAXALIGN(path->pathtarget->width) + MAXALIGN(SizeofHeapTupleHeader));
-	if (subquery_size > get_hash_memory_limit())
+	if (subquery_size > global_work_mem())
 		return false;
 
 	return true;

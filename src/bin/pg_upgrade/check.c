@@ -123,6 +123,13 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 		old_GPDB6_check_for_unsupported_sha256_password_hashes();
 
 	/*
+	 * Pre-PG 14 allowed user defined postfix operators, which are not
+	 * supported anymore.  Verify there are none, iff applicable.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1300)
+		check_for_user_defined_postfix_ops(&old_cluster);
+
+	/*
 	 * PG 14 changed polymorphic functions from anyarray to
 	 * anycompatiblearray.
 	 */

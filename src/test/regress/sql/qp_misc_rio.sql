@@ -535,7 +535,7 @@ order by a;
 -- does. The fix was submitted to upstream PostgreSQL and fixed there in
 -- version 8.4.16 (commit 5c4eb9166e.)
 -- ----------------------------------------------------------------------
-select to_date('-4713-11-23', 'yyyy-mm-dd');
-select to_date('-4713-11-24', 'yyyy-mm-dd');
+select to_date('-4714-11-23', 'yyyy-mm-dd');
+select to_date('-4714-11-24', 'yyyy-mm-dd');
 select to_date('5874897-12-31', 'yyyy-mm-dd');
 select to_date('5874898-01-01', 'yyyy-mm-dd');

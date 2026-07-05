@@ -13059,59 +13059,59 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 		/* Set up query for function-specific details */
 		appendPQExpBufferStr(query, "PREPARE dumpFunc(pg_catalog.oid) AS\n");
 
-		appendPQExpBuffer(query,
-							"SELECT\n"
-							"proretset,\n"
-							"prosrc,\n"
-							"probin,\n"
-							"provolatile,\n"
-							"proisstrict,\n"
-							"prosecdef,\n"
-							"(SELECT lanname FROM pg_catalog.pg_language WHERE oid = prolang) AS lanname,\n "
-							"proconfig,\n"
-							"procost,\n"
-							"prorows,\n"
-							"prodataaccess,\n"
-							"pg_catalog.pg_get_function_arguments(p.oid) AS funcargs,\n"
-							"pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs,\n"
-							"pg_catalog.pg_get_function_result(p.oid) AS funcresult,\n"
-							"(SELECT procallback FROM pg_catalog.pg_proc_callback WHERE profnoid::pg_catalog.oid = p.oid) as callbackfunc,\n");
+		appendPQExpBufferStr(query,
+							 "SELECT\n"
+							 "proretset,\n"
+							 "prosrc,\n"
+							 "probin,\n"
+							 "provolatile,\n"
+							 "proisstrict,\n"
+							 "prosecdef,\n"
+							 "(SELECT lanname FROM pg_catalog.pg_language WHERE oid = prolang) AS lanname,\n "
+							 "proconfig,\n"
+							 "procost,\n"
+							 "prorows,\n"
+							 "prodataaccess,\n"
+							 "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs,\n"
+							 "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs,\n"
+							 "pg_catalog.pg_get_function_result(p.oid) AS funcresult,\n"
+							 "(SELECT procallback FROM pg_catalog.pg_proc_callback WHERE profnoid::pg_catalog.oid = p.oid) as callbackfunc,\n");
 
 		if (fout->remoteVersion >= 90200)
-			appendPQExpBuffer(query,
-								"proleakproof,\n");
+			appendPQExpBufferStr(query,
+								 "proleakproof,\n");
 		else
-			appendPQExpBuffer(query,
-								"false AS proleakproof,\n");
+			appendPQExpBufferStr(query,
+								 "false AS proleakproof,\n");
 
 		/* GPDB6 added proexeclocation */
 		if (fout->remoteVersion >= GPDB6_MAJOR_PGVERSION)
-				appendPQExpBuffer(query,
-								"proexeclocation,\n");
+				appendPQExpBufferStr(query,
+									 "proexeclocation,\n");
 		else
-				appendPQExpBuffer(query,
-								"'a' as proexeclocation,\n");
+				appendPQExpBufferStr(query,
+									 "'a' as proexeclocation,\n");
 
 		if (fout->remoteVersion >= 90500)
-			appendPQExpBuffer(query,
-								"array_to_string(protrftypes, ' ') AS protrftypes,\n");
+			appendPQExpBufferStr(query,
+								 "array_to_string(protrftypes, ' ') AS protrftypes,\n");
 
 		if (fout->remoteVersion >= 90600)
-			appendPQExpBuffer(query,
-								"proparallel,\n");
+			appendPQExpBufferStr(query,
+								 "proparallel,\n");
 		else
-			appendPQExpBuffer(query,
-								"'u' AS proparallel,\n");
+			appendPQExpBufferStr(query,
+								 "'u' AS proparallel,\n");
 
 		if (fout->remoteVersion >= 110000)
-			appendPQExpBuffer(query,
-								"prokind,\n");
+			appendPQExpBufferStr(query,
+								 "prokind,\n");
 		else if (fout->remoteVersion >= 80400)
-			appendPQExpBuffer(query,
-								"CASE WHEN proiswindow THEN 'w' ELSE 'f' END AS prokind,\n");
+			appendPQExpBufferStr(query,
+								 "CASE WHEN proiswindow THEN 'w' ELSE 'f' END AS prokind,\n");
 		else
-			appendPQExpBuffer(query,
-								"CASE WHEN proiswin THEN 'w' ELSE 'f' END AS prokind,\n");
+			appendPQExpBufferStr(query,
+								 "CASE WHEN proiswin THEN 'w' ELSE 'f' END AS prokind,\n");
 
 		if (fout->remoteVersion >= 120000)
 			appendPQExpBuffer(query,
@@ -13127,7 +13127,7 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 			appendPQExpBuffer(query,
 								"NULL AS prosqlbody\n");
 
-		appendPQExpBuffer(query,
+		appendPQExpBufferStr(query,
 							 "FROM pg_catalog.pg_proc p, pg_catalog.pg_language l\n"
 							 "WHERE p.oid = $1 "
 							 "AND l.oid = p.prolang");

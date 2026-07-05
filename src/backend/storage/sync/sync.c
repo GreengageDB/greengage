@@ -21,6 +21,7 @@
 #include "access/commit_ts.h"
 #include "access/clog.h"
 #include "access/multixact.h"
+#include "access/distributedlog.h"
 #include "access/xlog.h"
 #include "access/xlogutils.h"
 #include "commands/tablespace.h"
@@ -115,6 +116,10 @@ static const SyncOps syncsw[] = {
 		.sync_syncfiletag = aosyncfiletag,
 		.sync_unlinkfiletag = mdunlinkfiletag,
 		.sync_filetagmatches = mdfiletagmatches
+	},
+	/* pg_distributedlog */
+	[SYNC_HANDLER_DISTRIBUTED_CLOG] = {
+		.sync_syncfiletag = DistributedLog_syncfiletag,
 	},
 	/* pg_xact */
 	[SYNC_HANDLER_CLOG] = {

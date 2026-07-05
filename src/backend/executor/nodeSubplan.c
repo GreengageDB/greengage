@@ -854,7 +854,7 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
 	 * This check can fail if the planner mistakenly puts a parallel-unsafe
 	 * subplan into a parallelized subquery; see ExecSerializePlan.
 	 */
-	if (sstate->planstate == NULL)
+	if (Gp_role != GP_ROLE_EXECUTE && sstate->planstate == NULL)
 		elog(ERROR, "subplan \"%s\" was not initialized",
 			 subplan->plan_name);
 

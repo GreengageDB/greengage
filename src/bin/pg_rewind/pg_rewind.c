@@ -55,11 +55,13 @@ static void findCommonAncestorTimeline(TimeLineHistoryEntry *a_history,
 									   XLogRecPtr *recptr, int *tliIndex);
 static void ensureCleanShutdown(const char *argv0);
 static void disconnect_atexit(void);
+static int32 get_target_dbid(const char *argv0);
 
 static ControlFileData ControlFile_target;
 static ControlFileData ControlFile_source;
 static ControlFileData ControlFile_source_after;
 
+int32		dbid_target;
 const char *progname;
 int			WalSegSz;
 
@@ -354,6 +356,8 @@ main(int argc, char **argv)
 	digestControlFile(&ControlFile_source, buffer, size);
 	pg_free(buffer);
 
+	dbid_target = get_target_dbid(argv[0]);
+
 	sanityChecks();
 
 	/*
@@ -527,7 +531,7 @@ main(int argc, char **argv)
 
 	if (showprogress)
 		pg_log_info("syncing target data directory");
-	sync_target_dir();
+	sync_target_dir(filemap);
 
 	/* Also update the standby configuration, if requested. */
 	if (writerecoveryconf && !dry_run)
@@ -1046,6 +1050,64 @@ digestControlFile(ControlFileData *ControlFile, const char *content,
 
 	/* Additional checks on control file */
 	checkControlFile(ControlFile);
+}
+
+static int32
+get_target_dbid(const char *argv0)
+{
+	char		cmd_output[1024];
+	FILE	   *output;
+	int32 		dbid;
+
+	int		ret;
+#define MAXCMDLEN (2 * MAXPGPATH)
+	char	exec_path[MAXPGPATH];
+	char	cmd[MAXCMDLEN];
+	long	parsed_dbid;
+
+	/* locate postgres binary */
+	if ((ret = find_other_exec(argv0, "postgres",
+							   "postgres (Greenplum Database) " PG_VERSION "\n",
+							   exec_path)) < 0)
+	{
+		char        full_path[MAXPGPATH];
+
+		if (find_my_exec(argv0, full_path) < 0)
+			strlcpy(full_path, progname, sizeof(full_path));
+
+		if (ret == -1)
+			pg_fatal("The program \"postgres\" is needed by %s but was \n"
+					 "not found in the same directory as \"%s\".\n"
+					 "Check your installation.\n", progname, full_path);
+		else
+			pg_fatal("The program \"postgres\" was found by \"%s\"\n"
+					 "but was not the same version as %s.\n"
+					 "Check your installation.\n", full_path, progname);
+	}
+
+	snprintf(cmd, MAXCMDLEN, "\"%s\" -D \"%s\" -C gp_dbid",
+			 exec_path, datadir_target);
+
+	if ((output = popen(cmd, "r")) == NULL ||
+		fgets(cmd_output, sizeof(cmd_output), output) == NULL)
+		pg_fatal("Could not get dbid using %s: %m\n",
+				 cmd);
+
+	pclose(output);
+
+	/* Remove trailing newline */
+	if (strchr(cmd_output, '\n') != NULL)
+		*strchr(cmd_output, '\n') = '\0';
+
+	errno = 0;
+	parsed_dbid = strtol(cmd_output, NULL, 10);
+	if (errno)
+		pg_fatal("could not parse valid dbid from %s\n with cmd_output %s\n", cmd, cmd_output);
+	if(parsed_dbid > INT16_MAX || parsed_dbid <= -1)
+		pg_fatal("parsed dbid (%ld) is out of valid range: [1, INT16_MAX]", parsed_dbid);
+	dbid = (int32) parsed_dbid;
+
+	return dbid;
 }
 
 /*

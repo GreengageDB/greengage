@@ -4341,7 +4341,7 @@ typedef struct ReindexStmt
 	int			options;		/* Reindex options flags */
 	bool		concurrent;		/* reindex concurrently? */
 	Oid			relid;			/* oid of table or index, used by QE */
-List	   *params;			/* list of DefElem nodes */
+	List	   *params;			/* list of DefElem nodes */
 } ReindexStmt;
 
 /* ----------------------

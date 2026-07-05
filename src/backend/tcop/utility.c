@@ -1363,9 +1363,6 @@ ProcessUtilitySlow(ParseState *pstate,
 							Datum		toast_options;
 							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
 
-							/* Remember transformed RangeVar for LIKE */
-							table_rv = cstmt->relation;
-
 							/*
 							 * If this T_CreateStmt was dispatched and we're a QE
 							 * receiving it, extract the relkind and relstorage from
@@ -1379,15 +1376,18 @@ ProcessUtilitySlow(ParseState *pstate,
 							else
 								cstmt->relKind = relKind;
 
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->relation;
+
 							/*
 							 * GPDB: Don't dispatch it yet, as we haven't
 							 * created the toast and other auxiliary tables
 							 * yet.
 							 */
 							/* Create the table itself */
-							address = DefineRelation((CreateStmt *) stmt,
+							address = DefineRelation(cstmt,
 													 relKind,
-													 ((CreateStmt *) stmt)->ownerid, NULL,
+													 cstmt->ownerid, NULL,
 													 queryString, false, true,
 													 cstmt->intoPolicy);
 
@@ -1425,19 +1425,6 @@ ProcessUtilitySlow(ParseState *pstate,
 							 */
 							CommandCounterIncrement();
 
-							/*
-							 * parse and validate reloptions for the toast
-							 * table
-							 */
-							toast_options = transformRelOptions((Datum) 0,
-																cstmt->options,
-																"toast",
-																validnsps,
-																true,
-																false);
-							(void) heap_reloptions(RELKIND_TOASTVALUE,
-												   toast_options,
-												   true);
 							if (relKind != RELKIND_COMPOSITE_TYPE)
 							{
 								/*
@@ -1445,7 +1432,7 @@ ProcessUtilitySlow(ParseState *pstate,
 								 * table
 								 */
 								toast_options = transformRelOptions((Datum) 0,
-																	((CreateStmt *) stmt)->options,
+																	cstmt->options,
 																	"toast",
 																	validnsps,
 																	true,
@@ -1825,7 +1812,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					Oid			relid;
 					LOCKMODE	lockmode;
 					int			nparts = -1;
-					bool		is_alter_table;
+					bool		is_alter_table = false; // see below
 
 					if (stmt->concurrent)
 						PreventInTransactionBlock(isTopLevel,
@@ -1901,6 +1888,29 @@ ProcessUtilitySlow(ParseState *pstate,
 					}
 
 					/*
+					 * Greengage specific behavior:
+					 * Postgres will pass false for is_alter_table for DefineIndex.
+					 * This argument is only used at two places in DefineIndex (in original postgres code):
+					 *   1. the function index_check_primary_key
+					 *   2. print a debug log on what the statement is
+					 *
+					 * In fact when calling DefineIndex here, we can always pass
+					 * false for is_alter_table when it actually comes from expandTableLikeClause:
+					 *   for 1, we are sure relationHasPrimaryKey check will pass because we are
+					 *   building a new relation with index here.
+					 *   for 2, I do not think it will mislead the user if we print it as CreateStmt.
+					 *
+					 * But for Greengage, is_alter_table matters a lot and has to be set false here:
+					 * DefineIndex need to dispatch, and if it is_alter_table is true, Greengage will
+					 * take this as a sub command of AlterTable stmt, thus it will not dispatch and
+					 * lead to errors. Thus, we comment off the following code and pass false for
+					 * is_alter_table for DefineIndex here.
+					 *
+					 * See following discussion for details:
+					 * https://www.postgresql.org/message-id/CANerzActdrdFO1r4RSqK0M2d0Xtwu5t5bH%3DZOoLsAQ%3DHhZrB%3Dg%40mail.gmail.com
+					 */
+#if 0
+					/*
 					 * If the IndexStmt is already transformed, it must have
 					 * come from generateClonedIndexStmt, which in current
 					 * usage means it came from expandTableLikeClause rather
@@ -1910,6 +1920,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					 * worth adding a separate bool field for the purpose.)
 					 */
 					is_alter_table = stmt->transformed;
+#endif
 
 					/* Run parse analysis ... */
 					stmt = transformIndexStmt(relid, stmt, queryString);

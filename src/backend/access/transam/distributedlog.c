@@ -662,8 +662,7 @@ DistributedLog_ShmemInit(void)
 	DistributedLogCtl->PagePrecedes = DistributedLog_PagePrecedes;
 	SimpleLruInit(DistributedLogCtl, "DistributedLogCtl", DistributedLog_ShmemBuffers(), 0,
 				  DistributedLogControlLock, "pg_distributedlog",
-				  LWTRANCHE_DISTRIBUTEDLOG_BUFFERS,
-				  SYNC_HANDLER_NONE);
+				  LWTRANCHE_DISTRIBUTEDLOG_BUFFERS, SYNC_HANDLER_DISTRIBUTED_CLOG);
 
 	/* Create or attach to the shared structure */
 	DistributedLogShared =
@@ -839,22 +838,6 @@ DistributedLog_Startup(TransactionId oldestActiveXid,
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-DistributedLog_Shutdown(void)
-{
-	if (IS_QUERY_DISPATCHER())
-		return;
-
-	elog((Debug_print_full_dtm ? LOG : DEBUG5),
-		 "DistributedLog_Shutdown");
-
-	/* Flush dirty DistributedLog pages to disk */
-	SimpleLruWriteAll(DistributedLogCtl, false);
-}
-
-/*
  * Perform a checkpoint --- either during shutdown, or on-the-fly
  */
 void
@@ -866,7 +849,7 @@ DistributedLog_CheckPoint(void)
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),
 		 "DistributedLog_CheckPoint");
 
-	/* Flush dirty DistributedLog pages to disk */
+	/* Write dirty DistributedLog pages to disk */
 	SimpleLruWriteAll(DistributedLogCtl, true);
 }
 
@@ -1092,4 +1075,13 @@ DistributedLog_redo(XLogReaderState *record)
 	}
 	else
 		elog(PANIC, "DistributedLog_redo: unknown op code %u", info);
+}
+
+/*
+ * Entrypoint for sync.c to sync distributed clog files.
+ */
+int
+DistributedLog_syncfiletag(const FileTag *ftag, char *path)
+{
+	return SlruSyncFileTag(DistributedLogCtl, ftag, path);
 }

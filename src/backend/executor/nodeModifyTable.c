@@ -2751,14 +2751,13 @@ ExecSplitUpdate_Insert(ModifyTableContext *context,
 {
 	ModifyTableState *mtstate = context->mtstate;
 	EState	   *estate = context->estate;
-	ResultRelInfo *resultRelInfo;
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
 	Relation	resultRelationDesc;
 	bool		partition_constraint_failed;
 
 	/*
 	 * get information on the (current) result relation
 	 */
-	resultRelInfo = estate->es_result_relation_info;
 	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	/* ensure slot is independent, consider e.g. EPQ */
@@ -4334,15 +4333,6 @@ ExecModifyTable(PlanState *pstate)
 				elog(ERROR, "unknown operation");
 				break;
 		}
-
-		/*
-		 * If the target is a partitioned table, ExecInsert / ExecUpdate /
-		 * ExecDelete might have changed es_result_relation_info to point to
-		 * a partition, instead of the top-level table. Reset it. (It would
-		 * be more tidy if those functions cleaned up after themselves, but
-		 * it's more robust to do it here just once.)
-		 */
-		estate->es_result_relation_info = resultRelInfo;
 
 		/*
 		 * If we got a RETURNING result, return it to caller.  We'll continue

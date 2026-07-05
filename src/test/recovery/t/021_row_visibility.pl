@@ -117,6 +117,10 @@ ok( send_query_and_wait(
 #
 # 5. Check that changes in prepared xacts is invisible
 #
+
+# GPDB: PREPARE TRANSACTION is not supported on GPDB, skip
+SKIP: {
+	skip "PREPARE TRANSACTION not implemented on GPDB", 4;
 ok( send_query_and_wait(
 		\%psql_primary, q[
 DELETE from test_visibility; -- delete old data, so we start with clean slate
@@ -153,6 +157,7 @@ ok( send_query_and_wait(
 		q[SELECT * FROM test_visibility ORDER BY data;],
 		qr/will_commit.*\n\(1 row\)$/m),
 	'finished prepared visible');
+} # end SKIP
 
 # explicitly shut down psql instances gracefully - to avoid hangs
 # or worse on windows

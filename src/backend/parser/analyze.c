@@ -2600,18 +2600,35 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 			Node	   *rcolnode = (Node *) rtle->expr;
 			Oid			lcoltype = exprType(lcolnode);
 			Oid			rcoltype = exprType(rcolnode);
-			Node	   *bestexpr;
+			Node	   *bestexpr = NULL;
 			int			bestlocation;
 			Oid			rescoltype = pct ? lfirst_oid(pct) : InvalidOid;
 			int32		rescoltypmod = pcm ? lfirst_int(pcm) : -1;
 			Oid			rescolcoll;
 
-			/* select common type, same as CASE et al */
-			rescoltype = select_common_type(pstate,
-											list_make2(lcolnode, rcolnode),
-											context,
-											&bestexpr);
-			bestlocation = exprLocation(bestexpr);
+			/*
+			 * If the preprocessed coltype is InvalidOid, we fall back
+			 * to the old style type resolution for backward
+			 * compatibility. See transformSetOperationStmt for the reason.
+			 */
+			if (!OidIsValid(rescoltype))
+			{
+				/* select common type, same as CASE et al */
+				rescoltype = select_common_type(pstate,
+												list_make2(lcolnode, rcolnode),
+												context,
+												&bestexpr);
+				bestlocation = exprLocation(bestexpr);
+			}
+			else
+			{
+				/*
+				 * If we used the preselected type, arbitrarily use the left
+				 * query's expression for error reporting purposes.
+				 */
+				bestexpr = lcolnode;
+				bestlocation = exprLocation(lcolnode);
+			}
 
 			/*
 			 * Verify the coercions are actually possible.  If not, we'd fail

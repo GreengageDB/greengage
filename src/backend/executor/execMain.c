@@ -4257,7 +4257,6 @@ attrMapExpr(TupleConversionMap *map, Node *expr)
 static void
 AdjustReplicatedTableCounts(EState *estate)
 {
-	int i;
 	ListCell   *l;
 	ResultRelInfo *resultRelInfo;
 	bool containReplicatedTable = false;

@@ -2126,20 +2126,6 @@ TrimMultiXact(void)
 }
 
 /*
- * This must be called ONCE during postmaster or standalone-backend shutdown
- */
-void
-ShutdownMultiXact(void)
-{
-	/* Flush dirty MultiXact pages to disk */
-	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_START(false);
-	SimpleLruWriteAll(MultiXactOffsetCtl, false);
-	SimpleLruWriteAll(MultiXactMemberCtl, false);
-
-	TRACE_POSTGRESQL_MULTIXACT_CHECKPOINT_DONE(false);
-}
-
-/*
  * Get the MultiXact data to save in a checkpoint record
  */
 void

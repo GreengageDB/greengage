@@ -108,9 +108,7 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan collate.icu.utf8
-# GPDB_13_MERGE_FIXME: enable incremental sort
-# incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.icu.utf8 incremental_sort
 
 # collate.*.utf8 tests cannot be run in parallel with each other
 test: psql psql_crosstab amutils stats_ext collate.linux.utf8 collate.windows.win1252

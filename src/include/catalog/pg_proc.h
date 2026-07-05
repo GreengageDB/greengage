@@ -255,21 +255,10 @@ extern bool function_parse_error_transpose(const char *prosrc);
 
 extern List *oid_array_to_list(Datum datum);
 
-/*
- * GPDB-specific function OIDs. PG14 disallows oid_symbol on pg_proc
- * entries, so these are declared manually here. Values must match the
- * pg_proc.dat entries with the same proname.
- */
-#define COUNT_ANY_OID         2147
-#define MEDIAN_FLOAT8_OID     6127
-#define MEDIAN_INTERVAL_OID   6128
-#define MEDIAN_TIMESTAMP_OID  6129
-#define MEDIAN_TIMESTAMPTZ_OID 6130
-
-#define IS_MEDIAN_OID(x) ((x) == MEDIAN_FLOAT8_OID || \
-						  (x) == MEDIAN_INTERVAL_OID || \
-						  (x) == MEDIAN_TIMESTAMP_OID || \
-						  (x) == MEDIAN_TIMESTAMPTZ_OID)
+#define IS_MEDIAN_OID(x) ((x) == F_MEDIAN_FLOAT8_FLOAT8 || \
+						  (x) == F_MEDIAN_FLOAT8_INTERVAL || \
+						  (x) == F_MEDIAN_FLOAT8_TIMESTAMP || \
+						  (x) == F_MEDIAN_FLOAT8_TIMESTAMPTZ)
 
 
 #endif							/* PG_PROC_H */

@@ -554,6 +554,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 set enable_indexscan = false;
 set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
+set hash_mem_multiplier = 2;
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -566,6 +567,7 @@ explain (costs off)
          count(hundred), count(thousand), count(twothousand),
          count(*)
     from tenk1 group by grouping sets (unique1,hundred,ten,four,two);
+reset hash_mem_multiplier;
 
 set work_mem = '384kB';
 explain (costs off)

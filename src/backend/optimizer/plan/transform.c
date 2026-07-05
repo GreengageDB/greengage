@@ -213,7 +213,8 @@ is_sirv_funcexpr(FuncExpr *fe)
 	if (fe->funcresulttype == RECORDOID)
 		return false;	/* Record types cannot be handled currently */
 
-	if (fe->funcid == 1574 || fe->funcid == 1575 || fe->funcid == 1576)
+	if (fe->funcid == F_NEXTVAL || fe->funcid == F_CURRVAL ||
+		fe->funcid == F_SETVAL_REGCLASS_INT8)
 		return false;	/* Function cannot be sequence related */
 
 	return true;

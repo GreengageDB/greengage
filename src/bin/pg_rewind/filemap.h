@@ -34,7 +34,8 @@ typedef enum
 
 	FILE_TYPE_REGULAR,
 	FILE_TYPE_DIRECTORY,
-	FILE_TYPE_SYMLINK
+	FILE_TYPE_SYMLINK,
+	FILE_TYPE_FIFO
 } file_type_t;
 
 /*
@@ -80,6 +81,8 @@ typedef struct file_entry_t
 	 * What will we do to the file?
 	 */
 	file_action_t action;
+
+	bool		is_gp_tablespace;	/* GPDB: entry lives under pg_tblspc/ */
 } file_entry_t;
 
 /*
@@ -111,7 +114,7 @@ extern filemap_t *decide_file_actions(void);
 extern void calculate_totals(filemap_t *filemap);
 extern void print_filemap(filemap_t *filemap);
 
-/* GPDB: AO file WAL tracking - needs adaptation for PG14 filemap */
+/* GPDB: AO file WAL tracking */
 extern void process_target_wal_aofile_change(RelFileNode rnode,
 											 int segno, int64 offset);
 

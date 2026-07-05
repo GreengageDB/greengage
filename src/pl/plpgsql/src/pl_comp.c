@@ -454,33 +454,15 @@ do_compile(FunctionCallInfo fcinfo,
 				}
 
 				/* Remember arguments in appropriate arrays */
-				switch (argmode)
-				{
-					/* input modes */
-					case PROARGMODE_IN:
-					case PROARGMODE_VARIADIC:
-						in_arg_varnos[num_in_args++] = argvariable->dno;
-						break;
-
-					/* output modes */
-					case PROARGMODE_OUT:
-					case PROARGMODE_TABLE:
-						out_arg_variables[num_out_args++] = argvariable;
-						break;
-
-					/* both */
-					case PROARGMODE_INOUT:
-						in_arg_varnos[num_in_args++] = argvariable->dno;
-						out_arg_variables[num_out_args++] = argvariable;
-						break;
-
-					default:
-						ereport(ERROR, 
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("plpgsql functions do not support argmode '%c'",
-										argmode)));
-						break;								 
-				}
+				if (argmode == PROARGMODE_IN ||
+					argmode == PROARGMODE_INOUT ||
+					(argmode == PROARGMODE_OUT && function->fn_prokind == PROKIND_PROCEDURE) ||
+					argmode == PROARGMODE_VARIADIC)
+					in_arg_varnos[num_in_args++] = argvariable->dno;
+				if (argmode == PROARGMODE_OUT ||
+					argmode == PROARGMODE_INOUT ||
+					argmode == PROARGMODE_TABLE)
+					out_arg_variables[num_out_args++] = argvariable;
 
 				/* Add to namespace under the $n name */
 				add_parameter_name(argitemtype, argvariable->dno, buf);

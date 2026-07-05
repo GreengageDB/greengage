@@ -34,14 +34,27 @@ ExceptionalCondition(const char *conditionName,
 					 const char *fileName,
 					 int lineNumber)
 {
-	/* Report the failure on stderr (or local equivalent) */
+	/*
+	 * CDB: Try to tell the QD or client what happened, going through the
+	 * error-reporting machinery so an assertion failure on a segment is
+	 * surfaced to the coordinator instead of just closing the connection.
+	 * errFatalReturn(gp_reraise_signal) makes errfinish() return to us (see
+	 * the CDB branch in errfinish) so we can fall through to abort() and
+	 * produce a core dump when gp_reraise_signal is set.
+	 */
 	if (!PointerIsValid(conditionName)
 		|| !PointerIsValid(fileName))
-		write_stderr("TRAP: ExceptionalCondition: bad arguments in PID %d\n",
-					 (int) getpid());
+		ereport(FATAL,
+				errFatalReturn(gp_reraise_signal),
+				errmsg("TRAP: ExceptionalCondition: bad arguments in PID %d",
+					   (int) getpid()));
 	else
-		write_stderr("TRAP: failed Assert(\"%s\"), File: \"%s\", Line: %d, PID: %d\n",
-					 conditionName, fileName, lineNumber, (int) getpid());
+		ereport(FATAL,
+				errFatalReturn(gp_reraise_signal),
+				errmsg("Unexpected internal error"),
+				errdetail("FailedAssertion(\"%s\", File: \"%s\", Line: %d, PID: %d)\n",
+						  conditionName, fileName, lineNumber,
+						  (int) getpid()));
 
 	/* Usually this shouldn't be needed, but make sure the msg went out */
 	fflush(stderr);

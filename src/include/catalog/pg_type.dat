@@ -673,7 +673,7 @@
   typname => 'complex', typlen => '16', typbyval => 'f', typcategory => 'N',
   typdelim => '\054', typinput => 'complex_in', typoutput => 'complex_out',
   typreceive => 'complex_recv', typsend => 'complex_send', typalign => 'd' },
-{ oid => '7053', 
+{ oid => '7053',
   descr => 'Represents a generic TABLE value expression',
   typname => 'anytable', typlen => '-1', typbyval => 'f', typtype => 'p',
   typcategory => 'P', typdelim => '\054', typinput => 'anytable_in',

@@ -1868,17 +1868,6 @@ RemoveRelations(DropStmt *drop)
 		}
 
 		/*
-		 * If we're told to drop a partitioned index, we must acquire lock on
-		 * all the children of its parent partitioned table before proceeding.
-		 * Otherwise we'd try to lock the child index partitions before their
-		 * tables, leading to potential deadlock against other sessions that
-		 * will lock those objects in the other order.
-		 */
-		if (state.actual_relkind == RELKIND_PARTITIONED_INDEX)
-			(void) find_all_inheritors(state.heapOid,
-									   state.heap_lockmode,
-									   NULL);
-		/*
 		 * Concurrent index drop cannot be used with partitioned indexes,
 		 * either.
 		 */
@@ -6425,17 +6414,6 @@ ATParseTransformCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 */
 		switch (cmd2->subtype)
 		{
-			/* Found the transformed version of our subcommand */
-			cmd2->subtype = cmd->subtype;	/* copy recursion flag */
-			newcmd = cmd2;
-
-			/*
-			 * In the QD save transformed version of definition for executing
-			 * in the QE
-			 */
-			if (Gp_role == GP_ROLE_DISPATCH)
-				cmd->def = newcmd->def;
-			break;
 			case AT_SetNotNull:
 				/* Need command-specific recursion decision */
 				ATPrepSetNotNull(wqueue, rel, cmd2,
@@ -6500,6 +6478,13 @@ ATParseTransformCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			{
 				/* Found the transformed version of our subcommand */
 				newcmd = cmd2;
+
+				/*
+				 * In the QD save transformed version of definition for
+				 * executing in the QE
+				 */
+				if (Gp_role == GP_ROLE_DISPATCH)
+					cmd->def = newcmd->def;
 			}
 			else
 				elog(ERROR, "ALTER TABLE scheduling failure: bogus item for pass %d",
@@ -9602,7 +9587,9 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 	RemoveAttrDefault(RelationGetRelid(rel), attnum, DROP_RESTRICT, false,
 					  true);
 
-	(void) StoreAttrDefault(rel, attnum, newDefault, false, NULL, NULL, true, false);
+	(void) StoreAttrDefault(rel, attnum, newDefault,
+							NULL, NULL, NULL, /* missing val stuff */
+							true, false);
 
 	ObjectAddressSubSet(address, RelationRelationId,
 						RelationGetRelid(rel), attnum);

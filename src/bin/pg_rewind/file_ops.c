@@ -35,6 +35,7 @@ static void create_target_dir(const char *path);
 static void remove_target_dir(const char *path);
 static void create_target_symlink(const char *path, const char *link);
 static void remove_target_symlink(const char *path);
+static void create_target_tablespace_layout(const char *path, const char *link);
 
 static void recurse_dir(const char *datadir, const char *parentpath,
 						process_file_callback_t callback);
@@ -165,12 +166,20 @@ create_target(file_entry_t *entry)
 			break;
 
 		case FILE_TYPE_SYMLINK:
-			create_target_symlink(entry->path, entry->source_link_target);
+			if (entry->is_gp_tablespace)
+				create_target_tablespace_layout(entry->path, entry->source_link_target);
+			else
+				create_target_symlink(entry->path, entry->source_link_target);
 			break;
 
 		case FILE_TYPE_REGULAR:
 			/* can't happen. Regular files are created with open_target_file. */
 			pg_fatal("invalid action (CREATE) for regular file");
+			break;
+
+		case FILE_TYPE_FIFO:
+			/* Only pgsql_tmp files are FIFO and they are ignored from source target. */
+			pg_fatal("invalid action (CREATE) for fifo file");
 			break;
 
 		case FILE_TYPE_UNDEFINED:
@@ -281,6 +290,32 @@ remove_target_symlink(const char *path)
 				 dstpath);
 }
 
+/* Create symlink for tablespace, create tablespace target dir */
+static void
+create_target_tablespace_layout(const char *path, const char *link)
+{
+	char		dstpath[MAXPGPATH];
+	char		*newlink;
+
+	if (dry_run)
+		return;
+
+	/* Append the target dbid to the symlink target. */
+	newlink = psprintf("%s/%d", link, dbid_target);
+
+	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
+	if (symlink(newlink, dstpath) != 0)
+		pg_fatal("could not create symbolic link at \"%s\": %m",
+				 dstpath);
+
+	/* We need to create the directory at the symlink target. */
+	if (mkdir(newlink, S_IRWXU) != 0)
+		pg_fatal("could not create directory \"%s\": %m",
+				 newlink);
+
+	pfree(newlink);
+}
+
 /*
  * Sync target data directory to ensure that modifications are safely on disk.
  *
@@ -289,16 +324,74 @@ remove_target_symlink(const char *path)
  * most dirty buffers to disk.  Additionally fsync_pgdata uses a two-pass
  * approach (only initiating writeback in the first pass), which often reduces
  * the overall amount of IO noticeably.
+ *
+ * gpdb: We assume that all files are synchronized before rewinding and thus we
+ * just need to synchronize those affected files. This is a resonable
+ * assumption for gpdb since we've ensured that the db state is clean shutdown
+ * in pg_rewind by running single mode postgres if needed and also we do not
+ * copy an unsynchronized dababase without sync as the target base.
  */
 void
-sync_target_dir(void)
+sync_target_dir(filemap_t *filemap)
 {
 	if (!do_sync || dry_run)
 		return;
 
-	fsync_pgdata(datadir_target, PG_VERSION_NUM);
-}
+	file_entry_t *entry;
+	int			  i;
 
+	if (chdir(datadir_target) < 0)
+	{
+		pg_log_error("could not change directory to \"%s\": %m", datadir_target);
+		exit(1);
+	}
+
+	for (i = 0; i < filemap->nentries; i++)
+	{
+		entry = filemap->entries[i];
+
+		if (entry->target_pages_to_overwrite.bitmapsize > 0)
+			fsync_fname(entry->path, false);
+		else
+		{
+			switch (entry->action)
+			{
+				case FILE_ACTION_COPY:
+				case FILE_ACTION_TRUNCATE:
+				case FILE_ACTION_COPY_TAIL:
+					fsync_fname(entry->path, false);
+					break;
+
+				case FILE_ACTION_CREATE:
+					fsync_fname(entry->path,
+								entry->source_type == FILE_TYPE_DIRECTORY);
+					/* FALLTHROUGH */
+				case FILE_ACTION_REMOVE:
+					/*
+					 * Fsync the parent directory if we either create or delete
+					 * files/directories in the parent directory. The parent
+					 * directory might be missing as expected, so fsync it could
+					 * fail but we ignore that error.
+					 */
+					fsync_parent_path(entry->path);
+					break;
+
+				case FILE_ACTION_NONE:
+					break;
+
+				default:
+					pg_fatal("no action decided for \"%s\"", entry->path);
+					break;
+			}
+		}
+	}
+
+	/* fsync some files that are (possibly) written by pg_rewind. */
+	fsync_fname("global/pg_control", false);
+	fsync_fname("backup_label", false);
+	fsync_fname("postgresql.auto.conf", false);
+	fsync_fname(".", true); /* due to new file backup_label. */
+}
 
 /*
  * Read a file into memory. The file to be read is <datadir>/<path>.

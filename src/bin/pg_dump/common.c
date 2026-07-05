@@ -31,9 +31,6 @@
 #include "pg_backup_utils.h"
 #include "pg_dump.h"
 
-static DumpableObject **buildIndexArray(void *objArray, int numObjs, Size objSize);
-static int	DOCatalogIdCompare(const void *p1, const void *p2);
-
 /*
  * Variables for mapping DumpId to DumpableObject
  */
@@ -822,90 +819,6 @@ findObjectByCatalogId(CatalogId catalogId)
 	if (entry == NULL)
 		return NULL;
 	return entry->dobj;
-}
-
-/*
- * Find a DumpableObject by OID, in a pre-sorted array of one type of object
- *
- * Returns NULL for unknown OID
- */
-static DumpableObject *
-findObjectByOid(Oid oid, DumpableObject **indexArray, int numObjs)
-{
-	DumpableObject **low;
-	DumpableObject **high;
-
-	/*
-	 * This is the same as findObjectByCatalogId except we assume we need not
-	 * look at table OID because the objects are all the same type.
-	 *
-	 * We could use bsearch() here, but the notational cruft of calling
-	 * bsearch is nearly as bad as doing it ourselves; and the generalized
-	 * bsearch function is noticeably slower as well.
-	 */
-	if (numObjs <= 0)
-		return NULL;
-	low = indexArray;
-	high = indexArray + (numObjs - 1);
-	while (low <= high)
-	{
-		DumpableObject **middle;
-		int			difference;
-
-		middle = low + (high - low) / 2;
-		difference = oidcmp((*middle)->catId.oid, oid);
-		if (difference == 0)
-			return *middle;
-		else if (difference < 0)
-			low = middle + 1;
-		else
-			high = middle - 1;
-	}
-	return NULL;
-}
-
-/*
- * Build an index array of DumpableObject pointers, sorted by OID
- */
-static DumpableObject **
-buildIndexArray(void *objArray, int numObjs, Size objSize)
-{
-	DumpableObject **ptrs;
-	int			i;
-
-	if (numObjs <= 0)
-		return NULL;
-
-	ptrs = (DumpableObject **) pg_malloc(numObjs * sizeof(DumpableObject *));
-	for (i = 0; i < numObjs; i++)
-		ptrs[i] = (DumpableObject *) ((char *) objArray + i * objSize);
-
-	/* We can use DOCatalogIdCompare to sort since its first key is OID */
-	if (numObjs > 1)
-		qsort((void *) ptrs, numObjs, sizeof(DumpableObject *),
-			  DOCatalogIdCompare);
-
-	return ptrs;
-}
-
-/*
- * qsort comparator for pointers to DumpableObjects
- */
-static int
-DOCatalogIdCompare(const void *p1, const void *p2)
-{
-	const DumpableObject *obj1 = *(DumpableObject *const *) p1;
-	const DumpableObject *obj2 = *(DumpableObject *const *) p2;
-	int			cmpval;
-
-	/*
-	 * Compare OID first since it's usually unique, whereas there will only be
-	 * a few distinct values of tableoid.
-	 */
-	cmpval = oidcmp(obj1->catId.oid, obj2->catId.oid);
-	if (cmpval == 0)
-		cmpval = oidcmp(obj1->catId.tableoid, obj2->catId.tableoid);
-	return cmpval;
 }
 
 /*

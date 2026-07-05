@@ -6043,6 +6043,9 @@ readNodeBinary(void)
 			case T_Sort:
 				return_value = _readSort();
 				break;
+			case T_IncrementalSort:
+				return_value = _readIncrementalSort();
+				break;
 			case T_Unique:
 				return_value = _readUnique();
 				break;

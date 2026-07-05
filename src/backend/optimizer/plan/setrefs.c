@@ -941,9 +941,11 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				/* adjust for the new range table offset */
 				tplan->scan.scanrelid += rtoffset;
 				tplan->scan.plan.targetlist =
-					fix_scan_list(root, tplan->scan.plan.targetlist, rtoffset, 1);
+					fix_scan_list(root, tplan->scan.plan.targetlist,
+								  rtoffset, NUM_EXEC_TLIST(plan));
 				tplan->scan.plan.qual =
-					fix_scan_list(root, tplan->scan.plan.qual, rtoffset, 1);
+					fix_scan_list(root, tplan->scan.plan.qual,
+								  rtoffset, NUM_EXEC_QUAL(plan));
 				tplan->function = (RangeTblFunction *)
 					fix_scan_expr(root, (Node *) tplan->function, rtoffset, 1);
 
@@ -1155,7 +1157,7 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 							pinfo->exec_pruning_steps = (List *)
 								fix_upper_expr(root, (Node *) pinfo->exec_pruning_steps,
 											   childplan_itlist, OUTER_VAR, rtoffset,
-											   NRM_EQUAL, 1);
+											   NRM_EQUAL, NUM_EXEC_TLIST(plan));
 						}
 					}
 				}
@@ -1250,7 +1252,7 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 					                                             subplan_itlist,
 					                                             OUTER_VAR,
 					                                             rtoffset,
-					                                             NRM_EQUAL, 1);
+					                                             NRM_EQUAL, NUM_EXEC_TLIST(plan));
 
 					lfirst(lc) = dqaExpr;
 				}
@@ -1586,7 +1588,9 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 					build_tlist_index(plan->lefttree->targetlist);
 
 				motion->hashExprs = (List *)
-					fix_upper_expr(root, (Node*) motion->hashExprs, childplan_itlist,  OUTER_VAR, rtoffset, NRM_EQUAL, 1);
+					fix_upper_expr(root, (Node*) motion->hashExprs,
+								   childplan_itlist,  OUTER_VAR, rtoffset,
+								   NRM_EQUAL, NUM_EXEC_TLIST(plan));
 
 				/* no need to fix targetlist and qual */
 				Assert(plan->qual == NIL);
@@ -1679,6 +1683,9 @@ set_indexonlyscan_references(PlannerInfo *root,
 					   rtoffset,
 					   NRM_EQUAL,
 					   NUM_EXEC_QUAL((Plan *) plan));
+	/* indexqualorig is already transformed to reference index columns */
+	plan->indexqualorig = fix_scan_list(root, plan->indexqualorig,
+										rtoffset, 1);
 	/* indexqual is already transformed to reference index columns */
 	plan->indexqual = fix_scan_list(root, plan->indexqual,
 									rtoffset, 1);

@@ -265,6 +265,19 @@ process_target_file(const char *path, file_type_t type, size_t size,
 	 */
 
 	/*
+	 * GPDB: leave the target's own log/ directory and the gpbackup backups/
+	 * directory untouched -- pg_rewind must neither remove nor overwrite them.
+	 * (internal.auto.conf / gp_dbid is handled in decide_file_action().)
+	 */
+	{
+		if (strstr(path, "log/") == path)
+			return;
+		if (strstr(path, "backups/") == path ||
+			strcmp(path, "backups") == 0)
+			return;
+	}
+
+	/*
 	 * Like in process_source_file, pretend that pg_wal is always a directory.
 	 */
 	if (strcmp(path, "pg_wal") == 0 && type == FILE_TYPE_SYMLINK)
@@ -340,6 +353,72 @@ process_target_wal_block_change(ForkNumber forknum, RelFileLocator rlocator,
 					datapagemap_add(&entry->target_pages_to_overwrite, blkno_inseg);
 			}
 		}
+	}
+}
+
+/*
+ * GPDB: This callback gets called while we read the WAL in the target, for
+ * every Append-Optimized segment file that was extended in the target system.
+ * AO/CO data is appended in variable-length "insert" records rather than
+ * fixed-size blocks, so we track the affected segment file's size directly
+ * instead of a page bitmap.
+ */
+void
+process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
+{
+	char	   *path;
+	file_entry_t *entry;
+	RelFileLocator rlocator;
+
+	/*
+	 * The AO WAL record carries the pre-PG16 RelFileNode shape; map it onto
+	 * the RelFileLocator that datasegpath() expects on PG16.
+	 */
+	rlocator.spcOid = rnode.spcNode;
+	rlocator.dbOid = rnode.dbNode;
+	rlocator.relNumber = rnode.relNode;
+
+	path = datasegpath(rlocator, MAIN_FORKNUM, segno);
+	entry = lookup_filehash_entry(path);
+	pfree(path);
+
+	if (entry && entry->target_exists)
+	{
+		if (entry->target_size < entry->source_size)
+		{
+			/*
+			 * If the insertion happened in the area between target_size and
+			 * source_size, no change in action is needed. But if the insert
+			 * was performed at an offset lower than the starting point, which
+			 * is target_size, reset the starting point to the lower value from
+			 * the xlog record.
+			 */
+			if (offset < entry->target_size)
+				entry->target_size = offset;
+		}
+		else
+		{
+			/*
+			 * If the insertion happened after the point we plan to truncate,
+			 * don't bother copying.
+			 */
+			if (offset < entry->source_size)
+			{
+				/*
+				 * Since target_size must be either equal to or greater than
+				 * source_size, we can safely assign offset to target_size.
+				 */
+				Assert(offset <= entry->target_size);
+				entry->target_size = offset;
+			}
+		}
+	}
+	else
+	{
+		/*
+		 * Similar to process_target_wal_block_change(), the absence of the
+		 * file entry is not an error.
+		 */
 	}
 }
 
@@ -686,9 +765,15 @@ decide_file_action(file_entry_t *entry)
 		{
 			case FILE_TYPE_DIRECTORY:
 			case FILE_TYPE_SYMLINK:
+				/* GPDB: remember tablespace symlinks so create_target() can
+				 * lay out the pg_tblspc/ directory correctly. */
+				entry->is_gp_tablespace = strncmp(entry->path, "pg_tblspc/", strlen("pg_tblspc/")) == 0;
 				return FILE_ACTION_CREATE;
 			case FILE_TYPE_REGULAR:
 				return FILE_ACTION_COPY;
+			case FILE_TYPE_FIFO:
+				/* GPDB: FIFOs (pgsql_tmp) are never copied. */
+				return FILE_ACTION_NONE;
 			case FILE_TYPE_UNDEFINED:
 				pg_fatal("unknown file type for \"%s\"", entry->path);
 				break;
@@ -783,6 +868,10 @@ decide_file_action(file_entry_t *entry)
 			}
 			break;
 
+		case FILE_TYPE_FIFO:
+			/* GPDB: FIFOs (pgsql_tmp) exist on both systems; leave them be. */
+			return FILE_ACTION_NONE;
+
 		case FILE_TYPE_UNDEFINED:
 			pg_fatal("unknown file type for \"%s\"", path);
 			break;
@@ -842,14 +931,4 @@ hash_string_pointer(const char *s)
 	unsigned char *ss = (unsigned char *) s;
 
 	return hash_bytes(ss, strlen(s));
-}
-
-/*
- * GPDB: Track AO file changes from WAL.
- * TODO: Adapt for PG14 filemap hash table API.
- */
-void
-process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
-{
-	/* No-op until adapted for PG14 filemap */
 }

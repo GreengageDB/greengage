@@ -39,10 +39,11 @@ location ('file://@hostname@@abs_srcdir@/data/region.tbl' )
 FORMAT 'text' (delimiter '|');
 -- Only tables with custom protocol should create dependency, due to a bug there
 -- used to be entries created for non custom protocol tables with refobjid=0.
-SELECT * FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
- classid | objid | objsubid | refclassid | refobjid | refobjsubid | deptype 
----------+-------+----------+------------+----------+-------------+---------
-(0 rows)
+SELECT count(*) FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
+ count 
+-------
+     0
+(1 row)
 
 -- drop tables
 DROP EXTERNAL TABLE EXT_NATION;

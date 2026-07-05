@@ -1178,7 +1178,8 @@ cdbllize_build_slice_table(PlannerInfo *root, Plan *top_plan,
 			 * list, because that would screw up the plan_id numbering of the
 			 * subplans).
 			 */
-			pfree(lfirst(lc));
+			if (lfirst(lc) != NULL)
+				pfree(lfirst(lc));
 			dummy_plan = (Plan *) make_result(NIL,
 											  (Node *) list_make1(makeBoolConst(false, false)),
 											  NULL);
@@ -1553,6 +1554,7 @@ motion_sanity_walker(Node *node, sanity_result_t *result)
 		case T_SetOp:
 		case T_Limit:
 		case T_Sort:
+		case T_IncrementalSort:
 		case T_Material:
 		case T_ForeignScan:
 			if (plan_tree_walker(node, motion_sanity_walker, result, true))

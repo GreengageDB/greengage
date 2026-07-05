@@ -27,9 +27,7 @@
 #include "pg_backup_utils.h"
 
 static void _check_database_version(ArchiveHandle *AH);
-static PGconn *_connectDB(ArchiveHandle *AH, const char *newdbname, const char *newUser);
 static void notice_processor(void *arg pg_attribute_unused(), const char *message);
-static void notice_processor(void *arg, const char *message);
 
 static void
 _check_database_version(ArchiveHandle *AH)
@@ -133,12 +131,10 @@ ConnectDatabase(Archive *AHX,
 	 * Start the connection.  Loop until we have a password if requested by
 	 * backend.
 	 */
-	const char *keywords[8];
-	const char *values[8];
+	const char *keywords[9];
+	const char *values[9];
 	do
 	{
-		const char *keywords[8];
-		const char *values[8];
 		int			i = 0;
 
 		/*
@@ -223,11 +219,11 @@ ConnectDatabase(Archive *AHX,
 	 */
 	if (AH->public.ropt && AH->public.ropt->binary_upgrade)
 	{
-		keywords[6] = "options";
-		values[6] = AH->public.remoteVersion < GPDB7_MAJOR_PGVERSION ?
+		keywords[7] = "options";
+		values[7] = AH->public.remoteVersion < GPDB7_MAJOR_PGVERSION ?
 								"-c gp_session_role=utility" : "-c gp_role=utility";
-		keywords[7] = NULL;
-		values[7] = NULL;
+		keywords[8] = NULL;
+		values[8] = NULL;
 		AH->connection = PQconnectdbParams(keywords, values, true);
 	}
 	PQsetNoticeProcessor(AH->connection, notice_processor, NULL);

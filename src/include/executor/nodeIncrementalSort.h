@@ -18,6 +18,7 @@
 extern IncrementalSortState *ExecInitIncrementalSort(IncrementalSort *node, EState *estate, int eflags);
 extern void ExecEndIncrementalSort(IncrementalSortState *node);
 extern void ExecReScanIncrementalSort(IncrementalSortState *node);
+extern void ExecSquelchIncrementalSort(IncrementalSortState *node);
 
 /* parallel instrumentation support */
 extern void ExecIncrementalSortEstimate(IncrementalSortState *node, ParallelContext *pcxt);

@@ -51,8 +51,6 @@
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
-#include "utils/faultinjector.h"
-#include "utils/gdd.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
@@ -61,6 +59,9 @@
 #include "utils/varlena.h"
 
 #include "cdb/cdbvars.h"
+#include "postmaster/fts.h"
+#include "utils/faultinjector.h"
+#include "utils/gdd.h"
 #include "utils/resgroup.h"
 #include "utils/resource_manager.h"
 #include "utils/resscheduler.h"

@@ -22,6 +22,7 @@
  * which only defines FRONTEND besides including "c.h"
  */
 #include "c.h"
+#include "common/fe_memutils.h"
 
 #ifndef WIN32
 #include <poll.h>
