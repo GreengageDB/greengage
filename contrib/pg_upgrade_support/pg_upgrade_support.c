@@ -78,9 +78,10 @@ PG_FUNCTION_INFO_V1(view_has_removed_operators);
 PG_FUNCTION_INFO_V1(view_has_removed_functions);
 PG_FUNCTION_INFO_V1(view_has_removed_types);
 PG_FUNCTION_INFO_V1(view_has_changed_function_signatures);
-PG_FUNCTION_INFO_V1(view_has_removed_tables);
+PG_FUNCTION_INFO_V1(get_removed_tables);
 PG_FUNCTION_INFO_V1(get_removed_columns);
 
+typedef struct RemovedTablesWalkerContext RemovedTablesWalkerContext;
 typedef struct RemovedColumnsWalkerContext RemovedColumnsWalkerContext;
 typedef struct RemovedColumnStatic RemovedColumnStatic;
 typedef struct RemovedColumnDynamic  RemovedColumnDynamic;
@@ -111,6 +112,11 @@ static bool check_node_removed_columns_walker(Node *node, RemovedColumnsWalkerCo
  * Moreover, they can be recreated from respective sql scripts after that,
  * changing OIDs of the objects. So, we need to ask the database for their OIDs first.
  */
+
+struct RemovedTablesWalkerContext
+{
+	List **removedTables;
+};
 
 struct RemovedColumnsWalkerContext
 {
@@ -1203,14 +1209,36 @@ check_node_changed_function_signatures_walker(Node *node, void *context)
 	return expression_tree_walker(node, check_node_changed_function_signatures_walker, context);
 }
 
-static bool is_removed_table(Oid reloid)
+static void report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
+{
+	Oid             already_reported_table;
+	ListCell       *lc;
+	List           *reported_tables;
+
+	/*
+	 * Go thorogh already reported tables to remove
+	 * duplicates
+	 */
+	reported_tables = *(context->removedTables);
+	foreach (lc, reported_tables)
+	{
+		already_reported_table = lfirst_oid(lc);
+		if (reloid == already_reported_table)
+			return;
+	}
+
+	reported_tables = lappend_oid(reported_tables, reloid);
+	*(context->removedTables) = reported_tables;
+}
+
+static void check_and_report_removed_table(RemovedTablesWalkerContext *context, Oid reloid)
 {
 	Oid gp_toolkit_oid;
 
 	for (int i = 0; i < num_removed_tables_static; i++)
 	{
 		if (reloid == removed_tables_static[i])
-			return true;
+			report_removed_table(context, reloid);
 	}
 
 	gp_toolkit_oid = GetSysCacheOid(NAMESPACENAME,
@@ -1222,17 +1250,15 @@ static bool is_removed_table(Oid reloid)
 		for (int i = 0; i < num_removed_tables_dynamic; i++)
 		{
 			if (reloid == get_relname_relid(removed_tables_dynamic[i], gp_toolkit_oid))
-			{
-				return true;
-			}
+				report_removed_table(context, reloid);
+
 		}
 	}
-	return false;
 }
 
 static bool check_node_removed_tables_walker(Node *node, void *context)
 {
-	Assert(context == NULL);
+	Assert(context != NULL);
 
 	if (node == NULL)
 		return false;
@@ -1240,7 +1266,8 @@ static bool check_node_removed_tables_walker(Node *node, void *context)
 	if (IsA(node, RangeTblEntry))
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) node;
-		return is_removed_table(rte->relid);
+		check_and_report_removed_table(context, rte->relid);
+		return false;
 	}
 	else if(IsA(node, Query))
 	{
@@ -1249,7 +1276,7 @@ static bool check_node_removed_tables_walker(Node *node, void *context)
 		 */
 		return query_tree_walker((Query *) node,
 								 check_node_removed_tables_walker,
-								 NULL,
+								 context,
 								 QTW_EXAMINE_RTES);
 	}
 
@@ -1261,38 +1288,68 @@ static bool check_node_removed_tables_walker(Node *node, void *context)
 }
 
 Datum
-view_has_removed_tables(PG_FUNCTION_ARGS)
+get_removed_tables(PG_FUNCTION_ARGS)
 {
-	Oid                     view_oid = PG_GETARG_OID(0);
-	Relation        rel = try_relation_open(view_oid, AccessShareLock, false);
-	Query           *viewquery;
-	bool            found;
+	Oid             view_oid = PG_GETARG_OID(0);
+	Relation        rel;
+	StringInfoData  buf;
+	Oid             reported_table;
+	Oid             relnamespace;
+	ListCell       *lc;
+	char           *nspname;
+	char           *relname;
+	Query		   *viewquery;
+	List		   *removed_tables;
+	RemovedTablesWalkerContext  context;
 
+	rel = try_relation_open(view_oid, AccessShareLock, false);
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
 
+	removed_tables = NIL;
+	context.removedTables = &removed_tables;
 	if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		viewquery = get_view_query(rel);
-		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
+		check_node_removed_tables_walker((Node *) viewquery, &context);
 	}
 	else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
 	{
 		viewquery = get_matview_query(rel);
-		found = check_node_removed_tables_walker((Node *) viewquery, NULL);
+		check_node_removed_tables_walker((Node *) viewquery, &context);
 	}
-	else
-		found = false;
 
 	relation_close(rel, AccessShareLock);
 
-	PG_RETURN_BOOL(found);
+	/*
+	 * Make a single formatted string, listing all unique removed columns.
+	 * It will be displayed to the user.
+	 */
+	initStringInfo(&buf);
+	foreach (lc, removed_tables)
+	{
+		reported_table = lfirst_oid(lc);
+		relname = get_rel_name(reported_table);
+		if (!relname)
+			elog(ERROR, "cache lookup failed for relation %u", reported_table);
+
+		relnamespace = get_rel_namespace(reported_table);
+		if (!OidIsValid(relnamespace))
+			elog(ERROR, "cache lookup failed for relation %u", reported_table);
+
+		nspname = get_namespace_name(relnamespace);
+		if (!nspname)
+			elog(ERROR, "cache lookup failed for namespace %u", relnamespace);
+
+		appendStringInfo(&buf, "\t%s.%s\n", nspname, relname);
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(buf.data));
 }
 
 
 static void report_removed_column(RemovedColumnsWalkerContext *context, Oid reloid, int attnum)
 {
-	bool            already_reported;
 	ListCell       *lc;
 	List           *reported_columns;
 	ReportedColumn *already_reported_column;
@@ -1305,7 +1362,6 @@ static void report_removed_column(RemovedColumnsWalkerContext *context, Oid relo
 	 * (currently, 110), and most view wouldn't have all of them.
 	 * But it is hard to tell without user data.
 	 */
-	already_reported = false;
 	reported_columns = *(context->removedColumns);
 	foreach (lc, reported_columns)
 	{
@@ -1313,9 +1369,7 @@ static void report_removed_column(RemovedColumnsWalkerContext *context, Oid relo
 		if (reloid == already_reported_column->attrelid &&
 			attnum == already_reported_column->attnum &&
 			context->inside_whole_row_reference == already_reported_column->comes_from_whole_row_reference)
-		{
 			return;
-		}
 	}
 
 	column = palloc(sizeof(ReportedColumn));
