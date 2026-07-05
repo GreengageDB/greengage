@@ -1228,11 +1228,9 @@ setupUDPListeningSocket(int *listenerSocketFd, uint16 *listenerPort, int *txFami
 	for (addr = addrs; addr != NULL; addr = addr->ai_next)
 	{
 
-#ifdef HAVE_UNIX_SOCKETS
 		/* Ignore AF_UNIX sockets, if any are returned. */
 		if (addr->ai_family == AF_UNIX)
 			continue;
-#endif
 
 		ereportif(++tries > 1 && gp_log_interconnect >= GPVARS_VERBOSITY_DEBUG, DEBUG3,
 				  errmsg("trying another address for UDP interconnect socket"));

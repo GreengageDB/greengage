@@ -574,16 +574,20 @@ internal_client_authentication(Port *port)
 				 "connection protocol");
 			return false;
 		}
-#ifdef HAVE_UNIX_SOCKETS
 		else if (port->raddr.addr.ss_family == AF_UNIX)
 		{
 			/*
-			 * Internal connection via a domain socket -- consider it authenticated
+			 * Internal connection via a domain socket -- consider it authenticated.
+			 *
+			 * PG16 removed the HAVE_UNIX_SOCKETS macro (Unix-domain sockets are
+			 * now unconditionally supported), so this branch must always be
+			 * compiled -- otherwise an entry-DB / QE-at-the-coordinator internal
+			 * connection arriving over the [local] socket would fall through to
+			 * the reject case below and be denied by pg_hba.
 			 */
 			FakeClientAuthentication(port);
 			return true;
 		}
-#endif   /* HAVE_UNIX_SOCKETS */
 		else
 		{
 			/* Security violation? */

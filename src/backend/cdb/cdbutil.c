@@ -1266,11 +1266,9 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 		hostinfo[0] = '\0';
 		for (addr = addrs; addr; addr = addr->ai_next)
 		{
-#ifdef HAVE_UNIX_SOCKETS
 			/* Ignore AF_UNIX sockets, if any are returned. */
 			if (addr->ai_family == AF_UNIX)
 				continue;
-#endif
 			if (addr->ai_family == AF_INET) /* IPv4 address */
 			{
 				memset(hostinfo, 0, sizeof(hostinfo));
