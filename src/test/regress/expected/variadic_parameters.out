@@ -20,24 +20,24 @@ select * from print_name;
   concat   
 -----------
  John Woo
- Jerry Lau
  Jim Ng
+ Jerry Lau
 (3 rows)
 
 select pg_get_viewdef('print_name');
-                                 pg_get_viewdef                                  
----------------------------------------------------------------------------------
-  SELECT concat(' '::text, VARIADIC ARRAY[people.fname, people.lname]) AS concat+
-    FROM people                                                                 +
-   WHERE (people.id < 790);
+                          pg_get_viewdef                           
+-------------------------------------------------------------------
+  SELECT concat(' '::text, VARIADIC ARRAY[fname, lname]) AS concat+
+    FROM people                                                   +
+   WHERE (id < 790);
 (1 row)
 
 select pg_get_viewdef('print_name', true);
-                                 pg_get_viewdef                                  
----------------------------------------------------------------------------------
-  SELECT concat(' '::text, VARIADIC ARRAY[people.fname, people.lname]) AS concat+
-    FROM people                                                                 +
-   WHERE people.id < 790;
+                          pg_get_viewdef                           
+-------------------------------------------------------------------
+  SELECT concat(' '::text, VARIADIC ARRAY[fname, lname]) AS concat+
+    FROM people                                                   +
+   WHERE id < 790;
 (1 row)
 
 drop view print_name;
@@ -50,14 +50,14 @@ $$ language sql strict;
 select * from tfunc ('hello', 'morning');
  id  |         tx         
 -----+--------------------
+ 770 | hello, Woo.John
+ 770 | morning, Woo.John
  778 | hello, Lau.Jerry
  771 | hello, Ng.Jim
- 790 | hello, Smith.Jen
- 770 | hello, Woo.John
  778 | morning, Lau.Jerry
  771 | morning, Ng.Jim
+ 790 | hello, Smith.Jen
  790 | morning, Smith.Jen
- 770 | morning, Woo.John
 (8 rows)
 
 drop table people;
