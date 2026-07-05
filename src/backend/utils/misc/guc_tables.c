@@ -903,7 +903,7 @@ struct config_bool ConfigureNamesBool[] =
 			GUC_EXPLAIN
 		},
 		&enable_incremental_sort,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 	{
