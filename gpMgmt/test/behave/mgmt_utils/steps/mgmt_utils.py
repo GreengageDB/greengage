@@ -3767,6 +3767,13 @@ def impl(context):
     with closing(dbconn.connect(dbconn.DbURL(), cursorFactory=psycopg2.extras.NamedTupleCursor)) as conn:
         rows = dbconn.query(conn, "SELECT name, setting FROM pg_settings WHERE name LIKE 'lc_%'").fetchall()
         context.database_locales = {row.name: row.setting for row in rows}
+        # PostgreSQL 16 removed lc_collate and lc_ctype as GUCs (they are no
+        # longer in pg_settings); they are now per-database properties, so read
+        # them from pg_database.
+        dbrows = dbconn.query(conn, "SELECT datcollate AS lc_collate, datctype AS lc_ctype FROM pg_database WHERE datname = current_database()").fetchall()
+        for row in dbrows:
+            context.database_locales['lc_collate'] = row.lc_collate
+            context.database_locales['lc_ctype'] = row.lc_ctype
 
 def check_locales(database_locales, locale_names, expected):
     locale_names = locale_names.split(',')
