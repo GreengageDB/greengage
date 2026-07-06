@@ -5263,14 +5263,16 @@ copy pt_td_leak from '/tmp/pt_td_leak.out' with delimiter ',';
 select * from pt_td_leak where col1 = 5;
  col1 | col2 | col3 
 ------+------+------
-(0 rows)
+    5 |    5 |    5
+(1 row)
 
 -- Check that data inserted into dropped/added column is correct
 select * from pt_td_leak where col3 = 1;
  col1 | col2 | col3 
 ------+------+------
+    1 |    1 |    1
     1 |    8 |    1
-(1 row)
+(2 rows)
 
 drop table pt_td_leak;
 drop table pt_td_leak_exchange;
@@ -5311,9 +5313,24 @@ COPY pt_dropped_col_distkey TO '/tmp/pt_dropped_col_distkey.out';
 DELETE FROM pt_dropped_col_distkey;
 COPY pt_dropped_col_distkey FROM '/tmp/pt_dropped_col_distkey.out';
 SELECT * FROM pt_dropped_col_distkey ORDER BY i;
- i | t 
----+---
-(0 rows)
+ i  |       t       
+----+---------------
+  1 | before drop 1
+  2 | before drop 2
+  3 | before drop 3
+  4 | before drop 4
+  5 | before drop 5
+  6 | before drop 6
+  7 | before drop 7
+  8 | after drop 8
+  9 | after drop 9
+ 10 | after drop 10
+ 11 | after drop 11
+ 12 | after drop 12
+ 13 | after drop 13
+ 14 | after drop 14
+ 15 | after drop 15
+(15 rows)
 
 -- don't drop the table, so that we have a partitioned table like this still
 -- in the database, when we test pg_upgrade later.
