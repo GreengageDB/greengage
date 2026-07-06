@@ -12,11 +12,9 @@ step merge1:
 
 step c1: COMMIT;
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  2|setup1 updated by merge1
-(1 row)
+key            val            
 
+2              setup1 updated by merge1
 step c2: COMMIT;
 
 starting permutation: merge1 c1 merge2a select2 c2
@@ -40,12 +38,10 @@ step merge2a:
 	UPDATE set key = t.key + 1, val = t.val || ' updated by ' || s.val;
 
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  2|setup1 updated by merge1
-  1|merge2a                 
-(2 rows)
+key            val            
 
+2              setup1 updated by merge1
+1              merge2a        
 step c2: COMMIT;
 
 starting permutation: merge1 merge2a c1 select2 c2
@@ -70,12 +66,10 @@ step merge2a:
 step c1: COMMIT;
 step merge2a: <... completed>
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  2|setup1 updated by merge1
-  1|merge2a                 
-(2 rows)
+key            val            
 
+2              setup1 updated by merge1
+1              merge2a        
 step c2: COMMIT;
 
 starting permutation: merge1 merge2a a1 select2 c2
@@ -100,11 +94,9 @@ step merge2a:
 step a1: ABORT;
 step merge2a: <... completed>
 step select2: SELECT * FROM target;
-key|val                      
----+-------------------------
-  2|setup1 updated by merge2a
-(1 row)
+key            val            
 
+2              setup1 updated by merge2a
 step c2: COMMIT;
 
 starting permutation: merge1 merge2b c1 select2 c2
@@ -129,12 +121,10 @@ step merge2b:
 step c1: COMMIT;
 step merge2b: <... completed>
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  2|setup1 updated by merge1
-  1|merge2b                 
-(2 rows)
+key            val            
 
+2              setup1 updated by merge1
+1              merge2b        
 step c2: COMMIT;
 
 starting permutation: merge1 merge2c c1 select2 c2
@@ -159,12 +149,10 @@ step merge2c:
 step c1: COMMIT;
 step merge2c: <... completed>
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  2|setup1 updated by merge1
-  1|merge2c                 
-(2 rows)
+key            val            
 
+2              setup1 updated by merge1
+1              merge2c        
 step c2: COMMIT;
 
 starting permutation: pa_merge1 pa_merge2a c1 pa_select2 c2
@@ -189,12 +177,10 @@ step pa_merge2a:
 step c1: COMMIT;
 step pa_merge2a: <... completed>
 step pa_select2: SELECT * FROM pa_target;
-key|val                                               
----+--------------------------------------------------
-  2|initial                                           
-  2|initial updated by pa_merge1 updated by pa_merge2a
-(2 rows)
+key            val            
 
+2              initial        
+2              initial updated by pa_merge1 updated by pa_merge2a
 step c2: COMMIT;
 
 starting permutation: pa_merge2 pa_merge2a c1 pa_select2 c2
@@ -218,7 +204,7 @@ step pa_merge2a:
  <waiting ...>
 step c1: COMMIT;
 step pa_merge2a: <... completed>
-ERROR:  tuple to be locked was already moved to another partition due to concurrent update
+ERROR:  tuple to be locked was already moved to another partition or segment due to concurrent update
 step pa_select2: SELECT * FROM pa_target;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 step c2: COMMIT;
@@ -244,13 +230,11 @@ step pa_merge2a:
 	UPDATE set key = t.key + 1, val = t.val || ' updated by ' || s.val;
 
 step pa_select2: SELECT * FROM pa_target;
-key|val                         
----+----------------------------
-  1|pa_merge2a                  
-  2|initial                     
-  2|initial updated by pa_merge2
-(3 rows)
+key            val            
 
+1              pa_merge2a     
+2              initial        
+2              initial updated by pa_merge2
 step c2: COMMIT;
 
 starting permutation: pa_merge3 pa_merge2b_when c1 pa_select2 c2
@@ -275,12 +259,10 @@ step pa_merge2b_when:
 step c1: COMMIT;
 step pa_merge2b_when: <... completed>
 step pa_select2: SELECT * FROM pa_target;
-key|val           
----+--------------
-  1|prefix initial
-  2|initial       
-(2 rows)
+key            val            
 
+1              prefix initial 
+2              initial        
 step c2: COMMIT;
 
 starting permutation: pa_merge1 pa_merge2b_when c1 pa_select2 c2
@@ -305,10 +287,8 @@ step pa_merge2b_when:
 step c1: COMMIT;
 step pa_merge2b_when: <... completed>
 step pa_select2: SELECT * FROM pa_target;
-key|val                                                    
----+-------------------------------------------------------
-  2|initial                                                
-  2|initial updated by pa_merge1 updated by pa_merge2b_when
-(2 rows)
+key            val            
 
+2              initial        
+2              initial updated by pa_merge1 updated by pa_merge2b_when
 step c2: COMMIT;

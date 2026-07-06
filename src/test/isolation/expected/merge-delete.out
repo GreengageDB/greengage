@@ -4,9 +4,7 @@ starting permutation: delete c1 select2 c2
 step delete: DELETE FROM target t WHERE t.key = 1;
 step c1: COMMIT;
 step select2: SELECT * FROM target;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -14,9 +12,7 @@ starting permutation: delete_pa c1 select2_pa c2
 step delete_pa: DELETE FROM target_pa t WHERE t.key = 1;
 step c1: COMMIT;
 step select2_pa: SELECT * FROM target_pa;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -25,9 +21,7 @@ s1: NOTICE:  Delete: (1,setup1)
 step delete_tg: DELETE FROM target_tg t WHERE t.key = 1;
 step c1: COMMIT;
 step select2_tg: SELECT * FROM target_tg;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -36,9 +30,7 @@ step delete: DELETE FROM target t WHERE t.key = 1;
 step c1: COMMIT;
 step update2: UPDATE target t SET val = t.val || ' updated by update2' WHERE t.key = 1;
 step select2: SELECT * FROM target;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -47,9 +39,7 @@ step delete_pa: DELETE FROM target_pa t WHERE t.key = 1;
 step c1: COMMIT;
 step update2_pa: UPDATE target_pa t SET val = t.val || ' updated by update2_pa' WHERE t.key = 1;
 step select2_pa: SELECT * FROM target_pa;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -59,9 +49,7 @@ step delete_tg: DELETE FROM target_tg t WHERE t.key = 1;
 step c1: COMMIT;
 step update2_tg: UPDATE target_tg t SET val = t.val || ' updated by update2_tg' WHERE t.key = 1;
 step select2_tg: SELECT * FROM target_tg;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -70,11 +58,9 @@ step delete: DELETE FROM target t WHERE t.key = 1;
 step c1: COMMIT;
 step merge2: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set key = t.key + 1, val = t.val || ' updated by ' || s.val;
 step select2: SELECT * FROM target;
-key|val   
----+------
-  1|merge2
-(1 row)
+key            val            
 
+1              merge2         
 step c2: COMMIT;
 
 starting permutation: delete_pa c1 merge2_pa select2_pa c2
@@ -82,11 +68,9 @@ step delete_pa: DELETE FROM target_pa t WHERE t.key = 1;
 step c1: COMMIT;
 step merge2_pa: MERGE INTO target_pa t USING (SELECT 1 as key, 'merge2_pa' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set key = t.key + 1, val = t.val || ' updated by ' || s.val;
 step select2_pa: SELECT * FROM target_pa;
-key|val      
----+---------
-  1|merge2_pa
-(1 row)
+key            val            
 
+1              merge2_pa      
 step c2: COMMIT;
 
 starting permutation: delete_tg c1 merge2_tg select2_tg c2
@@ -96,11 +80,9 @@ step c1: COMMIT;
 s2: NOTICE:  Insert: (1,merge2_tg)
 step merge2_tg: MERGE INTO target_tg t USING (SELECT 1 as key, 'merge2_tg' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set key = t.key + 1, val = t.val || ' updated by ' || s.val;
 step select2_tg: SELECT * FROM target_tg;
-key|val      
----+---------
-  1|merge2_tg
-(1 row)
+key            val            
 
+1              merge2_tg      
 step c2: COMMIT;
 
 starting permutation: delete c1 merge_delete2 select2 c2
@@ -108,11 +90,9 @@ step delete: DELETE FROM target t WHERE t.key = 1;
 step c1: COMMIT;
 step merge_delete2: MERGE INTO target t USING (SELECT 1 as key, 'merge_delete2' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN DELETE;
 step select2: SELECT * FROM target;
-key|val          
----+-------------
-  1|merge_delete2
-(1 row)
+key            val            
 
+1              merge_delete2  
 step c2: COMMIT;
 
 starting permutation: delete_tg c1 merge_delete2_tg select2_tg c2
@@ -122,11 +102,9 @@ step c1: COMMIT;
 s2: NOTICE:  Insert: (1,merge_delete2_tg)
 step merge_delete2_tg: MERGE INTO target_tg t USING (SELECT 1 as key, 'merge_delete2_tg' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN DELETE;
 step select2_tg: SELECT * FROM target_tg;
-key|val             
----+----------------
-  1|merge_delete2_tg
-(1 row)
+key            val            
 
+1              merge_delete2_tg
 step c2: COMMIT;
 
 starting permutation: delete update2 c1 select2 c2
@@ -135,9 +113,7 @@ step update2: UPDATE target t SET val = t.val || ' updated by update2' WHERE t.k
 step c1: COMMIT;
 step update2: <... completed>
 step select2: SELECT * FROM target;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -147,9 +123,7 @@ step update2_pa: UPDATE target_pa t SET val = t.val || ' updated by update2_pa' 
 step c1: COMMIT;
 step update2_pa: <... completed>
 step select2_pa: SELECT * FROM target_pa;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -160,9 +134,7 @@ step update2_tg: UPDATE target_tg t SET val = t.val || ' updated by update2_tg' 
 step c1: COMMIT;
 step update2_tg: <... completed>
 step select2_tg: SELECT * FROM target_tg;
-key|val
----+---
-(0 rows)
+key            val            
 
 step c2: COMMIT;
 
@@ -172,11 +144,9 @@ step merge2: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s
 step c1: COMMIT;
 step merge2: <... completed>
 step select2: SELECT * FROM target;
-key|val   
----+------
-  1|merge2
-(1 row)
+key            val            
 
+1              merge2         
 step c2: COMMIT;
 
 starting permutation: delete_pa merge2_pa c1 select2_pa c2
@@ -185,11 +155,9 @@ step merge2_pa: MERGE INTO target_pa t USING (SELECT 1 as key, 'merge2_pa' as va
 step c1: COMMIT;
 step merge2_pa: <... completed>
 step select2_pa: SELECT * FROM target_pa;
-key|val      
----+---------
-  1|merge2_pa
-(1 row)
+key            val            
 
+1              merge2_pa      
 step c2: COMMIT;
 
 starting permutation: delete_tg merge2_tg c1 select2_tg c2
@@ -200,11 +168,9 @@ step c1: COMMIT;
 s2: NOTICE:  Insert: (1,merge2_tg)
 step merge2_tg: <... completed>
 step select2_tg: SELECT * FROM target_tg;
-key|val      
----+---------
-  1|merge2_tg
-(1 row)
+key            val            
 
+1              merge2_tg      
 step c2: COMMIT;
 
 starting permutation: delete merge_delete2 c1 select2 c2
@@ -213,11 +179,9 @@ step merge_delete2: MERGE INTO target t USING (SELECT 1 as key, 'merge_delete2' 
 step c1: COMMIT;
 step merge_delete2: <... completed>
 step select2: SELECT * FROM target;
-key|val          
----+-------------
-  1|merge_delete2
-(1 row)
+key            val            
 
+1              merge_delete2  
 step c2: COMMIT;
 
 starting permutation: delete_tg merge_delete2_tg c1 select2_tg c2
@@ -228,9 +192,7 @@ step c1: COMMIT;
 s2: NOTICE:  Insert: (1,merge_delete2_tg)
 step merge_delete2_tg: <... completed>
 step select2_tg: SELECT * FROM target_tg;
-key|val             
----+----------------
-  1|merge_delete2_tg
-(1 row)
+key            val            
 
+1              merge_delete2_tg
 step c2: COMMIT;

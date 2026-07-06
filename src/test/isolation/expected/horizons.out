@@ -9,39 +9,32 @@ step ll_start:
     BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     SELECT 1;
 
-?column?
---------
-       1
-(1 row)
+?column?       
 
+1              
 step pruner_query_plan: 
     EXPLAIN (COSTS OFF) SELECT * FROM horizons_tst ORDER BY data;
 
-QUERY PLAN                                                 
------------------------------------------------------------
+QUERY PLAN     
+
 Index Only Scan using horizons_tst_data_key on horizons_tst
-(1 row)
-
+Optimizer: Postgres query optimizer
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_delete: 
     DELETE FROM horizons_tst;
 
@@ -50,21 +43,17 @@ step pruner_query:
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step ll_commit: COMMIT;
 step pruner_drop: 
     DROP TABLE horizons_tst;
@@ -79,39 +68,32 @@ step ll_start:
     BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     SELECT 1;
 
-?column?
---------
-       1
-(1 row)
+?column?       
 
+1              
 step pruner_query_plan: 
     EXPLAIN (COSTS OFF) SELECT * FROM horizons_tst ORDER BY data;
 
-QUERY PLAN                                                 
------------------------------------------------------------
+QUERY PLAN     
+
 Index Only Scan using horizons_tst_data_key on horizons_tst
-(1 row)
-
+Optimizer: Postgres query optimizer
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_delete: 
     DELETE FROM horizons_tst;
 
@@ -120,21 +102,17 @@ step pruner_query:
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       0
-(1 row)
+?column?       
 
+0              
 step ll_commit: COMMIT;
 step pruner_drop: 
     DROP TABLE horizons_tst;
@@ -149,31 +127,25 @@ step ll_start:
     BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     SELECT 1;
 
-?column?
---------
-       1
-(1 row)
+?column?       
 
+1              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_begin: BEGIN;
 step pruner_delete: 
     DELETE FROM horizons_tst;
@@ -183,21 +155,17 @@ step pruner_query:
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step ll_commit: COMMIT;
 step pruner_commit: COMMIT;
 step pruner_drop: 
@@ -213,31 +181,25 @@ step ll_start:
     BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     SELECT 1;
 
-?column?
---------
-       1
-(1 row)
+?column?       
 
+1              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_delete: 
     DELETE FROM horizons_tst;
 
@@ -249,21 +211,17 @@ step pruner_query:
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step ll_commit: COMMIT;
 step pruner_drop: 
     DROP TABLE horizons_tst;
@@ -278,31 +236,25 @@ step ll_start:
     BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     SELECT 1;
 
-?column?
---------
-       1
-(1 row)
+?column?       
 
+1              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       2
-(1 row)
+?column?       
 
+2              
 step pruner_delete: 
     DELETE FROM horizons_tst;
 
@@ -314,21 +266,17 @@ step pruner_query:
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       0
-(1 row)
+?column?       
 
+0              
 step pruner_query: 
     SELECT explain_json($$
         EXPLAIN (FORMAT json, BUFFERS, ANALYZE)
 	  SELECT * FROM horizons_tst ORDER BY data;$$)->0->'Plan'->'Heap Fetches';
 
-?column?
---------
-       0
-(1 row)
+?column?       
 
+0              
 step ll_commit: COMMIT;
 step pruner_drop: 
     DROP TABLE horizons_tst;

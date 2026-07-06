@@ -367,18 +367,12 @@ step controller_print_speculative_locks:
         AND pa.application_name LIKE 'isolation/insert-conflict-specconflict/s%'
     ORDER BY 1, 2, 3, 4;
 
-application_name                         |locktype     |mode         |granted
------------------------------------------+-------------+-------------+-------
-isolation/insert-conflict-specconflict/s1|spectoken    |ShareLock    |f      
-isolation/insert-conflict-specconflict/s1|transactionid|ExclusiveLock|t      
-isolation/insert-conflict-specconflict/s2|spectoken    |ExclusiveLock|t      
-isolation/insert-conflict-specconflict/s2|transactionid|ExclusiveLock|t      
-(4 rows)
+application_namelocktype       mode           granted        
 
-isolation/insert-conflict-specconflict-s1spectoken      ShareLock      f              
-isolation/insert-conflict-specconflict-s1transactionid  ExclusiveLock  t              
-isolation/insert-conflict-specconflict-s2spectoken      ExclusiveLock  t              
-isolation/insert-conflict-specconflict-s2transactionid  ExclusiveLock  t              
+isolation/insert-conflict-specconflict/s1spectoken      ShareLock      f              
+isolation/insert-conflict-specconflict/s1transactionid  ExclusiveLock  t              
+isolation/insert-conflict-specconflict/s2spectoken      ExclusiveLock  t              
+isolation/insert-conflict-specconflict/s2transactionid  ExclusiveLock  t              
 step controller_unlock_2_4: SELECT pg_advisory_unlock(2, 4);
 pg_advisory_unlock
 
@@ -396,16 +390,11 @@ step controller_print_speculative_locks:
         AND pa.application_name LIKE 'isolation/insert-conflict-specconflict/s%'
     ORDER BY 1, 2, 3, 4;
 
-application_name                         |locktype     |mode         |granted
------------------------------------------+-------------+-------------+-------
-isolation/insert-conflict-specconflict/s1|transactionid|ExclusiveLock|t      
-isolation/insert-conflict-specconflict/s1|transactionid|ShareLock    |f      
-isolation/insert-conflict-specconflict/s2|transactionid|ExclusiveLock|t      
-(3 rows)
+application_namelocktype       mode           granted        
 
-isolation/insert-conflict-specconflict-s1transactionid  ExclusiveLock  t              
-isolation/insert-conflict-specconflict-s1transactionid  ShareLock      f              
-isolation/insert-conflict-specconflict-s2transactionid  ExclusiveLock  t              
+isolation/insert-conflict-specconflict/s1transactionid  ExclusiveLock  t              
+isolation/insert-conflict-specconflict/s1transactionid  ShareLock      f              
+isolation/insert-conflict-specconflict/s2transactionid  ExclusiveLock  t              
 step s2_commit: COMMIT;
 s1: NOTICE:  blurt_and_lock_123() called for k1 in session 1
 s1: NOTICE:  acquiring advisory lock on 2

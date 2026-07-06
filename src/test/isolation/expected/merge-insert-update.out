@@ -4,11 +4,9 @@ starting permutation: merge1 c1 select2 c2
 step merge1: MERGE INTO target t USING (SELECT 1 as key, 'merge1' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set val = t.val || ' updated by merge1';
 step c1: COMMIT;
 step select2: SELECT * FROM target;
-key|val   
----+------
-  1|merge1
-(1 row)
+key            val            
 
+1              merge1         
 step c2: COMMIT;
 
 starting permutation: merge1 c1 merge2 select2 c2
@@ -16,11 +14,9 @@ step merge1: MERGE INTO target t USING (SELECT 1 as key, 'merge1' as val) s ON s
 step c1: COMMIT;
 step merge2: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set val = t.val || ' updated by merge2';
 step select2: SELECT * FROM target;
-key|val                     
----+------------------------
-  1|merge1 updated by merge2
-(1 row)
+key            val            
 
+1              merge1 updated by merge2
 step c2: COMMIT;
 
 starting permutation: insert1 merge2 c1 select2 c2
@@ -49,11 +45,9 @@ step merge2: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s
 step a1: ABORT;
 step merge2: <... completed>
 step select2: SELECT * FROM target;
-key|val   
----+------
-  1|merge2
-(1 row)
+key            val            
 
+1              merge2         
 step c2: COMMIT;
 
 starting permutation: delete1 insert1 c1 merge2 select2 c2
@@ -62,11 +56,9 @@ step insert1: INSERT INTO target VALUES (1, 'insert1');
 step c1: COMMIT;
 step merge2: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s.key = t.key WHEN NOT MATCHED THEN INSERT VALUES (s.key, s.val) WHEN MATCHED THEN UPDATE set val = t.val || ' updated by merge2';
 step select2: SELECT * FROM target;
-key|val                      
----+-------------------------
-  1|insert1 updated by merge2
-(1 row)
+key            val            
 
+1              insert1 updated by merge2
 step c2: COMMIT;
 
 starting permutation: delete1 insert1 merge2 c1 select2 c2
@@ -86,9 +78,7 @@ step insert1: INSERT INTO target VALUES (1, 'insert1');
 step merge2i: MERGE INTO target t USING (SELECT 1 as key, 'merge2' as val) s ON s.key = t.key WHEN MATCHED THEN UPDATE set val = t.val || ' updated by merge2';
 step c1: COMMIT;
 step select2: SELECT * FROM target;
-key|val    
----+-------
-  1|insert1
-(1 row)
+key            val            
 
+1              insert1        
 step c2: COMMIT;
