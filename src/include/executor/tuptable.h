@@ -237,7 +237,7 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
-#define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual || (slot)->tts_ops == &TTSOpsVirtualAOCS)
+#define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
 #define TTS_IS_VIRTUAL_AOCS(slot) ((slot)->tts_ops == &TTSOpsVirtualAOCS)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
