@@ -3781,6 +3781,13 @@ def check_locales(database_locales, locale_names, expected):
         if name not in database_locales:
             raise Exception("Locale %s is invalid" % name)
         locale = database_locales[name]
+        # PostgreSQL 16's initdb only writes lc_messages into postgresql.conf
+        # when it differs from "C" (see setup_config() in initdb.c); for the C
+        # locale the line stays commented and the GUC keeps its empty boot_val
+        # (''). An empty lc_messages means "use the server's startup
+        # environment", which is C here, so treat '' as 'C'.
+        if name == 'lc_messages' and locale == '' and expected == 'C':
+            locale = 'C'
         if locale != expected:
             raise Exception("Expected %s to be %s, but it was %s" % (name, expected, locale))
 

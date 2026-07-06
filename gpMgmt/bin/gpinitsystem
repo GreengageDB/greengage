@@ -1142,7 +1142,14 @@ SET_LOCALE_VARS_BASED_ON_COORDINATOR() {
 	# in the format
 	#
 	# --lc-collate=en_US.utf8 --lc-ctype=en_US.utf8 ...
-	psql_cmd="SELECT '--' || REPLACE(name, '_', '-') || '=' || setting FROM pg_settings WHERE name LIKE 'lc_%' ORDER BY name"
+	#
+	# PostgreSQL 16 removed lc_collate and lc_ctype as GUCs -- they are no longer
+	# in pg_settings and are per-database properties now -- so read them from
+	# pg_database (datcollate/datctype) and emit --lc-collate/--lc-ctype
+	# explicitly.  Without this the segments would be initialized without the
+	# coordinator's collation/ctype and diverge from it.  The remaining lc_*
+	# values are still GUCs and come from pg_settings.
+	psql_cmd="SELECT '--' || REPLACE(name, '_', '-') || '=' || setting FROM pg_settings WHERE name LIKE 'lc_%' UNION ALL SELECT '--lc-collate=' || datcollate FROM pg_database WHERE datname = current_database() UNION ALL SELECT '--lc-ctype=' || datctype FROM pg_database WHERE datname = current_database() ORDER BY 1"
 	export LC_ALL_SETTINGS=$($PSQL -d template1 -X -A -t -c "$psql_cmd")
 }
 
