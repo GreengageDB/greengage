@@ -1082,7 +1082,17 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			from = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
 								pstrdup(RelationGetRelationName(rel)),
 								-1);
-			from->inh = false;	/* apply ONLY */
+
+			/*
+			 * For the RLS rewrite use "ONLY" so RLS applies to just the named
+			 * table (upstream d66bb048c31).  But for the GPDB partitioned-table
+			 * backwards-compat rewrite we must expand to the leaf partitions,
+			 * so leave inh at makeRangeVar's default (true): otherwise
+			 * "COPY <partitioned table> TO" scans only the storage-less parent
+			 * and copies 0 rows.
+			 */
+			if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED)
+				from->inh = false;	/* apply ONLY */
 
 			/* Build query */
 			select = makeNode(SelectStmt);
