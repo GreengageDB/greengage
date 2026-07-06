@@ -305,6 +305,15 @@ typedef struct AOCSScanDescData
 	 * CO table, starting at a certain logical heap block and ending in another.
 	 */
 	bool 		partialScan;
+
+	struct {
+		SysScanDesc					scan_blkdir;
+		MinipagePerColumnGroup		curr_minipage;
+		MinipageEntry				*minipage_entry;
+		bool						curr_minipage_valid;
+		int							curr_minipage_entry_idx;
+		int							segno;
+	} soleRowIdScan;
 } AOCSScanDescData;
 
 typedef AOCSScanDescData *AOCSScanDesc;
