@@ -251,7 +251,8 @@ DROP TABLE inhg;
 ERROR:  table "inhg" does not exist
 /* Multiple primary keys creation should fail */
 CREATE TABLE inhg (x text, LIKE inhx INCLUDING INDEXES, PRIMARY KEY(x)); /* fails */
-ERROR:  multiple primary keys for table "inhg" are not allowed
+ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "x" is not included in the constraint.
 CREATE TABLE inhz (xx text DEFAULT 'text', yy int UNIQUE);
 CREATE UNIQUE INDEX inhz_xx_idx on inhz (xx) WHERE xx <> 'test';
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
@@ -417,6 +418,24 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 ERROR:  column "a" has a storage parameter conflict
 DETAIL:  MAIN versus EXTENDED
+-- Check that LIKE isn't confused by a system catalog of the same name
+CREATE TABLE pg_attrdef (LIKE ctlt1 INCLUDING ALL);
+\d+ public.pg_attrdef
+                                      Table "public.pg_attrdef"
+ Column | Type | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
+--------+------+-----------+----------+---------+----------+-------------+--------------+-------------
+ a      | text |           | not null |         | main     |             |              | A
+ b      | text |           |          |         | extended |             |              | B
+Indexes:
+    "pg_attrdef_pkey" PRIMARY KEY, btree (a)
+    "pg_attrdef_b_idx" btree (b)
+    "pg_attrdef_expr_idx" btree ((a || b))
+Check constraints:
+    "ctlt1_a_check" CHECK (length(a) > 2)
+Statistics objects:
+    "public.pg_attrdef_a_b_stat" ON a, b FROM public.pg_attrdef
+
+DROP TABLE public.pg_attrdef;
 DROP TABLE ctlt12_storage, ctlt12_comments, ctlt1_inh, ctlt13_inh, ctlt13_like, ctlt_all, ctlb, ctla, ctlt1, ctlt2, ctlt3, ctlt4 CASCADE;
 NOTICE:  drop cascades to table inhe
 -- LIKE must respect NO INHERIT property of constraints
