@@ -5,6 +5,7 @@
 -- end_matchsubs
 -- start_ignore
 CREATE EXTENSION plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 --- Fucntion which lists the table segment file size on each segment.
 CREATE OR REPLACE FUNCTION stat_table_segfile_size(datname text, tabname text)
@@ -63,11 +64,11 @@ truncate truncate_with_create_ao;
 end; 
 -- the ao table segment file size after truncate should be zero
 select stat_table_segfile_size('regression', 'truncate_with_create_ao');
-  stat_table_segfile_size  
----------------------------
- (2,segfile:16384/19161,0)
- (3,segfile:16384/19161,0)
- (4,segfile:16384/19160,0)
+   stat_table_segfile_size   
+-----------------------------
+ (2,segfile:138570/139304,0)
+ (3,segfile:138570/90152,0)
+ (4,segfile:138570/98344,0)
 (3 rows)
 
 -- test truncate table and create table are in the same transaction for aocs table
@@ -78,14 +79,14 @@ truncate truncate_with_create_aocs;
 end; 
 -- the aocs table segment file size after truncate should be zero
 select stat_table_segfile_size('regression', 'truncate_with_create_aocs');
-    stat_table_segfile_size    
--------------------------------
- (2,segfile:16384/19196,0)
- (2,segfile:16384/19196.128,0)
- (3,segfile:16384/19196,0)
- (3,segfile:16384/19196.128,0)
- (4,segfile:16384/19194,0)
- (4,segfile:16384/19194.128,0)
+     stat_table_segfile_size     
+---------------------------------
+ (2,segfile:138570/139309.128,0)
+ (2,segfile:138570/139309,0)
+ (3,segfile:138570/90157.128,0)
+ (3,segfile:138570/90157,0)
+ (4,segfile:138570/98349.128,0)
+ (4,segfile:138570/98349,0)
 (6 rows)
 
 -- test truncate table and create table are in the same transaction for heap table
@@ -96,10 +97,10 @@ truncate truncate_with_create_heap;
 end;
 -- the heap table segment file size after truncate should be zero
 select stat_table_segfile_size('regression', 'truncate_with_create_heap');
-  stat_table_segfile_size  
----------------------------
- (2,segfile:16384/19218,0)
- (3,segfile:16384/19217,0)
- (4,segfile:16384/19220,0)
+   stat_table_segfile_size   
+-----------------------------
+ (2,segfile:138570/139318,0)
+ (3,segfile:138570/90166,0)
+ (4,segfile:138570/98358,0)
 (3 rows)
 

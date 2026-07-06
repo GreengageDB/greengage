@@ -529,8 +529,8 @@ select * from (select * from t order by a) s order by a, b limit 55;
 
 -- Test EXPLAIN ANALYZE with only a fullsort group.
 select explain_analyze_without_memory('select * from (select * from t order by a) s order by a, b limit 55');
-                     explain_analyze_without_memory                      
--------------------------------------------------------------------------
+                        explain_analyze_without_memory                         
+-------------------------------------------------------------------------------
  Limit (actual rows=55 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=55 loops=1)
          Merge Key: a, b
@@ -538,9 +538,10 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                ->  Sort (actual rows=55 loops=1)
                      Sort Key: a, b
                      Sort Method:  top-N heapsort  Memory: NNkB
+                     Executor Memory: NNkB  Segments: 3  Max: NNkB (segment 0)
                      ->  Seq Scan on t (actual rows=400 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+(10 rows)
 
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 55'));
  jsonb_pretty 
@@ -699,15 +700,15 @@ explain (costs off) select * from t left join (select * from (select * from t or
 select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2); -- order none
  a | b | a | b 
 ---+---+---+---
- 1 | 1 | 1 | 1
  2 | 2 | 2 | 2
+ 1 | 1 | 1 | 1
 (2 rows)
 
 rollback;
 -- Test EXPLAIN ANALYZE with both fullsort and presorted groups.
 select explain_analyze_without_memory('select * from (select * from t order by a) s order by a, b limit 70');
-                     explain_analyze_without_memory                      
--------------------------------------------------------------------------
+                        explain_analyze_without_memory                         
+-------------------------------------------------------------------------------
  Limit (actual rows=70 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=70 loops=1)
          Merge Key: a, b
@@ -716,9 +717,10 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                      Sort Key: a, b
                      Sort Method:  top-N heapsort  Memory: NNkB
                      Sort Method:  quicksort  Memory: NNkB
+                     Executor Memory: NNkB  Segments: 3  Max: NNkB (segment 0)
                      ->  Seq Scan on t (actual rows=996 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+(11 rows)
 
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 70'));
  jsonb_pretty 
