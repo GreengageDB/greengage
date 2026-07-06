@@ -2253,8 +2253,8 @@ SELECT * FROM v1 order by a, b;
  a      | integer |           |          |         | plain    | 
  b      | text    |           |          |         | extended | 
 View definition:
- SELECT tf.a,
-    tf.b
+ SELECT a,
+    b
    FROM multiset_2(TABLE( SELECT example.a,
             example.b
            FROM example)) tf;
@@ -2262,8 +2262,8 @@ View definition:
 SELECT pg_get_viewdef('v1'::regclass);
                pg_get_viewdef                
 ---------------------------------------------
-  SELECT tf.a,                              +
-     tf.b                                   +
+  SELECT a,                                 +
+     b                                      +
     FROM multiset_2(TABLE( SELECT example.a,+
              example.b                      +
             FROM example)) tf;
@@ -2293,8 +2293,8 @@ SELECT * FROM v2 order by a, b;
  a      | integer |           |          |         | plain    | 
  b      | text    |           |          |         | extended | 
 View definition:
- SELECT tf.a,
-    tf.b
+ SELECT a,
+    b
    FROM multiset_2(TABLE( SELECT example.a,
             example.b
            FROM example
@@ -2303,8 +2303,8 @@ View definition:
 SELECT pg_get_viewdef('v2'::regclass);
                      pg_get_viewdef                     
 --------------------------------------------------------
-  SELECT tf.a,                                         +
-     tf.b                                              +
+  SELECT a,                                            +
+     b                                                 +
     FROM multiset_2(TABLE( SELECT example.a,           +
              example.b                                 +
             FROM example                               +
@@ -2335,8 +2335,8 @@ SELECT * FROM v3 order by a, b;
  a      | integer |           |          |         | plain    | 
  b      | text    |           |          |         | extended | 
 View definition:
- SELECT tf.a,
-    tf.b
+ SELECT a,
+    b
    FROM multiset_2(TABLE( SELECT example.a,
             example.b
            FROM example
@@ -2345,8 +2345,8 @@ View definition:
 SELECT pg_get_viewdef('v3'::regclass);
                pg_get_viewdef                
 ---------------------------------------------
-  SELECT tf.a,                              +
-     tf.b                                   +
+  SELECT a,                                 +
+     b                                      +
     FROM multiset_2(TABLE( SELECT example.a,+
              example.b                      +
             FROM example                    +

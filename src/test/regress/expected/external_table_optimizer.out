@@ -39,10 +39,11 @@ location ('file://gpdb_pg16/home/dvoronkov/ws/gpdb/src/test/regress/data/region.
 FORMAT 'text' (delimiter '|');
 -- Only tables with custom protocol should create dependency, due to a bug there
 -- used to be entries created for non custom protocol tables with refobjid=0.
-SELECT * FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
- classid | objid | objsubid | refclassid | refobjid | refobjsubid | deptype 
----------+-------+----------+------------+----------+-------------+---------
-(0 rows)
+SELECT count(*) FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
+ count 
+-------
+     0
+(1 row)
 
 -- drop tables
 DROP EXTERNAL TABLE EXT_NATION;
@@ -1239,7 +1240,7 @@ SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 (SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
 group by e1.j
 HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_2);
-ERROR:  variable not found in subplan target list (setrefs.c:3802)
+ERROR:  variable not found in subplan target list (setrefs.c:3809)
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1286,7 +1287,7 @@ SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 (SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
 group by e1.j
 HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_1);
-ERROR:  variable not found in subplan target list (setrefs.c:3802)
+ERROR:  variable not found in subplan target list (setrefs.c:3809)
 SELECT gp_truncate_error_log('exttab_subq_1');
  gp_truncate_error_log 
 -----------------------

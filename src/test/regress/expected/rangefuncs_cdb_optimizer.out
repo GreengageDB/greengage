@@ -7,7 +7,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
- enable_incremental_sort        | off
+ enable_incremental_sort        | on
  enable_indexonlyscan           | on
  enable_indexscan               | on
  enable_material                | on
@@ -30,6 +30,7 @@ create schema rangefuncs_cdb;
 set search_path to rangefuncs_cdb, public;
 -- end_ignore
 DROP TABLE IF EXISTS foo;
+NOTICE:  table "foo" does not exist, skipping
 CREATE TABLE foo(
   fooid int, foosubid int, fooname text, primary key(fooid,foosubid)
   ) DISTRIBUTED BY (fooid, foosubid);
@@ -764,17 +765,9 @@ HINT:  Use DROP FUNCTION foo(integer) first.
 CREATE OR REPLACE FUNCTION foor(in f1 int, out f2 int, out text)
 AS $$select $1-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, foor(f1) FROM int4_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-     f1      |            foor            
--------------+----------------------------
-      123456 | (123455,123456z)
-     -123456 | (-123457,-123456z)
-           0 | (-1,0z)
-  2147483647 | (2147483646,2147483647z)
- -2147483647 | (-2147483648,-2147483647z)
-(5 rows)
-
+ERROR:  relation "int4_tbl" does not exist
+LINE 1: SELECT f1, foor(f1) FROM int4_tbl;
+                                 ^
 SELECT * FROM foor(42);
  f2 | column2 
 ----+---------
@@ -790,17 +783,9 @@ SELECT * FROM foor(42) AS p(a,b);
 CREATE OR REPLACE FUNCTION foob(in f1 int, inout f2 int, out text)
 AS $$select $2-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, foob(f1, f1/2) FROM int4_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-     f1      |            foob            
--------------+----------------------------
-      123456 | (61727,123456z)
-     -123456 | (-61729,-123456z)
-           0 | (-1,0z)
-  2147483647 | (1073741822,2147483647z)
- -2147483647 | (-1073741824,-2147483647z)
-(5 rows)
-
+ERROR:  relation "int4_tbl" does not exist
+LINE 1: SELECT f1, foob(f1, f1/2) FROM int4_tbl;
+                                       ^
 SELECT * FROM foob(42, 99);
  f2 | column2 
 ----+---------
@@ -888,5 +873,5 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- end_matchsubs
 CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
 INSERT INTO srfdest select * FROM notice_srf();
-NOTICE:  notice_srf called in segment 1  (seg1 slice1 172.17.0.4:7003 pid=1292126)
+NOTICE:  notice_srf called in segment 2  (seg2 slice1 172.17.0.4:7004 pid=224411)
 reset optimizer_segments;

@@ -1021,8 +1021,7 @@ insert into no_eqop select i, i % 5 + 1, NULL from generate_series(1, 1000)i;
 insert into no_eqop select NULL, i % 5 + 1, '<foo>bar</foo>'::xml from generate_series(1, 1000)i;
 analyze verbose rootpartition no_eqop(c);
 INFO:  analyzing "public.no_eqop" inheritance tree
-INFO:  partition no_eqop_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117233, 10000, 't');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(22385, 10000, 't');
 select * from pg_stats where tablename = 'no_eqop';
  schemaname | tablename | attname | inherited | null_frac  | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
 ------------+-----------+---------+-----------+------------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
