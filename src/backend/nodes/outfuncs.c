@@ -756,6 +756,14 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 	WRITE_BOOL_FIELD(inh);
 	WRITE_BOOL_FIELD(inFromCl);
 	WRITE_NODE_FIELD(securityQuals);
+
+	/*
+	 * GPDB: forceDistRandom must round-trip through nodeToString/stringToNode
+	 * so that stored rules/views over gp_dist_random(...) (e.g.
+	 * gp_suboverflowed_backend) keep their random distribution when their
+	 * rule is read back from pg_rewrite.  Keep in sync with _readRangeTblEntry.
+	 */
+	WRITE_BOOL_FIELD(forceDistRandom);
 }
 
 static void

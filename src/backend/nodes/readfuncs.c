@@ -694,6 +694,9 @@ _readRangeTblEntry(void)
 	READ_BOOL_FIELD(inFromCl);
 	READ_NODE_FIELD(securityQuals);
 
+	/* GPDB: keep in sync with _outRangeTblEntry (must be the last field). */
+	READ_BOOL_FIELD(forceDistRandom);
+
 	READ_DONE();
 }
 
