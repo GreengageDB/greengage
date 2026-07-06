@@ -592,8 +592,7 @@ void CheckRTPermissions(List *rtable, List *rteperminfos);
 // PG16: create/look up RTEPermissionInfo for an rte
 RTEPermissionInfo *AddRTEPermissionInfo(List **rteperminfos,
 										RangeTblEntry *rte);
-RTEPermissionInfo *GetRTEPermissionInfo(List *rteperminfos,
-										RangeTblEntry *rte);
+RTEPermissionInfo *GetRTEPermissionInfo(List *rteperminfos, RangeTblEntry *rte);
 
 // throw an error if table has update triggers.
 bool HasUpdateTriggers(Oid relid);
