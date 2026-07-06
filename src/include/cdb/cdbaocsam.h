@@ -306,12 +306,31 @@ typedef struct AOCSScanDescData
 	 */
 	bool 		partialScan;
 
+	/*
+	 * State for the "shortpass" scan (see gp_aocs_scan_shortpass and
+	 * initscan_with_colinfo()/aocs_getnext() in aocsam.c). When a scan only
+	 * needs to produce row identities (AOCS_PROJ_ANY, e.g. count(*)) and a
+	 * block directory is already available, we skip reading any column data
+	 * and instead derive row counts directly from the anchor column's block
+	 * directory minipages. This struct holds the per-scan cursor over that
+	 * block directory; it is torn down by aocs_sole_rowid_scan_finish(),
+	 * which must be called both when the scan ends (aocs_endscan()) and
+	 * before it is possibly reopened on rescan (initscan_with_colinfo()), so
+	 * that this state never leaks or survives across rescans.
+	 */
 	struct {
+		/* systable scan over pg_aoblkdir, filtered to the anchor column's
+		 * columngroupno; NULL when the shortpass scan is not active */
 		SysScanDesc					scan_blkdir;
+		/* minipage copied out of the current pg_aoblkdir tuple */
 		MinipagePerColumnGroup		curr_minipage;
+		/* entry within curr_minipage currently being consumed */
 		MinipageEntry				*minipage_entry;
+		/* whether curr_minipage holds unconsumed entries */
 		bool						curr_minipage_valid;
+		/* index of the next entry to consume within curr_minipage */
 		int							curr_minipage_entry_idx;
+		/* segno the current minipage/entry belongs to */
 		int							segno;
 	} soleRowIdScan;
 } AOCSScanDescData;
