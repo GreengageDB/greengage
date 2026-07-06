@@ -1601,7 +1601,17 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		// TODO: add comments here as it might confuse
+		/*
+		 * Only the anchor column (attno above, not necessarily attribute 0)
+		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
+		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
+		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
+		 * hold here since the anchor column can be any attribute. Keep
+		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
+		 * a stale count from a previous tuple and instead always go through
+		 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
+		 * which consults tts_is_valid per attribute.
+		 */
 		slot->tts_nvalid = 0;
 
 		slot->tts_tid = scan->cdb_fake_ctid;
