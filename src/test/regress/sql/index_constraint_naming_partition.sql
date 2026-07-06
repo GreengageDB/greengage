@@ -46,7 +46,7 @@ CREATE FUNCTION dependencies() RETURNS TABLE( depname NAME, classtype "char", de
                                               refname NAME, refclasstype "char", refnsoid OID,
                                               classid REGCLASS,  objid OID, objsubid INTEGER,
                                               refclassid REGCLASS, refobjid OID, refobjsubid OID,
-                                              deptype "char", refobjversion "text" )
+                                              deptype "char" )
   LANGUAGE SQL STABLE STRICT AS $fn$
 WITH RECURSIVE
   w AS (
@@ -56,8 +56,7 @@ WITH RECURSIVE
            refclassid::regclass,
            refobjid,
            refobjsubid,
-           deptype,
-           refobjversion
+           deptype
     FROM pg_depend d
     WHERE classid IN ('pg_constraint'::regclass, 'pg_class'::regclass)
       AND (objid > 16384 OR refobjid > 16384)
