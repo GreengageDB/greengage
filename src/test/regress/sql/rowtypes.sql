@@ -42,11 +42,11 @@ select ' (Joe,Blow)  '::fullname;  -- ok, extra whitespace
 select '(Joe,Blow) /'::fullname;  -- bad
 
 -- test non-error-throwing API
-SELECT pg_input_is_valid('(1,2)', 'complex');
-SELECT pg_input_is_valid('(1,2', 'complex');
-SELECT pg_input_is_valid('(1,zed)', 'complex');
-SELECT * FROM pg_input_error_info('(1,zed)', 'complex');
-SELECT * FROM pg_input_error_info('(1,1e400)', 'complex');
+SELECT pg_input_is_valid('(1,2)', 'complex_t');
+SELECT pg_input_is_valid('(1,2', 'complex_t');
+SELECT pg_input_is_valid('(1,zed)', 'complex_t');
+SELECT * FROM pg_input_error_info('(1,zed)', 'complex_t');
+SELECT * FROM pg_input_error_info('(1,1e400)', 'complex_t');
 
 create temp table quadtable(f1 int, q quad);
 
