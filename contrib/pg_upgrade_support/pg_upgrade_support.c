@@ -19,7 +19,6 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
-#include "catalog/pg_authid.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_am.h"
