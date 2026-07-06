@@ -349,6 +349,7 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
+extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);
@@ -377,19 +378,6 @@ static inline void
 slot_getallattrs(TupleTableSlot *slot)
 {
 	slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
-}
-
-/*
- * This function forces the specific entry of the slot's Datum/isnull arrays to be
- * valid.
- */
-static inline bool
-slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
-{
-	if (NULL == slot->tts_ops->gettargetattr)
-		return false;
-
-	return slot->tts_ops->gettargetattr(slot, attrs);
 }
 
 /*

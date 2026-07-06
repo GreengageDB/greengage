@@ -2211,6 +2211,22 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 	}
 }
 
+/*
+ * slot_gettargetattr - fetch exactly the given (possibly sparse) set of
+ * attributes, for slot types that support it (see TupleTableSlotOps).
+ *
+ * Returns false, doing nothing, if the slot type has no gettargetattr
+ * callback, so the caller can fall back to slot_getsomeattrs().
+ */
+bool
+slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	if (NULL == slot->tts_ops->gettargetattr)
+		return false;
+
+	return slot->tts_ops->gettargetattr(slot, attrs);
+}
+
 /* ----------------------------------------------------------------
  *		ExecTypeFromTL
  *

@@ -322,6 +322,43 @@ llvm_compile_expr(ExprState *state)
 						v_slot = v_scanslot;
 
 					/*
+					 * For scan slots where the exact (possibly sparse) set
+					 * of required attnos is known, try slot_gettargetattr()
+					 * first: slot types that support it fetch just those
+					 * attributes and can skip the nvalid-prefix based deform
+					 * below entirely.
+					 * If the slot type doesn't support it,
+					 * slot_gettargetattr() returns false and we fall
+					 * through to the regular check, exactly mirroring the
+					 * EEOP_SCAN_FETCHSOME handling in ExecInterpExpr().
+					 */
+					if (opcode == EEOP_SCAN_FETCHSOME && op->d.fetch.all_vars)
+					{
+						LLVMBasicBlockRef b_nvalid_check;
+						LLVMValueRef v_params[2];
+						LLVMValueRef v_ret;
+
+						b_nvalid_check = l_bb_before_v(b_fetch,
+													   "op.%d.nvalid_check", i);
+
+						v_params[0] = v_slot;
+						v_params[1] = l_ptr_const(op->d.fetch.all_vars,
+												   l_ptr(StructBitmapset));
+
+						v_ret = l_call(b,
+									   llvm_pg_var_func_type("slot_gettargetattr"),
+									   llvm_pg_func(mod, "slot_gettargetattr"),
+									   v_params, lengthof(v_params), "");
+
+						LLVMBuildCondBr(b,
+										LLVMBuildICmp(b, LLVMIntNE, v_ret,
+													  LLVMConstNull(LLVMTypeOf(v_ret)), ""),
+										opblocks[i + 1], b_nvalid_check);
+
+						LLVMPositionBuilderAtEnd(b, b_nvalid_check);
+					}
+
+					/*
 					 * Check if all required attributes are available, or
 					 * whether deforming is required.
 					 *
