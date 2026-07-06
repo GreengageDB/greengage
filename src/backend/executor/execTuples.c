@@ -602,6 +602,7 @@ static HeapTuple
 tts_virtual_copy_heap_tuple(TupleTableSlot *slot)
 {
 	Assert(!TTS_EMPTY(slot));
+
 	return heap_form_tuple(slot->tts_tupleDescriptor,
 						   slot->tts_values,
 						   slot->tts_isnull);
@@ -611,6 +612,7 @@ static MinimalTuple
 tts_virtual_copy_minimal_tuple(TupleTableSlot *slot)
 {
 	Assert(!TTS_EMPTY(slot));
+
 	return heap_form_minimal_tuple(slot->tts_tupleDescriptor,
 								   slot->tts_values,
 								   slot->tts_isnull);
