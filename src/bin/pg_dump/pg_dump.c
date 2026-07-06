@@ -12753,8 +12753,10 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 		arr[i - 1] = '_';
 		if (i + namelen < NAMEDATALEN)
 			strcpy(arr + i, typeName);
-		else
-			strlcpy(arr + i, typeName, NAMEDATALEN - i);
+		else {
+			memcpy(arr + i, typeName, NAMEDATALEN - i);
+			arr[PQmblen(arr, fout->encoding) - 1] = '\0';
+		}
 
 		/* Check existence in pg_type */
 		query = createPQExpBuffer();
