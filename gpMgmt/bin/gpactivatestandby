@@ -280,28 +280,38 @@ def check_or_start_standby(options):
         # it anyway.  We'll restart with the full options after
         # promoting the standby.  This is nothing but a bailout and
         # this could lose some of the latest changes from the primary.
-        fd, trigger_file = tempfile.mkstemp(dir=options.coordinator_data_dir)
-
-        cmd = gp.GpConfigHelper("add promote trigger file",
-                                options.coordinator_data_dir,
-                                'promote_trigger_file',
-                                value="'" + trigger_file + "'")
-        cmd.run(validateAfter=True)
-
-        with open(trigger_file, 'w') as f:
-            f.write('');
-        f.close();
-
+        #
+        # Start the standby coordinator in recovery mode; the caller then
+        # promotes it via promote_standby() (pg_ctl promote).  Older releases
+        # instead wrote a promote_trigger_file GUC here and let the recovery
+        # loop pick it up, but PG16 removed that GUC (promotion is now
+        # signal-based), so writing it would make the postmaster refuse to
+        # start with "unrecognized configuration parameter".
         start_coordinator(options)
 
         return False
 
 #-------------------------------------------------------------------------
 def start_coordinator(options):
-    """Starts the coordinator."""
+    """Starts the standby coordinator postmaster in utility mode.
+
+    We deliberately use gp.CoordinatorStart (a bare pg_ctl start) rather than
+    gpstart -c.  gpstart reads the catalog over a client connection as part of
+    starting the coordinator, but a standby coordinator runs with hot_standby
+    off and, while still in recovery, rejects every connection until it is
+    promoted -- so gpstart -c would fail before promotion could happen.  Here we
+    only bring the postmaster up (it enters recovery); promote_standby()
+    (pg_ctl promote) then promotes it, after which the catalog is readable.
+    """
 
     logger.info('Starting standby coordinator database in utility mode...')
-    gp.NewGpStart.local('Start GPDB', coordinatorOnly=True, coordinatorDirectory=options.coordinator_data_dir)
+    port = int(os.getenv('PGPORT'))
+    # era is only a GPERA tag used to spot orphaned backends; gpstart itself
+    # starts the coordinator with era=None before it knows the real era, so
+    # None is fine here too.
+    gp.CoordinatorStart.local('Start standby coordinator in utility mode',
+                              options.coordinator_data_dir, port, None,
+                              None, None, utilityMode=True)
 
 #-------------------------------------------------------------------------
 def stop_coordinator():
@@ -374,11 +384,14 @@ try:
 
     requires_restart = not check_or_start_standby(options_)
 
-    # promote standby, only if the standby is running in recovery
-    if not requires_restart:
-        res = promote_standby(options_.coordinator_data_dir)
-        if not res:
-            raise GpActivateStandbyException('Timed out waiting for promoted coordinator to accept database connections.')
+    # Promote the standby, which is now running in recovery -- either it was
+    # already up (normal case) or check_or_start_standby() just started it in
+    # utility mode (the -f/force case).  Promotion is signal-based via
+    # pg_ctl promote; PG16 removed the promote_trigger_file GUC that the force
+    # path used to rely on, so both paths promote the same way here.
+    res = promote_standby(options_.coordinator_data_dir)
+    if not res:
+        raise GpActivateStandbyException('Timed out waiting for promoted coordinator to accept database connections.')
 
     # now we can access the catalog.  promote action has already updated
     # catalog, so array.coordinator is the old (promoted) standby at this point.

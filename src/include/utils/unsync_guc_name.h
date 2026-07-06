@@ -503,7 +503,6 @@
 		"pre_auth_delay",
 		"primary_conninfo",
 		"primary_slot_name",
-		"promote_trigger_file",
 		"quote_all_identifiers",
 		"random_page_cost",
 		"readable_external_table_timeout",
