@@ -301,6 +301,7 @@ static char *format_function_arguments(const FuncInfo *finfo, const char *funcar
 									   bool is_agg);
 static char *format_function_signature(Archive *fout,
 									   const FuncInfo *finfo, bool honor_quotes);
+static void truncate_array_type_name(char *typeName, int encoding);
 static char *make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout);
 static char *convertRegProcReference(const char *proc);
 static char *getFormattedOperatorName(const char *oproid);
@@ -12709,6 +12710,23 @@ format_function_signature(Archive *fout, const FuncInfo *finfo, bool honor_quote
 	return fn.data;
 }
 
+static void
+truncate_array_type_name(char *typeName, int encoding)
+{
+	int 	byte_len = 0;
+	int		char_len = 0;
+
+	while(byte_len < NAMEDATALEN - 1) {
+		char_len = PQmblen(typeName + byte_len, encoding);
+		/* Non-valid encoding or broken string */
+		Assert(char_len > 0);
+		if (byte_len + char_len > NAMEDATALEN - 1)
+			break;
+		byte_len += char_len;
+	}
+	typeName[byte_len] = '\0';
+}
+
 /*
  * make_array_type_name
  * 		given a base type name, make an array type name for it
@@ -12722,16 +12740,16 @@ static char *
 make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 {
 	static TypeNamesList *type_names_list = NULL;
-	TypeNamesList *list = NULL;
-	TypeNamesList *prev = NULL;
-	char 		   *arr;
-	int 			namelen = strlen(typeName);
-	int 			i;
-	int 			j;
-	PGresult 	   *res;
-	PQExpBuffer 	query;
-	bool 			is_dup;
-	bool 			is_assigned;
+	TypeNamesList  *list = NULL;
+	TypeNamesList  *prev = NULL;
+	char		   *arr;
+	int				namelen = strlen(typeName);
+	int				i;
+	int				j;
+	PGresult	   *res;
+	PQExpBuffer		query;
+	bool			is_dup;
+	bool			is_assigned;
 
 	arr = (char *) pg_malloc(NAMEDATALEN);
 	if (!arr)
@@ -12755,7 +12773,7 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 			strcpy(arr + i, typeName);
 		else {
 			memcpy(arr + i, typeName, NAMEDATALEN - i);
-			arr[PQmblen(arr, fout->encoding) - 1] = '\0';
+			truncate_array_type_name(arr, fout->encoding);
 		}
 
 		/* Check existence in pg_type */
