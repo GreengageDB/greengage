@@ -3,6 +3,13 @@
 -- m/segfile.*,/
 -- s/segfile:\d+\/\d+/segfile###/
 -- end_matchsubs
+-- The stat_table_segfile_size column header is centered on the pre-mask value
+-- width, which depends on the (variable-length) dboid/relfilenode OIDs, so its
+-- padding (leading/trailing spaces around the lone column name) drifts between
+-- runs.  Ignore that header line; the masked data rows and row count still diff.
+-- start_matchignore
+-- m/^ +stat_table_segfile_size +$/
+-- end_matchignore
 
 -- start_ignore
 CREATE EXTENSION plpython3u;
