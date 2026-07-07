@@ -1,3 +1,10 @@
+-- explain_sq_limit()'s lone column header is centered on the (masked) EXPLAIN
+-- ANALYZE output width (varies run to run), and the 'Executor Memory' line is
+-- only emitted sometimes; ignore both.
+-- start_matchignore
+-- m/^ +explain_sq_limit +$/
+-- m/Executor Memory:/
+-- end_matchignore
 --
 -- SUBSELECT
 --

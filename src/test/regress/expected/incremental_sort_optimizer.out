@@ -1,3 +1,8 @@
+-- explain_analyze_without_memory()'s lone column header is centered on the
+-- (masked) EXPLAIN ANALYZE output width, which varies run to run; ignore it.
+-- start_matchignore
+-- m/^ +explain_analyze_without_memory +$/
+-- end_matchignore
 -- When there is a LIMIT clause, incremental sort is beneficial because
 -- it only has to sort some of the groups, and not the entire table.
 explain (costs off)
