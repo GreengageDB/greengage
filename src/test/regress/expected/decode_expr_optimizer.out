@@ -1060,7 +1060,7 @@ View definition:
    FROM locations
   ORDER BY locid, country_code;
 
-select * from decode_view order by region, country_code;
+select * from decode_view order by region COLLATE "C", country_code;
       bus_name       | country_code |  region  
 ---------------------+--------------+----------
  Test Solutions      | CN           | APJ
