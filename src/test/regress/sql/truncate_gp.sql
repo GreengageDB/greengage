@@ -42,7 +42,7 @@ for dbid, datadir in db_instances.items():
     absolute_path_to_dboid_dir = '%s/base/%d' % (datadir, dboid)
     i = i+1
     try:
-        for relfilenode in os.listdir(absolute_path_to_dboid_dir):
+        for relfilenode in sorted(os.listdir(absolute_path_to_dboid_dir)):
             relfilenode_prefix = relfilenode.split('.')[0]
             if relfilenodes[i] != relfilenode_prefix:
                 continue

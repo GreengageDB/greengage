@@ -42,7 +42,7 @@ for dbid, datadir in db_instances.items():
     absolute_path_to_dboid_dir = '%s/base/%d' % (datadir, dboid)
     i = i+1
     try:
-        for relfilenode in os.listdir(absolute_path_to_dboid_dir):
+        for relfilenode in sorted(os.listdir(absolute_path_to_dboid_dir)):
             relfilenode_prefix = relfilenode.split('.')[0]
             if relfilenodes[i] != relfilenode_prefix:
                 continue
@@ -88,12 +88,12 @@ end;
 select stat_table_segfile_size('regression', 'truncate_with_create_aocs');
      stat_table_segfile_size     
 ---------------------------------
- (2,segfile:138570/139309.128,0)
  (2,segfile:138570/139309,0)
- (3,segfile:138570/90157.128,0)
+ (2,segfile:138570/139309.128,0)
  (3,segfile:138570/90157,0)
- (4,segfile:138570/98349.128,0)
+ (3,segfile:138570/90157.128,0)
  (4,segfile:138570/98349,0)
+ (4,segfile:138570/98349.128,0)
 (6 rows)
 
 -- test truncate table and create table are in the same transaction for heap table

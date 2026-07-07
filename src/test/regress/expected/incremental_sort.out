@@ -46,6 +46,9 @@ begin
   for line in
     execute 'explain (analyze, costs off, summary off, timing off) ' || query
   loop
+    -- the GGDB per-slice "Executor Memory" line is emitted only on some runs;
+    -- drop it so the row count is deterministic (this helper is _without_memory)
+    continue when line ~ 'Executor Memory';
     out_line := regexp_replace(line, '\d+kB', 'NNkB', 'g');
     return next;
   end loop;
