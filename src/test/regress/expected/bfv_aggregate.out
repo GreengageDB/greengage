@@ -102,7 +102,7 @@ select 1, to_char(col1, 'YYYY'), median(col2) from d group by 1, 2;
 --
 -- SETUP
 create table toy(id,val) as select i,i from generate_series(1,5) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create aggregate mysum1(int4) (sfunc = int4_sum, combinefunc=int8pl, stype=bigint);
 create aggregate mysum2(int4) (sfunc = int4_sum, stype=bigint);
@@ -161,6 +161,7 @@ select f3, array_sort(myaggp20a(f1)) from t group by f3 order by f3;
 
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -1590,16 +1591,18 @@ create temp table mpp14125 as select repeat('a', a) a, a % 10 b from generate_se
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain select string_agg(a, '') from mpp14125 group by b;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=6.50..6.83 rows=10 width=36)
-   ->  HashAggregate  (cost=6.50..6.62 rows=4 width=36)
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=322.00..339.50 rows=1000 width=36)
+   ->  Finalize HashAggregate  (cost=322.00..326.17 rows=333 width=36)
          Group Key: b
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..6.00 rows=34 width=55)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=282.00..314.50 rows=1000 width=36)
                Hash Key: b
-               ->  Seq Scan on mpp14125  (cost=0.00..4.00 rows=34 width=55)
+               ->  Partial HashAggregate  (cost=282.00..294.50 rows=1000 width=36)
+                     Group Key: b
+                     ->  Seq Scan on mpp14125  (cost=0.00..199.33 rows=16533 width=36)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 -- end MPP-14125
 -- Test that integer AVG() aggregate is accurate with large values. We used to
@@ -1625,9 +1628,9 @@ insert into int2vectortab values
 select distinct t from int2vectortab group by distkey, t;
    t   
 -------
- 1
- 1 2
  1 2 3
+ 1 2
+ 1
  22
 (4 rows)
 
@@ -1635,8 +1638,8 @@ select t from int2vectortab union select t from int2vectortab;
    t   
 -------
  1
- 1 2
  1 2 3
+ 1 2
  22
 (4 rows)
 
@@ -1645,9 +1648,9 @@ select count(*) over (partition by t) from int2vectortab;
 -------
      1
      1
+     2
+     2
      1
-     2
-     2
 (5 rows)
 
 select count(distinct t) from int2vectortab;
@@ -1696,7 +1699,7 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
                                              Hash Key: b.y
                                              ->  Seq Scan on pagg_tab2 b
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x ORDER BY 1 NULLS LAST;
  x  | sum  
@@ -1741,26 +1744,26 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
 SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, b.y;
  x  | y  | count 
 ----+----+-------
- 26 |    |    10
- 28 |    |    10
-  4 |    |    10
-    | 15 |    10
-  6 |  6 |   100
-  8 |    |    10
-  2 |    |    10
- 22 |    |    10
- 10 |    |    10
-    |  9 |    10
-    | 21 |    10
-  0 |  0 |   100
- 14 |    |    10
- 12 | 12 |   100
-    |  3 |    10
  16 |    |    10
-    | 27 |    10
- 18 | 18 |   100
- 20 |    |    10
+ 12 | 12 |   100
  24 | 24 |   100
+ 20 |    |    10
+    |  3 |    10
+ 18 | 18 |   100
+    | 27 |    10
+ 14 |    |    10
+    |  9 |    10
+  0 |  0 |   100
+    | 21 |    10
+ 10 |    |    10
+ 22 |    |    10
+  2 |    |    10
+  4 |    |    10
+  8 |    |    10
+    | 15 |    10
+ 28 |    |    10
+ 26 |    |    10
+  6 |  6 |   100
 (20 rows)
 
 --
@@ -1775,14 +1778,11 @@ explain (costs off)
 select 1, sum(col1) from group_by_const group by 1;
                    QUERY PLAN                   
 ------------------------------------------------
- Finalize GroupAggregate
-   Group Key: 1
+ GroupAggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial GroupAggregate
-               Group Key: 1
-               ->  Seq Scan on group_by_const
+         ->  Seq Scan on group_by_const
  Optimizer: Postgres query optimizer
-(7 rows)
+(4 rows)
 
 select 1, sum(col1) from group_by_const group by 1;
  ?column? |  sum   
@@ -1794,16 +1794,13 @@ select 1, sum(col1) from group_by_const group by 1;
 -- that you get a one-phase aggregate plan.
 explain (costs off)
 select 1, median(col1) from group_by_const group by 1;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  GroupAggregate
-         Group Key: 1
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: 1
-               ->  Seq Scan on group_by_const
+                   QUERY PLAN                   
+------------------------------------------------
+ GroupAggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on group_by_const
  Optimizer: Postgres query optimizer
-(7 rows)
+(4 rows)
 
 select 1, median(col1) from group_by_const group by 1;
  ?column? | median 

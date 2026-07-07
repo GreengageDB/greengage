@@ -142,28 +142,27 @@ select null, null, array_dims(gp_array_agg(x)) from mergeappend_test r
 order by 1,2;
                                                                    QUERY PLAN                                                                   
 ------------------------------------------------------------------------------------------------------------------------------------------------
- Sort  (cost=9.02..9.11 rows=37 width=40) (actual time=0.826..0.839 rows=7 loops=1)
+ Sort  (cost=8.89..8.98 rows=37 width=40) (actual time=2.253..2.258 rows=7 loops=1)
    Sort Key: r.a, r.b
-   Sort Method:  quicksort  Memory: 50kB
+   Sort Method:  quicksort  Memory: 25kB
    Executor Memory: 26kB  Segments: 1  Max: 26kB (segment -1)
-   ->  Append  (cost=3.92..8.06 rows=37 width=40) (actual time=0.539..0.806 rows=7 loops=1)
-         ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.92..4.70 rows=36 width=40) (actual time=0.538..0.744 rows=6 loops=1)
-               ->  HashAggregate  (cost=3.92..4.10 rows=12 width=40) (actual time=0.356..0.364 rows=4 loops=1)
+   ->  Append  (cost=3.92..7.93 rows=37 width=40) (actual time=0.197..2.245 rows=7 loops=1)
+         ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.92..4.58 rows=36 width=40) (actual time=0.196..0.623 rows=6 loops=1)
+               ->  HashAggregate  (cost=3.92..4.10 rows=12 width=40) (actual time=0.172..0.177 rows=4 loops=1)
                      Group Key: r.a, r.b
-                     Peak Memory Usage: 0 kB
-                     ->  Seq Scan on mergeappend_test r  (cost=0.00..2.67 rows=167 width=12) (actual time=0.095..0.141 rows=301 loops=1)
-         ->  Finalize Aggregate  (cost=3.15..3.17 rows=1 width=40) (actual time=0.048..0.048 rows=1 loops=1)
-               ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=3.09..3.14 rows=3 width=32) (actual time=0.003..0.007 rows=3 loops=1)
-                     ->  Partial Aggregate  (cost=3.09..3.10 rows=1 width=32) (actual time=0.243..0.243 rows=1 loops=1)
-                           ->  Seq Scan on mergeappend_test r_1  (cost=0.00..2.67 rows=167 width=4) (actual time=0.117..0.161 rows=301 loops=1)
- Planning Time: 0.688 ms
-   (slice0)    Executor memory: 73K bytes.  Work_mem: 26K bytes max.
-   (slice1)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).  Work_mem: 24K bytes max.
-   (slice2)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
- Memory used:  128000kB
+                     ->  Seq Scan on mergeappend_test r  (cost=0.00..2.67 rows=167 width=12) (actual time=0.022..0.086 rows=301 loops=1)
+         ->  Finalize Aggregate  (cost=3.15..3.17 rows=1 width=40) (actual time=1.618..1.619 rows=1 loops=1)
+               ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=3.09..3.14 rows=3 width=32) (actual time=0.257..1.600 rows=3 loops=1)
+                     ->  Partial Aggregate  (cost=3.09..3.10 rows=1 width=32) (actual time=0.115..0.116 rows=1 loops=1)
+                           ->  Seq Scan on mergeappend_test r_1  (cost=0.00..2.67 rows=167 width=4) (actual time=0.019..0.078 rows=301 loops=1)
  Optimizer: Postgres query optimizer
- Execution Time: 1.461 ms
-(21 rows)
+ Planning Time: 0.431 ms
+   (slice0)    Executor memory: 116K bytes.  Work_mem: 26K bytes max.
+   (slice1)    Executor memory: 112K bytes avg x 3 workers, 112K bytes max (seg0).  Work_mem: 24K bytes max.
+   (slice2)    Executor memory: 112K bytes avg x 3 workers, 112K bytes max (seg0).
+ Memory used:  256000kB
+ Execution Time: 3.708 ms
+(20 rows)
 
 set optimizer_trace_fallback = off;
 select * from
@@ -232,13 +231,15 @@ explain (costs off) select * from v_pagg_test order by y;
                Sort Key: pagg_test.y
                ->  Result
                      ->  ProjectSet
-                           ->  HashAggregate
+                           ->  Finalize HashAggregate
                                  Group Key: pagg_test.y
                                  ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: pagg_test.y
-                                       ->  Seq Scan on pagg_test
+                                       ->  Partial HashAggregate
+                                             Group Key: pagg_test.y
+                                             ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- Test array_agg(anyarray)
 create table int_array_table (a int, arr int[]);
@@ -328,7 +329,7 @@ explain (verbose, costs off) select array_dims(gp_array_agg(distinct arr)) from 
                                  ->  Seq Scan on test_gp_array_agg.int_array_table
                                        Output: a, arr
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: optimizer = 'off'
 (19 rows)
 
 CREATE TABLE arrtest (
@@ -372,7 +373,7 @@ EXPLAIN (COSTS OFF, VERBOSE)
                ->  Seq Scan on test_gp_array_agg.arrtest
                      Output: a, b, c, d, e, f, g
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: optimizer = 'off'
 (10 rows)
 
 :qry ;

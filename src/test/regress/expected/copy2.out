@@ -91,6 +91,23 @@ COPY x from stdin (encoding 'sql_ascii', encoding 'sql_ascii');
 ERROR:  conflicting or redundant options
 LINE 1: COPY x from stdin (encoding 'sql_ascii', encoding 'sql_ascii...
                                                  ^
+-- incorrect options
+COPY x to stdin (format BINARY, delimiter ',');
+ERROR:  COPY cannot specify DELIMITER in BINARY mode
+COPY x to stdin (format BINARY, null 'x');
+ERROR:  COPY cannot specify NULL in BINARY mode
+COPY x to stdin (format TEXT, force_quote(a));
+ERROR:  COPY force quote available only in CSV mode
+COPY x from stdin (format CSV, force_quote(a));
+ERROR:  COPY force quote only available using COPY TO
+COPY x to stdout (format TEXT, force_not_null(a));
+ERROR:  COPY force not null available only in CSV mode
+COPY x to stdin (format CSV, force_not_null(a));
+ERROR:  COPY force not null only available using COPY FROM
+COPY x to stdout (format TEXT, force_null(a));
+ERROR:  COPY force null available only in CSV mode
+COPY x to stdin (format CSV, force_null(a));
+ERROR:  COPY force null only available using COPY FROM
 -- too many columns in column list: should fail
 COPY x (a, b, c, d, e, d, c) from stdin;
 ERROR:  column "d" specified more than once
@@ -155,8 +172,6 @@ LINE 1: COPY x from stdin WHERE a = row_number() over(b);
                                     ^
 -- check results of copy in
 SELECT * FROM x;
-NOTICE:  One or more columns in the following table(s) do not have statistics: x
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c | d | e 
 ---+---+---+---+---
 (0 rows)
@@ -248,8 +263,6 @@ COPY testnull TO stdout WITH NULL AS E'\\0';
 1	\\0
 COPY testnull FROM stdin WITH NULL AS E'\\0';
 SELECT * FROM testnull;
-NOTICE:  One or more columns in the following table(s) do not have statistics: testnull
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   1 | \0
@@ -264,20 +277,16 @@ NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution 
 COPY vistest FROM stdin CSV;
 COMMIT;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- b
  a0
+ b
 (2 rows)
 
 BEGIN;
 TRUNCATE vistest;
 COPY vistest FROM stdin CSV;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
  a1
@@ -288,8 +297,6 @@ SAVEPOINT s1;
 TRUNCATE vistest;
 COPY vistest FROM stdin CSV;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
  d1
@@ -298,54 +305,44 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 COMMIT;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- e
  d1
+ e
 (2 rows)
 
 BEGIN;
 TRUNCATE vistest;
 COPY vistest FROM stdin CSV FREEZE;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- b
  a2
+ b
 (2 rows)
 
 SAVEPOINT s1;
 TRUNCATE vistest;
 COPY vistest FROM stdin CSV FREEZE;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- e
  d2
+ e
 (2 rows)
 
 COMMIT;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- d2
  e
+ d2
 (2 rows)
 
 BEGIN;
 TRUNCATE vistest;
 COPY vistest FROM stdin CSV FREEZE;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  x
@@ -389,22 +386,18 @@ SELECT truncate_in_subxact();
 
 COPY vistest FROM stdin CSV FREEZE;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- d4
  e
+ d4
 (2 rows)
 
 COMMIT;
 SELECT * FROM vistest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: vistest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  
 ----
- d4
  e
+ d4
 (2 rows)
 
 -- Test FORCE_NOT_NULL and FORCE_NULL options
@@ -423,8 +416,6 @@ BEGIN;
 COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(b), FORCE_NULL(c));
 COMMIT;
 SELECT b, c FROM forcetest WHERE a = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: forcetest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  b |  c   
 ---+------
    | NULL
@@ -435,8 +426,6 @@ BEGIN;
 COPY forcetest (a, b, c, d) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(c,d), FORCE_NULL(c,d));
 COMMIT;
 SELECT c, d FROM forcetest WHERE a = 2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: forcetest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c |  d   
 ---+------
    | NULL
@@ -482,10 +471,10 @@ Distributed by: (f1)
 -- GPDB: Change from 1 (value in PG) to 2 for copy to make test deterministic.
 -- 2 and null are on seg0 in a 3-seg test environment.
 copy check_con_tbl from stdin;
-NOTICE:  input = {"f1":2}  (seg0 172.17.0.3:7002 pid=959580)
-NOTICE:  input = {"f1":null}  (seg0 172.17.0.3:7002 pid=959580)
+NOTICE:  input = {"f1":2}  (seg0 172.17.0.2:7002 pid=23676)
+NOTICE:  input = {"f1":null}  (seg0 172.17.0.2:7002 pid=23676)
 copy check_con_tbl from stdin;
-NOTICE:  input = {"f1":0}  (seg1 172.17.0.3:7003 pid=959583)
+NOTICE:  input = {"f1":0}  (seg1 172.17.0.2:7003 pid=23680)
 ERROR:  new row for relation "check_con_tbl" violates check constraint "check_con_tbl_check"
 DETAIL:  Failing row contains (0).
 CONTEXT:  COPY check_con_tbl, line 1: "0"
@@ -638,11 +627,103 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 COPY copy_eoc_marker FROM stdin LOG ERRORS SEGMENT REJECT LIMIT 5;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 SELECT * FROM copy_eoc_marker;
-NOTICE:  One or more columns in the following table(s) do not have statistics: copy_eoc_marker
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a  | b  
 -----+----
  123 | 20
 (1 row)
 
 DROP TABLE copy_eoc_marker;
+--
+-- COPY FROM ... DEFAULT
+--
+create temp table copy_default (
+	id integer primary key,
+	text_value text not null default 'test',
+	ts_value timestamp without time zone not null default '2022-07-05'
+);
+-- if DEFAULT is not specified, then the marker will be regular data
+copy copy_default from stdin;
+select id, text_value, ts_value from copy_default;
+ id | text_value |         ts_value         
+----+------------+--------------------------
+  2 | D          | Tue Jul 05 00:00:00 2022
+  1 | value      | Mon Jul 04 00:00:00 2022
+(2 rows)
+
+truncate copy_default;
+copy copy_default from stdin with (format csv);
+select id, text_value, ts_value from copy_default;
+ id | text_value |         ts_value         
+----+------------+--------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | \D         | Tue Jul 05 00:00:00 2022
+(2 rows)
+
+truncate copy_default;
+-- DEFAULT cannot be used in binary mode
+copy copy_default from stdin with (format binary, default '\D');
+ERROR:  cannot specify DEFAULT in BINARY mode
+-- DEFAULT cannot be new line nor carriage return
+copy copy_default from stdin with (default E'\n');
+ERROR:  COPY default representation cannot use newline or carriage return
+copy copy_default from stdin with (default E'\r');
+ERROR:  COPY default representation cannot use newline or carriage return
+-- DELIMITER cannot appear in DEFAULT spec
+copy copy_default from stdin with (delimiter ';', default 'test;test');
+ERROR:  COPY delimiter must not appear in the DEFAULT specification
+-- CSV quote cannot appear in DEFAULT spec
+copy copy_default from stdin with (format csv, quote '"', default 'test"test');
+ERROR:  CSV quote character must not appear in the DEFAULT specification
+-- NULL and DEFAULT spec must be different
+copy copy_default from stdin with (default '\N');
+ERROR:  NULL specification and DEFAULT specification cannot be the same
+-- cannot use DEFAULT marker in column that has no DEFAULT value
+copy copy_default from stdin with (default '\D');
+ERROR:  invalid input syntax for type integer: "D"
+CONTEXT:  COPY copy_default, line 1, column id: "D"
+copy copy_default from stdin with (format csv, default '\D');
+ERROR:  invalid input syntax for type integer: "\D"
+CONTEXT:  COPY copy_default, line 1, column id: "\D"
+-- The DEFAULT marker must be unquoted and unescaped or it's not recognized
+copy copy_default from stdin with (default '\D');
+select id, text_value, ts_value from copy_default;
+ id | text_value |         ts_value         
+----+------------+--------------------------
+  1 | D          | Mon Jul 04 00:00:00 2022
+  2 | \D         | Mon Jul 04 00:00:00 2022
+  3 | "D"        | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+truncate copy_default;
+copy copy_default from stdin with (format csv, default '\D');
+select id, text_value, ts_value from copy_default;
+ id | text_value |         ts_value         
+----+------------+--------------------------
+  2 | \\D        | Mon Jul 04 00:00:00 2022
+  3 | \D         | Mon Jul 04 00:00:00 2022
+  1 | \D         | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+truncate copy_default;
+-- successful usage of DEFAULT option in COPY
+copy copy_default from stdin with (default '\D');
+ERROR:  invalid input syntax for type timestamp: "D"
+CONTEXT:  COPY copy_default, line 3, column ts_value: "D"
+select id, text_value, ts_value from copy_default;
+ id | text_value | ts_value 
+----+------------+----------
+(0 rows)
+
+truncate copy_default;
+copy copy_default from stdin with (format csv, default '\D');
+ERROR:  invalid input syntax for type timestamp: "\D"
+CONTEXT:  COPY copy_default, line 3, column ts_value: "\D"
+select id, text_value, ts_value from copy_default;
+ id | text_value | ts_value 
+----+------------+----------
+(0 rows)
+
+truncate copy_default;
+-- DEFAULT cannot be used in COPY TO
+copy (select 1 as test) TO stdout with (default '\D');
+ERROR:  COPY DEFAULT only available using COPY FROM

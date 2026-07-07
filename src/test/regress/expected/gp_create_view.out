@@ -84,16 +84,16 @@ create view v_sourcetable2 as
 select * from v_sourcetable2;
  cn | a_vn | b_vn | a_pn | b_pn 
 ----+------+------+------+------
-  1 |   20 |   33 |  100 |  300
-  1 |   31 |   33 |  500 |  300
-  1 |   10 |   20 |  200 |  100
-  1 |   10 |   33 |  200 |  300
   1 |   20 |   31 |  100 |  500
   1 |   20 |   51 |  100 |  400
   1 |   33 |   51 |  300 |  400
-  1 |   31 |   51 |  500 |  400
   1 |   10 |   31 |  200 |  500
   1 |   10 |   51 |  200 |  400
+  1 |   31 |   51 |  500 |  400
+  1 |   20 |   33 |  100 |  300
+  1 |   10 |   20 |  200 |  100
+  1 |   10 |   33 |  200 |  300
+  1 |   31 |   33 |  500 |  300
 (10 rows)
 
 drop view v_sourcetable2;
@@ -121,7 +121,7 @@ CREATE TEMP VIEW view_with_gp_dist_random_special_chars AS SELECT * FROM gp_dist
 SELECT pg_get_viewdef('view_with_gp_dist_random_special_chars');
                                pg_get_viewdef                               
 ----------------------------------------------------------------------------
-  SELECT "foo\'.bar".a                                                     +
+  SELECT a                                                                 +
     FROM gp_dist_random(E'"schema_view\\''.gp_dist_random"."foo\\''.bar"');
 (1 row)
 

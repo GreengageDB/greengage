@@ -563,6 +563,8 @@ ERROR:  unrecognized configuration parameter "plpgsql.extra_foo_warnings"
 -- Test DISCARD TEMP
 --
 CREATE TEMP TABLE reset_test ( data text ) ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT relname FROM pg_class WHERE relname = 'reset_test';
   relname   
 ------------
@@ -584,6 +586,8 @@ PREPARE foo AS SELECT 1;
 LISTEN foo_event;
 SET vacuum_cost_delay = 13;
 CREATE TEMP TABLE tmp_foo (data text) ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE ROLE regress_guc_user;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_guc_user;
@@ -843,9 +847,9 @@ create function func_with_bad_set() returns int as $$ select 1 $$
 language sql
 set default_text_search_config = no_such_config;
 NOTICE:  text search configuration "no_such_config" does not exist
-NOTICE:  text search configuration "no_such_config" does not exist  (seg0 172.17.0.3:7002 pid=548125)
-NOTICE:  text search configuration "no_such_config" does not exist  (seg1 172.17.0.3:7003 pid=548113)
-NOTICE:  text search configuration "no_such_config" does not exist  (seg2 172.17.0.3:7004 pid=548109)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg1 172.17.0.2:7003 pid=22905)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg2 172.17.0.2:7004 pid=22923)
+NOTICE:  text search configuration "no_such_config" does not exist  (seg0 172.17.0.2:7002 pid=22913)
 select func_with_bad_set();
 ERROR:  invalid value for parameter "default_text_search_config": "no_such_config"
 reset check_function_bodies;
@@ -882,6 +886,8 @@ NOTICE:  table "t1" does not exist, skipping
 
 -- After funtion drop table, public schema is still in search_path
 create table public.t1(i ty1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table public.t1;
 drop type public.ty1;
 drop function n1.drop_table(v_schema character varying, v_table character varying);
@@ -901,12 +907,14 @@ SELECT pg_settings_get_flags('does_not_exist');
 
 CREATE TABLE tab_settings_flags AS SELECT name, category,
     'EXPLAIN'          = ANY(flags) AS explain,
+    'NO_RESET'         = ANY(flags) AS no_reset,
     'NO_RESET_ALL'     = ANY(flags) AS no_reset_all,
-    'NO_SHOW_ALL'      = ANY(flags) AS no_show_all,
     'NOT_IN_SAMPLE'    = ANY(flags) AS not_in_sample,
     'RUNTIME_COMPUTED' = ANY(flags) AS runtime_computed
   FROM pg_show_all_settings() AS psas,
     pg_settings_get_flags(psas.name) AS flags;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Developer GUCs should be flagged with GUC_NOT_IN_SAMPLE:
 SELECT name FROM tab_settings_flags
   WHERE category = 'Developer Options' AND NOT not_in_sample
@@ -930,6 +938,7 @@ SELECT name FROM tab_settings_flags
   ORDER BY 1;
                            name                            
 -----------------------------------------------------------
+ default_statistics_target
  enable_groupagg
  gp_adjust_selectivity_for_outerjoins
  gp_dynamic_partition_pruning
@@ -992,7 +1001,7 @@ SELECT name FROM tab_settings_flags
  optimizer_join_order_threshold
  optimizer_metadata_caching
  optimizer_penalize_skew
-(62 rows)
+(63 rows)
 
 -- Runtime-computed GUCs should be part of the preset category.
 SELECT name FROM tab_settings_flags
@@ -1010,30 +1019,9 @@ SELECT name FROM tab_settings_flags
 ------
 (0 rows)
 
--- NO_SHOW_ALL implies NO_RESET_ALL, and vice-versa.
+-- NO_RESET implies NO_RESET_ALL.
 SELECT name FROM tab_settings_flags
-  WHERE no_show_all AND NOT no_reset_all
-  ORDER BY 1;
- name 
-------
-(0 rows)
-
--- Exceptions are transaction_*.
-SELECT name FROM tab_settings_flags
-  WHERE NOT no_show_all AND no_reset_all
-  ORDER BY 1;
-          name          
-------------------------
- gp_debug_linger
- gp_reraise_signal
- transaction_deferrable
- transaction_isolation
- transaction_read_only
-(5 rows)
-
--- NO_SHOW_ALL implies NOT_IN_SAMPLE.
-SELECT name FROM tab_settings_flags
-  WHERE no_show_all AND NOT not_in_sample
+  WHERE no_reset AND NOT no_reset_all
   ORDER BY 1;
  name 
 ------

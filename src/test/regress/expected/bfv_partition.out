@@ -114,7 +114,7 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-12-31', 
 (1 row)
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (5, '2001-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.3:7004 pid=3145187)
+ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.2:7004 pid=56991)
 DETAIL:  Partition key of the failing row contains (f2) = (Mon Jan 01 00:00:00 2001).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2001-01-01';
  i1 | f2 
@@ -154,7 +154,7 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-07-16', 
 
 -- Beginning of the first range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (2, '2000-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.3:7002 pid=3145185)
+ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.2:7002 pid=56988)
 DETAIL:  Partition key of the failing row contains (f2) = (Sat Jan 01 00:00:00 2000).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-01-01';
  i1 | f2 
@@ -406,16 +406,16 @@ SELECT COUNT(*) FROM pt, t WHERE pt.a = t.a and pt.c=4;
 select a, count(*) from pt group by a; 
  a | count 
 ---+-------
+ 4 |     2
+ 2 |     2
+ 8 |     2
+ 7 |     2
+ 3 |     2
  0 |     2
  1 |     3
- 5 |     2
- 6 |     2
  9 |     2
- 2 |     2
- 3 |     2
- 4 |     2
- 7 |     2
- 8 |     2
+ 6 |     2
+ 5 |     2
 (10 rows)
 
 select b, count(*) from pt group by b;
@@ -488,8 +488,8 @@ INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
-   | 2 | 3
  1 |   |  
+   | 2 | 3
 (2 rows)
 
 -- CLEANUP
@@ -519,8 +519,8 @@ INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
- 1 |   |  
    | 2 | 3
+ 1 |   |  
 (2 rows)
 
 CREATE TABLE mpp3263 (
@@ -1200,8 +1200,8 @@ Distributed by: (id)
 select relid,parentrelid,isleaf,level, pg_catalog.pg_get_expr(relpartbound, oid) from pg_partition_tree('mpp3512_part'), pg_class where relid = oid;
         relid         | parentrelid  | isleaf | level |           pg_get_expr            
 ----------------------+--------------+--------+-------+----------------------------------
- mpp3512_part_1_prt_1 | mpp3512_part | t      |     1 | FOR VALUES FROM (2001) TO (2002)
  mpp3512_part         |              | f      |     0 | 
+ mpp3512_part_1_prt_1 | mpp3512_part | t      |     1 | FOR VALUES FROM (2001) TO (2002)
  mpp3512_part_1_prt_2 | mpp3512_part | t      |     1 | FOR VALUES FROM (2002) TO (2003)
  mpp3512_part_1_prt_3 | mpp3512_part | t      |     1 | FOR VALUES FROM (2003) TO (2004)
  mpp3512_part_1_prt_4 | mpp3512_part | t      |     1 | FOR VALUES FROM (2004) TO (2005)
@@ -1275,6 +1275,7 @@ CREATE TABLE mpp3762_weather_partition (
 ) partition by range(date) ( start('2008-01-01') end ('2009-01-01') every (interval '1 month'));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 drop table mpp3762_cities, mpp3762_weather cascade;
@@ -2968,22 +2969,22 @@ select 1 as foobar;
 create table mpp6724 ( c1 int, dt DATE, c2 varchar, PRIMARY KEY ( c1,dt ) ) distributed by (c1) partition by range ( dt ) ( start ( date '2009-01-01' ) inclusive end ( date '2009-01-03' ) EXCLUSIVE EVERY ( INTERVAL '1 day' ) );
 insert into mpp6724 values ( 1,'2009-01-01','One'), (2,'2009-01-02','Two'),(3,'2009-01-01','three'), (3,'2009-01-02', 'three`');
 insert into mpp6724 values ( 1,'2009-01-01','One'); -- This violate the primary key, expected to fail
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.3:7003 pid=3145186)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.2:7003 pid=56990)
 DETAIL:  Key (c1, dt)=(1, 01-01-2009) already exists.
 alter table mpp6724 add partition start ( date '2009-01-03' ) inclusive end ( date '2009-01-04' ) ;
 insert into mpp6724 values ( 4,'2009-01-03','Four');
 -- Should fail because violates the primary key
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=56988)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=56988)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=56988)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.3:7002 pid=3145185)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=56988)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 select c1, dt, count(*) from mpp6724 group by 1,2 having count(*) > 1;
  c1 | dt | count 
@@ -3035,14 +3036,14 @@ ALTER TABLE part_acl_test ADD PARTITION p2 VALUES (2);
 -- View permissions
 \dp part_acl_*
                                                          Access privileges
-    Schema     |          Name          |       Type        |           Access privileges           | Column privileges | Policies 
----------------+------------------------+-------------------+---------------------------------------+-------------------+----------
- bfv_partition | part_acl_test          | partitioned table | part_acl_owner=arwdDxt/part_acl_owner+|                   | 
-               |                        |                   | part_acl_u1=r/part_acl_owner          |                   | 
- bfv_partition | part_acl_test_1_prt_p1 | table             | part_acl_owner=arwdDxt/part_acl_owner+|                   | 
-               |                        |                   | part_acl_u1=r/part_acl_owner          |                   | 
- bfv_partition | part_acl_test_1_prt_p2 | table             | part_acl_owner=arwdDxt/part_acl_owner+|                   | 
-               |                        |                   | part_acl_u1=r/part_acl_owner          |                   | 
+    Schema     |          Name          |       Type        |           Access privileges            | Column privileges | Policies 
+---------------+------------------------+-------------------+----------------------------------------+-------------------+----------
+ bfv_partition | part_acl_test          | partitioned table | part_acl_owner=arwdDxtm/part_acl_owner+|                   | 
+               |                        |                   | part_acl_u1=r/part_acl_owner           |                   | 
+ bfv_partition | part_acl_test_1_prt_p1 | table             | part_acl_owner=arwdDxtm/part_acl_owner+|                   | 
+               |                        |                   | part_acl_u1=r/part_acl_owner           |                   | 
+ bfv_partition | part_acl_test_1_prt_p2 | table             | part_acl_owner=arwdDxtm/part_acl_owner+|                   | 
+               |                        |                   | part_acl_u1=r/part_acl_owner           |                   | 
 (3 rows)
 
 -- View dependencies
@@ -3055,8 +3056,8 @@ where classid = 'pg_class'::regclass and objid::regclass::text like 'part_acl_te
 and datname = current_database();
  classid  |         objid          | refclassid |    rolname     
 ----------+------------------------+------------+----------------
- pg_class | part_acl_test_1_prt_p2 | pg_authid  | part_acl_owner
  pg_class | part_acl_test_1_prt_p1 | pg_authid  | part_acl_owner
+ pg_class | part_acl_test_1_prt_p2 | pg_authid  | part_acl_owner
  pg_class | part_acl_test          | pg_authid  | part_acl_owner
  pg_class | part_acl_test_1_prt_p2 | pg_authid  | part_acl_u1
  pg_class | part_acl_test_1_prt_p1 | pg_authid  | part_acl_u1
@@ -3118,8 +3119,11 @@ drop schema if exists bfv_partition cascade;
 ERROR:  must be owner of schema bfv_partition
 DROP USER mpp3641_user;
 ERROR:  permission denied to drop role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on the target roles may drop roles.
 DROP ROLE part_acl_owner;
 ERROR:  permission denied to drop role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on the target roles may drop roles.
 DROP ROLE part_acl_u1;
 ERROR:  permission denied to drop role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on the target roles may drop roles.
 -- end_ignore

@@ -286,8 +286,8 @@ CREATE TABLE subpart_range_templ_multilevel (id int, year int, month int, day in
 SELECT level, pg_get_expr(template, relid) from gp_partition_template t WHERE t.relid = 'subpart_range_templ_multilevel'::regclass;
  level |                                                pg_get_expr                                                 
 -------+------------------------------------------------------------------------------------------------------------
-     1 | SUBPARTITION TEMPLATE(DEFAULT SUBPARTITION other_months,  START (11::integer) END (12::integer) Every (1))
      2 | SUBPARTITION TEMPLATE(DEFAULT SUBPARTITION other_days,  START (7::integer) END (15::integer) Every (7))
+     1 | SUBPARTITION TEMPLATE(DEFAULT SUBPARTITION other_months,  START (11::integer) END (12::integer) Every (1))
 (2 rows)
 
 SELECT t.*, pg_get_expr(relpartbound, oid) FROM pg_partition_tree('subpart_range_templ_multilevel') As t, pg_class As c WHERE relid = oid ORDER BY 1,5;
@@ -848,8 +848,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 -- doesn't match the LIST partition strategy of the FIRST level 1 partition
 ALTER TABLE set_templ_test ADD PARTITION f VALUES ('F');
 ERROR:  invalid boundary specification for LIST partition
-LINE 1: ALTER TABLE set_templ_test ADD PARTITION f VALUES ('F');
-        ^
 -- Drop the FIRST level 1 partition
 DROP TABLE set_templ_test_a;
 -- Add a level 1 partition that is partitioned by multi-column range partition key,

@@ -4,7 +4,6 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_async_append            | on
  enable_bitmapscan              | on
  enable_gathermerge             | on
- enable_group_by_reordering     | on
  enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
@@ -20,6 +19,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_partition_pruning       | on
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
+ enable_presorted_aggregate     | off
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
@@ -97,22 +97,18 @@ select foost(fooid), * from foost(3);
 
 -- function over table (executed on segments)
 select foost(fooid), * from foo2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  foost  | fooid | f2  
 --------+-------+-----
- (2,11) |     2 |  22
- (2,33) |     2 |  22
  (1,11) |     1 |  11
  (1,33) |     1 |  11
  (1,11) |     1 | 111
  (1,33) |     1 | 111
+ (2,11) |     2 |  22
+ (2,33) |     2 |  22
 (6 rows)
 
 -- Joining with a table
 select * from foo2, foost(3) z where foo2.f2 = z.f2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 | fooid | f2 
 -------+----+-------+----
      1 | 11 |     3 | 11
@@ -130,8 +126,6 @@ select * from foo2, foost(foo2.fooid) z where foo2.f2 = z.f2;
 select * from foo2 
 where f2 in (select f2 from foost(1) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -141,8 +135,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from foost(foo2.fooid) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -152,8 +144,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from foost(foo2.fooid) z where z.fooid = 1) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -223,8 +213,6 @@ ERROR:  materialize mode required, but it is not allowed in this context
 CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
 -- Joining with a table
 select * from foo2, foor(3) z(fooid int, f2 int) where foo2.f2 = z.f2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 | fooid | f2 
 -------+----+-------+----
      1 | 11 |     3 | 11
@@ -244,8 +232,6 @@ select * from foo2
 where f2 in (select f2 from foor(1) z(fooid int, f2 int) 
              where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -256,8 +242,6 @@ select * from foo2
 where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int) 
              where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -268,8 +252,6 @@ select * from foo2
 where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int) 
              where z.fooid = 1) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -346,8 +328,6 @@ select fooro(fooid), * from fooro(3);
 
 -- Joining with a table
 select * from foo2, fooro(3) z where foo2.f2 = z.f2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 | fooid | f2 
 -------+----+-------+----
      1 | 11 |     3 | 11
@@ -365,8 +345,6 @@ select * from foo2, fooro(foo2.fooid) z where foo2.f2 = z.f2;
 select * from foo2 
 where f2 in (select f2 from fooro(1) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -376,8 +354,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -387,8 +363,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = 1) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -462,8 +436,6 @@ select foot(fooid), * from foot(3);
 
 -- Joining with a table
 select * from foo2, foot(3) z where foo2.f2 = z.f2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 | fooid | f2 
 -------+----+-------+----
      1 | 11 |     3 | 11
@@ -481,8 +453,6 @@ select * from foo2, foot(foo2.fooid) z where foo2.f2 = z.f2;
 select * from foo2 
 where f2 in (select f2 from foot(1) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -492,8 +462,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -503,8 +471,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select * from foo2 
 where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = 1) 
 ORDER BY 1,2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | f2 
 -------+----
      1 | 11
@@ -661,8 +627,6 @@ DROP VIEW vw_getfoo;
 DROP FUNCTION getfoo(int);
 CREATE FUNCTION getfoo(int) RETURNS int AS 'DECLARE fooint int; BEGIN SELECT fooid into fooint FROM foo WHERE fooid = $1; RETURN fooint; END;' LANGUAGE plpgsql READS SQL DATA;
 SELECT * FROM getfoo(1) AS t1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  t1 
 ----
   1
@@ -670,8 +634,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
 SELECT * FROM vw_getfoo;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  getfoo 
 --------
       1
@@ -682,8 +644,6 @@ DROP VIEW vw_getfoo;
 DROP FUNCTION getfoo(int);
 CREATE FUNCTION getfoo(int) RETURNS foo AS 'DECLARE footup foo%ROWTYPE; BEGIN SELECT * into footup FROM foo WHERE fooid = $1 ORDER BY 1,2,3; RETURN footup; END;' LANGUAGE plpgsql READS SQL DATA;
 SELECT * FROM getfoo(1) AS t1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | foosubid | fooname 
 -------+----------+---------
      1 |        1 | Joe
@@ -691,8 +651,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
 SELECT * FROM vw_getfoo;
-NOTICE:  One or more columns in the following table(s) do not have statistics: foo
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  fooid | foosubid | fooname 
 -------+----------+---------
      1 |        1 | Joe
@@ -926,5 +884,5 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- end_matchsubs
 CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
 INSERT INTO srfdest select * FROM notice_srf();
-NOTICE:  notice_srf called in segment 2  (seg2 slice1 172.17.0.3:7004 pid=192336)
+NOTICE:  notice_srf called in segment 0  (seg0 slice1 172.17.0.2:7002 pid=39038)
 reset optimizer_segments;

@@ -21,7 +21,7 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA AUTHORIZATION regress_create_schema_role
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_create_schema_role)
+ERROR:  Triggers for statements are not yet supported
 -- Again, with a role specification and no schema names.
 SET ROLE regress_create_schema_role;
 CREATE SCHEMA AUTHORIZATION CURRENT_ROLE
@@ -39,7 +39,7 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA AUTHORIZATION CURRENT_ROLE
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_create_schema_role)
+ERROR:  Triggers for statements are not yet supported
 -- Again, with a schema name and a role specification.
 CREATE SCHEMA regress_schema_1 AUTHORIZATION CURRENT_ROLE
   CREATE SEQUENCE schema_not_existing.seq;
@@ -56,17 +56,20 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA regress_schema_1 AUTHORIZATION CURRENT_ROLE
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_schema_1)
+ERROR:  Triggers for statements are not yet supported
 RESET ROLE;
 -- Cases where the schema creation succeeds.
 -- The schema created matches the role name.
 CREATE SCHEMA AUTHORIZATION regress_create_schema_role
   CREATE TABLE regress_create_schema_role.tab (id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d regress_create_schema_role.tab
       Table "regress_create_schema_role.tab"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  id     | integer |           |          | 
+Distributed by: (id)
 
 DROP SCHEMA regress_create_schema_role CASCADE;
 NOTICE:  drop cascades to table regress_create_schema_role.tab
@@ -74,22 +77,28 @@ NOTICE:  drop cascades to table regress_create_schema_role.tab
 SET ROLE regress_create_schema_role;
 CREATE SCHEMA AUTHORIZATION CURRENT_ROLE
   CREATE TABLE regress_create_schema_role.tab (id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d regress_create_schema_role.tab
       Table "regress_create_schema_role.tab"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  id     | integer |           |          | 
+Distributed by: (id)
 
 DROP SCHEMA regress_create_schema_role CASCADE;
 NOTICE:  drop cascades to table tab
 -- Again, with a schema name and a role specification.
 CREATE SCHEMA regress_schema_1 AUTHORIZATION CURRENT_ROLE
   CREATE TABLE regress_schema_1.tab (id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d regress_schema_1.tab
            Table "regress_schema_1.tab"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  id     | integer |           |          | 
+Distributed by: (id)
 
 DROP SCHEMA regress_schema_1 CASCADE;
 NOTICE:  drop cascades to table regress_schema_1.tab

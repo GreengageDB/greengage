@@ -4,6 +4,7 @@
 --
 --DROP TABLE LINE_TBL;
 CREATE TABLE LINE_TBL (s line);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO LINE_TBL VALUES ('{0,-1,5}');	-- A == 0
 INSERT INTO LINE_TBL VALUES ('{1,0,5}');	-- B == 0
 INSERT INTO LINE_TBL VALUES ('{0,3,0}');	-- A == C == 0
@@ -66,16 +67,16 @@ ERROR:  invalid line specification: must be two distinct points
 select * from LINE_TBL;
                        s                        
 ------------------------------------------------
- {0,-1,5}
- {1,0,5}
- {0,3,0}
  {1,-1,0}
+ {-1,0,3}
+ {0,-1,5}
+ {0,3,0}
  {-0.4,-1,-6}
  {-0.0001846153846153846,-1,15.384615384615387}
+ {0,-1,3}
+ {1,0,5}
  {3,NaN,5}
  {NaN,NaN,NaN}
- {0,-1,3}
- {-1,0,3}
 (10 rows)
 
 select '{nan, 1, nan}'::line = '{nan, 1, nan}'::line as true,
@@ -129,9 +130,9 @@ SELECT pg_input_is_valid('{1, 1, 1e400}', 'line');
 (1 row)
 
 SELECT * FROM pg_input_error_info('{1, 1, 1e400}', 'line');
-                      message                      | detail | hint | sql_error_code 
----------------------------------------------------+--------+------+----------------
- "1e400" is out of range for type double precision |        |      | 22003
+           message            | detail | hint | sql_error_code 
+------------------------------+--------+------+----------------
+ value out of range: overflow |        |      | 22003
 (1 row)
 
 SELECT pg_input_is_valid('(1, 1), (1, 1e400)', 'line');
@@ -141,8 +142,8 @@ SELECT pg_input_is_valid('(1, 1), (1, 1e400)', 'line');
 (1 row)
 
 SELECT * FROM pg_input_error_info('(1, 1), (1, 1e400)', 'line');
-                      message                      | detail | hint | sql_error_code 
----------------------------------------------------+--------+------+----------------
- "1e400" is out of range for type double precision |        |      | 22003
+           message            | detail | hint | sql_error_code 
+------------------------------+--------+------+----------------
+ value out of range: overflow |        |      | 22003
 (1 row)
 

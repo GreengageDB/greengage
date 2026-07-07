@@ -17,6 +17,8 @@ CREATE TABLE array_op_test (
 	i			int4[],
 	t			text[]
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/array.data'
 COPY array_op_test FROM :'filename';
 ANALYZE array_op_test;
@@ -39,9 +41,9 @@ INSERT INTO arrtest (a, b[1:2], c, d[1:2])
 SELECT * FROM arrtest;
       a      |        b        |     c     |       d       |        e        |        f        |      g      
 -------------+-----------------+-----------+---------------+-----------------+-----------------+-------------
+ {}          | {3,4}           | {foo,bar} | {bar,foo}     |                 |                 | 
  {1,2,3,4,5} | {{{0,0},{1,2}}} | {}        | {}            | [0:1]={1.1,2.2} | {}              | {}
  {11,12,23}  | {{3,4},{4,5}}   | {foobar}  | {{elt1,elt2}} | {3.4,6.7}       | {"abc  ",abcde} | {abc,abcde}
- {}          | {3,4}           | {foo,bar} | {bar,foo}     |                 |                 | 
 (3 rows)
 
 SELECT arrtest.a[1],
@@ -91,9 +93,9 @@ SELECT array_ndims(a) AS a,array_ndims(b) AS b,array_ndims(c) AS c
    FROM arrtest;
  a | b | c 
 ---+---+---
+   | 1 | 1
  1 | 3 |  
  1 | 2 | 1
-   | 1 | 1
 (3 rows)
 
 SELECT array_dims(a) AS a,array_dims(b) AS b,array_dims(c) AS c
@@ -127,8 +129,8 @@ UPDATE arrtest
 SELECT a,b,c FROM arrtest;
        a       |           b           |         c         
 ---------------+-----------------------+-------------------
- {16,25,3,4,5} | {{{113,142},{1,147}}} | {}
  {}            | {3,4}                 | {foo,new_word}
+ {16,25,3,4,5} | {{{113,142},{1,147}}} | {}
  {16,25,23}    | {{3,4},{4,5}}         | {foobar,new_word}
 (3 rows)
 
@@ -140,8 +142,8 @@ SELECT a[1:3],
      a      |           b           |         c         |    d     
 ------------+-----------------------+-------------------+----------
  {16,25,3}  | {{{113,142},{1,147}}} | {}                | {}
- {}         | {}                    | {foo,new_word}    | {}
  {16,25,23} | {}                    | {foobar,new_word} | {{elt2}}
+ {}         | {}                    | {foo,new_word}    | {}
 (3 rows)
 
 SELECT b[1:1][2][2],
@@ -149,8 +151,8 @@ SELECT b[1:1][2][2],
    FROM arrtest;
            b           |       d       
 -----------------------+---------------
- {{{113,142},{1,147}}} | {}
  {}                    | {}
+ {{{113,142},{1,147}}} | {}
  {}                    | {{elt1,elt2}}
 (3 rows)
 
@@ -160,8 +162,8 @@ SELECT a FROM arrtest;
 ---------------
  {1,NULL,3}
  {16,25,3,4,5}
- {}
  {16,25,23}
+ {}
 (4 rows)
 
 UPDATE arrtest SET a[4] = NULL WHERE a[2] IS NULL;
@@ -176,10 +178,35 @@ DELETE FROM arrtest WHERE a[2] IS NULL AND b IS NULL;
 SELECT a,b,c FROM arrtest;
        a       |           b           |         c         
 ---------------+-----------------------+-------------------
+ [4:4]={NULL}  | {3,4}                 | {foo,new_word}
  {16,25,3,4,5} | {{{113,142},{1,147}}} | {}
  {16,25,23}    | {{3,4},{4,5}}         | {foobar,new_word}
- [4:4]={NULL}  | {3,4}                 | {foo,new_word}
 (3 rows)
+
+-- test non-error-throwing API
+SELECT pg_input_is_valid('{1,2,3}', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('{1,2', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT pg_input_is_valid('{1,zed}', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('{1,zed}', 'integer[]');
+                   message                    | detail | hint | sql_error_code 
+----------------------------------------------+--------+------+----------------
+ invalid input syntax for type integer: "zed" |        |      | 22P02
+(1 row)
 
 -- test mixed slice/scalar subscripting
 select '{{1,2,3},{4,5,6},{7,8,9}}'::int[];
@@ -235,20 +262,22 @@ SELECT ('{{{1},{2},{3}},{{4},{5},{6}}}'::int[])[1][1:NULL][1];
 UPDATE arrtest
   SET c[NULL] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
+ERROR:  array subscript in assignment must not be null  (seg1 172.17.0.2:7003 pid=18082)
 UPDATE arrtest
   SET c[NULL:1] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
+ERROR:  array subscript in assignment must not be null  (seg2 172.17.0.2:7004 pid=18090)
 UPDATE arrtest
   SET c[1:NULL] = '{"can''t assign"}'
   WHERE array_dims(c) is not null;
-ERROR:  array subscript in assignment must not be null  (seg0 172.17.0.3:7002 pid=467629)
+ERROR:  array subscript in assignment must not be null  (seg2 172.17.0.2:7004 pid=18090)
 -- test slices with empty lower and/or upper index
 CREATE TEMP TABLE arrtest_s (
   a       int2[],
   b       int2[][]
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO arrtest_s VALUES ('{1,2,3,4,5}', '{{1,2,3}, {4,5,6}, {7,8,9}}');
 INSERT INTO arrtest_s VALUES ('[0:4]={1,2,3,4,5}', '[0:2][0:2]={{1,2,3}, {4,5,6}, {7,8,9}}');
 SELECT * FROM arrtest_s;
@@ -285,8 +314,8 @@ UPDATE arrtest_s SET a[:3] = '{11, 12, 13}', b[:2][:2] = '{{11,12}, {14,15}}'
 SELECT * FROM arrtest_s;
          a         |                  b                   
 -------------------+--------------------------------------
- {11,12,13,4,5}    | {{11,12,3},{14,15,6},{7,8,9}}
  [0:4]={1,2,3,4,5} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,9}}
+ {11,12,13,4,5}    | {{11,12,3},{14,15,6},{7,8,9}}
 (2 rows)
 
 UPDATE arrtest_s SET a[3:] = '{23, 24, 25}', b[2:][2:] = '{{25,26}, {28,29}}';
@@ -301,28 +330,30 @@ UPDATE arrtest_s SET a[:] = '{11, 12, 13, 14, 15}';
 SELECT * FROM arrtest_s;
            a            |                   b                   
 ------------------------+---------------------------------------
- {11,12,13,14,15}       | {{11,12,3},{14,25,26},{7,28,29}}
  [0:4]={11,12,13,14,15} | [0:2][0:2]={{1,2,3},{4,5,6},{7,8,25}}
+ {11,12,13,14,15}       | {{11,12,3},{14,25,26},{7,28,29}}
 (2 rows)
 
 UPDATE arrtest_s SET a[:] = '{23, 24, 25}';  -- fail, too small
-ERROR:  source array too small  (seg0 slice1 172.17.0.3:7002 pid=468024)
+ERROR:  source array too small  (seg0 slice1 172.17.0.2:7002 pid=18506)
 INSERT INTO arrtest_s VALUES(NULL, NULL);
 UPDATE arrtest_s SET a[:] = '{11, 12, 13, 14, 15}';  -- fail, no good with null
-ERROR:  array slice subscript must provide both boundaries  (seg0 slice1 172.17.0.3:7002 pid=468024)
+ERROR:  array slice subscript must provide both boundaries  (seg0 slice1 172.17.0.2:7002 pid=18506)
 DETAIL:  When assigning to a slice of an empty array value, slice boundaries must be fully specified.
 -- we want to work with a point_tbl that includes a null
 CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
 -- check with fixed-length-array type, such as point
 SELECT f1[0:1] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
+ERROR:  slices of fixed-length arrays not implemented  (seg2 slice1 172.17.0.2:7004 pid=18090)
 SELECT f1[0:] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
+ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.2:7002 pid=18078)
 SELECT f1[:1] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented  (seg0 slice1 172.17.0.3:7002 pid=467629)
+ERROR:  slices of fixed-length arrays not implemented  (seg1 slice1 172.17.0.2:7003 pid=18082)
 SELECT f1[:] FROM POINT_TBL;
-ERROR:  slices of fixed-length arrays not implemented  (seg1 slice1 172.17.0.3:7003 pid=467623)
+ERROR:  slices of fixed-length arrays not implemented  (seg1 slice1 172.17.0.2:7003 pid=18082)
 -- subscript assignments to fixed-width result in NULL if previous value is NULL
 UPDATE point_tbl SET f1[0] = 10 WHERE f1 IS NULL RETURNING *;
  f1 
@@ -352,7 +383,7 @@ UPDATE point_tbl SET f1[0] = -10, f1[1] = -10 WHERE f1::text = '(10,10)'::point:
 
 -- but not to expand the range
 UPDATE point_tbl SET f1[3] = 10 WHERE f1::text = '(-10,-10)'::point::text RETURNING *;
-ERROR:  array subscript out of range  (seg0 slice1 172.17.0.3:7002 pid=467629)
+ERROR:  array subscript out of range  (seg2 slice1 172.17.0.2:7004 pid=18090)
 --
 -- test array extension
 --
@@ -1352,7 +1383,7 @@ insert into arr_tbl values ('{1,2,3}');
 insert into arr_tbl values ('{1,2}');
 -- failure expected:
 insert into arr_tbl values ('{1,2,3}');
-ERROR:  duplicate key value violates unique constraint "arr_tbl_f1_key"  (seg1 172.17.0.3:7003 pid=467623)
+ERROR:  duplicate key value violates unique constraint "arr_tbl_f1_key"  (seg1 172.17.0.2:7003 pid=18082)
 DETAIL:  Key (f1)=({1,2,3}) already exists.
 insert into arr_tbl values ('{2,3,4}');
 insert into arr_tbl values ('{1,5,3}');
@@ -2163,19 +2194,23 @@ select f1 from t1;
 
 -- Check that arrays of composites are safely detoasted when needed
 create temp table src (f1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into src
   select string_agg(random()::text,'') from generate_series(1,10000);
 create type textandtext as (c1 text, c2 text);
 create temp table dest (f1 textandtext[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dest select array[row(f1,f1)::textandtext] from src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
 (1 row)
 
 delete from src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
@@ -2183,7 +2218,7 @@ select length(md5((f1[1]).c2)) from dest;
 
 truncate table src;
 drop table src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
@@ -2427,3 +2462,57 @@ DROP FUNCTION int_agg_state (internal, int4);
 RESET SESSION AUTHORIZATION;
 DROP USER IF EXISTS user_internal_stype;
 -- end_ignore
+-- array_shuffle
+SELECT array_shuffle('{1,2,3,4,5,6}'::int[]) <@ '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_shuffle('{1,2,3,4,5,6}'::int[]) @> '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_dims(array_shuffle('[-1:2][2:3]={{1,2},{3,NULL},{5,6},{7,8}}'::int[]));
+ array_dims  
+-------------
+ [-1:2][2:3]
+(1 row)
+
+SELECT array_dims(array_shuffle('{{{1,2},{3,NULL}},{{5,6},{7,8}},{{9,10},{11,12}}}'::int[]));
+   array_dims    
+-----------------
+ [1:3][1:2][1:2]
+(1 row)
+
+-- array_sample
+SELECT array_sample('{1,2,3,4,5,6}'::int[], 3) <@ '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_length(array_sample('{1,2,3,4,5,6}'::int[], 3), 1);
+ array_length 
+--------------
+            3
+(1 row)
+
+SELECT array_dims(array_sample('[-1:2][2:3]={{1,2},{3,NULL},{5,6},{7,8}}'::int[], 3));
+ array_dims 
+------------
+ [1:3][2:3]
+(1 row)
+
+SELECT array_dims(array_sample('{{{1,2},{3,NULL}},{{5,6},{7,8}},{{9,10},{11,12}}}'::int[], 2));
+   array_dims    
+-----------------
+ [1:2][1:2][1:2]
+(1 row)
+
+SELECT array_sample('{1,2,3,4,5,6}'::int[], -1); -- fail
+ERROR:  sample size must be between 0 and 6
+SELECT array_sample('{1,2,3,4,5,6}'::int[], 7); --fail
+ERROR:  sample size must be between 0 and 6

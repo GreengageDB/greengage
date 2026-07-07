@@ -102,9 +102,9 @@ select * from dd_singlecol_1 where a=10 or a=11 or a=12;
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  a  | b  
 ----+----
- 12 | 12
  10 | 10
  11 | 11
+ 12 | 12
 (3 rows)
 
 select * from dd_singlecol_1 where a is null or a=1;
@@ -183,18 +183,18 @@ select * from dd_part_singlecol where a in (10,11,12);
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  a  | b  | c  
 ----+----+----
+ 12 | 24 | 36
  10 | 20 | 30
  11 | 22 | 33
- 12 | 24 | 36
 (3 rows)
 
 select * from dd_part_singlecol where a=10 or a=11 or a=12;
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  a  | b  | c  
 ----+----+----
- 12 | 24 | 36
  10 | 20 | 30
  11 | 22 | 33
+ 12 | 24 | 36
 (3 rows)
 
 select * from dd_part_singlecol where a is null or a=1;
@@ -882,8 +882,9 @@ INFO:  (slice 2) Dispatch command to SINGLE content
 
 -- subqueries
 select * from dd_singlecol_1 t1 where a=1 and b < (select count(*) from dd_singlecol_2 t2 where t2.a=t1.a);
-INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 3) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 2) Dispatch command to SINGLE content
  a | b 
 ---+---
 (0 rows)
@@ -929,12 +930,12 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 ----+---
  65 | 5
  80 | 5
+  5 | 5
   1 | 1
  20 | 5
  35 | 5
  50 | 5
  95 | 5
-  5 | 5
 (8 rows)
 
 -- group by and sort

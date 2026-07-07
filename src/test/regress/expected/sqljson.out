@@ -1,342 +1,3 @@
--- JSON()
-SELECT JSON();
-ERROR:  syntax error at or near ")"
-LINE 1: SELECT JSON();
-                    ^
-SELECT JSON(NULL);
- json 
-------
- 
-(1 row)
-
-SELECT JSON('{ "a" : 1 } ');
-     json     
---------------
- { "a" : 1 } 
-(1 row)
-
-SELECT JSON('{ "a" : 1 } ' FORMAT JSON);
-     json     
---------------
- { "a" : 1 } 
-(1 row)
-
-SELECT JSON('{ "a" : 1 } ' FORMAT JSON ENCODING UTF8);
-ERROR:  JSON ENCODING clause is only allowed for bytea input type
-LINE 1: SELECT JSON('{ "a" : 1 } ' FORMAT JSON ENCODING UTF8);
-                                   ^
-SELECT JSON('{ "a" : 1 } '::bytea FORMAT JSON ENCODING UTF8);
-     json     
---------------
- { "a" : 1 } 
-(1 row)
-
-SELECT pg_typeof(JSON('{ "a" : 1 } '));
- pg_typeof 
------------
- json
-(1 row)
-
-SELECT JSON('   1   '::json);
-  json   
----------
-    1   
-(1 row)
-
-SELECT JSON('   1   '::jsonb);
- json 
-------
- 1
-(1 row)
-
-SELECT JSON('   1   '::json WITH UNIQUE KEYS);
-ERROR:  cannot use non-string types with WITH UNIQUE KEYS clause
-LINE 1: SELECT JSON('   1   '::json WITH UNIQUE KEYS);
-               ^
-SELECT JSON(123);
-ERROR:  cannot cast type integer to json
-LINE 1: SELECT JSON(123);
-                    ^
-SELECT JSON('{"a": 1, "a": 2}');
-       json       
-------------------
- {"a": 1, "a": 2}
-(1 row)
-
-SELECT JSON('{"a": 1, "a": 2}' WITH UNIQUE KEYS);
-ERROR:  duplicate JSON object key value
-SELECT JSON('{"a": 1, "a": 2}' WITHOUT UNIQUE KEYS);
-       json       
-------------------
- {"a": 1, "a": 2}
-(1 row)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123');
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON('123'::json)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123' FORMAT JSON);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON('123'::json)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123'::bytea FORMAT JSON);
-                  QUERY PLAN                   
------------------------------------------------
- Result
-   Output: JSON('\x313233'::bytea FORMAT JSON)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123'::bytea FORMAT JSON ENCODING UTF8);
-                         QUERY PLAN                          
--------------------------------------------------------------
- Result
-   Output: JSON('\x313233'::bytea FORMAT JSON ENCODING UTF8)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123' WITH UNIQUE KEYS);
-                  QUERY PLAN                  
-----------------------------------------------
- Result
-   Output: JSON('123'::text WITH UNIQUE KEYS)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123' WITHOUT UNIQUE KEYS);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON('123'::json)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-SELECT JSON('123' RETURNING text);
-ERROR:  cannot use RETURNING type text in JSON()
-LINE 1: SELECT JSON('123' RETURNING text);
-                                    ^
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123');
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON('123'::json)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123' RETURNING json);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON('123'::json)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON('123' RETURNING jsonb);
-                  QUERY PLAN                  
-----------------------------------------------
- Result
-   Output: JSON('123'::jsonb RETURNING jsonb)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-SELECT pg_typeof(JSON('123'));
- pg_typeof 
------------
- json
-(1 row)
-
-SELECT pg_typeof(JSON('123' RETURNING json));
- pg_typeof 
------------
- json
-(1 row)
-
-SELECT pg_typeof(JSON('123' RETURNING jsonb));
- pg_typeof 
------------
- jsonb
-(1 row)
-
--- JSON_SCALAR()
-SELECT JSON_SCALAR();
-ERROR:  syntax error at or near ")"
-LINE 1: SELECT JSON_SCALAR();
-                           ^
-SELECT JSON_SCALAR(NULL);
- json_scalar 
--------------
- 
-(1 row)
-
-SELECT JSON_SCALAR(NULL::int);
- json_scalar 
--------------
- 
-(1 row)
-
-SELECT JSON_SCALAR(123);
- json_scalar 
--------------
- 123
-(1 row)
-
-SELECT JSON_SCALAR(123.45);
- json_scalar 
--------------
- 123.45
-(1 row)
-
-SELECT JSON_SCALAR(123.45::numeric);
- json_scalar 
--------------
- 123.45
-(1 row)
-
-SELECT JSON_SCALAR(true);
- json_scalar 
--------------
- true
-(1 row)
-
-SELECT JSON_SCALAR(false);
- json_scalar 
--------------
- false
-(1 row)
-
-SELECT JSON_SCALAR(' 123.45');
- json_scalar 
--------------
- " 123.45"
-(1 row)
-
-SELECT JSON_SCALAR('2020-06-07'::date);
- json_scalar  
---------------
- "2020-06-07"
-(1 row)
-
-SELECT JSON_SCALAR('2020-06-07 01:02:03'::timestamp);
-      json_scalar      
------------------------
- "2020-06-07T01:02:03"
-(1 row)
-
-SELECT JSON_SCALAR('{}'::json);
- json_scalar 
--------------
- {}
-(1 row)
-
-SELECT JSON_SCALAR('{}'::jsonb);
- json_scalar 
--------------
- {}
-(1 row)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SCALAR(123);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON_SCALAR(123)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SCALAR('123');
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON_SCALAR('123'::text)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SCALAR(123 RETURNING json);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: JSON_SCALAR(123)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SCALAR(123 RETURNING jsonb);
-                 QUERY PLAN                 
---------------------------------------------
- Result
-   Output: JSON_SCALAR(123 RETURNING jsonb)
- Optimizer: Postgres query optimizer
-(3 rows)
-
--- JSON_SERIALIZE()
-SELECT JSON_SERIALIZE();
-ERROR:  syntax error at or near ")"
-LINE 1: SELECT JSON_SERIALIZE();
-                              ^
-SELECT JSON_SERIALIZE(NULL);
- json_serialize 
-----------------
- 
-(1 row)
-
-SELECT JSON_SERIALIZE(JSON('{ "a" : 1 } '));
- json_serialize 
-----------------
- { "a" : 1 } 
-(1 row)
-
-SELECT JSON_SERIALIZE('{ "a" : 1 } ');
- json_serialize 
-----------------
- { "a" : 1 } 
-(1 row)
-
-SELECT JSON_SERIALIZE('1');
- json_serialize 
-----------------
- 1
-(1 row)
-
-SELECT JSON_SERIALIZE('1' FORMAT JSON);
- json_serialize 
-----------------
- 1
-(1 row)
-
-SELECT JSON_SERIALIZE('{ "a" : 1 } ' RETURNING bytea);
-       json_serialize       
-----------------------------
- \x7b20226122203a2031207d20
-(1 row)
-
-SELECT pg_typeof(JSON_SERIALIZE(NULL));
- pg_typeof 
------------
- text
-(1 row)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SERIALIZE('{}');
-                     QUERY PLAN                      
------------------------------------------------------
- Result
-   Output: JSON_SERIALIZE('{}'::json RETURNING text)
- Optimizer: Postgres query optimizer
-(3 rows)
-
-EXPLAIN (VERBOSE, COSTS OFF) SELECT JSON_SERIALIZE('{}' RETURNING bytea);
-                      QUERY PLAN                      
-------------------------------------------------------
- Result
-   Output: JSON_SERIALIZE('{}'::json RETURNING bytea)
- Optimizer: Postgres query optimizer
-(3 rows)
-
 -- JSON_OBJECT()
 SELECT JSON_OBJECT();
  json_object 
@@ -408,12 +69,12 @@ SELECT JSON_OBJECT(RETURNING bytea FORMAT JSON ENCODING UTF16);
 ERROR:  unsupported JSON encoding
 LINE 1: SELECT JSON_OBJECT(RETURNING bytea FORMAT JSON ENCODING UTF1...
                                            ^
-HINT:  only UTF8 JSON encoding is supported
+HINT:  Only UTF8 JSON encoding is supported.
 SELECT JSON_OBJECT(RETURNING bytea FORMAT JSON ENCODING UTF32);
 ERROR:  unsupported JSON encoding
 LINE 1: SELECT JSON_OBJECT(RETURNING bytea FORMAT JSON ENCODING UTF3...
                                            ^
-HINT:  only UTF8 JSON encoding is supported
+HINT:  Only UTF8 JSON encoding is supported.
 SELECT JSON_OBJECT('foo': NULL::int FORMAT JSON);
 ERROR:  cannot use non-string types with explicit FORMAT JSON clause
 LINE 1: SELECT JSON_OBJECT('foo': NULL::int FORMAT JSON);
@@ -449,8 +110,7 @@ ERROR:  JSON ENCODING clause is only allowed for bytea input type
 LINE 1: SELECT JSON_OBJECT('foo': NULL::jsonb FORMAT JSON ENCODING U...
                                               ^
 SELECT JSON_OBJECT(NULL: 1);
-ERROR:  argument 1 cannot be null
-HINT:  Object keys should be text.
+ERROR:  null value not allowed for object key
 SELECT JSON_OBJECT('a': 2 + 3);
  json_object 
 -------------
@@ -598,9 +258,9 @@ ERROR:  duplicate JSON key "1"
 SELECT JSON_OBJECT(1: 1, '1': NULL ABSENT ON NULL WITH UNIQUE);
 ERROR:  duplicate JSON key "1"
 SELECT JSON_OBJECT(1: 1, '1': NULL NULL ON NULL WITH UNIQUE RETURNING jsonb);
-ERROR:  duplicate JSON object key value
+ERROR:  duplicate JSON object key
 SELECT JSON_OBJECT(1: 1, '1': NULL ABSENT ON NULL WITH UNIQUE RETURNING jsonb);
-ERROR:  duplicate JSON object key value
+ERROR:  duplicate JSON object key
 SELECT JSON_OBJECT(1: 1, '2': NULL, '1': 1 NULL ON NULL WITH UNIQUE);
 ERROR:  duplicate JSON key "1"
 SELECT JSON_OBJECT(1: 1, '2': NULL, '1': 1 ABSENT ON NULL WITH UNIQUE);
@@ -612,7 +272,7 @@ SELECT JSON_OBJECT(1: 1, '2': NULL, '1': 1 ABSENT ON NULL WITHOUT UNIQUE);
 (1 row)
 
 SELECT JSON_OBJECT(1: 1, '2': NULL, '1': 1 ABSENT ON NULL WITH UNIQUE RETURNING jsonb);
-ERROR:  duplicate JSON object key value
+ERROR:  duplicate JSON object key
 SELECT JSON_OBJECT(1: 1, '2': NULL, '1': 1 ABSENT ON NULL WITHOUT UNIQUE RETURNING jsonb);
  json_object 
 -------------
@@ -696,12 +356,12 @@ SELECT JSON_ARRAY(RETURNING bytea FORMAT JSON ENCODING UTF16);
 ERROR:  unsupported JSON encoding
 LINE 1: SELECT JSON_ARRAY(RETURNING bytea FORMAT JSON ENCODING UTF16...
                                           ^
-HINT:  only UTF8 JSON encoding is supported
+HINT:  Only UTF8 JSON encoding is supported.
 SELECT JSON_ARRAY(RETURNING bytea FORMAT JSON ENCODING UTF32);
 ERROR:  unsupported JSON encoding
 LINE 1: SELECT JSON_ARRAY(RETURNING bytea FORMAT JSON ENCODING UTF32...
                                           ^
-HINT:  only UTF8 JSON encoding is supported
+HINT:  Only UTF8 JSON encoding is supported.
 SELECT JSON_ARRAY('aaa', 111, true, array[1,2,3], NULL, json '{"a": [1]}', jsonb '["a",3]');
                      json_array                      
 -----------------------------------------------------
@@ -856,32 +516,43 @@ FROM generate_series(1, 5);
  [null, null, null, null, null] | [null, null, null, null, null]
 (1 row)
 
+\x
 SELECT
-	JSON_ARRAYAGG(bar),
-	JSON_ARRAYAGG(bar RETURNING jsonb),
-	JSON_ARRAYAGG(bar ABSENT ON NULL),
-	JSON_ARRAYAGG(bar ABSENT ON NULL RETURNING jsonb),
-	JSON_ARRAYAGG(bar NULL ON NULL),
-	JSON_ARRAYAGG(bar NULL ON NULL RETURNING jsonb),
-	JSON_ARRAYAGG(foo),
-	JSON_ARRAYAGG(foo RETURNING jsonb),
-	JSON_ARRAYAGG(foo ORDER BY bar) FILTER (WHERE bar > 2),
-	JSON_ARRAYAGG(foo ORDER BY bar RETURNING jsonb) FILTER (WHERE bar > 2)
+	JSON_ARRAYAGG(bar) as no_options,
+	JSON_ARRAYAGG(bar RETURNING jsonb) as returning_jsonb,
+	JSON_ARRAYAGG(bar ABSENT ON NULL) as absent_on_null,
+	JSON_ARRAYAGG(bar ABSENT ON NULL RETURNING jsonb) as absentonnull_returning_jsonb,
+	JSON_ARRAYAGG(bar NULL ON NULL) as null_on_null,
+	JSON_ARRAYAGG(bar NULL ON NULL RETURNING jsonb) as nullonnull_returning_jsonb,
+	JSON_ARRAYAGG(foo) as row_no_options,
+	JSON_ARRAYAGG(foo RETURNING jsonb) as row_returning_jsonb,
+	JSON_ARRAYAGG(foo ORDER BY bar) FILTER (WHERE bar > 2) as row_filtered_agg,
+	JSON_ARRAYAGG(foo ORDER BY bar RETURNING jsonb) FILTER (WHERE bar > 2) as row_filtered_agg_returning_jsonb
 FROM
 	(VALUES (NULL), (3), (1), (NULL), (NULL), (5), (2), (4), (NULL)) foo(bar);
-  json_arrayagg  |  json_arrayagg  |  json_arrayagg  |  json_arrayagg  |              json_arrayagg              |              json_arrayagg              |  json_arrayagg  |                                                      json_arrayagg                                                       | json_arrayagg |            json_arrayagg             
------------------+-----------------+-----------------+-----------------+-----------------------------------------+-----------------------------------------+-----------------+--------------------------------------------------------------------------------------------------------------------------+---------------+--------------------------------------
- [3, 1, 5, 2, 4] | [3, 1, 5, 2, 4] | [3, 1, 5, 2, 4] | [3, 1, 5, 2, 4] | [null, 3, 1, null, null, 5, 2, 4, null] | [null, 3, 1, null, null, 5, 2, 4, null] | [{"bar":null}, +| [{"bar": null}, {"bar": 3}, {"bar": 1}, {"bar": null}, {"bar": null}, {"bar": 5}, {"bar": 2}, {"bar": 4}, {"bar": null}] | [{"bar":3},  +| [{"bar": 3}, {"bar": 4}, {"bar": 5}]
-                 |                 |                 |                 |                                         |                                         |  {"bar":3},    +|                                                                                                                          |  {"bar":4},  +| 
-                 |                 |                 |                 |                                         |                                         |  {"bar":1},    +|                                                                                                                          |  {"bar":5}]   | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":null}, +|                                                                                                                          |               | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":null}, +|                                                                                                                          |               | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":5},    +|                                                                                                                          |               | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":2},    +|                                                                                                                          |               | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":4},    +|                                                                                                                          |               | 
-                 |                 |                 |                 |                                         |                                         |  {"bar":null}]  |                                                                                                                          |               | 
-(1 row)
+-[ RECORD 1 ]--------------------+-------------------------------------------------------------------------------------------------------------------------
+no_options                       | [3, 1, 5, 2, 4]
+returning_jsonb                  | [3, 1, 5, 2, 4]
+absent_on_null                   | [3, 1, 5, 2, 4]
+absentonnull_returning_jsonb     | [3, 1, 5, 2, 4]
+null_on_null                     | [null, 3, 1, null, null, 5, 2, 4, null]
+nullonnull_returning_jsonb       | [null, 3, 1, null, null, 5, 2, 4, null]
+row_no_options                   | [{"bar":null},                                                                                                          +
+                                 |  {"bar":3},                                                                                                             +
+                                 |  {"bar":1},                                                                                                             +
+                                 |  {"bar":null},                                                                                                          +
+                                 |  {"bar":null},                                                                                                          +
+                                 |  {"bar":5},                                                                                                             +
+                                 |  {"bar":2},                                                                                                             +
+                                 |  {"bar":4},                                                                                                             +
+                                 |  {"bar":null}]
+row_returning_jsonb              | [{"bar": null}, {"bar": 3}, {"bar": 1}, {"bar": null}, {"bar": null}, {"bar": 5}, {"bar": 2}, {"bar": 4}, {"bar": null}]
+row_filtered_agg                 | [{"bar":3},                                                                                                             +
+                                 |  {"bar":4},                                                                                                             +
+                                 |  {"bar":5}]
+row_filtered_agg_returning_jsonb | [{"bar": 3}, {"bar": 4}, {"bar": 5}]
 
+\x
 SELECT
 	bar, JSON_ARRAYAGG(bar) FILTER (WHERE bar > 2) OVER (PARTITION BY foo.bar % 2)
 FROM
@@ -911,7 +582,7 @@ WHERE FALSE;
 (1 row)
 
 SELECT JSON_OBJECTAGG(NULL: 1);
-ERROR:  field name must not be null
+ERROR:  null value not allowed for object key
 SELECT JSON_OBJECTAGG(NULL: 1 RETURNING jsonb);
 ERROR:  field name must not be null
 SELECT
@@ -955,17 +626,10 @@ FROM (VALUES (1, 1), (0, NULL), (3, NULL), (2, 2), (4, NULL)) foo(k, v);
 
 SELECT JSON_OBJECTAGG(k: v WITH UNIQUE KEYS RETURNING jsonb)
 FROM (VALUES (1, 1), (1, NULL), (2, 2)) foo(k, v);
-ERROR:  duplicate JSON object key value
+ERROR:  duplicate JSON object key
 SELECT JSON_OBJECTAGG(k: v ABSENT ON NULL WITH UNIQUE KEYS RETURNING jsonb)
 FROM (VALUES (1, 1), (1, NULL), (2, 2)) foo(k, v);
-ERROR:  duplicate JSON object key value
-SELECT JSON_OBJECTAGG(k: v ABSENT ON NULL WITH UNIQUE KEYS RETURNING jsonb)
-FROM (VALUES (1, 1), (0, NULL),(4, null), (5, null),(6, null),(2, 2)) foo(k, v);
-  json_objectagg  
-------------------
- {"1": 1, "2": 2}
-(1 row)
-
+ERROR:  duplicate JSON object key
 -- Test JSON_OBJECT deparsing
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT JSON_OBJECT('foo' : '1' FORMAT JSON, 'bar' : 'baz' RETURNING json);
@@ -974,7 +638,8 @@ SELECT JSON_OBJECT('foo' : '1' FORMAT JSON, 'bar' : 'baz' RETURNING json);
  Result
    Output: JSON_OBJECT('foo' : '1'::json, 'bar' : 'baz'::text RETURNING json)
  Optimizer: Postgres query optimizer
-(3 rows)
+ Settings: optimizer = 'off'
+(4 rows)
 
 CREATE VIEW json_object_view AS
 SELECT JSON_OBJECT('foo' : '1' FORMAT JSON, 'bar' : 'baz' RETURNING json);
@@ -982,41 +647,6 @@ SELECT JSON_OBJECT('foo' : '1' FORMAT JSON, 'bar' : 'baz' RETURNING json);
 CREATE OR REPLACE VIEW public.json_object_view AS
  SELECT JSON_OBJECT('foo' : '1'::text FORMAT JSON, 'bar' : 'baz'::text RETURNING json) AS "json_object"
 DROP VIEW json_object_view;
-SELECT to_json(a) AS a, JSON_OBJECTAGG(k : v WITH UNIQUE KEYS) OVER (ORDER BY k)
-FROM (VALUES (1,1), (2,2)) a(k,v);
-       a       |    json_objectagg    
----------------+----------------------
- {"k":1,"v":1} | { "1" : 1 }
- {"k":2,"v":2} | { "1" : 1, "2" : 2 }
-(2 rows)
-
-SELECT to_json(a) AS a, JSON_OBJECTAGG(k : v WITH UNIQUE KEYS) OVER (ORDER BY k)
-FROM (VALUES (1,1), (1,2), (2,2)) a(k,v);
-ERROR:  duplicate JSON key "1"
-SELECT to_json(a) AS a, JSON_OBJECTAGG(k : v ABSENT ON NULL WITH UNIQUE KEYS)
-   OVER (ORDER BY k)
-FROM (VALUES (1,1), (1,null), (2,2)) a(k,v);
-ERROR:  duplicate JSON key "1"
-SELECT to_json(a) AS a, JSON_OBJECTAGG(k : v ABSENT ON NULL)
-OVER (ORDER BY k)
-FROM (VALUES (1,1), (1,null), (2,2)) a(k,v);
-        a         |    json_objectagg    
-------------------+----------------------
- {"k":1,"v":1}    | { "1" : 1 }
- {"k":1,"v":null} | { "1" : 1 }
- {"k":2,"v":2}    | { "1" : 1, "2" : 2 }
-(3 rows)
-
-SELECT to_json(a) AS a, JSON_OBJECTAGG(k : v ABSENT ON NULL)
-OVER (ORDER BY k RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
-FROM (VALUES (1,1), (1,null), (2,2)) a(k,v);
-        a         |    json_objectagg    
-------------------+----------------------
- {"k":1,"v":1}    | { "1" : 1, "2" : 2 }
- {"k":1,"v":null} | { "1" : 1, "2" : 2 }
- {"k":2,"v":2}    | { "1" : 1, "2" : 2 }
-(3 rows)
-
 -- Test JSON_ARRAY deparsing
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT JSON_ARRAY('1' FORMAT JSON, 2 RETURNING json);
@@ -1025,7 +655,8 @@ SELECT JSON_ARRAY('1' FORMAT JSON, 2 RETURNING json);
  Result
    Output: JSON_ARRAY('1'::json, 2 RETURNING json)
  Optimizer: Postgres query optimizer
-(3 rows)
+ Settings: optimizer = 'off'
+(4 rows)
 
 CREATE VIEW json_array_view AS
 SELECT JSON_ARRAY('1' FORMAT JSON, 2 RETURNING json);
@@ -1045,7 +676,8 @@ FROM generate_series(1,5) i;
          Output: i
          Function Call: generate_series(1, 5)
  Optimizer: Postgres query optimizer
-(6 rows)
+ Settings: optimizer = 'off'
+(7 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT JSON_OBJECTAGG(i: ('111' || i)::bytea FORMAT JSON WITH UNIQUE RETURNING text) OVER (PARTITION BY i % 2)
@@ -1062,14 +694,15 @@ FROM generate_series(1,5) i;
                Output: (i % 2), i
                Function Call: generate_series(1, 5)
  Optimizer: Postgres query optimizer
-(10 rows)
+ Settings: optimizer = 'off'
+(11 rows)
 
 CREATE VIEW json_objectagg_view AS
 SELECT JSON_OBJECTAGG(i: ('111' || i)::bytea FORMAT JSON WITH UNIQUE RETURNING text) FILTER (WHERE i > 3)
 FROM generate_series(1,5) i;
 \sv json_objectagg_view
 CREATE OR REPLACE VIEW public.json_objectagg_view AS
- SELECT JSON_OBJECTAGG(i.i : ('111'::text || i.i)::bytea FORMAT JSON WITH UNIQUE KEYS RETURNING text) FILTER (WHERE i.i > 3) AS "json_objectagg"
+ SELECT JSON_OBJECTAGG(i : ('111'::text || i)::bytea FORMAT JSON WITH UNIQUE KEYS RETURNING text) FILTER (WHERE i > 3) AS "json_objectagg"
    FROM generate_series(1, 5) i(i)
 DROP VIEW json_objectagg_view;
 -- Test JSON_ARRAYAGG deparsing
@@ -1084,7 +717,8 @@ FROM generate_series(1,5) i;
          Output: i
          Function Call: generate_series(1, 5)
  Optimizer: Postgres query optimizer
-(6 rows)
+ Settings: optimizer = 'off'
+(7 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT JSON_ARRAYAGG(('111' || i)::bytea FORMAT JSON NULL ON NULL RETURNING text) OVER (PARTITION BY i % 2)
@@ -1101,14 +735,15 @@ FROM generate_series(1,5) i;
                Output: (i % 2), i
                Function Call: generate_series(1, 5)
  Optimizer: Postgres query optimizer
-(10 rows)
+ Settings: optimizer = 'off'
+(11 rows)
 
 CREATE VIEW json_arrayagg_view AS
 SELECT JSON_ARRAYAGG(('111' || i)::bytea FORMAT JSON NULL ON NULL RETURNING text) FILTER (WHERE i > 3)
 FROM generate_series(1,5) i;
 \sv json_arrayagg_view
 CREATE OR REPLACE VIEW public.json_arrayagg_view AS
- SELECT JSON_ARRAYAGG(('111'::text || i.i)::bytea FORMAT JSON NULL ON NULL RETURNING text) FILTER (WHERE i.i > 3) AS "json_arrayagg"
+ SELECT JSON_ARRAYAGG(('111'::text || i)::bytea FORMAT JSON NULL ON NULL RETURNING text) FILTER (WHERE i > 3) AS "json_arrayagg"
    FROM generate_series(1, 5) i(i)
 DROP VIEW json_arrayagg_view;
 -- Test JSON_ARRAY(subquery) deparsing
@@ -1124,7 +759,8 @@ SELECT JSON_ARRAY(SELECT i FROM (VALUES (1), (2), (NULL), (4)) foo(i) RETURNING 
            ->  Values Scan on "*VALUES*"
                  Output: "*VALUES*".column1
  Optimizer: Postgres query optimizer
-(8 rows)
+ Settings: optimizer = 'off'
+(9 rows)
 
 CREATE VIEW json_array_subquery_view AS
 SELECT JSON_ARRAY(SELECT i FROM (VALUES (1), (2), (NULL), (4)) foo(i) RETURNING jsonb);
@@ -1182,6 +818,8 @@ SELECT '' IS JSON;
 SELECT bytea '\x00' IS JSON;
 ERROR:  invalid byte sequence for encoding "UTF8": 0x00
 CREATE TABLE test_is_json (js text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'js' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_is_json VALUES
  (NULL),
  (''),
@@ -1213,11 +851,6 @@ FROM
 	test_is_json;
                       js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE 
 -----------------------------------------------+---------+-------------+----------+-----------+----------+-----------+----------------+-------------
- 123                                           | t       | f           | t        | f         | f        | t         | t              | t
- [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
- { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
- { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
- aaa                                           | f       | t           | f        | f         | f        | f         | f              | f
                                                | f       | t           | f        | f         | f        | f         | f              | f
  true                                          | t       | f           | t        | f         | f        | t         | t              | t
  {}                                            | t       | f           | t        | t         | f        | f         | t              | t
@@ -1229,6 +862,11 @@ FROM
  []                                            | t       | f           | t        | f         | t        | f         | t              | t
  { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
  {a:1}                                         | f       | t           | f        | f         | f        | f         | f              | f
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+ aaa                                           | f       | t           | f        | f         | f        | f         | f              | f
 (16 rows)
 
 SELECT
@@ -1245,9 +883,6 @@ FROM
 	(SELECT js::json FROM test_is_json WHERE js IS JSON) foo(js);
                       js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE 
 -----------------------------------------------+---------+-------------+----------+-----------+----------+-----------+----------------+-------------
- true                                          | t       | f           | t        | f         | f        | t         | t              | t
- {}                                            | t       | f           | t        | t         | f        | f         | t              | t
- { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
  "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
  null                                          | t       | f           | t        | f         | f        | t         | t              | t
  []                                            | t       | f           | t        | f         | t        | f         | t              | t
@@ -1256,6 +891,9 @@ FROM
  [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
  { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
  { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
 (11 rows)
 
 SELECT
@@ -1272,13 +910,13 @@ FROM
 	(SELECT js, js::bytea FROM test_is_json WHERE js IS JSON) foo(js0, js);
                       js0                      | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE 
 -----------------------------------------------+---------+-------------+----------+-----------+----------+-----------+----------------+-------------
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
  123                                           | t       | f           | t        | f         | f        | t         | t              | t
  [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
  { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
  { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
- true                                          | t       | f           | t        | f         | f        | t         | t              | t
- {}                                            | t       | f           | t        | t         | f        | f         | t              | t
- { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
  "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
  null                                          | t       | f           | t        | f         | f        | t         | t              | t
  []                                            | t       | f           | t        | f         | t        | f         | t              | t
@@ -1299,10 +937,6 @@ FROM
 	(SELECT js::jsonb FROM test_is_json WHERE js IS JSON) foo(js);
                  js                  | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE 
 -------------------------------------+---------+-------------+----------+-----------+----------+-----------+----------------+-------------
- "aaa "                              | t       | f           | t        | f         | f        | t         | t              | t
- null                                | t       | f           | t        | f         | f        | t         | t              | t
- []                                  | t       | f           | t        | f         | t        | f         | t              | t
- {"a": 1, "b": null}                 | t       | f           | t        | t         | f        | f         | t              | t
  123                                 | t       | f           | t        | f         | f        | t         | t              | t
  [1, "2", {}]                        | t       | f           | t        | f         | t        | f         | t              | t
  {"a": null}                         | t       | f           | t        | t         | f        | f         | t              | t
@@ -1310,6 +944,10 @@ FROM
  true                                | t       | f           | t        | f         | f        | t         | t              | t
  {}                                  | t       | f           | t        | t         | f        | f         | t              | t
  {"a": 1, "b": [{"a": 1}, {"a": 2}]} | t       | f           | t        | t         | f        | f         | t              | t
+ "aaa "                              | t       | f           | t        | f         | f        | t         | t              | t
+ null                                | t       | f           | t        | f         | f        | t         | t              | t
+ []                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {"a": 1, "b": null}                 | t       | f           | t        | t         | f        | f         | t              | t
 (11 rows)
 
 -- Test IS JSON deparsing
@@ -1321,14 +959,15 @@ SELECT '1' IS JSON AS "any", ('1' || i) IS JSON SCALAR AS "scalar", '[]' IS NOT 
    Output: ('1'::text IS JSON), (('1'::text || (i)::text) IS JSON SCALAR), (NOT ('[]'::text IS JSON ARRAY)), ('{}'::text IS JSON OBJECT WITH UNIQUE KEYS)
    Function Call: generate_series(1, 3)
  Optimizer: Postgres query optimizer
-(4 rows)
+ Settings: optimizer = 'off'
+(5 rows)
 
 CREATE VIEW is_json_view AS
 SELECT '1' IS JSON AS "any", ('1' || i) IS JSON SCALAR AS "scalar", '[]' IS NOT JSON ARRAY AS "array", '{}' IS JSON OBJECT WITH UNIQUE AS "object" FROM generate_series(1, 3) i;
 \sv is_json_view
 CREATE OR REPLACE VIEW public.is_json_view AS
  SELECT '1'::text IS JSON AS "any",
-    ('1'::text || i.i) IS JSON SCALAR AS scalar,
+    ('1'::text || i) IS JSON SCALAR AS scalar,
     NOT '[]'::text IS JSON ARRAY AS "array",
     '{}'::text IS JSON OBJECT WITH UNIQUE KEYS AS object
    FROM generate_series(1, 3) i(i)

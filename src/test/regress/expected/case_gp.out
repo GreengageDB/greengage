@@ -45,13 +45,13 @@ SELECT
         END AS t
     FROM mytable;
 select pg_get_viewdef('notdisview2',true);
-                                pg_get_viewdef                                 
--------------------------------------------------------------------------------
-  SELECT                                                                      +
-         CASE                                                                 +
-             WHEN mytable.c::text IS NOT DISTINCT FROM ''::text THEN 'A'::text+
-             ELSE 'B'::text                                                   +
-         END AS t                                                             +
+                            pg_get_viewdef                             
+-----------------------------------------------------------------------
+  SELECT                                                              +
+         CASE                                                         +
+             WHEN c::text IS NOT DISTINCT FROM ''::text THEN 'A'::text+
+             ELSE 'B'::text                                           +
+         END AS t                                                     +
     FROM mytable;
 (1 row)
 
@@ -72,9 +72,9 @@ select pg_get_viewdef('notdisview3',false);
                                pg_get_viewdef                                
 -----------------------------------------------------------------------------
   SELECT                                                                    +
-         CASE mytable2.key_value                                            +
+         CASE key_value                                                     +
              WHEN IS NOT DISTINCT FROM 'NULL'::text THEN ('now'::text)::date+
-             ELSE to_date((mytable2.key_value)::text, 'YYYYMM'::text)       +
+             ELSE to_date((key_value)::text, 'YYYYMM'::text)                +
          END AS t                                                           +
     FROM mytable2;
 (1 row)
@@ -111,18 +111,18 @@ SELECT * FROM myview ORDER BY a,b;
 
 -- Test deparse
 select pg_get_viewdef('myview',true); 
-                                   pg_get_viewdef                                    
--------------------------------------------------------------------------------------
-  SELECT mytable.a,                                                                 +
-     mytable.b,                                                                     +
-         CASE mytable.a                                                             +
-             WHEN IS NOT DISTINCT FROM mytable.b THEN (mytable.b * 10)::numeric     +
-             WHEN IS NOT DISTINCT FROM mytable.b + 1 THEN (mytable.b * 100)::numeric+
-             WHEN mytable.b - 1 THEN (mytable.b * 1000)::numeric                    +
-             WHEN mytable.b * 10 THEN (mytable.b * 10000)::numeric                  +
-             WHEN negate(mytable.b) THEN mytable.b::numeric * '-1.0'::numeric       +
-             ELSE mytable.b::numeric                                                +
-         END AS newb                                                                +
+                           pg_get_viewdef                            
+---------------------------------------------------------------------
+  SELECT a,                                                         +
+     b,                                                             +
+         CASE a                                                     +
+             WHEN IS NOT DISTINCT FROM b THEN (b * 10)::numeric     +
+             WHEN IS NOT DISTINCT FROM b + 1 THEN (b * 100)::numeric+
+             WHEN b - 1 THEN (b * 1000)::numeric                    +
+             WHEN b * 10 THEN (b * 10000)::numeric                  +
+             WHEN negate(b) THEN b::numeric * '-1.0'::numeric       +
+             ELSE b::numeric                                        +
+         END AS newb                                                +
     FROM mytable;
 (1 row)
 
@@ -143,9 +143,9 @@ SELECT id,name,price as old_price,
   FROM products;
  id |   name   | old_price | new_price 
 ----+----------+-----------+-----------
-  1 | keyboard |    124.99 |   187.485
   2 | monitor  |    299.99 |   359.988
   3 | mouse    |     45.59 |          
+  1 | keyboard |    124.99 |   187.485
 (3 rows)
 
                             
@@ -245,16 +245,16 @@ SELECT decode('2009-02-05 01:02:03'::timestamp, '2009-02-05 01:02:03', 'ok');
 SELECT b,c,decode(c,'a',b*10,'e',b*100,'o',b*1000,'u',b*10000,'i',b*100000) as newb from mytable;
  b | c | newb 
 ---+---+------
- 2 | t |     
+ 5 | t |     
+ 6 | t |     
+ 8 | a |   80
  3 | e |  300
  4 | o | 4000
  5 | o | 5000
  4 | o | 4000
- 5 | t |     
- 6 | t |     
  6 | a |   60
  7 | t |     
- 8 | a |   80
+ 2 | t |     
 (10 rows)
 
 SELECT b,c,decode(c,'a',ARRAY[1,2],'e',ARRAY[3,4],'o',ARRAY[5,6],'u',ARRAY[7,8],'i',ARRAY[9,10],ARRAY[0]) as newb from mytable;
@@ -265,10 +265,10 @@ SELECT b,c,decode(c,'a',ARRAY[1,2],'e',ARRAY[3,4],'o',ARRAY[5,6],'u',ARRAY[7,8],
  4 | o | {5,6}
  5 | o | {5,6}
  4 | o | {5,6}
- 5 | t | {0}
- 6 | t | {0}
  6 | a | {1,2}
  7 | t | {0}
+ 5 | t | {0}
+ 6 | t | {0}
  8 | a | {1,2}
 (10 rows)
 
@@ -296,10 +296,10 @@ SELECT * FROM myview ORDER BY id, location;
 select pg_get_viewdef('myview',true); 
                            pg_get_viewdef                           
 --------------------------------------------------------------------
-  SELECT products.id,                                              +
-     products.name,                                                +
-     products.price,                                               +
-         CASE products.id                                          +
+  SELECT id,                                                       +
+     name,                                                         +
+     price,                                                        +
+         CASE id                                                   +
              WHEN IS NOT DISTINCT FROM 1 THEN 'Southlake'::text    +
              WHEN IS NOT DISTINCT FROM 2 THEN 'San Francisco'::text+
              WHEN IS NOT DISTINCT FROM 3 THEN 'New Jersey'::text   +
@@ -310,7 +310,7 @@ select pg_get_viewdef('myview',true);
              ELSE 'Non domestic'::text                             +
          END AS location                                           +
     FROM products                                                  +
-   WHERE products.id < 100;
+   WHERE id < 100;
 (1 row)
 
 -- User-defined DECODE function
@@ -561,10 +561,6 @@ select '2011-05-27'::date as lsh,  CASE '2011-05-27'::date
  05-27-2011 | WHEN NEW: 2011-05-27
 (1 row)
 
--- start_ignore 
-drop table if exists nomatch_case;
-NOTICE:  table "nomatch_case" does not exist, skipping
--- end_ignore
 create table nomatch_case
 (
    sid integer, 

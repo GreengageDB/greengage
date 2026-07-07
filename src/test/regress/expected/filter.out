@@ -13,8 +13,6 @@ INSERT INTO filter_test VALUES
   (9, 3),
   (10, NULL);
 SELECT i,j FROM filter_test order by i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j 
 ----+---
   1 | 1
@@ -31,8 +29,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST COUNT(*)
 SELECT count(*) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     10
@@ -57,8 +53,6 @@ SELECT count(*) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT count(*) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      4
@@ -71,8 +65,6 @@ SELECT count(*) FILTER (WHERE j = 1) FROM filter_test;
 (1 row)
 
 SELECT count(*) FROM filter_test WHERE j = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      3
@@ -80,8 +72,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST COUNT(i)
 SELECT count(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      9
@@ -106,8 +96,6 @@ SELECT count(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT count(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      4
@@ -120,8 +108,6 @@ SELECT count(i) FILTER (WHERE j = 1) FROM filter_test;
 (1 row)
 
 SELECT count(i) FROM filter_test WHERE j = 1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      3
@@ -140,8 +126,6 @@ LINE 1: SELECT max(*) FILTER (WHERE i < 5) FROM filter_test;
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 -- TEST MAX(i)
 SELECT max(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  max 
 -----
   10
@@ -154,8 +138,6 @@ SELECT max(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT max(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  max 
 -----
    4
@@ -163,8 +145,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST MIN(i)
 SELECT min(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  min 
 -----
    1
@@ -177,8 +157,6 @@ SELECT min(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT min(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  min 
 -----
    1
@@ -186,8 +164,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST MAX(i)
 SELECT MAX(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  max 
 -----
   10
@@ -200,8 +176,6 @@ SELECT MAX(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT MAX(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  max 
 -----
    4
@@ -209,8 +183,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST AVG(i)
 SELECT AVG(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
         avg         
 --------------------
  5.5555555555555556
@@ -223,8 +195,6 @@ SELECT AVG(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT AVG(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
         avg         
 --------------------
  2.5000000000000000
@@ -232,8 +202,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST SUM(i)
 SELECT sum(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  sum 
 -----
   50
@@ -246,8 +214,6 @@ SELECT sum(i) FILTER (WHERE i < 5) FROM filter_test;
 (1 row)
 
 SELECT sum(i) FROM filter_test WHERE i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  sum 
 -----
   10
@@ -293,8 +259,6 @@ SELECT sum(i::numeric) FILTER (WHERE i < 5) FROM filter_test;
 
 -- TEST with cumulative aggs
 SELECT i, j, count(j) OVER (order by i) FROM filter_test ORDER BY i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j | count 
 ----+---+-------
   1 | 1 |     1
@@ -325,8 +289,6 @@ SELECT i, j, count(j) FILTER (WHERE i % 2 = 1) OVER (order by i) FROM filter_tes
 (10 rows)
 
 SELECT i, j, count(j) OVER (order by i) FROM filter_test WHERE i % 2 = 1 ORDER BY i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j | count 
 ---+---+-------
  1 | 1 |     1
@@ -337,8 +299,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST with partitioned aggs
 select i, j, count(i) over (partition by j) from filter_test ORDER BY j, i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j | count 
 ----+---+-------
   1 | 1 |     3
@@ -371,8 +331,6 @@ select i, j, count(i) filter (WHERE i % 2 = 1) over (partition by j) from filter
 -- TEST with rolling window aggs
 select i, j, count(i) over(w) from filter_test 
 window w as (order by i rows between 1 preceding and 1 following) ORDER BY i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j | count 
 ----+---+-------
   1 | 1 |     2
@@ -405,8 +363,6 @@ window w as (order by i rows between 1 preceding and 1 following) ORDER BY i;
 
 -- TEST with group by
 select j, count(i) from filter_test group by j ORDER BY j;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  j | count 
 ---+-------
  1 |     3
@@ -430,8 +386,6 @@ ORDER BY j;
 (4 rows)
 
 select count(i) from filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      9
@@ -439,16 +393,12 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- TEST with multi-parameter aggs
 select covar_pop(i,j) from filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      covar_pop      
 --------------------
  2.0816326530612246
 (1 row)
 
 select covar_pop(i,j) from filter_test where i < 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  covar_pop 
 -----------
      0.375
@@ -461,8 +411,6 @@ select covar_pop(i,j) filter (where i < 5) from filter_test;
 (1 row)
 
 select covar_pop(i,j) from filter_test where j in (1,2);
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  covar_pop 
 -----------
       0.72
@@ -476,8 +424,6 @@ select covar_pop(i,j) filter (where j in (1,2)) from filter_test;
 
 -- TEST with window functions => should error
 select i, j, row_number() over (partition by j order by i) from filter_test ORDER BY j,i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j | row_number 
 ----+---+------------
   1 | 1 |          1
@@ -498,8 +444,6 @@ ERROR:  FILTER is not implemented for non-aggregate window functions
 LINE 1: select i, j, row_number() filter (WHERE i % 2 = 1) over (par...
                      ^
 select i, rank() over (order by i) from filter_test ORDER BY i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | rank 
 ----+------
   1 |    1
@@ -519,8 +463,6 @@ ERROR:  FILTER is not implemented for non-aggregate window functions
 LINE 1: select i, rank() filter (where true) over (order by i) from ...
                   ^
 select i, ntile(3) over (order by i) from filter_test ORDER BY i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | ntile 
 ----+-------
   1 |     1
@@ -541,8 +483,6 @@ LINE 1: select i, ntile(3) filter (where true) over (order by i) fro...
                   ^
 select i, ntile(4-j) over (partition by j order by i) 
 FROM filter_test where j < 4 ORDER BY j, i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | ntile 
 ---+-------
  1 |     1
@@ -562,8 +502,6 @@ LINE 1: select i, ntile(4-j) filter (where true) over (partition by ...
                   ^
 -- TEST against non aggregate function => should error
 select i, lower('Hello') from filter_test order by i;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | lower 
 ----+-------
   1 | hello
@@ -586,8 +524,6 @@ LINE 1: select i, lower('Hello') filter (where i < 5) from filter_te...
 create or replace function maketuple() returns setof filter_test 
 as 'select * from filter_test' language sql READS SQL DATA;
 select i(t), j(t) from (select maketuple() as t) x order by i(t);
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  | j 
 ----+---
   1 | 1
@@ -625,7 +561,8 @@ select * from (select i from filter_test where j = 1) x1,
 ERROR:  invalid reference to FROM-clause entry for table "x1"
 LINE 2:               (select sum(i) filter (where i < x1.i) from fi...
                                                        ^
-HINT:  There is an entry for table "x1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "x1", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 -- TEST against user defined aggregation function
 create or replace function _maxodd(oldmax int, newval int) returns int as $$
   SELECT CASE WHEN $1 is NULL 
@@ -639,8 +576,6 @@ create or replace function _maxodd(oldmax int, newval int) returns int as $$
 $$ LANGUAGE sql STRICT CONTAINS SQL;
 create aggregate maxodd(sfunc = _maxodd, basetype = int, stype = int, initcond = 0);
 SELECT maxodd(i) from filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  maxodd 
 --------
       9
@@ -653,8 +588,6 @@ SELECT maxodd(i) FILTER (WHERE TRUE) from filter_test;
 (1 row)
 
 SELECT j, maxodd(i) from filter_test group by j order by j;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  j | maxodd 
 ---+--------
  1 |      3
@@ -684,8 +617,6 @@ create or replace function _maxodd(oldmax int, newval int) returns int as $$
               END;
 $$ LANGUAGE sql CONTAINS SQL;
 SELECT maxodd(i) FROM filter_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  maxodd 
 --------
       9
@@ -698,8 +629,6 @@ SELECT maxodd(i) FILTER (WHERE TRUE) from filter_test;
 (1 row)
 
 SELECT j, maxodd(i) FROM filter_test group by j order by j;
-NOTICE:  One or more columns in the following table(s) do not have statistics: filter_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  j | maxodd 
 ---+--------
  1 |      3

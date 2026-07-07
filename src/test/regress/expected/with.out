@@ -404,9 +404,9 @@ SELECT pg_get_viewdef('vsubdepartment'::regclass);
              subdepartment sd                 +
            WHERE (d.parent_department = sd.id)+
          )                                    +
-  SELECT subdepartment.id,                    +
-     subdepartment.parent_department,         +
-     subdepartment.name                       +
+  SELECT id,                                  +
+     parent_department,                       +
+     name                                     +
     FROM subdepartment;
 (1 row)
 
@@ -427,9 +427,9 @@ SELECT pg_get_viewdef('vsubdepartment'::regclass, true);
              subdepartment sd               +
            WHERE d.parent_department = sd.id+
          )                                  +
-  SELECT subdepartment.id,                  +
-     subdepartment.parent_department,       +
-     subdepartment.name                     +
+  SELECT id,                                +
+     parent_department,                     +
+     name                                   +
     FROM subdepartment;
 (1 row)
 
@@ -454,7 +454,7 @@ View definition:
            FROM t t_1
           WHERE t_1.n < 100
         )
- SELECT sum(t.n) AS sum
+ SELECT sum(n) AS sum
    FROM t;
 
 -- corner case in which sub-WITH gets initialized first
@@ -467,30 +467,30 @@ with recursive q as (
 select id, parent_department, name from q limit 24;
  id | parent_department | name 
 ----+-------------------+------
-  5 |                 0 | E
-  6 |                 4 | F
-  0 |                   | ROOT
-  1 |                 0 | A
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
+  0 |                   | ROOT
+  1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
 (24 rows)
 
 with recursive q as (
@@ -506,38 +506,38 @@ with recursive q as (
 select id, parent_department, name from q limit 32;
  id | parent_department | name 
 ----+-------------------+------
-  5 |                 0 | E
-  6 |                 4 | F
-  0 |                   | ROOT
-  1 |                 0 | A
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
-  5 |                 0 | E
-  6 |                 4 | F
   0 |                   | ROOT
   1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
   2 |                 1 | B
   3 |                 2 | C
   4 |                 2 | D
   7 |                 5 | G
+  0 |                   | ROOT
+  1 |                 0 | A
+  5 |                 0 | E
+  6 |                 4 | F
 (32 rows)
 
 -- recursive term has sub-UNION
@@ -647,6 +647,8 @@ SELECT t1.id, t2.path, t2 FROM t AS t1 JOIN t AS t2 ON
 
 -- SEARCH clause
 create temp table graph0( f int, t int, label text );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into graph0 values
 	(1, 2, 'arc 1 -> 2'),
 	(1, 3, 'arc 1 -> 3'),
@@ -685,7 +687,7 @@ select * from search_graph order by seq;
                                  ->  Seq Scan on pg_temp.graph0 g_1
                                        Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -758,7 +760,7 @@ select * from search_graph order by seq;
                                  ->  Seq Scan on pg_temp.graph0 g_1
                                        Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (22 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -798,6 +800,81 @@ select * from search_graph order by seq;
  2 | 3 | arc 2 -> 3 | (1,2,3)
  4 | 5 | arc 4 -> 5 | (1,4,5)
 (7 rows)
+
+-- a constant initial value causes issues for EXPLAIN
+explain (verbose, costs off)
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search depth first by x set y
+select * from test limit 5;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Limit
+   Output: (1), (ARRAY[ROW(1)])
+   ->  Recursive Union
+         ->  Result
+               Output: 1, ARRAY[ROW(1)]
+         ->  WorkTable Scan on test
+               Output: (test.x + 1), array_cat(test.y, ARRAY[ROW((test.x + 1))])
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
+(9 rows)
+
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search depth first by x set y
+select * from test limit 5;
+ x |           y           
+---+-----------------------
+ 1 | {(1)}
+ 2 | {(1),(2)}
+ 3 | {(1),(2),(3)}
+ 4 | {(1),(2),(3),(4)}
+ 5 | {(1),(2),(3),(4),(5)}
+(5 rows)
+
+explain (verbose, costs off)
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search breadth first by x set y
+select * from test limit 5;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Limit
+   Output: (1), (ROW('0'::bigint, 1))
+   ->  Recursive Union
+         ->  Result
+               Output: 1, ROW('0'::bigint, 1)
+         ->  WorkTable Scan on test
+               Output: (test.x + 1), ROW(int8inc((test.y)."*DEPTH*"), (test.x + 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
+(9 rows)
+
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search breadth first by x set y
+select * from test limit 5;
+ x |   y   
+---+-------
+ 1 | (0,1)
+ 2 | (1,2)
+ 3 | (2,3)
+ 4 | (3,4)
+ 5 | (4,5)
+(5 rows)
 
 -- various syntax errors
 with recursive search_graph(f, t, label) as (
@@ -891,20 +968,20 @@ select pg_get_viewdef('v_search');
              search_graph sg                   +
            WHERE (g.f = sg.t)                  +
          ) SEARCH DEPTH FIRST BY f, t SET seq  +
-  SELECT search_graph.f,                       +
-     search_graph.t,                           +
-     search_graph.label                        +
+  SELECT f,                                    +
+     t,                                        +
+     label                                     +
     FROM search_graph;
 (1 row)
 
 select * from v_search;
  f | t |   label    
 ---+---+------------
+ 2 | 3 | arc 2 -> 3
+ 4 | 5 | arc 4 -> 5
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
- 2 | 3 | arc 2 -> 3
- 4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
  4 | 5 | arc 4 -> 5
 (7 rows)
@@ -913,6 +990,8 @@ select * from v_search;
 -- test cycle detection
 --
 create temp table graph( f int, t int, label text );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into graph values
 	(1, 2, 'arc 1 -> 2'),
 	(1, 3, 'arc 1 -> 3'),
@@ -930,14 +1009,6 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
@@ -955,6 +1026,14 @@ select * from search_graph;
  4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
  5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
 -- UNION DISTINCT exercises row type hashing support
@@ -968,30 +1047,30 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
+ 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  1 | 4 | arc 1 -> 4 | t        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
 
@@ -1054,7 +1133,7 @@ select * from search_graph;
                Output: g_1.f, g_1.t, g_1.label, CASE WHEN (ROW(g_1.f, g_1.t) = ANY (sg.path)) THEN true ELSE false END, array_cat(sg.path, ARRAY[ROW(g_1.f, g_1.t)])
                Hash Cond: (sg.t = g_1.f)
                ->  WorkTable Scan on search_graph sg
-                     Output: sg.path, sg.t
+                     Output: sg.f, sg.t, sg.label, sg.is_cycle, sg.path
                      Filter: (NOT sg.is_cycle)
                ->  Hash
                      Output: g_1.f, g_1.t, g_1.label
@@ -1063,7 +1142,7 @@ select * from search_graph;
                            ->  Seq Scan on pg_temp.graph g_1
                                  Output: g_1.f, g_1.t, g_1.label
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (19 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -1076,13 +1155,6 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
@@ -1101,6 +1173,13 @@ select * from search_graph;
  1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
  4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
 (25 rows)
 
 with recursive search_graph(f, t, label) as (
@@ -1113,32 +1192,97 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | N        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(5,1)"}
  1 | 2 | arc 1 -> 2 | N        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | N        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | N        | {"(1,4)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(5,1)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(2,3)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(1,2)","(2,3)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(1,4)","(4,5)"}
  1 | 4 | arc 1 -> 4 | N        | {"(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(5,1)","(1,2)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(1,2)","(2,3)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(1,4)","(4,5)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | N        | {"(1,4)","(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | N        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(5,1)","(1,2)","(2,3)"}
  1 | 4 | arc 1 -> 4 | N        | {"(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | N        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | N        | {"(1,4)","(4,5)","(5,1)"}
- 4 | 5 | arc 4 -> 5 | Y        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | N        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | Y        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  1 | 4 | arc 1 -> 4 | Y        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
  1 | 3 | arc 1 -> 3 | N        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
  1 | 2 | arc 1 -> 2 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
+ 5 | 1 | arc 5 -> 1 | Y        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 4 | 5 | arc 4 -> 5 | Y        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | N        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  2 | 3 | arc 2 -> 3 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
+
+explain (verbose, costs off)
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+) cycle x set is_cycle using path
+select * from test;
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Recursive Union
+   ->  Result
+         Output: 0, false, ARRAY[ROW(0)]
+   ->  WorkTable Scan on test
+         Output: ((test.x + 1) % 10), CASE WHEN (ROW(((test.x + 1) % 10)) = ANY (test.path)) THEN true ELSE false END, array_cat(test.path, ARRAY[ROW(((test.x + 1) % 10))])
+         Filter: (NOT test.is_cycle)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
+(8 rows)
+
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+) cycle x set is_cycle using path
+select * from test;
+ x | is_cycle |                     path                      
+---+----------+-----------------------------------------------
+ 0 | f        | {(0)}
+ 1 | f        | {(0),(1)}
+ 2 | f        | {(0),(1),(2)}
+ 3 | f        | {(0),(1),(2),(3)}
+ 4 | f        | {(0),(1),(2),(3),(4)}
+ 5 | f        | {(0),(1),(2),(3),(4),(5)}
+ 6 | f        | {(0),(1),(2),(3),(4),(5),(6)}
+ 7 | f        | {(0),(1),(2),(3),(4),(5),(6),(7)}
+ 8 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8)}
+ 9 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)}
+ 0 | t        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0)}
+(11 rows)
+
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+    where not is_cycle  -- redundant, but legal
+) cycle x set is_cycle using path
+select * from test;
+ x | is_cycle |                     path                      
+---+----------+-----------------------------------------------
+ 0 | f        | {(0)}
+ 1 | f        | {(0),(1)}
+ 2 | f        | {(0),(1),(2)}
+ 3 | f        | {(0),(1),(2),(3)}
+ 4 | f        | {(0),(1),(2),(3),(4)}
+ 5 | f        | {(0),(1),(2),(3),(4),(5)}
+ 6 | f        | {(0),(1),(2),(3),(4),(5),(6)}
+ 7 | f        | {(0),(1),(2),(3),(4),(5),(6),(7)}
+ 8 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8)}
+ 9 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)}
+ 0 | t        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0)}
+(11 rows)
 
 -- multiple CTEs
 with recursive
@@ -1212,6 +1356,13 @@ with recursive search_graph(f, t, label) as (
 select * from search_graph;
  f | t |   label    |                    seq                    | is_cycle |                   path                    
 ---+---+------------+-------------------------------------------+----------+-------------------------------------------
+ 5 | 1 | arc 5 -> 1 | {"(5,1)"}                                 | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | {"(5,1)","(1,4)"}                         | f        | {"(5,1)","(1,4)"}
+ 1 | 3 | arc 1 -> 3 | {"(5,1)","(1,3)"}                         | f        | {"(5,1)","(1,3)"}
+ 1 | 2 | arc 1 -> 2 | {"(5,1)","(1,2)"}                         | f        | {"(5,1)","(1,2)"}
+ 4 | 5 | arc 4 -> 5 | {"(5,1)","(1,4)","(4,5)"}                 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | {"(5,1)","(1,2)","(2,3)"}                 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 5 | 1 | arc 5 -> 1 | {"(5,1)","(1,4)","(4,5)","(5,1)"}         | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  2 | 3 | arc 2 -> 3 | {"(2,3)"}                                 | f        | {"(2,3)"}
  4 | 5 | arc 4 -> 5 | {"(4,5)"}                                 | f        | {"(4,5)"}
  5 | 1 | arc 5 -> 1 | {"(4,5)","(5,1)"}                         | f        | {"(4,5)","(5,1)"}
@@ -1220,13 +1371,6 @@ select * from search_graph;
  1 | 2 | arc 1 -> 2 | {"(4,5)","(5,1)","(1,2)"}                 | f        | {"(4,5)","(5,1)","(1,2)"}
  4 | 5 | arc 4 -> 5 | {"(4,5)","(5,1)","(1,4)","(4,5)"}         | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
  2 | 3 | arc 2 -> 3 | {"(4,5)","(5,1)","(1,2)","(2,3)"}         | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | {"(5,1)"}                                 | f        | {"(5,1)"}
- 1 | 4 | arc 1 -> 4 | {"(5,1)","(1,4)"}                         | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | {"(5,1)","(1,3)"}                         | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | {"(5,1)","(1,2)"}                         | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | {"(5,1)","(1,4)","(4,5)"}                 | f        | {"(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | {"(5,1)","(1,2)","(2,3)"}                 | f        | {"(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | {"(5,1)","(1,4)","(4,5)","(5,1)"}         | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
  1 | 2 | arc 1 -> 2 | {"(1,2)"}                                 | f        | {"(1,2)"}
  1 | 3 | arc 1 -> 3 | {"(1,3)"}                                 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | {"(1,4)"}                                 | f        | {"(1,4)"}
@@ -1412,9 +1556,9 @@ select pg_get_viewdef('v_cycle1');
              search_graph sg                   +
            WHERE (g.f = sg.t)                  +
          ) CYCLE f, t SET is_cycle USING path  +
-  SELECT search_graph.f,                       +
-     search_graph.t,                           +
-     search_graph.label                        +
+  SELECT f,                                    +
+     t,                                        +
+     label                                     +
     FROM search_graph;
 (1 row)
 
@@ -1434,9 +1578,9 @@ select pg_get_viewdef('v_cycle2');
              search_graph sg                                                +
            WHERE (g.f = sg.t)                                               +
          ) CYCLE f, t SET is_cycle TO 'Y'::text DEFAULT 'N'::text USING path+
-  SELECT search_graph.f,                                                    +
-     search_graph.t,                                                        +
-     search_graph.label                                                     +
+  SELECT f,                                                                 +
+     t,                                                                     +
+     label                                                                  +
     FROM search_graph;
 (1 row)
 
@@ -1481,13 +1625,6 @@ select * from v_cycle2;
  1 | 2 | arc 1 -> 2
  4 | 5 | arc 4 -> 5
  2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
- 1 | 4 | arc 1 -> 4
- 1 | 3 | arc 1 -> 3
- 1 | 2 | arc 1 -> 2
- 4 | 5 | arc 4 -> 5
- 2 | 3 | arc 2 -> 3
- 5 | 1 | arc 5 -> 1
  1 | 2 | arc 1 -> 2
  1 | 3 | arc 1 -> 3
  1 | 4 | arc 1 -> 4
@@ -1498,6 +1635,13 @@ select * from v_cycle2;
  1 | 3 | arc 1 -> 3
  1 | 2 | arc 1 -> 2
  2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
+ 1 | 4 | arc 1 -> 4
+ 1 | 3 | arc 1 -> 3
+ 1 | 2 | arc 1 -> 2
+ 4 | 5 | arc 4 -> 5
+ 2 | 3 | arc 2 -> 3
+ 5 | 1 | arc 5 -> 1
 (25 rows)
 
 --
@@ -1683,16 +1827,16 @@ INSERT INTO y
 SELECT a+20 FROM t RETURNING *;
  a  
 ----
- 27
- 28
- 29
- 23
- 24
+ 22
  25
  26
+ 29
  30
  21
- 22
+ 23
+ 24
+ 27
+ 28
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -1726,16 +1870,16 @@ WITH t AS (
 UPDATE y SET a = y.a-10 FROM t WHERE y.a > 20 AND t.a = y.a RETURNING y.a;
  a  
 ----
- 17
- 18
- 19
- 13
- 14
+ 12
  15
  16
+ 19
  20
  11
- 12
+ 13
+ 14
+ 17
+ 18
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -1771,15 +1915,15 @@ WITH RECURSIVE t(a) AS (
 DELETE FROM y USING t WHERE t.a = y.a RETURNING y.a;
  a  
 ----
+ 20
  11
- 12
  13
  14
- 15
- 16
- 20
  17
  18
+ 12
+ 15
+ 16
  19
 (10 rows)
 
@@ -1879,6 +2023,8 @@ WITH RECURSIVE x(n) AS (SELECT 1 UNION ALL SELECT distinct(n+1) FROM x)
 ERROR:  DISTINCT in a recursive query is not implemented
 -- recursive term with a group by operation is not allowed
 CREATE TEMPORARY TABLE bar(c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WITH RECURSIVE x(n) AS (
 	SELECT 1,2
 	UNION ALL
@@ -2035,6 +2181,8 @@ LINE 2:    (SELECT i::numeric(3,0) FROM (VALUES(1),(2)) t(i)
 HINT:  Cast the output of the non-recursive term to the correct type.
 -- disallow OLD/NEW reference in CTE
 CREATE TEMPORARY TABLE x (n integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE r2 AS ON UPDATE TO x DO INSTEAD
     WITH t AS (SELECT OLD.*) UPDATE y SET a = t.n FROM t;
 ERROR:  cannot refer to OLD within WITH query
@@ -2060,11 +2208,11 @@ select ( with cte(foo) as ( values(f1) )
 from int4_tbl;
      foo     
 -------------
-      123456
-     -123456
            0
   2147483647
  -2147483647
+      123456
+     -123456
 (5 rows)
 
 select ( with cte(foo) as ( values(f1) )
@@ -2400,15 +2548,15 @@ SELECT * FROM t;
  a  
 ----
  17
- 19
+ 20
+ 13
+ 16
+ 18
  11
  12
- 13
- 15
- 18
- 20
  14
- 16
+ 15
+ 19
 (10 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2445,25 +2593,25 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
-  3
-  7
-  9
- 11
- 15
- 17
-  8
- 18
- 20
-  2
-  4
-  5
   6
- 10
  12
  13
- 14
+ 15
  16
+ 20
+  2
+  7
+  8
+ 10
+ 11
+ 14
+ 17
  19
+  3
+  4
+  5
+  9
+ 18
  21
 (20 rows)
 
@@ -2501,15 +2649,15 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
+  6
   3
-  7
-  9
-  2
   4
   5
-  6
- 10
+  9
+  2
+  7
   8
+ 10
 (9 rows)
 
 SELECT * FROM y ORDER BY 1;
@@ -2591,12 +2739,14 @@ DROP RULE y_rule ON y;
 -- check merging of outer CTE with CTE in a rule action
 CREATE TEMP TABLE bug6051 AS
   select i from generate_series(1,3) as t(i);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM bug6051;
  i 
 ---
- 1
  2
  3
+ 1
 (3 rows)
 
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
@@ -2613,6 +2763,8 @@ SELECT * FROM bug6051;
 (3 rows)
 
 CREATE TEMP TABLE bug6051_2 (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
  INSERT INTO bug6051_2
  VALUES(NEW.i);
@@ -2634,7 +2786,7 @@ SELECT * FROM bug6051_2;
 ---
 (0 rows)
 
--- check INSERT...SELECT rule actions are disallowed on commands
+-- check INSERT ... SELECT rule actions are disallowed on commands
 -- that have modifyingCTEs
 CREATE OR REPLACE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
  INSERT INTO bug6051_2
@@ -2647,9 +2799,11 @@ HINT:  Rewrite the query to only include one writable clause.
 -- silly example to verify that hasModifyingCTE flag is propagated
 CREATE TEMP TABLE bug6051_3 AS
   SELECT a FROM generate_series(11,13) AS a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE bug6051_3_ins AS ON INSERT TO bug6051_3 DO INSTEAD
   SELECT i FROM bug6051_2;
-BEGIN; SET LOCAL force_parallel_mode = on;
+BEGIN; SET LOCAL debug_parallel_query = on;
 WITH t1 AS ( DELETE FROM bug6051_3 RETURNING * )
   INSERT INTO bug6051_3 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
@@ -2681,7 +2835,7 @@ SELECT q1 FROM
          ->  Seq Scan on public.int8_tbl i8
                Output: i8.q1, NULL::bigint
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (8 rows)
 
 SELECT q1 FROM
@@ -2692,11 +2846,11 @@ SELECT q1 FROM
 ) ss;
         q1        
 ------------------
+ 4567890123456789
+ 4567890123456789
+ 4567890123456789
               123
               123
- 4567890123456789
- 4567890123456789
- 4567890123456789
 (5 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -2715,7 +2869,7 @@ SELECT q1 FROM
          ->  Seq Scan on public.int8_tbl i8
                Output: i8.q1, NULL::bigint
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (8 rows)
 
 SELECT q1 FROM
@@ -2927,6 +3081,8 @@ ERROR:  modification of distribution columns in OnConflictUpdate is not supporte
 DROP TABLE withz;
 -- WITH referenced by MERGE statement
 CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'k' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE m ADD UNIQUE (k);
 WITH RECURSIVE cte_basic AS (SELECT 1 a, 'cte_basic val' b)
 MERGE INTO m USING (select 0 k, 'merge source SubPlan' v) o ON m.k=o.k
@@ -2977,7 +3133,7 @@ WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
                        ->  Result
                              Output: 1, 'cte_basic val'::text
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (25 rows)
 
 -- InitPlan
@@ -3024,7 +3180,7 @@ WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
                      ->  Result
                            Output: 1, 'merge source InitPlan'::text
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (25 rows)
 
 -- MERGE source comes from CTE:
@@ -3074,7 +3230,7 @@ WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text
                      ->  Shared Scan (share slice:id 1:0)
                            Output: share0_ref3.a, share0_ref3.b
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (28 rows)
 
 DROP TABLE m;
@@ -3082,6 +3238,8 @@ DROP TABLE m;
 TRUNCATE TABLE y;
 INSERT INTO y SELECT generate_series(1, 3);
 CREATE TEMPORARY TABLE yy (a INTEGER);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WITH RECURSIVE t1 AS (
   INSERT INTO y SELECT * FROM y RETURNING *
 ), t2 AS (
@@ -3149,9 +3307,9 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t;
-NOTICE:  y_trigger: a = 22  (seg0 slice1 172.17.0.3:7002 pid=1280219)
-NOTICE:  y_trigger: a = 23  (seg2 slice1 172.17.0.3:7004 pid=1280234)
-NOTICE:  y_trigger: a = 21  (seg1 slice1 172.17.0.3:7003 pid=1280222)
+NOTICE:  y_trigger: a = 22  (seg1 slice1 172.17.0.2:7003 pid=23698)
+NOTICE:  y_trigger: a = 23  (seg1 slice1 172.17.0.2:7003 pid=23698)
+NOTICE:  y_trigger: a = 21  (seg2 slice1 172.17.0.2:7004 pid=23695)
  a  
 ----
  22
@@ -3189,9 +3347,9 @@ WITH t AS (
     RETURNING *
 )
 SELECT * FROM t LIMIT 1;
-NOTICE:  y_trigger: a = 32  (seg0 slice1 172.17.0.3:7002 pid=1280219)
-NOTICE:  y_trigger: a = 33  (seg1 slice1 172.17.0.3:7003 pid=1280222)
-NOTICE:  y_trigger: a = 31  (seg2 slice1 172.17.0.3:7004 pid=1280234)
+NOTICE:  y_trigger: a = 31  (seg0 slice1 172.17.0.2:7002 pid=23714)
+NOTICE:  y_trigger: a = 33  (seg2 slice1 172.17.0.2:7004 pid=23695)
+NOTICE:  y_trigger: a = 32  (seg1 slice1 172.17.0.2:7003 pid=23698)
  a  
 ----
  31
@@ -3239,8 +3397,8 @@ WITH t AS (
 SELECT * FROM t;
  a  
 ----
- 41
  42
+ 41
  43
 (3 rows)
 
@@ -3274,6 +3432,8 @@ DROP FUNCTION y_trigger();
 -- end_ignore
 -- WITH attached to inherited UPDATE or DELETE
 CREATE TEMP TABLE parent ( id int, val text );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE child1 ( ) INHERITS ( parent );
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TEMP TABLE child2 ( ) INHERITS ( parent );
@@ -3286,11 +3446,11 @@ UPDATE parent SET id = id + totalid FROM rcte;
 SELECT * FROM parent;
  id | val 
 ----+-----
+ 82 | c11
  94 | c21
  72 | p1
  83 | c12
  95 | c22
- 82 | c11
 (5 rows)
 
 WITH wcte AS ( INSERT INTO child1 VALUES ( 42, 'new' ) RETURNING id AS newid )
@@ -3301,8 +3461,8 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
  94 | c21
+ 82 | c11
  72 | p1
  83 | c12
  95 | c22
@@ -3313,10 +3473,10 @@ DELETE FROM parent USING rcte WHERE id = maxid;
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
  94 | c21
  72 | p1
  83 | c12
+ 82 | c11
 (4 rows)
 
 WITH wcte AS ( INSERT INTO child2 VALUES ( 42, 'new2' ) RETURNING id AS newid )
@@ -3327,10 +3487,10 @@ HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
 ----+-----
- 82 | c11
  94 | c21
  72 | p1
  83 | c12
+ 82 | c11
 (4 rows)
 
 -- check EXPLAIN VERBOSE for a wCTE with RETURNING
@@ -3423,6 +3583,8 @@ LINE 1: WITH with_test AS (SELECT 42) INSERT INTO with_test VALUES (...
 -- surprisingly it works, because CTEs don't hide tables from data-modifying
 -- statements)
 create temp table with_test (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 with with_test as (select 42) insert into with_test select * from with_test;
 select * from with_test;
  i  

@@ -23,6 +23,7 @@ GRANT ALL ON SCHEMA orca TO PUBLIC;
 SET search_path to orca, public;
 -- end_ignore
 create table orca.r();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 set allow_system_table_mods=true;
 delete from gp_distribution_policy where localoid='orca.r'::regclass;
 reset allow_system_table_mods;
@@ -30,6 +31,7 @@ alter table orca.r add column a int;
 alter table orca.r add column b int;
 insert into orca.r select i, i/3 from generate_series(1,20) i;
 create table orca.s();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 set allow_system_table_mods=true;
 delete from gp_distribution_policy where localoid='orca.s'::regclass;
 reset allow_system_table_mods;
@@ -2149,6 +2151,8 @@ select 129::bigint, 5623::int, 45::smallint from orca.r;
 
 --  distributed tables
 create table orca.foo (x1 int, x2 int, x3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.bar1 (x1 int, x2 int, x3 int) distributed randomly;
 create table orca.bar2 (x1 int, x2 int, x3 int) distributed randomly;
 insert into orca.foo select i,i+1,i+2 from generate_series(1,10) i;
@@ -2161,15 +2165,15 @@ analyze orca.bar2;
 select x2 from orca.foo where x1 in (select x2 from orca.bar1);
  x2 
 ----
-  6
-  7
- 10
- 11
   3
   4
   5
   8
   9
+  6
+  7
+ 10
+ 11
 (9 rows)
 
 select 1;
@@ -2265,16 +2269,16 @@ select distinct x1, sum(x3) from orca.foo group by x1,x2;
 select distinct s from (select sum(x2) s from orca.foo group by x1) x;
  s  
 ----
+  4
+  2
+  8
+  7
+  3
   5
  11
   9
   6
  10
-  2
-  4
-  8
-  7
-  3
 (10 rows)
 
 select * from orca.foo a where a.x1 = (select distinct sum(b.x1)+avg(b.x1) sa from orca.bar1 b group by b.x3 order by sa limit 1);
@@ -2293,6 +2297,7 @@ select distinct a.x1 from orca.foo a where a.x1 <= (select distinct sum(b.x1)+av
 select * from orca.foo a where a.x1 = (select distinct b.x1 from orca.bar1 b where b.x1=a.x1 limit 1);
  x1 | x2 | x3 
 ----+----+----
+  1 |  2 |  3
   2 |  3 |  4
   3 |  4 |  5
   4 |  5 |  6
@@ -2302,23 +2307,22 @@ select * from orca.foo a where a.x1 = (select distinct b.x1 from orca.bar1 b whe
   6 |  7 |  8
   9 | 10 | 11
  10 | 11 | 12
-  1 |  2 |  3
 (10 rows)
 
 -- with clause
 with cte1 as (select * from orca.foo) select a.x1+1 from (select * from cte1) a group by a.x1;
  ?column? 
 ----------
-       11
-       10
-        7
-        6
         2
         5
         3
         9
         8
         4
+       11
+       10
+        7
+        6
 (10 rows)
 
 select count(*)+1 from orca.bar1 b where b.x1 < any (with cte1 as (select * from orca.foo) select a.x1+1 from (select * from cte1) a group by a.x1);
@@ -2393,9 +2397,9 @@ explain select case when bar1.x2 = bar2.x2 then coalesce((select 1 from orca.foo
 from orca.bar1 inner join orca.bar2 on (bar1.x2 = bar2.x2) order by bar1.x1; 
                                                    QUERY PLAN                                                   
 ----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=11.74..12.03 rows=20 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=11.57..11.86 rows=20 width=8)
    Merge Key: bar1.x1
-   ->  Sort  (cost=11.74..11.76 rows=7 width=8)
+   ->  Sort  (cost=11.57..11.59 rows=7 width=8)
          Sort Key: bar1.x1
          ->  Hash Join  (cost=1.28..11.48 rows=7 width=8)
                Hash Cond: (bar2.x2 = bar1.x2)
@@ -2463,11 +2467,6 @@ select * from orca.r, orca.s where r.a=s.c;
  6 | 0 | 6 | 0
  5 | 2 | 5 | 0
  6 | 0 | 6 | 1
- 1 | 1 | 1 | 1
- 1 | 1 | 1 | 0
- 1 | 1 | 1 | 1
- 1 | 1 | 1 | 0
- 1 | 1 | 1 | 1
  2 | 2 | 2 | 0
  3 | 0 | 3 | 1
  4 | 1 | 4 | 0
@@ -2481,76 +2480,17 @@ select * from orca.r, orca.s where r.a=s.c;
  3 | 0 | 3 | 0
  4 | 1 | 4 | 1
  2 | 2 | 2 | 0
+ 1 | 1 | 1 | 1
+ 1 | 1 | 1 | 0
+ 1 | 1 | 1 | 1
+ 1 | 1 | 1 | 0
+ 1 | 1 | 1 | 1
 (26 rows)
 
 -- Materialize node
 select * from orca.r, orca.s where r.a<s.c+1 or r.a>s.c;
  a  | b | c | d 
 ----+---+---+---
-  5 | 2 | 5 | 1
-  5 | 2 | 6 | 0
-  5 | 2 | 5 | 0
-  5 | 2 | 6 | 1
-  5 | 2 | 5 | 1
-  5 | 2 | 6 | 0
-  5 | 2 | 5 | 0
-  5 | 2 | 6 | 1
-  6 | 0 | 5 | 1
-  6 | 0 | 6 | 0
-  6 | 0 | 5 | 0
-  6 | 0 | 6 | 1
-  6 | 0 | 5 | 1
-  6 | 0 | 6 | 0
-  6 | 0 | 5 | 0
-  6 | 0 | 6 | 1
-  9 | 0 | 5 | 1
-  9 | 0 | 6 | 0
-  9 | 0 | 5 | 0
-  9 | 0 | 6 | 1
-  9 | 0 | 5 | 1
-  9 | 0 | 6 | 0
-  9 | 0 | 5 | 0
-  9 | 0 | 6 | 1
- 10 | 1 | 5 | 1
- 10 | 1 | 6 | 0
- 10 | 1 | 5 | 0
- 10 | 1 | 6 | 1
- 10 | 1 | 5 | 1
- 10 | 1 | 6 | 0
- 10 | 1 | 5 | 0
- 10 | 1 | 6 | 1
- 11 | 2 | 5 | 1
- 11 | 2 | 6 | 0
- 11 | 2 | 5 | 0
- 11 | 2 | 6 | 1
- 11 | 2 | 5 | 1
- 11 | 2 | 6 | 0
- 11 | 2 | 5 | 0
- 11 | 2 | 6 | 1
- 13 | 1 | 5 | 1
- 13 | 1 | 6 | 0
- 13 | 1 | 5 | 0
- 13 | 1 | 6 | 1
- 13 | 1 | 5 | 1
- 13 | 1 | 6 | 0
- 13 | 1 | 5 | 0
- 13 | 1 | 6 | 1
- 14 | 2 | 5 | 1
- 14 | 2 | 6 | 0
- 14 | 2 | 5 | 0
- 14 | 2 | 6 | 1
- 14 | 2 | 5 | 1
- 14 | 2 | 6 | 0
- 14 | 2 | 5 | 0
- 14 | 2 | 6 | 1
- 17 | 2 | 5 | 1
- 17 | 2 | 6 | 0
- 17 | 2 | 5 | 0
- 17 | 2 | 6 | 1
- 17 | 2 | 5 | 1
- 17 | 2 | 6 | 0
- 17 | 2 | 5 | 0
- 17 | 2 | 6 | 1
   2 | 2 | 5 | 1
   2 | 2 | 6 | 0
   2 | 2 | 5 | 0
@@ -2647,110 +2587,302 @@ select * from orca.r, orca.s where r.a<s.c+1 or r.a>s.c;
  20 | 2 | 6 | 0
  20 | 2 | 5 | 0
  20 | 2 | 6 | 1
-  5 | 2 | 2 | 0
-  5 | 2 | 3 | 1
-  5 | 2 | 4 | 0
-  5 | 2 | 2 | 1
-  5 | 2 | 3 | 0
-  5 | 2 | 4 | 1
-  5 | 2 | 2 | 0
-  5 | 2 | 3 | 1
-  5 | 2 | 4 | 0
-  5 | 2 | 2 | 1
-  5 | 2 | 3 | 0
-  5 | 2 | 4 | 1
-  5 | 2 | 2 | 0
-  6 | 0 | 2 | 0
-  6 | 0 | 3 | 1
-  6 | 0 | 4 | 0
-  6 | 0 | 2 | 1
-  6 | 0 | 3 | 0
-  6 | 0 | 4 | 1
-  6 | 0 | 2 | 0
-  6 | 0 | 3 | 1
-  6 | 0 | 4 | 0
-  6 | 0 | 2 | 1
-  6 | 0 | 3 | 0
-  6 | 0 | 4 | 1
-  6 | 0 | 2 | 0
-  9 | 0 | 2 | 0
-  9 | 0 | 3 | 1
-  9 | 0 | 4 | 0
-  9 | 0 | 2 | 1
-  9 | 0 | 3 | 0
-  9 | 0 | 4 | 1
-  9 | 0 | 2 | 0
-  9 | 0 | 3 | 1
-  9 | 0 | 4 | 0
-  9 | 0 | 2 | 1
-  9 | 0 | 3 | 0
-  9 | 0 | 4 | 1
-  9 | 0 | 2 | 0
- 10 | 1 | 2 | 0
- 10 | 1 | 3 | 1
- 10 | 1 | 4 | 0
- 10 | 1 | 2 | 1
- 10 | 1 | 3 | 0
- 10 | 1 | 4 | 1
- 10 | 1 | 2 | 0
- 10 | 1 | 3 | 1
- 10 | 1 | 4 | 0
- 10 | 1 | 2 | 1
- 10 | 1 | 3 | 0
- 10 | 1 | 4 | 1
- 10 | 1 | 2 | 0
- 11 | 2 | 2 | 0
- 11 | 2 | 3 | 1
- 11 | 2 | 4 | 0
- 11 | 2 | 2 | 1
- 11 | 2 | 3 | 0
- 11 | 2 | 4 | 1
- 11 | 2 | 2 | 0
- 11 | 2 | 3 | 1
- 11 | 2 | 4 | 0
- 11 | 2 | 2 | 1
- 11 | 2 | 3 | 0
- 11 | 2 | 4 | 1
- 11 | 2 | 2 | 0
- 13 | 1 | 2 | 0
- 13 | 1 | 3 | 1
- 13 | 1 | 4 | 0
- 13 | 1 | 2 | 1
- 13 | 1 | 3 | 0
- 13 | 1 | 4 | 1
- 13 | 1 | 2 | 0
- 13 | 1 | 3 | 1
- 13 | 1 | 4 | 0
- 13 | 1 | 2 | 1
- 13 | 1 | 3 | 0
- 13 | 1 | 4 | 1
- 13 | 1 | 2 | 0
- 14 | 2 | 2 | 0
- 14 | 2 | 3 | 1
- 14 | 2 | 4 | 0
- 14 | 2 | 2 | 1
- 14 | 2 | 3 | 0
- 14 | 2 | 4 | 1
- 14 | 2 | 2 | 0
- 14 | 2 | 3 | 1
- 14 | 2 | 4 | 0
- 14 | 2 | 2 | 1
- 14 | 2 | 3 | 0
- 14 | 2 | 4 | 1
- 14 | 2 | 2 | 0
- 17 | 2 | 2 | 0
- 17 | 2 | 3 | 1
- 17 | 2 | 4 | 0
- 17 | 2 | 2 | 1
- 17 | 2 | 3 | 0
- 17 | 2 | 4 | 1
- 17 | 2 | 2 | 0
- 17 | 2 | 3 | 1
- 17 | 2 | 4 | 0
- 17 | 2 | 2 | 1
- 17 | 2 | 3 | 0
- 17 | 2 | 4 | 1
- 17 | 2 | 2 | 0
+  5 | 2 | 5 | 1
+  5 | 2 | 6 | 0
+  5 | 2 | 5 | 0
+  5 | 2 | 6 | 1
+  5 | 2 | 5 | 1
+  5 | 2 | 6 | 0
+  5 | 2 | 5 | 0
+  5 | 2 | 6 | 1
+  6 | 0 | 5 | 1
+  6 | 0 | 6 | 0
+  6 | 0 | 5 | 0
+  6 | 0 | 6 | 1
+  6 | 0 | 5 | 1
+  6 | 0 | 6 | 0
+  6 | 0 | 5 | 0
+  6 | 0 | 6 | 1
+  9 | 0 | 5 | 1
+  9 | 0 | 6 | 0
+  9 | 0 | 5 | 0
+  9 | 0 | 6 | 1
+  9 | 0 | 5 | 1
+  9 | 0 | 6 | 0
+  9 | 0 | 5 | 0
+  9 | 0 | 6 | 1
+ 10 | 1 | 5 | 1
+ 10 | 1 | 6 | 0
+ 10 | 1 | 5 | 0
+ 10 | 1 | 6 | 1
+ 10 | 1 | 5 | 1
+ 10 | 1 | 6 | 0
+ 10 | 1 | 5 | 0
+ 10 | 1 | 6 | 1
+ 11 | 2 | 5 | 1
+ 11 | 2 | 6 | 0
+ 11 | 2 | 5 | 0
+ 11 | 2 | 6 | 1
+ 11 | 2 | 5 | 1
+ 11 | 2 | 6 | 0
+ 11 | 2 | 5 | 0
+ 11 | 2 | 6 | 1
+ 13 | 1 | 5 | 1
+ 13 | 1 | 6 | 0
+ 13 | 1 | 5 | 0
+ 13 | 1 | 6 | 1
+ 13 | 1 | 5 | 1
+ 13 | 1 | 6 | 0
+ 13 | 1 | 5 | 0
+ 13 | 1 | 6 | 1
+ 14 | 2 | 5 | 1
+ 14 | 2 | 6 | 0
+ 14 | 2 | 5 | 0
+ 14 | 2 | 6 | 1
+ 14 | 2 | 5 | 1
+ 14 | 2 | 6 | 0
+ 14 | 2 | 5 | 0
+ 14 | 2 | 6 | 1
+ 17 | 2 | 5 | 1
+ 17 | 2 | 6 | 0
+ 17 | 2 | 5 | 0
+ 17 | 2 | 6 | 1
+ 17 | 2 | 5 | 1
+ 17 | 2 | 6 | 0
+ 17 | 2 | 5 | 0
+ 17 | 2 | 6 | 1
+  1 | 1 | 1 | 1
+  1 | 1 | 0 | 1
+  1 | 1 | 1 | 0
+  1 | 1 | 0 | 0
+  1 | 1 | 1 | 1
+  1 | 1 | 0 | 1
+  1 | 1 | 1 | 0
+  1 | 1 | 0 | 0
+  1 | 1 | 1 | 1
+ 12 | 0 | 1 | 1
+ 12 | 0 | 0 | 1
+ 12 | 0 | 1 | 0
+ 12 | 0 | 0 | 0
+ 12 | 0 | 1 | 1
+ 12 | 0 | 0 | 1
+ 12 | 0 | 1 | 0
+ 12 | 0 | 0 | 0
+ 12 | 0 | 1 | 1
+ 15 | 0 | 1 | 1
+ 15 | 0 | 0 | 1
+ 15 | 0 | 1 | 0
+ 15 | 0 | 0 | 0
+ 15 | 0 | 1 | 1
+ 15 | 0 | 0 | 1
+ 15 | 0 | 1 | 0
+ 15 | 0 | 0 | 0
+ 15 | 0 | 1 | 1
+ 20 | 2 | 1 | 1
+ 20 | 2 | 0 | 1
+ 20 | 2 | 1 | 0
+ 20 | 2 | 0 | 0
+ 20 | 2 | 1 | 1
+ 20 | 2 | 0 | 1
+ 20 | 2 | 1 | 0
+ 20 | 2 | 0 | 0
+ 20 | 2 | 1 | 1
+  2 | 2 | 1 | 1
+  2 | 2 | 0 | 1
+  2 | 2 | 1 | 0
+  2 | 2 | 0 | 0
+  2 | 2 | 1 | 1
+  2 | 2 | 0 | 1
+  2 | 2 | 1 | 0
+  2 | 2 | 0 | 0
+  2 | 2 | 1 | 1
+  3 | 0 | 1 | 1
+  3 | 0 | 0 | 1
+  3 | 0 | 1 | 0
+  3 | 0 | 0 | 0
+  3 | 0 | 1 | 1
+  3 | 0 | 0 | 1
+  3 | 0 | 1 | 0
+  3 | 0 | 0 | 0
+  3 | 0 | 1 | 1
+  4 | 1 | 1 | 1
+  4 | 1 | 0 | 1
+  4 | 1 | 1 | 0
+  4 | 1 | 0 | 0
+  4 | 1 | 1 | 1
+  4 | 1 | 0 | 1
+  4 | 1 | 1 | 0
+  4 | 1 | 0 | 0
+  4 | 1 | 1 | 1
+  7 | 1 | 1 | 1
+  7 | 1 | 0 | 1
+  7 | 1 | 1 | 0
+  7 | 1 | 0 | 0
+  7 | 1 | 1 | 1
+  7 | 1 | 0 | 1
+  7 | 1 | 1 | 0
+  7 | 1 | 0 | 0
+  7 | 1 | 1 | 1
+  8 | 2 | 1 | 1
+  8 | 2 | 0 | 1
+  8 | 2 | 1 | 0
+  8 | 2 | 0 | 0
+  8 | 2 | 1 | 1
+  8 | 2 | 0 | 1
+  8 | 2 | 1 | 0
+  8 | 2 | 0 | 0
+  8 | 2 | 1 | 1
+ 16 | 1 | 1 | 1
+ 16 | 1 | 0 | 1
+ 16 | 1 | 1 | 0
+ 16 | 1 | 0 | 0
+ 16 | 1 | 1 | 1
+ 16 | 1 | 0 | 1
+ 16 | 1 | 1 | 0
+ 16 | 1 | 0 | 0
+ 16 | 1 | 1 | 1
+ 18 | 0 | 1 | 1
+ 18 | 0 | 0 | 1
+ 18 | 0 | 1 | 0
+ 18 | 0 | 0 | 0
+ 18 | 0 | 1 | 1
+ 18 | 0 | 0 | 1
+ 18 | 0 | 1 | 0
+ 18 | 0 | 0 | 0
+ 18 | 0 | 1 | 1
+ 19 | 1 | 1 | 1
+ 19 | 1 | 0 | 1
+ 19 | 1 | 1 | 0
+ 19 | 1 | 0 | 0
+ 19 | 1 | 1 | 1
+ 19 | 1 | 0 | 1
+ 19 | 1 | 1 | 0
+ 19 | 1 | 0 | 0
+ 19 | 1 | 1 | 1
+  5 | 2 | 1 | 1
+  5 | 2 | 0 | 1
+  5 | 2 | 1 | 0
+  5 | 2 | 0 | 0
+  5 | 2 | 1 | 1
+  5 | 2 | 0 | 1
+  5 | 2 | 1 | 0
+  5 | 2 | 0 | 0
+  5 | 2 | 1 | 1
+  6 | 0 | 1 | 1
+  6 | 0 | 0 | 1
+  6 | 0 | 1 | 0
+  6 | 0 | 0 | 0
+  6 | 0 | 1 | 1
+  6 | 0 | 0 | 1
+  6 | 0 | 1 | 0
+  6 | 0 | 0 | 0
+  6 | 0 | 1 | 1
+  9 | 0 | 1 | 1
+  9 | 0 | 0 | 1
+  9 | 0 | 1 | 0
+  9 | 0 | 0 | 0
+  9 | 0 | 1 | 1
+  9 | 0 | 0 | 1
+  9 | 0 | 1 | 0
+  9 | 0 | 0 | 0
+  9 | 0 | 1 | 1
+ 10 | 1 | 1 | 1
+ 10 | 1 | 0 | 1
+ 10 | 1 | 1 | 0
+ 10 | 1 | 0 | 0
+ 10 | 1 | 1 | 1
+ 10 | 1 | 0 | 1
+ 10 | 1 | 1 | 0
+ 10 | 1 | 0 | 0
+ 10 | 1 | 1 | 1
+ 11 | 2 | 1 | 1
+ 11 | 2 | 0 | 1
+ 11 | 2 | 1 | 0
+ 11 | 2 | 0 | 0
+ 11 | 2 | 1 | 1
+ 11 | 2 | 0 | 1
+ 11 | 2 | 1 | 0
+ 11 | 2 | 0 | 0
+ 11 | 2 | 1 | 1
+ 13 | 1 | 1 | 1
+ 13 | 1 | 0 | 1
+ 13 | 1 | 1 | 0
+ 13 | 1 | 0 | 0
+ 13 | 1 | 1 | 1
+ 13 | 1 | 0 | 1
+ 13 | 1 | 1 | 0
+ 13 | 1 | 0 | 0
+ 13 | 1 | 1 | 1
+ 14 | 2 | 1 | 1
+ 14 | 2 | 0 | 1
+ 14 | 2 | 1 | 0
+ 14 | 2 | 0 | 0
+ 14 | 2 | 1 | 1
+ 14 | 2 | 0 | 1
+ 14 | 2 | 1 | 0
+ 14 | 2 | 0 | 0
+ 14 | 2 | 1 | 1
+ 17 | 2 | 1 | 1
+ 17 | 2 | 0 | 1
+ 17 | 2 | 1 | 0
+ 17 | 2 | 0 | 0
+ 17 | 2 | 1 | 1
+ 17 | 2 | 0 | 1
+ 17 | 2 | 1 | 0
+ 17 | 2 | 0 | 0
+ 17 | 2 | 1 | 1
+  1 | 1 | 2 | 0
+  1 | 1 | 3 | 1
+  1 | 1 | 4 | 0
+  1 | 1 | 2 | 1
+  1 | 1 | 3 | 0
+  1 | 1 | 4 | 1
+  1 | 1 | 2 | 0
+  1 | 1 | 3 | 1
+  1 | 1 | 4 | 0
+  1 | 1 | 2 | 1
+  1 | 1 | 3 | 0
+  1 | 1 | 4 | 1
+  1 | 1 | 2 | 0
+ 12 | 0 | 2 | 0
+ 12 | 0 | 3 | 1
+ 12 | 0 | 4 | 0
+ 12 | 0 | 2 | 1
+ 12 | 0 | 3 | 0
+ 12 | 0 | 4 | 1
+ 12 | 0 | 2 | 0
+ 12 | 0 | 3 | 1
+ 12 | 0 | 4 | 0
+ 12 | 0 | 2 | 1
+ 12 | 0 | 3 | 0
+ 12 | 0 | 4 | 1
+ 12 | 0 | 2 | 0
+ 15 | 0 | 2 | 0
+ 15 | 0 | 3 | 1
+ 15 | 0 | 4 | 0
+ 15 | 0 | 2 | 1
+ 15 | 0 | 3 | 0
+ 15 | 0 | 4 | 1
+ 15 | 0 | 2 | 0
+ 15 | 0 | 3 | 1
+ 15 | 0 | 4 | 0
+ 15 | 0 | 2 | 1
+ 15 | 0 | 3 | 0
+ 15 | 0 | 4 | 1
+ 15 | 0 | 2 | 0
+ 20 | 2 | 2 | 0
+ 20 | 2 | 3 | 1
+ 20 | 2 | 4 | 0
+ 20 | 2 | 2 | 1
+ 20 | 2 | 3 | 0
+ 20 | 2 | 4 | 1
+ 20 | 2 | 2 | 0
+ 20 | 2 | 3 | 1
+ 20 | 2 | 4 | 0
+ 20 | 2 | 2 | 1
+ 20 | 2 | 3 | 0
+ 20 | 2 | 4 | 1
+ 20 | 2 | 2 | 0
   2 | 2 | 2 | 0
   2 | 2 | 3 | 1
   2 | 2 | 4 | 0
@@ -2855,244 +2987,156 @@ select * from orca.r, orca.s where r.a<s.c+1 or r.a>s.c;
  19 | 1 | 3 | 0
  19 | 1 | 4 | 1
  19 | 1 | 2 | 0
-  1 | 1 | 2 | 0
-  1 | 1 | 3 | 1
-  1 | 1 | 4 | 0
-  1 | 1 | 2 | 1
-  1 | 1 | 3 | 0
-  1 | 1 | 4 | 1
-  1 | 1 | 2 | 0
-  1 | 1 | 3 | 1
-  1 | 1 | 4 | 0
-  1 | 1 | 2 | 1
-  1 | 1 | 3 | 0
-  1 | 1 | 4 | 1
-  1 | 1 | 2 | 0
- 12 | 0 | 2 | 0
- 12 | 0 | 3 | 1
- 12 | 0 | 4 | 0
- 12 | 0 | 2 | 1
- 12 | 0 | 3 | 0
- 12 | 0 | 4 | 1
- 12 | 0 | 2 | 0
- 12 | 0 | 3 | 1
- 12 | 0 | 4 | 0
- 12 | 0 | 2 | 1
- 12 | 0 | 3 | 0
- 12 | 0 | 4 | 1
- 12 | 0 | 2 | 0
- 15 | 0 | 2 | 0
- 15 | 0 | 3 | 1
- 15 | 0 | 4 | 0
- 15 | 0 | 2 | 1
- 15 | 0 | 3 | 0
- 15 | 0 | 4 | 1
- 15 | 0 | 2 | 0
- 15 | 0 | 3 | 1
- 15 | 0 | 4 | 0
- 15 | 0 | 2 | 1
- 15 | 0 | 3 | 0
- 15 | 0 | 4 | 1
- 15 | 0 | 2 | 0
- 20 | 2 | 2 | 0
- 20 | 2 | 3 | 1
- 20 | 2 | 4 | 0
- 20 | 2 | 2 | 1
- 20 | 2 | 3 | 0
- 20 | 2 | 4 | 1
- 20 | 2 | 2 | 0
- 20 | 2 | 3 | 1
- 20 | 2 | 4 | 0
- 20 | 2 | 2 | 1
- 20 | 2 | 3 | 0
- 20 | 2 | 4 | 1
- 20 | 2 | 2 | 0
-  5 | 2 | 1 | 1
-  5 | 2 | 0 | 1
-  5 | 2 | 1 | 0
-  5 | 2 | 0 | 0
-  5 | 2 | 1 | 1
-  5 | 2 | 0 | 1
-  5 | 2 | 1 | 0
-  5 | 2 | 0 | 0
-  5 | 2 | 1 | 1
-  6 | 0 | 1 | 1
-  6 | 0 | 0 | 1
-  6 | 0 | 1 | 0
-  6 | 0 | 0 | 0
-  6 | 0 | 1 | 1
-  6 | 0 | 0 | 1
-  6 | 0 | 1 | 0
-  6 | 0 | 0 | 0
-  6 | 0 | 1 | 1
-  9 | 0 | 1 | 1
-  9 | 0 | 0 | 1
-  9 | 0 | 1 | 0
-  9 | 0 | 0 | 0
-  9 | 0 | 1 | 1
-  9 | 0 | 0 | 1
-  9 | 0 | 1 | 0
-  9 | 0 | 0 | 0
-  9 | 0 | 1 | 1
- 10 | 1 | 1 | 1
- 10 | 1 | 0 | 1
- 10 | 1 | 1 | 0
- 10 | 1 | 0 | 0
- 10 | 1 | 1 | 1
- 10 | 1 | 0 | 1
- 10 | 1 | 1 | 0
- 10 | 1 | 0 | 0
- 10 | 1 | 1 | 1
- 11 | 2 | 1 | 1
- 11 | 2 | 0 | 1
- 11 | 2 | 1 | 0
- 11 | 2 | 0 | 0
- 11 | 2 | 1 | 1
- 11 | 2 | 0 | 1
- 11 | 2 | 1 | 0
- 11 | 2 | 0 | 0
- 11 | 2 | 1 | 1
- 13 | 1 | 1 | 1
- 13 | 1 | 0 | 1
- 13 | 1 | 1 | 0
- 13 | 1 | 0 | 0
- 13 | 1 | 1 | 1
- 13 | 1 | 0 | 1
- 13 | 1 | 1 | 0
- 13 | 1 | 0 | 0
- 13 | 1 | 1 | 1
- 14 | 2 | 1 | 1
- 14 | 2 | 0 | 1
- 14 | 2 | 1 | 0
- 14 | 2 | 0 | 0
- 14 | 2 | 1 | 1
- 14 | 2 | 0 | 1
- 14 | 2 | 1 | 0
- 14 | 2 | 0 | 0
- 14 | 2 | 1 | 1
- 17 | 2 | 1 | 1
- 17 | 2 | 0 | 1
- 17 | 2 | 1 | 0
- 17 | 2 | 0 | 0
- 17 | 2 | 1 | 1
- 17 | 2 | 0 | 1
- 17 | 2 | 1 | 0
- 17 | 2 | 0 | 0
- 17 | 2 | 1 | 1
-  2 | 2 | 1 | 1
-  2 | 2 | 0 | 1
-  2 | 2 | 1 | 0
-  2 | 2 | 0 | 0
-  2 | 2 | 1 | 1
-  2 | 2 | 0 | 1
-  2 | 2 | 1 | 0
-  2 | 2 | 0 | 0
-  2 | 2 | 1 | 1
-  3 | 0 | 1 | 1
-  3 | 0 | 0 | 1
-  3 | 0 | 1 | 0
-  3 | 0 | 0 | 0
-  3 | 0 | 1 | 1
-  3 | 0 | 0 | 1
-  3 | 0 | 1 | 0
-  3 | 0 | 0 | 0
-  3 | 0 | 1 | 1
-  4 | 1 | 1 | 1
-  4 | 1 | 0 | 1
-  4 | 1 | 1 | 0
-  4 | 1 | 0 | 0
-  4 | 1 | 1 | 1
-  4 | 1 | 0 | 1
-  4 | 1 | 1 | 0
-  4 | 1 | 0 | 0
-  4 | 1 | 1 | 1
-  7 | 1 | 1 | 1
-  7 | 1 | 0 | 1
-  7 | 1 | 1 | 0
-  7 | 1 | 0 | 0
-  7 | 1 | 1 | 1
-  7 | 1 | 0 | 1
-  7 | 1 | 1 | 0
-  7 | 1 | 0 | 0
-  7 | 1 | 1 | 1
-  8 | 2 | 1 | 1
-  8 | 2 | 0 | 1
-  8 | 2 | 1 | 0
-  8 | 2 | 0 | 0
-  8 | 2 | 1 | 1
-  8 | 2 | 0 | 1
-  8 | 2 | 1 | 0
-  8 | 2 | 0 | 0
-  8 | 2 | 1 | 1
- 16 | 1 | 1 | 1
- 16 | 1 | 0 | 1
- 16 | 1 | 1 | 0
- 16 | 1 | 0 | 0
- 16 | 1 | 1 | 1
- 16 | 1 | 0 | 1
- 16 | 1 | 1 | 0
- 16 | 1 | 0 | 0
- 16 | 1 | 1 | 1
- 18 | 0 | 1 | 1
- 18 | 0 | 0 | 1
- 18 | 0 | 1 | 0
- 18 | 0 | 0 | 0
- 18 | 0 | 1 | 1
- 18 | 0 | 0 | 1
- 18 | 0 | 1 | 0
- 18 | 0 | 0 | 0
- 18 | 0 | 1 | 1
- 19 | 1 | 1 | 1
- 19 | 1 | 0 | 1
- 19 | 1 | 1 | 0
- 19 | 1 | 0 | 0
- 19 | 1 | 1 | 1
- 19 | 1 | 0 | 1
- 19 | 1 | 1 | 0
- 19 | 1 | 0 | 0
- 19 | 1 | 1 | 1
-  1 | 1 | 1 | 1
-  1 | 1 | 0 | 1
-  1 | 1 | 1 | 0
-  1 | 1 | 0 | 0
-  1 | 1 | 1 | 1
-  1 | 1 | 0 | 1
-  1 | 1 | 1 | 0
-  1 | 1 | 0 | 0
-  1 | 1 | 1 | 1
- 12 | 0 | 1 | 1
- 12 | 0 | 0 | 1
- 12 | 0 | 1 | 0
- 12 | 0 | 0 | 0
- 12 | 0 | 1 | 1
- 12 | 0 | 0 | 1
- 12 | 0 | 1 | 0
- 12 | 0 | 0 | 0
- 12 | 0 | 1 | 1
- 15 | 0 | 1 | 1
- 15 | 0 | 0 | 1
- 15 | 0 | 1 | 0
- 15 | 0 | 0 | 0
- 15 | 0 | 1 | 1
- 15 | 0 | 0 | 1
- 15 | 0 | 1 | 0
- 15 | 0 | 0 | 0
- 15 | 0 | 1 | 1
- 20 | 2 | 1 | 1
- 20 | 2 | 0 | 1
- 20 | 2 | 1 | 0
- 20 | 2 | 0 | 0
- 20 | 2 | 1 | 1
- 20 | 2 | 0 | 1
- 20 | 2 | 1 | 0
- 20 | 2 | 0 | 0
- 20 | 2 | 1 | 1
+  5 | 2 | 2 | 0
+  5 | 2 | 3 | 1
+  5 | 2 | 4 | 0
+  5 | 2 | 2 | 1
+  5 | 2 | 3 | 0
+  5 | 2 | 4 | 1
+  5 | 2 | 2 | 0
+  5 | 2 | 3 | 1
+  5 | 2 | 4 | 0
+  5 | 2 | 2 | 1
+  5 | 2 | 3 | 0
+  5 | 2 | 4 | 1
+  5 | 2 | 2 | 0
+  6 | 0 | 2 | 0
+  6 | 0 | 3 | 1
+  6 | 0 | 4 | 0
+  6 | 0 | 2 | 1
+  6 | 0 | 3 | 0
+  6 | 0 | 4 | 1
+  6 | 0 | 2 | 0
+  6 | 0 | 3 | 1
+  6 | 0 | 4 | 0
+  6 | 0 | 2 | 1
+  6 | 0 | 3 | 0
+  6 | 0 | 4 | 1
+  6 | 0 | 2 | 0
+  9 | 0 | 2 | 0
+  9 | 0 | 3 | 1
+  9 | 0 | 4 | 0
+  9 | 0 | 2 | 1
+  9 | 0 | 3 | 0
+  9 | 0 | 4 | 1
+  9 | 0 | 2 | 0
+  9 | 0 | 3 | 1
+  9 | 0 | 4 | 0
+  9 | 0 | 2 | 1
+  9 | 0 | 3 | 0
+  9 | 0 | 4 | 1
+  9 | 0 | 2 | 0
+ 10 | 1 | 2 | 0
+ 10 | 1 | 3 | 1
+ 10 | 1 | 4 | 0
+ 10 | 1 | 2 | 1
+ 10 | 1 | 3 | 0
+ 10 | 1 | 4 | 1
+ 10 | 1 | 2 | 0
+ 10 | 1 | 3 | 1
+ 10 | 1 | 4 | 0
+ 10 | 1 | 2 | 1
+ 10 | 1 | 3 | 0
+ 10 | 1 | 4 | 1
+ 10 | 1 | 2 | 0
+ 11 | 2 | 2 | 0
+ 11 | 2 | 3 | 1
+ 11 | 2 | 4 | 0
+ 11 | 2 | 2 | 1
+ 11 | 2 | 3 | 0
+ 11 | 2 | 4 | 1
+ 11 | 2 | 2 | 0
+ 11 | 2 | 3 | 1
+ 11 | 2 | 4 | 0
+ 11 | 2 | 2 | 1
+ 11 | 2 | 3 | 0
+ 11 | 2 | 4 | 1
+ 11 | 2 | 2 | 0
+ 13 | 1 | 2 | 0
+ 13 | 1 | 3 | 1
+ 13 | 1 | 4 | 0
+ 13 | 1 | 2 | 1
+ 13 | 1 | 3 | 0
+ 13 | 1 | 4 | 1
+ 13 | 1 | 2 | 0
+ 13 | 1 | 3 | 1
+ 13 | 1 | 4 | 0
+ 13 | 1 | 2 | 1
+ 13 | 1 | 3 | 0
+ 13 | 1 | 4 | 1
+ 13 | 1 | 2 | 0
+ 14 | 2 | 2 | 0
+ 14 | 2 | 3 | 1
+ 14 | 2 | 4 | 0
+ 14 | 2 | 2 | 1
+ 14 | 2 | 3 | 0
+ 14 | 2 | 4 | 1
+ 14 | 2 | 2 | 0
+ 14 | 2 | 3 | 1
+ 14 | 2 | 4 | 0
+ 14 | 2 | 2 | 1
+ 14 | 2 | 3 | 0
+ 14 | 2 | 4 | 1
+ 14 | 2 | 2 | 0
+ 17 | 2 | 2 | 0
+ 17 | 2 | 3 | 1
+ 17 | 2 | 4 | 0
+ 17 | 2 | 2 | 1
+ 17 | 2 | 3 | 0
+ 17 | 2 | 4 | 1
+ 17 | 2 | 2 | 0
+ 17 | 2 | 3 | 1
+ 17 | 2 | 4 | 0
+ 17 | 2 | 2 | 1
+ 17 | 2 | 3 | 0
+ 17 | 2 | 4 | 1
+ 17 | 2 | 2 | 0
 (600 rows)
 
 -- empty target list
 select r.* from orca.r, orca.s where s.c=2;
  a  | b 
 ----+---
+  2 | 2
+  3 | 0
+  4 | 1
+  7 | 1
+  8 | 2
+ 16 | 1
+ 18 | 0
+ 19 | 1
+  2 | 2
+  3 | 0
+  4 | 1
+  7 | 1
+  8 | 2
+ 16 | 1
+ 18 | 0
+ 19 | 1
+  2 | 2
+  3 | 0
+  4 | 1
+  7 | 1
+  8 | 2
+ 16 | 1
+ 18 | 0
+ 19 | 1
+  2 | 2
+  3 | 0
+  4 | 1
+  7 | 1
+  8 | 2
+ 16 | 1
+ 18 | 0
+ 19 | 1
+  2 | 2
+  3 | 0
+  4 | 1
+  7 | 1
+  8 | 2
+ 16 | 1
+ 18 | 0
+ 19 | 1
   1 | 1
  12 | 0
  15 | 0
@@ -3153,52 +3197,14 @@ select r.* from orca.r, orca.s where s.c=2;
  13 | 1
  14 | 2
  17 | 2
-  2 | 2
-  3 | 0
-  4 | 1
-  7 | 1
-  8 | 2
- 16 | 1
- 18 | 0
- 19 | 1
-  2 | 2
-  3 | 0
-  4 | 1
-  7 | 1
-  8 | 2
- 16 | 1
- 18 | 0
- 19 | 1
-  2 | 2
-  3 | 0
-  4 | 1
-  7 | 1
-  8 | 2
- 16 | 1
- 18 | 0
- 19 | 1
-  2 | 2
-  3 | 0
-  4 | 1
-  7 | 1
-  8 | 2
- 16 | 1
- 18 | 0
- 19 | 1
-  2 | 2
-  3 | 0
-  4 | 1
-  7 | 1
-  8 | 2
- 16 | 1
- 18 | 0
- 19 | 1
 (100 rows)
 
 create table orca.m();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 alter table orca.m add column a int;
 alter table orca.m add column b int;
 create table orca.m1();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 alter table orca.m1 add column a int;
 alter table orca.m1 add column b int;
 insert into orca.m select i-1, i%2 from generate_series(1,35) i;
@@ -3213,9 +3219,23 @@ select r.a, s.c from orca.r left outer join orca.s on(r.a=s.c);
   1 | 1
   1 | 1
   1 | 1
+ 12 |  
  20 |  
  15 |  
- 12 |  
+  5 | 5
+  6 | 6
+  5 | 5
+  6 | 6
+  5 | 5
+  6 | 6
+  5 | 5
+  6 | 6
+ 17 |  
+ 13 |  
+ 14 |  
+ 11 |  
+ 10 |  
+  9 |  
   2 | 2
   3 | 3
   4 | 4
@@ -3231,24 +3251,10 @@ select r.a, s.c from orca.r left outer join orca.s on(r.a=s.c);
   2 | 2
     |  
  18 |  
-  7 |  
  16 |  
   8 |  
  19 |  
-  5 | 5
-  6 | 6
-  5 | 5
-  6 | 6
-  5 | 5
-  6 | 6
-  5 | 5
-  6 | 6
- 13 |  
- 14 |  
- 11 |  
- 10 |  
-  9 |  
- 17 |  
+  7 |  
 (41 rows)
 
 select r.a, s.c from orca.r left outer join orca.s on(r.a=s.c and r.a=r.b and s.c=s.d) order by r.a,s.c;
@@ -3302,23 +3308,6 @@ select r.a, s.c from orca.r left outer join orca.s on(r.a=s.c) where s.d > 2 or 
 select r.a, s.c from orca.r right outer join orca.s on(r.a=s.c);
  a | c 
 ---+---
- 5 | 5
- 6 | 6
- 5 | 5
- 6 | 6
- 5 | 5
- 6 | 6
- 5 | 5
- 6 | 6
- 1 | 1
-   | 0
- 1 | 1
-   | 0
- 1 | 1
-   | 0
- 1 | 1
-   | 0
- 1 | 1
  2 | 2
  3 | 3
  4 | 4
@@ -3332,15 +3321,32 @@ select r.a, s.c from orca.r right outer join orca.s on(r.a=s.c);
  3 | 3
  4 | 4
  2 | 2
+ 1 | 1
+   | 0
+ 1 | 1
+   | 0
+ 1 | 1
+   | 0
+ 1 | 1
+   | 0
+ 1 | 1
+ 5 | 5
+ 6 | 6
+ 5 | 5
+ 6 | 6
+ 5 | 5
+ 6 | 6
+ 5 | 5
+ 6 | 6
 (30 rows)
 
 select * from orca.r where exists (select * from orca.s where s.c=r.a + 2);
  a | b 
 ---+---
- 3 | 0
- 4 | 1
  1 | 1
  2 | 2
+ 3 | 0
+ 4 | 1
 (4 rows)
 
 select * from orca.r where exists (select * from orca.s where s.c=r.b);
@@ -3353,82 +3359,82 @@ select * from orca.r where exists (select * from orca.s where s.c=r.b);
  18 | 0
  19 | 1
     | 1
-  1 | 1
- 12 | 0
- 15 | 0
   6 | 0
   9 | 0
  10 | 1
  13 | 1
+  1 | 1
+ 12 | 0
+ 15 | 0
   2 | 2
   8 | 2
- 20 | 2
   5 | 2
  11 | 2
  14 | 2
  17 | 2
+ 20 | 2
 (21 rows)
 
 select * from orca.m where m.a not in (select a from orca.m1 where a=5);
  a  | b 
 ----+---
+  0 | 1
+  1 | 0
+  8 | 1
  10 | 1
- 11 | 0
+ 13 | 0
  14 | 1
- 18 | 1
- 22 | 1
+ 15 | 0
+ 23 | 0
  24 | 1
- 25 | 0
  26 | 1
  27 | 0
  28 | 1
- 29 | 0
- 34 | 1
-  0 | 1
-  1 | 0
-  6 | 1
-  7 | 0
-  9 | 0
- 13 | 0
- 15 | 0
- 16 | 1
- 31 | 0
+ 30 | 1
  32 | 1
  33 | 0
   2 | 1
-  3 | 0
   4 | 1
-  8 | 1
+  6 | 1
+  9 | 0
+ 11 | 0
  12 | 1
  17 | 0
- 19 | 0
+ 18 | 1
  20 | 1
+ 25 | 0
+ 29 | 0
+  3 | 0
+  7 | 0
+ 16 | 1
+ 19 | 0
  21 | 0
- 23 | 0
- 30 | 1
+ 22 | 1
+ 31 | 0
+ 34 | 1
 (34 rows)
 
 select * from orca.m where m.a not in (select a from orca.m1);
  a  | b 
 ----+---
- 30 | 1
+ 31 | 0
+ 34 | 1
  24 | 1
- 25 | 0
  26 | 1
  27 | 0
  28 | 1
- 29 | 0
- 34 | 1
- 31 | 0
+ 30 | 1
  32 | 1
  33 | 0
+ 25 | 0
+ 29 | 0
 (11 rows)
 
 select * from orca.m where m.a in (select a from orca.m1 where m1.a-1 = m.b);
  a | b 
 ---+---
- 1 | 0
  2 | 1
+ 1 | 0
 (2 rows)
 
 -- enable_hashjoin=off; enable_mergejoin=on
@@ -3457,25 +3463,25 @@ select 1 from orca.m, orca.m1 where m.a = m1.a and m.b!=m1.b;
 select * from orca.r left outer join orca.s on (r.a=s.c and r.b<s.d) where s.d is null;
  a  | b | c | d 
 ----+---+---+---
-  2 | 2 |   |  
-  4 | 1 |   |  
-  7 | 1 |   |  
-  8 | 2 |   |  
- 16 | 1 |   |  
- 18 | 0 |   |  
- 19 | 1 |   |  
-    | 1 |   |  
-  1 | 1 |   |  
- 12 | 0 |   |  
- 15 | 0 |   |  
- 20 | 2 |   |  
   5 | 2 |   |  
-  9 | 0 |   |  
- 10 | 1 |   |  
- 11 | 2 |   |  
+ 17 | 2 |   |  
  13 | 1 |   |  
  14 | 2 |   |  
- 17 | 2 |   |  
+ 11 | 2 |   |  
+ 10 | 1 |   |  
+  9 | 0 |   |  
+  1 | 1 |   |  
+ 12 | 0 |   |  
+ 20 | 2 |   |  
+ 15 | 0 |   |  
+    | 1 |   |  
+ 18 | 0 |   |  
+ 16 | 1 |   |  
+  8 | 2 |   |  
+ 19 | 1 |   |  
+  7 | 1 |   |  
+  4 | 1 |   |  
+  2 | 2 |   |  
 (19 rows)
 
 -- select * from orca.r m full outer join orca.r m1 on (m.a=m1.a) where m.a is null;
@@ -3633,86 +3639,86 @@ insert into orca.m values (1,-1), (1,2), (1,1);
 select a,a,a+b from orca.m;
  a  | a  | ?column? 
 ----+----+----------
-  5 |  5 |        5
- 10 | 10 |       11
- 11 | 11 |       11
- 14 | 14 |       15
- 18 | 18 |       19
+  3 |  3 |        3
+  7 |  7 |        7
+ 16 | 16 |       17
+ 19 | 19 |       19
+ 21 | 21 |       21
  22 | 22 |       23
+ 31 | 31 |       31
+ 34 | 34 |       35
+  1 |  1 |        2
+  0 |  0 |        1
+  1 |  1 |        1
+  5 |  5 |        5
+  8 |  8 |        9
+ 10 | 10 |       11
+ 13 | 13 |       13
+ 14 | 14 |       15
+ 15 | 15 |       15
+ 23 | 23 |       23
  24 | 24 |       25
- 25 | 25 |       25
  26 | 26 |       27
  27 | 27 |       27
  28 | 28 |       29
- 29 | 29 |       29
- 34 | 34 |       35
-  1 |  1 |        0
-  1 |  1 |        2
-  2 |  2 |        3
-  3 |  3 |        3
-  4 |  4 |        5
-  8 |  8 |        9
- 12 | 12 |       13
- 17 | 17 |       17
- 19 | 19 |       19
- 20 | 20 |       21
- 21 | 21 |       21
- 23 | 23 |       23
  30 | 30 |       31
-  0 |  0 |        1
-  1 |  1 |        1
-  6 |  6 |        7
-  7 |  7 |        7
-  9 |  9 |        9
- 13 | 13 |       13
- 15 | 15 |       15
- 16 | 16 |       17
- 31 | 31 |       31
  32 | 32 |       33
  33 | 33 |       33
   1 |  1 |        3
+  2 |  2 |        3
+  4 |  4 |        5
+  6 |  6 |        7
+  9 |  9 |        9
+ 11 | 11 |       11
+ 12 | 12 |       13
+ 17 | 17 |       17
+ 18 | 18 |       19
+ 20 | 20 |       21
+ 25 | 25 |       25
+ 29 | 29 |       29
+  1 |  1 |        0
 (38 rows)
 
 select a,a+b,a+b from orca.m;
  a  | ?column? | ?column? 
 ----+----------+----------
   2 |        3 |        3
-  3 |        3 |        3
   4 |        5 |        5
-  8 |        9 |        9
+  6 |        7 |        7
+  9 |        9 |        9
+ 11 |       11 |       11
  12 |       13 |       13
  17 |       17 |       17
- 19 |       19 |       19
+ 18 |       19 |       19
  20 |       21 |       21
- 21 |       21 |       21
- 23 |       23 |       23
- 30 |       31 |       31
+ 25 |       25 |       25
+ 29 |       29 |       29
+  1 |        0 |        0
   0 |        1 |        1
   1 |        1 |        1
-  6 |        7 |        7
-  7 |        7 |        7
-  9 |        9 |        9
- 13 |       13 |       13
- 15 |       15 |       15
- 16 |       17 |       17
- 31 |       31 |       31
- 32 |       33 |       33
- 33 |       33 |       33
-  1 |        3 |        3
   5 |        5 |        5
+  8 |        9 |        9
  10 |       11 |       11
- 11 |       11 |       11
+ 13 |       13 |       13
  14 |       15 |       15
- 18 |       19 |       19
- 22 |       23 |       23
+ 15 |       15 |       15
+ 23 |       23 |       23
  24 |       25 |       25
- 25 |       25 |       25
  26 |       27 |       27
  27 |       27 |       27
  28 |       29 |       29
- 29 |       29 |       29
+ 30 |       31 |       31
+ 32 |       33 |       33
+ 33 |       33 |       33
+  1 |        3 |        3
+  3 |        3 |        3
+  7 |        7 |        7
+ 16 |       17 |       17
+ 19 |       19 |       19
+ 21 |       21 |       21
+ 22 |       23 |       23
+ 31 |       31 |       31
  34 |       35 |       35
-  1 |        0 |        0
   1 |        2 |        2
 (38 rows)
 
@@ -3720,8 +3726,8 @@ select a,a+b,a+b from orca.m;
 select * from orca.m where a=abs(b);
  a | b  
 ---+----
- 1 | -1
  1 |  1
+ 1 | -1
 (2 rows)
 
 -- grouping sets
@@ -3806,30 +3812,29 @@ select a,b,count(*) from orca.m group by grouping sets ((a), (a,b));
 select b,count(*) from orca.m group by grouping sets ((a), (a,b));
  b  | count 
 ----+-------
-  0 |     1
-    |     1
-  0 |     1
-  0 |     1
     |     1
     |     1
   0 |     1
-    |     1
-    |     4
   0 |     1
   1 |     1
-  1 |     1
-    |     1
-    |     1
     |     1
   1 |     1
   1 |     1
+  0 |     1
+  0 |     1
   1 |     1
     |     1
-  1 |     1
-  1 |     1
+  0 |     1
+    |     1
     |     1
   1 |     1
+  0 |     1
     |     1
+    |     1
+  0 |     1
+    |     1
+    |     1
+  1 |     1
     |     1
   1 |     1
  -1 |     1
@@ -3856,29 +3861,30 @@ select b,count(*) from orca.m group by grouping sets ((a), (a,b));
   0 |     1
     |     1
   1 |     1
-    |     1
+  0 |     1
     |     1
   0 |     1
   0 |     1
+    |     1
+    |     1
+  0 |     1
+    |     1
+    |     4
+  0 |     1
+  1 |     1
+  1 |     1
+    |     1
+    |     1
+    |     1
+  1 |     1
+  1 |     1
   1 |     1
     |     1
   1 |     1
   1 |     1
-  0 |     1
-  0 |     1
-  1 |     1
-    |     1
-  0 |     1
-    |     1
     |     1
   1 |     1
-  0 |     1
     |     1
-    |     1
-  0 |     1
-    |     1
-    |     1
-  1 |     1
 (73 rows)
 
 select a,count(*) from orca.m group by grouping sets ((a), (a,b));
@@ -3975,6 +3981,18 @@ select a,count(*) from orca.m group by grouping sets ((a), (b));
  10 |     1
     |     1
  18 |     1
+ 32 |     1
+ 34 |     1
+ 16 |     1
+  0 |     1
+ 11 |     1
+ 20 |     1
+  7 |     1
+ 27 |     1
+ 25 |     1
+ 17 |     1
+  1 |     4
+ 30 |     1
     |    19
   2 |     1
   4 |     1
@@ -3989,46 +4007,11 @@ select a,count(*) from orca.m group by grouping sets ((a), (b));
  33 |     1
  26 |     1
   5 |     1
- 32 |     1
- 34 |     1
- 16 |     1
-  0 |     1
- 11 |     1
- 20 |     1
-  7 |     1
- 27 |     1
- 25 |     1
- 17 |     1
-  1 |     4
- 30 |     1
 (39 rows)
 
 select a,b,count(*) from orca.m group by rollup(a, b);
  a  | b  | count 
 ----+----+-------
-  3 |    |     1
- 25 |    |     1
- 21 |  0 |     1
- 11 |  0 |     1
- 10 |  1 |     1
- 10 |    |     1
- 18 |  1 |     1
- 24 |  1 |     1
- 31 |  0 |     1
- 19 |  0 |     1
-  4 |  1 |     1
- 31 |    |     1
- 27 |  0 |     1
- 16 |    |     1
- 26 |    |     1
- 32 |  1 |     1
-  1 |  0 |     1
-  4 |    |     1
- 24 |    |     1
- 25 |  0 |     1
-  5 |    |     1
- 20 |    |     1
- 28 |  1 |     1
     |    |    38
   9 |  0 |     1
   9 |    |     1
@@ -4054,6 +4037,29 @@ select a,b,count(*) from orca.m group by rollup(a, b);
  19 |    |     1
  22 |  1 |     1
   6 |    |     1
+  3 |    |     1
+ 25 |    |     1
+ 21 |  0 |     1
+ 11 |  0 |     1
+ 10 |  1 |     1
+ 10 |    |     1
+ 18 |  1 |     1
+ 24 |  1 |     1
+ 31 |  0 |     1
+ 19 |  0 |     1
+  4 |  1 |     1
+ 31 |    |     1
+ 27 |  0 |     1
+ 16 |    |     1
+ 26 |    |     1
+ 32 |  1 |     1
+  1 |  0 |     1
+  4 |    |     1
+ 24 |    |     1
+ 25 |  0 |     1
+  5 |    |     1
+ 20 |    |     1
+ 28 |  1 |     1
  13 |    |     1
   8 |  1 |     1
   1 | -1 |     1
@@ -4174,15 +4180,6 @@ select a, count(*) from orca.r group by (), a;
  12 |     1
  20 |     1
  15 |     1
-  8 |     1
-    |     1
- 19 |     1
-  7 |     1
- 18 |     1
-  4 |     1
-  2 |     1
- 16 |     1
-  3 |     1
  17 |     1
  11 |     1
  13 |     1
@@ -4191,14 +4188,23 @@ select a, count(*) from orca.r group by (), a;
   5 |     1
   6 |     1
  14 |     1
+  8 |     1
+    |     1
+ 19 |     1
+  7 |     1
+ 18 |     1
+  4 |     1
+  2 |     1
+ 16 |     1
+  3 |     1
 (21 rows)
 
 select a, count(*) from orca.r group by grouping sets ((),(a));
  a  | count 
 ----+-------
     |    21
- 11 |     1
   8 |     1
+ 11 |     1
     |     1
  19 |     1
   4 |     1
@@ -4206,16 +4212,16 @@ select a, count(*) from orca.r group by grouping sets ((),(a));
   3 |     1
  17 |     1
  20 |     1
+  7 |     1
  13 |     1
  10 |     1
   9 |     1
-  7 |     1
   1 |     1
   5 |     1
  18 |     1
   2 |     1
- 15 |     1
  16 |     1
+ 15 |     1
   6 |     1
  12 |     1
 (22 rows)
@@ -4361,15 +4367,6 @@ select distinct grouping(a) + grouping(b) from orca.m group by rollup(a,b);
 select array[array[a,b]], array[b] from orca.r;
    array    | array 
 ------------+-------
- {{2,2}}    | {2}
- {{3,0}}    | {0}
- {{4,1}}    | {1}
- {{7,1}}    | {1}
- {{8,2}}    | {2}
- {{16,1}}   | {1}
- {{18,0}}   | {0}
- {{19,1}}   | {1}
- {{NULL,1}} | {1}
  {{1,1}}    | {1}
  {{12,0}}   | {0}
  {{15,0}}   | {0}
@@ -4382,6 +4379,15 @@ select array[array[a,b]], array[b] from orca.r;
  {{13,1}}   | {1}
  {{14,2}}   | {2}
  {{17,2}}   | {2}
+ {{2,2}}    | {2}
+ {{3,0}}    | {0}
+ {{4,1}}    | {1}
+ {{7,1}}    | {1}
+ {{8,2}}    | {2}
+ {{16,1}}   | {1}
+ {{18,0}}   | {0}
+ {{19,1}}   | {1}
+ {{NULL,1}} | {1}
 (21 rows)
 
 -- setops
@@ -4466,25 +4472,35 @@ SELECT a from orca.m UNION ALL select b from orca.m UNION ALL select a+b from or
 ----
   0
   1
-  6
-  7
-  9
+  5
+  8
+ 10
  13
+ 14
  15
- 16
- 31
+ 23
+ 24
+ 26
+ 27
+ 28
+ 30
  32
  33
   1
   1
   0
+  0
+  1
+  1
+  0
   1
   0
   0
-  0
-  0
+  1
   1
   0
+  1
+  1
   1
   0
   2
@@ -4495,63 +4511,29 @@ SELECT a from orca.m UNION ALL select b from orca.m UNION ALL select a+b from or
  23
   1
   2
-  3
   4
-  8
+  6
+  9
+ 11
  12
  17
- 19
- 20
- 21
- 23
- 30
-  1
-  0
-  1
-  1
-  1
-  0
-  0
-  1
-  0
-  0
-  1
- 19
-  2
- 29
- 27
-  3
-  7
-  5
- 10
- 11
- 14
  18
- 22
- 24
+ 20
  25
- 26
- 27
- 28
  29
- 34
-  1
-  1
-  0
-  1
-  0
   1
   1
   1
   1
   0
-  1
   0
   1
   0
   1
+  1
+  0
+  0
  -1
-  1
  13
   5
  11
@@ -4560,19 +4542,62 @@ SELECT a from orca.m UNION ALL select b from orca.m UNION ALL select a+b from or
  21
  33
  17
+  3
+  7
+ 16
+ 19
+ 21
+ 22
+ 31
+ 34
+  1
+  0
+  0
+  1
+  0
+  0
+  1
+  0
+  1
+  1
+ 19
+  2
+ 29
+ 27
+  3
+  7
 (96 rows)
 
 drop table if exists orca.foo;
 create table orca.foo(a int, b int, c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table if exists orca.bar;
 NOTICE:  table "bar" does not exist, skipping
 create table orca.bar(a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.foo select i, i%2, i%4, i-1 from generate_series(1,40)i;
 insert into orca.bar select i, i%3, i%2 from generate_series(1,30)i;
 -- distinct operation
 SELECT distinct a, b from orca.foo;
  a  | b 
 ----+---
+  2 | 0
+ 16 | 0
+ 22 | 0
+  3 | 1
+  8 | 0
+  7 | 1
+ 34 | 0
+ 39 | 1
+  4 | 0
+ 19 | 1
+ 29 | 1
+ 24 | 0
+ 27 | 1
+ 37 | 1
+ 18 | 0
   1 | 1
  38 | 0
  36 | 0
@@ -4598,21 +4623,6 @@ SELECT distinct a, b from orca.foo;
  32 | 0
  10 | 0
  21 | 1
-  2 | 0
- 16 | 0
- 22 | 0
-  3 | 1
-  8 | 0
-  7 | 1
- 34 | 0
- 39 | 1
-  4 | 0
- 19 | 1
- 29 | 1
- 24 | 0
- 27 | 1
- 37 | 1
- 18 | 0
 (40 rows)
 
 SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
@@ -4643,6 +4653,31 @@ SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
 SELECT distinct a, b from orca.foo;
  a  | b 
 ----+---
+  1 | 1
+ 38 | 0
+ 36 | 0
+ 12 | 0
+ 40 | 0
+ 20 | 0
+ 30 | 0
+ 35 | 1
+ 23 | 1
+ 26 | 0
+ 15 | 1
+ 31 | 1
+ 11 | 1
+ 14 | 0
+ 28 | 0
+  6 | 0
+  5 | 1
+ 33 | 1
+ 13 | 1
+ 25 | 1
+  9 | 1
+ 17 | 1
+ 32 | 0
+ 10 | 0
+ 21 | 1
   2 | 0
  16 | 0
  22 | 0
@@ -4658,31 +4693,6 @@ SELECT distinct a, b from orca.foo;
  27 | 1
  37 | 1
  18 | 0
- 11 | 1
- 14 | 0
- 28 | 0
-  6 | 0
-  5 | 1
- 33 | 1
- 13 | 1
- 25 | 1
-  9 | 1
- 17 | 1
- 32 | 0
- 10 | 0
- 21 | 1
-  1 | 1
- 38 | 0
- 36 | 0
- 12 | 0
- 40 | 0
- 20 | 0
- 30 | 0
- 35 | 1
- 23 | 1
- 26 | 0
- 15 | 1
- 31 | 1
 (40 rows)
 
 SELECT distinct a, count(*) from orca.foo group by a;
@@ -4733,13 +4743,6 @@ SELECT distinct a, count(*) from orca.foo group by a;
 SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo.b = bar.a group by foo.a, bar.b;
  a  | b | sum 
 ----+---+-----
- 15 | 1 |   4
- 27 | 1 |   4
- 21 | 1 |   2
- 35 | 1 |   4
-  7 | 1 |   4
-  5 | 1 |   2
- 19 | 1 |   4
  29 | 1 |   2
  13 | 1 |   2
  17 | 1 |   2
@@ -4753,6 +4756,13 @@ SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo
  11 | 1 |   4
  31 | 1 |   4
  23 | 1 |   4
+ 15 | 1 |   4
+ 27 | 1 |   4
+ 21 | 1 |   2
+ 35 | 1 |   4
+  7 | 1 |   4
+  5 | 1 |   2
+ 19 | 1 |   4
 (20 rows)
 
 SELECT distinct a, count(*) from orca.foo group by a;
@@ -4828,13 +4838,6 @@ SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
 SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo.b = bar.a group by foo.a, bar.b;
  a  | b | sum 
 ----+---+-----
- 29 | 1 |   2
- 13 | 1 |   2
- 17 | 1 |   2
- 39 | 1 |   4
- 37 | 1 |   2
-  1 | 1 |   2
- 25 | 1 |   2
  15 | 1 |   4
  27 | 1 |   4
  21 | 1 |   2
@@ -4842,6 +4845,13 @@ SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo
   7 | 1 |   4
   5 | 1 |   2
  19 | 1 |   4
+ 29 | 1 |   2
+ 13 | 1 |   2
+ 17 | 1 |   2
+ 39 | 1 |   4
+ 37 | 1 |   2
+  1 | 1 |   2
+ 25 | 1 |   2
   3 | 1 |   4
   9 | 1 |   2
  33 | 1 |   2
@@ -4853,6 +4863,18 @@ SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo
 SELECT distinct a, b from orca.foo;
  a  | b 
 ----+---
+  1 | 1
+ 38 | 0
+ 36 | 0
+ 12 | 0
+ 40 | 0
+ 20 | 0
+ 30 | 0
+ 35 | 1
+ 23 | 1
+ 26 | 0
+ 15 | 1
+ 31 | 1
  11 | 1
  14 | 0
  28 | 0
@@ -4866,18 +4888,6 @@ SELECT distinct a, b from orca.foo;
  32 | 0
  10 | 0
  21 | 1
-  1 | 1
- 38 | 0
- 36 | 0
- 12 | 0
- 40 | 0
- 20 | 0
- 30 | 0
- 35 | 1
- 23 | 1
- 26 | 0
- 15 | 1
- 31 | 1
   2 | 0
  16 | 0
  22 | 0
@@ -4898,31 +4908,6 @@ SELECT distinct a, b from orca.foo;
 SELECT distinct a, count(*) from orca.foo group by a;
  a  | count 
 ----+-------
- 17 |     1
- 25 |     1
- 10 |     1
- 28 |     1
- 13 |     1
- 21 |     1
-  9 |     1
- 11 |     1
-  5 |     1
- 32 |     1
- 33 |     1
- 14 |     1
-  6 |     1
-  1 |     1
- 26 |     1
- 15 |     1
- 23 |     1
- 30 |     1
- 40 |     1
- 31 |     1
- 38 |     1
- 12 |     1
- 35 |     1
- 20 |     1
- 36 |     1
   7 |     1
   3 |     1
  22 |     1
@@ -4938,18 +4923,36 @@ SELECT distinct a, count(*) from orca.foo group by a;
  16 |     1
  18 |     1
   2 |     1
+  1 |     1
+ 26 |     1
+ 15 |     1
+ 23 |     1
+ 30 |     1
+ 40 |     1
+ 31 |     1
+ 38 |     1
+ 12 |     1
+ 35 |     1
+ 20 |     1
+ 36 |     1
+ 17 |     1
+ 25 |     1
+ 10 |     1
+ 28 |     1
+ 13 |     1
+ 21 |     1
+  9 |     1
+ 11 |     1
+  5 |     1
+ 32 |     1
+ 33 |     1
+ 14 |     1
+  6 |     1
 (40 rows)
 
 SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
  a  | b 
 ----+---
-  5 | 1
- 19 | 1
- 15 | 1
-  7 | 1
- 21 | 1
- 27 | 1
- 35 | 1
  37 | 1
  13 | 1
   1 | 1
@@ -4957,6 +4960,13 @@ SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
  29 | 1
  39 | 1
  25 | 1
+  5 | 1
+ 19 | 1
+ 15 | 1
+  7 | 1
+ 21 | 1
+ 27 | 1
+ 35 | 1
   9 | 1
  11 | 1
  23 | 1
@@ -4968,13 +4978,12 @@ SELECT distinct foo.a, bar.b from orca.foo, orca.bar where foo.b = bar.a;
 SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo.b = bar.a group by foo.a, bar.b;
  a  | b | sum 
 ----+---+-----
- 15 | 1 |   4
- 27 | 1 |   4
- 21 | 1 |   2
- 35 | 1 |   4
-  7 | 1 |   4
-  5 | 1 |   2
- 19 | 1 |   4
+  3 | 1 |   4
+  9 | 1 |   2
+ 33 | 1 |   2
+ 11 | 1 |   4
+ 31 | 1 |   4
+ 23 | 1 |   4
  29 | 1 |   2
  13 | 1 |   2
  17 | 1 |   2
@@ -4982,12 +4991,13 @@ SELECT distinct foo.a, bar.b, sum(bar.c+foo.c) from orca.foo, orca.bar where foo
  37 | 1 |   2
   1 | 1 |   2
  25 | 1 |   2
-  3 | 1 |   4
-  9 | 1 |   2
- 33 | 1 |   2
- 11 | 1 |   4
- 31 | 1 |   4
- 23 | 1 |   4
+ 15 | 1 |   4
+ 27 | 1 |   4
+ 21 | 1 |   2
+ 35 | 1 |   4
+  7 | 1 |   4
+  5 | 1 |   2
+ 19 | 1 |   4
 (20 rows)
 
 -- window operations
@@ -6536,8 +6546,14 @@ select lead(c,c+d,1000) over(order by c,d) from orca.s order by 1;
 
 -- test normalization of window functions
 create table orca_w1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca_w2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca_w3(a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca_w1 select i, i from generate_series(1, 3) i;
 insert into orca_w2 select i, i from generate_series(2, 4) i;
 insert into orca_w3 select i, i from generate_series(3, 5) i;
@@ -6548,12 +6564,12 @@ select (select b from orca_w3 where a = orca_w1.a) as one, row_number() over(par
      |   1
      |   2
      |   3
-     |   1
-     |   2
-     |   3
  3   |   1
  3   |   2
  3   |   3
+     |   1
+     |   2
+     |   3
 (9 rows)
 
 -- aggref in subquery with window func in target list
@@ -6615,9 +6631,9 @@ select (select rank() over(partition by orca_w2.a) from orca_w3 where a = orca_w
 select (select a+1 from (select a from orca_w2 where orca_w1.a=orca_w2.a) sq(a)) as one, row_number() over(partition by orca_w1.a) as two from orca_w1;
  one | two 
 -----+-----
-     |   1
    3 |   1
    4 |   1
+     |   1
 (3 rows)
 
 -- correlated subquery in target list, mismatching varattnos
@@ -6719,18 +6735,6 @@ select foo.d from orca.foo full join orca.bar on (foo.d = bar.a) group by d;
  39
  16
  24
- 15
- 35
- 31
- 38
- 20
-  1
- 26
- 30
-  0
- 36
- 12
- 23
   5
  10
   6
@@ -6744,6 +6748,18 @@ select foo.d from orca.foo full join orca.bar on (foo.d = bar.a) group by d;
  32
  25
  33
+ 15
+ 35
+ 31
+ 38
+ 20
+  1
+ 26
+ 30
+  0
+ 36
+ 12
+ 23
 (40 rows)
 
 select 1 as v from orca.foo full join orca.bar on (foo.d = bar.a) group by d;
@@ -6823,47 +6839,48 @@ select * from orca.r where r.a in (select d+r.b+1 as v from orca.foo full join o
 drop table if exists orca.rcte;
 NOTICE:  table "rcte" does not exist, skipping
 create table orca.rcte(a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.rcte select i, i%2, i%3 from generate_series(1,40)i;
 with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  a | b | c | a | b | c 
 ---+---+---+---+---+---
- 1 | 1 | 1 | 1 | 1 | 1
- 1 | 1 | 1 | 5 | 1 | 2
- 1 | 1 | 1 | 6 | 0 | 0
- 1 | 1 | 1 | 9 | 1 | 0
  1 | 1 | 1 | 2 | 0 | 2
  1 | 1 | 1 | 3 | 1 | 0
  1 | 1 | 1 | 4 | 0 | 1
  1 | 1 | 1 | 7 | 1 | 1
  1 | 1 | 1 | 8 | 0 | 2
- 5 | 1 | 2 | 1 | 1 | 1
- 5 | 1 | 2 | 5 | 1 | 2
- 5 | 1 | 2 | 6 | 0 | 0
- 5 | 1 | 2 | 9 | 1 | 0
+ 1 | 1 | 1 | 5 | 1 | 2
+ 1 | 1 | 1 | 6 | 0 | 0
+ 1 | 1 | 1 | 9 | 1 | 0
+ 1 | 1 | 1 | 1 | 1 | 1
  5 | 1 | 2 | 2 | 0 | 2
  5 | 1 | 2 | 3 | 1 | 0
  5 | 1 | 2 | 4 | 0 | 1
  5 | 1 | 2 | 7 | 1 | 1
  5 | 1 | 2 | 8 | 0 | 2
- 6 | 0 | 0 | 1 | 1 | 1
- 6 | 0 | 0 | 5 | 1 | 2
- 6 | 0 | 0 | 6 | 0 | 0
- 6 | 0 | 0 | 9 | 1 | 0
+ 5 | 1 | 2 | 5 | 1 | 2
+ 5 | 1 | 2 | 6 | 0 | 0
+ 5 | 1 | 2 | 9 | 1 | 0
+ 5 | 1 | 2 | 1 | 1 | 1
  6 | 0 | 0 | 2 | 0 | 2
  6 | 0 | 0 | 3 | 1 | 0
  6 | 0 | 0 | 4 | 0 | 1
  6 | 0 | 0 | 7 | 1 | 1
  6 | 0 | 0 | 8 | 0 | 2
- 9 | 1 | 0 | 1 | 1 | 1
- 9 | 1 | 0 | 5 | 1 | 2
- 9 | 1 | 0 | 6 | 0 | 0
- 9 | 1 | 0 | 9 | 1 | 0
+ 6 | 0 | 0 | 5 | 1 | 2
+ 6 | 0 | 0 | 6 | 0 | 0
+ 6 | 0 | 0 | 9 | 1 | 0
+ 6 | 0 | 0 | 1 | 1 | 1
  9 | 1 | 0 | 2 | 0 | 2
  9 | 1 | 0 | 3 | 1 | 0
  9 | 1 | 0 | 4 | 0 | 1
  9 | 1 | 0 | 7 | 1 | 1
  9 | 1 | 0 | 8 | 0 | 2
- 2 | 0 | 2 | 1 | 1 | 1
+ 9 | 1 | 0 | 5 | 1 | 2
+ 9 | 1 | 0 | 6 | 0 | 0
+ 9 | 1 | 0 | 9 | 1 | 0
+ 9 | 1 | 0 | 1 | 1 | 1
  2 | 0 | 2 | 5 | 1 | 2
  2 | 0 | 2 | 6 | 0 | 0
  2 | 0 | 2 | 9 | 1 | 0
@@ -6872,7 +6889,7 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  2 | 0 | 2 | 4 | 0 | 1
  2 | 0 | 2 | 7 | 1 | 1
  2 | 0 | 2 | 8 | 0 | 2
- 3 | 1 | 0 | 1 | 1 | 1
+ 2 | 0 | 2 | 1 | 1 | 1
  3 | 1 | 0 | 5 | 1 | 2
  3 | 1 | 0 | 6 | 0 | 0
  3 | 1 | 0 | 9 | 1 | 0
@@ -6881,7 +6898,7 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  3 | 1 | 0 | 4 | 0 | 1
  3 | 1 | 0 | 7 | 1 | 1
  3 | 1 | 0 | 8 | 0 | 2
- 4 | 0 | 1 | 1 | 1 | 1
+ 3 | 1 | 0 | 1 | 1 | 1
  4 | 0 | 1 | 5 | 1 | 2
  4 | 0 | 1 | 6 | 0 | 0
  4 | 0 | 1 | 9 | 1 | 0
@@ -6890,7 +6907,7 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  4 | 0 | 1 | 4 | 0 | 1
  4 | 0 | 1 | 7 | 1 | 1
  4 | 0 | 1 | 8 | 0 | 2
- 7 | 1 | 1 | 1 | 1 | 1
+ 4 | 0 | 1 | 1 | 1 | 1
  7 | 1 | 1 | 5 | 1 | 2
  7 | 1 | 1 | 6 | 0 | 0
  7 | 1 | 1 | 9 | 1 | 0
@@ -6899,7 +6916,7 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  7 | 1 | 1 | 4 | 0 | 1
  7 | 1 | 1 | 7 | 1 | 1
  7 | 1 | 1 | 8 | 0 | 2
- 8 | 0 | 2 | 1 | 1 | 1
+ 7 | 1 | 1 | 1 | 1 | 1
  8 | 0 | 2 | 5 | 1 | 2
  8 | 0 | 2 | 6 | 0 | 0
  8 | 0 | 2 | 9 | 1 | 0
@@ -6908,6 +6925,7 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2;
  8 | 0 | 2 | 4 | 0 | 1
  8 | 0 | 2 | 7 | 1 | 1
  8 | 0 | 2 | 8 | 0 | 2
+ 8 | 0 | 2 | 1 | 1 | 1
 (81 rows)
 
 with x as (select * from orca.rcte where a < 10) select * from x x1, x x2 where x2.a = x1.b;
@@ -6915,22 +6933,14 @@ with x as (select * from orca.rcte where a < 10) select * from x x1, x x2 where 
 ---+---+---+---+---+---
  3 | 1 | 0 | 1 | 1 | 1
  7 | 1 | 1 | 1 | 1 | 1
- 1 | 1 | 1 | 1 | 1 | 1
  5 | 1 | 2 | 1 | 1 | 1
  9 | 1 | 0 | 1 | 1 | 1
+ 1 | 1 | 1 | 1 | 1 | 1
 (5 rows)
 
 with x as (select * from orca.rcte where a < 10) select a from x union all select b from x;
  a 
 ---
- 1
- 1
- 5
- 6
- 9
- 1
- 0
- 1
  2
  3
  4
@@ -6941,16 +6951,24 @@ with x as (select * from orca.rcte where a < 10) select a from x union all selec
  0
  1
  0
+ 5
+ 6
+ 9
+ 1
+ 0
+ 1
+ 1
+ 1
 (18 rows)
 
 with x as (select * from orca.rcte where a < 10) select * from x x1 where x1.b = any (select x2.a from x x2 group by x2.a);
  a | b | c 
 ---+---+---
- 1 | 1 | 1
  5 | 1 | 2
  9 | 1 | 0
  3 | 1 | 0
  7 | 1 | 1
+ 1 | 1 | 1
 (5 rows)
 
 with x as (select * from orca.rcte where a < 10) select * from x x1 where x1.b = all (select x2.a from x x2 group by x2.a);
@@ -6961,40 +6979,40 @@ with x as (select * from orca.rcte where a < 10) select * from x x1 where x1.b =
 with x as (select * from orca.rcte where a < 10) select * from x x1, x x2, x x3 where x2.a = x1.b and x3.b = x2.b                                                                                   ;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 3 | 1 | 0 | 1 | 1 | 1 | 7 | 1 | 1
- 3 | 1 | 0 | 1 | 1 | 1 | 3 | 1 | 0
- 3 | 1 | 0 | 1 | 1 | 1 | 9 | 1 | 0
- 3 | 1 | 0 | 1 | 1 | 1 | 5 | 1 | 2
- 3 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
- 7 | 1 | 1 | 1 | 1 | 1 | 7 | 1 | 1
- 7 | 1 | 1 | 1 | 1 | 1 | 3 | 1 | 0
- 7 | 1 | 1 | 1 | 1 | 1 | 9 | 1 | 0
- 7 | 1 | 1 | 1 | 1 | 1 | 5 | 1 | 2
- 7 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1
- 1 | 1 | 1 | 1 | 1 | 1 | 7 | 1 | 1
- 1 | 1 | 1 | 1 | 1 | 1 | 3 | 1 | 0
+ 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1
  1 | 1 | 1 | 1 | 1 | 1 | 9 | 1 | 0
  1 | 1 | 1 | 1 | 1 | 1 | 5 | 1 | 2
- 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1
- 5 | 1 | 2 | 1 | 1 | 1 | 7 | 1 | 1
- 5 | 1 | 2 | 1 | 1 | 1 | 3 | 1 | 0
+ 1 | 1 | 1 | 1 | 1 | 1 | 7 | 1 | 1
+ 1 | 1 | 1 | 1 | 1 | 1 | 3 | 1 | 0
+ 5 | 1 | 2 | 1 | 1 | 1 | 1 | 1 | 1
  5 | 1 | 2 | 1 | 1 | 1 | 9 | 1 | 0
  5 | 1 | 2 | 1 | 1 | 1 | 5 | 1 | 2
- 5 | 1 | 2 | 1 | 1 | 1 | 1 | 1 | 1
- 9 | 1 | 0 | 1 | 1 | 1 | 7 | 1 | 1
- 9 | 1 | 0 | 1 | 1 | 1 | 3 | 1 | 0
+ 5 | 1 | 2 | 1 | 1 | 1 | 7 | 1 | 1
+ 5 | 1 | 2 | 1 | 1 | 1 | 3 | 1 | 0
+ 9 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
  9 | 1 | 0 | 1 | 1 | 1 | 9 | 1 | 0
  9 | 1 | 0 | 1 | 1 | 1 | 5 | 1 | 2
- 9 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+ 9 | 1 | 0 | 1 | 1 | 1 | 7 | 1 | 1
+ 9 | 1 | 0 | 1 | 1 | 1 | 3 | 1 | 0
+ 3 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+ 3 | 1 | 0 | 1 | 1 | 1 | 9 | 1 | 0
+ 3 | 1 | 0 | 1 | 1 | 1 | 5 | 1 | 2
+ 3 | 1 | 0 | 1 | 1 | 1 | 7 | 1 | 1
+ 3 | 1 | 0 | 1 | 1 | 1 | 3 | 1 | 0
+ 7 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1
+ 7 | 1 | 1 | 1 | 1 | 1 | 9 | 1 | 0
+ 7 | 1 | 1 | 1 | 1 | 1 | 5 | 1 | 2
+ 7 | 1 | 1 | 1 | 1 | 1 | 7 | 1 | 1
+ 7 | 1 | 1 | 1 | 1 | 1 | 3 | 1 | 0
 (25 rows)
 
 with x as (select * from orca.rcte where a < 10) select * from x x2 where x2.b < (select avg(b) from x x1);
  a | b | c 
 ---+---+---
+ 6 | 0 | 0
  2 | 0 | 2
  4 | 0 | 1
  8 | 0 | 2
- 6 | 0 | 0
 (4 rows)
 
 with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.d < 10 and r.a = s.d) select * from x x1, x x2;
@@ -7230,19 +7248,6 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.d < 10 and r.a =
 with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a = s.c) select * from x x1, x x2;
  a | a 
 ---+---
- 5 | 5
- 5 | 6
- 5 | 5
- 5 | 6
- 5 | 5
- 5 | 6
- 5 | 5
- 5 | 6
- 5 | 1
- 5 | 1
- 5 | 1
- 5 | 1
- 5 | 1
  5 | 2
  5 | 3
  5 | 4
@@ -7256,32 +7261,6 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  5 | 3
  5 | 4
  5 | 2
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 2
- 6 | 3
- 6 | 4
- 6 | 2
- 6 | 3
- 6 | 4
- 6 | 2
- 6 | 3
- 6 | 4
- 6 | 2
- 6 | 3
- 6 | 4
- 6 | 2
  5 | 5
  5 | 6
  5 | 5
@@ -7295,32 +7274,6 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  5 | 1
  5 | 1
  5 | 1
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
  6 | 2
  6 | 3
  6 | 4
@@ -7334,6 +7287,32 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  6 | 3
  6 | 4
  6 | 2
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
  5 | 5
  5 | 6
  5 | 5
@@ -7347,32 +7326,6 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  5 | 1
  5 | 1
  5 | 1
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
  6 | 2
  6 | 3
  6 | 4
@@ -7386,6 +7339,32 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  6 | 3
  6 | 4
  6 | 2
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
  5 | 5
  5 | 6
  5 | 5
@@ -7399,32 +7378,6 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  5 | 1
  5 | 1
  5 | 1
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 5 | 3
- 5 | 4
- 5 | 2
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 5
- 6 | 6
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
- 6 | 1
  6 | 2
  6 | 3
  6 | 4
@@ -7438,14 +7391,71 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  6 | 3
  6 | 4
  6 | 2
- 1 | 5
- 1 | 6
- 1 | 5
- 1 | 6
- 1 | 5
- 1 | 6
- 1 | 5
- 1 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 3
+ 5 | 4
+ 5 | 2
+ 5 | 5
+ 5 | 6
+ 5 | 5
+ 5 | 6
+ 5 | 5
+ 5 | 6
+ 5 | 5
+ 5 | 6
+ 5 | 1
+ 5 | 1
+ 5 | 1
+ 5 | 1
+ 5 | 1
+ 6 | 2
+ 6 | 3
+ 6 | 4
+ 6 | 2
+ 6 | 3
+ 6 | 4
+ 6 | 2
+ 6 | 3
+ 6 | 4
+ 6 | 2
+ 6 | 3
+ 6 | 4
+ 6 | 2
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 5
+ 6 | 6
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
+ 6 | 1
  1 | 1
  1 | 1
  1 | 1
@@ -7568,14 +7578,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  1 | 3
  1 | 4
  1 | 2
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
+ 1 | 5
+ 1 | 6
+ 1 | 5
+ 1 | 6
+ 1 | 5
+ 1 | 6
+ 1 | 5
+ 1 | 6
  2 | 1
  2 | 1
  2 | 1
@@ -7594,14 +7604,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  2 | 3
  2 | 4
  2 | 2
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
  3 | 1
  3 | 1
  3 | 1
@@ -7620,14 +7630,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  3 | 3
  3 | 4
  3 | 2
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
  4 | 1
  4 | 1
  4 | 1
@@ -7646,14 +7656,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  4 | 3
  4 | 4
  4 | 2
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
  2 | 1
  2 | 1
  2 | 1
@@ -7672,14 +7682,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  2 | 3
  2 | 4
  2 | 2
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
  3 | 1
  3 | 1
  3 | 1
@@ -7698,14 +7708,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  3 | 3
  3 | 4
  3 | 2
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
  4 | 1
  4 | 1
  4 | 1
@@ -7724,14 +7734,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  4 | 3
  4 | 4
  4 | 2
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
  2 | 1
  2 | 1
  2 | 1
@@ -7750,14 +7760,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  2 | 3
  2 | 4
  2 | 2
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
  3 | 1
  3 | 1
  3 | 1
@@ -7776,14 +7786,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  3 | 3
  3 | 4
  3 | 2
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
  4 | 1
  4 | 1
  4 | 1
@@ -7802,14 +7812,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  4 | 3
  4 | 4
  4 | 2
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
  2 | 1
  2 | 1
  2 | 1
@@ -7828,14 +7838,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  2 | 3
  2 | 4
  2 | 2
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
- 3 | 5
- 3 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
  3 | 1
  3 | 1
  3 | 1
@@ -7854,14 +7864,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  3 | 3
  3 | 4
  3 | 2
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
- 4 | 5
- 4 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
+ 3 | 5
+ 3 | 6
  4 | 1
  4 | 1
  4 | 1
@@ -7880,14 +7890,14 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  4 | 3
  4 | 4
  4 | 2
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
- 2 | 5
- 2 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
+ 4 | 5
+ 4 | 6
  2 | 1
  2 | 1
  2 | 1
@@ -7906,20 +7916,28 @@ with x as (select r.a from orca.r, orca.s  where r.a < 10 and s.c < 10 and r.a =
  2 | 3
  2 | 4
  2 | 2
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
+ 2 | 5
+ 2 | 6
 (676 rows)
 
 with x as (select * from orca.rcte where a < 10) (select a from x x2) union all (select max(a) from x x1);
  a 
 ---
- 5
- 6
- 9
  2
  3
  4
  7
  8
  1
+ 5
+ 6
+ 9
  9
 (10 rows)
 
@@ -7956,7 +7974,7 @@ ERROR:  more than one row returned by a subquery used as an expression
 select (select generate_series(1,5));
 ERROR:  more than one row returned by a subquery used as an expression
 select (select a from orca.foo inner1 where inner1.a=outer1.a  union select b from orca.foo inner2 where inner2.b=outer1.b) from orca.foo outer1;
-ERROR:  more than one row returned by a subquery used as an expression  (seg2 slice1 172.17.0.2:7004 pid=2842364)
+ERROR:  more than one row returned by a subquery used as an expression  (seg0 slice1 172.17.0.2:7002 pid=63106)
 select (select generate_series(1,1)) as series;
  series 
 --------
@@ -8080,6 +8098,8 @@ stringu1 name,
 stringu2 name,
 string4 name
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.onek values (931,1,1,3,1,11,1,31,131,431,931,2,3,'VJAAAA','BAAAAA','HHHHxx');
 insert into orca.onek values (714,2,0,2,4,14,4,14,114,214,714,8,9,'MBAAAA','CAAAAA','OOOOxx');
 insert into orca.onek values (711,3,1,3,1,11,1,11,111,211,711,2,3,'JBAAAA','DAAAAA','VVVVxx');
@@ -8092,15 +8112,17 @@ group by ten
 having exists (select 1 from orca.onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
-   1 |   3
-   0 |   2
-   9 |   3
    4 |   2
    3 |   3
+   9 |   3
+   1 |   3
+   0 |   2
 (5 rows)
 
 -- indexes on partitioned tables
 create table orca.pp(a int) partition by range(a)(partition pp1 start(1) end(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index pp_a on orca.pp(a);
 -- list partition tests
 -- test homogeneous partitions
@@ -8152,6 +8174,8 @@ subpartition sp2 start(10) end(200) every(50)
 )
 (partition aa start(0) end (100) every (50),
 partition bb start(100) end(200) every (50) );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.multilevel_p values (1,1), (100,200);
 select * from orca.multilevel_p;
   a  |  b  
@@ -8232,9 +8256,9 @@ select * from orca.t order by 1,2;
 explain select * from orca.t order by 1,2;
                                           QUERY PLAN                                          
 ----------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8058.21..10302.21 rows=158400 width=94)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=5137.70..7381.70 rows=158400 width=94)
    Merge Key: t.timest, t.user_id
-   ->  Sort  (cost=8058.21..8190.21 rows=52800 width=94)
+   ->  Sort  (cost=5137.70..5269.70 rows=52800 width=94)
          Sort Key: t.timest, t.user_id
          ->  Append  (cost=0.00..996.00 rows=52800 width=94)
                ->  Seq Scan on t_1_prt_part201203 t_1  (cost=0.00..122.00 rows=8800 width=94)
@@ -8439,6 +8463,8 @@ reset optimizer_enable_constant_expression_evaluation;
 -- test project elements in TVF
 CREATE FUNCTION orca.csq_f(a int) RETURNS int AS $$ select $1 $$ LANGUAGE SQL;
 CREATE TABLE orca.csq_r(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO orca.csq_r VALUES (1);
 SELECT * FROM orca.csq_r WHERE a IN (SELECT * FROM orca.csq_f(orca.csq_r.a));
  a 
@@ -8450,6 +8476,8 @@ SELECT * FROM orca.csq_r WHERE a IN (SELECT * FROM orca.csq_f(orca.csq_r.a));
 drop table if exists orca.tab1;
 NOTICE:  table "tab1" does not exist, skipping
 create table orca.tab1(a int, b int, c int, d int, e int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.tab1 values (1,2,3,4,5);
 insert into orca.tab1 values (1,2,3,4,5);
 insert into orca.tab1 values (1,2,3,4,5);
@@ -8472,16 +8500,20 @@ select b,d from orca.tab1 group by b,d having min(distinct d)>b;
 (1 row)
 
 create table orca.fooh1 (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.fooh2 (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.fooh1 select i%4, i%3, i from generate_series(1,20) i;
 insert into orca.fooh2 select i%3, i%2, i from generate_series(1,20) i;
 select sum(f1.b) from orca.fooh1 f1 group by f1.a;
  sum 
 -----
-   6
-   6
    5
    4
+   6
+   6
 (4 rows)
 
 select f1.a + 1 from fooh1 f1 group by f1.a+1 having sum(f1.a+1) + 1 > 20;
@@ -8619,8 +8651,14 @@ select sum(f1.a+1)+avg(f1.a+1), sum(f1.a), sum(f1.a+1) from orca.fooh1 f1 group 
 drop table if exists foo, bar, jazz;
 NOTICE:  table "jazz" does not exist, skipping
 create table foo (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar (d int, e int, f int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table jazz (g int, h int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'g' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo values (1, 1, 1), (2, 2, 2), (3, 3, 3);
 insert into bar values (1, 1, 1), (2, 2, 2), (3, 3, 3);
 insert into jazz values (2, 2, 2);
@@ -8732,9 +8770,9 @@ select max(a) from foo group by (select min(g) from jazz where foo.a = (select m
 select max(a) from foo group by b, (with cte as (select min(g) from jazz group by h) select a from cte);
  max 
 -----
-   1
    2
    3
+   1
 (3 rows)
 
 -- group by subquery in order by
@@ -8759,26 +8797,26 @@ select max(b), (select foo.a * count(bar.e) from bar), (with cte as (select e, m
 select b + (a+1) from foo group by b, a+1;
  ?column? 
 ----------
-        3
         5
         7
+        3
 (3 rows)
 
 -- subselects inside aggs
 SELECT  foo.b+1, avg (( SELECT bar.f FROM bar WHERE bar.d = foo.b)) AS t FROM foo GROUP BY foo.b;
  ?column? |           t            
 ----------+------------------------
-        2 | 1.00000000000000000000
         3 |     2.0000000000000000
         4 |     3.0000000000000000
+        2 | 1.00000000000000000000
 (3 rows)
 
 SELECT foo.b+1, sum( 1 + (SELECT bar.f FROM bar WHERE bar.d = ANY (SELECT jazz.g FROM jazz WHERE jazz.h = foo.b))) AS t FROM foo GROUP BY foo.b;
  ?column? | t 
 ----------+---
-        2 |  
         3 | 3
         4 |  
+        2 |  
 (3 rows)
 
 select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte where cte.h = foo.b)) as t FROM foo GROUP BY foo.b;
@@ -8800,6 +8838,8 @@ select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte cte1, ct
 
 drop table foo, bar, jazz;
 create table orca.t77(C952 text) WITH (compresstype=zlib,compresslevel=2,appendonly=true,blocksize=393216,checksum=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c952' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.t77 select 'text'::text;
 insert into orca.t77 select 'mine'::text;
 insert into orca.t77 select 'apple'::text;
@@ -8813,6 +8853,8 @@ SELECT to_char(AVG( char_length(DT466.C952) ), '9999999.9999999'), MAX( char_len
 (3 rows)
 
 create table orca.prod9 (sale integer, prodnm varchar,price integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'sale' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.prod9 values (100, 'shirts', 500);
 insert into orca.prod9 values (200, 'pants',800);
 insert into orca.prod9 values (300, 't-shirts', 300);
@@ -8826,15 +8868,25 @@ select prodnm, price from orca.prod9 GROUP BY prodnm, price HAVING price !=300;
 
 -- analyze on tables with dropped attributes
 create table orca.toanalyze(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.toanalyze values (1,1), (2,2), (3,3);
 alter table orca.toanalyze drop column a;
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 analyze orca.toanalyze;
 -- union
 create table orca.ur (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.us (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.ut(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.uu(c int, d bigint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.ur values (1,1);
 insert into orca.ur values (1,2);
 insert into orca.ur values (2,1);
@@ -8844,9 +8896,9 @@ insert into orca.uu values (1,3);
 select * from (select a, a from orca.ur union select c, d from orca.us) x(g,h);
  g | h 
 ---+---
+ 2 | 2
  1 | 1
  1 | 3
- 2 | 2
 (3 rows)
 
 select * from (select a, a from orca.ur union select c, d from orca.us) x(g,h), orca.ut t where t.a = x.h;
@@ -8884,7 +8936,11 @@ select * from (select 2.2 AS two UNION select 1) x(a), (select 1.0 AS two UNION 
 
 -- window functions inside inline CTE
 CREATE TABLE orca.twf1 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE orca.twf2 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET optimizer_cte_inlining_bound=1000;
 SET optimizer_cte_inlining = on;
 WITH CTE(a,b) AS
@@ -8920,7 +8976,11 @@ drop table if exists orca.tab1;
 drop table if exists orca.tab2;
 NOTICE:  table "tab2" does not exist, skipping
 create table orca.tab1 (i, j) as select i,i%2 from generate_series(1,10) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table orca.tab2 (a, b) as select 1, 2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from orca.tab1 where 0 < (select count(*) from generate_series(1,i)) order by 1;
  i  | j 
 ----+---
@@ -9014,6 +9074,8 @@ CREATE FUNCTION gptfp(anyarray,anyelement) RETURNS anyarray AS 'select $1 || $2'
 CREATE FUNCTION gpffp(anyarray) RETURNS anyarray AS 'select $1' LANGUAGE SQL;
 CREATE AGGREGATE myagg3(BASETYPE = anyelement, SFUNC = gptfp, STYPE = anyarray, FINALFUNC = gpffp, INITCOND = '{}');
 CREATE TABLE array_table(f1 int, f2 int[], f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO array_table values(1,array[1],'a');
 INSERT INTO array_table values(2,array[11],'b');
 INSERT INTO array_table values(3,array[111],'c');
@@ -9032,6 +9094,8 @@ SELECT f3, myagg3(f1) from (select * from array_table order by f1 limit 10) as f
 
 -- MPP-22453: wrong result in indexscan when the indexqual compares different data types
 create table mpp22453(a int, d date);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp22453 values (1, '2012-01-01'), (2, '2012-01-02'), (3, '2012-12-31');
 create index mpp22453_idx on mpp22453(d);
 set optimizer_enable_tablescan = off;
@@ -9050,6 +9114,8 @@ select * from mpp22453 where d > '2012-02-01';
 reset optimizer_enable_tablescan;
 -- MPP-22791: SIGSEGV when querying a table with default partition only
 create table mpp22791(a int, b int) partition by range(b) (default partition d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp22791 values (1, 1), (2, 2), (3, 3);
 select * from mpp22791 where b > 1;
  a | b 
@@ -9074,6 +9140,8 @@ select 1 as x where 1 in (2, 3);
 
 -- MPP-23081: keys of partitioned tables
 create table orca.p1(a int) partition by range(a)(partition pp1 start(1) end(10), partition pp2 start(10) end(20));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.p1 select * from generate_series(2,15);
 select count(*) from (select gp_segment_id,ctid,tableoid from orca.p1 group by gp_segment_id,ctid,tableoid) as foo;
  count 
@@ -9681,8 +9749,12 @@ SELECT generate_series(1,10) UNION SELECT 1;
 
 -- warning messages for missing stats
 create table foo_missing_stats(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_missing_stats select i, i%5 from generate_series(1,20) i;
 create table bar_missing_stats(c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bar_missing_stats select i, i%8 from generate_series(1,30) i;
 analyze foo_missing_stats;
 analyze bar_missing_stats;
@@ -9732,6 +9804,8 @@ NOTICE:  table "table_with_small_statistic_precision_diff" does not exist, skipp
 CREATE TABLE orca.table_with_small_statistic_precision_diff (
     col1 double precision
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET allow_system_table_mods=true;
 DELETE FROM pg_statistic WHERE starelid='table_with_small_statistic_precision_diff'::regclass;
 INSERT INTO pg_statistic VALUES (
@@ -9829,6 +9903,8 @@ reset optimizer_segments;
 drop table if exists orca.bm_test;
 NOTICE:  table "bm_test" does not exist, skipping
 create table orca.bm_test (i int, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.bm_test select i % 10, (i % 10)::text  from generate_series(1, 100) i;
 analyze orca.bm_test;
 create index bm_test_idx on orca.bm_test using bitmap (i);
@@ -10160,6 +10236,8 @@ id serial,
 code character varying(25),
 name character varying(40)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm.outer_tab select i % 10, i % 5, i % 2 from generate_series(1, 100) i;
 set optimizer_enable_hashjoin = off;
 select count(1) from bm.outer_tab;
@@ -10254,9 +10332,9 @@ GROUP BY 1
 ORDER BY 1 asc ;
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=39946.11..39960.27 rows=1000 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=39937.77..39951.93 rows=1000 width=16)
    Merge Key: ((((tt.event_ts / 100000) / 5) * 5))
-   ->  Sort  (cost=39946.11..39946.94 rows=333 width=16)
+   ->  Sort  (cost=39937.77..39938.60 rows=333 width=16)
          Sort Key: ((((tt.event_ts / 100000) / 5) * 5))
          ->  Finalize HashAggregate  (cost=39917.97..39923.80 rows=333 width=16)
                Group Key: ((((tt.event_ts / 100000) / 5) * 5))
@@ -10315,6 +10393,8 @@ id serial,
 code character varying(25),
 name character varying(40)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table if exists idxscan_inner;
 NOTICE:  table "idxscan_inner" does not exist, skipping
 create table idxscan_inner
@@ -10360,8 +10440,8 @@ select id, comment from idxscan_outer as o join idxscan_inner as i on o.id = i.p
 where ordernum between 10 and 20;
  id | comment 
 ----+---------
-  3 | zzzz
   1 | xxxx
+  3 | zzzz
 (2 rows)
 
 reset optimizer_enable_hashjoin;
@@ -10370,6 +10450,8 @@ drop table idxscan_inner;
 drop table if exists ggg;
 NOTICE:  table "ggg" does not exist, skipping
 create table ggg (a char(1), b char(2), d char(3));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ggg values ('x', 'a', 'c');
 insert into ggg values ('x', 'a');
 insert into ggg values ('x');
@@ -10377,6 +10459,8 @@ insert into ggg values ('x');
 drop table if exists orca.t3;
 NOTICE:  table "t3" does not exist, skipping
 create table orca.t3 (c1 timestamp without time zone);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into orca.t3 values  ('2015-07-03 00:00:00'::timestamp without time zone);
 select to_char(c1, 'YYYY-MM-DD HH24:MI:SS') from orca.t3 where c1 = TO_DATE('2015-07-03','YYYY-MM-DD');
        to_char       
@@ -10441,6 +10525,8 @@ create table can_set_tag_target
 	y int,
 	z char
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table if exists can_set_tag_audit;
 NOTICE:  table "can_set_tag_audit" does not exist, skipping
 create table can_set_tag_audit
@@ -10450,6 +10536,8 @@ create table can_set_tag_audit
 	y int,
 	z char
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create rule can_set_tag_audit_update AS
     ON UPDATE TO can_set_tag_target DO  INSERT INTO can_set_tag_audit (t, x, y, z)
   VALUES (now(), old.x, old.y, old.z);
@@ -10480,6 +10568,7 @@ drop table can_set_tag_target;
 drop table can_set_tag_audit;
 -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 -- Checking if ORCA uses parser's canSetTag for CREATE TABLE AS SELECT
 create or replace function canSetTag_Func(x int) returns int as $$
@@ -10551,9 +10640,9 @@ EXPLAIN SELECT * FROM btree_test WHERE a in ('1', '2', 47);
 SELECT * FROM btree_test WHERE a in ('1', '2', 47);
  a  | b  
 ----+----
-  1 |  1
   2 |  2
  47 | 47
+  1 |  1
 (3 rows)
 
 CREATE INDEX btree_test_index_ab ON btree_test using btree(a,b);
@@ -10634,7 +10723,6 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in ('1', '2', 47);
 -- Test Logging for unsupported features in ORCA
 -- start_ignore
 drop table if exists foo;
-NOTICE:  table "foo" does not exist, skipping
 -- end_ignore
 create table foo(a int, b int) distributed by (a);
 -- The amount of log messages you get depends on a lot of options, but any
@@ -10761,6 +10849,8 @@ drop table foo;
 -- Test GPDB Expr (T_ArrayCoerceExpr) conversion to Scalar Array Coerce Expr
 -- start_ignore
 create table foo (a int, b character varying(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 -- Query should not fallback to planner
 explain select * from foo where b in ('1', '2');
@@ -10784,7 +10874,11 @@ reset optimizer_enable_ctas;
 -- Test to ensure that ORCA produces correct results for a query with an Agg on top of LOJ
 -- start_ignore
 create table input_tab1 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table input_tab2 (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into input_tab1 values (1, 1);
 analyze input_tab1;
 insert into input_tab1 values (NULL, NULL);
@@ -10850,10 +10944,10 @@ FROM   (SELECT *
         FROM   tab_3)a;
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=3.21..3.22 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.16..3.21 rows=3 width=8)
-         ->  Partial Aggregate  (cost=3.16..3.17 rows=1 width=8)
-               ->  Append  (cost=1.04..3.13 rows=2 width=64)
+ Finalize Aggregate  (cost=3.20..3.21 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.14..3.19 rows=3 width=8)
+         ->  Partial Aggregate  (cost=3.14..3.15 rows=1 width=8)
+               ->  Append  (cost=1.04..3.12 rows=2 width=64)
                      ->  Hash Left Join  (cost=1.04..2.09 rows=1 width=6)
                            Hash Cond: ((tab_1.id)::text = (tab_2.id)::text)
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=5)
@@ -10891,7 +10985,11 @@ FROM   (SELECT *
 --
 -- start_ignore
 create table t_outer (c1 integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t_inner (c2 integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_outer values (generate_series (1,10));
 insert into t_inner values (generate_series (1,300));
 -- end_ignore
@@ -10915,11 +11013,11 @@ set optimizer_enable_streaming_material = off;
 select c1 from t_outer where not c1 =all (select c2 from t_inner);
  c1 
 ----
-  1
   5
   6
   9
  10
+  1
   2
   3
   4
@@ -10935,8 +11033,14 @@ NOTICE:  table "wst0" does not exist, skipping
 NOTICE:  table "wst1" does not exist, skipping
 NOTICE:  table "wst2" does not exist, skipping
 create table wst0(a0 int, b0 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a0' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table wst1(a1 int, b1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table wst2(a2 int, b2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into wst0 select i, i from generate_series(1,10) i;
 insert into wst1 select i, i from generate_series(1,10) i;
 insert into wst2 select i, i from generate_series(1,10) i;
@@ -10957,9 +11061,13 @@ select count(*) from wst0 where exists (select 1, rank() over (order by wst1.a1)
 --
 -- start_ignore
 create table test1 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test1 select generate_series(1,100),generate_series(1,100);
 -- end_ignore
 create table t_new as select avg(a) from test1 join (select i from unnest(array[1,2,3]) i) t on (test1.a = t.i);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'avg' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from t_new;
         avg         
 --------------------
@@ -10971,6 +11079,8 @@ drop table t_new;
 set optimizer_enable_gather_on_segment_for_DML=off;
 -- end_ignore
 create table t_new as select avg(a) from test1 join (select i from unnest(array[1,2,3]) i) t on (test1.a = t.i);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'avg' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from t_new;
         avg         
 --------------------
@@ -10985,8 +11095,14 @@ reset optimizer_enable_gather_on_segment_for_DML;
 --
 -- start_ignore
 create table x_tab(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table y_tab(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table z_tab(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into x_tab values(1);
 insert into y_tab values(0);
 insert into z_tab values(1);
@@ -11037,10 +11153,11 @@ select * from x_tab;
 
 -- start_ignore
 drop table bar;
-ERROR:  table "bar" does not exist
 -- end_ignore
 -- TVF with a subplan that generates an RTABLE entry
 create table bar(name text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bar values('person');
 select * from unnest((select string_to_array(name, ',') from bar)) as a;
    a    
@@ -11064,10 +11181,14 @@ CREATE TYPE myint
 CREATE FUNCTION myint_int8(myint) RETURNS int8 AS 'int48' LANGUAGE INTERNAL STRICT IMMUTABLE;
 CREATE CAST (myint AS int8) WITH FUNCTION myint_int8(myint) AS IMPLICIT;
 CREATE TABLE csq_cast_param_outer (a int, b myint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO csq_cast_param_outer VALUES
 	(1, '42'),
 	(2, '12');
 CREATE TABLE csq_cast_param_inner (c int, d myint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO csq_cast_param_inner VALUES
 	(11, '11'),
 	(101, '12');
@@ -11076,7 +11197,7 @@ EXPLAIN SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 TH
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10046320507.70 rows=43050 width=4)
    ->  Nested Loop Semi Join  (cost=10000000000.00..10046319933.70 rows=14350 width=4)
-         Join Filter: ((CASE WHEN (csq_cast_param_outer.a > 1) THEN csq_cast_param_inner.d ELSE '42'::myint END)::bigint = (csq_cast_param_outer.b)::bigint)
+         Join Filter: ((csq_cast_param_outer.b)::bigint = (CASE WHEN (csq_cast_param_outer.a > 1) THEN csq_cast_param_inner.d ELSE '42'::myint END)::bigint)
          ->  Seq Scan on csq_cast_param_outer  (cost=0.00..321.00 rows=28700 width=8)
          ->  Materialize  (cost=0.00..1899.50 rows=86100 width=4)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=4)
@@ -11087,8 +11208,8 @@ EXPLAIN SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 TH
 SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 THEN d ELSE '42' END FROM csq_cast_param_inner);
  a 
 ---
- 2
  1
+ 2
 (2 rows)
 
 DROP CAST (myint as int8);
@@ -11099,7 +11220,7 @@ EXPLAIN SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 TH
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10046320507.70 rows=43050 width=4)
    ->  Nested Loop Semi Join  (cost=10000000000.00..10046319933.70 rows=14350 width=4)
-         Join Filter: ((CASE WHEN (csq_cast_param_outer.a > 1) THEN csq_cast_param_inner.d ELSE '42'::myint END)::numeric = (csq_cast_param_outer.b)::numeric)
+         Join Filter: ((csq_cast_param_outer.b)::numeric = (CASE WHEN (csq_cast_param_outer.a > 1) THEN csq_cast_param_inner.d ELSE '42'::myint END)::numeric)
          ->  Seq Scan on csq_cast_param_outer  (cost=0.00..321.00 rows=28700 width=8)
          ->  Materialize  (cost=0.00..1899.50 rows=86100 width=4)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=4)
@@ -11110,8 +11231,8 @@ EXPLAIN SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 TH
 SELECT a FROM csq_cast_param_outer WHERE b in (SELECT CASE WHEN a > 1 THEN d ELSE '42' END FROM csq_cast_param_inner);
  a 
 ---
- 2
  1
+ 2
 (2 rows)
 
 SELECT a FROM ggg WHERE a IN (NULL, 'x');
@@ -11141,7 +11262,11 @@ EXPLAIN SELECT a FROM ggg WHERE a IN (NULL, 'x');
 
 -- result node with one time filter and filter
 CREATE TABLE onetimefilter1 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE onetimefilter2 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO onetimefilter1 SELECT i, i FROM generate_series(1,10)i;
 INSERT INTO onetimefilter2 SELECT i, i FROM generate_series(1,10)i;
 ANALYZE onetimefilter1;
@@ -11194,15 +11319,15 @@ WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onet
  ?column? | coalesce | b  
 ----------+----------+----
         1 |        0 |  1
+        1 |        0 |  5
+        1 |        0 |  6
+        1 |        0 |  9
+        1 |        0 | 10
         1 |        0 |  2
         1 |        0 |  3
         1 |        0 |  4
         1 |        0 |  7
         1 |        0 |  8
-        1 |        0 |  5
-        1 |        0 |  6
-        1 |        0 |  9
-        1 |        0 | 10
 (10 rows)
 
 -- full joins with predicates
@@ -11249,21 +11374,22 @@ SELECT * FROM touter LEFT JOIN tinnerbitmap ON touter.a = tinnerbitmap.a;
 SELECT * FROM touter LEFT JOIN tinnerbitmap ON touter.a = tinnerbitmap.a AND tinnerbitmap.b=10;
  a  | b | a | b 
 ----+---+---+---
-  1 | 1 |   |  
-  5 | 5 |   |  
-  6 | 0 |   |  
-  9 | 3 |   |  
- 10 | 4 |   |  
   2 | 2 |   |  
   3 | 3 |   |  
   4 | 4 |   |  
   7 | 1 |   |  
   8 | 2 |   |  
+  1 | 1 |   |  
+  5 | 5 |   |  
+  6 | 0 |   |  
+  9 | 3 |   |  
+ 10 | 4 |   |  
 (10 rows)
 
 SELECT * FROM touter LEFT JOIN tinnerbtree ON touter.a = tinnerbtree.a;
  a  | b | a  | b 
 ----+---+----+---
+  1 | 1 |  1 | 1
   6 | 0 |  6 | 0
   5 | 5 |  5 | 5
   9 | 3 |  9 | 3
@@ -11273,28 +11399,33 @@ SELECT * FROM touter LEFT JOIN tinnerbtree ON touter.a = tinnerbtree.a;
   8 | 2 |  8 | 2
   3 | 3 |  3 | 3
   4 | 4 |  4 | 4
-  1 | 1 |  1 | 1
 (10 rows)
 
 SELECT * FROM touter LEFT JOIN tinnerbtree ON touter.a = tinnerbtree.a AND tinnerbtree.b=10;
  a  | b | a | b 
 ----+---+---+---
+  1 | 1 |   |  
+  5 | 5 |   |  
+  6 | 0 |   |  
+  9 | 3 |   |  
+ 10 | 4 |   |  
   2 | 2 |   |  
   3 | 3 |   |  
   4 | 4 |   |  
   7 | 1 |   |  
   8 | 2 |   |  
-  5 | 5 |   |  
-  6 | 0 |   |  
-  9 | 3 |   |  
- 10 | 4 |   |  
-  1 | 1 |   |  
 (10 rows)
 
 -- test subplan in a qual under dynamic scan
 CREATE TABLE ds_part ( a INT, b INT, c INT) PARTITION BY RANGE(c)( START(1) END (10) EVERY (2), DEFAULT PARTITION deflt);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE non_part1 (c INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE non_part2 (e INT, f INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ds_part SELECT i, i, i FROM generate_series (1, 1000)i; 
 INSERT INTO non_part1 SELECT i FROM generate_series(1, 100)i; 
 INSERT INTO non_part2 SELECT i, i FROM generate_series(1, 100)i;
@@ -11310,11 +11441,11 @@ SELECT * FROM ds_part, non_part2 WHERE ds_part.c = non_part2.e AND non_part2.f =
 explain analyze SELECT * FROM ds_part, non_part2 WHERE ds_part.c = non_part2.e AND non_part2.f = 10 AND a IN ( SELECT b + 1 FROM non_part1);
                                                                       QUERY PLAN                                                                       
 -------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.45..10000000015.71 rows=7 width=20) (actual time=117.654..117.657 rows=0 loops=1)
-   ->  Nested Loop Semi Join  (cost=10000000001.45..10000000015.62 rows=2 width=20) (actual time=0.000..116.062 rows=0 loops=1)
-         ->  Hash Join  (cost=1.45..12.54 rows=1 width=20) (actual time=0.000..112.624 rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.45..10000000015.71 rows=7 width=20) (actual time=5.220..5.223 rows=0 loops=1)
+   ->  Nested Loop Semi Join  (cost=10000000001.45..10000000015.62 rows=2 width=20) (actual time=0.000..3.567 rows=0 loops=1)
+         ->  Hash Join  (cost=1.45..12.54 rows=1 width=20) (actual time=0.000..0.650 rows=0 loops=1)
                Hash Cond: (ds_part.c = non_part2.e)
-               ->  Append  (cost=0.00..11.06 rows=6 width=12) (actual time=0.000..0.058 rows=0 loops=1)
+               ->  Append  (cost=0.00..11.06 rows=6 width=12) (actual time=0.000..0.064 rows=0 loops=1)
                      Partition Selectors: $0
                      ->  Seq Scan on ds_part_1_prt_2 ds_part_1  (cost=0.00..1.01 rows=1 width=12) (never executed)
                            Filter: (a = (b + 1))
@@ -11326,26 +11457,26 @@ explain analyze SELECT * FROM ds_part, non_part2 WHERE ds_part.c = non_part2.e A
                            Filter: (a = (b + 1))
                      ->  Seq Scan on ds_part_1_prt_6 ds_part_5  (cost=0.00..1.01 rows=1 width=12) (never executed)
                            Filter: (a = (b + 1))
-                     ->  Seq Scan on ds_part_1_prt_deflt ds_part_6  (cost=0.00..5.95 rows=1 width=12) (actual time=0.000..0.055 rows=0 loops=1)
+                     ->  Seq Scan on ds_part_1_prt_deflt ds_part_6  (cost=0.00..5.95 rows=1 width=12) (actual time=0.000..0.062 rows=0 loops=1)
                            Filter: (a = (b + 1))
-               ->  Hash  (cost=1.44..1.44 rows=1 width=8) (actual time=110.778..110.779 rows=1 loops=1)
-                     Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-                     ->  Partition Selector (selector id: $0)  (cost=0.00..1.44 rows=1 width=8) (actual time=110.765..110.768 rows=1 loops=1)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.44 rows=1 width=8) (actual time=8.608..8.611 rows=1 loops=1)
-                                 ->  Seq Scan on non_part2  (cost=0.00..1.42 rows=1 width=8) (actual time=13.006..13.008 rows=1 loops=1)
+               ->  Hash  (cost=1.44..1.44 rows=1 width=8) (actual time=0.010..0.011 rows=1 loops=1)
+                     Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+                     ->  Partition Selector (selector id: $0)  (cost=0.00..1.44 rows=1 width=8) (actual time=0.007..0.008 rows=1 loops=1)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.44 rows=1 width=8) (actual time=0.002..0.003 rows=1 loops=1)
+                                 ->  Seq Scan on non_part2  (cost=0.00..1.42 rows=1 width=8) (actual time=0.021..0.024 rows=1 loops=1)
                                        Filter: (f = 10)
                                        Rows Removed by Filter: 24
-         ->  Materialize  (cost=0.00..3.17 rows=100 width=0) (actual time=3.324..3.324 rows=1 loops=1)
-               ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..2.67 rows=100 width=0) (actual time=2.326..3.314 rows=100 loops=1)
-                     ->  Seq Scan on non_part1  (cost=0.00..1.33 rows=33 width=0) (actual time=2.574..2.578 rows=38 loops=1)
+         ->  Materialize  (cost=0.00..3.17 rows=100 width=0) (actual time=2.757..2.757 rows=1 loops=1)
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..2.67 rows=100 width=0) (actual time=1.664..2.748 rows=100 loops=1)
+                     ->  Seq Scan on non_part1  (cost=0.00..1.33 rows=33 width=0) (actual time=0.016..0.021 rows=38 loops=1)
  Optimizer: Postgres query optimizer
- Planning Time: 0.597 ms
-   (slice0)    Executor memory: 237K bytes.
-   (slice1)    Executor memory: 2265K bytes avg x 3 workers, 2265K bytes max (seg0).
+ Planning Time: 1.134 ms
+   (slice0)    Executor memory: 150K bytes.
+   (slice1)    Executor memory: 4201K bytes avg x 3 workers, 4201K bytes max (seg0).  Work_mem: 4097K bytes max.
    (slice2)    Executor memory: 111K bytes avg x 3 workers, 111K bytes max (seg0).
    (slice3)    Executor memory: 111K bytes avg x 3 workers, 111K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 119.371 ms
+ Memory used:  256000kB
+ Execution Time: 6.610 ms
 (36 rows)
 
 SELECT *, a IN ( SELECT b + 1 FROM non_part1) FROM ds_part, non_part2 WHERE ds_part.c = non_part2.e AND non_part2.f = 10 AND a IN ( SELECT b FROM non_part1);
@@ -11365,6 +11496,8 @@ SELECT *, a IN ( SELECT b + 1 FROM non_part1) FROM ds_part, non_part2 WHERE ds_p
 RESET optimizer_enforce_subplans;
 -- implied predicate must be generated for the type cast(ident) scalar array cmp const array
 CREATE TABLE varchar_sc_array_cmp(a varchar);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO varchar_sc_array_cmp VALUES ('a'), ('b'), ('c'), ('d');
 EXPLAIN SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.a = t2.a and t1.a in ('b', 'c');
                                          QUERY PLAN                                          
@@ -11383,8 +11516,8 @@ EXPLAIN SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.
 SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.a = t2.a and t1.a in ('b', 'c');
  a | a 
 ---+---
- c | c
  b | b
+ c | c
 (2 rows)
 
 SET optimizer_array_constraints=on;
@@ -11420,6 +11553,8 @@ NOTICE:  table "tc3" does not exist, skipping
 NOTICE:  table "tc4" does not exist, skipping
 -- end_ignore
 CREATE TABLE tc0 (a int check (a = 5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tc0 VALUES (NULL);
 -- FIXME: Planner gives wrong result
 SELECT * from tc0 where a IS NULL;
@@ -11429,6 +11564,8 @@ SELECT * from tc0 where a IS NULL;
 (1 row)
 
 CREATE TABLE tc1 (a int check (a between 1 and 2 or a != 3 and a > 5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tc1 VALUES (NULL);
 SELECT * from tc1 where a IS NULL;
  a 
@@ -11437,6 +11574,8 @@ SELECT * from tc1 where a IS NULL;
 (1 row)
 
 CREATE TABLE tc2 (a int check (a in (1,2)));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tc2 VALUES (NULL);
 SELECT * from tc2 where a IS NULL;
  a 
@@ -11446,6 +11585,8 @@ SELECT * from tc2 where a IS NULL;
 
 set optimizer_array_constraints = on;
 CREATE TABLE tc3 (a int check (a = ANY (ARRAY[1,2])));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tc3 VALUES (NULL);
 SELECT * from tc3 where a IS NULL;
  a 
@@ -11455,6 +11596,8 @@ SELECT * from tc3 where a IS NULL;
 
 reset optimizer_array_constraints;
 CREATE TABLE tc4 (a int, b int, check(a + b > 1 and a = b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tc4 VALUES(NULL, NULL);
 SELECT * from tc4 where a IS NULL;
  a | b 
@@ -11475,10 +11618,10 @@ insert into tt values (1, 'b'), (1, 'B');
 select * from tc, tt where c = v;
  a | c | b | v 
 ---+---+---+---
- 1 | b | 1 | b
  1 | a | 1 | a
  1 | A | 1 | A
  1 | B | 1 | B
+ 1 | b | 1 | b
 (4 rows)
 
 -- bitmap scan on bitmap index
@@ -11678,7 +11821,11 @@ select count(*) as expect_20 from noexp_hash h join gpexp_repl r on h.a=r.a;
 (1 row)
 
 create table part1(a int, b int) partition by range(b) (start(1) end(5) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part2(a int, b int) partition by range(b) (start(1) end(5) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part1 select i, (i % 2) + 1 from generate_series(1, 1000) i;
 insert into part2 select i, (i % 2) + 1 from generate_series(1, 100) i;
 -- make sure some child partitions have not been analyzed. This just means that
@@ -11693,10 +11840,10 @@ analyze part2_1_prt_2;
 explain select * from part1, part2 where part1.b = part2.b limit 5;
                                                       QUERY PLAN                                                       
 -----------------------------------------------------------------------------------------------------------------------
- Limit  (cost=54416.76..54416.91 rows=5 width=16)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=54416.76..54417.22 rows=15 width=16)
-         ->  Limit  (cost=54416.76..54417.02 rows=5 width=16)
-               ->  Hash Join  (cost=2798.08..518984.84 rows=9947453 width=16)
+ Limit  (cost=5183986.86..5183986.95 rows=5 width=16)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=5183986.86..5183987.11 rows=15 width=16)
+         ->  Limit  (cost=5183986.86..5183986.91 rows=5 width=16)
+               ->  Hash Join  (cost=2798.08..51814685.86 rows=4973726667 width=16)
                      Hash Cond: (part1.b = part2.b)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..2090.67 rows=57733 width=8)
                            Hash Key: part1.b
@@ -11719,13 +11866,16 @@ explain select * from part1, part2 where part1.b = part2.b limit 5;
 -- test opfamily handling in ORCA
 -- start_ignore
 DROP FUNCTION abseq(int, int) CASCADE;
-ERROR:  function abseq(integer, integer) does not exist
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to operator |=|(integer,integer)
+drop cascades to operator class abs_int_btree_ops for access method btree
+drop cascades to operator class abs_int_hash_ops for access method hash
+drop cascades to table abs_opclass_test
 DROP FUNCTION abslt(int, int) CASCADE;
-ERROR:  function abslt(integer, integer) does not exist
+NOTICE:  drop cascades to operator |<|(integer,integer)
 DROP FUNCTION absgt(int, int) CASCADE;
-ERROR:  function absgt(integer, integer) does not exist
+NOTICE:  drop cascades to operator |>|(integer,integer)
 DROP FUNCTION abscmp(int, int) CASCADE;
-ERROR:  function abscmp(integer, integer) does not exist
 -- end_ignore
 CREATE FUNCTION abseq(int, int) RETURNS BOOL AS
 $$
@@ -11786,7 +11936,7 @@ EXPLAIN SELECT a, b FROM atab_old_hash INNER JOIN btab_old_hash ON a |=| b;
 (8 rows)
 
 SELECT a, b FROM atab_old_hash INNER JOIN btab_old_hash ON a |=| b;
-ERROR:  could not find hash function for hash operator 30197 (nodeHash.c:606)  (seg0 slice1 172.17.0.2:7002 pid=2842362) (nodeHash.c:606)
+ERROR:  could not find hash function for hash operator 119426 (nodeHash.c:616)  (seg0 slice1 172.17.0.2:7002 pid=63106) (nodeHash.c:616)
 CREATE OPERATOR CLASS abs_int_hash_ops FOR TYPE int4
   USING hash AS
   OPERATOR 1 |=|,
@@ -11818,10 +11968,10 @@ SELECT a, b FROM atab_old_hash INNER JOIN btab_old_hash ON a |=| b;
  a  | b  
 ----+----
   0 |  0
-  1 |  1
   1 | -1
- -1 |  1
+  1 |  1
  -1 | -1
+ -1 |  1
 (5 rows)
 
 EXPLAIN SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
@@ -11844,10 +11994,10 @@ SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
  a  | b  
 ----+----
   0 |  0
-  1 | -1
   1 |  1
- -1 | -1
+  1 | -1
  -1 |  1
+ -1 | -1
     |  2
 (6 rows)
 
@@ -11872,10 +12022,10 @@ SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
  a  | b  
 ----+----
   0 |  0
-  1 |  1
   1 | -1
- -1 |  1
+  1 |  1
  -1 | -1
+ -1 |  1
     |  2
 (6 rows)
 
@@ -11888,8 +12038,14 @@ NOTICE:  table "foo2" does not exist, skipping
 DROP TABLE IF EXISTS foo3 CASCADE;
 NOTICE:  table "foo3" does not exist, skipping
 CREATE table foo1(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE table foo2(a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE table foo3(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE index f2c on foo2 using bitmap(c);
 INSERT INTO foo1 values (1), (2);
 INSERT INTO foo2 values (1,1,1), (2,2,2);
@@ -11948,6 +12104,8 @@ NOTICE:  table "t55" does not exist, skipping
 drop table if exists tp;
 NOTICE:  table "tp" does not exist, skipping
 create table t55 (c int, lid int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t55 select i, i from generate_series(1, 1000) i;
 analyze t55;
 set optimizer_join_order = query;
@@ -11958,31 +12116,38 @@ WITH META AS (SELECT '2020-01-01' AS VALID_DT, '99' AS LOAD_ID)
 SELECT DISTINCT L1.c, L1.lid
 FROM t55 L1 CROSS JOIN META
 WHERE L1.lid = int4in(textout(meta.load_id));
-                                                                 QUERY PLAN                                                                 
---------------------------------------------------------------------------------------------------------------------------------------------
- HashAggregate  (cost=5.24..5.25 rows=1 width=8)
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Unique  (cost=5.25..5.28 rows=1 width=8)
    Output: l1.c, l1.lid
    Group Key: l1.c, l1.lid
-   ->  Hash Join  (cost=0.02..5.22 rows=3 width=8)
+   ->  Sort  (cost=5.25..5.26 rows=3 width=8)
          Output: l1.c, l1.lid
-         Hash Cond: (l1.lid = int4in(textout(meta.load_id)))
-         ->  Seq Scan on orca.t55 l1  (cost=0.00..4.33 rows=333 width=8)
+         Sort Key: l1.c, l1.lid
+         ->  Hash Join  (cost=0.02..5.22 rows=3 width=8)
                Output: l1.c, l1.lid
-         ->  Hash  (cost=0.01..0.01 rows=1 width=32)
-               Output: meta.load_id
-               ->  Subquery Scan on meta  (cost=0.00..0.01 rows=1 width=32)
+               Hash Cond: (l1.lid = int4in(textout(meta.load_id)))
+               ->  Seq Scan on orca.t55 l1  (cost=0.00..4.33 rows=333 width=8)
+                     Output: l1.c, l1.lid
+               ->  Hash  (cost=0.01..0.01 rows=1 width=32)
                      Output: meta.load_id
-                     ->  Result  (cost=0.00..0.01 rows=1 width=64)
-                           Output: '2020-01-01'::text, '99'::text
+                     ->  Subquery Scan on meta  (cost=0.00..0.01 rows=1 width=32)
+                           Output: meta.load_id
+                           ->  Result  (cost=0.00..0.01 rows=1 width=64)
+                                 Output: '2020-01-01'::text, '99'::text
  Optimizer: Postgres query optimizer
- Settings: jit = 'on', jit_above_cost = '0', optimizer = 'off', optimizer_enable_master_only_queries = 'on', optimizer_join_order = 'query'
-(16 rows)
+ Settings: optimizer = 'off', optimizer_join_order = 'query', optimizer_enable_master_only_queries = 'on'
+(19 rows)
 
 CREATE TABLE TP AS
 WITH META AS (SELECT '2020-01-01' AS VALID_DT, '99' AS LOAD_ID)
 SELECT DISTINCT L1.c, L1.lid
 FROM t55 L1 CROSS JOIN META
 WHERE L1.lid = int4in(textout(meta.load_id));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 reset optimizer_join_order;
 SELECT * from tp;
  c  | lid 
@@ -11992,6 +12157,8 @@ SELECT * from tp;
 
 -- Test partition selection for lossy casts
 create table lossycastrangepart(a float, b float) partition by range(b) (start(0) end(40) every(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into lossycastrangepart (values (5.1,5.1), (9.9,9.9), (10.1,10.1), (9.1,9.1), (10.9,10.9), (11.1,11.1), (21.0,21.0)); 
 explain select * from lossycastrangepart where b::int = 10;
                                                   QUERY PLAN                                                   
@@ -12012,8 +12179,8 @@ explain select * from lossycastrangepart where b::int = 10;
 select * from lossycastrangepart where b::int = 10;
   a   |  b   
 ------+------
-  9.9 |  9.9
  10.1 | 10.1
+  9.9 |  9.9
 (2 rows)
 
 explain select * from lossycastrangepart where b::int = 11;
@@ -12081,13 +12248,15 @@ explain select * from lossycastrangepart where b::int < 11;
 select * from lossycastrangepart where b::int < 11;
   a   |  b   
 ------+------
-  9.1 |  9.1
   9.9 |  9.9
+  9.1 |  9.1
   5.1 |  5.1
  10.1 | 10.1
 (4 rows)
 
 create table lossycastlistpart( a int, b float) partition by list(b) (partition l1 values(1.7, 2.1), partition l2 values(1.3, 2.7), partition l3 values(1.8, 2.8));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into lossycastlistpart (values (1.0,2.1), (1.0,1.3), (10.1,2.1), (9.1,2.7), (10.9,1.8), (11.1,2.8), (21.0,1.7));
 explain select * from lossycastlistpart where b::int < 2;
                                                    QUERY PLAN                                                   
@@ -12126,10 +12295,10 @@ explain select * from lossycastlistpart where b::int = 2;
 select * from lossycastlistpart where b::int = 2;
  a  |  b  
 ----+-----
+  1 | 2.1
  10 | 2.1
  21 | 1.7
  11 | 1.8
-  1 | 2.1
 (4 rows)
 
 --Test lossy casted NEQ on range partitioned table
@@ -12137,6 +12306,8 @@ drop table if exists sales;
 create table sales(id int, prod_id int, cust_id int, sales_ts timestamp)
 partition by range(sales_ts) (start (timestamp '2010-01-01 00:00:00') end(timestamp '2010-02-02 23:59:59')
 every (interval '1 day'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into sales select i, i%100, i%1000, timestamp '2010-01-01 00:00:00' + i * interval '1 day' from generate_series(1,20) i;
 select * from sales where sales_ts::date != '2010-01-05' order by sales_ts;
  id | prod_id | cust_id |         sales_ts         
@@ -12180,7 +12351,11 @@ drop table if exists tcorr1, tcorr2;
 NOTICE:  table "tcorr1" does not exist, skipping
 NOTICE:  table "tcorr2" does not exist, skipping
 create table tcorr1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tcorr2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tcorr1 values (1,99);
 insert into tcorr2 values (1,1);
 analyze tcorr1;
@@ -12261,27 +12436,28 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              from tcorr2
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
- Nested Loop Semi Join  (cost=10000000001.08..10000000003.20 rows=3 width=8)
-   Join Filter: ("out".b = COALESCE((count(*)), '99'::bigint))
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Semi Join  (cost=10000000001.08..10000000003.22 rows=3 width=8)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..1.01 rows=1 width=8)
    ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
          ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
-               Hash Cond: (tcorr1.a = tcorr2.a)
+               Hash Cond: (tcorr1.a = tcorr2_d.a)
+               Filter: ("out".b = COALESCE(tcorr2_d.c, '99'::bigint))
                ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                      ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
-                     ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
-                           Group Key: tcorr2.a
-                           ->  Result  (cost=0.00..1.04 rows=1 width=4)
-                                 Filter: (tcorr2.b = "out".b)
-                                 ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
-                                       ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
-                                             ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
+                     ->  Subquery Scan on tcorr2_d  (cost=1.05..1.07 rows=1 width=12)
+                           ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
+                                 Group Key: tcorr2.a
+                                 ->  Result  (cost=0.00..1.04 rows=1 width=4)
+                                       Filter: (tcorr2.b = "out".b)
+                                       ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
+                                             ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
+                                                   ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(18 rows)
+(19 rows)
 
 -- expect 1 row
 select *
@@ -12382,27 +12558,28 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              from tcorr2
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
- Nested Loop Semi Join  (cost=10000000001.08..10000000003.20 rows=3 width=8)
-   Join Filter: ("out".b = COALESCE((count(*)), '99'::bigint))
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Semi Join  (cost=10000000001.08..10000000003.22 rows=3 width=8)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..1.01 rows=1 width=8)
    ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
          ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
-               Hash Cond: (tcorr1.a = tcorr2.a)
+               Hash Cond: (tcorr1.a = tcorr2_d.a)
+               Filter: ("out".b = COALESCE(tcorr2_d.c, '99'::bigint))
                ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                      ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
-                     ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
-                           Group Key: tcorr2.a
-                           ->  Result  (cost=0.00..1.04 rows=1 width=4)
-                                 Filter: (tcorr2.b = "out".b)
-                                 ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
-                                       ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
-                                             ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
+                     ->  Subquery Scan on tcorr2_d  (cost=1.05..1.07 rows=1 width=12)
+                           ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
+                                 Group Key: tcorr2.a
+                                 ->  Result  (cost=0.00..1.04 rows=1 width=4)
+                                       Filter: (tcorr2.b = "out".b)
+                                       ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
+                                             ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
+                                                   ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(18 rows)
+(19 rows)
 
 -- expect 1 row
 select *
@@ -12503,13 +12680,13 @@ select * from foo join tbtree on foo.a=tbtree.a;
 select * from foo join tbtree on foo.a=tbtree.a;
    a   |   b   |   c   |   a   |   b   |   c   
 -------+-------+-------+-------+-------+-------
+  5000 |  5000 |  5000 |  5000 |  5000 |  5000
   1000 |  1000 |  1000 |  1000 |  1000 |  1000
   2000 |  2000 |  2000 |  2000 |  2000 |  2000
   6000 |  6000 |  6000 |  6000 |  6000 |  6000
   7000 |  7000 |  7000 |  7000 |  7000 |  7000
   8000 |  8000 |  8000 |  8000 |  8000 |  8000
   2000 |  2000 |  2000 |  2000 |    -1 |    -1
-  5000 |  5000 |  5000 |  5000 |  5000 |  5000
   3000 |  3000 |  3000 |  3000 |  3000 |  3000
   4000 |  4000 |  4000 |  4000 |  4000 |  4000
   9000 |  9000 |  9000 |  9000 |  9000 |  9000
@@ -12533,17 +12710,17 @@ select * from foo join tbitmap on foo.a=tbitmap.a;
 select * from foo join tbitmap on foo.a=tbitmap.a;
    a   |   b   |   c   |   a   |   b   |   c   
 -------+-------+-------+-------+-------+-------
+  3000 |  3000 |  3000 |  3000 |  3000 |  3000
+  4000 |  4000 |  4000 |  4000 |  4000 |  4000
+  9000 |  9000 |  9000 |  9000 |  9000 |  9000
+ 10000 | 10000 | 10000 | 10000 | 10000 | 10000
+  5000 |  5000 |  5000 |  5000 |  5000 |  5000
   1000 |  1000 |  1000 |  1000 |  1000 |  1000
   2000 |  2000 |  2000 |  2000 |  2000 |  2000
   6000 |  6000 |  6000 |  6000 |  6000 |  6000
   7000 |  7000 |  7000 |  7000 |  7000 |  7000
   8000 |  8000 |  8000 |  8000 |  8000 |  8000
   2000 |  2000 |  2000 |  2000 |    -1 |    -1
-  3000 |  3000 |  3000 |  3000 |  3000 |  3000
-  4000 |  4000 |  4000 |  4000 |  4000 |  4000
-  9000 |  9000 |  9000 |  9000 |  9000 |  9000
- 10000 | 10000 | 10000 | 10000 | 10000 | 10000
-  5000 |  5000 |  5000 |  5000 |  5000 |  5000
 (11 rows)
 
 -- 3 btree with select pred
@@ -12619,10 +12796,6 @@ select * from foo join (select a, b+c as bc from tbtree) proj on foo.a=proj.a;
 select * from foo join (select a, b+c as bc from tbtree) proj on foo.a=proj.a;
    a   |   b   |   c   |   a   |  bc   
 -------+-------+-------+-------+-------
-  3000 |  3000 |  3000 |  3000 |  6000
-  4000 |  4000 |  4000 |  4000 |  8000
-  9000 |  9000 |  9000 |  9000 | 18000
- 10000 | 10000 | 10000 | 10000 | 20000
   5000 |  5000 |  5000 |  5000 | 10000
   1000 |  1000 |  1000 |  1000 |  2000
   2000 |  2000 |  2000 |  2000 |  4000
@@ -12630,6 +12803,10 @@ select * from foo join (select a, b+c as bc from tbtree) proj on foo.a=proj.a;
   7000 |  7000 |  7000 |  7000 | 14000
   8000 |  8000 |  8000 |  8000 | 16000
   2000 |  2000 |  2000 |  2000 |    -2
+  3000 |  3000 |  3000 |  3000 |  6000
+  4000 |  4000 |  4000 |  4000 |  8000
+  9000 |  9000 |  9000 |  9000 | 18000
+ 10000 | 10000 | 10000 | 10000 | 20000
 (11 rows)
 
 -- 6 bitmap with project
@@ -12655,11 +12832,11 @@ select * from foo join (select a, b+c as bc from tbitmap) proj on foo.a=proj.a;
   7000 |  7000 |  7000 |  7000 | 14000
   8000 |  8000 |  8000 |  8000 | 16000
   2000 |  2000 |  2000 |  2000 |    -2
+  5000 |  5000 |  5000 |  5000 | 10000
   3000 |  3000 |  3000 |  3000 |  6000
   4000 |  4000 |  4000 |  4000 |  8000
   9000 |  9000 |  9000 |  9000 | 18000
  10000 | 10000 | 10000 | 10000 | 20000
-  5000 |  5000 |  5000 |  5000 | 10000
 (11 rows)
 
 -- 7 btree with grby
@@ -12687,11 +12864,11 @@ select * from foo join (select a, count(*) as cnt from tbtree group by a,b) grby
   7000 |  7000 |  7000 |  7000 |   1
   2000 |  2000 |  2000 |  2000 |   1
   1000 |  1000 |  1000 |  1000 |   1
+  5000 |  5000 |  5000 |  5000 |   1
  10000 | 10000 | 10000 | 10000 |   1
   9000 |  9000 |  9000 |  9000 |   1
   4000 |  4000 |  4000 |  4000 |   1
   3000 |  3000 |  3000 |  3000 |   1
-  5000 |  5000 |  5000 |  5000 |   1
 (11 rows)
 
 -- 8 bitmap with grby
@@ -12714,15 +12891,15 @@ select * from foo join (select a, count(*) as cnt from tbitmap group by a) grby 
    a   |   b   |   c   |   a   | cnt 
 -------+-------+-------+-------+-----
   5000 |  5000 |  5000 |  5000 |   1
+ 10000 | 10000 | 10000 | 10000 |   1
+  3000 |  3000 |  3000 |  3000 |   1
+  9000 |  9000 |  9000 |  9000 |   1
+  4000 |  4000 |  4000 |  4000 |   1
   8000 |  8000 |  8000 |  8000 |   1
   6000 |  6000 |  6000 |  6000 |   1
   2000 |  2000 |  2000 |  2000 |   2
   7000 |  7000 |  7000 |  7000 |   1
   1000 |  1000 |  1000 |  1000 |   1
- 10000 | 10000 | 10000 | 10000 |   1
-  3000 |  3000 |  3000 |  3000 |   1
-  9000 |  9000 |  9000 |  9000 |   1
-  4000 |  4000 |  4000 |  4000 |   1
 (10 rows)
 
 -- 9 btree with proj select grby select
@@ -12748,9 +12925,9 @@ select * from foo join (select a, count(*) + 5 as cnt from tbtree where tbtree.a
 select * from foo join (select a, count(*) + 5 as cnt from tbtree where tbtree.a < 5000 group by a having count(*) < 2) proj_sel_grby_sel on foo.a=proj_sel_grby_sel.a;
   a   |  b   |  c   |  a   | cnt 
 ------+------+------+------+-----
+ 1000 | 1000 | 1000 | 1000 |   6
  4000 | 4000 | 4000 | 4000 |   6
  3000 | 3000 | 3000 | 3000 |   6
- 1000 | 1000 | 1000 | 1000 |   6
 (3 rows)
 
 -- 10 bitmap with proj select grby select
@@ -12776,9 +12953,9 @@ select * from foo join (select a, count(*) + 5 as cnt from tbitmap where tbitmap
 select * from foo join (select a, count(*) + 5 as cnt from tbitmap where tbitmap.a < 5000 group by a having count(*) < 2) proj_sel_grby_sel on foo.a=proj_sel_grby_sel.a;
   a   |  b   |  c   |  a   | cnt 
 ------+------+------+------+-----
+ 1000 | 1000 | 1000 | 1000 |   6
  4000 | 4000 | 4000 | 4000 |   6
  3000 | 3000 | 3000 | 3000 |   6
- 1000 | 1000 | 1000 | 1000 |   6
 (3 rows)
 
 -- 11 bitmap with two groupbys
@@ -12802,16 +12979,16 @@ select * from foo join (select a, count(*) as cnt from (select distinct a, b fro
 select * from foo join (select a, count(*) as cnt from (select distinct a, b from tbitmap) grby1 group by a) grby2 on foo.a=grby2.a;
    a   |   b   |   c   |   a   | cnt 
 -------+-------+-------+-------+-----
-  8000 |  8000 |  8000 |  8000 |   1
-  6000 |  6000 |  6000 |  6000 |   1
-  2000 |  2000 |  2000 |  2000 |   2
-  7000 |  7000 |  7000 |  7000 |   1
-  1000 |  1000 |  1000 |  1000 |   1
  10000 | 10000 | 10000 | 10000 |   1
   3000 |  3000 |  3000 |  3000 |   1
   9000 |  9000 |  9000 |  9000 |   1
   4000 |  4000 |  4000 |  4000 |   1
   5000 |  5000 |  5000 |  5000 |   1
+  8000 |  8000 |  8000 |  8000 |   1
+  6000 |  6000 |  6000 |  6000 |   1
+  2000 |  2000 |  2000 |  2000 |   2
+  7000 |  7000 |  7000 |  7000 |   1
+  1000 |  1000 |  1000 |  1000 |   1
 (10 rows)
 
 -- 12 btree with proj select 2*grby select
@@ -12895,7 +13072,7 @@ from foo l1 where b in (select ab
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: (RowIdExpr)
                ->  Nested Loop
-                     Join Filter: ((l1.a + tbtree.b) = l1.b)
+                     Join Filter: (l1.b = (l1.a + tbtree.b))
                      ->  Broadcast Motion 3:3  (slice3; segments: 3)
                            ->  Seq Scan on foo l1
                      ->  Materialize
@@ -12956,7 +13133,11 @@ reset optimizer_enable_hashjoin;
 reset optimizer_enable_groupagg;
 -- ROJ must use the hash side for deriving the distribution spec. Force a non-redistribute plan to ensure we get some motion (gather)
 create table roj1 (a int, b int) ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table roj2 (c int, d int) ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into roj1 values (1, 1);
 insert into roj1 values (2, 2);
 insert into roj2 select null,null from generate_series(1,10) ;
@@ -13184,9 +13365,9 @@ group by asset_records.uid, asset_records.hostname, asset_records.asset_type, as
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
-         Group Key: asset_records.uid, asset_records.asset_type, asset_records.os, asset_records.create_ts, asset_records.hostname
+         Group Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
          ->  Sort
-               Sort Key: asset_records.uid, asset_records.asset_type, asset_records.os, asset_records.create_ts, asset_records.hostname
+               Sort Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
                      ->  Hash Join
@@ -13253,6 +13434,8 @@ reset optimizer_enable_indexjoin;
 -- InferPredicatesBCC-vcpart-txt.mdp
 -- from comment
 create table infer_txt (a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into infer_txt select * from generate_series(1,1000);
 analyze infer_txt;
 CREATE TABLE infer_part_vc (id int, gender varchar(1))
@@ -13620,12 +13803,16 @@ select r.a, r.b, r.c, l.c from left_outer_index_nl_foo r left outer join left_ou
 ---+---+---+---
  1 | 1 | 1 |  
  3 | 3 | 3 | 3
- 4 | 4 | 4 | 4
  2 | 2 | 2 | 2
+ 4 | 4 | 4 | 4
 (4 rows)
 
 create table left_outer_index_nl_foo_hash (a integer, b integer, c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table left_outer_index_nl_bar_hash (a integer, b integer, c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index left_outer_index_nl_bar_hash_idx on left_outer_index_nl_bar_hash using btree (b);
 insert into left_outer_index_nl_foo_hash select i, i, i from generate_series(1, 4)i;
 insert into left_outer_index_nl_bar_hash select i, i, i from generate_series(2, 6)i;
@@ -13732,10 +13919,10 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_repl r left outer
 select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_repl r left outer join left_outer_index_nl_bar_hash l on r.b=l.b;
  a | b | c | c 
 ---+---+---+---
- 1 | 1 | 1 | 
  2 | 2 | 2 | 2
  3 | 3 | 3 | 3
  4 | 4 | 4 | 4
+ 1 | 1 | 1 | 
 (4 rows)
 
 reset optimizer_enable_hashjoin;
@@ -13744,7 +13931,11 @@ reset enable_hashjoin;
 --- IS DISTINCT FROM FALSE previously simplified to IS TRUE, returning incorrect results for some hash anti joins
 --- the following tests were added to verify the behavior is correct
 CREATE TABLE tt1 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tt2 (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tt1 VALUES (1, NULL), (2, 2), (3, 4), (NULL, 5);
 INSERT INTO tt2 VALUES (1, 1), (2, NULL), (4, 4), (NULL, 2);
 ANALYZE tt1;
@@ -13833,6 +14024,8 @@ reset statement_timeout;
 -- optimizer must not eliminate the SRF or it can produce incorrect results
 set optimizer_trace_fallback = on;
 create table nested_srf(a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into nested_srf values ('abc,def,ghi');
 select * from (select regexp_split_to_table((a)::text, ','::text) from nested_srf)a;
  regexp_split_to_table 
@@ -13894,6 +14087,8 @@ reset optimizer_trace_fallback;
 --- if the inner child is already distributed on the join column, orca should
 --- not place any motion on the inner child
 CREATE TABLE tone (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tone select i,i,i from generate_series(1, 10) i;
 ANALYZE tone;
 SET optimizer_enable_hashjoin=off;
@@ -13912,16 +14107,16 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a
 SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
  a  | b  | c  | a  | b  | c  
 ----+----+----+----+----+----
-  5 |  5 |  5 |  5 |  5 |  5
-  6 |  6 |  6 |  6 |  6 |  6
-  9 |  9 |  9 |  9 |  9 |  9
- 10 | 10 | 10 | 10 | 10 | 10
-  1 |  1 |  1 |  1 |  1 |  1
   2 |  2 |  2 |  2 |  2 |  2
   3 |  3 |  3 |  3 |  3 |  3
   4 |  4 |  4 |  4 |  4 |  4
   7 |  7 |  7 |  7 |  7 |  7
   8 |  8 |  8 |  8 |  8 |  8
+  1 |  1 |  1 |  1 |  1 |  1
+  5 |  5 |  5 |  5 |  5 |  5
+  6 |  6 |  6 |  6 |  6 |  6
+  9 |  9 |  9 |  9 |  9 |  9
+ 10 | 10 | 10 | 10 | 10 | 10
 (10 rows)
 
 --- if the inner child is not distributed on the join column, orca should
@@ -13972,16 +14167,16 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN (SELECT 1+t2.b as b fr
 SELECT * FROM tone t1 LEFT OUTER JOIN (SELECT 1+t2.b as b from tone t2) t2 ON t1.a = t2.b;
  a  | b  | c  | b  
 ----+----+----+----
+  7 |  7 |  7 |  7
+  2 |  2 |  2 |  2
   3 |  3 |  3 |  3
   4 |  4 |  4 |  4
   8 |  8 |  8 |  8
-  2 |  2 |  2 |  2
-  7 |  7 |  7 |  7
   1 |  1 |  1 |   
-  5 |  5 |  5 |  5
-  9 |  9 |  9 |  9
   6 |  6 |  6 |  6
  10 | 10 | 10 | 10
+  5 |  5 |  5 |  5
+  9 |  9 |  9 |  9
 (10 rows)
 
 --- if the join condition does not involve a simple scalar ident, orca must
@@ -14002,16 +14197,16 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b
 SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b-t1.a;
  a  | b  | c  | a  | b  | c  
 ----+----+----+----+----+----
-  5 |  5 |  5 | 10 | 10 | 10
-  6 |  6 |  6 |    |    |   
-  9 |  9 |  9 |    |    |   
- 10 | 10 | 10 |    |    |   
-  1 |  1 |  1 |  2 |  2 |  2
   2 |  2 |  2 |  4 |  4 |  4
   3 |  3 |  3 |  6 |  6 |  6
   4 |  4 |  4 |  8 |  8 |  8
   7 |  7 |  7 |    |    |   
   8 |  8 |  8 |    |    |   
+  5 |  5 |  5 | 10 | 10 | 10
+  6 |  6 |  6 |    |    |   
+  9 |  9 |  9 |    |    |   
+ 10 | 10 | 10 |    |    |   
+  1 |  1 |  1 |  2 |  2 |  2
 (10 rows)
 
 --- orca should broadcast the inner child if the guc is set off
@@ -14060,12 +14255,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a
 SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
  a  | b  | c  | a  | b  | c  
 ----+----+----+----+----+----
+  1 |  1 |  1 |  1 |  1 |  1
   2 |  2 |  2 |  2 |  2 |  2
   3 |  3 |  3 |  3 |  3 |  3
   4 |  4 |  4 |  4 |  4 |  4
   7 |  7 |  7 |  7 |  7 |  7
   8 |  8 |  8 |  8 |  8 |  8
-  1 |  1 |  1 |  1 |  1 |  1
   5 |  5 |  5 |  5 |  5 |  5
   6 |  6 |  6 |  6 |  6 |  6
   9 |  9 |  9 |  9 |  9 |  9
@@ -14100,9 +14295,9 @@ CREATE TABLE result_tab AS
 SELECT gp_segment_id, * FROM result_tab;
  gp_segment_id |   a   | b 
 ---------------+-------+---
-             1 | 2     | 2
              2 | 1     | 1
              0 | 3     | 3
+             1 | 2     | 2
 (3 rows)
 
 DROP TABLE IF EXISTS dist_tab_a;
@@ -14115,7 +14310,11 @@ DROP TABLE IF EXISTS result_tab;
 -- eval_const_expressions() call for subplan. ORCA has only one call to
 -- fold_constants() at the very beginning and doesn't perform folding later.
 CREATE TABLE join_null_rej1(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE join_null_rej2(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO join_null_rej1(i) VALUES (1), (2), (3);
 INSERT INTO join_null_rej2 SELECT i FROM join_null_rej1;
 CREATE OR REPLACE FUNCTION join_null_rej_func() RETURNS int AS $$
@@ -14172,18 +14371,18 @@ from (select (min(i) over (order by j)) as i, j from window_agg_test) tt
 where t.j = tt.j;
                                                         QUERY PLAN                                                        
 --------------------------------------------------------------------------------------------------------------------------
- Update on window_agg_test t  (cost=3722.34..185407.69 rows=0 width=0)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=3722.34..185407.69 rows=2471070 width=46)
-         ->  Hash Join  (cost=3722.34..135986.29 rows=2471070 width=46)
+ Update on window_agg_test t  (cost=3699.81..185385.16 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=3699.81..185385.16 rows=2471070 width=46)
+         ->  Hash Join  (cost=3699.81..135963.76 rows=2471070 width=46)
                Hash Cond: (tt.j = t.j)
-               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=2468.59..6988.84 rows=28700 width=40)
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=2446.06..6966.31 rows=28700 width=40)
                      Hash Key: tt.j
-                     ->  Subquery Scan on tt  (cost=2468.59..5840.84 rows=86100 width=40)
-                           ->  WindowAgg  (cost=2468.59..4979.84 rows=86100 width=8)
+                     ->  Subquery Scan on tt  (cost=2446.06..5818.31 rows=86100 width=40)
+                           ->  WindowAgg  (cost=2446.06..4957.31 rows=86100 width=8)
                                  Order By: window_agg_test.j
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=2468.59..3688.34 rows=86100 width=8)
+                                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=2446.06..3665.81 rows=86100 width=8)
                                        Merge Key: window_agg_test.j
-                                       ->  Sort  (cost=2468.59..2540.34 rows=28700 width=8)
+                                       ->  Sort  (cost=2446.06..2517.81 rows=28700 width=8)
                                              Sort Key: window_agg_test.j
                                              ->  Seq Scan on window_agg_test  (cost=0.00..321.00 rows=28700 width=8)
                ->  Hash  (cost=895.00..895.00 rows=28700 width=14)
@@ -14298,6 +14497,8 @@ select c from mix_func_cast();
 drop table if exists empty_cte_tl_test;
 NOTICE:  table "empty_cte_tl_test" does not exist, skipping
 create table empty_cte_tl_test(id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set optimizer_trace_fallback = on;
 with cte as (
   select from empty_cte_tl_test

@@ -250,7 +250,11 @@ ERROR:  column "id" is in index used as replica identity
 -- (This matches the way pg_dump will try to dump a partitioned table.)
 --
 CREATE TABLE test_replica_identity4(id integer NOT NULL) PARTITION BY LIST (id);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test_replica_identity4_1(id integer NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ONLY test_replica_identity4
   ATTACH PARTITION test_replica_identity4_1 FOR VALUES IN (1);
 ALTER TABLE ONLY test_replica_identity4
@@ -260,26 +264,28 @@ ALTER TABLE ONLY test_replica_identity4
 ALTER TABLE ONLY test_replica_identity4_1
   ADD CONSTRAINT test_replica_identity4_1_pkey PRIMARY KEY (id);
 \d+ test_replica_identity4
-                    Partitioned table "public.test_replica_identity4"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- id     | integer |           | not null |         | plain   |              | 
+                           Partitioned table "public.test_replica_identity4"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ id     | integer |           | not null |         | plain   |             |              | 
 Partition key: LIST (id)
 Indexes:
     "test_replica_identity4_pkey" PRIMARY KEY, btree (id) INVALID REPLICA IDENTITY
 Partitions: test_replica_identity4_1 FOR VALUES IN (1)
+Distributed by: (id)
 
 ALTER INDEX test_replica_identity4_pkey
   ATTACH PARTITION test_replica_identity4_1_pkey;
 \d+ test_replica_identity4
-                    Partitioned table "public.test_replica_identity4"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- id     | integer |           | not null |         | plain   |              | 
+                           Partitioned table "public.test_replica_identity4"
+ Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ id     | integer |           | not null |         | plain   |             |              | 
 Partition key: LIST (id)
 Indexes:
     "test_replica_identity4_pkey" PRIMARY KEY, btree (id) REPLICA IDENTITY
 Partitions: test_replica_identity4_1 FOR VALUES IN (1)
+Distributed by: (id)
 
 DROP TABLE test_replica_identity;
 DROP TABLE test_replica_identity2;

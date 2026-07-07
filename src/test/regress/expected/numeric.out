@@ -507,35 +507,23 @@ VACUUM ANALYZE num_exp_power_10_ln;
 -- * Addition check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, t1.val + t2.val
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, t2.expected
     FROM num_result t1, num_exp_add t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
 
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, round(t1.val + t2.val, 10)
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, round(t2.expected, 10) as expected
     FROM num_result t1, num_exp_add t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != round(t2.expected, 10);
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
@@ -544,35 +532,23 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Subtraction check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, t1.val - t2.val
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, t2.expected
     FROM num_result t1, num_exp_sub t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
 
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, round(t1.val - t2.val, 40)
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, round(t2.expected, 40)
     FROM num_result t1, num_exp_sub t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != round(t2.expected, 40);
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | round 
 -----+-----+--------+-------
 (0 rows)
@@ -581,35 +557,23 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Multiply check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, t1.val * t2.val
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, t2.expected
     FROM num_result t1, num_exp_mul t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
 
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, round(t1.val * t2.val, 30)
     FROM num_data t1, num_data t2;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, round(t2.expected, 30) as expected
     FROM num_result t1, num_exp_mul t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != round(t2.expected, 30);
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
@@ -618,37 +582,25 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Division check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, t1.val / t2.val
     FROM num_data t1, num_data t2
     WHERE t2.val != '0.0';
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, t2.expected
     FROM num_result t1, num_exp_div t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
 
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT t1.id, t2.id, round(t1.val / t2.val, 80)
     FROM num_data t1, num_data t2
     WHERE t2.val != '0.0';
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.id2, t1.result, round(t2.expected, 80) as expected
     FROM num_result t1, num_exp_div t2
     WHERE t1.id1 = t2.id1 AND t1.id2 = t2.id2
     AND t1.result != round(t2.expected, 80);
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | id2 | result | expected 
 -----+-----+--------+----------
 (0 rows)
@@ -657,18 +609,12 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Square root check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT id, 0, SQRT(ABS(val))
     FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.result, t2.expected
     FROM num_result t1, num_exp_sqrt t2
     WHERE t1.id1 = t2.id
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | result | expected 
 -----+--------+----------
 (0 rows)
@@ -677,19 +623,13 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Natural logarithm check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT id, 0, LN(ABS(val))
     FROM num_data
     WHERE val != '0.0';
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.result, t2.expected
     FROM num_result t1, num_exp_ln t2
     WHERE t1.id1 = t2.id
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | result | expected 
 -----+--------+----------
 (0 rows)
@@ -698,19 +638,13 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * Logarithm base 10 check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT id, 0, LOG(numeric '10', ABS(val))
     FROM num_data
     WHERE val != '0.0';
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.result, t2.expected
     FROM num_result t1, num_exp_log10 t2
     WHERE t1.id1 = t2.id
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | result | expected 
 -----+--------+----------
 (0 rows)
@@ -719,19 +653,13 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- * POWER(10, LN(value)) check
 -- ******************************
 DELETE FROM num_result;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INSERT INTO num_result SELECT id, 0, POWER(numeric '10', LN(ABS(round(val,200))))
     FROM num_data
     WHERE val != '0.0';
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT t1.id1, t1.result, t2.expected
     FROM num_result t1, num_exp_power_10_ln t2
     WHERE t1.id1 = t2.id
     AND t1.result != t2.expected;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_result
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id1 | result | expected 
 -----+--------+----------
 (0 rows)
@@ -811,46 +739,46 @@ FROM v AS v1(x1), v AS v2(x2) WHERE x2 != 0;
     x1     |    x2     |          quot           | mod  |    div    
 -----------+-----------+-------------------------+------+-----------
          0 |         1 |  0.00000000000000000000 |    0 |         0
-         1 |         1 |  1.00000000000000000000 |    0 |         1
-        -1 |         1 | -1.00000000000000000000 |    0 |        -1
-       4.2 |         1 |      4.2000000000000000 |  0.2 |         4
-  Infinity |         1 |                Infinity |  NaN |  Infinity
- -Infinity |         1 |               -Infinity |  NaN | -Infinity
-       NaN |         1 |                     NaN |  NaN |       NaN
          0 |        -1 |  0.00000000000000000000 |    0 |         0
-         1 |        -1 | -1.00000000000000000000 |    0 |        -1
-        -1 |        -1 |  1.00000000000000000000 |    0 |         1
-       4.2 |        -1 |     -4.2000000000000000 |  0.2 |        -4
-  Infinity |        -1 |               -Infinity |  NaN | -Infinity
- -Infinity |        -1 |                Infinity |  NaN |  Infinity
-       NaN |        -1 |                     NaN |  NaN |       NaN
          0 |       4.2 |  0.00000000000000000000 |  0.0 |         0
-         1 |       4.2 |  0.23809523809523809524 |  1.0 |         0
-        -1 |       4.2 | -0.23809523809523809524 | -1.0 |         0
-       4.2 |       4.2 |  1.00000000000000000000 |  0.0 |         1
-  Infinity |       4.2 |                Infinity |  NaN |  Infinity
- -Infinity |       4.2 |               -Infinity |  NaN | -Infinity
-       NaN |       4.2 |                     NaN |  NaN |       NaN
          0 |  Infinity |                       0 |    0 |         0
-         1 |  Infinity |                       0 |    1 |         0
-        -1 |  Infinity |                       0 |   -1 |         0
-       4.2 |  Infinity |                       0 |  4.2 |         0
-  Infinity |  Infinity |                     NaN |  NaN |       NaN
- -Infinity |  Infinity |                     NaN |  NaN |       NaN
-       NaN |  Infinity |                     NaN |  NaN |       NaN
          0 | -Infinity |                       0 |    0 |         0
-         1 | -Infinity |                       0 |    1 |         0
-        -1 | -Infinity |                       0 |   -1 |         0
-       4.2 | -Infinity |                       0 |  4.2 |         0
-  Infinity | -Infinity |                     NaN |  NaN |       NaN
- -Infinity | -Infinity |                     NaN |  NaN |       NaN
-       NaN | -Infinity |                     NaN |  NaN |       NaN
          0 |       NaN |                     NaN |  NaN |       NaN
+         1 |         1 |  1.00000000000000000000 |    0 |         1
+         1 |        -1 | -1.00000000000000000000 |    0 |        -1
+         1 |       4.2 |  0.23809523809523809524 |  1.0 |         0
+         1 |  Infinity |                       0 |    1 |         0
+         1 | -Infinity |                       0 |    1 |         0
          1 |       NaN |                     NaN |  NaN |       NaN
+        -1 |         1 | -1.00000000000000000000 |    0 |        -1
+        -1 |        -1 |  1.00000000000000000000 |    0 |         1
+        -1 |       4.2 | -0.23809523809523809524 | -1.0 |         0
+        -1 |  Infinity |                       0 |   -1 |         0
+        -1 | -Infinity |                       0 |   -1 |         0
         -1 |       NaN |                     NaN |  NaN |       NaN
+       4.2 |         1 |      4.2000000000000000 |  0.2 |         4
+       4.2 |        -1 |     -4.2000000000000000 |  0.2 |        -4
+       4.2 |       4.2 |  1.00000000000000000000 |  0.0 |         1
+       4.2 |  Infinity |                       0 |  4.2 |         0
+       4.2 | -Infinity |                       0 |  4.2 |         0
        4.2 |       NaN |                     NaN |  NaN |       NaN
+  Infinity |         1 |                Infinity |  NaN |  Infinity
+  Infinity |        -1 |               -Infinity |  NaN | -Infinity
+  Infinity |       4.2 |                Infinity |  NaN |  Infinity
+  Infinity |  Infinity |                     NaN |  NaN |       NaN
+  Infinity | -Infinity |                     NaN |  NaN |       NaN
   Infinity |       NaN |                     NaN |  NaN |       NaN
+ -Infinity |         1 |               -Infinity |  NaN | -Infinity
+ -Infinity |        -1 |                Infinity |  NaN |  Infinity
+ -Infinity |       4.2 |               -Infinity |  NaN | -Infinity
+ -Infinity |  Infinity |                     NaN |  NaN |       NaN
+ -Infinity | -Infinity |                     NaN |  NaN |       NaN
  -Infinity |       NaN |                     NaN |  NaN |       NaN
+       NaN |         1 |                     NaN |  NaN |       NaN
+       NaN |        -1 |                     NaN |  NaN |       NaN
+       NaN |       4.2 |                     NaN |  NaN |       NaN
+       NaN |  Infinity |                     NaN |  NaN |       NaN
+       NaN | -Infinity |                     NaN |  NaN |       NaN
        NaN |       NaN |                     NaN |  NaN |       NaN
 (42 rows)
 
@@ -1028,44 +956,44 @@ WITH v(x) AS
 SELECT x1, x2,
   power(x1, x2)
 FROM v AS v1(x1), v AS v2(x2) WHERE x1 != 0 OR x2 >= 0;
-    x1    |    x2    |        power        
-----------+----------+---------------------
-        0 |        0 |  1.0000000000000000
-        0 |        1 |  0.0000000000000000
-        0 |        2 |  0.0000000000000000
-        0 |      4.2 |  0.0000000000000000
-        0 | Infinity |                   0
-        0 |      NaN |                 NaN
-        1 |        0 |  1.0000000000000000
-        1 |        1 |  1.0000000000000000
-        1 |        2 |  1.0000000000000000
-        1 |      4.2 |  1.0000000000000000
-        1 | Infinity |                   1
-        1 |      NaN |                   1
-        2 |        0 |  1.0000000000000000
-        2 |        1 |  2.0000000000000000
-        2 |        2 |  4.0000000000000000
-        2 |      4.2 |  18.379173679952560
-        2 | Infinity |            Infinity
-        2 |      NaN |                 NaN
-      4.2 |        0 |  1.0000000000000000
-      4.2 |        1 |  4.2000000000000000
-      4.2 |        2 | 17.6400000000000000
-      4.2 |      4.2 |  414.61691860129675
-      4.2 | Infinity |            Infinity
-      4.2 |      NaN |                 NaN
- Infinity |        0 |                   1
- Infinity |        1 |            Infinity
- Infinity |        2 |            Infinity
- Infinity |      4.2 |            Infinity
- Infinity | Infinity |            Infinity
- Infinity |      NaN |                 NaN
-      NaN |        0 |                   1
-      NaN |        1 |                 NaN
-      NaN |        2 |                 NaN
-      NaN |      4.2 |                 NaN
-      NaN | Infinity |                 NaN
-      NaN |      NaN |                 NaN
+    x1    |    x2    |       power        
+----------+----------+--------------------
+        0 |        0 | 1.0000000000000000
+        0 |        1 | 0.0000000000000000
+        0 |        2 | 0.0000000000000000
+        0 |      4.2 | 0.0000000000000000
+        0 | Infinity |                  0
+        0 |      NaN |                NaN
+        1 |        0 | 1.0000000000000000
+        1 |        1 | 1.0000000000000000
+        1 |        2 | 1.0000000000000000
+        1 |      4.2 | 1.0000000000000000
+        1 | Infinity |                  1
+        1 |      NaN |                  1
+        2 |        0 | 1.0000000000000000
+        2 |        1 | 2.0000000000000000
+        2 |        2 | 4.0000000000000000
+        2 |      4.2 | 18.379173679952560
+        2 | Infinity |           Infinity
+        2 |      NaN |                NaN
+      4.2 |        0 | 1.0000000000000000
+      4.2 |        1 | 4.2000000000000000
+      4.2 |        2 | 17.640000000000000
+      4.2 |      4.2 | 414.61691860129675
+      4.2 | Infinity |           Infinity
+      4.2 |      NaN |                NaN
+ Infinity |        0 |                  1
+ Infinity |        1 |           Infinity
+ Infinity |        2 |           Infinity
+ Infinity |      4.2 |           Infinity
+ Infinity | Infinity |           Infinity
+ Infinity |      NaN |                NaN
+      NaN |        0 |                  1
+      NaN |        1 |                NaN
+      NaN |        2 |                NaN
+      NaN |      4.2 |                NaN
+      NaN | Infinity |                NaN
+      NaN |      NaN |                NaN
 (36 rows)
 
 SELECT power('0'::numeric, '-1');
@@ -1167,40 +1095,30 @@ SELECT power('-inf'::numeric, '-inf');
 -- ******************************
 -- numeric AVG used to fail on some platforms
 SELECT AVG(val) FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
           avg           
 ------------------------
  -13430913.592242320700
 (1 row)
 
 SELECT MAX(val) FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
         max         
 --------------------
  7799461.4119000000
 (1 row)
 
 SELECT MIN(val) FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
          min          
 ----------------------
  -83028485.0000000000
 (1 row)
 
 SELECT STDDEV(val) FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
             stddev             
 -------------------------------
  27791203.28758835329805617386
 (1 row)
 
 SELECT VARIANCE(val) FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                variance               
 --------------------------------------
  772350980172061.69659105821915863601
@@ -1230,8 +1148,6 @@ INSERT INTO fract_only VALUES (11, '-Inf');	-- should fail
 ERROR:  numeric field overflow
 DETAIL:  A field with precision 4, scale 4 cannot hold an infinite value.
 SELECT * FROM fract_only;
-NOTICE:  One or more columns in the following table(s) do not have statistics: fract_only
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id |   val   
 ----+---------
   2 |  0.1000
@@ -1402,17 +1318,15 @@ INSERT INTO ceil_floor_round VALUES ('0.0');
 INSERT INTO ceil_floor_round VALUES ('0.0000001');
 INSERT INTO ceil_floor_round VALUES ('-0.000001');
 SELECT a, ceil(a), ceiling(a), floor(a), round(a) FROM ceil_floor_round;
-NOTICE:  One or more columns in the following table(s) do not have statistics: ceil_floor_round
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      a     | ceil | ceiling | floor | round 
 -----------+------+---------+-------+-------
+       0.0 |    0 |       0 |     0 |     0
+ -0.000001 |    0 |       0 |    -1 |     0
       -5.5 |   -5 |      -5 |    -6 |    -6
  9.4999999 |   10 |      10 |     9 |     9
  -5.499999 |   -5 |      -5 |    -6 |    -5
        9.5 |   10 |      10 |     9 |    10
  0.0000001 |    1 |       1 |     0 |     0
-       0.0 |    0 |       0 |     0 |     0
- -0.000001 |    0 |       0 |    -1 |     0
 (7 rows)
 
 DROP TABLE ceil_floor_round;
@@ -1469,8 +1383,6 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'opera
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY width_bucket_test (operand_num) FROM stdin;
 UPDATE width_bucket_test SET operand_f8 = operand_num::float8;
-NOTICE:  One or more columns in the following table(s) do not have statistics: width_bucket_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 SELECT
     operand_num,
     width_bucket(operand_num, 0, 10, 5) AS wb_1,
@@ -1484,17 +1396,13 @@ SELECT
     width_bucket(operand_num, -25, 25, 10) AS wb_5,
     width_bucket(operand_f8, -25, 25, 10) AS wb_5f
     FROM width_bucket_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: width_bucket_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    operand_num    | wb_1 | wb_1f | wb_2 | wb_2f | wb_3 | wb_3f | wb_4 | wb_4f | wb_5 | wb_5f 
 ------------------+------+-------+------+-------+------+-------+------+-------+------+-------
-             -5.2 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    4 |     4
-    -0.0000000001 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    5 |     5
-                2 |    2 |     2 |    5 |     5 |    1 |     1 |    0 |     0 |    6 |     6
-              4.5 |    3 |     3 |    3 |     3 |    2 |     2 |    0 |     0 |    6 |     6
-                6 |    4 |     4 |    3 |     3 |    3 |     3 |   21 |    21 |    7 |     7
-                9 |    5 |     5 |    1 |     1 |    5 |     5 |   21 |    21 |    7 |     7
- 10.0000000000001 |    6 |     6 |    0 |     0 |    5 |     5 |   21 |    21 |    8 |     8
+   0.000000000001 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
+                1 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
+ 1.99999999999999 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
+ 2.00000000000001 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
+               10 |    6 |     6 |    1 |     1 |    5 |     5 |   21 |    21 |    8 |     8
                 3 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
                 4 |    3 |     3 |    4 |     4 |    2 |     2 |    0 |     0 |    6 |     6
                 5 |    3 |     3 |    3 |     3 |    3 |     3 |    1 |     1 |    7 |     7
@@ -1502,11 +1410,13 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                 7 |    4 |     4 |    2 |     2 |    4 |     4 |   21 |    21 |    7 |     7
                 8 |    5 |     5 |    2 |     2 |    5 |     5 |   21 |    21 |    7 |     7
  9.99999999999999 |    5 |     5 |    1 |     1 |    5 |     5 |   21 |    21 |    7 |     7
-   0.000000000001 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
-                1 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
- 1.99999999999999 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
- 2.00000000000001 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
-               10 |    6 |     6 |    1 |     1 |    5 |     5 |   21 |    21 |    8 |     8
+             -5.2 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    4 |     4
+    -0.0000000001 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    5 |     5
+                2 |    2 |     2 |    5 |     5 |    1 |     1 |    0 |     0 |    6 |     6
+              4.5 |    3 |     3 |    3 |     3 |    2 |     2 |    0 |     0 |    6 |     6
+                6 |    4 |     4 |    3 |     3 |    3 |     3 |   21 |    21 |    7 |     7
+                9 |    5 |     5 |    1 |     1 |    5 |     5 |   21 |    21 |    7 |     7
+ 10.0000000000001 |    6 |     6 |    0 |     0 |    5 |     5 |   21 |    21 |    8 |     8
 (19 rows)
 
 -- Check positive and negative infinity: we require
@@ -1573,13 +1483,75 @@ FROM generate_series(0, 110, 10) x;
  110 |   0 |   0
 (12 rows)
 
+-- Another roundoff-error hazard
+SELECT width_bucket(0, -1e100::numeric, 1, 10);
+ width_bucket 
+--------------
+           10
+(1 row)
+
+SELECT width_bucket(0, -1e100::float8, 1, 10);
+ width_bucket 
+--------------
+           10
+(1 row)
+
+SELECT width_bucket(1, 1e100::numeric, 0, 10);
+ width_bucket 
+--------------
+           10
+(1 row)
+
+SELECT width_bucket(1, 1e100::float8, 0, 10);
+ width_bucket 
+--------------
+           10
+(1 row)
+
+-- Check cases that could trigger overflow or underflow within the calculation
+SELECT oper, low, high, cnt, width_bucket(oper, low, high, cnt)
+FROM
+  (SELECT 1.797e+308::float8 AS big, 5e-324::float8 AS tiny) as v,
+  LATERAL (VALUES
+    (10.5::float8, -big, big, 1),
+    (10.5::float8, -big, big, 2),
+    (10.5::float8, -big, big, 3),
+    (big / 4, -big / 2, big / 2, 10),
+    (10.5::float8, big, -big, 1),
+    (10.5::float8, big, -big, 2),
+    (10.5::float8, big, -big, 3),
+    (big / 4, big / 2, -big / 2, 10),
+    (0, 0, tiny, 4),
+    (tiny, 0, tiny, 4),
+    (0, 0, 1, 2147483647),
+    (1, 1, 0, 2147483647)
+  ) as sample(oper, low, high, cnt);
+    oper     |     low     |    high     |    cnt     | width_bucket 
+-------------+-------------+-------------+------------+--------------
+        10.5 | -1.797e+308 |  1.797e+308 |          1 |            1
+        10.5 | -1.797e+308 |  1.797e+308 |          2 |            2
+        10.5 | -1.797e+308 |  1.797e+308 |          3 |            2
+ 4.4925e+307 | -8.985e+307 |  8.985e+307 |         10 |            8
+        10.5 |  1.797e+308 | -1.797e+308 |          1 |            1
+        10.5 |  1.797e+308 | -1.797e+308 |          2 |            2
+        10.5 |  1.797e+308 | -1.797e+308 |          3 |            2
+ 4.4925e+307 |  8.985e+307 | -8.985e+307 |         10 |            3
+           0 |           0 |      5e-324 |          4 |            1
+      5e-324 |           0 |      5e-324 |          4 |            5
+           0 |           0 |           1 | 2147483647 |            1
+           1 |           1 |           0 | 2147483647 |            1
+(12 rows)
+
+-- These fail because the result would be out of int32 range:
+SELECT width_bucket(1::float8, 0, 1, 2147483647);
+ERROR:  integer out of range
+SELECT width_bucket(0::float8, 1, 0, 2147483647);
+ERROR:  integer out of range
 --
 -- TO_CHAR()
 --
 SELECT to_char(val, '9G999G999G999G999G999')
 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
         to_char         
 ------------------------
             -34,338,492
@@ -1587,126 +1559,109 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
               7,799,461
             -83,028,485
                  74,881
+                      0
+                      0
                  16,397
                  93,902
             -24,926,804
-                      0
-                      0
 (10 rows)
 
 SELECT to_char(val, '9G999G999G999G999G999D999G999G999G999G999')
 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                   to_char                   
 --------------------------------------------
                        .000,000,000,000,000
                        .000,000,000,000,000
-                 16,397.038,491,000,000,000
-                 93,901.577,630,260,000,000
-            -24,926,804.045,047,420,000,000
             -34,338,492.215,397,047,000,000
                       4.310,000,000,000,000
               7,799,461.411,900,000,000,000
             -83,028,485.000,000,000,000,000
                  74,881.000,000,000,000,000
+                 16,397.038,491,000,000,000
+                 93,901.577,630,260,000,000
+            -24,926,804.045,047,420,000,000
 (10 rows)
 
 SELECT to_char(val, '9999999999999999.999999999999999PR')
 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char               
 ------------------------------------
-         <34338492.215397047000000>
-                 4.310000000000000 
-           7799461.411900000000000 
-         <83028485.000000000000000>
-             74881.000000000000000 
                   .000000000000000 
                   .000000000000000 
              16397.038491000000000 
              93901.577630260000000 
          <24926804.045047420000000>
+         <34338492.215397047000000>
+                 4.310000000000000 
+           7799461.411900000000000 
+         <83028485.000000000000000>
+             74881.000000000000000 
 (10 rows)
 
 SELECT to_char(val, '9999999999999999.999999999999999S')
 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char              
 -----------------------------------
-         34338492.215397047000000-
-                4.310000000000000+
-          7799461.411900000000000+
-         83028485.000000000000000-
-            74881.000000000000000+
                  .000000000000000+
                  .000000000000000+
             16397.038491000000000+
             93901.577630260000000+
          24926804.045047420000000-
+         34338492.215397047000000-
+                4.310000000000000+
+          7799461.411900000000000+
+         83028485.000000000000000-
+            74881.000000000000000+
 (10 rows)
 
 SELECT to_char(val, 'MI9999999999999999.999999999999999')     FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char              
 -----------------------------------
- -        34338492.215397047000000
-                 4.310000000000000
-           7799461.411900000000000
- -        83028485.000000000000000
-             74881.000000000000000
                   .000000000000000
                   .000000000000000
              16397.038491000000000
              93901.577630260000000
  -        24926804.045047420000000
+ -        34338492.215397047000000
+                 4.310000000000000
+           7799461.411900000000000
+ -        83028485.000000000000000
+             74881.000000000000000
 (10 rows)
 
 SELECT to_char(val, 'FMS9999999999999999.999999999999999')    FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
- -34338492.215397047
- +4.31
- +7799461.4119
- -83028485.
- +74881.
  +0.
  +0.
  +16397.038491
  +93901.57763026
  -24926804.04504742
+ -34338492.215397047
+ +4.31
+ +7799461.4119
+ -83028485.
+ +74881.
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999999999.999999999999999THPR') FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char        
 ----------------------
- <34338492.215397047>
- 4.31
- 7799461.4119
- <83028485.>
- 74881.
  0.
  0.
  16397.038491
  93901.57763026
  <24926804.04504742>
+ <34338492.215397047>
+ 4.31
+ 7799461.4119
+ <83028485.>
+ 74881.
 (10 rows)
 
 SELECT to_char(val, 'SG9999999999999999.999999999999999th')   FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char              
 -----------------------------------
- +           16397.038491000000000
- +           93901.577630260000000
- -        24926804.045047420000000
  -        34338492.215397047000000
  +               4.310000000000000
  +         7799461.411900000000000
@@ -1714,18 +1669,19 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
  +           74881.000000000000000
  +                .000000000000000
  +                .000000000000000
+ +           16397.038491000000000
+ +           93901.577630260000000
+ -        24926804.045047420000000
 (10 rows)
 
 SELECT to_char(val, '0999999999999999.999999999999999')       FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char              
 -----------------------------------
+  0000000000000000.000000000000000
+  0000000000000000.000000000000000
   0000000000016397.038491000000000
   0000000000093901.577630260000000
  -0000000024926804.045047420000000
-  0000000000000000.000000000000000
-  0000000000000000.000000000000000
  -0000000034338492.215397047000000
   0000000000000004.310000000000000
   0000000007799461.411900000000000
@@ -1734,25 +1690,21 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, 'S0999999999999999.999999999999999')      FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char              
 -----------------------------------
- +0000000000016397.038491000000000
- +0000000000093901.577630260000000
- -0000000024926804.045047420000000
- +0000000000000000.000000000000000
- +0000000000000000.000000000000000
  -0000000034338492.215397047000000
  +0000000000000004.310000000000000
  +0000000007799461.411900000000000
  -0000000083028485.000000000000000
  +0000000000074881.000000000000000
+ +0000000000000000.000000000000000
+ +0000000000000000.000000000000000
+ +0000000000016397.038491000000000
+ +0000000000093901.577630260000000
+ -0000000024926804.045047420000000
 (10 rows)
 
 SELECT to_char(val, 'FM0999999999999999.999999999999999')     FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            to_char           
 -----------------------------
  -0000000034338492.215397047
@@ -1768,25 +1720,21 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999999999.099999999999999') 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
- .0
- .0
- 16397.038491
- 93901.57763026
- -24926804.04504742
  -34338492.215397047
  4.31
  7799461.4119
  -83028485.0
  74881.0
+ .0
+ .0
+ 16397.038491
+ 93901.57763026
+ -24926804.04504742
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999990999.990999999999999') 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
  -34338492.215397047
@@ -1802,25 +1750,21 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, 'FM0999999999999999.999909999999999') 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
            to_char           
 -----------------------------
+ 0000000000000000.00000
+ 0000000000000000.00000
  -0000000034338492.215397047
  0000000000000004.31000
  0000000007799461.41190
  -0000000083028485.00000
  0000000000074881.00000
- 0000000000000000.00000
- 0000000000000000.00000
  0000000000016397.038491
  0000000000093901.57763026
  -0000000024926804.04504742
 (10 rows)
 
 SELECT to_char(val, 'FM9999999990999999.099999999999999') 	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
  -34338492.215397047
@@ -1836,59 +1780,51 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, 'L9999999999999999.099999999999999')	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
               to_char               
 ------------------------------------
-                   .000000000000000
-                   .000000000000000
           -34338492.215397047000000
                   4.310000000000000
             7799461.411900000000000
           -83028485.000000000000000
               74881.000000000000000
+                   .000000000000000
+                   .000000000000000
               16397.038491000000000
               93901.577630260000000
           -24926804.045047420000000
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999999999.99999999999999')	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
+ 0.
+ 0.
  -34338492.215397047
  4.31
  7799461.4119
  -83028485.
  74881.
- 0.
- 0.
  16397.038491
  93901.57763026
  -24926804.04504742
 (10 rows)
 
 SELECT to_char(val, 'S 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 . 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9') FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                 to_char                                
 -----------------------------------------------------------------------
-                        +1 6 3 9 7 . 0 3 8 4 9 1 0 0 0 0 0 0 0 0 0 0 0
-                        +9 3 9 0 1 . 5 7 7 6 3 0 2 6 0 0 0 0 0 0 0 0 0
-                  -2 4 9 2 6 8 0 4 . 0 4 5 0 4 7 4 2 0 0 0 0 0 0 0 0 0
+                                  +. 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                  +. 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                   -3 4 3 3 8 4 9 2 . 2 1 5 3 9 7 0 4 7 0 0 0 0 0 0 0 0
                                 +4 . 3 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                     +7 7 9 9 4 6 1 . 4 1 1 9 0 0 0 0 0 0 0 0 0 0 0 0 0
                   -8 3 0 2 8 4 8 5 . 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                         +7 4 8 8 1 . 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                  +. 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                  +. 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                        +1 6 3 9 7 . 0 3 8 4 9 1 0 0 0 0 0 0 0 0 0 0 0
+                        +9 3 9 0 1 . 5 7 7 6 3 0 2 6 0 0 0 0 0 0 0 0 0
+                  -2 4 9 2 6 8 0 4 . 0 4 5 0 4 7 4 2 0 0 0 0 0 0 0 0 0
 (10 rows)
 
 SELECT to_char(val, 'FMS 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 . 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9') FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                         to_char                        
 -------------------------------------------------------
                  +0 .                 
@@ -1904,25 +1840,21 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, E'99999 "text" 9999 "9999" 999 "\\"text between quote marks\\"" 9999') FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                           to_char                          
 -----------------------------------------------------------
        text      9999     "text between quote marks"     0
        text      9999     "text between quote marks"     0
-       text      9999    1 "text between quote marks" 6397
-       text      9999    9 "text between quote marks" 3902
-       text    -2 9999 492 "text between quote marks" 6804
        text    -3 9999 433 "text between quote marks" 8492
        text      9999     "text between quote marks"     4
        text      9999  779 "text between quote marks" 9461
        text    -8 9999 302 "text between quote marks" 8485
        text      9999    7 "text between quote marks" 4881
+       text      9999    1 "text between quote marks" 6397
+       text      9999    9 "text between quote marks" 3902
+       text    -2 9999 492 "text between quote marks" 6804
 (10 rows)
 
 SELECT to_char(val, '999999SG9999999999')			FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
       to_char      
 -------------------
        -  34338492
@@ -1938,8 +1870,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999999999.999999999999999')	FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        to_char       
 ---------------------
  -34338492.215397047
@@ -1955,8 +1885,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 SELECT to_char(val, '9.999EEEE')				FROM num_data;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_data
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   to_char   
 ------------
  -3.434e+07
@@ -2073,6 +2001,12 @@ SELECT to_char('100'::numeric, 'FM999');
  to_char 
 ---------
  100
+(1 row)
+
+SELECT to_char('12345678901'::float8, 'FM9999999999D9999900000000000000000');
+     to_char     
+-----------------
+ ##########.####
 (1 row)
 
 -- Check parsing of literal text in a format string
@@ -2292,6 +2226,17 @@ INSERT INTO num_input_test(n1) VALUES (' -inf ');
 INSERT INTO num_input_test(n1) VALUES (' Infinity ');
 INSERT INTO num_input_test(n1) VALUES (' +inFinity ');
 INSERT INTO num_input_test(n1) VALUES (' -INFINITY ');
+INSERT INTO num_input_test(n1) VALUES ('12_000_000_000');
+INSERT INTO num_input_test(n1) VALUES ('12_000.123_456');
+INSERT INTO num_input_test(n1) VALUES ('23_000_000_000e-1_0');
+INSERT INTO num_input_test(n1) VALUES ('.000_000_000_123e1_0');
+INSERT INTO num_input_test(n1) VALUES ('.000_000_000_123e+1_1');
+INSERT INTO num_input_test(n1) VALUES ('0b10001110111100111100001001010');
+INSERT INTO num_input_test(n1) VALUES ('  -0B_1010_1011_0101_0100_1010_1001_1000_1100_1110_1011_0001_1111_0000_1010_1101_0010  ');
+INSERT INTO num_input_test(n1) VALUES ('  +0o112402761777 ');
+INSERT INTO num_input_test(n1) VALUES ('-0O0012_5524_5230_6334_3167_0261');
+INSERT INTO num_input_test(n1) VALUES ('-0x0000000000000000000000000deadbeef');
+INSERT INTO num_input_test(n1) VALUES (' 0X_30b1_F33a_6DF0_bD4E_64DF_9BdA_7D15 ');
 -- bad inputs
 INSERT INTO num_input_test(n1) VALUES ('     ');
 ERROR:  invalid input syntax for type numeric: "     "
@@ -2325,29 +2270,159 @@ INSERT INTO num_input_test(n1) VALUES (' N aN ');
 ERROR:  invalid input syntax for type numeric: " N aN "
 LINE 1: INSERT INTO num_input_test(n1) VALUES (' N aN ');
                                                ^
+INSERT INTO num_input_test(n1) VALUES ('+NaN');
+ERROR:  invalid input syntax for type numeric: "+NaN"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('+NaN');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('-NaN');
+ERROR:  invalid input syntax for type numeric: "-NaN"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('-NaN');
+                                               ^
 INSERT INTO num_input_test(n1) VALUES ('+ infinity');
 ERROR:  invalid input syntax for type numeric: "+ infinity"
 LINE 1: INSERT INTO num_input_test(n1) VALUES ('+ infinity');
                                                ^
+INSERT INTO num_input_test(n1) VALUES ('_123');
+ERROR:  invalid input syntax for type numeric: "_123"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('_123');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('123_');
+ERROR:  invalid input syntax for type numeric: "123_"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('123_');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('12__34');
+ERROR:  invalid input syntax for type numeric: "12__34"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('12__34');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('123_.456');
+ERROR:  invalid input syntax for type numeric: "123_.456"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('123_.456');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('123._456');
+ERROR:  invalid input syntax for type numeric: "123._456"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('123._456');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('1.2e_34');
+ERROR:  invalid input syntax for type numeric: "1.2e_34"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('1.2e_34');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('1.2e34_');
+ERROR:  invalid input syntax for type numeric: "1.2e34_"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('1.2e34_');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('1.2e3__4');
+ERROR:  invalid input syntax for type numeric: "1.2e3__4"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('1.2e3__4');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0b1112');
+ERROR:  invalid input syntax for type numeric: "0b1112"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0b1112');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0c1112');
+ERROR:  invalid input syntax for type numeric: "0c1112"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0c1112');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0o12345678');
+ERROR:  invalid input syntax for type numeric: "0o12345678"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0o12345678');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0x1eg');
+ERROR:  invalid input syntax for type numeric: "0x1eg"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0x1eg');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0x12.34');
+ERROR:  invalid input syntax for type numeric: "0x12.34"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0x12.34');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0x__1234');
+ERROR:  invalid input syntax for type numeric: "0x__1234"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0x__1234');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0x1234_');
+ERROR:  invalid input syntax for type numeric: "0x1234_"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0x1234_');
+                                               ^
+INSERT INTO num_input_test(n1) VALUES ('0x12__34');
+ERROR:  invalid input syntax for type numeric: "0x12__34"
+LINE 1: INSERT INTO num_input_test(n1) VALUES ('0x12__34');
+                                               ^
 SELECT * FROM num_input_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: num_input_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-    n1     
------------
-   3245874
-    555.50
-   -555.50
-       NaN
-       NaN
-  Infinity
-  Infinity
- -Infinity
-  Infinity
-  Infinity
- -Infinity
-       123
-    -93853
-(13 rows)
+                n1                 
+-----------------------------------
+                           3245874
+                            555.50
+                           -555.50
+                               NaN
+                               NaN
+                          Infinity
+                          Infinity
+                         -Infinity
+                          Infinity
+                          Infinity
+                         -Infinity
+                      12000.123456
+                         299792458
+                        9999999999
+             -12345678900987654321
+                       -3735928559
+                               123
+                            -93853
+                       12000000000
+                      2.3000000000
+                              1.23
+                              12.3
+             -12345678901234567890
+ 987654321234567898765432123456789
+(24 rows)
+
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('34.5', 'numeric');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('34xyz', 'numeric');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT pg_input_is_valid('1e400000', 'numeric');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('1e400000', 'numeric');
+            message             | detail | hint | sql_error_code 
+--------------------------------+--------+------+----------------
+ value overflows numeric format |        |      | 22003
+(1 row)
+
+SELECT pg_input_is_valid('1234.567', 'numeric(8,4)');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('1234.567', 'numeric(7,4)');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('1234.567', 'numeric(7,4)');
+        message         |                                      detail                                       | hint | sql_error_code 
+------------------------+-----------------------------------------------------------------------------------+------+----------------
+ numeric field overflow | A field with precision 7, scale 4 must round to an absolute value less than 10^3. |      | 22003
+(1 row)
+
+SELECT * FROM pg_input_error_info('0x1234.567', 'numeric');
+                       message                       | detail | hint | sql_error_code 
+-----------------------------------------------------+--------+------+----------------
+ invalid input syntax for type numeric: "0x1234.567" |        |      | 22P02
+(1 row)
 
 --
 -- Test precision and scale typemods
@@ -2359,6 +2434,8 @@ CREATE TABLE num_typemod_test (
   thousandths numeric(3, 3),
   millionths numeric(3, 6)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'millions' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d num_typemod_test
                Table "public.num_typemod_test"
    Column    |     Type      | Collation | Nullable | Default 
@@ -2368,6 +2445,7 @@ CREATE TABLE num_typemod_test (
  units       | numeric(3,0)  |           |          | 
  thousandths | numeric(3,3)  |           |          | 
  millionths  | numeric(3,6)  |           |          | 
+Distributed by: (millions)
 
 -- rounding of valid inputs
 INSERT INTO num_typemod_test VALUES (123456, 123, 0.123, 0.000123, 0.000000123);
@@ -2581,15 +2659,15 @@ select sqrt(8015491789940783531003294973900307::numeric);
 -- Test code path for raising to integer powers
 --
 select 10.0 ^ -2147483648 as rounds_to_zero;
-   rounds_to_zero   
---------------------
- 0.0000000000000000
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               rounds_to_zero                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 (1 row)
 
 select 10.0 ^ -2147483647 as rounds_to_zero;
-   rounds_to_zero   
---------------------
- 0.0000000000000000
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               rounds_to_zero                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 (1 row)
 
 select 10.0 ^ 2147483647 as overflows;
@@ -2597,28 +2675,28 @@ ERROR:  value overflows numeric format
 select 117743296169.0 ^ 1000000000 as overflows;
 ERROR:  value overflows numeric format
 -- cases that used to return inaccurate results
-select 3.789 ^ 21;
+select 3.789 ^ 21.0000000000000000;
             ?column?            
 --------------------------------
  1409343026052.8716016316022141
 (1 row)
 
-select 3.789 ^ 35;
+select 3.789 ^ 35.0000000000000000;
                 ?column?                
 ----------------------------------------
  177158169650516670809.3820586142670135
 (1 row)
 
 select 1.2 ^ 345;
-                   ?column?                    
------------------------------------------------
- 2077446682327378559843444695.5827049735727869
+            ?column?            
+--------------------------------
+ 2077446682327378559843444695.6
 (1 row)
 
 select 0.12 ^ (-20);
-               ?column?               
---------------------------------------
- 2608405330458882702.5529619561355838
+        ?column?        
+------------------------
+ 2608405330458882702.55
 (1 row)
 
 select 1.000000000123 ^ (-2147483648);
@@ -2641,15 +2719,15 @@ select round(((1 - 1.500012345678e-1000) ^ 1.45e1003) * 1e1000);
 
 -- cases that used to error out
 select 0.12 ^ (-25);
-                 ?column?                  
--------------------------------------------
- 104825960103961013959336.4983657883169110
+          ?column?           
+-----------------------------
+ 104825960103961013959336.50
 (1 row)
 
 select 0.5678 ^ (-85);
-                ?column?                
-----------------------------------------
- 782333637740774446257.7719390061997396
+          ?column?          
+----------------------------
+ 782333637740774446257.7719
 (1 row)
 
 select coalesce(nullif(0.9999999999 ^ 70000000000000, 0), 0) as underflows;
@@ -2688,6 +2766,54 @@ select (-1.0) ^ 1000000000000001;
 ---------------------
  -1.0000000000000000
 (1 row)
+
+-- integer powers of 10
+select n, 10.0 ^ n as "10^n", (10.0 ^ n) * (10.0 ^ (-n)) = 1 as ok
+from generate_series(-20, 20) n;
+  n  |                  10^n                  | ok 
+-----+----------------------------------------+----
+ -20 | 0.000000000000000000010000000000000000 | t
+ -19 |  0.00000000000000000010000000000000000 | t
+ -18 |   0.0000000000000000010000000000000000 | t
+ -17 |    0.000000000000000010000000000000000 | t
+ -16 |     0.00000000000000010000000000000000 | t
+ -15 |      0.0000000000000010000000000000000 | t
+ -14 |       0.000000000000010000000000000000 | t
+ -13 |        0.00000000000010000000000000000 | t
+ -12 |         0.0000000000010000000000000000 | t
+ -11 |          0.000000000010000000000000000 | t
+ -10 |           0.00000000010000000000000000 | t
+  -9 |            0.0000000010000000000000000 | t
+  -8 |             0.000000010000000000000000 | t
+  -7 |              0.00000010000000000000000 | t
+  -6 |               0.0000010000000000000000 | t
+  -5 |                0.000010000000000000000 | t
+  -4 |                 0.00010000000000000000 | t
+  -3 |                  0.0010000000000000000 | t
+  -2 |                   0.010000000000000000 | t
+  -1 |                    0.10000000000000000 | t
+   0 |                     1.0000000000000000 | t
+   1 |                     10.000000000000000 | t
+   2 |                     100.00000000000000 | t
+   3 |                     1000.0000000000000 | t
+   4 |                     10000.000000000000 | t
+   5 |                     100000.00000000000 | t
+   6 |                     1000000.0000000000 | t
+   7 |                     10000000.000000000 | t
+   8 |                     100000000.00000000 | t
+   9 |                     1000000000.0000000 | t
+  10 |                     10000000000.000000 | t
+  11 |                     100000000000.00000 | t
+  12 |                     1000000000000.0000 | t
+  13 |                     10000000000000.000 | t
+  14 |                     100000000000000.00 | t
+  15 |                     1000000000000000.0 | t
+  16 |                    10000000000000000.0 | t
+  17 |                   100000000000000000.0 | t
+  18 |                  1000000000000000000.0 | t
+  19 |                 10000000000000000000.0 | t
+  20 |                100000000000000000000.0 | t
+(41 rows)
 
 --
 -- Tests for raising to non-integer powers
@@ -2780,9 +2906,9 @@ select 12.3 ^ (-45.6);
 
 -- big test
 select 1.234 ^ 5678;
-                                                                                                                                                                                                                                                                         ?column?                                                                                                                                                                                                                                                                         
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 307239295662090741644584872593956173493568238595074141254349565406661439636598896798876823220904084953233015553994854875890890858118656468658643918169805277399402542281777901029346337707622181574346585989613344285010764501017625366742865066948856161360224801370482171458030533346309750557140549621313515752078638620714732831815297168231790779296290266207315344008883935010274044001522606235576584215999260117523114297033944018699691024106823438431754073086813382242140602291215149759520833200152654884259619588924545324.5973362312547382
+                                                                                                                                                                                                                                                                  ?column?                                                                                                                                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 307239295662090741644584872593956173493568238595074141254349565406661439636598896798876823220904084953233015553994854875890890858118656468658643918169805277399402542281777901029346337707622181574346585989613344285010764501017625366742865066948856161360224801370482171458030533346309750557140549621313515752078638620714732831815297168231790779296290266207315344008883935010274044001522606235576584215999260117523114297033944018699691024106823438431754073086813382242140602291215149759520833200152654884259619588924545324.597
 (1 row)
 
 --
@@ -3331,6 +3457,8 @@ SELECT SUM((-9999)::numeric) FROM generate_series(1, 100000);
 -- Tests for VARIANCE()
 --
 CREATE TABLE num_variance (a numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO num_variance VALUES (0);
 INSERT INTO num_variance VALUES (3e-500);
 INSERT INTO num_variance VALUES (-3e-500);

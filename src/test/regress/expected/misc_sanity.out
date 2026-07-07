@@ -201,6 +201,7 @@ ORDER BY 1;
  pg_attribute_relid_attnam_index
  pg_attribute_relid_attnum_index
  pg_auth_members_member_role_index
+ pg_auth_members_oid_index
  pg_auth_members_role_member_index
  pg_authid_oid_index
  pg_authid_rolname_index
@@ -312,5 +313,5 @@ ORDER BY 1;
  pg_type_typname_nsp_index
  pg_user_mapping_oid_index
  pg_user_mapping_user_server_index
-(131 rows)
+(132 rows)
 

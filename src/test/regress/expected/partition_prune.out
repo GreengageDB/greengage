@@ -46,6 +46,8 @@
 -- Force generic plans to be used for all prepared statements in this file.
 set plan_cache_mode = force_generic_plan;
 create table lp (a char) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lp_default partition of lp default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_ef partition of lp for values in ('e', 'f');
@@ -217,6 +219,8 @@ explain (costs off) select * from lp where a not in ('a', 'd');
 
 -- collation matches the partitioning collation, pruning works
 create table coll_pruning (a text collate "C") partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_a partition of coll_pruning for values in ('a');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_b partition of coll_pruning for values in ('b');
@@ -248,6 +252,8 @@ explain (costs off) select * from coll_pruning where a collate "POSIX" = 'a' col
 (9 rows)
 
 create table rlp (a int, b varchar) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rlp_default partition of rlp default partition by list (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_default partition of rlp_default default;
@@ -263,6 +269,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp2 partition of rlp for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3 (b varchar, a int) partition by list (b varchar_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: distribution policy must match the parent table.
 alter table rlp3 set distributed by (a);
 create table rlp3_default partition of rlp3 default;
@@ -838,6 +846,8 @@ explain (costs off) select * from rlp where (a = 1 and a = 3) or (a > 1 and a = 
 
 -- multi-column keys
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p_default partition of mc3p default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p0 partition of mc3p for values from (minvalue, minvalue, minvalue) to (1, 1, 1);
@@ -1158,6 +1168,8 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1) or (a = 10 a
 
 -- a simpler multi-column keys case
 create table mc2p (a int, b int) partition by range (a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc2p_default partition of mc2p default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p0 partition of mc2p for values from (minvalue, minvalue) to (1, minvalue);
@@ -1272,12 +1284,15 @@ explain (costs off) select * from mc2p where b is null;
 
 -- boolean partitioning
 create table boolpart (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolpart_default partition of boolpart default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolpart_t partition of boolpart for values in ('true');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolpart_f partition of boolpart for values in ('false');
 NOTICE:  table has parent, setting distribution columns to match parent table
+insert into boolpart values (true), (false), (null);
 explain (costs off) select * from boolpart where a in (true, false);
                       QUERY PLAN                      
 ------------------------------------------------------
@@ -1317,25 +1332,31 @@ explain (costs off) select * from boolpart where a is true or a is not true;
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
          ->  Seq Scan on boolpart_t boolpart_2
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+         ->  Seq Scan on boolpart_default boolpart_3
+               Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from boolpart where a is not true;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on boolpart_f boolpart_1
+               Filter: (a IS NOT TRUE)
+         ->  Seq Scan on boolpart_default boolpart_2
+               Filter: (a IS NOT TRUE)
  Optimizer: Postgres query optimizer
 (7 rows)
 
-explain (costs off) select * from boolpart where a is not true;
-                QUERY PLAN                
-------------------------------------------
+explain (costs off) select * from boolpart where a is not true and a is not false;
+                       QUERY PLAN                       
+--------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on boolpart_f boolpart
-         Filter: (a IS NOT TRUE)
+   ->  Seq Scan on boolpart_default boolpart
+         Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
  Optimizer: Postgres query optimizer
 (4 rows)
-
-explain (costs off) select * from boolpart where a is not true and a is not false;
-             QUERY PLAN              
--------------------------------------
- Result
-   One-Time Filter: false
- Optimizer: Postgres query optimizer
-(3 rows)
 
 explain (costs off) select * from boolpart where a is unknown;
                      QUERY PLAN                      
@@ -1365,7 +1386,229 @@ explain (costs off) select * from boolpart where a is not unknown;
  Optimizer: Postgres query optimizer
 (9 rows)
 
+select * from boolpart where a in (true, false);
+ a 
+---
+ f
+ t
+(2 rows)
+
+select * from boolpart where a = false;
+ a 
+---
+ f
+(1 row)
+
+select * from boolpart where not a = false;
+ a 
+---
+ t
+(1 row)
+
+select * from boolpart where a is true or a is not true;
+ a 
+---
+ f
+ t
+ 
+(3 rows)
+
+select * from boolpart where a is not true;
+ a 
+---
+ f
+ 
+(2 rows)
+
+select * from boolpart where a is not true and a is not false;
+ a 
+---
+ 
+(1 row)
+
+select * from boolpart where a is unknown;
+ a 
+---
+ 
+(1 row)
+
+select * from boolpart where a is not unknown;
+ a 
+---
+ f
+ t
+(2 rows)
+
+-- inverse boolean partitioning - a seemingly unlikely design, but we've got
+-- code for it, so we'd better test it.
+create table iboolpart (a bool) partition by list ((not a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table iboolpart_default partition of iboolpart default;
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table iboolpart_f partition of iboolpart for values in ('true');
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table iboolpart_t partition of iboolpart for values in ('false');
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into iboolpart values (true), (false), (null);
+explain (costs off) select * from iboolpart where a in (true, false);
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: (a = ANY ('{t,f}'::boolean[]))
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: (a = ANY ('{t,f}'::boolean[]))
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: (a = ANY ('{t,f}'::boolean[]))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from iboolpart where a = false;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on iboolpart_f iboolpart
+         Filter: (NOT a)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (costs off) select * from iboolpart where not a = false;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on iboolpart_t iboolpart
+         Filter: a
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (costs off) select * from iboolpart where a is true or a is not true;
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from iboolpart where a is not true;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: (a IS NOT TRUE)
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: (a IS NOT TRUE)
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: (a IS NOT TRUE)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from iboolpart where a is not true and a is not false;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from iboolpart where a is unknown;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: (a IS UNKNOWN)
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: (a IS UNKNOWN)
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: (a IS UNKNOWN)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from iboolpart where a is not unknown;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on iboolpart_t iboolpart_1
+               Filter: (a IS NOT UNKNOWN)
+         ->  Seq Scan on iboolpart_f iboolpart_2
+               Filter: (a IS NOT UNKNOWN)
+         ->  Seq Scan on iboolpart_default iboolpart_3
+               Filter: (a IS NOT UNKNOWN)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select * from iboolpart where a in (true, false);
+ a 
+---
+ t
+ f
+(2 rows)
+
+select * from iboolpart where a = false;
+ a 
+---
+ f
+(1 row)
+
+select * from iboolpart where not a = false;
+ a 
+---
+ t
+(1 row)
+
+select * from iboolpart where a is true or a is not true;
+ a 
+---
+ 
+ t
+ f
+(3 rows)
+
+select * from iboolpart where a is not true;
+ a 
+---
+ 
+ f
+(2 rows)
+
+select * from iboolpart where a is not true and a is not false;
+ a 
+---
+ 
+(1 row)
+
+select * from iboolpart where a is unknown;
+ a 
+---
+ 
+(1 row)
+
+select * from iboolpart where a is not unknown;
+ a 
+---
+ t
+ f
+(2 rows)
+
 create table boolrangep (a bool, b bool, c int) partition by range (a,b,c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolrangep_tf partition of boolrangep for values from ('true', 'false', 0) to ('true', 'false', 100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_ft partition of boolrangep for values from ('false', 'true', 0) to ('false', 'true', 100);
@@ -1386,6 +1629,8 @@ explain (costs off)  select * from boolrangep where not a and not b and c = 25;
 
 -- test scalar-to-array operators
 create table coercepart (a varchar) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coercepart_ab partition of coercepart for values in ('ab');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coercepart_bc partition of coercepart for values in ('bc');
@@ -1670,6 +1915,8 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
 --
 -- doesn't prune range partitions
 create table rp (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp0 partition of rp for values from (minvalue) to (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp1 partition of rp for values from (1) to (2);
@@ -1769,6 +2016,8 @@ explain (costs off) select * from rlp where a = 15 and b <> 'ab' and b <> 'cd' a
 -- different collations for different keys with same expression
 --
 create table coll_pruning_multi (a text) partition by range (substr(a, 1) collate "POSIX", substr(a, 1) collate "C");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_multi1 partition of coll_pruning_multi for values from ('a', 'a') to ('a', 'e');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_multi2 partition of coll_pruning_multi for values from ('a', 'e') to ('a', 'z');
@@ -1817,6 +2066,8 @@ explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' co
 -- LIKE operators don't prune
 --
 create table like_op_noprune (a text) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table like_op_noprune1 partition of like_op_noprune for values in ('ABC');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table like_op_noprune2 partition of like_op_noprune for values in ('BCD');
@@ -1837,11 +2088,13 @@ explain (costs off) select * from like_op_noprune where a like '%BC';
 -- tests wherein clause value requires a cross-type comparison function
 --
 create table lparted_by_int2 (a smallint) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lparted_by_int2_1 partition of lparted_by_int2 for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table lparted_by_int2_16384 partition of lparted_by_int2 for values in (16384);
 NOTICE:  table has parent, setting distribution columns to match parent table
-explain (costs off) select * from lparted_by_int2 where a = 100000000000000;
+explain (costs off) select * from lparted_by_int2 where a = 100_000_000_000_000;
              QUERY PLAN              
 -------------------------------------
  Result
@@ -1850,12 +2103,14 @@ explain (costs off) select * from lparted_by_int2 where a = 100000000000000;
 (3 rows)
 
 create table rparted_by_int2 (a smallint) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rparted_by_int2_1 partition of rparted_by_int2 for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rparted_by_int2_16384 partition of rparted_by_int2 for values from (10) to (16384);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- all partitions pruned
-explain (costs off) select * from rparted_by_int2 where a > 100000000000000;
+explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
              QUERY PLAN              
 -------------------------------------
  Result
@@ -1866,7 +2121,7 @@ explain (costs off) select * from rparted_by_int2 where a > 100000000000000;
 create table rparted_by_int2_maxvalue partition of rparted_by_int2 for values from (16384) to (maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- all partitions but rparted_by_int2_maxvalue pruned
-explain (costs off) select * from rparted_by_int2 where a > 100000000000000;
+explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
                          QUERY PLAN                         
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1875,7 +2130,7 @@ explain (costs off) select * from rparted_by_int2 where a > 100000000000000;
  Optimizer: Postgres query optimizer
 (4 rows)
 
-drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, boolrangep, rp, coll_pruning_multi, like_op_noprune, lparted_by_int2, rparted_by_int2;
+drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, iboolpart, boolrangep, rp, coll_pruning_multi, like_op_noprune, lparted_by_int2, rparted_by_int2;
 --
 -- Test Partition pruning for HASH partitioning
 --
@@ -1884,6 +2139,8 @@ drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, boolrangep, rp, coll_pru
 -- part_part_test_int4_ops and part_test_text_ops in insert.sql.
 --
 create table hp (a int, b text) partition by hash (a part_test_int4_ops, b part_test_text_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp0 partition of hp for values with (modulus 4, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp3 partition of hp for values with (modulus 4, remainder 3);
@@ -2097,6 +2354,8 @@ drop table hp;
 -- Test runtime partition pruning
 --
 create table ab (a int not null, b int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ab_a2 partition of ab for values in(2) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a2_b1 partition of ab_a2 for values in (1);
@@ -2240,6 +2499,8 @@ explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
 
 -- Test a backwards Append scan
 create table list_part (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table list_part1 partition of list_part for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table list_part2 partition of list_part for values in (2);
@@ -2436,6 +2697,8 @@ select explain_parallel_append('select count(*) from ab where (a = (select 1) or
 
 -- Test pruning during parallel nested loop query
 create table lprt_a (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Insert some values we won't find in ab
 insert into lprt_a select 0 from generate_series(1,100);
 -- and insert some values that we should find.
@@ -2782,7 +3045,7 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
          ->  Result (actual rows=0 loops=1)
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Result (actual rows=0 loops=1)
                      One-Time Filter: (5 = $0)
          ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
@@ -2808,6 +3071,8 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
 
 -- Another UNION ALL test, but containing a mix of exec init and exec run-time pruning.
 create table xy_1 (x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into xy_1 values(100,-10);
 set enable_bitmapscan = 0;
 set enable_indexscan = 0;
@@ -2949,10 +3214,14 @@ select tableoid::regclass, * from ab;
 drop table ab, lprt_a;
 -- Join
 create table tbl1(col1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tbl1 values (501), (505);
 analyze tbl1;
 -- Basic table
 create table tprt (col1 int) partition by range (col1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tprt_1 partition of tprt for values from (1) to (501);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_2 partition of tprt for values from (501) to (1001);
@@ -3277,9 +3546,17 @@ order by tbl1.col1, tprt.col1;
 drop table tbl1, tprt;
 -- Test with columns defined in varying orders between each level
 create table part_abc (a int not null, b int not null, c int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_bac (b int not null, a int not null, c int not null) partition by list (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_cab (c int not null, a int not null, b int not null) partition by list (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_abc_p1 (a int not null, b int not null, c int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: the distribution keys must be the same in all parts of partition
 -- hierarchy.
 alter table part_bac set distributed by (a);
@@ -3304,6 +3581,8 @@ drop table part_abc;
 -- Ensure that an Append node properly handles a sub-partitioned table
 -- matching without any of its leaf partitions matching the clause.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp_1 partition of listp for values in(1) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_1_1 partition of listp_1 for values in(1);
@@ -3418,9 +3697,9 @@ select * from stable_qual_pruning where a < localtimestamp;
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          ->  Seq Scan on stable_qual_pruning1 stable_qual_pruning_1 (actual rows=0 loops=1)
-               Filter: (a < 'Sat Jun 20 14:43:38.242732 2026'::timestamp without time zone)
+               Filter: (a < 'Tue Jul 07 11:44:42.634127 2026'::timestamp without time zone)
          ->  Seq Scan on stable_qual_pruning2 stable_qual_pruning_2 (actual rows=0 loops=1)
-               Filter: (a < 'Sat Jun 20 14:43:38.242732 2026'::timestamp without time zone)
+               Filter: (a < 'Tue Jul 07 11:44:42.634127 2026'::timestamp without time zone)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -3466,7 +3745,7 @@ select * from stable_qual_pruning
 -----------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Seq Scan on stable_qual_pruning2 stable_qual_pruning (actual rows=0 loops=1)
-         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Sat Jun 20 14:43:38.253246 2026"}'::timestamp without time zone[]))
+         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Tue Jul 07 11:44:42.642582 2026"}'::timestamp without time zone[]))
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -3517,6 +3796,8 @@ drop table stable_qual_pruning;
 -- non-inclusive operator for an earlier key
 --
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p0 partition of mc3p
   for values from (0, 0, 0) to (0, maxvalue, maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3586,8 +3867,12 @@ deallocate ps2;
 drop table mc3p;
 -- Ensure runtime pruning works with initplans params with boolean types
 create table boolvalues (value bool not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'value' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into boolvalues values('t'),('f');
 create table boolp (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolp_t partition of boolp for values in('t');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolp_f partition of boolp for values in('f');
@@ -3633,6 +3918,8 @@ drop table boolp;
 set enable_seqscan = off;
 set enable_sort = off;
 create table ma_test (a int, b int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ma_test_p1 partition of ma_test for values from (0) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table ma_test_p2 partition of ma_test for values from (10) to (20);
@@ -3721,7 +4008,7 @@ explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35
                      Sort Key: ma_test.b
                      Subplans Removed: 3
  Optimizer: Postgres query optimizer
- Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_seqscan = 'off', enable_sort = 'off', optimizer = 'off', plan_cache_mode = 'force_generic_plan'
+ Settings: enable_sort = 'off', optimizer = 'off', enable_hashjoin = 'off', plan_cache_mode = 'force_generic_plan', enable_indexonlyscan = 'off', enable_seqscan = 'off'
 (12 rows)
 
 deallocate mt_q2;
@@ -3760,6 +4047,8 @@ reset enable_indexonlyscan;
 --
 -- array type list partition key
 create table pp_arrpart (a int[]) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_arrpart1 partition of pp_arrpart for values in ('{1}');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_arrpart2 partition of pp_arrpart for values in ('{2, 3}', '{4, 5}');
@@ -3816,6 +4105,8 @@ explain (costs off) delete from pp_arrpart where a = '{1}';
 drop table pp_arrpart;
 -- array type hash partition key
 create table pph_arrpart (a int[]) partition by hash (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pph_arrpart1 partition of pph_arrpart for values with (modulus 2, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pph_arrpart2 partition of pph_arrpart for values with (modulus 2, remainder 1);
@@ -3863,6 +4154,8 @@ drop table pph_arrpart;
 -- enum type list partition key
 create type pp_colors as enum ('green', 'blue', 'black');
 create table pp_enumpart (a pp_colors) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_enumpart_green partition of pp_enumpart for values in ('green');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_enumpart_blue partition of pp_enumpart for values in ('blue');
@@ -3889,6 +4182,8 @@ drop type pp_colors;
 -- record type as partition key
 create type pp_rectype as (a int, b int);
 create table pp_recpart (a pp_rectype) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_recpart_11 partition of pp_recpart for values in ('(1,1)');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_recpart_23 partition of pp_recpart for values in ('(2,3)');
@@ -3914,6 +4209,8 @@ drop table pp_recpart;
 drop type pp_rectype;
 -- range type partition key
 create table pp_intrangepart (a int4range) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_intrangepart12 partition of pp_intrangepart for values in ('[1,2]');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_intrangepart2inf partition of pp_intrangepart for values in ('[2,)');
@@ -3940,6 +4237,8 @@ drop table pp_intrangepart;
 -- Ensure the enable_partition_prune GUC properly disables partition pruning.
 --
 create table pp_lp (a int, value int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_lp1 partition of pp_lp for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_lp2 partition of pp_lp for values in(2);
@@ -4059,6 +4358,8 @@ explain (costs off) delete from pp_lp where a = 1;
 drop table pp_lp;
 -- Ensure enable_partition_prune does not affect non-partitioned tables.
 create table inh_lp (a int, value int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_lp1 (a int, value int, check(a = 1)) inherits (inh_lp);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
@@ -4129,6 +4430,8 @@ reset enable_partition_pruning;
 reset constraint_exclusion;
 -- Check pruning for a partition tree containing only temporary relations
 create temp table pp_temp_parent (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table pp_temp_part_1 partition of pp_temp_parent for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table pp_temp_part_def partition of pp_temp_parent default;
@@ -4155,11 +4458,15 @@ explain (costs off) select * from pp_temp_parent where a = 2;
 drop table pp_temp_parent;
 -- Stress run-time partition pruning a bit more, per bug reports
 create temp table p (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table p1 partition of p for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table p2 partition of p for values in (2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table q1 partition of q for values in (1) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q11 partition of q1 for values in (1) partition by list (c);
@@ -4199,7 +4506,7 @@ where s.a = 1 and s.b = 1 and s.c = (select 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = 1) AND (b = 1) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Result
                      One-Time Filter: (1 = $0)
  Optimizer: Postgres query optimizer
@@ -4242,7 +4549,7 @@ explain (costs off) execute q (1, 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = $1) AND (b = $2) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Result
                      One-Time Filter: ((1 = $1) AND (1 = $2) AND (1 = $0))
  Optimizer: Postgres query optimizer
@@ -4258,6 +4565,8 @@ drop table p, q;
 -- Ensure run-time pruning works correctly when we match a partitioned table
 -- on the first level but find no matching partitions on the second level.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp1 partition of listp for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp2 partition of listp for values in(2) partition by list(b);
@@ -4331,6 +4640,8 @@ drop table listp;
 -- clauses for different partition keys
 --
 create table rp_prefix_test1 (a int, b varchar) partition by range(a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test1_p1 partition of rp_prefix_test1 for values from (1, 'a') to (1, 'b');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test1_p2 partition of rp_prefix_test1 for values from (2, 'a') to (2, 'b');
@@ -4347,6 +4658,8 @@ explain (costs off) select * from rp_prefix_test1 where a <= 1 and b = 'a';
 (4 rows)
 
 create table rp_prefix_test2 (a int, b int, c int) partition by range(a, b, c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test2_p1 partition of rp_prefix_test2 for values from (1, 1, 0) to (1, 1, 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test2_p2 partition of rp_prefix_test2 for values from (2, 2, 0) to (2, 2, 10);
@@ -4363,6 +4676,8 @@ explain (costs off) select * from rp_prefix_test2 where a <= 1 and b = 1 and c >
 (4 rows)
 
 create table rp_prefix_test3 (a int, b int, c int, d int) partition by range(a, b, c, d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test3_p1 partition of rp_prefix_test3 for values from (1, 1, 1, 0) to (1, 1, 1, 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test3_p2 partition of rp_prefix_test3 for values from (2, 2, 2, 0) to (2, 2, 2, 10);
@@ -4391,6 +4706,8 @@ explain (costs off) select * from rp_prefix_test3 where a >= 1 and b >= 1 and b 
 (4 rows)
 
 create table hp_prefix_test (a int, b int, c int, d int) partition by hash (a part_test_int4_ops, b part_test_int4_ops, c part_test_int4_ops, d part_test_int4_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp_prefix_test_p1 partition of hp_prefix_test for values with (modulus 2, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p2 partition of hp_prefix_test for values with (modulus 2, remainder 1);
@@ -4427,6 +4744,8 @@ using hash as
 operator 1 ===,
 function 2 part_hashint4_noop(int4, int8);
 create table hp_contradict_test (a int, b int) partition by hash (a part_test_int4_ops2, b part_test_int4_ops2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp_contradict_test_p1 partition of hp_contradict_test for values with (modulus 2, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_contradict_test_p2 partition of hp_contradict_test for values with (modulus 2, remainder 1);

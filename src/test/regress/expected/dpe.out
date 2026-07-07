@@ -107,6 +107,10 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 select * from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
+    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
     0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
     0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
     0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
@@ -121,10 +125,6 @@ select * from t, pt where tid = ptid;
     1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
     1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
     1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid + 1 = ptid;
@@ -153,16 +153,16 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 select * from t, pt where tid + 1 = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
-    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
-    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
-    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
     0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
     0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
     0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
     1 |   1 | hello1 | bar |    2 | hello2  | world | drop this |    2
     1 |   1 | hello1 | bar |    8 | hello8  | world | drop this |    2
+    0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
+    0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
+    0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
+    1 |   1 | hello1 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |   32 | hello32 | world | drop this |    2
     0 |   0 | hello0 | bar |    1 | hello1  | world | drop this |    1
     0 |   0 | hello0 | bar |   31 | hello31 | world | drop this |    1
     0 |   0 | hello0 | bar |   49 | hello49 | world | drop this |    1
@@ -338,16 +338,16 @@ select * from pt where exists (select 1 from t where tid = ptid and t1 = 'hello'
     1 | hello1  | world | drop this |    1
    31 | hello31 | world | drop this |    1
    49 | hello49 | world | drop this |    1
+    6 | hello6  | world | drop this |    0
+   13 | hello13 | world | drop this |    1
+   25 | hello25 | world | drop this |    1
+   43 | hello43 | world | drop this |    1
    18 | hello18 | world | drop this |    0
    24 | hello24 | world | drop this |    0
    42 | hello42 | world | drop this |    0
     7 | hello7  | world | drop this |    1
    19 | hello19 | world | drop this |    1
    37 | hello37 | world | drop this |    1
-    6 | hello6  | world | drop this |    0
-   13 | hello13 | world | drop this |    1
-   25 | hello25 | world | drop this |    1
-   43 | hello43 | world | drop this |    1
 (18 rows)
 
 --
@@ -490,20 +490,6 @@ select * from t, pt where tid = ptid
 	  select * from t, pt where tid + 2 = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
-    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
-    0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
-    0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
-    0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
-    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
-    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
-    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
-    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
-    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
-    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
-    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
-    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
     0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
     1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
     1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
@@ -526,6 +512,20 @@ select * from t, pt where tid = ptid
     1 |   1 | hello1 | bar |   39 | hello39 | world | drop this |    3
     1 |   1 | hello1 | bar |   45 | hello45 | world | drop this |    3
     1 |   1 | hello1 | bar |   51 | hello51 | world | drop this |    3
+    0 |   0 | hello0 | bar |    0 | hello0  | world | drop this |    0
+    0 |   0 | hello0 | bar |   12 | hello12 | world | drop this |    0
+    0 |   0 | hello0 | bar |   30 | hello30 | world | drop this |    0
+    0 |   0 | hello0 | bar |   36 | hello36 | world | drop this |    0
+    0 |   0 | hello0 | bar |   48 | hello48 | world | drop this |    0
+    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
+    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
+    1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
+    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
+    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
+    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
+    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
+    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
+    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
 (36 rows)
 
 --
@@ -600,7 +600,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 -------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
    ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 30
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
@@ -618,6 +618,10 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 select * from t, pt where tid = ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
+    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
+    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
     0 |   0 | hello0 | bar |   18 | hello18 | world | drop this |    0
     0 |   0 | hello0 | bar |   24 | hello24 | world | drop this |    0
     0 |   0 | hello0 | bar |   42 | hello42 | world | drop this |    0
@@ -632,10 +636,6 @@ select * from t, pt where tid = ptid;
     1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
     1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
     1 |   1 | hello1 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |    6 | hello6  | world | drop this |    0
-    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
 (18 rows)
 
 --
@@ -654,7 +654,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 ------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
    ->  Nested Loop (actual rows=1 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 1
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
@@ -693,7 +693,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 -------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
    ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 30
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
@@ -789,31 +789,6 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 select * from t, pt where tid < ptid;
  dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+---------+-------+-----------+------
-    0 |   0 | hello0 | bar |    1 | hello1  | world | drop this |    1
-    0 |   0 | hello0 | bar |   31 | hello31 | world | drop this |    1
-    0 |   0 | hello0 | bar |   49 | hello49 | world | drop this |    1
-    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
-    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
-    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
-    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
-    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
-    0 |   0 | hello0 | bar |   15 | hello15 | world | drop this |    3
-    0 |   0 | hello0 | bar |   40 | hello40 | world | drop this |    4
-    0 |   0 | hello0 | bar |   46 | hello46 | world | drop this |    4
-    0 |   0 | hello0 | bar |   23 | hello23 | world | drop this |    5
-    0 |   0 | hello0 | bar |   35 | hello35 | world | drop this |    5
-    0 |   0 | hello0 | bar |   47 | hello47 | world | drop this |    5
-    1 |   1 | hello1 | bar |   20 | hello20 | world | drop this |    2
-    1 |   1 | hello1 | bar |   26 | hello26 | world | drop this |    2
-    1 |   1 | hello1 | bar |   38 | hello38 | world | drop this |    2
-    1 |   1 | hello1 | bar |   44 | hello44 | world | drop this |    2
-    1 |   1 | hello1 | bar |   50 | hello50 | world | drop this |    2
-    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
-    1 |   1 | hello1 | bar |   40 | hello40 | world | drop this |    4
-    1 |   1 | hello1 | bar |   46 | hello46 | world | drop this |    4
-    1 |   1 | hello1 | bar |   23 | hello23 | world | drop this |    5
-    1 |   1 | hello1 | bar |   35 | hello35 | world | drop this |    5
-    1 |   1 | hello1 | bar |   47 | hello47 | world | drop this |    5
     0 |   0 | hello0 | bar |   13 | hello13 | world | drop this |    1
     0 |   0 | hello0 | bar |   25 | hello25 | world | drop this |    1
     0 |   0 | hello0 | bar |   43 | hello43 | world | drop this |    1
@@ -839,6 +814,31 @@ select * from t, pt where tid < ptid;
     1 |   1 | hello1 | bar |    5 | hello5  | world | drop this |    5
     1 |   1 | hello1 | bar |   11 | hello11 | world | drop this |    5
     1 |   1 | hello1 | bar |   17 | hello17 | world | drop this |    5
+    0 |   0 | hello0 | bar |    1 | hello1  | world | drop this |    1
+    0 |   0 | hello0 | bar |   31 | hello31 | world | drop this |    1
+    0 |   0 | hello0 | bar |   49 | hello49 | world | drop this |    1
+    0 |   0 | hello0 | bar |   20 | hello20 | world | drop this |    2
+    0 |   0 | hello0 | bar |   26 | hello26 | world | drop this |    2
+    0 |   0 | hello0 | bar |   38 | hello38 | world | drop this |    2
+    0 |   0 | hello0 | bar |   44 | hello44 | world | drop this |    2
+    0 |   0 | hello0 | bar |   50 | hello50 | world | drop this |    2
+    0 |   0 | hello0 | bar |   15 | hello15 | world | drop this |    3
+    0 |   0 | hello0 | bar |   40 | hello40 | world | drop this |    4
+    0 |   0 | hello0 | bar |   46 | hello46 | world | drop this |    4
+    0 |   0 | hello0 | bar |   23 | hello23 | world | drop this |    5
+    0 |   0 | hello0 | bar |   35 | hello35 | world | drop this |    5
+    0 |   0 | hello0 | bar |   47 | hello47 | world | drop this |    5
+    1 |   1 | hello1 | bar |   20 | hello20 | world | drop this |    2
+    1 |   1 | hello1 | bar |   26 | hello26 | world | drop this |    2
+    1 |   1 | hello1 | bar |   38 | hello38 | world | drop this |    2
+    1 |   1 | hello1 | bar |   44 | hello44 | world | drop this |    2
+    1 |   1 | hello1 | bar |   50 | hello50 | world | drop this |    2
+    1 |   1 | hello1 | bar |   15 | hello15 | world | drop this |    3
+    1 |   1 | hello1 | bar |   40 | hello40 | world | drop this |    4
+    1 |   1 | hello1 | bar |   46 | hello46 | world | drop this |    4
+    1 |   1 | hello1 | bar |   23 | hello23 | world | drop this |    5
+    1 |   1 | hello1 | bar |   35 | hello35 | world | drop this |    5
+    1 |   1 | hello1 | bar |   47 | hello47 | world | drop this |    5
     0 |   0 | hello0 | bar |    7 | hello7  | world | drop this |    1
     0 |   0 | hello0 | bar |   19 | hello19 | world | drop this |    1
     0 |   0 | hello0 | bar |   37 | hello37 | world | drop this |    1
@@ -913,6 +913,16 @@ explain (costs off, timing off, summary off, analyze) select * from t, t1, pt wh
 select * from t, t1, pt where t1.t2 = t.t2 and t1.tid = ptid;
  dist | tid |   t1   | t2  | dist | tid |   t1   | t2  | dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+-----+--------+-----+------+-----+--------+-----+------+---------+-------+-----------+------
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
+    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
+    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
+    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
+    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
+    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
     0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |    1 | hello1  | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   31 | hello31 | world | drop this |    1
@@ -929,16 +939,6 @@ select * from t, t1, pt where t1.t2 = t.t2 and t1.tid = ptid;
     0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   44 | hello44 | world | drop this |    2
     1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   50 | hello50 | world | drop this |    2
     0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   50 | hello50 | world | drop this |    2
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   13 | hello13 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   25 | hello25 | world | drop this |    1
-    1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |   43 | hello43 | world | drop this |    1
-    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
-    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   14 | hello14 | world | drop this |    2
-    1 |   1 | hello1 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
-    0 |   0 | hello0 | bar |    2 |   2 | hello2 | bar |   32 | hello32 | world | drop this |    2
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
     0 |   0 | hello0 | bar |    1 |   1 | hello1 | bar |    7 | hello7  | world | drop this |    1
     1 |   1 | hello1 | bar |    1 |   1 | hello1 | bar |   19 | hello19 | world | drop this |    1
@@ -1194,11 +1194,11 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 select * from t, pt where a = b;
  id | a | id | b 
 ----+---+----+---
+  0 | 0 |  0 | 0
+  1 | 1 |  1 | 1
   2 | 2 |  2 | 2
   3 | 3 |  3 | 3
   4 | 4 |  4 | 4
-  0 | 0 |  0 | 0
-  1 | 1 |  1 | 1
 (5 rows)
 
 rollback;
@@ -1296,7 +1296,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: ((fact1.pid = dim1.pid) AND (fact1.code = dim1.code))
@@ -1384,7 +1384,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: ((fact1.pid = dim1.pid) AND (fact1.code = dim1.code))
@@ -1477,7 +1477,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=100 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 83kB
+         Sort Method:  quicksort  Memory: 82kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=100 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -1615,7 +1615,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=100 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 83kB
+         Sort Method:  quicksort  Memory: 82kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=100 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -2229,7 +2229,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -2313,7 +2313,7 @@ explain (costs off, timing off, summary off, analyze) select * from dim1 inner j
    Merge Key: fact1.u
    ->  Sort (actual rows=50 loops=1)
          Sort Key: fact1.u
-         Sort Method:  quicksort  Memory: 79kB
+         Sort Method:  quicksort  Memory: 78kB
          Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
          ->  Hash Join (actual rows=50 loops=1)
                Hash Cond: (fact1.pid = dim1.pid)
@@ -2400,12 +2400,12 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
 -------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
    Merge Key: fact1.code
-   ->  Sort (actual rows=2 loops=1)
-         Sort Key: fact1.code
-         Sort Method:  quicksort  Memory: 75kB
-         Executor Memory: 82kB  Segments: 3  Max: 28kB (segment 0)
-         ->  HashAggregate (actual rows=2 loops=1)
-               Group Key: fact1.code
+   ->  GroupAggregate (actual rows=2 loops=1)
+         Group Key: fact1.code
+         ->  Sort (actual rows=100 loops=1)
+               Sort Key: fact1.code
+               Sort Method:  quicksort  Memory: 77kB
+               Executor Memory: 82kB  Segments: 3  Max: 28kB (segment 0)
                ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=100 loops=1)
                      Hash Key: fact1.code
                      ->  Hash Join (actual rows=100 loops=1)
@@ -2444,12 +2444,12 @@ explain (costs off, timing off, summary off, analyze) select fact1.code, count(*
 ---------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
    Merge Key: fact1.code
-   ->  Sort (actual rows=2 loops=1)
-         Sort Key: fact1.code
-         Sort Method:  quicksort  Memory: 75kB
-         Executor Memory: 82kB  Segments: 3  Max: 28kB (segment 0)
-         ->  HashAggregate (actual rows=2 loops=1)
-               Group Key: fact1.code
+   ->  GroupAggregate (actual rows=2 loops=1)
+         Group Key: fact1.code
+         ->  Sort (actual rows=100 loops=1)
+               Sort Key: fact1.code
+               Sort Method:  quicksort  Memory: 77kB
+               Executor Memory: 82kB  Segments: 3  Max: 28kB (segment 0)
                ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=100 loops=1)
                      Hash Key: fact1.code
                      ->  Hash Join (actual rows=100 loops=1)
@@ -2618,11 +2618,11 @@ explain (costs off, timing off, summary off, analyze) select * from apart as a, 
 select * from apart as a, b, c where a.t = b.t and a.id = c.id;
  id | t | id | t | id | t 
 ----+---+----+---+----+---
-  1 | 1 |  1 | 1 |  1 | 1
-  5 | 5 |  5 | 5 |  5 | 5
   2 | 2 |  2 | 2 |  2 | 2
   3 | 3 |  3 | 3 |  3 | 3
   4 | 4 |  4 | 4 |  4 | 4
+  5 | 5 |  5 | 5 |  5 | 5
+  1 | 1 |  1 | 1 |  1 | 1
 (5 rows)
 
 set gp_dynamic_partition_pruning = on;
@@ -2657,11 +2657,11 @@ explain (costs off, timing off, summary off, analyze) select * from apart as a, 
 select * from apart as a, b, c where a.t = b.t and a.id = c.id;
  id | t | id | t | id | t 
 ----+---+----+---+----+---
-  5 | 5 |  5 | 5 |  5 | 5
-  1 | 1 |  1 | 1 |  1 | 1
   2 | 2 |  2 | 2 |  2 | 2
   3 | 3 |  3 | 3 |  3 | 3
   4 | 4 |  4 | 4 |  4 | 4
+  5 | 5 |  5 | 5 |  5 | 5
+  1 | 1 |  1 | 1 |  1 | 1
 (5 rows)
 
 --
@@ -2932,15 +2932,14 @@ explain (analyze, timing off, summary off)
 select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t.sk;
                                                                    QUERY PLAN                                                                   
 ------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000015.55..10000000015.64 rows=7 width=24) (actual rows=5 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000008.18..10000000014.83 rows=7 width=24) (actual rows=5 loops=1)
    Merge Key: pt.ptid, t.sk
-   ->  Sort  (cost=10000000015.55..10000000015.55 rows=2 width=24) (actual rows=2 loops=1)
+   ->  Incremental Sort  (cost=10000000008.18..10000000014.74 rows=2 width=24) (actual rows=2 loops=1)
          Sort Key: pt.ptid, t.sk
-         Sort Method:  quicksort  Memory: 75kB
-         Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
-         ->  Merge Join  (cost=10000000003.82..10000000015.46 rows=2 width=24) (actual rows=2 loops=1)
+         Presorted Key: pt.ptid
+         ->  Merge Join  (cost=10000000003.00..10000000014.64 rows=2 width=24) (actual rows=2 loops=1)
                Merge Cond: (pt.ptid = t.tid)
-               Join Filter: (pt.dist = t.dist)
+               Join Filter: (t.dist = pt.dist)
                ->  Merge Append  (cost=0.85..446.48 rows=39 width=12) (actual rows=3 loops=1)
                      Sort Key: pt.ptid
                      ->  Index Scan using pt1_ptid_sk_idx on pt1 pt_1  (cost=0.12..8.14 rows=1 width=12) (actual rows=1 loops=1)
@@ -2951,10 +2950,10 @@ select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t
                      ->  Index Scan using ptdefault_ptid_sk_idx on ptdefault pt_6  (cost=0.14..405.00 rows=34 width=12) (actual rows=2 loops=1)
                ->  Sort  (cost=10000000002.15..10000000002.23 rows=33 width=12) (actual rows=19 loops=2)
                      Sort Key: t.tid
-                     Sort Method:  quicksort  Memory: 80kB
+                     Sort Method:  quicksort  Memory: 78kB
                      Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
                      ->  Partition Selector (selector id: $0)  (cost=10000000000.00..10000000001.33 rows=33 width=12) (actual rows=37 loops=1)
                            ->  Seq Scan on t  (cost=10000000000.00..10000000001.33 rows=33 width=12) (actual rows=37 loops=1)
  Optimizer: Postgres query optimizer
-(24 rows)
+(23 rows)
 
