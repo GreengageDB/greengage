@@ -116,9 +116,18 @@ ExecInitTupleSplit(TupleSplit *node, EState *estate, int eflags)
 
 	/*
 	 * fetch all columns which is not referenced by all DQAs
+	 *
+	 * Use 1-based attribute numbers (resnos), matching grpColIdx, the DQA
+	 * TargetEntry resnos, and the null-out loop in ExecTupleSplit.  A 0-based
+	 * loop here omits the highest resno and adds a bogus member 0: harmless
+	 * while the last column is also a group key or DQA argument (it gets
+	 * re-added via grpbySet / dqa_split_bms), but if it is a plain pass-through
+	 * (e.g. a GROUP BY column dropped from the group key because it is
+	 * equivalence-class-redundant with another) it is wrongly nulled out,
+	 * surfacing as a NULL in the final result.
 	 */
 	Bitmapset *all_input_attr_bms = NULL;
-	for (int id = 0; id < list_length(outerPlan(node)->targetlist); id++)
+	for (int id = 1; id <= list_length(outerPlan(node)->targetlist); id++)
 		all_input_attr_bms = bms_add_member(all_input_attr_bms, id);
 
 	Bitmapset *dqa_not_used_bms = all_input_attr_bms;
