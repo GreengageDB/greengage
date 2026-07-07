@@ -288,6 +288,25 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 		return;
 
 	/*
+	 * Degenerate case: the query has a GROUP BY, but every grouping column was
+	 * provably constant (e.g. "GROUP BY region ... WHERE region = 'x'") and was
+	 * therefore dropped from processed_groupClause, leaving it empty while the
+	 * columns are still referenced in the target as ordinary Vars.  A two-stage
+	 * split would build a plain (numCols == 0) partial Agg that still projects
+	 * those pass-through Vars.  Such a plain Agg emits one row on every segment
+	 * even where its input is empty, and projecting a Var from the empty
+	 * representative tuple trips the EEOP_ASSIGN_*_VAR assert in
+	 * execExprInterp.c; even without asserts the value picked for the
+	 * pass-through column would be non-deterministic across segments.  Leave
+	 * this case to the single-stage gather+Agg path, whose representative tuple
+	 * is read from the gathered, non-empty input.  (Grouping sets keep their
+	 * own group columns, so they are unaffected.)
+	 */
+	if (parse->groupClause != NIL && root->processed_groupClause == NIL &&
+		!parse->groupingSets)
+		return;
+
+	/*
 	 * Is the input hashable / sortable? This is largely the same logic as in
 	 * upstream create_grouping_paths(), but we can do hashing in limited ways
 	 * even if there are DISTINCT aggs or grouping setst.
