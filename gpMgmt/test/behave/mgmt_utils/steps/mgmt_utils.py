@@ -3337,9 +3337,19 @@ def step_impl(context):
 
             ## check postgresql.conf
             remote_postgresql_conf = "%s/%s" % (datadir, 'postgresql.conf')
-            local_conf_copy = os.path.join(gp.get_coordinatordatadir(), "%s.%s" % ('postgresql.conf', hostname))
+            # The local copy name must be unique per segment: on a single-host
+            # cluster every segment shares one hostname, so keying only on
+            # hostname makes all segments rsync into the same file.  Because the
+            # per-segment postgresql.conf files differ only in the port digit
+            # (identical size) and are often written within the same second
+            # (identical mtime), rsync's default size+mtime quick-check can skip
+            # the transfer and leave the previous segment's copy in place, so we
+            # would read a stale port and report a spurious mismatch.  Key on
+            # dbid and force rsync to compare by checksum.
+            local_conf_copy = os.path.join(gp.get_coordinatordatadir(),
+                                           "postgresql.conf.%s.%s" % (hostname, segment[0]))
             cmd = Command(name="Copy remote conf to local to diff",
-                        cmdStr='rsync %s:%s %s' % (hostname, remote_postgresql_conf, local_conf_copy))
+                        cmdStr='rsync -c %s:%s %s' % (hostname, remote_postgresql_conf, local_conf_copy))
             cmd.run(validateAfter=True)
 
             dic = pgconf.readfile(filename=local_conf_copy)
