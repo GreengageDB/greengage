@@ -31,7 +31,18 @@
 -- s/Max: \d+kB/Max: ###kB/
 -- m/segment \d+/
 -- s/segment \d+/segment ###/
+-- m/->  Partial Aggregate \(/
+-- s/actual rows=\d+ loops=\d+/actual rows=N loops=N/
+-- m/->  Seq Scan on lprt_a/
+-- s/actual rows=\d+ loops=\d+/actual rows=N loops=N/
+-- m/(Partial Aggregate|Seq Scan on lprt_a).* \(never executed\)/
+-- s/\(never executed\)/(actual rows=N loops=N)/
 -- end_matchsubs
+-- start_matchignore
+-- m/^ +Partitions scanned:/
+-- m/^ +Extra Text: /
+-- m/^ +Executor Memory: /
+-- end_matchignore
 -- Force generic plans to be used for all prepared statements in this file.
 set plan_cache_mode = force_generic_plan;
 create table lp (a char) partition by list (a);
