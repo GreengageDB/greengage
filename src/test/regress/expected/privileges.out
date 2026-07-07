@@ -52,21 +52,117 @@ CREATE USER regress_priv_user10;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_priv_role;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
+-- circular ADMIN OPTION grants should be disallowed
+GRANT regress_priv_user1 TO regress_priv_user2 WITH ADMIN OPTION;
+GRANT regress_priv_user1 TO regress_priv_user3 WITH ADMIN OPTION GRANTED BY regress_priv_user2;
+GRANT regress_priv_user1 TO regress_priv_user2 WITH ADMIN OPTION GRANTED BY regress_priv_user3;
+ERROR:  ADMIN option cannot be granted back to your own grantor
+-- need CASCADE to revoke grant or admin option if dependent grants exist
+REVOKE ADMIN OPTION FOR regress_priv_user1 FROM regress_priv_user2; -- fail
+ERROR:  dependent privileges exist
+HINT:  Use CASCADE to revoke them too.
+REVOKE regress_priv_user1 FROM regress_priv_user2; -- fail
+ERROR:  dependent privileges exist
+HINT:  Use CASCADE to revoke them too.
+SELECT member::regrole, admin_option FROM pg_auth_members WHERE roleid = 'regress_priv_user1'::regrole;
+       member       | admin_option 
+--------------------+--------------
+ regress_priv_user2 | t
+ regress_priv_user3 | t
+(2 rows)
+
+BEGIN;
+REVOKE ADMIN OPTION FOR regress_priv_user1 FROM regress_priv_user2 CASCADE;
+SELECT member::regrole, admin_option FROM pg_auth_members WHERE roleid = 'regress_priv_user1'::regrole;
+       member       | admin_option 
+--------------------+--------------
+ regress_priv_user2 | f
+(1 row)
+
+ROLLBACK;
+REVOKE regress_priv_user1 FROM regress_priv_user2 CASCADE;
+SELECT member::regrole, admin_option FROM pg_auth_members WHERE roleid = 'regress_priv_user1'::regrole;
+ member | admin_option 
+--------+--------------
+(0 rows)
+
+-- inferred grantor must be a role with ADMIN OPTION
+GRANT regress_priv_user1 TO regress_priv_user2 WITH ADMIN OPTION;
+GRANT regress_priv_user2 TO regress_priv_user3;
+SET ROLE regress_priv_user3;
+GRANT regress_priv_user1 TO regress_priv_user4;
+SELECT grantor::regrole FROM pg_auth_members WHERE roleid = 'regress_priv_user1'::regrole and member = 'regress_priv_user4'::regrole;
+      grantor       
+--------------------
+ regress_priv_user2
+(1 row)
+
+RESET ROLE;
+REVOKE regress_priv_user2 FROM regress_priv_user3;
+REVOKE regress_priv_user1 FROM regress_priv_user2 CASCADE;
+-- test GRANTED BY with DROP OWNED and REASSIGN OWNED
+GRANT regress_priv_user1 TO regress_priv_user2 WITH ADMIN OPTION;
+GRANT regress_priv_user1 TO regress_priv_user3 GRANTED BY regress_priv_user2;
+DROP ROLE regress_priv_user2; -- fail, dependency
+ERROR:  role "regress_priv_user2" cannot be dropped because some objects depend on it
+DETAIL:  privileges for membership of role regress_priv_user3 in role regress_priv_user1
+REASSIGN OWNED BY regress_priv_user2 TO regress_priv_user4;
+DROP ROLE regress_priv_user2; -- still fail, REASSIGN OWNED doesn't help
+ERROR:  role "regress_priv_user2" cannot be dropped because some objects depend on it
+DETAIL:  privileges for membership of role regress_priv_user3 in role regress_priv_user1
+DROP OWNED BY regress_priv_user2;
+DROP ROLE regress_priv_user2; -- ok now, DROP OWNED does the job
+-- test that removing granted role or grantee role removes dependency
+GRANT regress_priv_user1 TO regress_priv_user3 WITH ADMIN OPTION;
+GRANT regress_priv_user1 TO regress_priv_user4 GRANTED BY regress_priv_user3;
+DROP ROLE regress_priv_user3; -- should fail, dependency
+ERROR:  role "regress_priv_user3" cannot be dropped because some objects depend on it
+DETAIL:  privileges for membership of role regress_priv_user4 in role regress_priv_user1
+DROP ROLE regress_priv_user4; -- ok
+DROP ROLE regress_priv_user3; -- ok now
+GRANT regress_priv_user1 TO regress_priv_user5 WITH ADMIN OPTION;
+GRANT regress_priv_user1 TO regress_priv_user6 GRANTED BY regress_priv_user5;
+DROP ROLE regress_priv_user5; -- should fail, dependency
+ERROR:  role "regress_priv_user5" cannot be dropped because some objects depend on it
+DETAIL:  privileges for membership of role regress_priv_user6 in role regress_priv_user1
+DROP ROLE regress_priv_user1, regress_priv_user5; -- ok, despite order
+-- recreate the roles we just dropped
+CREATE USER regress_priv_user1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER regress_priv_user2;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER regress_priv_user3;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER regress_priv_user4;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER regress_priv_user5;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT pg_read_all_data TO regress_priv_user6;
 GRANT pg_write_all_data TO regress_priv_user7;
 GRANT pg_read_all_settings TO regress_priv_user8 WITH ADMIN OPTION;
+GRANT regress_priv_user9 TO regress_priv_user8;
 SET SESSION AUTHORIZATION regress_priv_user8;
 GRANT pg_read_all_settings TO regress_priv_user9 WITH ADMIN OPTION;
 SET SESSION AUTHORIZATION regress_priv_user9;
 GRANT pg_read_all_settings TO regress_priv_user10;
 SET SESSION AUTHORIZATION regress_priv_user8;
-REVOKE pg_read_all_settings FROM regress_priv_user10;
+REVOKE pg_read_all_settings FROM regress_priv_user10 GRANTED BY regress_priv_user9;
 REVOKE ADMIN OPTION FOR pg_read_all_settings FROM regress_priv_user9;
 REVOKE pg_read_all_settings FROM regress_priv_user9;
 RESET SESSION AUTHORIZATION;
+REVOKE regress_priv_user9 FROM regress_priv_user8;
 REVOKE ADMIN OPTION FOR pg_read_all_settings FROM regress_priv_user8;
 SET SESSION AUTHORIZATION regress_priv_user8;
 SET ROLE pg_read_all_settings;
+RESET ROLE;
+RESET SESSION AUTHORIZATION;
+REVOKE SET OPTION FOR pg_read_all_settings FROM regress_priv_user8;
+GRANT pg_read_all_stats TO regress_priv_user8 WITH SET FALSE;
+SET SESSION AUTHORIZATION regress_priv_user8;
+SET ROLE pg_read_all_settings;  -- fail, no SET option any more
+ERROR:  permission denied to set role "pg_read_all_settings"
+SET ROLE pg_read_all_stats;     -- fail, granted without SET option
+ERROR:  permission denied to set role "pg_read_all_stats"
 RESET ROLE;
 RESET SESSION AUTHORIZATION;
 REVOKE pg_read_all_settings FROM regress_priv_user8;
@@ -75,12 +171,22 @@ DROP USER regress_priv_user9;
 DROP USER regress_priv_user8;
 CREATE GROUP regress_priv_group1;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
-CREATE GROUP regress_priv_group2 WITH USER regress_priv_user1, regress_priv_user2;
+CREATE GROUP regress_priv_group2 WITH ADMIN regress_priv_user1 USER regress_priv_user2;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER GROUP regress_priv_group1 ADD USER regress_priv_user4;
+GRANT regress_priv_group2 TO regress_priv_user2 GRANTED BY regress_priv_user1;
+SET SESSION AUTHORIZATION regress_priv_user1;
+ALTER GROUP regress_priv_group2 ADD USER regress_priv_user2;
+NOTICE:  role "regress_priv_user2" has already been granted membership in role "regress_priv_group2" by role "regress_priv_user1"
 ALTER GROUP regress_priv_group2 ADD USER regress_priv_user2;	-- duplicate
-NOTICE:  role "regress_priv_user2" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user2" has already been granted membership in role "regress_priv_group2" by role "regress_priv_user1"
 ALTER GROUP regress_priv_group2 DROP USER regress_priv_user2;
+ALTER USER regress_priv_user2 PASSWORD 'verysecret'; -- not permitted
+ERROR:  permission denied to alter role
+DETAIL:  To change another role's password, the current user must have the CREATEROLE attribute and the ADMIN option on the role.
+RESET SESSION AUTHORIZATION;
+ALTER GROUP regress_priv_group2 DROP USER regress_priv_user2;
+REVOKE ADMIN OPTION FOR regress_priv_group2 FROM regress_priv_user1;
 GRANT regress_priv_group2 TO regress_priv_user4 WITH ADMIN OPTION;
 -- prepare non-leakproof function for later
 CREATE FUNCTION leak(integer,integer) RETURNS boolean
@@ -88,9 +194,17 @@ CREATE FUNCTION leak(integer,integer) RETURNS boolean
   LANGUAGE internal IMMUTABLE STRICT;  -- but deliberately not LEAKPROOF
 ALTER FUNCTION leak(integer,integer) OWNER TO regress_priv_user1;
 -- test owner privileges
+GRANT regress_priv_role TO regress_priv_user1 WITH ADMIN OPTION GRANTED BY regress_priv_role; -- error, doesn't have ADMIN OPTION
+ERROR:  permission denied to grant privileges as role "regress_priv_role"
+DETAIL:  The grantor must have the ADMIN option on role "regress_priv_role".
 GRANT regress_priv_role TO regress_priv_user1 WITH ADMIN OPTION GRANTED BY CURRENT_ROLE;
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY foo; -- error
-REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY regress_priv_user2; -- error
+ERROR:  role "foo" does not exist
+REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY regress_priv_user2; -- warning, noop
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg0 172.17.0.2:7002 pid=20273)
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg1 172.17.0.2:7003 pid=20267)
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg2 172.17.0.2:7004 pid=20269)
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_USER;
 REVOKE regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_ROLE;
 DROP ROLE regress_priv_role;
@@ -129,6 +243,8 @@ SELECT * FROM atest1;
 (0 rows)
 
 CREATE TABLE atest2 (col1 varchar(10), col2 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT ON atest2 TO regress_priv_user2;
 GRANT UPDATE ON atest2 TO regress_priv_user3;
 GRANT INSERT ON atest2 TO regress_priv_user4 GRANTED BY CURRENT_USER;
@@ -282,6 +398,8 @@ SELECT * FROM atest1; -- ok
 SET SESSION AUTHORIZATION regress_priv_user1;
 CREATE TABLE atest12 as
   SELECT x AS a, 10001 - x AS b FROM generate_series(1,10000) x;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX ON atest12 (a);
 CREATE INDEX ON atest12 (abs(a));
 -- results below depend on having quite accurate stats for atest12, so...
@@ -473,6 +591,8 @@ NOTICE:  drop cascades to operator >>>(integer,integer)
 -- groups
 SET SESSION AUTHORIZATION regress_priv_user3;
 CREATE TABLE atest3 (one int, two int, three int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'one' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT DELETE ON atest3 TO GROUP regress_priv_group2;
 SET SESSION AUTHORIZATION regress_priv_user1;
 SELECT * FROM atest3; -- fail
@@ -482,7 +602,19 @@ BEGIN;
 RESET SESSION AUTHORIZATION;
 ALTER ROLE regress_priv_user1 NOINHERIT;
 SET SESSION AUTHORIZATION regress_priv_user1;
-DELETE FROM atest3;
+SAVEPOINT s1;
+DELETE FROM atest3; -- ok because grant-level option is unchanged
+ROLLBACK TO s1;
+RESET SESSION AUTHORIZATION;
+GRANT regress_priv_group2 TO regress_priv_user1 WITH INHERIT FALSE;
+SET SESSION AUTHORIZATION regress_priv_user1;
+DELETE FROM atest3; -- fail
+ERROR:  permission denied for table atest3
+ROLLBACK TO s1;
+RESET SESSION AUTHORIZATION;
+REVOKE INHERIT OPTION FOR regress_priv_group2 FROM regress_priv_user1;
+SET SESSION AUTHORIZATION regress_priv_user1;
+DELETE FROM atest3; -- also fail
 ERROR:  permission denied for table atest3
 ROLLBACK;
 -- views
@@ -564,6 +696,8 @@ ERROR:  permission denied for table atest2
 SET SESSION AUTHORIZATION regress_priv_user1;
 CREATE TABLE atest5 (one int, two int unique, three int, four int unique) distributed replicated;
 CREATE TABLE atest6 (one int, two int, blue int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'one' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT (one), INSERT (two), UPDATE (three) ON atest5 TO regress_priv_user4;
 GRANT ALL (one) ON atest5 TO regress_priv_user3;
 INSERT INTO atest5 VALUES (1,2,3);
@@ -762,7 +896,11 @@ COPY atest6 TO stdout; -- ok
 -- test column privileges with MERGE
 SET SESSION AUTHORIZATION regress_priv_user1;
 CREATE TABLE mtarget (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE msource (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mtarget VALUES (1, 'init1'), (2, 'init2');
 INSERT INTO msource VALUES (1, 'source1'), (2, 'source2'), (3, 'source3');
 GRANT SELECT (a) ON msource TO regress_priv_user4;
@@ -871,27 +1009,33 @@ INSERT INTO t1 VALUES (2, 2, 2);
 INSERT INTO t1 VALUES (3, 1, 3);
 SET SESSION AUTHORIZATION regress_priv_user2;
 INSERT INTO t1 (c1, c2) VALUES (1, 1); -- fail, but row not shown
-ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.3:7003 pid=545512)
+ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=20267)
 UPDATE t1 SET c2 = 1; -- fail, but row not shown
-ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg0 172.17.0.3:7002 pid=545509)
+ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=20267)
 INSERT INTO t1 (c1, c2) VALUES (null, null); -- fail, but see columns being inserted
-ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.3:7002 pid=545509)
+ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=20273)
 DETAIL:  Failing row contains (c1, c2) = (null, null).
 INSERT INTO t1 (c3) VALUES (null); -- fail, but see columns being inserted or have SELECT
-ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.3:7002 pid=545509)
+ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=20273)
 DETAIL:  Failing row contains (c1, c3) = (null, null).
 INSERT INTO t1 (c1) VALUES (5); -- fail, but see columns being inserted or have SELECT
-ERROR:  null value in column "c2" of relation "t1" violates not-null constraint  (seg1 172.17.0.3:7003 pid=545512)
+ERROR:  null value in column "c2" of relation "t1" violates not-null constraint  (seg1 172.17.0.2:7003 pid=20267)
 DETAIL:  Failing row contains (c1) = (5).
 UPDATE t1 SET c3 = 10; -- fail, but see columns with SELECT rights, or being modified
-ERROR:  new row for relation "t1" violates check constraint "t1_c3_check"  (seg2 172.17.0.3:7004 pid=545513)
-DETAIL:  Failing row contains (c1, c3) = (3, 10).
+ERROR:  new row for relation "t1" violates check constraint "t1_c3_check"  (seg1 172.17.0.2:7003 pid=20267)
+DETAIL:  Failing row contains (c1, c3) = (1, 10).
 SET SESSION AUTHORIZATION regress_priv_user1;
 DROP TABLE t1;
 -- check error reporting with column privs on a partitioned table
 CREATE TABLE errtst(a text, b text NOT NULL, c text, secret1 text, secret2 text) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE errtst_part_1(secret2 text, c text, a text, b text NOT NULL, secret1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'secret2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE errtst_part_2(secret1 text, secret2 text, a text, c text, b text NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'secret1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE errtst ATTACH PARTITION errtst_part_1 FOR VALUES IN ('aaa');
 ERROR:  distribution policy for "errtst_part_1" must be the same as that for "errtst"
 ALTER TABLE errtst ATTACH PARTITION errtst_part_2 FOR VALUES IN ('aaaa');
@@ -906,7 +1050,7 @@ SET SESSION AUTHORIZATION regress_priv_user2;
 -- the error messages don't leak the secret fields.
 -- simple insert.
 INSERT INTO errtst (a, b) VALUES ('aaa', NULL);
-ERROR:  no partition of relation "errtst" found for row  (seg1 172.17.0.3:7003 pid=545512)
+ERROR:  no partition of relation "errtst" found for row  (seg1 172.17.0.2:7003 pid=20267)
 DETAIL:  Partition key of the failing row contains (a) = (aaa).
 -- simple update.
 UPDATE errtst SET b = NULL;
@@ -961,7 +1105,11 @@ DELETE FROM atest5 WHERE two = 2; -- ok
 -- check inheritance cases
 SET SESSION AUTHORIZATION regress_priv_user1;
 CREATE TABLE atestp1 (f1 int, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE atestp2 (fx int, fy int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fx' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE atestc (fz int) INHERITS (atestp1, atestp2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 GRANT SELECT(fx,fy,tableoid) ON atestp2 TO regress_priv_user2;
@@ -1184,12 +1332,20 @@ ERROR:  permission denied for type priv_testdomain1
 CREATE OPERATOR !+! (PROCEDURE = int4pl, LEFTARG = priv_testdomain1, RIGHTARG = priv_testdomain1);
 ERROR:  permission denied for type priv_testdomain1
 CREATE TABLE test5a (a int, b priv_testdomain1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  permission denied for type priv_testdomain1
 CREATE TABLE test6a OF priv_testtype1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  permission denied for type priv_testtype1
 CREATE TABLE test10a (a int[], b priv_testtype1[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  permission denied for type priv_testtype1
 CREATE TABLE test9a (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE test9a ADD COLUMN c priv_testdomain1;
 ERROR:  permission denied for type priv_testdomain1
 ALTER TABLE test9a ALTER COLUMN b TYPE priv_testdomain1;
@@ -1202,6 +1358,8 @@ ERROR:  permission denied for type priv_testdomain1
 ALTER TYPE test8a ALTER ATTRIBUTE b TYPE priv_testdomain1;
 ERROR:  permission denied for type priv_testdomain1
 CREATE TABLE test11a AS (SELECT 1::priv_testdomain1 AS a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  permission denied for type priv_testdomain1
 REVOKE ALL ON TYPE priv_testtype1 FROM PUBLIC;
 ERROR:  permission denied for type priv_testtype1
@@ -1213,16 +1371,24 @@ CREATE DOMAIN priv_testdomain3b AS int;
 CREATE FUNCTION castfunc(int) RETURNS priv_testdomain3b AS $$ SELECT $1::priv_testdomain3b $$ LANGUAGE SQL;
 CREATE CAST (priv_testdomain1 AS priv_testdomain3b) WITH FUNCTION castfunc(int);
 WARNING:  cast will be ignored because the source data type is a domain
-WARNING:  cast will be ignored because the source data type is a domain  (seg2 172.17.0.3:7004 pid=546319)
-WARNING:  cast will be ignored because the source data type is a domain  (seg1 172.17.0.3:7003 pid=546317)
-WARNING:  cast will be ignored because the source data type is a domain  (seg0 172.17.0.3:7002 pid=546318)
+WARNING:  cast will be ignored because the source data type is a domain  (seg2 172.17.0.2:7004 pid=21165)
+WARNING:  cast will be ignored because the source data type is a domain  (seg1 172.17.0.2:7003 pid=21164)
+WARNING:  cast will be ignored because the source data type is a domain  (seg0 172.17.0.2:7002 pid=21163)
 CREATE FUNCTION priv_testfunc5b(a priv_testdomain1) RETURNS int LANGUAGE SQL AS $$ SELECT $1 $$;
 CREATE FUNCTION priv_testfunc6b(b int) RETURNS priv_testdomain1 LANGUAGE SQL AS $$ SELECT $1::priv_testdomain1 $$;
 CREATE OPERATOR !! (PROCEDURE = priv_testfunc5b, RIGHTARG = priv_testdomain1);
 CREATE TABLE test5b (a int, b priv_testdomain1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test6b OF priv_testtype1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test10b (a int[], b priv_testtype1[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test9b (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE test9b ADD COLUMN c priv_testdomain1;
 ALTER TABLE test9b ALTER COLUMN b TYPE priv_testdomain1;
 CREATE TYPE test7b AS (a int, b priv_testdomain1);
@@ -1230,6 +1396,8 @@ CREATE TYPE test8b AS (a int, b int);
 ALTER TYPE test8b ADD ATTRIBUTE c priv_testdomain1;
 ALTER TYPE test8b ALTER ATTRIBUTE b TYPE priv_testdomain1;
 CREATE TABLE test11b AS (SELECT 1::priv_testdomain1 AS a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REVOKE ALL ON TYPE priv_testtype1 FROM PUBLIC;
 WARNING:  no privileges could be revoked for "priv_testtype1"
 NOTICE:  no privileges could be revoked
@@ -1573,6 +1741,8 @@ select has_column_privilege(9999,99::int2,'select');
 (1 row)
 
 create temp table mytable(f1 int, f2 int, f3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mytable drop column f2;
 select has_column_privilege('mytable','f2','select');
 ERROR:  column "f2" of relation "mytable" does not exist
@@ -1611,6 +1781,8 @@ drop table mytable;
 -- Grant options
 SET SESSION AUTHORIZATION regress_priv_user1;
 CREATE TABLE atest4 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT ON atest4 TO regress_priv_user2 WITH GRANT OPTION;
 GRANT UPDATE ON atest4 TO regress_priv_user2;
 GRANT SELECT ON atest4 TO GROUP regress_priv_group1 WITH GRANT OPTION;
@@ -1665,6 +1837,8 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 -- Create a table owned by regress_sro_user
 CREATE TABLE sro_tab (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE sro_tab OWNER TO regress_sro_user;
 INSERT INTO sro_tab VALUES (1), (2), (3);
 -- Create an expression index with a predicate
@@ -1698,11 +1872,13 @@ SELECT brin_desummarize_range('sro_brin', 0);
 (1 row)
 
 SELECT brin_summarize_range('sro_brin', 0);
-ERROR:  Greenplum could not summarize indicated page range  (seg1 slice1 172.17.0.3:7003 pid=546455)
+ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=21262)
 CONTEXT:  SQL function "brin_summarize_range" statement 1
 DROP TABLE sro_tab;
 -- Check with a partitioned table
 CREATE TABLE sro_ptab (a int) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE sro_ptab OWNER TO regress_sro_user;
 CREATE TABLE sro_part PARTITION OF sro_ptab FOR VALUES FROM (1) TO (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1720,6 +1896,8 @@ CREATE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELECT true';
 -- REFRESH of this MV will queue a GRANT at end of transaction
 CREATE MATERIALIZED VIEW sro_mv AS SELECT mv_action() WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot create a cursor WITH HOLD within security-restricted operation
 CONTEXT:  SQL function "mv_action" statement 1
@@ -1730,6 +1908,7 @@ CONTEXT:  SQL function "mv_action" statement 1
 SET SESSION AUTHORIZATION regress_sro_user;
 -- INSERT to this table will queue a GRANT at end of transaction
 CREATE TABLE sro_trojan_table ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE FUNCTION sro_trojan() RETURNS trigger LANGUAGE plpgsql AS
 	'BEGIN PERFORM unwanted_grant(); RETURN NULL; END';
 CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
@@ -1738,14 +1917,14 @@ CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
 CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.3:7002 pid=546495)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21289)
 CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.3:7002 pid=546507)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21307)
 CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.3:7002 pid=546507)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:7004 pid=21308)
 CONTEXT:  SQL function "unwanted_grant" during startup
 SQL statement "SELECT unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
@@ -1762,9 +1941,13 @@ EXCEPTION WHEN OTHERS THEN
 	RETURN 2;
 END$$;
 CREATE MATERIALIZED VIEW sro_index_mv AS SELECT 1 AS c;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX ON sro_index_mv (c) WHERE unwanted_grant_nofail(1) > 0;
 \c -
 REFRESH MATERIALIZED VIEW CONCURRENTLY sro_index_mv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW sro_index_mv;
 DROP OWNED BY regress_sro_user;
 DROP ROLE regress_sro_user;
@@ -1775,12 +1958,14 @@ CREATE FUNCTION dogrant_ok() RETURNS void LANGUAGE sql SECURITY DEFINER AS
 GRANT regress_priv_group2 TO regress_priv_user5; -- ok: had ADMIN OPTION
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE suspended privilege
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_user1;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: no ADMIN OPTION
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SELECT dogrant_ok();			-- ok: SECURITY DEFINER conveys ADMIN
-NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user5" has already been granted membership in role "regress_priv_group2" by role "regress_priv_user4"
  dogrant_ok 
 ------------
  
@@ -1788,10 +1973,12 @@ NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_gro
 
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE did not help
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: no self-admin
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_user4;
 DROP FUNCTION dogrant_ok();
 REVOKE regress_priv_group2 FROM regress_priv_user5;
@@ -1959,10 +2146,11 @@ ERROR:  permission denied for table pg_largeobject
 -- test pg_database_owner
 RESET SESSION AUTHORIZATION;
 GRANT pg_database_owner TO regress_priv_user1;
-ERROR:  role "pg_database_owner" cannot have explicit members (user.c:2001)
+ERROR:  role "pg_database_owner" cannot have explicit members (user.c:3215)
 GRANT regress_priv_user1 TO pg_database_owner;
-ERROR:  role "pg_database_owner" cannot be a member of any role (user.c:2047)
+ERROR:  role "pg_database_owner" cannot be a member of any role (user.c:2332)
 CREATE TABLE datdba_only ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ALTER TABLE datdba_only OWNER TO pg_database_owner;
 REVOKE DELETE ON datdba_only FROM pg_database_owner;
 SELECT
@@ -2022,6 +2210,8 @@ ROLLBACK;
 CREATE SCHEMA testns;
 GRANT ALL ON SCHEMA testns TO regress_priv_user1;
 CREATE TABLE testns.acltest1 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'SELECT'); -- no
  has_table_privilege 
 ---------------------
@@ -2050,6 +2240,8 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'INSERT'); -
 
 DROP TABLE testns.acltest1;
 CREATE TABLE testns.acltest1 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'SELECT'); -- yes
  has_table_privilege 
 ---------------------
@@ -2065,6 +2257,8 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'INSERT'); -
 ALTER DEFAULT PRIVILEGES IN SCHEMA testns GRANT INSERT ON TABLES TO regress_priv_user1;
 DROP TABLE testns.acltest1;
 CREATE TABLE testns.acltest1 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'SELECT'); -- yes
  has_table_privilege 
 ---------------------
@@ -2080,6 +2274,8 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'INSERT'); -
 ALTER DEFAULT PRIVILEGES IN SCHEMA testns REVOKE INSERT ON TABLES FROM regress_priv_user1;
 DROP TABLE testns.acltest1;
 CREATE TABLE testns.acltest1 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'SELECT'); -- yes
  has_table_privilege 
 ---------------------
@@ -2095,6 +2291,67 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.acltest1', 'INSERT'); -
 ALTER DEFAULT PRIVILEGES FOR ROLE regress_priv_user1 REVOKE EXECUTE ON FUNCTIONS FROM public;
 ALTER DEFAULT PRIVILEGES IN SCHEMA testns GRANT USAGE ON SCHEMAS TO regress_priv_user2; -- error
 ERROR:  cannot use IN SCHEMA clause when using GRANT/REVOKE ON SCHEMAS
+-- Test makeaclitem()
+SELECT makeaclitem('regress_priv_user1'::regrole, 'regress_priv_user2'::regrole,
+	'SELECT', TRUE);  -- single privilege
+               makeaclitem                
+------------------------------------------
+ regress_priv_user1=r*/regress_priv_user2
+(1 row)
+
+SELECT makeaclitem('regress_priv_user1'::regrole, 'regress_priv_user2'::regrole,
+	'SELECT, INSERT,  UPDATE , DELETE  ', FALSE);  -- multiple privileges
+                makeaclitem                 
+--------------------------------------------
+ regress_priv_user1=arwd/regress_priv_user2
+(1 row)
+
+SELECT makeaclitem('regress_priv_user1'::regrole, 'regress_priv_user2'::regrole,
+	'SELECT, fake_privilege', FALSE);  -- error
+ERROR:  unrecognized privilege type: "fake_privilege"
+-- Test non-throwing aclitem I/O
+SELECT pg_input_is_valid('regress_priv_user1=r/regress_priv_user2', 'aclitem');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('regress_priv_user1=r/', 'aclitem');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('regress_priv_user1=r/', 'aclitem');
+             message             | detail | hint | sql_error_code 
+---------------------------------+--------+------+----------------
+ a name must follow the "/" sign |        |      | 22P02
+(1 row)
+
+SELECT pg_input_is_valid('regress_priv_user1=r/regress_no_such_user', 'aclitem');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('regress_priv_user1=r/regress_no_such_user', 'aclitem');
+                  message                   | detail | hint | sql_error_code 
+--------------------------------------------+--------+------+----------------
+ role "regress_no_such_user" does not exist |        |      | 42704
+(1 row)
+
+SELECT pg_input_is_valid('regress_priv_user1=rY', 'aclitem');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('regress_priv_user1=rY', 'aclitem');
+                         message                          | detail | hint | sql_error_code 
+----------------------------------------------------------+--------+------+----------------
+ invalid mode character: must be one of "arwdDxtXUCTcsAm" |        |      | 22P02
+(1 row)
+
 --
 -- Testing blanket default grants is very hazardous since it might change
 -- the privileges attached to objects created by concurrent regression tests.
@@ -2302,8 +2559,14 @@ $$ LANGUAGE SQL VOLATILE
 CONTAINS SQL EXECUTE ON ALL SEGMENTS;
 CREATE SCHEMA testns;
 CREATE TABLE testns.t1 (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testns.t2 (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testns.t3 (f1 int) PARTITION BY RANGE (f1) (START (2018) END (2020) EVERY (1),DEFAULT PARTITION extra );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testns.t4 (f1 int) inherits (testns.t1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "f1" with inherited definition
@@ -2317,31 +2580,31 @@ SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t1', 'SELECT
  segid | has_table_privilege 
 -------+---------------------
      2 | f
-     0 | f
      1 | f
+     0 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     1 | f
-     0 | f
      2 | f
+     0 | f
+     1 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_extra', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     1 | f
-     0 | f
      2 | f
+     0 | f
+     1 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     0 | f
      1 | f
+     0 | f
      2 | f
 (3 rows)
 
@@ -2361,16 +2624,16 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.t2', 'SELECT'); -- true
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t1', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     2 | t
      0 | t
      1 | t
+     2 | t
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     0 | t
      1 | t
+     0 | t
      2 | t
 (3 rows)
 
@@ -2385,9 +2648,9 @@ SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_ext
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     2 | t
-     1 | t
      0 | t
+     1 | t
+     2 | t
 (3 rows)
 
 REVOKE ALL ON ALL TABLES IN SCHEMA testns FROM regress_priv_user1;
@@ -2406,25 +2669,25 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.t2', 'SELECT'); -- fals
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     0 | f
      1 | f
      2 | f
+     0 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_extra', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     1 | f
      0 | f
+     1 | f
      2 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
+     0 | f
      2 | f
      1 | f
-     0 | f
 (3 rows)
 
 CREATE FUNCTION testns.priv_testfunc(int) RETURNS int AS 'select 3 * $1;' LANGUAGE sql;
@@ -2532,6 +2795,8 @@ DROP ROLE regress_schemauser_renamed;
 \c -
 set session role regress_priv_user1;
 create table dep_priv_test (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 grant select on dep_priv_test to regress_priv_user2 with grant option;
 grant select on dep_priv_test to regress_priv_user3 with grant option;
 set session role regress_priv_user2;
@@ -2542,38 +2807,38 @@ set session role regress_priv_user4;
 grant select on dep_priv_test to regress_priv_user5;
 \dp dep_priv_test
                                                Access privileges
- Schema |     Name      | Type  |               Access privileges               | Column privileges | Policies 
---------+---------------+-------+-----------------------------------------------+-------------------+----------
- public | dep_priv_test | table | regress_priv_user1=arwdDxt/regress_priv_user1+|                   | 
-        |               |       | regress_priv_user2=r*/regress_priv_user1     +|                   | 
-        |               |       | regress_priv_user3=r*/regress_priv_user1     +|                   | 
-        |               |       | regress_priv_user4=r*/regress_priv_user2     +|                   | 
-        |               |       | regress_priv_user4=r*/regress_priv_user3     +|                   | 
-        |               |       | regress_priv_user5=r/regress_priv_user4       |                   | 
+ Schema |     Name      | Type  |               Access privileges                | Column privileges | Policies 
+--------+---------------+-------+------------------------------------------------+-------------------+----------
+ public | dep_priv_test | table | regress_priv_user1=arwdDxtm/regress_priv_user1+|                   | 
+        |               |       | regress_priv_user2=r*/regress_priv_user1      +|                   | 
+        |               |       | regress_priv_user3=r*/regress_priv_user1      +|                   | 
+        |               |       | regress_priv_user4=r*/regress_priv_user2      +|                   | 
+        |               |       | regress_priv_user4=r*/regress_priv_user3      +|                   | 
+        |               |       | regress_priv_user5=r/regress_priv_user4        |                   | 
 (1 row)
 
 set session role regress_priv_user2;
 revoke select on dep_priv_test from regress_priv_user4 cascade;
 \dp dep_priv_test
                                                Access privileges
- Schema |     Name      | Type  |               Access privileges               | Column privileges | Policies 
---------+---------------+-------+-----------------------------------------------+-------------------+----------
- public | dep_priv_test | table | regress_priv_user1=arwdDxt/regress_priv_user1+|                   | 
-        |               |       | regress_priv_user2=r*/regress_priv_user1     +|                   | 
-        |               |       | regress_priv_user3=r*/regress_priv_user1     +|                   | 
-        |               |       | regress_priv_user4=r*/regress_priv_user3     +|                   | 
-        |               |       | regress_priv_user5=r/regress_priv_user4       |                   | 
+ Schema |     Name      | Type  |               Access privileges                | Column privileges | Policies 
+--------+---------------+-------+------------------------------------------------+-------------------+----------
+ public | dep_priv_test | table | regress_priv_user1=arwdDxtm/regress_priv_user1+|                   | 
+        |               |       | regress_priv_user2=r*/regress_priv_user1      +|                   | 
+        |               |       | regress_priv_user3=r*/regress_priv_user1      +|                   | 
+        |               |       | regress_priv_user4=r*/regress_priv_user3      +|                   | 
+        |               |       | regress_priv_user5=r/regress_priv_user4        |                   | 
 (1 row)
 
 set session role regress_priv_user3;
 revoke select on dep_priv_test from regress_priv_user4 cascade;
 \dp dep_priv_test
                                                Access privileges
- Schema |     Name      | Type  |               Access privileges               | Column privileges | Policies 
---------+---------------+-------+-----------------------------------------------+-------------------+----------
- public | dep_priv_test | table | regress_priv_user1=arwdDxt/regress_priv_user1+|                   | 
-        |               |       | regress_priv_user2=r*/regress_priv_user1     +|                   | 
-        |               |       | regress_priv_user3=r*/regress_priv_user1      |                   | 
+ Schema |     Name      | Type  |               Access privileges                | Column privileges | Policies 
+--------+---------------+-------+------------------------------------------------+-------------------+----------
+ public | dep_priv_test | table | regress_priv_user1=arwdDxtm/regress_priv_user1+|                   | 
+        |               |       | regress_priv_user2=r*/regress_priv_user1      +|                   | 
+        |               |       | regress_priv_user3=r*/regress_priv_user1       |                   | 
 (1 row)
 
 set session role regress_priv_user1;
@@ -2589,6 +2854,8 @@ CREATE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELECT true';
 -- REFRESH of this MV will queue a GRANT at end of transaction
 CREATE MATERIALIZED VIEW sro_mv AS SELECT mv_action() WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot create a cursor WITH HOLD within security-restricted operation
 CONTEXT:  SQL function "mv_action" statement 1
@@ -2599,6 +2866,7 @@ CONTEXT:  SQL function "mv_action" statement 1
 SET SESSION AUTHORIZATION regress_sro_user;
 -- INSERT to this table will queue a GRANT at end of transaction
 CREATE TABLE sro_trojan_table ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE FUNCTION sro_trojan() RETURNS trigger LANGUAGE plpgsql AS
 	'BEGIN PERFORM unwanted_grant(); RETURN NULL; END';
 CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
@@ -2607,14 +2875,15 @@ CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
 CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.3:7002 pid=546813)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.2:7004 pid=21599)
 CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.3:7004 pid=546836)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.2:7004 pid=21611)
 CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET allow_segment_DML = ON; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
-ERROR:  must have admin option on role "regress_priv_group2"  (seg1 172.17.0.3:7003 pid=546834)
+ERROR:  permission denied to grant role "regress_priv_group2"  (seg2 172.17.0.2:7004 pid=21611)
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CONTEXT:  SQL function "unwanted_grant" statement 1
 SQL statement "SELECT unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
@@ -2679,7 +2948,7 @@ SELECT DISTINCT is_superuser_on_segments('regress_sro_user');
 -- Execute a trap with superuser.
 RESET SESSION AUTHORIZATION;
 ANALYZE trap;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.3:7004 pid=546857)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21623)
 CONTEXT:  SQL function "trap_sfunc" statement 2
 -- Check "regress_sro_user" superuser privileges on segments.
 SELECT DISTINCT is_superuser_on_segments('regress_sro_user');
@@ -2745,16 +3014,18 @@ ERROR:  role "regress_priv_user8" does not exist
 CREATE USER regress_locktable_user;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE lock_table (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- LOCK TABLE and SELECT permission
 GRANT SELECT ON lock_table TO regress_locktable_user;
 SET SESSION AUTHORIZATION regress_locktable_user;
 BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+COMMIT;
+BEGIN;
 LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should fail
 ERROR:  permission denied for table lock_table
 ROLLBACK;
-BEGIN;
-LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
-COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should fail
 ERROR:  permission denied for table lock_table
@@ -2765,12 +3036,11 @@ REVOKE SELECT ON lock_table FROM regress_locktable_user;
 GRANT INSERT ON lock_table TO regress_locktable_user;
 SET SESSION AUTHORIZATION regress_locktable_user;
 BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+ROLLBACK;
+BEGIN;
 LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
-BEGIN;
-LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
-ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should fail
 ERROR:  permission denied for table lock_table
@@ -2781,12 +3051,11 @@ REVOKE INSERT ON lock_table FROM regress_locktable_user;
 GRANT UPDATE ON lock_table TO regress_locktable_user;
 SET SESSION AUTHORIZATION regress_locktable_user;
 BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+ROLLBACK;
+BEGIN;
 LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
-BEGIN;
-LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
-ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
 COMMIT;
@@ -2796,12 +3065,11 @@ REVOKE UPDATE ON lock_table FROM regress_locktable_user;
 GRANT DELETE ON lock_table TO regress_locktable_user;
 SET SESSION AUTHORIZATION regress_locktable_user;
 BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+ROLLBACK;
+BEGIN;
 LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
-BEGIN;
-LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
-ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
 COMMIT;
@@ -2811,17 +3079,30 @@ REVOKE DELETE ON lock_table FROM regress_locktable_user;
 GRANT TRUNCATE ON lock_table TO regress_locktable_user;
 SET SESSION AUTHORIZATION regress_locktable_user;
 BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+ROLLBACK;
+BEGIN;
 LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
-BEGIN;
-LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
-ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
 COMMIT;
 \c
 REVOKE TRUNCATE ON lock_table FROM regress_locktable_user;
+-- LOCK TABLE and MAINTAIN permission
+GRANT MAINTAIN ON lock_table TO regress_locktable_user;
+SET SESSION AUTHORIZATION regress_locktable_user;
+BEGIN;
+LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should pass
+ROLLBACK;
+BEGIN;
+LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
+COMMIT;
+BEGIN;
+LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
+COMMIT;
+\c
+REVOKE MAINTAIN ON lock_table FROM regress_locktable_user;
 -- clean up
 DROP TABLE lock_table;
 DROP USER regress_locktable_user;
@@ -2873,3 +3154,144 @@ SELECT COUNT(*) >= 0 AS ok FROM pg_shmem_allocations;
 RESET ROLE;
 -- clean up
 DROP ROLE regress_readallstats;
+-- test role grantor machinery
+CREATE ROLE regress_group;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_group_direct_manager;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_group_indirect_manager;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_group_member;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT regress_group TO regress_group_direct_manager WITH INHERIT FALSE, ADMIN TRUE;
+GRANT regress_group_direct_manager TO regress_group_indirect_manager;
+SET SESSION AUTHORIZATION regress_group_direct_manager;
+GRANT regress_group TO regress_group_member;
+SELECT member::regrole::text, CASE WHEN grantor = 10 THEN 'BOOTSTRAP SUPERUSER' ELSE grantor::regrole::text END FROM pg_auth_members WHERE roleid = 'regress_group'::regrole ORDER BY 1, 2;
+            member            |           grantor            
+------------------------------+------------------------------
+ regress_group_direct_manager | BOOTSTRAP SUPERUSER
+ regress_group_member         | regress_group_direct_manager
+(2 rows)
+
+REVOKE regress_group FROM regress_group_member;
+SET SESSION AUTHORIZATION regress_group_indirect_manager;
+GRANT regress_group TO regress_group_member;
+SELECT member::regrole::text, CASE WHEN grantor = 10 THEN 'BOOTSTRAP SUPERUSER' ELSE grantor::regrole::text END FROM pg_auth_members WHERE roleid = 'regress_group'::regrole ORDER BY 1, 2;
+            member            |           grantor            
+------------------------------+------------------------------
+ regress_group_direct_manager | BOOTSTRAP SUPERUSER
+ regress_group_member         | regress_group_direct_manager
+(2 rows)
+
+REVOKE regress_group FROM regress_group_member;
+RESET SESSION AUTHORIZATION;
+DROP ROLE regress_group;
+DROP ROLE regress_group_direct_manager;
+DROP ROLE regress_group_indirect_manager;
+DROP ROLE regress_group_member;
+-- test SET and INHERIT options with object ownership changes
+CREATE ROLE regress_roleoption_protagonist;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_roleoption_donor;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_roleoption_recipient;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE SCHEMA regress_roleoption;
+GRANT CREATE, USAGE ON SCHEMA regress_roleoption TO PUBLIC;
+GRANT regress_roleoption_donor TO regress_roleoption_protagonist WITH INHERIT TRUE, SET FALSE;
+GRANT regress_roleoption_recipient TO regress_roleoption_protagonist WITH INHERIT FALSE, SET TRUE;
+SET SESSION AUTHORIZATION regress_roleoption_protagonist;
+CREATE TABLE regress_roleoption.t1 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE regress_roleoption.t2 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SET SESSION AUTHORIZATION regress_roleoption_donor;
+CREATE TABLE regress_roleoption.t3 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SET SESSION AUTHORIZATION regress_roleoption_recipient;
+CREATE TABLE regress_roleoption.t4 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SET SESSION AUTHORIZATION regress_roleoption_protagonist;
+ALTER TABLE regress_roleoption.t1 OWNER TO regress_roleoption_donor; -- fails, can't be come donor
+ERROR:  must be able to SET ROLE "regress_roleoption_donor"
+ALTER TABLE regress_roleoption.t2 OWNER TO regress_roleoption_recipient; -- works
+ALTER TABLE regress_roleoption.t3 OWNER TO regress_roleoption_protagonist; -- works
+ALTER TABLE regress_roleoption.t4 OWNER TO regress_roleoption_protagonist; -- fails, we don't inherit from recipient
+ERROR:  must be owner of table t4
+RESET SESSION AUTHORIZATION;
+DROP TABLE regress_roleoption.t1;
+DROP TABLE regress_roleoption.t2;
+DROP TABLE regress_roleoption.t3;
+DROP TABLE regress_roleoption.t4;
+DROP SCHEMA regress_roleoption;
+DROP ROLE regress_roleoption_protagonist;
+DROP ROLE regress_roleoption_donor;
+DROP ROLE regress_roleoption_recipient;
+-- MAINTAIN
+CREATE ROLE regress_no_maintain;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_maintain;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_maintain_all IN ROLE pg_maintain;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE TABLE maintain_test (a INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE INDEX ON maintain_test (a);
+GRANT MAINTAIN ON maintain_test TO regress_maintain;
+CREATE MATERIALIZED VIEW refresh_test AS SELECT 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+GRANT MAINTAIN ON refresh_test TO regress_maintain;
+CREATE SCHEMA reindex_test;
+-- negative tests; should fail
+SET ROLE regress_no_maintain;
+VACUUM maintain_test;
+WARNING:  permission denied to vacuum "maintain_test", skipping it
+ANALYZE maintain_test;
+WARNING:  permission denied to analyze "maintain_test", skipping it
+VACUUM (ANALYZE) maintain_test;
+WARNING:  permission denied to vacuum "maintain_test", skipping it
+CLUSTER maintain_test USING maintain_test_a_idx;
+ERROR:  permission denied for table maintain_test
+REFRESH MATERIALIZED VIEW refresh_test;
+ERROR:  permission denied for table refresh_test
+REINDEX TABLE maintain_test;
+ERROR:  permission denied for table maintain_test
+REINDEX INDEX maintain_test_a_idx;
+ERROR:  permission denied for index maintain_test_a_idx
+REINDEX SCHEMA reindex_test;
+ERROR:  must be owner of schema reindex_test
+RESET ROLE;
+SET ROLE regress_maintain;
+VACUUM maintain_test;
+ANALYZE maintain_test;
+VACUUM (ANALYZE) maintain_test;
+CLUSTER maintain_test USING maintain_test_a_idx;
+REFRESH MATERIALIZED VIEW refresh_test;
+REINDEX TABLE maintain_test;
+REINDEX INDEX maintain_test_a_idx;
+REINDEX SCHEMA reindex_test;
+ERROR:  must be owner of schema reindex_test
+RESET ROLE;
+SET ROLE regress_maintain_all;
+VACUUM maintain_test;
+ANALYZE maintain_test;
+VACUUM (ANALYZE) maintain_test;
+CLUSTER maintain_test USING maintain_test_a_idx;
+REFRESH MATERIALIZED VIEW refresh_test;
+REINDEX TABLE maintain_test;
+REINDEX INDEX maintain_test_a_idx;
+REINDEX SCHEMA reindex_test;
+RESET ROLE;
+DROP TABLE maintain_test;
+DROP MATERIALIZED VIEW refresh_test;
+DROP SCHEMA reindex_test;
+DROP ROLE regress_no_maintain;
+DROP ROLE regress_maintain;
+DROP ROLE regress_maintain_all;

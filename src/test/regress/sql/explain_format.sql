@@ -7,9 +7,9 @@
 -- m/^Settings:.*/
 -- s/,?\s*jit\w*\s*=\s*[^,\n]+//g
 -- m/^Settings:.*/
--- s/^Settings:[,\s]*/Settings: /
--- m/^Settings:.*/
 -- s/,?\s*optimizer\w*\s*=\s*'off'//g
+-- m/^Settings:.*/
+-- s/^Settings:[,\s]*/Settings: /
 -- end_matchsubs
 
 -- ignore variable JIT gucs which can be shown when SETTINGS=ON

@@ -6,9 +6,9 @@
 -- m/^Settings:.*/
 -- s/,?\s*jit\w*\s*=\s*[^,\n]+//g
 -- m/^Settings:.*/
--- s/^Settings:[,\s]*/Settings: /
--- m/^Settings:.*/
 -- s/,?\s*optimizer\w*\s*=\s*'off'//g
+-- m/^Settings:.*/
+-- s/^Settings:[,\s]*/Settings: /
 -- end_matchsubs
 -- ignore variable JIT gucs which can be shown when SETTINGS=ON
 -- start_matchignore
@@ -314,9 +314,9 @@ explain_filter
           - "location_id"
   Optimizer: "Postgres query optimizer"
   Settings: 
-    cpu_index_tuple_cost: "N.N"
     optimizer: "off"
     random_page_cost: "N"
+    cpu_index_tuple_cost: "N.N"
 (1 row)
 select explain_filter('EXPLAIN (FORMAT YAML, VERBOSE, SETTINGS ON) SELECT * from boxes;');
 explain_filter
@@ -358,8 +358,8 @@ explain_filter
           - "location_id"
   Optimizer: "Postgres query optimizer"
   Settings: 
-    cpu_index_tuple_cost: "N.N"
     random_page_cost: "N"
+    cpu_index_tuple_cost: "N.N"
     optimizer: "off"
 (1 row)
 --- Check Explain Analyze YAML output that include the slices information
@@ -594,7 +594,7 @@ Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual
         ->  Seq Scan on public.boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
               Output: id, apple_id, location_id
 Optimizer: Postgres query optimizer
-Settings: cpu_index_tuple_cost = 'N.N', optimizer = 'off', random_page_cost = 'N'
+Settings: optimizer = 'off', random_page_cost = 'N', cpu_index_tuple_cost = 'N.N'
 Planning Time: N.N ms
   (sliceN)    Executor memory: NK bytes.
   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
@@ -634,12 +634,16 @@ explain_filter
 -- Test for an old bug in printing Sequence nodes in JSON/XML format
 -- (https://github.com/greenplum-db/gpdb/issues/9410)
 CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;');
 explain_filter_to_json
 [{"Plan": {"Plans": [{"Alias": "jsonexplaintest", "Slice": 0, "Filter": "(i = 0)", "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Async Capable": false, "Relation Name": "jsonexplaintest_1_prt_2", "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Receivers": 0, "Async Capable": false, "Parallel Aware": false}, "Optimizer": "Postgres query optimizer"}]
 (1 row)
 -- Check Explain Text format output with jit enable
 CREATE TABLE jit_explain_output(c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO jit_explain_output SELECT generate_series(1,100);
 SET jit = on;
 SET jit_above_cost = 0;
