@@ -512,9 +512,19 @@ typedef struct Aggref
 
 	/*
 	 * GPDB: if the aggref is distinct-qualified, the AggExprId value
-	 * recorded in the tuple split
+	 * recorded in the tuple split.
+	 *
+	 * This is a planner-internal scratch value assigned only to the DQA
+	 * aggregates that feed a TupleSplit (see fetch_multi_dqas_info); other
+	 * copies of the same aggregate (e.g. in the HAVING qual) are left at 0.
+	 * It must therefore be excluded from equal(), exactly as GGDB's
+	 * hand-written _equalAggref did before the PG16 node-support migration.
+	 * Otherwise a two-phase multi-DQA plan whose HAVING/parent-qual Aggref
+	 * carries agg_expr_id=0 fails to match the stamped partial-stage Aggref
+	 * in setrefs.c, and set_upper_references falls through to the raw
+	 * aggregate-argument Var: "variable not found in subplan target list".
 	 */
-	int		agg_expr_id pg_node_attr(query_jumble_ignore);
+	int		agg_expr_id pg_node_attr(equal_ignore, query_jumble_ignore);
 } Aggref;
 
 typedef struct DQAExpr
@@ -1160,8 +1170,14 @@ typedef struct SubPlan
 	bool		parallel_safe;	/* is the subplan parallel-safe? */
 	/* Note: parallel_safe does not consider contents of testexpr or args */
 
-	bool		is_initplan;	/* CDB: Is the subplan implemented as an
-								 * initplan? */
+	/*
+	 * CDB: Is the subplan implemented as an initplan?  This is a
+	 * planner-internal flag that can differ between otherwise-identical
+	 * SubPlan references, so GGDB's hand-written _equalSubPlan deliberately
+	 * excluded it from equal() ("CDB: Ignore value of is_initplan"); restore
+	 * that exclusion, lost in the PG16 node-support migration.
+	 */
+	bool		is_initplan pg_node_attr(equal_ignore);
 	bool		is_multirow;	/* CDB: May the subplan return more than
 								 * one row? */
 
