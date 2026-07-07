@@ -3657,6 +3657,7 @@ reset enable_memoize;
 --
 set enable_sort=false;
 set work_mem='64kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 select unique1, count(*), sum(twothousand) from tenk1
 group by unique1
 having sum(fivethous) > 4975
@@ -3714,12 +3715,14 @@ order by sum(twothousand);
 (48 rows)
 
 set work_mem to default;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set enable_sort to default;
 --
 -- Compare results between plans using sorting and plans using hash
 -- aggregation. Force spilling in both cases by setting work_mem low.
 --
 set work_mem='64kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 create table agg_data_2k as
 select g from generate_series(0, 1999) g;
 analyze agg_data_2k;
@@ -3811,6 +3814,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Hash aggregation with ORDER BY
 set enable_sort = true;
 set work_mem to default;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Compare group aggregation results to hash aggregation results
 (select * from agg_hash_1 except select * from agg_group_1)
   union all

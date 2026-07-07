@@ -442,6 +442,7 @@ COMMIT;
 BEGIN;
 SET LOCAL enable_indexscan = false;
 SET LOCAL work_mem = '100kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- unfortunately can't show analyze output confirming sort method,
 -- the memory used output wouldn't be stable
 EXPLAIN (COSTS OFF) DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
@@ -542,6 +543,7 @@ FROM (
 -- disk based (see also above)
 BEGIN;
 SET LOCAL work_mem = '100kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 SELECT
     (array_agg(id ORDER BY id DESC NULLS FIRST))[0:5],
     (array_agg(abort_increasing ORDER BY abort_increasing DESC NULLS LAST))[0:5],
@@ -627,6 +629,7 @@ EXPLAIN (COSTS OFF) :qry;
 
 -- test mark/restore with on-disk sorts
 SET LOCAL work_mem = '100kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 EXPLAIN (COSTS OFF) :qry;
                                                                                        QUERY PLAN                                                                                        
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -79,34 +79,34 @@ LINE 1: select '(Joe,Blow) /'::fullname;
                ^
 DETAIL:  Junk after right parenthesis.
 -- test non-error-throwing API
-SELECT pg_input_is_valid('(1,2)', 'complex');
+SELECT pg_input_is_valid('(1,2)', 'complex_t');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('(1,2', 'complex_t');
  pg_input_is_valid 
 -------------------
  f
 (1 row)
 
-SELECT pg_input_is_valid('(1,2', 'complex');
+SELECT pg_input_is_valid('(1,zed)', 'complex_t');
  pg_input_is_valid 
 -------------------
  f
 (1 row)
 
-SELECT pg_input_is_valid('(1,zed)', 'complex');
- pg_input_is_valid 
--------------------
- f
+SELECT * FROM pg_input_error_info('(1,zed)', 'complex_t');
+                        message                        | detail | hint | sql_error_code 
+-------------------------------------------------------+--------+------+----------------
+ invalid input syntax for type double precision: "zed" |        |      | 22P02
 (1 row)
 
-SELECT * FROM pg_input_error_info('(1,zed)', 'complex');
-                     message                      | detail | hint | sql_error_code 
---------------------------------------------------+--------+------+----------------
- invalid input syntax for type complex: "(1,zed)" |        |      | 22P02
-(1 row)
-
-SELECT * FROM pg_input_error_info('(1,1e400)', 'complex');
-                      message                       | detail | hint | sql_error_code 
-----------------------------------------------------+--------+------+----------------
- invalid input syntax for type complex: "(1,1e400)" |        |      | 22P02
+SELECT * FROM pg_input_error_info('(1,1e400)', 'complex_t');
+           message            | detail | hint | sql_error_code 
+------------------------------+--------+------+----------------
+ value out of range: overflow |        |      | 22003
 (1 row)
 
 create temp table quadtable(f1 int, q quad);

@@ -2049,6 +2049,7 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 set enable_indexscan = false;
 set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set hash_mem_multiplier = 2;
 explain (costs off)
   select unique1,
@@ -2163,6 +2164,7 @@ explain (costs off)
 
 reset hash_mem_multiplier;
 set work_mem = '384kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 explain (costs off)
   select unique1,
          count(two), count(four), count(ten),
@@ -2272,6 +2274,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
 RESET allow_system_table_mods;
 SET work_mem='64kB';
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 -- Produce results with sorting.
 set enable_hashagg = false;
 set jit_above_cost = 0;
@@ -2436,6 +2439,7 @@ from gs_data_1 group by cube (g1000, g100,g10);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 set enable_sort = true;
 set work_mem to default;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set hash_mem_multiplier to default;
 -- GPDB_12_MERGE_FIXME: the following comparison query has an ORCA plan that
 -- relies on "IS NOT DISTINCT FROM" Hash Join, a variant that we likely have
