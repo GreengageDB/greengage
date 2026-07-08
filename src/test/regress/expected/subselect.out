@@ -37,6 +37,12 @@ SELECT * FROM ((SELECT 1 AS x)) ss;
  1
 (1 row)
 
+SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
+ x | y 
+---+---
+ 1 | 2
+(1 row)
+
 (SELECT 2) UNION SELECT 2;
  ?column? 
 ----------
@@ -96,9 +102,9 @@ INSERT INTO SUBSELECT_TBL VALUES (8, 9, NULL);
 SELECT * FROM SUBSELECT_TBL;
  f1 | f2 | f3 
 ----+----+----
+  6 |  7 |  8
   1 |  2 |  3
   1 |  1 |  1
-  6 |  7 |  8
   2 |  3 |  4
   3 |  4 |  5
   2 |  2 |  2
@@ -146,9 +152,9 @@ SELECT f1, f2
                          WHERE f3 IS NOT NULL);
  f1 | f2 
 ----+----
+  8 |  9
   6 |  7
   1 |  2
-  8 |  9
 (3 rows)
 
 -- Correlated subselects
@@ -203,6 +209,69 @@ SELECT f1 AS "Correlated Field"
                 1
 (5 rows)
 
+-- Subselects without aliases
+SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
+   f1   | column1 
+--------+---------
+ 123456 |  123456
+(1 row)
+
+CREATE VIEW view_unnamed_ss AS
+SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
+              (SELECT * FROM int8_tbl)
+  WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
+SELECT * FROM view_unnamed_ss;
+ a1 |        q1        |        q2         
+----+------------------+-------------------
+  0 | 4567890123456789 | -4567890123456789
+  0 | 4567890123456789 |               123
+  0 | 4567890123456789 |  4567890123456789
+  0 |              123 |               456
+  0 |              123 |  4567890123456789
+(5 rows)
+
+\sv view_unnamed_ss
+CREATE OR REPLACE VIEW public.view_unnamed_ss AS
+ SELECT unnamed_subquery.a1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT unnamed_subquery_2.a1
+           FROM ( SELECT abs(int4_tbl.f1) AS a1
+                   FROM int4_tbl) unnamed_subquery_2) unnamed_subquery,
+    ( SELECT int8_tbl.q1,
+            int8_tbl.q2
+           FROM int8_tbl) unnamed_subquery_1
+  WHERE unnamed_subquery.a1 < 10 AND unnamed_subquery_1.q1 > unnamed_subquery.a1
+  ORDER BY unnamed_subquery_1.q1, unnamed_subquery_1.q2
+DROP VIEW view_unnamed_ss;
+-- Test matching of locking clause to correct alias
+CREATE VIEW view_unnamed_ss_locking AS
+SELECT * FROM (SELECT * FROM int4_tbl), int8_tbl AS unnamed_subquery
+  WHERE f1 = q1
+  FOR UPDATE OF unnamed_subquery;
+\sv view_unnamed_ss_locking
+CREATE OR REPLACE VIEW public.view_unnamed_ss_locking AS
+ SELECT unnamed_subquery.f1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT int4_tbl.f1
+           FROM int4_tbl) unnamed_subquery,
+    int8_tbl unnamed_subquery_1
+  WHERE unnamed_subquery.f1 = unnamed_subquery_1.q1
+ FOR UPDATE OF unnamed_subquery_1
+DROP VIEW view_unnamed_ss_locking;
 --
 -- Use some existing tables in the regression test
 --
@@ -212,12 +281,12 @@ SELECT ss.f1 AS "Correlated Field", ss.f3 AS "Second Field"
                    WHERE f1 != ss.f1 AND f1 < 2147483647);
  Correlated Field | Second Field 
 ------------------+--------------
+                6 |            8
                 2 |            4
                 3 |            5
                 2 |            2
                 3 |            3
                 8 |             
-                6 |            8
 (6 rows)
 
 select q1, float8(count(*)) / (select count(*) from int8_tbl)
@@ -311,11 +380,11 @@ select * from int4_tbl o where not exists
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Anti Join
-         Hash Cond: (o.f1 = i.f1)
-         ->  Seq Scan on int4_tbl o
+   ->  Hash Right Anti Join
+         Hash Cond: (i.f1 = o.f1)
+         ->  Seq Scan on int4_tbl i
          ->  Hash
-               ->  Seq Scan on int4_tbl i
+               ->  Seq Scan on int4_tbl o
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -481,9 +550,6 @@ FROM orderstest ord;
 SELECT * FROM orders_view;
  approver_ref | po_ref | ordercanceled | Approved |  Status  | Status_OK 
 --------------+--------+---------------+----------+----------+-----------
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
            66 |      5 | f             | Approved | PO       | PO
            66 |      6 | f             | Approved | PO       | PO
            66 |      7 | f             | Approved | PO       | PO
@@ -492,6 +558,9 @@ SELECT * FROM orders_view;
            66 |      1 | f             | Approved | Approved | Approved
            77 |      1 | f             | Approved | Approved | Approved
            66 |      1 | f             | Approved | Approved | Approved
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
 (11 rows)
 
 DROP TABLE orderstest cascade;
@@ -541,11 +610,11 @@ select f1, ss1 as relabel from
      from int4_tbl a) ss;
      f1      |  relabel   
 -------------+------------
+      123456 | 2147607103
+     -123456 | 2147483647
            0 | 2147607103
   2147483647 | 2147483647
  -2147483647 |          0
-      123456 | 2147607103
-     -123456 | 2147483647
 (5 rows)
 
 --
@@ -586,19 +655,19 @@ select * from float_table
   where float_col in (select num_col from numeric_table);
  float_col 
 -----------
-         2
          1
          3
+         2
 (3 rows)
 
 select * from numeric_table
   where num_col in (select float_col from float_table);
          num_col         
 -------------------------
+                       1
  1.000000000000000000001
                        3
                        2
-                       1
 (4 rows)
 
 --
@@ -1025,12 +1094,12 @@ select * from exists_tbl t1
   where (exists(select 1 from exists_tbl t2 where t1.c1 = t2.c2) or c3 < 0);
  c1 | c2 | c3 
 ----+----+----
+  5 |  2 |  6
   2 |  1 |  3
   3 |  1 |  4
   4 |  2 |  5
   0 |  0 |  1
   1 |  0 |  2
-  5 |  2 |  6
 (6 rows)
 
 --
@@ -1244,8 +1313,8 @@ insert into notinouter values (null), (1);
 select * from notinouter where a not in (select b from notininner);
  a 
 ---
-  
  1
+  
 (2 rows)
 
 --
@@ -1470,11 +1539,11 @@ select * from
 where b and f1 >= 0;
      f1     | b | id 
 ------------+---+----
+     123456 | t |  1
+     123456 | t |  2
           0 | t |  2
  2147483647 | t |  1
  2147483647 | t |  2
-     123456 | t |  1
-     123456 | t |  2
 (5 rows)
 
 --
@@ -1710,7 +1779,7 @@ select * from x where f1 = 1;
          Output: subselect_tbl.f1
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (7 rows)
 
 -- Explicitly request materialization
@@ -1729,7 +1798,7 @@ select * from x where f1 = 1;
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (11 rows)
 
 -- Stable functions are safe to inline
@@ -1744,7 +1813,7 @@ select * from x where f1 = 1;
          Output: subselect_tbl.f1, 'regression'::name
          Filter: (subselect_tbl.f1 = 1)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (7 rows)
 
 -- Volatile functions prevent inlining
@@ -1765,7 +1834,7 @@ select * from x where f1 = 1;
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1, random()
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (11 rows)
 
 create temporary sequence ts;
@@ -1785,7 +1854,7 @@ select * from x where a = 1;
                ->  Seq Scan on public.vol_test
                      Output: vol_test.a, nextval('ts'::regclass)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (11 rows)
 
 drop sequence ts;
@@ -1808,7 +1877,7 @@ select * from x where f1 = 1;
                Output: subselect_tbl.f1, subselect_tbl.ctid
                Filter: (subselect_tbl.f1 = 1)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (9 rows)
 
 -- Multiply-referenced CTEs are inlined only when requested
@@ -1837,7 +1906,7 @@ select * from x, x x2 where x.n = x2.n;
                            ->  Seq Scan on public.subselect_tbl
                                  Output: subselect_tbl.f1, 'regression'::name
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (21 rows)
 
 explain (verbose, costs off)
@@ -1863,7 +1932,7 @@ select * from x, x x2 where x.n = x2.n;
                      ->  Seq Scan on public.subselect_tbl subselect_tbl_1
                            Output: subselect_tbl_1.f1, 'regression'::name
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (19 rows)
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
@@ -1890,7 +1959,7 @@ select * from x;
                ->  WorkTable Scan on x x_1
                      Output: x_1.a
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (14 rows)
 
 with recursive x(a) as
@@ -1945,7 +2014,7 @@ select * from x;
                Output: x.a
                Filter: (length((x.a || x.a)) < 5)
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (10 rows)
 
 with recursive x(a) as
@@ -1976,7 +2045,7 @@ select * from (with y as (select * from x) select * from y) ss;
    ->  Seq Scan on public.int4_tbl
          Output: int4_tbl.f1
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (6 rows)
 
 explain (verbose, costs off)
@@ -1991,7 +2060,7 @@ select * from (with y as (select * from x) select * from y) ss;
          ->  Seq Scan on public.int4_tbl
                Output: int4_tbl.f1
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (8 rows)
 
 -- Ensure that we inline the currect CTE when there are
@@ -2004,7 +2073,7 @@ select * from (with x as (select 2 as y) select * from x) ss;
  Result
    Output: 2
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (4 rows)
 
 -- Row marks are not pushed into CTEs
@@ -2018,7 +2087,7 @@ select * from x for update;
    ->  Seq Scan on public.subselect_tbl
          Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
+ Settings: optimizer = 'off', gp_cte_sharing = 'on'
 (6 rows)
 
 set gp_cte_sharing to off;
