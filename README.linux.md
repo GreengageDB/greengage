@@ -10,14 +10,21 @@
 
 - Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
-  ./README.Rhel-Rocky.bash
+  sudo ./README.Rhel-Rocky.bash
   ```
 
-- Create symbolic link to Python 2 in `/usr/bin`:
+- Create a symbolic link to Python in `/usr/bin` and install `future` v0.16:
 
-  ```bash
-  sudo ln -s python2 /usr/bin/python
-  ```
+  - Rocky 8:
+    ```bash
+    sudo ln -s python2 /usr/bin/python
+    sudo python -m pip install --no-cache-dir future==0.16
+    ```
+
+  - Rocky 9:
+    ```bash
+    sudo ln -s python3 /usr/bin/python
+    ```
 
 ## For Ubuntu (versions 22.04 or 24.04):
 
