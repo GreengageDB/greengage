@@ -12773,6 +12773,14 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 			strcpy(arr + i, typeName);
 		else {
 			memcpy(arr + i, typeName, NAMEDATALEN - i);
+			/*
+			 * Be aware, that if archive's encoding is passed with --encoding
+			 * and the database has diffrent one - this function can fail.
+			 *
+			 * Yet, it does not matter much as this function is intended to be used
+			 * inside pg_upgrade (with --binary-upgrade), which uses default
+			 * database encoding.
+			 */
 			truncate_array_type_name(arr, fout->encoding);
 		}
 
