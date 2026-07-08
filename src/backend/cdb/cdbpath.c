@@ -828,8 +828,8 @@ cdbpath_strip_nullingrels_mutator(Node *node, void *context)
  * cdbpath_eclasses_distribution_match
  *
  * True if two EquivalenceClasses are equivalent for data-distribution
- * purposes, i.e. they share a member expression once Var/PlaceHolderVar
- * nulling markers are ignored.
+ * purposes, i.e. they share an operator family AND a member expression once
+ * Var/PlaceHolderVar nulling markers are ignored.
  *
  * PostgreSQL 16 records in each Var's varnullingrels the set of outer joins
  * that may have replaced the value with NULL, so the same base column
@@ -838,7 +838,30 @@ cdbpath_strip_nullingrels_mutator(Node *node, void *context)
  * null-extension -- a null-extended row carries NULL in the key and matches no
  * equijoin predicate, which is exactly the promise a HashedOJ locus encodes --
  * so for co-location the nulling markers must be ignored.
+ *
+ * The opfamily check is essential: two ECs for the same column that disagree on
+ * hash/sort semantics are NOT co-located.  For example, a column distributed
+ * with the default integer opclass is not co-located with a join predicate that
+ * uses a custom "absolute value" opclass on the same column -- they hash
+ * differently.  EquivalenceClass identity (the fast path in the caller) already
+ * implies matching opfamilies; when we relax it here to a nulling-insensitive
+ * member match we must re-impose the opfamily agreement that identity gave us
+ * (nulling never changes an EC's opfamilies, so this keeps the outer-join case
+ * matching).
  */
+static bool
+cdbpath_opfamilies_overlap(List *ofs1, List *ofs2)
+{
+	ListCell   *lc;
+
+	foreach(lc, ofs1)
+	{
+		if (list_member_oid(ofs2, lfirst_oid(lc)))
+			return true;
+	}
+	return false;
+}
+
 static bool
 cdbpath_eclasses_distribution_match(EquivalenceClass *ec1, EquivalenceClass *ec2)
 {
@@ -846,6 +869,10 @@ cdbpath_eclasses_distribution_match(EquivalenceClass *ec1, EquivalenceClass *ec2
 
 	if (ec1 == ec2)
 		return true;
+
+	/* Different hash/sort semantics => not co-located. */
+	if (!cdbpath_opfamilies_overlap(ec1->ec_opfamilies, ec2->ec_opfamilies))
+		return false;
 
 	foreach(lc1, ec1->ec_members)
 	{
