@@ -1210,22 +1210,25 @@ SELECT unnest(ARRAY[]::integer[]) + 1 AS pathkey
   ORDER BY pathkey;
                                              QUERY PLAN                                              
 -----------------------------------------------------------------------------------------------------
- Sort
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: (((unnest('{}'::integer[])) + 1))
-   Sort Key: (((unnest('{}'::integer[])) + 1))
-   ->  Result
-         Output: ((unnest('{}'::integer[])) + 1)
-         ->  ProjectSet
-               Output: unnest('{}'::integer[])
-               ->  Nested Loop
-                     ->  Gather
-                           Workers Planned: 4
-                           ->  Parallel Index Only Scan using tenk1_hundred on public.tenk1 t1
-                     ->  Materialize
-                           ->  Gather
-                                 Workers Planned: 4
-                                 ->  Parallel Index Only Scan using tenk1_hundred on public.tenk1 t2
-(15 rows)
+   Merge Key: (((unnest('{}'::integer[])) + 1))
+   ->  Sort
+         Output: (((unnest('{}'::integer[])) + 1))
+         Sort Key: (((unnest('{}'::integer[])) + 1))
+         ->  Result
+               Output: ((unnest('{}'::integer[])) + 1)
+               ->  ProjectSet
+                     Output: unnest('{}'::integer[])
+                     ->  Nested Loop
+                           ->  Seq Scan on public.tenk1 t1
+                                 Output: t1.unique1, t1.unique2, t1.two, t1.four, t1.ten, t1.twenty, t1.hundred, t1.thousand, t1.twothousand, t1.fivethous, t1.tenthous, t1.odd, t1.even, t1.stringu1, t1.stringu2, t1.string4
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Seq Scan on public.tenk1 t2
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off', parallel_tuple_cost = '0', parallel_setup_cost = '0', min_parallel_table_scan_size = '0'
+(18 rows)
 
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as

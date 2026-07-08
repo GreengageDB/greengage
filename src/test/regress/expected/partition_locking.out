@@ -402,7 +402,8 @@ select * from locktest_master where coalesce not like 'gp_%' and coalesce not li
  partlockt               | AccessShareLock | relation | master
  partlockt_1_prt_1       | AccessShareLock | relation | master
  partlockt_1_prt_1_i_idx | AccessShareLock | relation | master
-(3 rows)
+ partlockt_idx           | AccessShareLock | relation | master
+(4 rows)
 
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
         coalesce         |      mode       | locktype |   node    
@@ -448,7 +449,8 @@ select * from locktest_master where coalesce not like 'gp_%' and coalesce not li
  partlockt               | ExclusiveLock | relation | master
  partlockt_1_prt_4       | ExclusiveLock | relation | master
  partlockt_1_prt_4_i_idx | ExclusiveLock | relation | master
-(3 rows)
+ partlockt_idx           | ExclusiveLock | relation | master
+(4 rows)
 
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
         coalesce         |     mode      | locktype |   node    
