@@ -358,11 +358,6 @@ heap_create(const char *relname,
 			break;
 	}
 
-	if (relpersistence == RELPERSISTENCE_UNLOGGED &&
-		(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
-		 relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind)))
-		create_storage = false;
-
 	/*
 	 * Unless otherwise requested, the physical ID (relfilenode) is initially
 	 * the same as the logical ID (OID).  When the caller did specify a
@@ -1559,9 +1554,6 @@ heap_create_with_catalog(const char *relname,
 
 	Assert(relid == RelationGetRelid(new_rel_desc));
 
-	if (relpersistence == RELPERSISTENCE_UNLOGGED)
-		RelationOpenSmgr(new_rel_desc);
-
 	/*
 	 * Decide whether to create an array type over the relation's rowtype. We
 	 * do not create any array types for system catalogs (ie, those made
@@ -1866,9 +1858,9 @@ heap_create_with_catalog(const char *relname,
 
 	/*
 	 * If this is an unlogged relation, it needs an init fork so that it can
-	 * be correctly reinitialized on restart. Since we're going to do an
-	 * immediate sync, we only need to xlog this if archiving or streaming is
-	 * enabled. And the immediate sync is required, because otherwise there's
+	 * be correctly reinitialized on restart.  Since we're going to do an
+	 * immediate sync, we ony need to xlog this if archiving or streaming is
+	 * enabled.  And the immediate sync is required, because otherwise there's
 	 * no guarantee that this will hit the disk before the next checkpoint
 	 * moves the redo pointer.
 	 */
@@ -1877,7 +1869,6 @@ heap_create_with_catalog(const char *relname,
 		Assert(relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
 			   relkind == RELKIND_TOASTVALUE || IsAppendonlyMetadataRelkind(relkind));
 		heap_create_init_fork(new_rel_desc);
-		RelationCreateStorage(new_rel_desc->rd_node, relpersistence, relstorage);
 	}
 
 	/*
