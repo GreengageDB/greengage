@@ -42,12 +42,19 @@ ALTER SCHEMA pg_toast RENAME to bread;  -- system schema
 -- RENAME to a valid new name
 ALTER SCHEMA test_schema_1 RENAME to test_schema_2;
 
--- Check that ALTER statements dispatched correctly
+-- Check that ALTER statements dispatched correctly.
+-- Exclude backend-local temporary namespaces: each backend (coordinator and
+-- every QE) creates its own pg_temp_*/pg_toast_temp_* schema with an
+-- independent OID, so they legitimately differ between the coordinator and the
+-- segment sampled by gp_dist_random().  A concurrent test in the same schedule
+-- group holding a temp table would otherwise make this consistency check flap.
 select *
 FROM gp_dist_random('pg_namespace') n1
   full outer join pg_namespace n2 on (n1.oid = n2.oid)
-WHERE n1.nspname != n2.nspname or n1.nspowner != n2.nspowner or
-      n1.nspname is null or n2.nspname is null;
+WHERE (n1.nspname != n2.nspname or n1.nspowner != n2.nspowner or
+       n1.nspname is null or n2.nspname is null)
+  AND coalesce(n1.nspname, n2.nspname) NOT LIKE 'pg_temp%'
+  AND coalesce(n1.nspname, n2.nspname) NOT LIKE 'pg_toast_temp%';
 
 -- DROP SCHEMA
 DROP SCHEMA pg_toast;       -- system schema
