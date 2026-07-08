@@ -38,7 +38,11 @@ BEGIN
     WITH samples AS (
       SELECT random() r FROM generate_series(1, n) ORDER BY 1
     ), indexed_samples AS (
-      SELECT (row_number() OVER())-1.0 i, r FROM samples
+      -- GPDB: order the window explicitly by r.  Upstream relies on the CTE's
+      -- ORDER BY propagating into an empty-window row_number(), which is
+      -- unspecified in SQL and is not preserved when ORCA materializes the CTE
+      -- as a Shared Scan (the rank would then not track the sorted value).
+      SELECT (row_number() OVER(ORDER BY r))-1.0 i, r FROM samples
     )
     SELECT max(abs(i/n-r)) < c / sqrt(n) FROM indexed_samples
   );
@@ -84,7 +88,8 @@ BEGIN
     WITH samples AS (
       SELECT random_normal() r FROM generate_series(1, n) ORDER BY 1
     ), indexed_samples AS (
-      SELECT (row_number() OVER())-1.0 i, r FROM samples
+      -- GPDB: see the note in ks_test_uniform_random() above.
+      SELECT (row_number() OVER(ORDER BY r))-1.0 i, r FROM samples
     )
     SELECT max(abs((1+erf(r/sqrt(2)))/2 - i/n)) < c / sqrt(n)
     FROM indexed_samples
