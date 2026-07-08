@@ -791,6 +791,87 @@ cdbpath_eclass_constant_is_hashable(EquivalenceClass *ec, Oid hashOpFamily)
 	return false;
 }
 
+/*
+ * cdbpath_strip_nullingrels_mutator
+ *
+ * Return a copy of an expression with all Var.varnullingrels and
+ * PlaceHolderVar.phnullingrels cleared.  Used to compare distribution-key
+ * expressions for co-location independently of which outer joins may have
+ * null-extended the row (see cdbpath_eclasses_distribution_match).
+ */
+static Node *
+cdbpath_strip_nullingrels_mutator(Node *node, void *context)
+{
+	if (node == NULL)
+		return NULL;
+	if (IsA(node, Var))
+	{
+		Var		   *var = (Var *) copyObject(node);
+
+		var->varnullingrels = NULL;
+		return (Node *) var;
+	}
+	if (IsA(node, PlaceHolderVar))
+	{
+		PlaceHolderVar *phv;
+
+		phv = (PlaceHolderVar *) expression_tree_mutator(node,
+														 cdbpath_strip_nullingrels_mutator,
+														 context);
+		phv->phnullingrels = NULL;
+		return (Node *) phv;
+	}
+	return expression_tree_mutator(node, cdbpath_strip_nullingrels_mutator, context);
+}
+
+/*
+ * cdbpath_eclasses_distribution_match
+ *
+ * True if two EquivalenceClasses are equivalent for data-distribution
+ * purposes, i.e. they share a member expression once Var/PlaceHolderVar
+ * nulling markers are ignored.
+ *
+ * PostgreSQL 16 records in each Var's varnullingrels the set of outer joins
+ * that may have replaced the value with NULL, so the same base column
+ * referenced above different outer joins is a distinct Var and lands in a
+ * distinct EquivalenceClass.  A value's hash segment does not depend on such
+ * null-extension -- a null-extended row carries NULL in the key and matches no
+ * equijoin predicate, which is exactly the promise a HashedOJ locus encodes --
+ * so for co-location the nulling markers must be ignored.
+ */
+static bool
+cdbpath_eclasses_distribution_match(EquivalenceClass *ec1, EquivalenceClass *ec2)
+{
+	ListCell   *lc1;
+
+	if (ec1 == ec2)
+		return true;
+
+	foreach(lc1, ec1->ec_members)
+	{
+		EquivalenceMember *em1 = (EquivalenceMember *) lfirst(lc1);
+		Node	   *e1;
+		ListCell   *lc2;
+
+		if (em1->em_is_child)
+			continue;
+		e1 = cdbpath_strip_nullingrels_mutator((Node *) em1->em_expr, NULL);
+
+		foreach(lc2, ec2->ec_members)
+		{
+			EquivalenceMember *em2 = (EquivalenceMember *) lfirst(lc2);
+			Node	   *e2;
+
+			if (em2->em_is_child)
+				continue;
+			e2 = cdbpath_strip_nullingrels_mutator((Node *) em2->em_expr, NULL);
+			if (equal(e1, e2))
+				return true;
+		}
+	}
+	return false;
+}
+
 static bool
 cdbpath_match_preds_to_distkey_tail(CdbpathMatchPredsContext *ctx,
 									List *lst,
@@ -858,7 +939,18 @@ cdbpath_match_preds_to_distkey_tail(CdbpathMatchPredsContext *ctx,
 			{
 				EquivalenceClass *dk_eclass = (EquivalenceClass *) lfirst(i);
 
-				if (dk_eclass == a_ec)
+				/*
+				 * Match by EquivalenceClass identity, or -- for PG16+, where the
+				 * same column referenced above different outer joins carries
+				 * different varnullingrels and therefore lands in a distinct
+				 * EquivalenceClass -- by a nulling-insensitive comparison of the
+				 * member expressions.  Without this, a distribution key that
+				 * passed through an outer join (e.g. the shared key of chained
+				 * FULL JOINs) is not recognised as co-located, and a spurious
+				 * Redistribute Motion is planned.
+				 */
+				if (dk_eclass == a_ec ||
+					cdbpath_eclasses_distribution_match(dk_eclass, a_ec))
 					codistkey = makeDistributionKeyForEC(b_ec, distkey->dk_opfamily); /* break earlier? */
 			}
 
