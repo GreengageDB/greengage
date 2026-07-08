@@ -388,21 +388,25 @@ heap_create(const char *relname,
 	/* Don't create storage for relkinds without physical storage. */
 	if (!RELKIND_HAS_STORAGE(relkind))
 		create_storage = false;
-	else
+	else if (!RelFileNumberIsValid(relfilenumber))
 	{
-		create_storage = true;
-
 		/*
 		 * In PostgreSQL, if relfilenumber is unspecified by the caller then
 		 * storage is created with oid same as relid.  In GPDB, the
 		 * relfilenumber is assigned using a separate counter.  Pass '1' to
 		 * RelationBuildLocalRelation() to signal that it should assign a new
-		 * value.  (During binary upgrade the caller may specify the
-		 * relfilenumber to use; honor that.)
+		 * value, and force creation of fresh storage for it.
 		 */
-		if (!RelFileNumberIsValid(relfilenumber))
-			relfilenumber = 1;
+		create_storage = true;
+		relfilenumber = 1;
 	}
+	/*
+	 * Otherwise the caller specified a relfilenumber (binary upgrade, or
+	 * reusing an existing index's storage for a binary-coercible ALTER COLUMN
+	 * TYPE).  Honor it and leave the caller's create_storage decision
+	 * unchanged: unconditionally forcing create_storage here would try to
+	 * create a file that already exists and fail with "File exists".
+	 */
 
 	/*
 	 * Never allow a pg_class entry to explicitly specify the database's
