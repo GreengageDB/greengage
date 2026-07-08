@@ -720,6 +720,7 @@ tempcat_insert(Relation relation, HeapTuple htup)
 		);
 #endif
 
+	/* Invalidate syscache */
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 	tempcat_mark_command_id_used();
 	pgstat_count_heap_insert(relation, 1);
@@ -751,6 +752,8 @@ tempcat_delete(Relation relation, ItemPointer tid)
 		if (ItemPointerEquals(&dlist_tup->tup->t_self, tid))
 		{
 			pgstat_count_heap_delete(relation);
+			
+			/* Invalidate syscache */
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 			tempcat_mark_command_id_used();
 
@@ -812,6 +815,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 		{
 			MemoryContext oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
 
+			/* Invalidate syscache */
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, newtup);
 			tempcat_mark_command_id_used();
 			heap_freetuple(dlist_tup->tup);
