@@ -171,6 +171,11 @@ select 10 as test01, 20 as test02 from generate_series(1,3) \gset
 more than one row returned for \gset
 select 10 as test01, 20 as test02 from generate_series(1,0) \gset
 no rows returned for \gset
+-- \gset returns no tuples
+select a from generate_series(1, 10) as a where a = 11 \gset
+no rows returned for \gset
+\echo :ROW_COUNT
+0
 -- \gset should work in FETCH_COUNT mode too
 \set FETCH_COUNT 1
 select 1 as x, 2 as y \gset pref01_ \\ \echo :pref01_x
@@ -281,8 +286,6 @@ The command has no result, or the result has no columns.
 rollback;
 -- \gexec
 create temporary table gexec_test(a int, b text, c date, d float);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select format('create index on gexec_test(%I)', attname)
 from pg_attribute
 where attrelid = 'gexec_test'::regclass and attnum > 0
@@ -2724,8 +2727,6 @@ deallocate q;
 \pset border 1
 -- support table for output-format tests (useful to create a footer)
 create table psql_serial_tab (id serial);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- test header/footer/tuples_only behavior in aligned/unaligned/wrapped cases
 \pset format aligned
 \pset expanded off
@@ -2890,47 +2891,41 @@ CREATE ACCESS METHOD heap_psql TYPE TABLE HANDLER heap_tableam_handler;
 SET ROLE TO regress_display_role;
 -- Use only relations with a physical size of zero.
 CREATE TABLE tbl_heap_psql(f1 int, f2 char(100)) using heap_psql;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbl_heap(f1 int, f2 char(100)) using heap;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW view_heap_psql AS SELECT f1 from tbl_heap_psql;
 CREATE MATERIALIZED VIEW mat_view_heap_psql USING heap_psql AS SELECT f1 from tbl_heap_psql;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ tbl_heap_psql
-                                     Table "tableam_display.tbl_heap_psql"
- Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
- f1     | integer        |           |          |         | plain    |             |              | 
- f2     | character(100) |           |          |         | extended |             |              | 
+                              Table "tableam_display.tbl_heap_psql"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |              | 
+ f2     | character(100) |           |          |         | extended |              | 
 Distributed by: (f1)
 
 \d+ tbl_heap
-                                        Table "tableam_display.tbl_heap"
- Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
- f1     | integer        |           |          |         | plain    |             |              | 
- f2     | character(100) |           |          |         | extended |             |              | 
+                                 Table "tableam_display.tbl_heap"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |              | 
+ f2     | character(100) |           |          |         | extended |              | 
 Distributed by: (f1)
 
 \set HIDE_TABLEAM off
 \d+ tbl_heap_psql
-                                     Table "tableam_display.tbl_heap_psql"
- Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
- f1     | integer        |           |          |         | plain    |             |              | 
- f2     | character(100) |           |          |         | extended |             |              | 
+                              Table "tableam_display.tbl_heap_psql"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |              | 
+ f2     | character(100) |           |          |         | extended |              | 
 Distributed by: (f1)
 Access method: heap_psql
 
 \d+ tbl_heap
-                                        Table "tableam_display.tbl_heap"
- Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+----------------+-----------+----------+---------+----------+-------------+--------------+-------------
- f1     | integer        |           |          |         | plain    |             |              | 
- f2     | character(100) |           |          |         | extended |             |              | 
+                                 Table "tableam_display.tbl_heap"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+----------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer        |           |          |         | plain    |              | 
+ f2     | character(100) |           |          |         | extended |              | 
 Distributed by: (f1)
 Access method: heap
 
@@ -4608,6 +4603,7 @@ bar 'bar' "bar"
 	\echo `nosuchcommand` :foo :'foo' :"foo"
 	\pset fieldsep | `nosuchcommand` :foo :'foo' :"foo"
 	\a
+	SELECT $1 \bind 1 \g
 	\C arg1
 	\c arg1 arg2 arg3 arg4
 	\cd arg1
@@ -4856,7 +4852,7 @@ number of rows: 0
 last error message: syntax error at end of input
 \echo 'last error code:' :LAST_ERROR_SQLSTATE
 last error code: 42601
--- check row count for a cursor-fetched query
+-- check row count for a query with chunked results
 \set FETCH_COUNT 10
 select unique2 from tenk1 order by unique2 limit 19;
  unique2 
@@ -4916,6 +4912,7 @@ number of rows: 0
 last error message: division by zero
 \echo 'last error code:' :LAST_ERROR_SQLSTATE
 last error code: 22012
+reset debug_parallel_query;
 \unset FETCH_COUNT
 create schema testpart;
 create role regress_partitioning_role;
@@ -4925,19 +4922,11 @@ set role to regress_partitioning_role;
 -- run test inside own schema and hide other partitions
 set search_path to testpart;
 create table testtable_apple(logdate date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table testtable_orange(logdate date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index testtable_apple_index on testtable_apple(logdate);
 create index testtable_orange_index on testtable_orange(logdate);
 create table testpart_apple(logdate date) partition by range(logdate);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table testpart_orange(logdate date) partition by range(logdate);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'logdate' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index testpart_apple_index on testpart_apple(logdate);
 create index testpart_orange_index on testpart_orange(logdate);
 -- only partition related object should be displayed
@@ -4968,29 +4957,21 @@ drop table testtable_orange;
 drop table testpart_apple;
 drop table testpart_orange;
 create table parent_tab (id int) partition by range (id);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index parent_index on parent_tab (id);
 create table child_0_10 partition of parent_tab
   for values from (0) to (10);
-NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_10_20 partition of parent_tab
   for values from (10) to (20);
-NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_20_30 partition of parent_tab
   for values from (20) to (30);
-NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parent_tab values (generate_series(0,29));
 create table child_30_40 partition of parent_tab
 for values from (30) to (40)
   partition by range(id);
-NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_30_35 partition of child_30_40
   for values from (30) to (35);
-NOTICE:  table has parent, setting distribution columns to match parent table
 create table child_35_40 partition of child_30_40
    for values from (35) to (40);
-NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parent_tab values (generate_series(30,39));
 \dPt
             List of partitioned tables
@@ -5434,33 +5415,37 @@ comment on function psql_df_plpgsql () is 'some comment';
 rollback;
 drop role regress_psql_user;
 -- check \sf
-\sf information_schema._pg_expandarray
-CREATE OR REPLACE FUNCTION information_schema._pg_expandarray(anyarray, OUT x anyelement, OUT n integer)
- RETURNS SETOF record
+\sf information_schema._pg_index_position
+CREATE OR REPLACE FUNCTION information_schema._pg_index_position(oid, smallint)
+ RETURNS integer
  LANGUAGE sql
- IMMUTABLE PARALLEL SAFE STRICT
-AS $function$select $1[s],
-        s operator(pg_catalog.-) pg_catalog.array_lower($1,1) operator(pg_catalog.+) 1
-        from pg_catalog.generate_series(pg_catalog.array_lower($1,1),
-                                        pg_catalog.array_upper($1,1),
-                                        1) as g(s)$function$
-\sf+ information_schema._pg_expandarray
-        CREATE OR REPLACE FUNCTION information_schema._pg_expandarray(anyarray, OUT x anyelement, OUT n integer)
-         RETURNS SETOF record
+ STABLE STRICT
+BEGIN ATOMIC
+ SELECT (ss.a).n AS n
+    FROM ( SELECT information_schema._pg_expandarray(pg_index.indkey) AS a
+            FROM pg_index
+           WHERE (pg_index.indexrelid = $1)) ss
+   WHERE ((ss.a).x = $2);
+END
+\sf+ information_schema._pg_index_position
+        CREATE OR REPLACE FUNCTION information_schema._pg_index_position(oid, smallint)
+         RETURNS integer
          LANGUAGE sql
-         IMMUTABLE PARALLEL SAFE STRICT
-1       AS $function$select $1[s],
-2               s operator(pg_catalog.-) pg_catalog.array_lower($1,1) operator(pg_catalog.+) 1
-3               from pg_catalog.generate_series(pg_catalog.array_lower($1,1),
-4                                               pg_catalog.array_upper($1,1),
-5                                               1) as g(s)$function$
+         STABLE STRICT
+1       BEGIN ATOMIC
+2        SELECT (ss.a).n AS n
+3           FROM ( SELECT information_schema._pg_expandarray(pg_index.indkey) AS a
+4                   FROM pg_index
+5                  WHERE (pg_index.indexrelid = $1)) ss
+6          WHERE ((ss.a).x = $2);
+7       END
 \sf+ interval_pl_time
         CREATE OR REPLACE FUNCTION pg_catalog.interval_pl_time(interval, time without time zone)
          RETURNS time without time zone
          LANGUAGE sql
          IMMUTABLE PARALLEL SAFE STRICT COST 1
 1       RETURN ($2 + $1)
-\sf ts_debug(text)
+\sf ts_debug(text);
 CREATE OR REPLACE FUNCTION pg_catalog.ts_debug(document text, OUT alias text, OUT description text, OUT token text, OUT dictionaries regdictionary[], OUT dictionary regdictionary, OUT lexemes text[])
  RETURNS SETOF record
  LANGUAGE sql
@@ -5490,8 +5475,6 @@ END
 9       END
 -- AUTOCOMMIT
 CREATE TABLE ac_test (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set AUTOCOMMIT off
 INSERT INTO ac_test VALUES (1);
 COMMIT;
@@ -5517,8 +5500,8 @@ COMMIT;
 SELECT * FROM ac_test;
  a 
 ---
- 1
  3
+ 1
 (2 rows)
 
 COMMIT;
@@ -5542,8 +5525,6 @@ LINE 1: SELECT * FROM ac_test;
 -- ON_ERROR_ROLLBACK
 \set ON_ERROR_ROLLBACK on
 CREATE TABLE oer_test (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 BEGIN;
 INSERT INTO oer_test VALUES (1);
 INSERT INTO oer_test VALUES ('foo');
@@ -5565,8 +5546,8 @@ ROLLBACK;
 SELECT * FROM oer_test;
  a 
 ---
- 1
  3
+ 1
 (2 rows)
 
 BEGIN;
@@ -5579,8 +5560,8 @@ SELECT * FROM oer_test;
 ---
  5
  6
- 1
  3
+ 1
 (4 rows)
 
 DROP TABLE oer_test;
@@ -5660,8 +5641,6 @@ COPY psql_comics TO STDOUT \;
 TRUNCATE psql_comics \;
 DROP TABLE psql_comics \;
 SELECT 'ok' AS "done" ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  begin 
 -------
  ok
@@ -5695,8 +5674,6 @@ CREATE TEMPORARY TABLE reload_output(
   lineno int NOT NULL GENERATED ALWAYS AS IDENTITY,
   line text
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'lineno' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT 1 AS a \g :g_out_file
 COPY reload_output(line) FROM :'g_out_file';
 SELECT 2 AS b\; SELECT 3 AS c\; SELECT 4 AS d \g :g_out_file
@@ -5828,13 +5805,9 @@ DROP TABLE reload_output;
 -- BEGIN is now implicit
 CREATE TABLE foo(s TEXT) \;
 ROLLBACK;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE foo(s TEXT) \;
 INSERT INTO foo(s) VALUES ('hello'), ('world') \;
 COMMIT;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP TABLE foo \;
 ROLLBACK;
 -- table foo is still there
@@ -5855,8 +5828,6 @@ BEGIN \;
 CREATE TABLE foo(s TEXT) \;
 INSERT INTO foo(s) VALUES ('hello'), ('world') \;
 COMMIT;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 BEGIN \;
 DROP TABLE foo \;
 ROLLBACK \;
@@ -5888,8 +5859,6 @@ ERROR:  type "no_such_type" does not exist
 LINE 1: CREATE TABLE bla(s NO_SUCH_TYPE);
                            ^
 CREATE TABLE bla(s TEXT);                       -- succeeds
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT psql_error('oops!');                     -- fails
 ERROR:  error oops!
 CONTEXT:  PL/pgSQL function psql_error(text) line 3 at RAISE
@@ -5969,6 +5938,7 @@ SELECT * FROM bla ORDER BY 1;
  Susie
 (5 rows)
 
+COMMIT;
 -- reset all
 \set AUTOCOMMIT on
 \set ON_ERROR_ROLLBACK off
@@ -6349,9 +6319,9 @@ List of text search templates
 (0 rows)
 
 \dg "no.such.role"
-           List of roles
- Role name | Attributes | Member of 
------------+------------+-----------
+     List of roles
+ Role name | Attributes 
+-----------+------------
 
 \dL "no.such.language"
           List of languages
@@ -6372,9 +6342,9 @@ List of schemas
 (0 rows)
 
 \dO "no.such.collation"
-                                  List of collations
- Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
---------+------+----------+---------+-------+------------+-----------+----------------
+                                List of collations
+ Schema | Name | Provider | Collate | Ctype | Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+--------+-----------+----------------
 (0 rows)
 
 \dp "no.such.access.privilege"
@@ -6561,9 +6531,9 @@ cross-database references are not implemented: "no.such.schema"."no.such.languag
 (0 rows)
 
 \dO "no.such.schema"."no.such.collation"
-                                  List of collations
- Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
---------+------+----------+---------+-------+------------+-----------+----------------
+                                List of collations
+ Schema | Name | Provider | Collate | Ctype | Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+--------+-----------+----------------
 (0 rows)
 
 \dp "no.such.schema"."no.such.access.privilege"
@@ -6704,9 +6674,9 @@ List of text search templates
 (0 rows)
 
 \dO regression."no.such.schema"."no.such.collation"
-                                  List of collations
- Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
---------+------+----------+---------+-------+------------+-----------+----------------
+                                List of collations
+ Schema | Name | Provider | Collate | Ctype | Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+--------+-----------+----------------
 (0 rows)
 
 \dp regression."no.such.schema"."no.such.access.privilege"
@@ -6780,3 +6750,102 @@ cross-database references are not implemented: "no.such.database"."no.such.schem
 cross-database references are not implemented: "no.such.database"."no.such.schema"."no.such.data.type"
 \dX "no.such.database"."no.such.schema"."no.such.extended.statistics"
 cross-database references are not implemented: "no.such.database"."no.such.schema"."no.such.extended.statistics"
+-- check \drg and \du
+CREATE ROLE regress_du_role0;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_du_role1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_du_role2;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE regress_du_admin;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT regress_du_role0 TO regress_du_admin WITH ADMIN TRUE;
+GRANT regress_du_role1 TO regress_du_admin WITH ADMIN TRUE;
+GRANT regress_du_role2 TO regress_du_admin WITH ADMIN TRUE;
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN TRUE,  INHERIT TRUE,  SET TRUE  GRANTED BY regress_du_admin;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN TRUE,  INHERIT FALSE, SET FALSE GRANTED BY regress_du_admin;
+GRANT regress_du_role1 TO regress_du_role2 WITH ADMIN TRUE , INHERIT FALSE, SET TRUE  GRANTED BY regress_du_admin;
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN FALSE, INHERIT TRUE,  SET FALSE GRANTED BY regress_du_role1;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN FALSE, INHERIT TRUE , SET TRUE  GRANTED BY regress_du_role1;
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN FALSE, INHERIT FALSE, SET TRUE  GRANTED BY regress_du_role2;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN FALSE, INHERIT FALSE, SET FALSE GRANTED BY regress_du_role2;
+\drg regress_du_role*
+                             List of role grants
+    Role name     |    Member of     |       Options       |     Grantor      
+------------------+------------------+---------------------+------------------
+ regress_du_role1 | regress_du_role0 | ADMIN, INHERIT, SET | regress_du_admin
+ regress_du_role1 | regress_du_role0 | INHERIT             | regress_du_role1
+ regress_du_role1 | regress_du_role0 | SET                 | regress_du_role2
+ regress_du_role2 | regress_du_role0 | ADMIN               | regress_du_admin
+ regress_du_role2 | regress_du_role0 | INHERIT, SET        | regress_du_role1
+ regress_du_role2 | regress_du_role0 |                     | regress_du_role2
+ regress_du_role2 | regress_du_role1 | ADMIN, SET          | regress_du_admin
+(7 rows)
+
+\du regress_du_role*
+          List of roles
+    Role name     |  Attributes  
+------------------+--------------
+ regress_du_role0 | Cannot login
+ regress_du_role1 | Cannot login
+ regress_du_role2 | Cannot login
+
+DROP ROLE regress_du_role0;
+DROP ROLE regress_du_role1;
+DROP ROLE regress_du_role2;
+DROP ROLE regress_du_admin;
+-- Test display of empty privileges.
+BEGIN;
+-- Create an owner for tested objects because output contains owner name.
+CREATE ROLE regress_zeropriv_owner;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET LOCAL ROLE regress_zeropriv_owner;
+CREATE DOMAIN regress_zeropriv_domain AS int;
+REVOKE ALL ON DOMAIN regress_zeropriv_domain FROM CURRENT_USER, PUBLIC;
+\dD+ regress_zeropriv_domain
+                                                    List of domains
+ Schema |          Name           |  Type   | Collation | Nullable | Default | Check | Access privileges | Description 
+--------+-------------------------+---------+-----------+----------+---------+-------+-------------------+-------------
+ public | regress_zeropriv_domain | integer |           |          |         |       | (none)            | 
+(1 row)
+
+CREATE PROCEDURE regress_zeropriv_proc() LANGUAGE sql AS '';
+REVOKE ALL ON PROCEDURE regress_zeropriv_proc() FROM CURRENT_USER, PUBLIC;
+\df+ regress_zeropriv_proc
+                                                                                                          List of functions
+ Schema |         Name          | Result data type | Argument data types | Type | Data access  | Execute on | Volatility | Parallel |         Owner          | Security | Access privileges | Language | Internal name | Description 
+--------+-----------------------+------------------+---------------------+------+--------------+------------+------------+----------+------------------------+----------+-------------------+----------+---------------+-------------
+ public | regress_zeropriv_proc |                  |                     | proc | contains sql | any        | volatile   | unsafe   | regress_zeropriv_owner | invoker  | (none)            | sql      |               | 
+(1 row)
+
+CREATE TABLE regress_zeropriv_tbl (a int);
+REVOKE ALL ON TABLE regress_zeropriv_tbl FROM CURRENT_USER;
+\dp regress_zeropriv_tbl
+                                    Access privileges
+ Schema |         Name         | Type  | Access privileges | Column privileges | Policies 
+--------+----------------------+-------+-------------------+-------------------+----------
+ public | regress_zeropriv_tbl | table | (none)            |                   | 
+(1 row)
+
+CREATE TYPE regress_zeropriv_type AS (a int);
+REVOKE ALL ON TYPE regress_zeropriv_type FROM CURRENT_USER, PUBLIC;
+\dT+ regress_zeropriv_type
+                                                                 List of data types
+ Schema |         Name          |     Internal name     | Size  | Elements | Type Options |     Internal name      | Access privileges | Description 
+--------+-----------------------+-----------------------+-------+----------+--------------+------------------------+-------------------+-------------
+ public | regress_zeropriv_type | regress_zeropriv_type | tuple |          |              | regress_zeropriv_owner | (none)            | 
+(1 row)
+
+ROLLBACK;
+-- Test display of default privileges with \pset null.
+CREATE TABLE defprivs (a int);
+\pset null '(default)'
+\z defprivs
+                              Access privileges
+ Schema |   Name   | Type  | Access privileges | Column privileges | Policies 
+--------+----------+-------+-------------------+-------------------+----------
+ public | defprivs | table |                   |                   | 
+(1 row)
+
+\pset null ''
+DROP TABLE defprivs;

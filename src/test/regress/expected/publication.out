@@ -186,15 +186,16 @@ SELECT pubname, puballtables FROM pg_publication WHERE pubname = 'testpub_forall
 (1 row)
 
 \d+ testpub_tbl2
-                                                       Table "public.testpub_tbl2"
- Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+------------------------------------------+----------+-------------+--------------+-------------
- id     | integer |           | not null | nextval('testpub_tbl2_id_seq'::regclass) | plain    |             |              | 
- data   | text    |           |          |                                          | extended |             |              | 
+                                                Table "public.testpub_tbl2"
+ Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Stats target | Description 
+--------+---------+-----------+----------+------------------------------------------+----------+--------------+-------------
+ id     | integer |           | not null | nextval('testpub_tbl2_id_seq'::regclass) | plain    |              | 
+ data   | text    |           |          |                                          | extended |              | 
 Indexes:
     "testpub_tbl2_pkey" PRIMARY KEY, btree (id)
 Publications:
     "testpub_foralltables"
+Distributed by: (id)
 
 \dRp+ testpub_foralltables
                               Publication testpub_foralltables
@@ -207,7 +208,6 @@ DROP TABLE testpub_tbl2;
 DROP PUBLICATION testpub_foralltables, testpub_fortable, testpub_forschema, testpub_for_tbl_schema;
 CREATE TABLE testpub_tbl3 (a int);
 CREATE TABLE testpub_tbl3a (b text) INHERITS (testpub_tbl3);
-NOTICE:  table has parent, setting distribution columns to match parent table
 SET client_min_messages = 'ERROR';
 CREATE PUBLICATION testpub3 FOR TABLE testpub_tbl3;
 CREATE PUBLICATION testpub4 FOR TABLE ONLY testpub_tbl3;
@@ -309,6 +309,7 @@ Tables:
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  e      | integer |           |          | 
+Distributed by: (e)
 
 ALTER PUBLICATION testpub5 ADD TABLE testpub_rf_tbl3 WHERE (e > 1000 AND e < 2000);
 \dRp+ testpub5
@@ -328,6 +329,7 @@ Tables:
  e      | integer |           |          | 
 Publications:
     "testpub5" WHERE ((e > 1000) AND (e < 2000))
+Distributed by: (e)
 
 ALTER PUBLICATION testpub5 DROP TABLE testpub_rf_tbl2;
 \dRp+ testpub5
@@ -356,6 +358,7 @@ Tables:
  e      | integer |           |          | 
 Publications:
     "testpub5" WHERE ((e > 300) AND (e < 500))
+Distributed by: (e)
 
 -- test \d <tablename> (now it displays filter information)
 SET client_min_messages = 'ERROR';
@@ -371,6 +374,7 @@ RESET client_min_messages;
 Publications:
     "testpub_rf_no"
     "testpub_rf_yes" WHERE (a > 1)
+Distributed by: (a)
 
 DROP PUBLICATION testpub_rf_yes, testpub_rf_no;
 -- some more syntax tests to exercise other parser pathways
@@ -747,11 +751,11 @@ Tables:
 CREATE TABLE testpub_tbl5d (a int PRIMARY KEY DEFERRABLE);
 ALTER PUBLICATION testpub_fortable ADD TABLE testpub_tbl5d;
 UPDATE testpub_tbl5d SET a = 1;
-ERROR:  cannot update table "testpub_tbl5d" because it does not have a replica identity and publishes updates
-HINT:  To enable updating the table, set REPLICA IDENTITY using ALTER TABLE.
+ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 /* but works fine with FULL replica identity */
 ALTER TABLE testpub_tbl5d REPLICA IDENTITY FULL;
 UPDATE testpub_tbl5d SET a = 1;
+ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 DROP TABLE testpub_tbl5d;
 -- tests with REPLICA IDENTITY FULL
 CREATE TABLE testpub_tbl6 (a int, b text, c text);
@@ -767,56 +771,57 @@ UPDATE testpub_tbl6 SET a = 1;
 CREATE TABLE testpub_tbl7 (a int primary key, b text, c text);
 ALTER PUBLICATION testpub_fortable ADD TABLE testpub_tbl7 (a, b);
 \d+ testpub_tbl7
-                                       Table "public.testpub_tbl7"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer |           | not null |         | plain    |             |              | 
- b      | text    |           |          |         | extended |             |              | 
- c      | text    |           |          |         | extended |             |              | 
+                                Table "public.testpub_tbl7"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer |           | not null |         | plain    |              | 
+ b      | text    |           |          |         | extended |              | 
+ c      | text    |           |          |         | extended |              | 
 Indexes:
     "testpub_tbl7_pkey" PRIMARY KEY, btree (a)
 Publications:
     "testpub_fortable" (a, b)
+Distributed by: (a)
 
 -- ok: the column list is the same, we should skip this table (or at least not fail)
 ALTER PUBLICATION testpub_fortable SET TABLE testpub_tbl7 (a, b);
 \d+ testpub_tbl7
-                                       Table "public.testpub_tbl7"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer |           | not null |         | plain    |             |              | 
- b      | text    |           |          |         | extended |             |              | 
- c      | text    |           |          |         | extended |             |              | 
+                                Table "public.testpub_tbl7"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer |           | not null |         | plain    |              | 
+ b      | text    |           |          |         | extended |              | 
+ c      | text    |           |          |         | extended |              | 
 Indexes:
     "testpub_tbl7_pkey" PRIMARY KEY, btree (a)
 Publications:
     "testpub_fortable" (a, b)
+Distributed by: (a)
 
 -- ok: the column list changes, make sure the catalog gets updated
 ALTER PUBLICATION testpub_fortable SET TABLE testpub_tbl7 (a, c);
 \d+ testpub_tbl7
-                                       Table "public.testpub_tbl7"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer |           | not null |         | plain    |             |              | 
- b      | text    |           |          |         | extended |             |              | 
- c      | text    |           |          |         | extended |             |              | 
+                                Table "public.testpub_tbl7"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer |           | not null |         | plain    |              | 
+ b      | text    |           |          |         | extended |              | 
+ c      | text    |           |          |         | extended |              | 
 Indexes:
     "testpub_tbl7_pkey" PRIMARY KEY, btree (a)
 Publications:
     "testpub_fortable" (a, c)
+Distributed by: (a)
 
 -- column list for partitioned tables has to cover replica identities for
 -- all child relations
 CREATE TABLE testpub_tbl8 (a int, b text, c text) PARTITION BY HASH (a);
 -- first partition has replica identity "a"
 CREATE TABLE testpub_tbl8_0 PARTITION OF testpub_tbl8 FOR VALUES WITH (modulus 2, remainder 0);
-NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE testpub_tbl8_0 ADD PRIMARY KEY (a);
 ALTER TABLE testpub_tbl8_0 REPLICA IDENTITY USING INDEX testpub_tbl8_0_pkey;
 -- second partition has replica identity "b"
 CREATE TABLE testpub_tbl8_1 PARTITION OF testpub_tbl8 FOR VALUES WITH (modulus 2, remainder 1);
-NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE testpub_tbl8_1 ADD PRIMARY KEY (b);
 ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "a" is not included in the constraint.
@@ -946,16 +951,17 @@ Tables:
     "public.testpub_tbl_both_filters" (a, c) WHERE (c <> 1)
 
 \d+ testpub_tbl_both_filters
-                                Table "public.testpub_tbl_both_filters"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           | not null |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           | not null |         | plain   |             |              | 
+                         Table "public.testpub_tbl_both_filters"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           | not null |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           | not null |         | plain   |              | 
 Indexes:
     "testpub_tbl_both_filters_pkey" PRIMARY KEY, btree (a, c) REPLICA IDENTITY
 Publications:
     "testpub_both_filters" (a, c) WHERE (c <> 1)
+Distributed by: (a, c)
 
 DROP TABLE testpub_tbl_both_filters;
 DROP PUBLICATION testpub_both_filters;
@@ -1173,28 +1179,30 @@ ALTER PUBLICATION testpub_default SET TABLE testpub_tbl1;
 ALTER PUBLICATION testpub_default ADD TABLE pub_test.testpub_nopk;
 ALTER PUBLICATION testpib_ins_trunct ADD TABLE pub_test.testpub_nopk, testpub_tbl1;
 \d+ pub_test.testpub_nopk
-                                     Table "pub_test.testpub_nopk"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- foo    | integer |           |          |         | plain   |             |              | 
- bar    | integer |           |          |         | plain   |             |              | 
+                              Table "pub_test.testpub_nopk"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ foo    | integer |           |          |         | plain   |              | 
+ bar    | integer |           |          |         | plain   |              | 
 Publications:
     "testpib_ins_trunct"
     "testpub_default"
     "testpub_fortbl"
+Distributed by: (foo)
 
 \d+ testpub_tbl1
-                                                       Table "public.testpub_tbl1"
- Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+------------------------------------------+----------+-------------+--------------+-------------
- id     | integer |           | not null | nextval('testpub_tbl1_id_seq'::regclass) | plain    |             |              | 
- data   | text    |           |          |                                          | extended |             |              | 
+                                                Table "public.testpub_tbl1"
+ Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Stats target | Description 
+--------+---------+-----------+----------+------------------------------------------+----------+--------------+-------------
+ id     | integer |           | not null | nextval('testpub_tbl1_id_seq'::regclass) | plain    |              | 
+ data   | text    |           |          |                                          | extended |              | 
 Indexes:
     "testpub_tbl1_pkey" PRIMARY KEY, btree (id)
 Publications:
     "testpib_ins_trunct"
     "testpub_default"
     "testpub_fortbl"
+Distributed by: (id)
 
 \dRp+ testpub_default
                                 Publication testpub_default
@@ -1210,16 +1218,17 @@ ALTER PUBLICATION testpub_default DROP TABLE testpub_tbl1, pub_test.testpub_nopk
 ALTER PUBLICATION testpub_default DROP TABLE pub_test.testpub_nopk;
 ERROR:  relation "testpub_nopk" is not part of the publication
 \d+ testpub_tbl1
-                                                       Table "public.testpub_tbl1"
- Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+------------------------------------------+----------+-------------+--------------+-------------
- id     | integer |           | not null | nextval('testpub_tbl1_id_seq'::regclass) | plain    |             |              | 
- data   | text    |           |          |                                          | extended |             |              | 
+                                                Table "public.testpub_tbl1"
+ Column |  Type   | Collation | Nullable |                 Default                  | Storage  | Stats target | Description 
+--------+---------+-----------+----------+------------------------------------------+----------+--------------+-------------
+ id     | integer |           | not null | nextval('testpub_tbl1_id_seq'::regclass) | plain    |              | 
+ data   | text    |           |          |                                          | extended |              | 
 Indexes:
     "testpub_tbl1_pkey" PRIMARY KEY, btree (id)
 Publications:
     "testpib_ins_trunct"
     "testpub_fortbl"
+Distributed by: (id)
 
 -- verify relation cache invalidation when a primary key is added using
 -- an existing index
@@ -1595,7 +1604,6 @@ CREATE SCHEMA pub_testpart1;
 CREATE SCHEMA pub_testpart2;
 CREATE TABLE pub_testpart1.parent1 (a int) partition by list (a);
 CREATE TABLE pub_testpart2.child_parent1 partition of pub_testpart1.parent1 for values in (1);
-NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pub_testpart2.child_parent1 values(1);
 UPDATE pub_testpart2.child_parent1 set a = 1;
 SET client_min_messages = 'ERROR';
@@ -1613,7 +1621,6 @@ DROP PUBLICATION testpubpart_forschema;
 -- parent and child tables of different partition hierarchies
 CREATE TABLE pub_testpart2.parent2 (a int) partition by list (a);
 CREATE TABLE pub_testpart1.child_parent2 partition of pub_testpart2.parent2 for values in (1);
-NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pub_testpart1.child_parent2 values(1);
 UPDATE pub_testpart1.child_parent2 set a = 1;
 SET client_min_messages = 'ERROR';

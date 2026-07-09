@@ -97,9 +97,9 @@ FROM json_table_test vals
 	ON true;
                                           js                                           | id | int |  text   | char(4) | bool | numeric | domain  |      js      |      jb      
 ---------------------------------------------------------------------------------------+----+-----+---------+---------+------+---------+---------+--------------+--------------
+ {}                                                                                    |  1 |     |         |         |      |         |         | {}           | {}
  1                                                                                     |  1 |   1 | 1       | 1       | t    |       1 | 1       | 1            | 1
  []                                                                                    |    |     |         |         |      |         |         |              | 
- {}                                                                                    |  1 |     |         |         |      |         |         | {}           | {}
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  1 |   1 | 1       | 1       | t    |       1 | 1       | 1            | 1
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  2 |     | 1.23    | 1.23    |      |    1.23 | 1.23    | 1.23         | 1.23
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  3 |   2 | 2       | 2       |      |       2 | 2       | "2"          | "2"
@@ -131,9 +131,9 @@ FROM json_table_test vals
 	ON true;
                                           js                                           | id |     jst      | jsc  | jsv  |     jsb      |     jsbq     
 ---------------------------------------------------------------------------------------+----+--------------+------+------+--------------+--------------
+ {}                                                                                    |  1 | {}           | {}   | {}   | {}           | {}
  1                                                                                     |  1 | 1            | 1    | 1    | 1            | 1
  []                                                                                    |    |              |      |      |              | 
- {}                                                                                    |  1 | {}           | {}   | {}   | {}           | {}
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  1 | 1            | 1    | 1    | 1            | 1
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  2 | 1.23         | 1.23 | 1.23 | 1.23         | 1.23
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  3 | "2"          | "2"  | "2"  | "2"          | 2
@@ -164,9 +164,9 @@ FROM json_table_test vals
 	ON true;
                                           js                                           | id | exists1 | exists2 | exists3 | exists4 
 ---------------------------------------------------------------------------------------+----+---------+---------+---------+---------
+ {}                                                                                    |  1 | f       |       0 |         | false
  1                                                                                     |  1 | f       |       0 |         | false
  []                                                                                    |    |         |         |         | 
- {}                                                                                    |  1 | f       |       0 |         | false
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  1 | f       |       0 |         | false
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  2 | f       |       0 |         | false
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  3 | f       |       0 |         | false
@@ -201,9 +201,9 @@ FROM json_table_test vals
 	ON true;
                                           js                                           | id | aaa | aaa1 |     js2      |     jsb2w      |    jsb2q     | ia | ta | jba 
 ---------------------------------------------------------------------------------------+----+-----+------+--------------+----------------+--------------+----+----+-----
+ {}                                                                                    |  1 |     |      | {}           | [{}]           | {}           |    |    | 
  1                                                                                     |  1 |     |      | 1            | [1]            | 1            |    |    | 
  []                                                                                    |    |     |      |              |                |              |    |    | 
- {}                                                                                    |  1 |     |      | {}           | [{}]           | {}           |    |    | 
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  1 |     |      | 1            | [1]            | 1            |    |    | 
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  2 |     |      | 1.23         | [1.23]         | 1.23         |    |    | 
  [1, 1.23, "2", "aaaaaaa", "foo", null, false, true, {"aaa": 123}, "[1,2]", "\"str\""] |  3 |     |      | "2"          | ["2"]          | 2            |    |    | 
@@ -403,7 +403,8 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view2;
  Table Function Scan on "json_table"
    Output: "json_table"."int", "json_table".text, "json_table"."char(4)", "json_table".bool, "json_table"."numeric", "json_table".domain
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS ("int" integer PATH '$', text text PATH '$', "char(4)" character(4) PATH '$', bool boolean PATH '$', "numeric" numeric PATH '$', domain jsonb_test_domain PATH '$'))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view3;
                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                              
@@ -411,7 +412,8 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view3;
  Table Function Scan on "json_table"
    Output: "json_table".js, "json_table".jb, "json_table".jst, "json_table".jsc, "json_table".jsv
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS (js json PATH '$' WITHOUT WRAPPER KEEP QUOTES, jb jsonb PATH '$' WITHOUT WRAPPER KEEP QUOTES, jst text FORMAT JSON PATH '$' WITHOUT WRAPPER KEEP QUOTES, jsc character(4) FORMAT JSON PATH '$' WITHOUT WRAPPER KEEP QUOTES, jsv character varying(4) FORMAT JSON PATH '$' WITHOUT WRAPPER KEEP QUOTES))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view4;
                                                                                                                                         QUERY PLAN                                                                                                                                        
@@ -419,7 +421,8 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view4;
  Table Function Scan on "json_table"
    Output: "json_table".jsb, "json_table".jsbq, "json_table".aaa, "json_table".aaa1
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS (jsb jsonb PATH '$' WITHOUT WRAPPER KEEP QUOTES, jsbq jsonb PATH '$' WITHOUT WRAPPER OMIT QUOTES, aaa integer PATH '$."aaa"', aaa1 integer PATH '$."aaa"'))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view5;
                                                                                                                                        QUERY PLAN                                                                                                                                       
@@ -427,7 +430,8 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view5;
  Table Function Scan on "json_table"
    Output: "json_table".exists1, "json_table".exists2, "json_table".exists3
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS (exists1 boolean EXISTS PATH '$."aaa"', exists2 integer EXISTS PATH '$."aaa"' TRUE ON ERROR, exists3 text EXISTS PATH 'strict $."aaa"' UNKNOWN ON ERROR))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view6;
                                                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                                                     
@@ -435,7 +439,8 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM jsonb_table_view6;
  Table Function Scan on "json_table"
    Output: "json_table".js2, "json_table".jsb2w, "json_table".jsb2q, "json_table".ia, "json_table".ta, "json_table".jba
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS (js2 json PATH '$' WITHOUT WRAPPER KEEP QUOTES, jsb2w jsonb PATH '$' WITH UNCONDITIONAL WRAPPER KEEP QUOTES, jsb2q jsonb PATH '$' WITHOUT WRAPPER OMIT QUOTES, ia integer[] PATH '$' WITHOUT WRAPPER KEEP QUOTES, ta text[] PATH '$' WITHOUT WRAPPER KEEP QUOTES, jba jsonb[] PATH '$' WITHOUT WRAPPER KEEP QUOTES))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 -- JSON_TABLE() with alias
 EXPLAIN (COSTS OFF, VERBOSE)
@@ -452,7 +457,8 @@ SELECT * FROM
  Table Function Scan on "json_table" json_table_func
    Output: id, "int", text
    Table Function Call: JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '"foo"'::jsonb AS "b c" COLUMNS (id FOR ORDINALITY, "int" integer PATH '$', text text PATH '$'))
-(3 rows)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF, FORMAT JSON, VERBOSE)
 SELECT * FROM
@@ -469,12 +475,18 @@ SELECT * FROM
    {                                                                                                                                                                                                        +
      "Plan": {                                                                                                                                                                                              +
        "Node Type": "Table Function Scan",                                                                                                                                                                  +
+       "Slice": 0,                                                                                                                                                                                          +
+       "Segments": 0,                                                                                                                                                                                       +
+       "Gang Type": "unallocated",                                                                                                                                                                          +
        "Parallel Aware": false,                                                                                                                                                                             +
        "Async Capable": false,                                                                                                                                                                              +
        "Table Function Name": "json_table",                                                                                                                                                                 +
        "Alias": "json_table_func",                                                                                                                                                                          +
        "Output": ["id", "\"int\"", "text"],                                                                                                                                                                 +
        "Table Function Call": "JSON_TABLE('null'::jsonb, '$[*]' AS json_table_path_0 PASSING 3 AS a, '\"foo\"'::jsonb AS \"b c\" COLUMNS (id FOR ORDINALITY, \"int\" integer PATH '$', text text PATH '$'))"+
+     },                                                                                                                                                                                                     +
+     "Optimizer": "Postgres query optimizer",                                                                                                                                                               +
+     "Settings": {                                                                                                                                                                                          +
      }                                                                                                                                                                                                      +
    }                                                                                                                                                                                                        +
  ]
@@ -877,12 +889,12 @@ SELECT sub.* FROM s,
 	)) sub;
  xx | z21  
 ----+------
-  3 |     
-  3 |  234
-  3 | 2345
  10 |   32
  10 |  134
  10 | 1345
+  3 |     
+  3 |  234
+  3 | 2345
 (6 rows)
 
 -- Parent columns xx1, xx appear before NESTED ones
@@ -899,6 +911,12 @@ SELECT sub.* FROM s,
 	)) sub;
  xx1 | xx |  c  |       d       |  a   |  b   
 -----+----+-----+---------------+------+------
+  10 | 10 |     | {32,134,1345} |      |     
+  10 | 10 |     |               |   21 |     
+  10 | 10 |     |               | 4222 |     
+  10 | 10 |     |               |      |   32
+  10 | 10 |     |               |      |  134
+  10 | 10 |     |               |      | 1345
    3 |  3 |  32 |               |      |     
    3 |  3 | 204 |               |      |     
    3 |  3 | 145 |               |      |     
@@ -908,12 +926,6 @@ SELECT sub.* FROM s,
    3 |  3 |     |               |      |   22
    3 |  3 |     |               |      |  234
    3 |  3 |     |               |      | 2345
-  10 | 10 |     | {32,134,1345} |      |     
-  10 | 10 |     |               |   21 |     
-  10 | 10 |     |               | 4222 |     
-  10 | 10 |     |               |      |   32
-  10 | 10 |     |               |      |  134
-  10 | 10 |     |               |      | 1345
 (15 rows)
 
 -- Test applying PASSING variables at different nesting levels
@@ -984,6 +996,11 @@ SELECT sub.* FROM s,
 	)) sub;
  xx1 |  c  |            d             |  a   |  b   
 -----+-----+--------------------------+------+------
+  10 |     |                          |      |     
+  10 |     |                          |   21 |     
+  10 |     |                          | 4222 |     
+  10 |     |                          |      |    0
+  10 |     |                          |      | 1345
    3 |  32 |                          |      |     
    3 | 204 |                          |      |     
    3 | 145 |                          |      |     
@@ -991,11 +1008,6 @@ SELECT sub.* FROM s,
    3 |     |                          | 2222 |     
    3 |     |                          |      |  234
    3 |     |                          |      | 2345
-  10 |     |                          |      |     
-  10 |     |                          |   21 |     
-  10 |     |                          | 4222 |     
-  10 |     |                          |      |    0
-  10 |     |                          |      | 1345
 (12 rows)
 
 CREATE OR REPLACE VIEW jsonb_table_view7 AS
