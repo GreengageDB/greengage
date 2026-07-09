@@ -3704,7 +3704,7 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 	}
 
 	/* init WaitEventSet */
-	waitset = CreateWaitEventSet(CurrentMemoryContext, nevent);
+	waitset = CreateWaitEventSet(NULL, nevent);
 
 	/*
 	 * Use PG_TRY() - PG_CATCH() to make sure destroy the waiteventset (close the epoll fd)

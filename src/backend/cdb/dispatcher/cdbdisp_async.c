@@ -219,7 +219,7 @@ cdbdisp_waitDispatchFinish_async(struct CdbDispatcherState *ds)
 {
 	CdbDispatchCmdAsync *pParms = (CdbDispatchCmdAsync *) ds->dispatchParams;
 	int				dispatchCount = pParms->dispatchCount;
-	WaitEventSet 	*volatile waitset = CreateWaitEventSet(CurrentMemoryContext, dispatchCount);
+	WaitEventSet 	*volatile waitset = CreateWaitEventSet(NULL, dispatchCount);
 
 	/* Use PG_TRY() - PG_CATCH() to make sure destroy the waiteventset (close the epoll fd) */
 	PG_TRY();
@@ -467,7 +467,7 @@ static void
 checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 {
 	CdbDispatchCmdAsync *pParms = (CdbDispatchCmdAsync *) ds->dispatchParams;
-	WaitEventSet *volatile waitset = CreateWaitEventSet(CurrentMemoryContext, pParms->dispatchCount);
+	WaitEventSet *volatile waitset = CreateWaitEventSet(NULL, pParms->dispatchCount);
 
 	/* Use PG_TRY() - PG_CATCH() to make sure destroy the waiteventset (close the epoll fd) */
 	PG_TRY();

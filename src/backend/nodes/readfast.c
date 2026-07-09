@@ -5271,6 +5271,8 @@ _readBitmapset(void)
 		return bms;
 
 	bms = palloc(offsetof(Bitmapset, words)+nwords*sizeof(bitmapword));
+	/* PG17 made Bitmapset a Node; the tag must be set or bms_is_valid_set() fails */
+	bms->type = T_Bitmapset;
 	bms->nwords = nwords;
 	for (i = 0; i < nwords; i++)
 	{
