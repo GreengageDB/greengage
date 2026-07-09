@@ -3002,8 +3002,22 @@ std_typanalyze(VacAttrStats *stats)
 	/*
 	 * Determine which standard statistics algorithm to use
 	 */
-	List *va_cols = list_make1(makeString(NameStr(stats->attr->attname)));
-	if (get_rel_relkind(attr->attrelid) == RELKIND_PARTITIONED_TABLE &&
+	/*
+	 * GPDB: for a partitioned (root) table we can merge the already-computed
+	 * leaf-partition statistics instead of sampling.  This path dereferences
+	 * stats->attr (the real column being analyzed), which is NULL for
+	 * extended-statistics expressions -- examine_attribute() in
+	 * extended_stats.c palloc0's the VacAttrStats and never sets ->attr.  Guard
+	 * it so expression statistics fall through to the normal per-type
+	 * selection below instead of crashing.
+	 */
+	List	   *va_cols = NIL;
+
+	if (stats->attr != NULL)
+		va_cols = list_make1(makeString(NameStr(stats->attr->attname)));
+
+	if (stats->attr != NULL &&
+		get_rel_relkind(attr->attrelid) == RELKIND_PARTITIONED_TABLE &&
 		!get_rel_relispartition(attr->attrelid) &&
 		leaf_parts_analyzed(stats->attr->attrelid, InvalidOid, va_cols, stats->elevel) &&
 		((!OidIsValid(eqopr)) || op_hashjoinable(eqopr, stats->attrtypid)))
