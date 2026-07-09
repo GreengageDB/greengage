@@ -351,9 +351,9 @@ get_matview_query(Relation matview)
 			 RelationGetRelationName(matview));
 
 	if (matview->rd_rules->numLocks > 1)
-	elog(ERROR,
-		 "materialized view \"%s\" has too many rules",
-		 RelationGetRelationName(matview));
+		elog(ERROR,
+			 "materialized view \"%s\" has too many rules",
+			 RelationGetRelationName(matview));
 
 	rule = matview->rd_rules->rules[0];
 	if (rule->event != CMD_SELECT || !(rule->isInstead))
