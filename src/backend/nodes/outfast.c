@@ -1580,6 +1580,7 @@ _outAggref(StringInfo str, const Aggref *node)
 	WRITE_BOOL_FIELD(aggstar);
 	WRITE_BOOL_FIELD(aggvariadic);
 	WRITE_CHAR_FIELD(aggkind);
+	WRITE_BOOL_FIELD(aggpresorted);
 	WRITE_UINT_FIELD(agglevelsup);
 	WRITE_ENUM_FIELD(aggsplit, AggSplit);
 	WRITE_INT_FIELD(aggno);
@@ -4199,6 +4200,8 @@ _outPartitionCmd(StringInfo str, const PartitionCmd *node)
 
 	WRITE_NODE_FIELD(name);
 	WRITE_NODE_FIELD(bound);
+	WRITE_NODE_FIELD(partlist);
+	WRITE_BOOL_FIELD(concurrent);
 }
 
 static void
