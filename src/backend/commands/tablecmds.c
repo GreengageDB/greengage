@@ -19535,13 +19535,19 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 		PushActiveSnapshot(GetLatestSnapshot());
 
 		/*
-		 * The plan built by build_ctas_with_dist() was given a (now popped)
-		 * snapshot in queryDesc->snapshot.  ExecutorStart() asserts that the
-		 * active snapshot is identical to queryDesc->snapshot, so retarget
-		 * queryDesc->snapshot to the snapshot we just made active (which also
-		 * ensures the query sees all committed work, per the comment above).
+		 * build_ctas_with_dist() created queryDesc via CreateQueryDesc(),
+		 * which registered queryDesc->snapshot under the current resource
+		 * owner but then popped it off the active-snapshot stack.  PG17
+		 * requires the query's snapshot to be the active one (ExecutorStart()
+		 * asserts GetActiveSnapshot() == queryDesc->snapshot) and
+		 * FreeQueryDesc() will UnregisterSnapshot() it.  Swap the registered
+		 * snapshot for the one we just pushed active, keeping the
+		 * register/unregister accounting balanced -- otherwise FreeQueryDesc()
+		 * unregisters a snapshot that was never registered under this owner
+		 * ("snapshot reference ... is not owned by resource owner Portal").
 		 */
-		queryDesc->snapshot = GetActiveSnapshot();
+		UnregisterSnapshot(queryDesc->snapshot);
+		queryDesc->snapshot = RegisterSnapshot(GetActiveSnapshot());
 
 		/* Step (c) - run on all nodes */
 		queryDesc->ddesc = makeNode(QueryDispatchDesc);
@@ -20061,14 +20067,20 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			PushActiveSnapshot(GetLatestSnapshot());
 
 			/*
-			 * The plan built by build_ctas_with_dist() was given a (now
-			 * popped) snapshot in queryDesc->snapshot.  ExecutorStart()
-			 * asserts that the active snapshot is identical to
-			 * queryDesc->snapshot, so retarget queryDesc->snapshot to the
-			 * snapshot we just made active (which also ensures the query sees
-			 * all committed work, per the comment above).
+			 * build_ctas_with_dist() created queryDesc via CreateQueryDesc(),
+			 * which registered queryDesc->snapshot under the current resource
+			 * owner but then popped it off the active-snapshot stack.  PG17
+			 * requires the query's snapshot to be the active one
+			 * (ExecutorStart() asserts GetActiveSnapshot() ==
+			 * queryDesc->snapshot) and FreeQueryDesc() will
+			 * UnregisterSnapshot() it.  Swap the registered snapshot for the
+			 * one we just pushed active, keeping the register/unregister
+			 * accounting balanced -- otherwise FreeQueryDesc() unregisters a
+			 * snapshot that was never registered under this owner ("snapshot
+			 * reference ... is not owned by resource owner Portal").
 			 */
-			queryDesc->snapshot = GetActiveSnapshot();
+			UnregisterSnapshot(queryDesc->snapshot);
+			queryDesc->snapshot = RegisterSnapshot(GetActiveSnapshot());
 
 			/* Step (c) - run on all nodes */
 			queryDesc->ddesc = makeNode(QueryDispatchDesc);
