@@ -500,7 +500,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 								parent,
 								name);
 
-			if (parent)
+			if (parent && IsA(parent, AllocSetContext))
 				set->accountingParent = ((AllocSet) parent)->accountingParent;
 			else
 				set->accountingParent = set;
@@ -602,7 +602,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 						parent,
 						name);
 
-	if (parent)
+	if (parent && IsA(parent, AllocSetContext))
 		set->accountingParent = ((AllocSet) parent)->accountingParent;
 	else
 		set->accountingParent = set;

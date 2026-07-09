@@ -106,7 +106,11 @@ CATALOG_HEADERS := \
 
 GENERATED_HEADERS := $(CATALOG_HEADERS:%.h=%_d.h)
 
-POSTGRES_BKI_SRCS := $(addprefix $(top_srcdir)/src/include/catalog/, $(CATALOG_HEADERS))
+# GPDB: toasting.h carries the centralized DECLARE_TOAST() declarations (and
+# indexing.h any centralized indexes); they must be fed to genbki so the
+# catalog toast tables get created.  They go last (after the catalogs they
+# reference) as the comment above requires.
+POSTGRES_BKI_SRCS := $(addprefix $(top_srcdir)/src/include/catalog/, $(CATALOG_HEADERS) toasting.h indexing.h)
 
 # The .dat files we need can just be listed alphabetically.
 POSTGRES_BKI_DATA = \

@@ -5832,11 +5832,20 @@ examine_simple_variable(PlannerInfo *root, Var *var,
 			}
 			if (lc == NULL)		/* shouldn't happen */
 				elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
+
+			/*
+			 * GPDB: the MPP planner may plan a CTE via a path that does not
+			 * populate cte_plan_ids (e.g. a shared input scan), in which case
+			 * there is no conventional subroot to draw stats from.  Rather than
+			 * error out (upstream treats these as "shouldn't happen"), punt on
+			 * gathering stats for the CTE reference, as we do just below when
+			 * the subquery hasn't been planned yet.
+			 */
 			if (ndx >= list_length(cteroot->cte_plan_ids))
-				elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
+				return;
 			plan_id = list_nth_int(cteroot->cte_plan_ids, ndx);
 			if (plan_id <= 0)
-				elog(ERROR, "no plan was made for CTE \"%s\"", rte->ctename);
+				return;
 			subroot = list_nth(root->glob->subroots, plan_id - 1);
 		}
 

@@ -638,7 +638,11 @@ DistributedLog_SharedShmemSize(void)
 Size
 DistributedLog_ShmemBuffers(void)
 {
-	return Min(128, Max(8, NBuffers / 512));
+	/*
+	 * PG17 SLRU requires the slot count to be a multiple of SLRU_BANK_SIZE;
+	 * SimpleLruAutotuneBuffers() enforces that (and a SLRU_BANK_SIZE minimum).
+	 */
+	return SimpleLruAutotuneBuffers(512, 128);
 }
 
 /*
