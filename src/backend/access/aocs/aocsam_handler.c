@@ -1475,11 +1475,17 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 }
 
 static bool
-aoco_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
-                                   BufferAccessStrategy bstrategy)
+aoco_scan_analyze_next_block(TableScanDesc scan, ReadStream *stream)
 {
 	AOCSScanDesc aoscan = (AOCSScanDesc) scan;
-	aoscan->targetTupleId = blockno;
+
+	/*
+	 * GPDB: AOCS relations have no shared-buffer blocks, so ANALYZE does not
+	 * use the PG17 read stream (it is always NULL here).  acquire_sample_rows()
+	 * hands us the sampled logical row number via rs_sampleTargetBlock; the
+	 * following scan_analyze_next_tuple() call skips forward to it.
+	 */
+	aoscan->targetTupleId = scan->rs_sampleTargetBlock;
 
 	return true;
 }

@@ -1661,17 +1661,44 @@ acquire_sample_rows(Relation onerel, int elevel,
 	scan = table_beginscan_analyze(onerel);
 	slot = table_slot_create(onerel, NULL);
 
-	stream = read_stream_begin_relation(READ_STREAM_MAINTENANCE,
-										vac_strategy,
-										scan->rs_rd,
-										MAIN_FORKNUM,
-										block_sampling_read_stream_next,
-										&bs,
-										0);
+	/*
+	 * GPDB: For AO/AOCS relations the sampled "block numbers" are logical row
+	 * numbers, not buffer-manager blocks (see the totalblocks computation
+	 * above).  The PG17 read stream would drive md into the append-optimized
+	 * segment files and never terminate, so only heap relations use the
+	 * stream; for AO/AOCS we advance the BlockSampler here and pass each
+	 * sampled ordinal to the AM via rs_sampleTargetBlock.
+	 */
+	if (RelationIsAppendOptimized(onerel))
+		stream = NULL;
+	else
+		stream = read_stream_begin_relation(READ_STREAM_MAINTENANCE,
+											vac_strategy,
+											scan->rs_rd,
+											MAIN_FORKNUM,
+											block_sampling_read_stream_next,
+											&bs,
+											0);
 
 	/* Outer loop over blocks to sample */
-	while (table_scan_analyze_next_block(scan, stream))
+	for (;;)
 	{
+		if (stream != NULL)
+		{
+			/* Heap: the read stream drives (and exhausts) the sampler. */
+			if (!table_scan_analyze_next_block(scan, stream))
+				break;
+		}
+		else
+		{
+			/* AO/AOCS: drive the sampler ourselves (no read stream). */
+			if (!BlockSampler_HasMore(&bs))
+				break;
+			scan->rs_sampleTargetBlock = BlockSampler_Next(&bs);
+			if (!table_scan_analyze_next_block(scan, NULL))
+				continue;
+		}
+
 		vacuum_delay_point();
 
 		while (table_scan_analyze_next_tuple(scan, OldestXmin, &liverows, &deadrows, slot))
@@ -1723,7 +1750,8 @@ acquire_sample_rows(Relation onerel, int elevel,
 									 ++blksdone);
 	}
 
-	read_stream_end(stream);
+	if (stream != NULL)
+		read_stream_end(stream);
 
 	ExecDropSingleTupleTableSlot(slot);
 	table_endscan(scan);

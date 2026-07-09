@@ -48,6 +48,15 @@ typedef struct TableScanDescData
 
 	struct ParallelTableScanDescData *rs_parallel;	/* parallel scan
 													 * information */
+
+	/*
+	 * GPDB: target "block" (logical row number) chosen by ANALYZE's
+	 * BlockSampler for AO/AOCS relations.  Heap analyze drives the sample via
+	 * the PG17 read stream, but AO/AOCS have no shared-buffer blocks to stream
+	 * (see acquire_sample_rows()), so analyze.c hands each sampled ordinal to
+	 * the AM's scan_analyze_next_block() through this field instead.
+	 */
+	BlockNumber rs_sampleTargetBlock;
 } TableScanDescData;
 typedef struct TableScanDescData *TableScanDesc;
 
