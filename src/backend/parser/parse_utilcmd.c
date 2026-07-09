@@ -1174,7 +1174,7 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 		 * For constraints, ONLY the not-null constraint is inherited by the
 		 * new column definition per SQL99.
 		 */
-		def = makeColumnDef(attributeName, attribute->atttypid,
+		def = makeColumnDef(NameStr(attribute->attname), attribute->atttypid,
 							attribute->atttypmod, attribute->attcollation);
 		def->is_not_null = (forceBareCol ? false : attribute->attnotnull);
 

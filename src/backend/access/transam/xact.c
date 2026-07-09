@@ -2849,7 +2849,7 @@ StartTransaction(void)
 					  "isolation level %s, read-only = %d, %s",
 					  DtxContextToString(DistributedTransactionContext),
 					  IsoLevelAsUpperString(XactIsoLevel), XactReadOnly,
-					  LocalDistribXact_DisplayString(MyProc->pgprocno))));
+					  LocalDistribXact_DisplayString(MyProcNumber))));
 }
 
 /*
@@ -6995,8 +6995,8 @@ EndLocalDistribXact(bool isCommit)
 		case DTX_CONTEXT_QD_RETRY_PHASE_2:
 		case DTX_CONTEXT_LOCAL_ONLY:
 			AssertImply(DistributedTransactionContext == DTX_CONTEXT_LOCAL_ONLY,
-						Gp_role == GP_ROLE_UTILITY || IsAutoVacuumWorkerProcess());
-			LocalDistribXact_ChangeState(MyProc->pgprocno,
+						Gp_role == GP_ROLE_UTILITY || AmAutoVacuumWorkerProcess());
+			LocalDistribXact_ChangeState(MyProcNumber,
 										 isCommit ?
 										 LOCALDISTRIBXACT_STATE_COMMITTED :
 										 LOCALDISTRIBXACT_STATE_ABORTED);

@@ -44,6 +44,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
+#include "replication/slot.h"
 #include "replication/slotsync.h"
 #include "replication/syncrep.h"
 #include "storage/condition_variable.h"
@@ -1083,7 +1084,7 @@ ProcKill(int code, Datum arg)
 		ReplicationSlotRelease();
 
 	/* Also cleanup all the temporary slots. */
-	ReplicationSlotCleanup();
+	ReplicationSlotCleanup(false);
 
 	/*
 	 * Detach from any lock group of which we are a member.  If the leader

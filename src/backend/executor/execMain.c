@@ -53,6 +53,7 @@
 #include "foreign/fdwapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "nodes/print.h"
 #include "parser/parse_relation.h"
 #include "rewrite/rewriteHandler.h"
 #include "tcop/utility.h"

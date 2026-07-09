@@ -5328,7 +5328,7 @@ isAuxiliaryBgWorker(BackgroundWorker *worker)
 bool
 amAuxiliaryBgWorker(void)
 {
-	if (!IsBackgroundWorker)
+	if (!AmBackgroundWorkerProcess())
 		return false;
 
 	Assert(MyBgworkerEntry);

@@ -170,25 +170,11 @@ static List *on_commits = NIL;
  * In GPDB, these are in nodes/altertablenodes.h
  */
 
-typedef enum AlterTablePass
-{
-	AT_PASS_UNSET = -1,			/* UNSET will cause ERROR */
-	AT_PASS_DROP,				/* DROP (all flavors) */
-	AT_PASS_ALTER_TYPE,			/* ALTER COLUMN TYPE */
-	AT_PASS_ADD_COL,			/* ADD COLUMN */
-	AT_PASS_SET_EXPRESSION,		/* ALTER SET EXPRESSION */
-	AT_PASS_OLD_INDEX,			/* re-add existing indexes */
-	AT_PASS_OLD_CONSTR,			/* re-add existing constraints */
-	/* We could support a RENAME COLUMN pass here, but not currently used */
-	AT_PASS_ADD_CONSTR,			/* ADD constraints (initial examination) */
-	AT_PASS_COL_ATTRS,			/* set column attributes, eg NOT NULL */
-	AT_PASS_ADD_INDEXCONSTR,	/* ADD index-based constraints */
-	AT_PASS_ADD_INDEX,			/* ADD indexes */
-	AT_PASS_ADD_OTHERCONSTR,	/* ADD other constraints, defaults */
-	AT_PASS_MISC,				/* other stuff */
-} AlterTablePass;
-
-#define AT_NUM_PASSES			(AT_PASS_MISC + 1)
+/*
+ * The AlterTablePass enum and AT_NUM_PASSES are defined in
+ * nodes/altertablenodes.h (included above), because AlteredTableInfo and
+ * friends reference them and must be serializable Nodes for MPP dispatch.
+ */
 
 /*
  * In GPDB, AlteredTableInfo, NewConstraint, and NewColumnValue are defined
@@ -6535,7 +6521,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			break;
 		case AT_SplitPartition:
 			cmd = ATParseTransformCmd(wqueue, tab, rel, cmd, false, lockmode,
-									  cur_pass, context);
+									  cur_pass, context, &cmd->execStmts);
 			Assert(cmd != NULL);
 			Assert(rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE);
 			ATExecSplitPartition(wqueue, tab, rel, (PartitionCmd *) cmd->def,
@@ -6543,7 +6529,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			break;
 		case AT_MergePartitions:
 			cmd = ATParseTransformCmd(wqueue, tab, rel, cmd, false, lockmode,
-									  cur_pass, context);
+									  cur_pass, context, &cmd->execStmts);
 			Assert(cmd != NULL);
 			Assert(rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE);
 			ATExecMergePartitions(wqueue, tab, rel, (PartitionCmd *) cmd->def,
@@ -8964,7 +8950,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		if (RelationIsAppendOptimized(rel))
 		{
 			if (!defval)
-				defval = (Expr *) makeNullConst(typeOid, -1, collOid);
+				defval = (Expr *) makeNullConst(attribute->atttypid, -1, attribute->attcollation);
 			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 		}
 
@@ -19633,7 +19619,7 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 	CommandCounterIncrement();
 
 	/* now, reindex */
-	reindex_relation(relid, 0, &(ReindexParams) {0});
+	reindex_relation(NULL, relid, 0, &(ReindexParams) {0});
 
 	/* Step (h) Drop the table */
 	{
@@ -20187,7 +20173,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		CommandCounterIncrement();
 
 		/* now, reindex */
-		reindex_relation(tarrelid, 0, &(ReindexParams) {0});
+		reindex_relation(NULL, tarrelid, 0, &(ReindexParams) {0});
 	}
 
 	/* Step (g) */

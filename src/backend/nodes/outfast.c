@@ -1623,6 +1623,7 @@ _outWindowFunc(StringInfo str, const WindowFunc *node)
 	WRITE_OID_FIELD(inputcollid);
 	WRITE_NODE_FIELD(args);
 	WRITE_NODE_FIELD(aggfilter);
+	WRITE_NODE_FIELD(runCondition);
 	WRITE_UINT_FIELD(winref);
 	WRITE_BOOL_FIELD(winstar);
 	WRITE_BOOL_FIELD(winagg);
@@ -3485,7 +3486,6 @@ _outWindowClause(StringInfo str, const WindowClause *node)
 	WRITE_INT_FIELD(frameOptions);
 	WRITE_NODE_FIELD(startOffset);
 	WRITE_NODE_FIELD(endOffset);
-	WRITE_NODE_FIELD(runCondition);
 	WRITE_OID_FIELD(startInRangeFunc);
 	WRITE_OID_FIELD(endInRangeFunc);
 	WRITE_OID_FIELD(inRangeColl);
@@ -3569,7 +3569,7 @@ _outMergeWhenClause(StringInfo str, const MergeWhenClause *node)
 {
 	WRITE_NODE_TYPE("MERGEWHENCLAUSE");
 
-	WRITE_BOOL_FIELD(matched);
+	WRITE_ENUM_FIELD(matchKind, MergeMatchKind);
 	WRITE_ENUM_FIELD(commandType, CmdType);
 	WRITE_ENUM_FIELD(override, OverridingKind);
 	WRITE_NODE_FIELD(condition);
@@ -3582,7 +3582,7 @@ _outMergeAction(StringInfo str, const MergeAction *node)
 {
 	WRITE_NODE_TYPE("MERGEACTION");
 
-	WRITE_BOOL_FIELD(matched);
+	WRITE_ENUM_FIELD(matchKind, MergeMatchKind);
 	WRITE_ENUM_FIELD(commandType, CmdType);
 	WRITE_ENUM_FIELD(override, OverridingKind);
 	WRITE_NODE_FIELD(qual);

@@ -1195,8 +1195,33 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 		{
 			Form_pg_attribute att = TupleDescAttr(tupdesc, i);
 			char       *attname;
+			HeapTuple	atttuple;
+			Datum		dat;
+			bool		isnull;
+			int			attstattarget;
 
-			if (att->attisdropped || att->attstattarget == 0)
+			if (att->attisdropped)
+				continue;
+
+			/*
+			 * PG17 moved attstattarget out of the fixed-length part of
+			 * pg_attribute; it is now a nullable catalog column (NULL means
+			 * "use the default").  Fetch it from the syscache and treat NULL
+			 * as -1 (default), mirroring examine_attribute().  A value of 0
+			 * means the user asked not to collect statistics for this column.
+			 */
+			atttuple = SearchSysCache2(ATTNUM,
+									   ObjectIdGetDatum(attrelid),
+									   Int16GetDatum(att->attnum));
+			if (!HeapTupleIsValid(atttuple))
+				elog(ERROR, "cache lookup failed for attribute %d of relation %u",
+					 att->attnum, attrelid);
+			dat = SysCacheGetAttr(ATTNUM, atttuple,
+								  Anum_pg_attribute_attstattarget, &isnull);
+			attstattarget = isnull ? -1 : DatumGetInt16(dat);
+			ReleaseSysCache(atttuple);
+
+			if (attstattarget == 0)
 				continue;
 
 			attname = pstrdup(NameStr(att->attname));

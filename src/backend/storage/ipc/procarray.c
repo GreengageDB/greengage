@@ -626,11 +626,11 @@ ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 		 * Remember that the distributed xid is just a plain counter, so we just use the `<` for
 		 * the comparison of gxid
 		 */
-		DistributedTransactionId gxid = allTmGxact[proc->pgprocno].gxid;
+		DistributedTransactionId gxid = allTmGxact[GetNumberFromPGProc(proc)].gxid;
 
 		if (InvalidDistributedTransactionId != gxid &&
-			ShmemVariableCache->latestCompletedGxid < gxid)
-			ShmemVariableCache->latestCompletedGxid = gxid;
+			TransamVariables->latestCompletedGxid < gxid)
+			TransamVariables->latestCompletedGxid = gxid;
 	}
 
 	Assert(TransactionIdIsValid(ProcGlobal->xids[proc->pgxactoff] == 0));
@@ -701,8 +701,8 @@ ProcArrayEndGxact(TMGXACT *tmGxact)
 	 * the comparison of gxid
 	 */
 	if (InvalidDistributedTransactionId != gxid &&
-		ShmemVariableCache->latestCompletedGxid < gxid)
-		ShmemVariableCache->latestCompletedGxid = gxid;
+		TransamVariables->latestCompletedGxid < gxid)
+		TransamVariables->latestCompletedGxid = gxid;
 }
 
 /*
@@ -721,7 +721,7 @@ ProcArrayEndGxact(TMGXACT *tmGxact)
 void
 ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 {
-	TMGXACT	   *tmGxact = &allTmGxact[proc->pgprocno];
+	TMGXACT	   *tmGxact = &allTmGxact[GetNumberFromPGProc(proc)];
 
 #ifdef FAULT_INJECTOR
 	FaultInjector_InjectFaultIfSet("before_xact_end_procarray",
@@ -771,11 +771,11 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 	 * handle the cases like: there's a valid distributed XID but no local XID.
 	 */
 	Assert(!TransactionIdIsValid(proc->xid));
-	Assert(!TransactionIdIsValid(allTmGxact[proc->pgprocno].gxid));
+	Assert(!TransactionIdIsValid(allTmGxact[GetNumberFromPGProc(proc)].gxid));
 	Assert(proc->subxidStatus.count == 0);
 	Assert(!proc->subxidStatus.overflowed);
 
-	proc->lxid = InvalidLocalTransactionId;
+	proc->vxid.lxid = InvalidLocalTransactionId;
 	proc->xmin = InvalidTransactionId;
 	proc->delayChkptFlags = 0;		/* be sure this is cleared in abort */
 	proc->recoveryConflictPending = false;
@@ -899,7 +899,7 @@ ProcArrayGroupClearXid(PGPROC *proc, TransactionId latestXid)
 
 	/* We should definitely have an XID to clear. */
 	Assert(TransactionIdIsValid(proc->xid) ||
-		   TransactionIdIsValid(allTmGxact[proc->pgprocno].gxid));
+		   TransactionIdIsValid(allTmGxact[pgprocno].gxid));
 
 	/* Add ourselves to the list of processes needing a group XID clear. */
 	proc->procArrayGroupMember = true;
@@ -2645,7 +2645,7 @@ CreateDistributedSnapshot(DistributedSnapshot *ds)
 	if (*shmNumCommittedGxacts != 0)
 		elog(ERROR, "Create distributed snapshot before DTM recovery finish");
 
-	xmin = xmax = ShmemVariableCache->latestCompletedGxid + 1;
+	xmin = xmax = TransamVariables->latestCompletedGxid + 1;
 
 	/*
 	 * initialize for calculation with xmax, the calculation for this is on
@@ -3355,8 +3355,6 @@ ret:
 		Assert(SharedLocalSnapshotSlot != NULL);
 		updateSharedLocalSnapshot(&QEDtxContextInfo, distributedTransactionContext, snapshot, "GetSnapshotData");
 	}
-
-	GetSnapshotDataInitOldSnapshot(snapshot);
 
 	ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
 			(errmsg("GetSnapshotData(): WRITER currentcommandid %d curcid %d segmatesync %d",
@@ -6352,7 +6350,7 @@ void
 ResGroupSignalMoveQuery(int sessionId, void *slot, Oid groupId)
 {
 	pid_t pid;
-	BackendId backendId;
+	ProcNumber procNumber;
 	ProcArrayStruct *arrayP = procArray;
 
 	LWLockAcquire(ProcArrayLock, LW_SHARED);
@@ -6363,13 +6361,13 @@ ResGroupSignalMoveQuery(int sessionId, void *slot, Oid groupId)
 			continue;
 
 		pid = proc->pid;
-		backendId = proc->backendId;
+		procNumber = proc->vxid.procNumber;
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
 			Assert(proc->movetoResSlot == NULL);
 			Assert(slot != NULL);
 			proc->movetoResSlot = slot;
-			SendProcSignal(pid, PROCSIG_RESOURCE_GROUP_MOVE_QUERY, backendId);
+			SendProcSignal(pid, PROCSIG_RESOURCE_GROUP_MOVE_QUERY, procNumber);
 			break;
 		}
 		else if (Gp_role == GP_ROLE_EXECUTE)
@@ -6377,7 +6375,7 @@ ResGroupSignalMoveQuery(int sessionId, void *slot, Oid groupId)
 			Assert(groupId != InvalidOid);
 			Assert(proc->movetoGroupId == InvalidOid);
 			proc->movetoGroupId = groupId;
-			SendProcSignal(pid, PROCSIG_RESOURCE_GROUP_MOVE_QUERY, backendId);
+			SendProcSignal(pid, PROCSIG_RESOURCE_GROUP_MOVE_QUERY, procNumber);
 			/* don't break, need to signal all the procs of this session */
 		}
 	}

@@ -1154,7 +1154,7 @@ DefineIndex(Oid tableId,
 		(void) index_check_policy_compatible(rel->rd_cdbpolicy,
 											 RelationGetDescr(rel),
 											 indexInfo->ii_IndexAttrNumbers,
-											 classObjectId,
+											 opclassIds,
 											 indexInfo->ii_ExclusionOps,
 											 indexInfo->ii_NumIndexKeyAttrs,
 											 true, /* report_error */
@@ -3126,7 +3126,7 @@ ReindexIndex(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 
 		Assert(get_rel_relkind(stmt->relid) == RELKIND_INDEX);
 
-		reindex_index(stmt->relid, false, persistence, params);
+		reindex_index(stmt, stmt->relid, false, persistence, params);
 		return;
 	}
 
@@ -3184,7 +3184,13 @@ ReindexIndex(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 	 * index then reindexes each child non-concurrently via ReindexPartitions.
 	 * Single-node utility mode keeps the working concurrent path.
 	 */
-	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+	/*
+	 * PG17 made ReindexParams const; keep a mutable local copy so the GPDB
+	 * concurrent-reindex fallback can clear REINDEXOPT_CONCURRENTLY.
+	 */
+	ReindexParams localparams = *params;
+
+	if ((localparams.options & REINDEXOPT_CONCURRENTLY) != 0 &&
 		Gp_role == GP_ROLE_DISPATCH &&
 		persistence != RELPERSISTENCE_TEMP)
 	{
@@ -3197,17 +3203,17 @@ ReindexIndex(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 		ereport(NOTICE,
 				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
 						get_rel_name(indOid))));
-		params->options &= ~REINDEXOPT_CONCURRENTLY;
+		localparams.options &= ~REINDEXOPT_CONCURRENTLY;
 	}
 
 	if (relkind == RELKIND_PARTITIONED_INDEX)
-		ReindexPartitions(stmt, indOid, params, isTopLevel);
-	else if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+		ReindexPartitions(stmt, indOid, &localparams, isTopLevel);
+	else if ((localparams.options & REINDEXOPT_CONCURRENTLY) != 0 &&
 			 persistence != RELPERSISTENCE_TEMP)
-		ReindexRelationConcurrently(stmt, indOid, params);
+		ReindexRelationConcurrently(stmt, indOid, &localparams);
 	else
 	{
-		ReindexParams newparams = *params;
+		ReindexParams newparams = localparams;
 
 		newparams.options |= REINDEXOPT_REPORT_PROGRESS;
 		reindex_index(stmt, indOid, false, persistence, &newparams);
@@ -3310,7 +3316,7 @@ ReindexTable(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE)
 	{
-		reindex_relation(stmt->relid,
+		reindex_relation(stmt, stmt->relid,
 						 REINDEX_REL_PROCESS_TOAST |
 						 REINDEX_REL_CHECK_CONSTRAINTS,
 						 params);
@@ -3340,7 +3346,13 @@ ReindexTable(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 	 * via ReindexPartitions.  Single-node utility mode keeps the working
 	 * concurrent path.
 	 */
-	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+	/*
+	 * PG17 made ReindexParams const; keep a mutable local copy so the GPDB
+	 * concurrent-reindex fallback can clear REINDEXOPT_CONCURRENTLY.
+	 */
+	ReindexParams localparams = *params;
+
+	if ((localparams.options & REINDEXOPT_CONCURRENTLY) != 0 &&
 		Gp_role == GP_ROLE_DISPATCH &&
 		get_rel_persistence(heapOid) != RELPERSISTENCE_TEMP)
 	{
@@ -3353,15 +3365,15 @@ ReindexTable(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 		ereport(NOTICE,
 				(errmsg("concurrent reindex of \"%s\" is not supported in Greenplum, reindexing non-concurrently instead",
 						relation->relname)));
-		params->options &= ~REINDEXOPT_CONCURRENTLY;
+		localparams.options &= ~REINDEXOPT_CONCURRENTLY;
 	}
 
 	if (get_rel_relkind(heapOid) == RELKIND_PARTITIONED_TABLE)
-		ReindexPartitions(stmt, heapOid, params, isTopLevel);
-	else if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
+		ReindexPartitions(stmt, heapOid, &localparams, isTopLevel);
+	else if ((localparams.options & REINDEXOPT_CONCURRENTLY) != 0 &&
 			 get_rel_persistence(heapOid) != RELPERSISTENCE_TEMP)
 	{
-		result = ReindexRelationConcurrently(stmt, heapOid, params);
+		result = ReindexRelationConcurrently(stmt, heapOid, &localparams);
 
 		if (!result)
 			ereport(NOTICE,
@@ -3370,7 +3382,7 @@ ReindexTable(const ReindexStmt *stmt, const ReindexParams *params, bool isTopLev
 	}
 	else
 	{
-		ReindexParams newparams = *params;
+		ReindexParams newparams = localparams;
 
 		newparams.options |= REINDEXOPT_REPORT_PROGRESS;
 		result = reindex_relation(stmt, heapOid,
@@ -3757,6 +3769,15 @@ ReindexMultipleInternal(const ReindexStmt *stmt, const List *relids, const Reind
 	ListCell   *l;
 
 	/*
+	 * PG17 made ReindexParams const; keep a mutable local copy (repointing
+	 * params at it) so the GPDB concurrent-reindex fallback below can clear
+	 * REINDEXOPT_CONCURRENTLY and have it observed by the loop that follows.
+	 */
+	ReindexParams localparams = *params;
+
+	params = &localparams;
+
+	/*
 	 * GPDB: REINDEX CONCURRENTLY is not supported on the coordinator (see
 	 * ReindexTable); fall back to a normal reindex.  REINDEX TABLE/INDEX already
 	 * cleared this (and emitted the NOTICE) before reaching here via
@@ -3765,7 +3786,7 @@ ReindexMultipleInternal(const ReindexStmt *stmt, const List *relids, const Reind
 	 */
 	if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
 		Gp_role == GP_ROLE_DISPATCH)
-		params->options &= ~REINDEXOPT_CONCURRENTLY;
+		localparams.options &= ~REINDEXOPT_CONCURRENTLY;
 
 	PopActiveSnapshot();
 	CommitTransactionCommand();

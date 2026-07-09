@@ -5894,8 +5894,8 @@ PostgresMain(const char *dbname, const char *username)
 						 * 3. The related code change on segments are lightweight.
 						 */
 						SpinLockAcquire(shmGxidGenLock);
-						if (TempDtxContextInfo.distributedXid > ShmemVariableCache->nextGxid)
-							ShmemVariableCache->nextGxid = TempDtxContextInfo.distributedXid;
+						if (TempDtxContextInfo.distributedXid > TransamVariables->nextGxid)
+							TransamVariables->nextGxid = TempDtxContextInfo.distributedXid;
 						SpinLockRelease(shmGxidGenLock);
 					}
 

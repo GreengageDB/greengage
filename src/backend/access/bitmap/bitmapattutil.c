@@ -263,7 +263,8 @@ _bitmap_create_lov_heapandindex(Relation rel,
 						 BTREE_AM_OID,
 						 rel->rd_rel->reltablespace,
 						 colcollations,
-						 classObjectId, coloptions, (Datum) 0,
+						 classObjectId, NULL /* opclassOptions */,
+						 coloptions, NULL /* stattargets */, (Datum) 0,
 						 INDEX_CREATE_IF_NOT_EXISTS, /* flags */
 						 0, /* constr_flags */
 						 /* allow_system_table_mods */ true,

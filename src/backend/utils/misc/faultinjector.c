@@ -274,8 +274,8 @@ FaultInjector_InjectFaultIfSet_out_of_line(
 	 * using fault injector framework, this restriction needs to be lifted and
 	 * some other mechanism needs to be placed to avoid flaky failures.
 	 */
-	if (IsAutoVacuumLauncherProcess() ||
-		(IsAutoVacuumWorkerProcess() &&
+	if (AmAutoVacuumLauncherProcess() ||
+		(AmAutoVacuumWorkerProcess() &&
 		 !(0 == strcmp("vacuum_update_dat_frozen_xid", faultName) ||
 		   0 == strcmp("auto_vac_worker_before_do_autovacuum", faultName) ||
 		   0 == strcmp("auto_vac_worker_after_report_activity", faultName) ||

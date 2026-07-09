@@ -633,10 +633,12 @@ typedef struct ViewOptions
 #define RelationOpenSmgr(relation) \
 	do { \
 		if ((relation)->rd_smgr == NULL) \
-			smgrsetowner(&((relation)->rd_smgr), \
-						 smgropen((relation)->rd_locator, \
-								  (relation)->rd_backend, \
-								  RelationIsAppendOptimized(relation)?SMGR_AO:SMGR_MD)); \
+		{ \
+			(relation)->rd_smgr = smgropen((relation)->rd_locator, \
+										   (relation)->rd_backend, \
+										   RelationIsAppendOptimized(relation)?SMGR_AO:SMGR_MD); \
+			smgrpin((relation)->rd_smgr); \
+		} \
 	} while (0)
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)

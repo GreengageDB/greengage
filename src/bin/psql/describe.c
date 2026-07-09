@@ -29,7 +29,7 @@
 #include "settings.h"
 #include "variables.h"
 
-#include "catalog/gp_distribution_policy.h"
+#include "catalog/gp_distribution_policy_d.h"
 #include "catalog/pg_foreign_server.h"
 
 static const char *map_typename_pattern(const char *pattern);

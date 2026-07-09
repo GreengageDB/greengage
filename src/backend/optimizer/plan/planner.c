@@ -63,6 +63,7 @@
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "partitioning/partdesc.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/lsyscache.h"
 #include "utils/partcache.h"
 #include "utils/rel.h"
@@ -2295,6 +2296,7 @@ inheritance_planner(PlannerInfo *root)
 									 is_split_updates,
 									 rowMarks,
 									 NULL,
+									 NIL,
 									 NIL,
 									 assign_special_exec_param(root)));
 }

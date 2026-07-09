@@ -763,11 +763,17 @@ RetrievePersistentErrorLogFromRangeVar(RangeVar *relrv, AclMode mode, char *fnam
 	else
 	{
 		ListCell			   *cell;
-		OverrideSearchPath	   *searchPath;
+		List				   *searchPath;
 		char					filename[MAXPGPATH];
 
-		searchPath = GetOverrideSearchPath(CurrentMemoryContext);
-		foreach(cell, searchPath->schemas)
+		/*
+		 * PG17 removed OverrideSearchPath / GetOverrideSearchPath.
+		 * fetch_search_path(false) returns the explicit search-path schema
+		 * OIDs (implicit pg_catalog/pg_temp stripped), matching the old
+		 * GetOverrideSearchPath()->schemas semantics.
+		 */
+		searchPath = fetch_search_path(false);
+		foreach(cell, searchPath)
 		{
 			namespaceId = lfirst_oid(cell);
 			ErrorLogPersistentFileName(filename, MyDatabaseId, namespaceId, relrv->relname);

@@ -46,7 +46,6 @@ OBJS = \
 	path.o \
 	pg_bitutils.o \
 	pg_strong_random.o \
-	pwritev.o \
 	pgcheckdir.o \
 	pgmkdirp.o \
 	pgsleep.o \

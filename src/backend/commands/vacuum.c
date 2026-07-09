@@ -43,6 +43,7 @@
 #include "catalog/partition.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_inherits.h"
+#include "catalog/pg_namespace_d.h"
 #include "commands/cluster.h"
 #include "commands/defrem.h"
 #include "commands/vacuum.h"
@@ -744,7 +745,7 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 				}
 
 #ifdef FAULT_INJECTOR
-				if (IsAutoVacuumWorkerProcess())
+				if (AmAutoVacuumWorkerProcess())
 				{
 					FaultInjector_InjectFaultIfSet(
 						"analyze_finished_one_relation", DDLNotSpecified,
@@ -2610,13 +2611,14 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	/*
 	 * Permissions are checked once, above, by
 	 * vacuum_is_permitted_for_relation().  That check honors the MAINTAIN
-	 * privilege and the VACOPT_SKIP_PRIVS bypass used when we recurse into a
-	 * relation's TOAST/AO-auxiliary heaps.  The legacy owner/dbowner-only
+	 * privilege and the VacuumParams.toast_parent bypass used when we recurse
+	 * into a relation's TOAST/AO-auxiliary heaps (PG17 replaced the older
+	 * VACOPT_SKIP_PRIVS bit with toast_parent).  The legacy owner/dbowner-only
 	 * recheck that used to live here was redundant with it for non-privileged
 	 * users (they already bailed above) and actively wrong for the privileged
 	 * ones: it denied a MAINTAIN-privileged non-owner that the check above had
-	 * just allowed, and it ignored VACOPT_SKIP_PRIVS so it wrongly skipped the
-	 * auxiliary heaps.  Upstream removed it; do the same here.
+	 * just allowed, and it ignored the parent-privilege bypass so it wrongly
+	 * skipped the auxiliary heaps.  Upstream removed it; do the same here.
 	 */
 
 	/*
@@ -2820,17 +2822,24 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	}
 
 	int orig_option = params->options;
+	Oid orig_toast_parent = params->toast_parent;
 
 	/*
 	 * Strip the AO phase bits so the auxiliary heaps aren't treated as an
 	 * AO-phase vacuum.  Also force VACOPT_PROCESS_MAIN so vacuum_rel()
 	 * actually processes the auxiliary/toast heap (it may have been unset by
-	 * the caller), and VACOPT_SKIP_PRIVS since privileges on the main
-	 * relation are sufficient to process them.  params->options is restored
-	 * below before we dispatch.
+	 * the caller).  params->options is restored below before we dispatch.
+	 *
+	 * PG17 replaced the VACOPT_SKIP_PRIVS bypass with VacuumParams.toast_parent:
+	 * point it at the main relation so vacuum_rel()'s privilege check runs
+	 * against the parent (whose privileges we already verified above) instead
+	 * of the auxiliary/toast heap.  This is safe because we hold a session lock
+	 * on the main relation that prevents concurrent deletion.  toast_parent is
+	 * restored below alongside params->options.
 	 */
 	params->options = (params->options & ~VACUUM_AO_PHASE_MASK) |
-		VACOPT_PROCESS_MAIN | VACOPT_SKIP_PRIVS;
+		VACOPT_PROCESS_MAIN;
+	params->toast_parent = relid;
 
 	/*
 	 * If the relation has a secondary toast rel, vacuum that too while we
@@ -2857,13 +2866,14 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	if (aovisimap_relid != InvalidOid)
 		vacuum_rel(aovisimap_relid, NULL, params, bstrategy, vac_context, true);
 	params->options = orig_option;
+	params->toast_parent = orig_toast_parent;
 
 	/*
 	 * Don't dispatch auto-vacuum. Each segment performs auto-vacuum as per
 	 * its own need.
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH && !recursing &&
-		!IsAutoVacuumWorkerProcess() &&
+		!AmAutoVacuumWorkerProcess() &&
 		(!is_appendoptimized || ao_vacuum_phase))
 	{
 		VacuumStatsContext stats_context;
@@ -2881,7 +2891,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		vac_update_relstats_from_list(&stats_context);
 
 		/* Also update pg_stat_last_operation */
-		if (IsAutoVacuumWorkerProcess())
+		if (AmAutoVacuumWorkerProcess())
 			vsubtype = "AUTO";
 		else
 		{
@@ -3270,12 +3280,12 @@ vacuum_params_to_options_list(VacuumParams *params)
 	}
 
 	/*
-	 * VACOPT_SKIP_PRIVS (new in PG16) is an internal bypass set when vacuum
-	 * recurses into a relation's TOAST/main child after checking privileges
-	 * on the parent.  Each node re-derives it during its own vacuum_rel()
-	 * recursion, so it must not be dispatched; just clear it from the mask.
+	 * PG17 removed the VACOPT_SKIP_PRIVS option bit; the "check privileges on
+	 * the parent" bypass is now carried by VacuumParams.toast_parent, which is
+	 * re-derived on each segment when it recurses into a relation's
+	 * TOAST/AO-auxiliary heaps, so there is nothing to strip from the option
+	 * mask here.
 	 */
-	optmask &= ~VACOPT_SKIP_PRIVS;
 
 	if (optmask & VACUUM_AO_PHASE_MASK)
 	{

@@ -342,7 +342,7 @@ CreateReplicationSlotOnPromote(const char *name)
 	if (MyReplicationSlot == NULL)
 	{
 		ereport(LOG, (errmsg("creating replication slot %s", name)));
-		ReplicationSlotCreate(name, false, RS_PERSISTENT, false);
+		ReplicationSlotCreate(name, false, RS_PERSISTENT, false, false, false);
 	}
 	else
 		ereport(LOG, (errmsg("replication slot %s exists", name)));

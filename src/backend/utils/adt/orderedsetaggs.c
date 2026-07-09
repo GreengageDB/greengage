@@ -26,6 +26,7 @@
 #include "utils/array.h"
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
+#include "utils/timestamp.h"
 #include "utils/tuplesort.h"
 
 

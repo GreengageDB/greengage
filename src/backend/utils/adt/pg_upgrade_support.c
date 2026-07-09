@@ -48,6 +48,27 @@ do {															\
 				 errmsg("function can only be called when server is in binary upgrade mode"))); \
 } while (0)
 
+/*
+ * GPDB: tablespace OID preservation during binary upgrade is normally handled
+ * via the oid-dispatch preassignment machinery (see GetNewOidForTableSpace in
+ * tablespace.c), which replaces upstream's binary_upgrade_next_pg_tablespace_oid
+ * mechanism.  We still provide the setter (and its backing global) so the
+ * upstream-emitted SQL resolves; the global is simply unused by GPDB's
+ * CreateTableSpace path.
+ */
+Oid			binary_upgrade_next_pg_tablespace_oid = InvalidOid;
+
+Datum
+binary_upgrade_set_next_pg_tablespace_oid(PG_FUNCTION_ARGS)
+{
+	Oid			tbspoid = PG_GETARG_OID(0);
+
+	CHECK_IS_BINARY_UPGRADE;
+	binary_upgrade_next_pg_tablespace_oid = tbspoid;
+
+	PG_RETURN_VOID();
+}
+
 Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {

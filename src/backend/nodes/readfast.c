@@ -358,7 +358,6 @@ _readWindowClause(void)
 	READ_INT_FIELD(frameOptions);
 	READ_NODE_FIELD(startOffset);
 	READ_NODE_FIELD(endOffset);
-	READ_NODE_FIELD(runCondition);
 	READ_OID_FIELD(startInRangeFunc);
 	READ_OID_FIELD(endInRangeFunc);
 	READ_OID_FIELD(inRangeColl);
@@ -469,12 +468,12 @@ _readMergeWhenClause(void)
 {
 	READ_LOCALS(MergeWhenClause);
 
-	READ_BOOL_FIELD(matched);
+	READ_ENUM_FIELD(matchKind, MergeMatchKind);
 	READ_ENUM_FIELD(commandType, CmdType);
+	READ_ENUM_FIELD(override, OverridingKind);
 	READ_NODE_FIELD(condition);
 	READ_NODE_FIELD(targetList);
 	READ_NODE_FIELD(values);
-	READ_ENUM_FIELD(override, OverridingKind);
 
 	READ_DONE();
 }
@@ -487,7 +486,7 @@ _readMergeAction(void)
 {
 	READ_LOCALS(MergeAction);
 
-	READ_BOOL_FIELD(matched);
+	READ_ENUM_FIELD(matchKind, MergeMatchKind);
 	READ_ENUM_FIELD(commandType, CmdType);
 	READ_ENUM_FIELD(override, OverridingKind);
 	READ_NODE_FIELD(qual);
@@ -1281,6 +1280,7 @@ _readWindowFunc(void)
 	READ_OID_FIELD(inputcollid);
 	READ_NODE_FIELD(args);
 	READ_NODE_FIELD(aggfilter);
+	READ_NODE_FIELD(runCondition);
 	READ_UINT_FIELD(winref);
 	READ_BOOL_FIELD(winstar);
 	READ_BOOL_FIELD(winagg);

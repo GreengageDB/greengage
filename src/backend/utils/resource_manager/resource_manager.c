@@ -100,7 +100,7 @@ InitResManager(void)
 	}
 
 	if (MySessionState &&
-		!IsBackgroundWorker &&
+		!AmBackgroundWorkerProcess() &&
 		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE))
 		GPMemoryProtect_TrackStartupMemory();
 }

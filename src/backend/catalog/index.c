@@ -3134,7 +3134,7 @@ index_build(Relation heapRelation,
 		!smgrexists(RelationGetSmgr(indexRelation), INIT_FORKNUM))
 	{
 		smgrcreate(RelationGetSmgr(indexRelation), INIT_FORKNUM, false);
-		log_smgrcreate(&indexRelation->rd_locator, INIT_FORKNUM);
+		log_smgrcreate(&indexRelation->rd_locator, INIT_FORKNUM, SMGR_MD);
 		indexRelation->rd_indam->ambuildempty(indexRelation);
 	}
 

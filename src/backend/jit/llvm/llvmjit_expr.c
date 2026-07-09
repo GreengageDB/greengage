@@ -2144,7 +2144,7 @@ llvm_compile_expr(ExprState *state)
 					v_rowcounter_p = l_ptr_const(rowcounter_p,
 												 l_ptr(LLVMInt64Type()));
 					v_rowcounter = LLVMBuildLoad(b, v_rowcounter_p, "v_rowcounter");
-					v_rowcounter_new = LLVMBuildAdd(b, v_rowcounter, l_int64_const(1), "v_rowcounter_new");
+					v_rowcounter_new = LLVMBuildAdd(b, v_rowcounter, l_int64_const(lc, 1), "v_rowcounter_new");
 
 					/* Store the new value back */
 					LLVMBuildStore(b, v_rowcounter_new, v_rowcounter_p);

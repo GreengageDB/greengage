@@ -10023,12 +10023,13 @@ void
 wait_for_mirror()
 {
     XLogwrtResult tmpLogwrtResult;
-    /* use volatile pointer to prevent code rearrangement */
-    volatile XLogCtlData *xlogctl = XLogCtl;
 
-    SpinLockAcquire(&xlogctl->info_lck);
-    tmpLogwrtResult = xlogctl->LogwrtResult;
-    SpinLockRelease(&xlogctl->info_lck);
+    /*
+     * PG17 moved the written/flushed positions out from under info_lck into
+     * the lock-free atomics logWriteResult/logFlushResult. Read an up-to-date
+     * flush position via the same helper the rest of xlog.c uses.
+     */
+    RefreshXLogWriteResult(tmpLogwrtResult);
 
     SyncRepWaitForLSN(tmpLogwrtResult.Flush, false);
 }

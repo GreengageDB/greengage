@@ -732,10 +732,10 @@ pg_stat_get_backend_pid(PG_FUNCTION_ARGS)
 Datum
 pg_stat_get_backend_session_id(PG_FUNCTION_ARGS)
 {
-	int32		beid = PG_GETARG_INT32(0);
+	int32		procNumber = PG_GETARG_INT32(0);
 	PgBackendStatus *beentry;
 
-	if ((beentry = pgstat_fetch_stat_beentry(beid)) == NULL)
+	if ((beentry = pgstat_get_beentry_by_proc_number(procNumber)) == NULL)
 		PG_RETURN_NULL();
 
 	PG_RETURN_INT32(beentry->st_session_id);

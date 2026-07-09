@@ -3292,7 +3292,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 {
 	PlannerInfo *cteroot;
 	Index		levelsup;
-	List	   *pathkeys;
 	int			ndx;
 	ListCell   *lc;
 	int			planinfo_id;

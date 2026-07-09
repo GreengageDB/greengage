@@ -102,6 +102,7 @@
 #include <limits.h>
 
 #include "commands/tablespace.h"
+#include "executor/instrument.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
 #include "storage/shmem.h"

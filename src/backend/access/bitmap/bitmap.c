@@ -553,7 +553,7 @@ bmbulkdelete(IndexVacuumInfo *info,
 	 * struct instead of a literal 0 (which became a NULL deref -> SIGSEGV when
 	 * VACUUM reindexed a bitmap index, e.g. "vacuum bm_test").
 	 */
-	reindex_index(RelationGetRelid(rel), true, rel->rd_rel->relpersistence,
+	reindex_index(NULL, RelationGetRelid(rel), true, rel->rd_rel->relpersistence,
 				  &reindex_params);
 
 	CommandCounterIncrement();

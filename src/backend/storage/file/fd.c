@@ -2314,7 +2314,10 @@ FileWriteV(File file, const struct iovec *iov, int iovcnt, off_t offset,
 	 */
 	if ((VfdCache[file].fdstate & FD_WORKFILE) != 0)
 	{
-		off_t		newPos = offset + amount;
+		off_t		newPos = offset;
+
+		for (int i = 0; i < iovcnt; ++i)
+			newPos += iov[i].iov_len;
 
 		if (newPos > VfdCache[file].fileSize)
 			UpdateWorkFileSize(file, newPos);

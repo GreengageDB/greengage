@@ -388,7 +388,7 @@ ProcessSyncRequests(void)
 			 || (entry->tag.handler == 1 &&
 				 SIMPLE_FAULT_INJECTOR("ao_fsync_counter") == FaultInjectorTypeSkip)))
 		{
-			if (MyAuxProcType == CheckpointerProcess)
+			if (AmCheckpointerProcess())
 			{
 				if (entry->tag.segno == 0)
 					elog(LOG, "checkpoint performing fsync for %d/%d/%d",

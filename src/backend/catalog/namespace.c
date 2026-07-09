@@ -4436,7 +4436,7 @@ recomputeNamespacePath(void)
  * and RelationData.rd_backend fields.
  */
 #define MyTempSessionId() \
-	((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) ? gp_session_id : MyBackendId)
+	((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) ? gp_session_id : MyProcNumber)
 
 /*
  * AccessTempTableNamespace
@@ -4515,7 +4515,7 @@ InitTempTableNamespace(void)
 			break;
 
 		case GP_ROLE_UTILITY:
-			session_suffix = MyBackendId;
+			session_suffix = MyProcNumber;
 
 			/*
 			 * Backend id is used as the suffix of schema name in utility mode

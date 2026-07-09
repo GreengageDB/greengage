@@ -1102,7 +1102,7 @@ cdb_setup(void)
 	 * Ignore background worker because bgworker_should_start_mpp() already did
 	 * the check.
 	 */
-	if (!IsBackgroundWorker &&
+	if (!AmBackgroundWorkerProcess() &&
 		Gp_role == GP_ROLE_DISPATCH &&
 		!*shmDtmStarted)
 	{

@@ -4398,22 +4398,6 @@ restore_toc_entries_parallel(ArchiveHandle *AH, ParallelState *pstate,
 			/* Loop around to see if anything's now ready */
 			continue;
 		}
-		else if (IsEveryWorkerIdle(pstate))
-		{
-			/*
-			 * Nothing is ready and no worker is running, so we're done with
-			 * the current pass or maybe with the whole process.
-			 */
-			if (AH->restorePass == RESTORE_PASS_LAST)
-				break;			/* No more parallel processing is possible */
-
-			/* Advance to next restore pass */
-			AH->restorePass++;
-			/* That probably allows some stuff to be made ready */
-			move_to_ready_list(pending_list, &ready_list, AH->restorePass);
-			/* Loop around to see if anything's now ready */
-			continue;
-		}
 		else
 		{
 			/*

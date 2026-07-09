@@ -15939,7 +15939,7 @@ dumpExtProtocol(Archive *fout, ExtProtInfo *ptcinfo)
 	dumpACL(fout, ptcinfo->dobj.dumpId, ptcinfo->dobj.dumpId,
 			"PROTOCOL",
 			namecopy, NULL,
-			NULL, ptcinfo->rolname, &ptcinfo->dacl);
+			NULL, NULL, ptcinfo->rolname, &ptcinfo->dacl);
 	free(namecopy);
 
 	destroyPQExpBuffer(q);

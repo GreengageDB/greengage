@@ -73,6 +73,8 @@
 #include "executor/nodeShareInputScan.h"
 #include "nodes/extensible.h"
 #include "nodes/pathnodes.h"
+#include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
 #include "utils/syscache.h"
 
 static bool IndexSupportsBackwardScan(Oid indexid);

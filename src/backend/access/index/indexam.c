@@ -158,7 +158,7 @@ try_index_open(Oid relationId, LOCKMODE lockmode)
 {
 	Relation	r;
 
-	r = try_relation_open(relationId, lockmode);
+	r = try_relation_open(relationId, lockmode, false);
 
 	/* leave if index does not exist */
 	if (!r)

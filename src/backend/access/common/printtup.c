@@ -15,6 +15,8 @@
  */
 #include "postgres.h"
 
+#include <arpa/inet.h>			/* for htonl()/htons() used in binary output */
+
 #include "access/printtup.h"
 #include "libpq/pqformat.h"
 #include "tcop/pquery.h"

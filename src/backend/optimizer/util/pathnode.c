@@ -28,6 +28,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
+#include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
 #include "utils/memutils.h"
@@ -44,6 +45,7 @@
 #include "cdb/cdbvars.h"
 #include "executor/nodeHash.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"		/* func_exec_location() */
 
 typedef enum
 {

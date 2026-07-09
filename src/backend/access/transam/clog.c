@@ -110,6 +110,7 @@ static SlruCtlData XactCtlData;
 #define XactCtl (&XactCtlData)
 
 
+static int	CLOGShmemBuffers(void);
 static int	ZeroCLOGPage(int64 pageno, bool writeXlog);
 static bool CLOGPagePrecedes(int64 page1, int64 page2);
 static void WriteZeroPageXlogRec(int64 pageno);

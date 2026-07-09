@@ -12316,7 +12316,7 @@
 # contrib/adminpack functions, brought to core in GPDB.
 # the new version functions which using the GRANT system to control access instead of having hard-coded superuser checks
 { oid => 6045, descr => 'Read text from a file',
-   proname => 'pg_file_read', provolatile => 'v', prorettype => 'text', proargtypes => 'text int8 int8', prosrc => 'pg_read_file' },
+   proname => 'pg_file_read', provolatile => 'v', prorettype => 'text', proargtypes => 'text int8 int8', prosrc => 'pg_read_file_off_len' },
 
 { oid => 6046, descr => 'Rotate log file',
    proname => 'pg_logfile_rotate', provolatile => 'v', prorettype => 'bool', proargtypes => '', prosrc => 'pg_rotate_logfile' },

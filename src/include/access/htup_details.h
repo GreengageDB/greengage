@@ -716,9 +716,9 @@ extern Datum getmissingattr(TupleDesc tupleDesc,
 
 /* prototypes for functions in common/heaptuple.c */
 extern Size heap_compute_data_size(TupleDesc tupleDesc,
-								   Datum *values, bool *isnull);
+								   const Datum *values, const bool *isnull);
 extern Size heap_fill_tuple(TupleDesc tupleDesc,
-							Datum *values, bool *isnull,
+							const Datum *values, const bool *isnull,
 							char *data, Size data_size,
 							uint16 *infomask, bits8 *bit);
 extern bool heap_attisnull(HeapTuple tup, int attnum, TupleDesc tupleDesc);

@@ -37,6 +37,12 @@ typedef struct
 	 *-------------------------------------------------------
 	 */
 
+	/*
+	 * GGDB: the relation being pruned.  Threaded through so the visibility
+	 * check can pass it to HeapTupleSatisfiesVacuumHorizon(), which in the
+	 * MPP fork takes the relation as an argument.
+	 */
+	Relation	rel;
 	/* tuple visibility test, initialized for the relation */
 	GlobalVisState *vistest;
 	/* whether or not dead items can be set LP_UNUSED during pruning */
@@ -368,6 +374,7 @@ heap_page_prune_and_freeze(Relation relation, Buffer buffer,
 	int64		fpi_before = pgWalUsage.wal_fpi;
 
 	/* Copy parameters to prstate */
+	prstate.rel = relation;
 	prstate.vistest = vistest;
 	prstate.mark_unused_now = (options & HEAP_PAGE_PRUNE_MARK_UNUSED_NOW) != 0;
 	prstate.freeze = (options & HEAP_PAGE_PRUNE_FREEZE) != 0;

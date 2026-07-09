@@ -1270,7 +1270,7 @@ AbsorbSyncRequests(void)
 
 	if (IsUnderPostmaster && !AmStartupProcess() && !AmCheckpointerProcess())
 		elog(ERROR, "AbsorbFsyncRequests() called in process %d (type %d)",
-			 MyProcPid, MyAuxProcType);
+			 MyProcPid, MyBackendType);
 
 	LWLockAcquire(CheckpointerCommLock, LW_EXCLUSIVE);
 

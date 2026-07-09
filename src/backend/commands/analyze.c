@@ -97,6 +97,7 @@
 #include "storage/procarray.h"
 #include "utils/attoptcache.h"
 #include "utils/datum.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -409,7 +410,7 @@ analyze_rel_internal(Oid relid, RangeVar *relation,
 	{
 		char *asubtype = "";
 
-		if (IsAutoVacuumWorkerProcess())
+		if (AmAutoVacuumWorkerProcess())
 			asubtype = "AUTO";
 
 		MetaTrackUpdObject(RelationRelationId,
@@ -826,7 +827,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			if(stats->merge_stats)
 			{
 				(*stats->compute_stats) (stats, std_fetch_func, 0, 0);
-				MemoryContextResetAndDeleteChildren(col_context);
+				MemoryContextReset(col_context);
 				continue;
 			}
 			Assert(sample_needed);

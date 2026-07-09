@@ -3954,7 +3954,7 @@ CopyFrom(CopyState cstate)
 	target_resultRelInfo = resultRelInfo;
 
 	/* Verify the named relation is a valid target for INSERT */
-	CheckValidResultRel(resultRelInfo, CMD_INSERT);
+	CheckValidResultRel(resultRelInfo, CMD_INSERT, NIL);
 
 	ExecOpenIndices(resultRelInfo, false);
 
