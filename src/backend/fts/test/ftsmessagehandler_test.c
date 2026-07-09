@@ -172,6 +172,8 @@ test_HandleFtsWalRepPromoteMirror(void **state)
 	expect_value(ReplicationSlotCreate, db_specific, false);
 	expect_value(ReplicationSlotCreate, persistency, RS_PERSISTENT);
 	expect_value(ReplicationSlotCreate, two_phase, false);
+	expect_value(ReplicationSlotCreate, failover, false);
+	expect_value(ReplicationSlotCreate, synced, false);
 	will_be_called_with_sideeffect(ReplicationSlotCreate,
 								   set_replication_slot, &ReplicationSlotCtl);
 

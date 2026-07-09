@@ -63,6 +63,14 @@ class CFile(object):
         if 'be-secure' not in self.path and 'guc_gp.c' not in self.path:
             content = CFile.s_comment_pat.sub('', content)
         content = CFile.attribute_pat.sub('', content)
+        # GPDB: pg_attribute_always_inline / pg_noinline are macros that embed
+        # the substring 'inline'.  The function matcher and rettype handling below
+        # only understand the plain 'inline' keyword and blindly strip the
+        # substring 'inline', which mangles these tokens (e.g. pg_noinline ->
+        # 'pg_no') and produces malformed mocks.  Normalize them up front:
+        # always_inline -> inline (keep the inline semantics), noinline -> dropped.
+        content = re.sub(r'\bpg_attribute_always_inline\b', 'inline', content)
+        content = re.sub(r'\bpg_noinline\b', '', content)
         # .c files included in other .c files can generally not be found from
         # where the mock files are located which leads to compilation failure.
         # Since we thus far arent interested in handling this anyways, let's
@@ -174,7 +182,7 @@ class FuncSignature(object):
 
     def __init__(self, modifier, rettype, funcname, args):
         self.modifier = modifier.strip()
-        self.rettype = re.sub('inline', '', rettype).strip()
+        self.rettype = re.sub(r'\binline\b', '', rettype).strip()
         self.funcname = funcname.strip()
         self.args = self.parse_args(args)
 

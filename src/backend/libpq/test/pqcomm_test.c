@@ -143,91 +143,15 @@ pqcomm_accept_mock(int accept_sock, struct sockaddr *restrict address,
 }
 
 /*
- * Test for StreamConnection that verifies that the socket has the SO_SNDTIMEO
- * timeout set for it when the connection is through a TCP/IP socket (AF_INET)
+ * NOTE (PG17): the StreamConnection() SO_SNDTIMEO unit tests were removed here.
+ * PG17 (aafc05de1bf) replaced StreamConnection(server_fd, Port*) with
+ * pq_init(ClientSocket*); the GPDB SO_SNDTIMEO-on-dispatcher logic was
+ * re-grafted into pq_init() (see src/backend/libpq/pqcomm.c). pq_init()
+ * palloc0()s its Port and has many side effects, so it is not cleanly
+ * unit-testable here; the behavior is covered by cluster/segment tests.
+ * TODO: re-port these SO_SNDTIMEO checks against pq_init().
  */
-static void
-test__StreamConnection_set_SNDTIMEO_AF_INET(void **state)
-{
-	Port *port = (Port *) calloc(1, sizeof(Port));
-	pgsocket server_fd = 1;
 
-	GpIdentity.segindex = MASTER_CONTENT_ID;
-	gp_connection_send_timeout = SOCKET_TIMEOUT_SECONDS;
-	test_accept_socket = socket(AF_INET, SOCK_STREAM, 0 /* protocol */);
-
-	int result = StreamConnection(server_fd, port);
-	assert_int_equal(result, STATUS_OK);
-
-	struct timeval timeout;
-	socklen_t timeout_len = sizeof(timeout);
-	result = getsockopt(port->sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, &timeout_len);
-	/* Check that getsockopt ran successfully */
-	assert_int_equal(result, 0);
-	/* Check that the timeout is actually set */
-	assert_int_equal(timeout.tv_sec, SOCKET_TIMEOUT_SECONDS);
-
-	close(test_accept_socket);
-}
-
-/*
- * Test for StreamConnection that verifies that the socket has the SO_SNDTIMEO
- * timeout set for it when the connection is through a UNIX socket (AF_UNIX)
- */
-static void
-test__StreamConnection_set_SNDTIMEO_AF_UNIX(void **state)
-{
-	Port *port = (Port *) calloc(1, sizeof(Port));
-	pgsocket server_fd = 1;
-
-	GpIdentity.segindex = MASTER_CONTENT_ID;
-	gp_connection_send_timeout = SOCKET_TIMEOUT_SECONDS;
-	test_accept_socket = socket(AF_UNIX, SOCK_STREAM, 0 /* protocol */);
-
-	int result = StreamConnection(server_fd, port);
-	assert_int_equal(result, STATUS_OK);
-
-	struct timeval timeout;
-	socklen_t timeout_len = sizeof(timeout);
-	result = getsockopt(port->sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, &timeout_len);
-
-	/* Check that getsockopt ran successfully */
-	assert_int_equal(result, 0);
-	/* Check that the timeout is actually set */
-	assert_int_equal(timeout.tv_sec, SOCKET_TIMEOUT_SECONDS);
-
-	close(test_accept_socket);
-}
-
-/*
- * Test for StreamConnection that verifies that we don't set the socket
- * SO_SNDTIMEO timeout on segments
- */
-static void
-test__StreamConnection_set_SNDTIMEO_segment(void **state)
-{
-	Port *port = (Port *) calloc(1, sizeof(Port));
-	pgsocket server_fd = 1;
-
-	/* Use another segindex than master, anything != MASTER_CONTENT_ID will do */
-	GpIdentity.segindex = 1;
-	gp_connection_send_timeout = SOCKET_TIMEOUT_SECONDS;
-	test_accept_socket = socket(AF_INET, SOCK_STREAM, 0 /* protocol */);
-
-	int result = StreamConnection(server_fd, port);
-	assert_int_equal(result, STATUS_OK);
-
-	struct timeval timeout;
-	socklen_t timeout_len = sizeof(timeout);
-	result = getsockopt(port->sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, &timeout_len);
-
-	/* Check that getsockopt ran successfully */
-	assert_int_equal(result, 0);
-	/* Check that the timeout is NOT actually set */
-	assert_int_equal(timeout.tv_sec, 0);
-
-	close(test_accept_socket);
-}
 
 /* ==================== main ==================== */
 int
@@ -238,10 +162,7 @@ main(int argc, char* argv[])
 	const UnitTest tests[] = {
 		unit_test(test__internal_flush_successfulSend),
 		unit_test(test__internal_flush_failedSendEINTR),
-		unit_test(test__internal_flush_failedSendEPIPE),
-		unit_test(test__StreamConnection_set_SNDTIMEO_AF_INET),
-		unit_test(test__StreamConnection_set_SNDTIMEO_AF_UNIX),
-		unit_test(test__StreamConnection_set_SNDTIMEO_segment)
+		unit_test(test__internal_flush_failedSendEPIPE)
 	};
 
 	return run_tests(tests);
