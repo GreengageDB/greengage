@@ -3,7 +3,7 @@
  * auth.c
  *	  Routines to handle network authentication
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -37,9 +37,7 @@
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
-#include "utils/guc.h"
 #include "utils/memutils.h"
-#include "utils/timestamp.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -345,7 +343,7 @@ auth_failed(Port *port, int status, const char *logdetail)
 	  }
 	}
 
-	cdetail = psprintf(_("Connection matched %s line %d: \"%s\""),
+	cdetail = psprintf(_("Connection matched file \"%s\" line %d: \"%s\""),
 					   port->hba->sourcefile, port->hba->linenumber,
 					   port->hba->rawline);
 
@@ -969,6 +967,22 @@ ClientAuthentication(Port *port)
 #endif
 	}
 
+	if (Log_connections && status == STATUS_OK &&
+		!MyClientConnectionInfo.authn_id)
+	{
+		/*
+		 * Normally, if log_connections is set, the call to set_authn_id()
+		 * will log the connection.  However, if that function is never
+		 * called, perhaps because the trust method is in use, then we handle
+		 * the logging here instead.
+		 */
+		ereport(LOG,
+				errmsg("connection authenticated: user=\"%s\" method=%s "
+					   "(%s:%d)",
+					   port->user_name, hba_authname(port->hba->auth_method),
+					   port->hba->sourcefile, port->hba->linenumber));
+	}
+
 	if (ClientAuthentication_hook)
 		(*ClientAuthentication_hook) (port, status);
 
@@ -1001,7 +1015,7 @@ sendAuthRequest(Port *port, AuthRequest areq, const char *extradata, int extrale
 
 	CHECK_FOR_INTERRUPTS();
 
-	pq_beginmessage(&buf, 'R');
+	pq_beginmessage(&buf, PqMsg_AuthenticationRequest);
 	pq_sendint32(&buf, (int32) areq);
 	if (extralen > 0)
 		pq_sendbytes(&buf, extradata, extralen);
@@ -1034,7 +1048,7 @@ recv_password_packet(Port *port)
 
 	/* Expect 'p' message type */
 	mtype = pq_getbyte();
-	if (mtype != 'p')
+	if (mtype != PqMsg_PasswordMessage)
 	{
 		/*
 		 * If the client just disconnects without offering a password, don't
@@ -1185,15 +1199,13 @@ CheckPWChallengeAuth(Port *port, const char **logdetail)
 
 	if (shadow_pass)
 		pfree(shadow_pass);
-
-	/*
-	 * If get_role_password() returned error, return error, even if the
-	 * authentication succeeded.
-	 */
-	if (!shadow_pass)
+	else
 	{
+		/*
+		 * If get_role_password() returned error, authentication better not
+		 * have succeeded.
+		 */
 		Assert(auth_result != STATUS_OK);
-		return STATUS_ERROR;
 	}
 
 	if (auth_result == STATUS_OK)
@@ -1208,11 +1220,6 @@ CheckMD5Auth(Port *port, char *shadow_pass, const char **logdetail)
 	char		md5Salt[4];		/* Password salt */
 	char	   *passwd;
 	int			result;
-
-	if (Db_user_namespace)
-		ereport(FATAL,
-				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				 errmsg("MD5 authentication is not supported when \"db_user_namespace\" is enabled")));
 
 	/* include the salt to use for computing the response */
 	if (!pg_strong_random(md5Salt, 4))
@@ -1343,7 +1350,7 @@ pg_GSS_recvauth(Port *port)
 		CHECK_FOR_INTERRUPTS();
 
 		mtype = pq_getbyte();
-		if (mtype != 'p')
+		if (mtype != PqMsg_GSSResponse)
 		{
 			/* Only log error if client didn't disconnect. */
 			if (mtype != EOF)
@@ -1614,7 +1621,7 @@ pg_SSPI_recvauth(Port *port)
 	{
 		pq_startmsgread();
 		mtype = pq_getbyte();
-		if (mtype != 'p')
+		if (mtype != PqMsg_GSSResponse)
 		{
 			if (sspictx != NULL)
 			{
@@ -2993,31 +3000,6 @@ CheckLDAPAuth(Port *port)
 		pfree(filter);
 		ldap_memfree(dn);
 		ldap_msgfree(search_message);
-
-		/* Unbind and disconnect from the LDAP server */
-		r = ldap_unbind_s(ldap);
-		if (r != LDAP_SUCCESS)
-		{
-			ereport(LOG,
-					(errmsg("could not unbind after searching for user \"%s\" on server \"%s\"",
-							fulluser, server_name)));
-			pfree(passwd);
-			pfree(fulluser);
-			return STATUS_ERROR;
-		}
-
-		/*
-		 * Need to re-initialize the LDAP connection, so that we can bind to
-		 * it with a different username.
-		 */
-		if (InitializeLDAPConnection(port, &ldap) == STATUS_ERROR)
-		{
-			pfree(passwd);
-			pfree(fulluser);
-
-			/* Error message already sent */
-			return STATUS_ERROR;
-		}
 	}
 	else
 		fulluser = psprintf("%s%s%s",

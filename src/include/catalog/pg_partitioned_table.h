@@ -5,7 +5,7 @@
  *	  (pg_partitioned_table)
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_partitioned_table.h
@@ -65,7 +65,9 @@ CATALOG(pg_partitioned_table,3350,PartitionedRelationId)
 typedef FormData_pg_partitioned_table *Form_pg_partitioned_table;
 
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_partitioned_table_partrelid_index, 3351, PartitionedRelidIndexId, on pg_partitioned_table using btree(partrelid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_partitioned_table_partrelid_index, 3351, PartitionedRelidIndexId, pg_partitioned_table, btree(partrelid oid_ops));
+
+MAKE_SYSCACHE(PARTRELID, pg_partitioned_table_partrelid_index, 32);
 
 /* partattrs can contain zero (InvalidAttrNumber) to represent expressions */
 

@@ -179,8 +179,6 @@ ExecReScanPartitionSelector(PartitionSelectorState *node)
 void
 ExecEndPartitionSelector(PartitionSelectorState *node)
 {
-	ExecFreeExprContext(&node->ps);
-
 	/* clean child node */
 	ExecEndNode(outerPlanState(node));
 }

@@ -12,7 +12,7 @@
  * postgresql.conf.  An extension also has an installation script file,
  * containing SQL commands to create the extension's objects.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -32,7 +32,6 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/relation.h"
-#include "access/sysattr.h"
 #include "access/table.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
@@ -56,7 +55,6 @@
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
-#include "nodes/makefuncs.h"
 #include "storage/fd.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
@@ -137,6 +135,9 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 								  char *origSchemaName,
 								  bool cascade,
 								  bool is_create);
+static void ExecAlterExtensionContentsRecurse(AlterExtensionContentsStmt *stmt,
+											  ObjectAddress extension,
+											  ObjectAddress object);
 static char *read_whole_file(const char *filename, int *length);
 
 
@@ -1047,6 +1048,16 @@ execute_extension_script(Node *stmt,
 		char	   *c_sql = read_extension_script_file(control, filename);
 		Datum		t_sql;
 
+		/*
+		 * We filter each substitution through quote_identifier().  When the
+		 * arg contains one of the following characters, no one collection of
+		 * quoting can work inside $$dollar-quoted string literals$$,
+		 * 'single-quoted string literals', and outside of any literal.  To
+		 * avoid a security snare for extension authors, error on substitution
+		 * for arguments containing these.
+		 */
+		const char *quoting_relevant_chars = "\"$'\\";
+
 		/* We use various functions that want to operate on text datums */
 		t_sql = CStringGetTextDatum(c_sql);
 
@@ -1076,6 +1087,11 @@ execute_extension_script(Node *stmt,
 											t_sql,
 											CStringGetTextDatum("@extowner@"),
 											CStringGetTextDatum(qUserName));
+			if (strpbrk(userName, quoting_relevant_chars))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						 errmsg("invalid character in extension owner: must not contain any of \"%s\"",
+								quoting_relevant_chars)));
 		}
 
 		/*
@@ -1087,6 +1103,7 @@ execute_extension_script(Node *stmt,
 		 */
 		if (!control->relocatable)
 		{
+			Datum		old = t_sql;
 			const char *qSchemaName = quote_identifier(schemaName);
 
 			t_sql = DirectFunctionCall3Coll(replace_text,
@@ -1094,6 +1111,11 @@ execute_extension_script(Node *stmt,
 											t_sql,
 											CStringGetTextDatum("@extschema@"),
 											CStringGetTextDatum(qSchemaName));
+			if (t_sql != old && strpbrk(schemaName, quoting_relevant_chars))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						 errmsg("invalid character in extension \"%s\" schema: must not contain any of \"%s\"",
+								control->name, quoting_relevant_chars)));
 		}
 
 		/*
@@ -1103,6 +1125,7 @@ execute_extension_script(Node *stmt,
 		Assert(list_length(control->requires) == list_length(requiredSchemas));
 		forboth(lc, control->requires, lc2, requiredSchemas)
 		{
+			Datum		old = t_sql;
 			char	   *reqextname = (char *) lfirst(lc);
 			Oid			reqschema = lfirst_oid(lc2);
 			char	   *schemaName = get_namespace_name(reqschema);
@@ -1115,6 +1138,11 @@ execute_extension_script(Node *stmt,
 											t_sql,
 											CStringGetTextDatum(repltoken),
 											CStringGetTextDatum(qSchemaName));
+			if (t_sql != old && strpbrk(schemaName, quoting_relevant_chars))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						 errmsg("invalid character in extension \"%s\" schema: must not contain any of \"%s\"",
+								reqextname, quoting_relevant_chars)));
 		}
 
 		/*
@@ -2890,7 +2918,7 @@ AlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *o
 {
 	Oid			extensionOid;
 	Oid			nspOid;
-	Oid			oldNspOid = InvalidOid;
+	Oid			oldNspOid;
 	AclResult	aclresult;
 	Relation	extRel;
 	ScanKeyData key[2];
@@ -2973,6 +3001,9 @@ AlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *o
 
 	objsMoved = new_object_addresses();
 
+	/* store the OID of the namespace to-be-changed */
+	oldNspOid = extForm->extnamespace;
+
 	/*
 	 * Scan pg_depend to find objects that depend directly on the extension,
 	 * and alter each one's schema.
@@ -3053,14 +3084,8 @@ AlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *o
 												 objsMoved);
 
 		/*
-		 * Remember previous namespace of first object that has one
-		 */
-		if (oldNspOid == InvalidOid && dep_oldNspOid != InvalidOid)
-			oldNspOid = dep_oldNspOid;
-
-		/*
 		 * If not all the objects had the same old namespace (ignoring any
-		 * that are not in namespaces), complain.
+		 * that are not in namespaces or are dependent types), complain.
 		 */
 		if (dep_oldNspOid != InvalidOid && dep_oldNspOid != oldNspOid)
 			ereport(ERROR,
@@ -3087,9 +3112,11 @@ AlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *o
 
 	table_close(extRel, RowExclusiveLock);
 
-	/* update dependencies to point to the new schema */
-	changeDependencyFor(ExtensionRelationId, extensionOid,
-						NamespaceRelationId, oldNspOid, nspOid);
+	/* update dependency to point to the new schema */
+	if (changeDependencyFor(ExtensionRelationId, extensionOid,
+							NamespaceRelationId, oldNspOid, nspOid) != 1)
+		elog(ERROR, "could not change schema dependency for extension %s",
+			 NameStr(extForm->extname));
 
 	InvokeObjectPostAlterHook(ExtensionRelationId, extensionOid, 0);
 
@@ -3473,7 +3500,6 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 	ObjectAddress extension;
 	ObjectAddress object;
 	Relation	relation;
-	Oid			oldExtension;
 
 	switch (stmt->objtype)
 	{
@@ -3529,6 +3555,38 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 	/* Permission check: must own target object, too */
 	check_object_ownership(GetUserId(), stmt->objtype, object,
 						   stmt->object, relation);
+
+	/* Do the update, recursing to any dependent objects */
+	ExecAlterExtensionContentsRecurse(stmt, extension, object);
+
+	/* Finish up */
+	InvokeObjectPostAlterHook(ExtensionRelationId, extension.objectId, 0);
+
+	/*
+	 * If get_object_address() opened the relation for us, we close it to keep
+	 * the reference count correct - but we retain any locks acquired by
+	 * get_object_address() until commit time, to guard against concurrent
+	 * activity.
+	 */
+	if (relation != NULL)
+		relation_close(relation, NoLock);
+
+	return extension;
+}
+
+/*
+ * ExecAlterExtensionContentsRecurse
+ *		Subroutine for ExecAlterExtensionContentsStmt
+ *
+ * Do the bare alteration of object's membership in extension,
+ * without permission checks.  Recurse to dependent objects, if any.
+ */
+static void
+ExecAlterExtensionContentsRecurse(AlterExtensionContentsStmt *stmt,
+								  ObjectAddress extension,
+								  ObjectAddress object)
+{
+	Oid			oldExtension;
 
 	/*
 	 * Check existing extension membership.
@@ -3613,18 +3671,47 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 		removeExtObjInitPriv(object.objectId, object.classId);
 	}
 
-	InvokeObjectPostAlterHook(ExtensionRelationId, extension.objectId, 0);
-
 	/*
-	 * If get_object_address() opened the relation for us, we close it to keep
-	 * the reference count correct - but we retain any locks acquired by
-	 * get_object_address() until commit time, to guard against concurrent
-	 * activity.
+	 * Recurse to any dependent objects; currently, this includes the array
+	 * type of a base type, the multirange type associated with a range type,
+	 * and the rowtype of a table.
 	 */
-	if (relation != NULL)
-		relation_close(relation, NoLock);
+	if (object.classId == TypeRelationId)
+	{
+		ObjectAddress depobject;
 
-	return extension;
+		depobject.classId = TypeRelationId;
+		depobject.objectSubId = 0;
+
+		/* If it has an array type, update that too */
+		depobject.objectId = get_array_type(object.objectId);
+		if (OidIsValid(depobject.objectId))
+			ExecAlterExtensionContentsRecurse(stmt, extension, depobject);
+
+		/* If it is a range type, update the associated multirange too */
+		if (type_is_range(object.objectId))
+		{
+			depobject.objectId = get_range_multirange(object.objectId);
+			if (!OidIsValid(depobject.objectId))
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						 errmsg("could not find multirange type for data type %s",
+								format_type_be(object.objectId))));
+			ExecAlterExtensionContentsRecurse(stmt, extension, depobject);
+		}
+	}
+	if (object.classId == RelationRelationId)
+	{
+		ObjectAddress depobject;
+
+		depobject.classId = TypeRelationId;
+		depobject.objectSubId = 0;
+
+		/* It might not have a rowtype, but if it does, update that */
+		depobject.objectId = get_rel_type_id(object.objectId);
+		if (OidIsValid(depobject.objectId))
+			ExecAlterExtensionContentsRecurse(stmt, extension, depobject);
+	}
 }
 
 ObjectAddress

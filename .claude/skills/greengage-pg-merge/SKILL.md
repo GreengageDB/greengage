@@ -15,8 +15,8 @@ upstream `master` and the `REL_x_0` tag; add a `postgres/postgres` remote and
 | Step | Target | Notes |
 |---|---|---|
 | PG15 | `adadae45816` | done on branch claude-merge-3 |
-| PG16 | `97d89101045` | in progress on claude-merge-4 |
-| PG17 | `7dcc6f8e6d7` | pinned |
+| PG16 | `97d89101045` | done on branch claude-merge-4 (see [pg16-notes.md](pg16-notes.md)) |
+| PG17 | `7dcc6f8e6d7` | in progress on branch claude-merge-5 (see [pg17-notes.md](pg17-notes.md)) |
 | PG18 | `9c5b9a280cb`, then tag `REL_18_4` (`f5cc81719e6`) | pinned |
 
 Each campaign gets its own branch + git worktree + docker build container
@@ -153,7 +153,8 @@ bug/regen commits after the merge itself.
   (PG14 `xactCompletionCount` bump in `XidCacheRemoveRunningXids`).
 
 Per-version class references: [pg14-notes.md](pg14-notes.md) ·
-[pg15-notes.md](pg15-notes.md) · [pg16-notes.md](pg16-notes.md).
+[pg15-notes.md](pg15-notes.md) · [pg16-notes.md](pg16-notes.md) ·
+[pg17-notes.md](pg17-notes.md).
 Siblings: [greengage-internals](../greengage-internals/SKILL.md) ·
 [greengage-build](../greengage-build/SKILL.md) · [greengage-regress-tests](../greengage-regress-tests/SKILL.md) ·
 [greengage-answer-file-regen](../greengage-answer-file-regen/SKILL.md) · [greengage-ci-triage](../greengage-ci-triage/SKILL.md) ·

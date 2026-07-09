@@ -9,7 +9,7 @@
  * Reading data from the input file or client and parsing it into Datums
  * is handled in copyfromparse.c.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -25,10 +25,8 @@
 #include <sys/stat.h>
 
 #include "access/heapam.h"
-#include "access/htup_details.h"
 #include "access/tableam.h"
 #include "access/xact.h"
-#include "access/xlog.h"
 #include "catalog/namespace.h"
 #include "commands/copy.h"
 #include "commands/copyfrom_internal.h"
@@ -39,9 +37,9 @@
 #include "executor/nodeModifyTable.h"
 #include "executor/tuptable.h"
 #include "foreign/fdwapi.h"
-#include "libpq/libpq.h"
-#include "libpq/pqformat.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "nodes/miscnodes.h"
 #include "optimizer/optimizer.h"
 #include "pgstat.h"
 #include "rewrite/rewriteHandler.h"
@@ -144,7 +142,7 @@ CopyFromErrorCallback(void *arg)
 			/* error is relevant to a particular column */
 			char	   *attval;
 
-			attval = limit_printout_length(cstate->cur_attval);
+			attval = CopyLimitPrintoutLength(cstate->cur_attval);
 			errcontext("COPY %s, line %llu, column %s: \"%s\"",
 					   cstate->cur_relname,
 					   (unsigned long long) cstate->cur_lineno,
@@ -171,7 +169,7 @@ CopyFromErrorCallback(void *arg)
 			{
 				char	   *lineval;
 
-				lineval = limit_printout_length(cstate->line_buf.data);
+				lineval = CopyLimitPrintoutLength(cstate->line_buf.data);
 				errcontext("COPY %s, line %llu: \"%s\"",
 						   cstate->cur_relname,
 						   (unsigned long long) cstate->cur_lineno, lineval);
@@ -187,6 +185,37 @@ CopyFromErrorCallback(void *arg)
 	}
 }
 #endif /* GPDB: CopyFromErrorCallback */
+
+/*
+ * Make sure we don't print an unreasonable amount of COPY data in a message.
+ *
+ * Returns a pstrdup'd copy of the input.
+ */
+char *
+CopyLimitPrintoutLength(const char *str)
+{
+#define MAX_COPY_DATA_DISPLAY 100
+
+	int			slen = strlen(str);
+	int			len;
+	char	   *res;
+
+	/* Fast path if definitely okay */
+	if (slen <= MAX_COPY_DATA_DISPLAY)
+		return pstrdup(str);
+
+	/* Apply encoding-dependent truncation */
+	len = pg_mbcliplen(str, slen, MAX_COPY_DATA_DISPLAY);
+
+	/*
+	 * Truncate, and add "..." to show we truncated the input.
+	 */
+	res = (char *) palloc(len + 4);
+	memcpy(res, str, len);
+	strcpy(res + len, "...");
+
+	return res;
+}
 
 /*
  * Allocate memory and initialize a new CopyMultiInsertBuffer for this
@@ -625,12 +654,16 @@ CopyFrom(CopyFromState cstate)
 	CopyMultiInsertInfo multiInsertInfo = {0};	/* pacify compiler */
 	int64		processed = 0;
 	int64		excluded = 0;
+	int64		skipped = 0;
 	bool		has_before_insert_row_trig;
 	bool		has_instead_insert_row_trig;
 	bool		leafpart_use_multi_insert = false;
 
 	Assert(cstate->rel);
 	Assert(list_length(cstate->range_table) == 1);
+
+	if (cstate->opts.on_error != COPY_ON_ERROR_STOP)
+		Assert(cstate->escontext);
 
 	/*
 	 * The target must be a plain, foreign, or partitioned relation, or have
@@ -738,7 +771,7 @@ CopyFrom(CopyFromState cstate)
 	ExecInitResultRelation(estate, resultRelInfo, 1);
 
 	/* Verify the named relation is a valid target for INSERT */
-	CheckValidResultRel(resultRelInfo, CMD_INSERT);
+	CheckValidResultRel(resultRelInfo, CMD_INSERT, NIL);
 
 	ExecOpenIndices(resultRelInfo, false);
 
@@ -863,6 +896,9 @@ CopyFrom(CopyFromState cstate)
 		 * Can't support multi-inserts if there are any volatile function
 		 * expressions in WHERE clause.  Similarly to the trigger case above,
 		 * such expressions may query the table we're inserting into.
+		 *
+		 * Note: the whereClause was already preprocessed in DoCopy(), so it's
+		 * okay to use contain_volatile_functions() directly.
 		 */
 		insertMethod = CIM_SINGLE;
 	}
@@ -964,6 +1000,29 @@ CopyFrom(CopyFromState cstate)
 		/* Directly store the values/nulls array in the slot */
 		if (!NextCopyFrom(cstate, econtext, myslot->tts_values, myslot->tts_isnull))
 			break;
+
+		if (cstate->opts.on_error != COPY_ON_ERROR_STOP &&
+			cstate->escontext->error_occurred)
+		{
+			/*
+			 * Soft error occurred, skip this tuple and deal with error
+			 * information according to ON_ERROR.
+			 */
+			if (cstate->opts.on_error == COPY_ON_ERROR_IGNORE)
+
+				/*
+				 * Just make ErrorSaveContext ready for the next NextCopyFrom.
+				 * Since we don't set details_wanted and error_data is not to
+				 * be filled, just resetting error_occurred is enough.
+				 */
+				cstate->escontext->error_occurred = false;
+
+			/* Report that this tuple was skipped by the ON_ERROR clause */
+			pgstat_progress_update_param(PROGRESS_COPY_TUPLES_SKIPPED,
+										 ++skipped);
+
+			continue;
+		}
 
 		ExecStoreVirtualTuple(myslot);
 
@@ -1257,6 +1316,14 @@ CopyFrom(CopyFromState cstate)
 	/* Done, clean up */
 	error_context_stack = errcallback.previous;
 
+	if (cstate->opts.on_error != COPY_ON_ERROR_STOP &&
+		cstate->num_errors > 0)
+		ereport(NOTICE,
+				errmsg_plural("%llu row was skipped due to data type incompatibility",
+							  "%llu rows were skipped due to data type incompatibility",
+							  (unsigned long long) cstate->num_errors,
+							  (unsigned long long) cstate->num_errors));
+
 	if (bistate != NULL)
 		FreeBulkInsertState(bistate);
 
@@ -1369,7 +1436,9 @@ BeginCopyFrom(ParseState *pstate,
 
 	/* Convert FORCE_NOT_NULL name list to per-column flags, check validity */
 	cstate->opts.force_notnull_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->opts.force_notnull)
+	if (cstate->opts.force_notnull_all)
+		MemSet(cstate->opts.force_notnull_flags, true, num_phys_attrs * sizeof(bool));
+	else if (cstate->opts.force_notnull)
 	{
 		List	   *attnums;
 		ListCell   *cur;
@@ -1390,9 +1459,28 @@ BeginCopyFrom(ParseState *pstate,
 		}
 	}
 
+	/* Set up soft error handler for ON_ERROR */
+	if (cstate->opts.on_error != COPY_ON_ERROR_STOP)
+	{
+		cstate->escontext = makeNode(ErrorSaveContext);
+		cstate->escontext->type = T_ErrorSaveContext;
+		cstate->escontext->error_occurred = false;
+
+		/*
+		 * Currently we only support COPY_ON_ERROR_IGNORE. We'll add other
+		 * options later
+		 */
+		if (cstate->opts.on_error == COPY_ON_ERROR_IGNORE)
+			cstate->escontext->details_wanted = false;
+	}
+	else
+		cstate->escontext = NULL;
+
 	/* Convert FORCE_NULL name list to per-column flags, check validity */
 	cstate->opts.force_null_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->opts.force_null)
+	if (cstate->opts.force_null_all)
+		MemSet(cstate->opts.force_null_flags, true, num_phys_attrs * sizeof(bool));
+	else if (cstate->opts.force_null)
 	{
 		List	   *attnums;
 		ListCell   *cur;
@@ -1457,6 +1545,12 @@ BeginCopyFrom(ParseState *pstate,
 		cstate->need_transcoding = true;
 		cstate->conversion_proc = FindDefaultConversionProc(cstate->file_encoding,
 															GetDatabaseEncoding());
+		if (!OidIsValid(cstate->conversion_proc))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_FUNCTION),
+					 errmsg("default conversion function for encoding \"%s\" to \"%s\" does not exist",
+							pg_encoding_to_char(cstate->file_encoding),
+							pg_encoding_to_char(GetDatabaseEncoding()))));
 	}
 
 	cstate->copy_src = COPY_FILE;	/* default */
@@ -1509,8 +1603,6 @@ BeginCopyFrom(ParseState *pstate,
 		cstate->rteperminfos = pstate->p_rteperminfos;
 	}
 
-	tupDesc = RelationGetDescr(cstate->rel);
-	num_phys_attrs = tupDesc->natts;
 	num_defaults = 0;
 	volatile_defexprs = false;
 
@@ -1545,7 +1637,14 @@ BeginCopyFrom(ParseState *pstate,
 		/* Get default info if available */
 		defexprs[attnum - 1] = NULL;
 
-		if (!att->attgenerated)
+		/*
+		 * We only need the default values for columns that do not appear in
+		 * the column list, unless the DEFAULT option was given. We never need
+		 * default values for generated columns.
+		 */
+		if ((cstate->opts.default_print != NULL ||
+			 !list_member_int(cstate->attnumlist, attnum)) &&
+			!att->attgenerated)
 		{
 			Expr	   *defexpr = (Expr *) build_column_default(cstate->rel,
 																attnum);
@@ -1577,7 +1676,8 @@ BeginCopyFrom(ParseState *pstate,
 				 * known to be safe for use with the multi-insert
 				 * optimization. Hence we use this special case function
 				 * checker rather than the standard check for
-				 * contain_volatile_functions().
+				 * contain_volatile_functions().  Note also that we already
+				 * ran the expression through expression_planner().
 				 */
 				if (!volatile_defexprs)
 					volatile_defexprs = contain_volatile_functions_not_nextval((Node *) defexpr);
@@ -1585,6 +1685,7 @@ BeginCopyFrom(ParseState *pstate,
 		}
 	}
 
+	cstate->defaults = (bool *) palloc0(tupDesc->natts * sizeof(bool));
 
 	/* initialize progress */
 	pgstat_progress_start_command(PROGRESS_COMMAND_COPY,

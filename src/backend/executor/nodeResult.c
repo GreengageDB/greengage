@@ -50,7 +50,6 @@
 #include "executor/executor.h"
 #include "executor/nodeResult.h"
 #include "miscadmin.h"
-#include "utils/memutils.h"
 
 #include "cdb/cdbhash.h"
 #include "cdb/cdbutil.h"
@@ -326,16 +325,6 @@ ExecInitResult(Result *node, EState *estate, int eflags)
 void
 ExecEndResult(ResultState *node)
 {
-	/*
-	 * Free the exprcontext
-	 */
-	ExecFreeExprContext(&node->ps);
-
-	/*
-	 * clean out the tuple table
-	 */
-	ExecClearTuple(node->ps.ps_ResultTupleSlot);
-
 	/*
 	 * shut down subplans
 	 */

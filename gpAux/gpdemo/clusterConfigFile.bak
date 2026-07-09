@@ -1,0 +1,39 @@
+# This file must exist in the same directory that you execute gpinitsystem in
+MACHINE_LIST_FILE=/home/dvoronkov/ws/gpdb/gpAux/gpdemo/hostfile
+
+# This names the data directories for the Segment Instances and the Entry Postmaster
+SEG_PREFIX=demoDataDir
+
+# This is the port at which to contact the resulting Greenplum database, e.g.
+#   psql -p $PORT_BASE -d template1
+PORT_BASE=15434
+
+# Array of data locations for each hosts Segment Instances, the number of directories in this array will
+# set the number of segment instances per host
+declare -a DATA_DIRECTORY=(/home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast1 /home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast2 /home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast3)
+
+# Name of host on which to setup the QD
+COORDINATOR_HOSTNAME=gpdb_pg16
+
+# Name of directory on that host in which to setup the QD
+COORDINATOR_DIRECTORY=/home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/qddir
+
+COORDINATOR_PORT=15432
+
+# Shell to use to execute commands on all hosts
+TRUSTED_SHELL="/home/dvoronkov/ws/gpdb/gpAux/gpdemo/lalshell"
+
+ENCODING=UNICODE
+
+# Array of mirror data locations for each hosts Segment Instances, the number of directories in this array will
+# set the number of segment instances per host
+declare -a MIRROR_DATA_DIRECTORY=(/home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror1 /home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2 /home/dvoronkov/ws/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror3)
+
+MIRROR_PORT_BASE=15437
+
+# Keep max_connection settings to reasonable values for
+# installcheck good execution.
+
+DEFAULT_QD_MAX_CONNECT=25
+QE_CONNECT_FACTOR=5
+

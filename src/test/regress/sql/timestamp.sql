@@ -175,11 +175,115 @@ SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71393' ) AS week_trunc;
 
+-- verify date_bin behaves the same as date_trunc for relevant intervals
+
+-- case 1: AD dates, origin < input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2001-01-01') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '2020-02-29 15:44:17.71393')) ts (ts);
+
+-- case 2: BC dates, origin < input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2000-01-01 BC') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '0055-6-10 15:44:17.71393 BC')) ts (ts);
+
+-- case 3: AD dates, origin > input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '2020-03-02') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '2020-02-29 15:44:17.71393')) ts (ts);
+
+-- case 4: BC dates, origin > input
+SELECT
+  str,
+  interval,
+  date_trunc(str, ts) = date_bin(interval::interval, ts, timestamp '0055-06-17 BC') AS equal
+FROM (
+  VALUES
+  ('week', '7 d'),
+  ('day', '1 d'),
+  ('hour', '1 h'),
+  ('minute', '1 m'),
+  ('second', '1 s'),
+  ('millisecond', '1 ms'),
+  ('microsecond', '1 us')
+) intervals (str, interval),
+(VALUES (timestamp '0055-6-10 15:44:17.71393 BC')) ts (ts);
+
+-- bin timestamps into arbitrary intervals
+SELECT
+  interval,
+  ts,
+  origin,
+  date_bin(interval::interval, ts, origin)
+FROM (
+  VALUES
+  ('15 days'),
+  ('2 hours'),
+  ('1 hour 30 minutes'),
+  ('15 minutes'),
+  ('10 seconds'),
+  ('100 milliseconds'),
+  ('250 microseconds')
+) intervals (interval),
+(VALUES (timestamp '2020-02-11 15:44:17.71393')) ts (ts),
+(VALUES (timestamp '2001-01-01')) origin (origin);
+
+-- shift bins using the origin parameter:
+SELECT date_bin('5 min'::interval, timestamp '2020-02-01 01:01:01', timestamp '2020-02-01 00:02:30');
+
+-- test roundoff edge case when source < origin
+SELECT date_bin('30 minutes'::interval, timestamp '2024-02-01 15:00:00', timestamp '2024-02-01 17:00:00');
+
+-- disallow intervals with months or years
+SELECT date_bin('5 months'::interval, timestamp '2020-02-01 01:01:01', timestamp '2001-01-01');
+SELECT date_bin('5 years'::interval,  timestamp '2020-02-01 01:01:01', timestamp '2001-01-01');
+
 -- disallow zero intervals
 SELECT date_bin('0 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
 
 -- disallow negative intervals
 SELECT date_bin('-2 days'::interval, timestamp '1970-01-01 01:00:00' , timestamp '1970-01-01 00:00:00');
+
+-- test overflow cases
+select date_bin('15 minutes'::interval, timestamp '294276-12-30', timestamp '4000-12-20 BC');
+select date_bin('200000000 days'::interval, '2024-02-01'::timestamp, '2024-01-01'::timestamp);
+select date_bin('365000 days'::interval, '4400-01-01 BC'::timestamp, '4000-01-01 BC'::timestamp);
 
 -- Test casting within a BETWEEN qualifier
 SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
@@ -328,3 +432,22 @@ select generate_series('2022-01-01 00:00'::timestamp,
 select * from generate_series('2020-01-01 00:00'::timestamp,
                               '2020-01-02 03:00'::timestamp,
                               '0 hour'::interval);
+select generate_series(timestamp '1995-08-06 12:12:12', timestamp '1996-08-06 12:12:12', interval 'infinity');
+select generate_series(timestamp '1995-08-06 12:12:12', timestamp '1996-08-06 12:12:12', interval '-infinity');
+
+
+-- test arithmetic with infinite timestamps
+select timestamp 'infinity' - timestamp 'infinity';
+select timestamp 'infinity' - timestamp '-infinity';
+select timestamp '-infinity' - timestamp 'infinity';
+select timestamp '-infinity' - timestamp '-infinity';
+select timestamp 'infinity' - timestamp '1995-08-06 12:12:12';
+select timestamp '-infinity' - timestamp '1995-08-06 12:12:12';
+
+-- test age() with infinite timestamps
+select age(timestamp 'infinity');
+select age(timestamp '-infinity');
+select age(timestamp 'infinity', timestamp 'infinity');
+select age(timestamp 'infinity', timestamp '-infinity');
+select age(timestamp '-infinity', timestamp 'infinity');
+select age(timestamp '-infinity', timestamp '-infinity');

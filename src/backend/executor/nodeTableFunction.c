@@ -452,9 +452,6 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 void
 ExecEndTableFunction(TableFunctionState *node)
 {
-	/* Free the ExprContext */
-	ExecFreeExprContext(&node->ss.ps);
-	
 	/* Clean out the tuple table */
 	if (node->ss.ps.ps_ResultTupleSlot)
 		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);

@@ -3,7 +3,7 @@
  * xactdesc.c
  *	  rmgr descriptor routines for access/transam/xact.c
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -17,6 +17,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "storage/dbdirnode.h"
+#include "storage/procnumber.h"
 #include "replication/origin.h"
 #include "storage/sinval.h"
 #include "storage/standbydefs.h"
@@ -26,7 +27,7 @@
  * Parse the WAL format of an xact commit and abort records into an easier to
  * understand format.
  *
- * This routines are in xactdesc.c because they're accessed in backend (when
+ * These routines are in xactdesc.c because they're accessed in backend (when
  * replaying WAL) and frontend (pg_waldump) code. This file is the only xact
  * specific one shared between both. They're complicated enough that
  * duplication would be bothersome.
@@ -324,8 +325,8 @@ xact_desc_relations(StringInfo buf, char *label, int nrels,
 		appendStringInfo(buf, "; %s:", label);
 		for (i = 0; i < nrels; i++)
 		{
-			BackendId  backendId = xlocators[i].isTempRelation ?
-								  TempRelBackendId : InvalidBackendId;
+			ProcNumber	backendId = xlocators[i].isTempRelation ?
+								  ProcNumberForTempRelations() : INVALID_PROC_NUMBER;
 			char	   *path = relpathbackend(xlocators[i].node,
 											  backendId,
 											  MAIN_FORKNUM);

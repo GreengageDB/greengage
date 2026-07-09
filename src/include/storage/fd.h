@@ -17,7 +17,7 @@
 /*
  * calls:
  *
- *	File {Close, Read, Write, Size, Sync}
+ *	File {Close, Read, ReadV, Write, WriteV, Size, Sync}
  *	{Path Name Open, Allocate, Free} File
  *
  * These are NOT JUST RENAMINGS OF THE UNIX ROUTINES.
@@ -45,14 +45,10 @@
 #ifndef FD_H
 #define FD_H
 
+#include "port/pg_iovec.h"
+
 #include <dirent.h>
 #include <fcntl.h>
-
-typedef enum RecoveryInitSyncMethod
-{
-	RECOVERY_INIT_SYNC_METHOD_FSYNC,
-	RECOVERY_INIT_SYNC_METHOD_SYNCFS
-}			RecoveryInitSyncMethod;
 
 typedef int File;
 
@@ -114,8 +110,8 @@ extern File PathNameOpenFilePerm(const char *fileName, int fileFlags, mode_t fil
 extern File OpenTemporaryFile(bool interXact, const char *filePrefix);
 extern void FileClose(File file);
 extern int	FilePrefetch(File file, off_t offset, off_t amount, uint32 wait_event_info);
-extern int	FileRead(File file, void *buffer, size_t amount, off_t offset, uint32 wait_event_info);
-extern int	FileWrite(File file, const void *buffer, size_t amount, off_t offset, uint32 wait_event_info);
+extern ssize_t FileReadV(File file, const struct iovec *iov, int iovcnt, off_t offset, uint32 wait_event_info);
+extern ssize_t FileWriteV(File file, const struct iovec *iov, int iovcnt, off_t offset, uint32 wait_event_info);
 extern int	FileSync(File file, uint32 wait_event_info);
 extern int	FileZero(File file, off_t offset, off_t amount, uint32 wait_event_info);
 extern int	FileFallocate(File file, off_t offset, off_t amount, uint32 wait_event_info);
@@ -190,6 +186,7 @@ extern int	pg_fsync(int fd);
 extern int	pg_fsync_no_writethrough(int fd);
 extern int	pg_fsync_writethrough(int fd);
 extern int	pg_fdatasync(int fd);
+extern bool pg_file_exists(const char *name);
 extern void pg_flush_data(int fd, off_t offset, off_t nbytes);
 extern int	pg_truncate(const char *path, off_t length);
 extern void fsync_fname(const char *fname, bool isdir);
@@ -203,8 +200,33 @@ extern int	data_sync_elevel(int elevel);
 extern int gp_retry_close(int fd);
 
 /* Filename components */
+/* Note: PG17 also defines these in common/file_utils.h; identical values. */
 #define PG_TEMP_FILES_DIR "pgsql_tmp"
 #define PG_TEMP_FILE_PREFIX "pgsql_tmp"
+
+static inline ssize_t
+FileRead(File file, void *buffer, size_t amount, off_t offset,
+		 uint32 wait_event_info)
+{
+	struct iovec iov = {
+		.iov_base = buffer,
+		.iov_len = amount
+	};
+
+	return FileReadV(file, &iov, 1, offset, wait_event_info);
+}
+
+static inline ssize_t
+FileWrite(File file, const void *buffer, size_t amount, off_t offset,
+		  uint32 wait_event_info)
+{
+	struct iovec iov = {
+		.iov_base = unconstify(void *, buffer),
+		.iov_len = amount
+	};
+
+	return FileWriteV(file, &iov, 1, offset, wait_event_info);
+}
 
 extern const char *FileGetFilename(File file);
 

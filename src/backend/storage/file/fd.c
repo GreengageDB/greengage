@@ -102,7 +102,7 @@
 #include "storage/ipc.h"
 #include "utils/guc.h"
 #include "utils/guc_hooks.h"
-#include "utils/resowner_private.h"
+#include "utils/resowner.h"
 #include "utils/varlena.h"
 #include "utils/workfile_mgr.h"
 #include "utils/faultinjector.h"
@@ -171,7 +171,7 @@ int			max_safe_fds = FD_MINFREE;	/* default if not changed */
 bool		data_sync_retry = false;
 
 /* How SyncDataDirectory() should do its job. */
-int			recovery_init_sync_method = RECOVERY_INIT_SYNC_METHOD_FSYNC;
+int			recovery_init_sync_method = DATA_DIR_SYNC_METHOD_FSYNC;
 
 /* Which kinds of files should be opened with PG_O_DIRECT. */
 int			io_direct_flags;
@@ -264,7 +264,7 @@ typedef enum
 	AllocateDescFile,
 	AllocateDescPipe,
 	AllocateDescDir,
-	AllocateDescRawFD
+	AllocateDescRawFD,
 } AllocateDescKind;
 
 typedef struct
@@ -370,6 +370,31 @@ static void unlink_if_exists_fname(const char *fname, bool isdir, int elevel);
 static int	fsync_parent_path(const char *fname, int elevel);
 
 
+/* ResourceOwner callbacks to hold virtual file descriptors */
+static void ResOwnerReleaseFile(Datum res);
+static char *ResOwnerPrintFile(Datum res);
+
+static const ResourceOwnerDesc file_resowner_desc =
+{
+	.name = "File",
+	.release_phase = RESOURCE_RELEASE_AFTER_LOCKS,
+	.release_priority = RELEASE_PRIO_FILES,
+	.ReleaseResource = ResOwnerReleaseFile,
+	.DebugPrint = ResOwnerPrintFile
+};
+
+/* Convenience wrappers over ResourceOwnerRemember/Forget */
+static inline void
+ResourceOwnerRememberFile(ResourceOwner owner, File file)
+{
+	ResourceOwnerRemember(owner, Int32GetDatum(file), &file_resowner_desc);
+}
+static inline void
+ResourceOwnerForgetFile(ResourceOwner owner, File file)
+{
+	ResourceOwnerForget(owner, Int32GetDatum(file), &file_resowner_desc);
+}
+
 /*
  * pg_fsync --- do fsync with or without writethrough
  */
@@ -414,9 +439,9 @@ pg_fsync(int fd)
 	errno = 0;
 #endif
 
-	/* #if is to skip the sync_method test if there's no need for it */
-#if defined(HAVE_FSYNC_WRITETHROUGH) && !defined(FSYNC_WRITETHROUGH_IS_FSYNC)
-	if (sync_method == SYNC_METHOD_FSYNC_WRITETHROUGH)
+	/* #if is to skip the wal_sync_method test if there's no need for it */
+#if defined(HAVE_FSYNC_WRITETHROUGH)
+	if (wal_sync_method == WAL_SYNC_METHOD_FSYNC_WRITETHROUGH)
 		return pg_fsync_writethrough(fd);
 	else
 #endif
@@ -453,9 +478,7 @@ pg_fsync_writethrough(int fd)
 {
 	if (enableFsync)
 	{
-#ifdef WIN32
-		return _commit(fd);
-#elif defined(F_FULLFSYNC)
+#if defined(F_FULLFSYNC)
 		return (fcntl(fd, F_FULLFSYNC, 0) == -1) ? -1 : 0;
 #else
 		errno = ENOSYS;
@@ -484,6 +507,29 @@ retry:
 		goto retry;
 
 	return rc;
+}
+
+/*
+ * pg_file_exists -- check that a file exists.
+ *
+ * This requires an absolute path to the file.  Returns true if the file is
+ * not a directory, false otherwise.
+ */
+bool
+pg_file_exists(const char *name)
+{
+	struct stat st;
+
+	Assert(name != NULL);
+
+	if (stat(name, &st) == 0)
+		return !S_ISDIR(st.st_mode);
+	else if (!(errno == ENOENT || errno == ENOTDIR || errno == EACCES))
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not access file \"%s\": %m", name)));
+
+	return false;
 }
 
 /*
@@ -1524,7 +1570,7 @@ ReportTemporaryFileUsage(const char *path, off_t size)
 
 /*
  * Called to register a temporary file for automatic close.
- * ResourceOwnerEnlargeFiles(CurrentResourceOwner) must have been called
+ * ResourceOwnerEnlarge(CurrentResourceOwner) must have been called
  * before the file was opened.
  */
 static void
@@ -1719,7 +1765,7 @@ OpenTemporaryFile(bool interXact, const char *filePrefix)
 	 * open it, if we'll be registering it below.
 	 */
 	if (!interXact)
-		ResourceOwnerEnlargeFiles(CurrentResourceOwner);
+		ResourceOwnerEnlarge(CurrentResourceOwner);
 
 	/*
 	 * If some temp tablespace(s) have been given to us, try to use the next
@@ -1881,7 +1927,7 @@ PathNameCreateTemporaryFile(const char *path, bool error_on_failure)
 
 	Assert(temporary_files_allowed);	/* check temp file access is up */
 
-	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
+	ResourceOwnerEnlarge(CurrentResourceOwner);
 
 	/*
 	 * Open the file.  Note: we don't use O_EXCL, in case there is an orphaned
@@ -1921,7 +1967,7 @@ PathNameOpenTemporaryFile(const char *path, int mode)
 
 	Assert(temporary_files_allowed);	/* check temp file access is up */
 
-	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
+	ResourceOwnerEnlarge(CurrentResourceOwner);
 
 	file = PathNameOpenFile(path, mode | PG_BINARY);
 
@@ -2153,19 +2199,19 @@ FileWriteback(File file, off_t offset, off_t nbytes, uint32 wait_event_info)
 	pgstat_report_wait_end();
 }
 
-int
-FileRead(File file, void *buffer, size_t amount, off_t offset,
-		 uint32 wait_event_info)
+ssize_t
+FileReadV(File file, const struct iovec *iov, int iovcnt, off_t offset,
+		  uint32 wait_event_info)
 {
-	int			returnCode;
+	ssize_t		returnCode;
 	Vfd		   *vfdP;
 
 	Assert(FileIsValid(file));
 
-	DO_DB(elog(LOG, "FileRead: %d (%s) " INT64_FORMAT " %zu %p",
+	DO_DB(elog(LOG, "FileReadV: %d (%s) " INT64_FORMAT " %d",
 			   file, VfdCache[file].fileName,
 			   (int64) offset,
-			   amount, buffer));
+			   iovcnt));
 
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
@@ -2175,7 +2221,7 @@ FileRead(File file, void *buffer, size_t amount, off_t offset,
 
 retry:
 	pgstat_report_wait_start(wait_event_info);
-	returnCode = pg_pread(vfdP->fd, buffer, amount, offset);
+	returnCode = pg_preadv(vfdP->fd, iov, iovcnt, offset);
 	pgstat_report_wait_end();
 
 	if (returnCode < 0)
@@ -2209,19 +2255,19 @@ retry:
 	return returnCode;
 }
 
-int
-FileWrite(File file, const void *buffer, size_t amount, off_t offset,
-		  uint32 wait_event_info)
+ssize_t
+FileWriteV(File file, const struct iovec *iov, int iovcnt, off_t offset,
+		   uint32 wait_event_info)
 {
-	int			returnCode;
+	ssize_t		returnCode;
 	Vfd		   *vfdP;
 
 	Assert(FileIsValid(file));
 
-	DO_DB(elog(LOG, "FileWrite: %d (%s) " INT64_FORMAT " %zu %p",
+	DO_DB(elog(LOG, "FileWriteV: %d (%s) " INT64_FORMAT " %d",
 			   file, VfdCache[file].fileName,
 			   (int64) offset,
-			   amount, buffer));
+			   iovcnt));
 
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
@@ -2239,7 +2285,10 @@ FileWrite(File file, const void *buffer, size_t amount, off_t offset,
 	 */
 	if (temp_file_limit >= 0 && (vfdP->fdstate & FD_TEMP_FILE_LIMIT))
 	{
-		off_t		past_write = offset + amount;
+		off_t		past_write = offset;
+
+		for (int i = 0; i < iovcnt; ++i)
+			past_write += iov[i].iov_len;
 
 		if (past_write > vfdP->fileSize)
 		{
@@ -2272,23 +2321,27 @@ FileWrite(File file, const void *buffer, size_t amount, off_t offset,
 	}
 
 retry:
-	errno = 0;
 	pgstat_report_wait_start(wait_event_info);
-	returnCode = pg_pwrite(VfdCache[file].fd, buffer, amount, offset);
+	returnCode = pg_pwritev(vfdP->fd, iov, iovcnt, offset);
 	pgstat_report_wait_end();
-
-	/* if write didn't set errno, assume problem is no disk space */
-	if (returnCode != amount && errno == 0)
-		errno = ENOSPC;
 
 	if (returnCode >= 0)
 	{
+		/*
+		 * Some callers expect short writes to set errno, and traditionally we
+		 * have assumed that they imply disk space shortage.  We don't want to
+		 * waste CPU cycles adding up the total size here, so we'll just set
+		 * it for all successful writes in case such a caller determines that
+		 * the write was short and ereports "%m".
+		 */
+		errno = ENOSPC;
+
 		/*
 		 * Maintain fileSize and temporary_files_size if it's a temp file.
 		 */
 		if (vfdP->fdstate & FD_TEMP_FILE_LIMIT)
 		{
-			off_t		past_write = offset + amount;
+			off_t		past_write = offset + returnCode;
 
 			if (past_write > vfdP->fileSize)
 			{
@@ -2300,7 +2353,7 @@ retry:
 	else
 	{
 		/*
-		 * See comments in FileRead()
+		 * See comments in FileReadV()
 		 */
 #ifdef WIN32
 		DWORD		error = GetLastError();
@@ -3680,7 +3733,7 @@ SyncDataDirectory(void)
 	}
 
 #ifdef HAVE_SYNCFS
-	if (recovery_init_sync_method == RECOVERY_INIT_SYNC_METHOD_SYNCFS)
+	if (recovery_init_sync_method == DATA_DIR_SYNC_METHOD_SYNCFS)
 	{
 		DIR		   *dir;
 		struct dirent *de;
@@ -4074,7 +4127,7 @@ data_sync_elevel(int elevel)
 }
 
 bool
-check_io_direct(char **newval, void **extra, GucSource source)
+check_debug_io_direct(char **newval, void **extra, GucSource source)
 {
 	bool		result = true;
 	int			flags;
@@ -4082,7 +4135,7 @@ check_io_direct(char **newval, void **extra, GucSource source)
 #if PG_O_DIRECT == 0
 	if (strcmp(*newval, "") != 0)
 	{
-		GUC_check_errdetail("debug_io_direct is not supported on this platform.");
+		GUC_check_errdetail("\"debug_io_direct\" is not supported on this platform.");
 		result = false;
 	}
 	flags = 0;
@@ -4096,7 +4149,7 @@ check_io_direct(char **newval, void **extra, GucSource source)
 
 	if (!SplitGUCList(rawstring, ',', &elemlist))
 	{
-		GUC_check_errdetail("invalid list syntax in parameter \"%s\"",
+		GUC_check_errdetail("Invalid list syntax in parameter \"%s\"",
 							"debug_io_direct");
 		pfree(rawstring);
 		list_free(elemlist);
@@ -4116,7 +4169,7 @@ check_io_direct(char **newval, void **extra, GucSource source)
 			flags |= IO_DIRECT_WAL_INIT;
 		else
 		{
-			GUC_check_errdetail("invalid option \"%s\"", item);
+			GUC_check_errdetail("Invalid option \"%s\"", item);
 			result = false;
 			break;
 		}
@@ -4129,14 +4182,14 @@ check_io_direct(char **newval, void **extra, GucSource source)
 #if XLOG_BLCKSZ < PG_IO_ALIGN_SIZE
 	if (result && (flags & (IO_DIRECT_WAL | IO_DIRECT_WAL_INIT)))
 	{
-		GUC_check_errdetail("debug_io_direct is not supported for WAL because XLOG_BLCKSZ is too small");
+		GUC_check_errdetail("\"debug_io_direct\" is not supported for WAL because XLOG_BLCKSZ is too small");
 		result = false;
 	}
 #endif
 #if BLCKSZ < PG_IO_ALIGN_SIZE
 	if (result && (flags & IO_DIRECT_DATA))
 	{
-		GUC_check_errdetail("debug_io_direct is not supported for data because BLCKSZ is too small");
+		GUC_check_errdetail("\"debug_io_direct\" is not supported for data because BLCKSZ is too small");
 		result = false;
 	}
 #endif
@@ -4148,7 +4201,7 @@ check_io_direct(char **newval, void **extra, GucSource source)
 	if (!result)
 		return result;
 
-	/* Save the flags in *extra, for use by assign_io_direct */
+	/* Save the flags in *extra, for use by assign_debug_io_direct */
 	*extra = guc_malloc(ERROR, sizeof(int));
 	*((int *) *extra) = flags;
 
@@ -4156,9 +4209,31 @@ check_io_direct(char **newval, void **extra, GucSource source)
 }
 
 extern void
-assign_io_direct(const char *newval, void *extra)
+assign_debug_io_direct(const char *newval, void *extra)
 {
 	int		   *flags = (int *) extra;
 
 	io_direct_flags = *flags;
+}
+
+/* ResourceOwner callbacks */
+
+static void
+ResOwnerReleaseFile(Datum res)
+{
+	File		file = (File) DatumGetInt32(res);
+	Vfd		   *vfdP;
+
+	Assert(FileIsValid(file));
+
+	vfdP = &VfdCache[file];
+	vfdP->resowner = NULL;
+
+	FileClose(file);
+}
+
+static char *
+ResOwnerPrintFile(Datum res)
+{
+	return psprintf("File %d", DatumGetInt32(res));
 }

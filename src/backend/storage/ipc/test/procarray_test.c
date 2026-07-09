@@ -8,14 +8,14 @@
 
 #define SIZE_OF_IN_PROGRESS_ARRAY (10 * sizeof(DistributedTransactionId))
 #define MAX_PROCS 100
-VariableCacheData vcdata;
+TransamVariablesData vcdata;
 uint32 nextSnapshotId;
 int num_committed_xacts;
 
 static void
 setup(void)
 {
-	ShmemVariableCache = &vcdata;
+	TransamVariables = &vcdata;
 	shmNextSnapshotId = &nextSnapshotId;
 	shmNumCommittedGxacts = &num_committed_xacts;
 
@@ -49,7 +49,7 @@ test__CreateDistributedSnapshot(void **state)
 	will_return_count(LWLockHeldByMe, true, -1);
 #endif
 
-	ShmemVariableCache->latestCompletedGxid = 24;
+	TransamVariables->latestCompletedGxid = 24;
 
 	/* This is going to act as our gxact */
 	allTmGxact[procArray->pgprocnos[0]].gxid = 20;

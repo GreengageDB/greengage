@@ -4,7 +4,7 @@
  *
  * This module also contains some logic associated with fork names.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -20,7 +20,7 @@
 
 #include "catalog/pg_tablespace_d.h"
 #include "common/relpath.h"
-#include "storage/backendid.h"
+#include "storage/procnumber.h"
 
 
 /*
@@ -31,10 +31,10 @@
  * pg_relation_size().
  */
 const char *const forkNames[] = {
-	"main",						/* MAIN_FORKNUM */
-	"fsm",						/* FSM_FORKNUM */
-	"vm",						/* VISIBILITYMAP_FORKNUM */
-	"init"						/* INIT_FORKNUM */
+	[MAIN_FORKNUM] = "main",
+	[FSM_FORKNUM] = "fsm",
+	[VISIBILITYMAP_FORKNUM] = "vm",
+	[INIT_FORKNUM] = "init",
 };
 
 StaticAssertDecl(lengthof(forkNames) == (MAX_FORKNUM + 1),
@@ -133,21 +133,21 @@ GetDatabasePath(Oid dbOid, Oid spcOid)
  *
  * Result is a palloc'd string.
  *
- * Note: ideally, backendId would be declared as type BackendId, but relpath.h
- * would have to include a backend-only header to do that; doesn't seem worth
- * the trouble considering BackendId is just int anyway.
+ * Note: ideally, procNumber would be declared as type ProcNumber, but
+ * relpath.h would have to include a backend-only header to do that; doesn't
+ * seem worth the trouble considering ProcNumber is just int anyway.
  *
- * In PostgreSQL, the 'backendid' is embedded in the filename of temporary
+ * In PostgreSQL, the 'procNumber' is embedded in the filename of temporary
  * relations. In GPDB, however, temporary relations are just prefixed with
- * "t_*", without the backend id. For compatibility with upstream code, this
- * function still takes 'backendid' as argument, but we only care whether
- * it's InvalidBackendId or not. If you need to construct the path of a
- * temporary relation, but don't know the real backend ID, pass
- * TempRelBackendId.
+ * "t_*", without the proc number. For compatibility with upstream code, this
+ * function still takes 'procNumber' as argument, but we only care whether
+ * it's INVALID_PROC_NUMBER or not. If you need to construct the path of a
+ * temporary relation, but don't know the real proc number, pass
+ * ProcNumberForTempRelations().
  */
 char *
 GetRelationPath(Oid dbOid, Oid spcOid, RelFileNumber relNumber,
-				int backendId, ForkNumber forkNumber)
+				int procNumber, ForkNumber forkNumber)
 {
 	char	   *path;
 
@@ -155,7 +155,7 @@ GetRelationPath(Oid dbOid, Oid spcOid, RelFileNumber relNumber,
 	{
 		/* Shared system relations live in {datadir}/global */
 		Assert(dbOid == 0);
-		Assert(backendId == InvalidBackendId);
+		Assert(procNumber == INVALID_PROC_NUMBER);
 		if (forkNumber != MAIN_FORKNUM)
 			path = psprintf("global/%u_%s",
 							relNumber, forkNames[forkNumber]);
@@ -165,7 +165,7 @@ GetRelationPath(Oid dbOid, Oid spcOid, RelFileNumber relNumber,
 	else if (spcOid == DEFAULTTABLESPACE_OID)
 	{
 		/* The default tablespace is {datadir}/base */
-		if (backendId == InvalidBackendId)
+		if (procNumber == INVALID_PROC_NUMBER)
 		{
 			if (forkNumber != MAIN_FORKNUM)
 				path = psprintf("base/%u/%u_%s",
@@ -189,7 +189,7 @@ GetRelationPath(Oid dbOid, Oid spcOid, RelFileNumber relNumber,
 	else
 	{
 		/* All other tablespaces are accessed via symlinks */
-		if (backendId == InvalidBackendId)
+		if (procNumber == INVALID_PROC_NUMBER)
 		{
 			if (forkNumber != MAIN_FORKNUM)
 				path = psprintf("pg_tblspc/%u/%s/%u/%u_%s",

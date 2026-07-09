@@ -66,7 +66,7 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -100,7 +100,7 @@ typedef enum
 {
 	TSS_INMEM,					/* Tuples still fit in memory */
 	TSS_WRITEFILE,				/* Writing to temp file */
-	TSS_READFILE				/* Reading from temp file */
+	TSS_READFILE,				/* Reading from temp file */
 } TupStoreStatus;
 
 /*
@@ -837,7 +837,7 @@ tuplestore_puttuple(Tuplestorestate *state, HeapTuple tuple)
  */
 void
 tuplestore_putvalues(Tuplestorestate *state, TupleDesc tdesc,
-					 Datum *values, bool *isnull)
+					 const Datum *values, const bool *isnull)
 {
 	MinimalTuple tuple;
 	MemoryContext oldcxt = MemoryContextSwitchTo(state->context);

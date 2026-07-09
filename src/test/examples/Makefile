@@ -18,5 +18,5 @@ PROGS = test_parallel_retrieve_cursor_wait test_parallel_retrieve_cursor_nowait 
 
 all: $(PROGS)
 
-clean distclean maintainer-clean:
+clean distclean:
 	rm -f $(PROGS) *.o

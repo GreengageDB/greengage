@@ -4,7 +4,7 @@
  *	  POSTGRES heap tuple header definitions.
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/htup_details.h
@@ -742,20 +742,20 @@ static inline HeapTuple heap_form_tuple(TupleDesc tupleDescriptor,
 
 extern HeapTuple heap_modify_tuple(HeapTuple tuple,
 								   TupleDesc tupleDesc,
-								   Datum *replValues,
-								   bool *replIsnull,
-								   bool *doReplace);
+								   const Datum *replValues,
+								   const bool *replIsnull,
+								   const bool *doReplace);
 extern HeapTuple heap_modify_tuple_by_cols(HeapTuple tuple,
 										   TupleDesc tupleDesc,
 										   int nCols,
-										   int *replCols,
-										   Datum *replValues,
-										   bool *replIsnull);
+										   const int *replCols,
+										   const Datum *replValues,
+										   const bool *replIsnull);
 extern void heap_deform_tuple(HeapTuple tuple, TupleDesc tupleDesc,
 							  Datum *values, bool *isnull);
 extern void heap_freetuple(HeapTuple htup);
 extern MinimalTuple heap_form_minimal_tuple(TupleDesc tupleDescriptor,
-											Datum *values, bool *isnull);
+											const Datum *values, const bool *isnull);
 extern void heap_free_minimal_tuple(MinimalTuple mtup);
 extern MinimalTuple heap_copy_minimal_tuple(MinimalTuple mtup);
 extern HeapTuple heap_tuple_from_minimal_tuple(MinimalTuple mtup);

@@ -228,7 +228,7 @@ bumpGxid()
 	 * No need to bump if there have been enough gxid. This is possible if
 	 * another bump finished before we tried to lock GxidBumpLock.
 	 */
-	if (ShmemVariableCache->GxidCount > GXID_PRETCH_THRESHOLD)
+	if (TransamVariables->GxidCount > GXID_PRETCH_THRESHOLD)
 	{
 		LWLockRelease(GxidBumpLock);
 		return;
@@ -236,19 +236,19 @@ bumpGxid()
 
 	/* nextLimit should be always multiple of gp_gxid_prefetch_num. */
 	SpinLockAcquire(shmGxidGenLock);
-	nextCount = ShmemVariableCache->GxidCount + gp_gxid_prefetch_num;
-	nextLimit = ShmemVariableCache->nextGxid + nextCount;
+	nextCount = TransamVariables->GxidCount + gp_gxid_prefetch_num;
+	nextLimit = TransamVariables->nextGxid + nextCount;
 	if (nextLimit >= (LastDistributedTransactionId - gp_gxid_prefetch_num))
 		ereport(PANIC,
 				(errmsg("Will soon reach the limit of global transactions: "UINT64_FORMAT,
-						ShmemVariableCache->nextGxid)));
+						TransamVariables->nextGxid)));
 	SpinLockRelease(shmGxidGenLock);
 
 	/* It might be time-consuming, so put it out of the spin locking section. */
 	XLogPutNextGxid(nextLimit);
 
 	SpinLockAcquire(shmGxidGenLock);
-	ShmemVariableCache->GxidCount += gp_gxid_prefetch_num;
+	TransamVariables->GxidCount += gp_gxid_prefetch_num;
 	SpinLockRelease(shmGxidGenLock);
 
 	/* Only one bump operation one time, so lock till the end. */
@@ -260,7 +260,7 @@ currentDtxActivate(void)
 {
 	bool signal_dtx_recovery;
 
-	if (ShmemVariableCache->GxidCount <= GXID_PRETCH_THRESHOLD &&
+	if (TransamVariables->GxidCount <= GXID_PRETCH_THRESHOLD &&
 		(GetDtxRecoveryEvent() & DTX_RECOVERY_EVENT_BUMP_GXID) == 0)
 	{
 
@@ -288,14 +288,14 @@ currentDtxActivate(void)
 	 */
 	for(;;)
 	{
-		if (unlikely(ShmemVariableCache->GxidCount == 0))
+		if (unlikely(TransamVariables->GxidCount == 0))
 			bumpGxid();
 
 		SpinLockAcquire(shmGxidGenLock);
-		if (ShmemVariableCache->GxidCount > 0)
+		if (TransamVariables->GxidCount > 0)
 		{
-			MyTmGxact->gxid = ShmemVariableCache->nextGxid++;
-			ShmemVariableCache->GxidCount--;
+			MyTmGxact->gxid = TransamVariables->nextGxid++;
+			TransamVariables->GxidCount--;
 			SpinLockRelease(shmGxidGenLock);
 			break;
 		}
@@ -1078,7 +1078,7 @@ tmShmemInit(void)
 	/* Only initialize this if we are the creator of the shared memory */
 	if (!found)
 	{
-		ShmemVariableCache->latestCompletedGxid = InvalidDistributedTransactionId;
+		TransamVariables->latestCompletedGxid = InvalidDistributedTransactionId;
 		SpinLockInit(&shared->DtxRecoveryEventLock);
 		SpinLockInit(&shared->gxidGenLock);
 	}
@@ -2431,7 +2431,7 @@ gp_get_next_gxid(PG_FUNCTION_ARGS)
 						(errmsg("Superuser only to execute it"))));
 
 	SpinLockAcquire(shmGxidGenLock);
-	next_gxid = ShmemVariableCache->nextGxid;
+	next_gxid = TransamVariables->nextGxid;
 	SpinLockRelease(shmGxidGenLock);
 
 	PG_RETURN_UINT64(next_gxid);

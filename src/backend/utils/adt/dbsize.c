@@ -2,7 +2,7 @@
  * dbsize.c
  *		Database object size functions, and related inquiries
  *
- * Copyright (c) 2002-2023, PostgreSQL Global Development Group
+ * Copyright (c) 2002-2024, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/adt/dbsize.c
@@ -16,7 +16,6 @@
 
 #include "access/htup_details.h"
 #include "access/relation.h"
-#include "catalog/catalog.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_database.h"
@@ -1202,7 +1201,7 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	HeapTuple	tuple;
 	Form_pg_class relform;
 	RelFileLocator rlocator;
-	BackendId	backend;
+	ProcNumber	backend;
 	char	   *path;
 
 	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
@@ -1247,21 +1246,21 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	{
 		case RELPERSISTENCE_UNLOGGED:
 		case RELPERSISTENCE_PERMANENT:
-			backend = InvalidBackendId;
+			backend = INVALID_PROC_NUMBER;
 			break;
 		case RELPERSISTENCE_TEMP:
 			if (isTempOrTempToastNamespace(relform->relnamespace))
-				backend = BackendIdForTempRelations();
+				backend = ProcNumberForTempRelations();
 			else
 			{
 				/* Do it the hard way. */
-				backend = GetTempNamespaceBackendId(relform->relnamespace);
-				Assert(backend != InvalidBackendId);
+				backend = GetTempNamespaceProcNumber(relform->relnamespace);
+				Assert(backend != INVALID_PROC_NUMBER);
 			}
 			break;
 		default:
 			elog(ERROR, "invalid relpersistence: %c", relform->relpersistence);
-			backend = InvalidBackendId; /* placate compiler */
+			backend = INVALID_PROC_NUMBER;	/* placate compiler */
 			break;
 	}
 

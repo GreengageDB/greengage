@@ -2,7 +2,7 @@
  *
  * filemap.h
  *
- * Copyright (c) 2013-2023, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2024, PostgreSQL Global Development Group
  *-------------------------------------------------------------------------
  */
 #ifndef FILEMAP_H
@@ -25,7 +25,7 @@ typedef enum
 	FILE_ACTION_NONE,			/* no action (we might still copy modified
 								 * blocks based on the parsed WAL) */
 	FILE_ACTION_TRUNCATE,		/* truncate local file to 'newsize' bytes */
-	FILE_ACTION_REMOVE			/* remove local file / directory / symlink */
+	FILE_ACTION_REMOVE,			/* remove local file / directory / symlink */
 } file_action_t;
 
 typedef enum
@@ -35,7 +35,7 @@ typedef enum
 	FILE_TYPE_REGULAR,
 	FILE_TYPE_DIRECTORY,
 	FILE_TYPE_SYMLINK,
-	FILE_TYPE_FIFO
+	FILE_TYPE_FIFO,
 } file_type_t;
 
 /*

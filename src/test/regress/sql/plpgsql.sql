@@ -2060,11 +2060,9 @@ begin
 end $$ language plpgsql;
 select namedparmcursor_test7();
 
--- check that line comments work correctly within the argument list (there
--- is some special handling of this case in the code: the newline after the
--- comment must be preserved when the argument-evaluating query is
--- constructed, otherwise the comment effectively comments out the next
--- argument, too)
+-- check that line comments work correctly within the argument list
+-- (this used to require a special hack in the code; it no longer does,
+-- but let's keep the test anyway)
 create function namedparmcursor_test8() returns int4 as $$
 declare
   c1 cursor (p1 int, p2 int) for
@@ -3378,7 +3376,7 @@ declare v int := 0;
 begin
   return 10 / v;
 end;
-$$ language plpgsql;
+$$ language plpgsql parallel safe;
 
 create or replace function raise_test() returns void as $$
 begin
@@ -3439,8 +3437,28 @@ $$ language plpgsql;
 
 select stacked_diagnostics_test();
 
-drop function zero_divide();
 drop function stacked_diagnostics_test();
+
+-- Test that an error recovery subtransaction is parallel safe
+
+create function error_trap_test() returns text as $$
+begin
+  perform zero_divide();
+  return 'no error detected!';
+exception when division_by_zero then
+  return 'division_by_zero detected';
+end;
+$$ language plpgsql parallel safe;
+
+set debug_parallel_query to on;
+
+explain (verbose, costs off) select error_trap_test();
+select error_trap_test();
+
+reset debug_parallel_query;
+
+drop function error_trap_test();
+drop function zero_divide();
 
 -- check cases where implicit SQLSTATE variable could be confused with
 -- SQLSTATE as a keyword, cf bug #5524

@@ -37,7 +37,7 @@ test: date time timetz timestamp timestamptz interval inet macaddr macaddr8 tsty
 # geometry depends on point, lseg, box, path, polygon and circle
 # horology depends on interval, timetz, timestamp, timestamptz
 # ----------
-test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions unicode
+test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions unicode database
 
 # ----------
 # Load huge amounts of data
@@ -108,7 +108,7 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.utf8 collate.icu.utf8 incremental_sort
 
 # collate.*.utf8 tests cannot be run in parallel with each other
 test: psql psql_crosstab amutils stats_ext collate.linux.utf8 collate.windows.win1252
@@ -146,7 +146,7 @@ test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch 
 # ----------
 # Another group of parallel tests (JSON related)
 # ----------
-test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath sqljson
+test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath sqljson sqljson_queryfuncs sqljson_jsontable
 
 # ----------
 # Another group of parallel tests
@@ -166,12 +166,16 @@ test: gp_foreign_data
 # The stats test resets stats, so nothing else needing stats access can be in
 # this group.
 # ----------
-test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain
+test: partition_merge partition_split partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain predicate
 
 # event triggers cannot run concurrently with any test that runs DDL
 test: event_trigger
 # this test also uses event triggers, so likewise run it by itself
 test: fast_default
+
+# event_trigger_login cannot run concurrently with any other tests because
+# on-login event handling could catch connection of a concurrent test.
+test: event_trigger_login
 
 # run stats by itself because its delay may be insufficient under heavy load
 #

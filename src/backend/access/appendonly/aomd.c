@@ -462,7 +462,7 @@ struct copy_append_only_data_callback_ctx {
  */
 void
 copy_append_only_data(RelFileNode src, RelFileNode dst,
-        BackendId backendid, char relpersistence)
+        ProcNumber backendid, char relpersistence)
 {
 	char *srcPath;
 	char *dstPath;

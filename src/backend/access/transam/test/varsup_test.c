@@ -45,16 +45,16 @@ static void expect_ereport(int log_level, int errcode)
 static void
 test_GetNewTransactionId_xid_stop_limit(void **state)
 {
-	VariableCacheData data;
+	TransamVariablesData data;
 
 	/*
 	 * make sure the nextXid is larger than xidVacLimit to check xidStopLimit,
 	 * and it's larger than xidStopLimit to trigger the ereport(ERROR).
 	 */
-	ShmemVariableCache = &data;
-	ShmemVariableCache->nextXid.value = 30;
-	ShmemVariableCache->xidVacLimit = 10;
-	ShmemVariableCache->xidStopLimit = 20;
+	TransamVariables = &data;
+	TransamVariables->nextXid.value = 30;
+	TransamVariables->xidVacLimit = 10;
+	TransamVariables->xidStopLimit = 20;
 	IsUnderPostmaster = true;
 
 	will_return(RecoveryInProgress, false);
@@ -86,7 +86,7 @@ static void
 test_GetNewTransactionId_xid_warn_limit(void **state)
 {
 	const int xid = 25;
-	VariableCacheData data;
+	TransamVariablesData data;
 	/*
 	 * Zero-initialize: this test exercises the warn-limit path which (unlike
 	 * the stop-limit path) continues into the XID assignment, where
@@ -110,11 +110,11 @@ test_GetNewTransactionId_xid_warn_limit(void **state)
 	 * make sure nextXid is between xidWarnLimit and xidStopLimit to trigger
 	 * the ereport(WARNING).
 	 */
-	ShmemVariableCache = &data;
-	ShmemVariableCache->nextXid.value = xid;
-	ShmemVariableCache->xidVacLimit = 10;
-	ShmemVariableCache->xidWarnLimit = 20;
-	ShmemVariableCache->xidStopLimit = 30;
+	TransamVariables = &data;
+	TransamVariables->nextXid.value = xid;
+	TransamVariables->xidVacLimit = 10;
+	TransamVariables->xidWarnLimit = 20;
+	TransamVariables->xidStopLimit = 30;
 	IsUnderPostmaster = true;
 
 	will_return(RecoveryInProgress, false);
@@ -188,8 +188,8 @@ should_generate_xlog_for_next_oid(Oid expected_oid_in_xlog_rec)
 static void
 test_AdvanceObjectId_QD_wrapped_before_QE(void **state)
 {
-	VariableCacheData data = {.nextOid = PG_UINT32_MAX, .oidCount = 1};
-	ShmemVariableCache = &data;
+	TransamVariablesData data = {.nextOid = PG_UINT32_MAX, .oidCount = 1};
+	TransamVariables = &data;
 
 	should_generate_xlog_for_next_oid(FirstNormalObjectId + VAR_OID_PREFETCH);
 
@@ -199,8 +199,8 @@ test_AdvanceObjectId_QD_wrapped_before_QE(void **state)
 	AdvanceObjectId(FirstNormalObjectId);
 
 	/* Check if shared memory Oid values have been changed correctly */
-	assert_int_equal(ShmemVariableCache->nextOid, FirstNormalObjectId);
-	assert_int_equal(ShmemVariableCache->oidCount, VAR_OID_PREFETCH);
+	assert_int_equal(TransamVariables->nextOid, FirstNormalObjectId);
+	assert_int_equal(TransamVariables->oidCount, VAR_OID_PREFETCH);
 }
 
 /*
@@ -211,8 +211,8 @@ test_AdvanceObjectId_QD_wrapped_before_QE(void **state)
 static void
 test_AdvanceObjectId_QE_wrapped_before_QD(void **state)
 {
-	VariableCacheData data = {.nextOid = FirstNormalObjectId, .oidCount = VAR_OID_PREFETCH};
-	ShmemVariableCache = &data;
+	TransamVariablesData data = {.nextOid = FirstNormalObjectId, .oidCount = VAR_OID_PREFETCH};
+	TransamVariables = &data;
 
 	should_acquire_and_release_oid_gen_lock();
 
@@ -220,8 +220,8 @@ test_AdvanceObjectId_QE_wrapped_before_QD(void **state)
 	AdvanceObjectId(PG_UINT32_MAX);
 
 	/* Check if shared memory Oid values have been changed correctly */
-	assert_int_equal(ShmemVariableCache->nextOid, FirstNormalObjectId);
-	assert_int_equal(ShmemVariableCache->oidCount, VAR_OID_PREFETCH);
+	assert_int_equal(TransamVariables->nextOid, FirstNormalObjectId);
+	assert_int_equal(TransamVariables->oidCount, VAR_OID_PREFETCH);
 }
 
 /*
@@ -232,8 +232,8 @@ test_AdvanceObjectId_QE_wrapped_before_QD(void **state)
 static void
 test_AdvanceObjectId_normal_flow(void **state)
 {
-	VariableCacheData data = {.nextOid = FirstNormalObjectId, .oidCount = VAR_OID_PREFETCH};
-	ShmemVariableCache = &data;
+	TransamVariablesData data = {.nextOid = FirstNormalObjectId, .oidCount = VAR_OID_PREFETCH};
+	TransamVariables = &data;
 
 	should_acquire_and_release_oid_gen_lock();
 
@@ -241,8 +241,8 @@ test_AdvanceObjectId_normal_flow(void **state)
 	AdvanceObjectId(FirstNormalObjectId + 2);
 
 	/* Check if shared memory Oid values have been changed correctly */
-	assert_int_equal(ShmemVariableCache->nextOid, FirstNormalObjectId + 2);
-	assert_int_equal(ShmemVariableCache->oidCount, VAR_OID_PREFETCH -2);
+	assert_int_equal(TransamVariables->nextOid, FirstNormalObjectId + 2);
+	assert_int_equal(TransamVariables->oidCount, VAR_OID_PREFETCH -2);
 }
 
 int

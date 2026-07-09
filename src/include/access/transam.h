@@ -4,7 +4,7 @@
  *	  postgres transaction access method support code
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/transam.h
@@ -210,7 +210,7 @@ FullTransactionIdAdvance(FullTransactionId *dest)
 
 
 /*
- * VariableCache is a data structure in shared memory that is used to track
+ * TransamVariables is a data structure in shared memory that is used to track
  * OID and XID assignment state.  For largely historical reasons, there is
  * just one struct with different fields that are protected by different
  * LWLocks.
@@ -219,7 +219,7 @@ FullTransactionIdAdvance(FullTransactionId *dest)
  * used just to generate useful messages when xidWarnLimit or xidStopLimit
  * are exceeded.
  */
-typedef struct VariableCacheData
+typedef struct TransamVariablesData
 {
 	/*
 	 * These fields are protected by OidGenLock.
@@ -282,9 +282,7 @@ typedef struct VariableCacheData
 	 */
 	TransactionId oldestClogXid;	/* oldest it's safe to look up in clog */
 
-} VariableCacheData;
-
-typedef VariableCacheData *VariableCache;
+} TransamVariablesData;
 
 
 /* ----------------
@@ -296,7 +294,7 @@ typedef VariableCacheData *VariableCache;
 extern bool TransactionStartedDuringRecovery(void);
 
 /* in transam/varsup.c */
-extern PGDLLIMPORT VariableCache ShmemVariableCache;
+extern PGDLLIMPORT TransamVariablesData *TransamVariables;
 
 extern int xid_stop_limit;
 extern int xid_warn_limit;
@@ -323,6 +321,8 @@ extern TransactionId TransactionIdLatest(TransactionId mainxid,
 extern XLogRecPtr TransactionIdGetCommitLSN(TransactionId xid);
 
 /* in transam/varsup.c */
+extern Size VarsupShmemSize(void);
+extern void VarsupShmemInit(void);
 extern FullTransactionId GetNewTransactionId(bool isSubXact);
 extern void AdvanceNextFullTransactionIdPastXid(TransactionId xid);
 extern FullTransactionId ReadNextFullTransactionId(void);

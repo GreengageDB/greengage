@@ -1,10 +1,15 @@
 # PG16 merge notes (branch claude-merge-4)
 
-> Status: this merge is IN PROGRESS at time of writing (conflict-resolution stage; node
-> layer and memory-context cluster are done, a ~300-file long tail remains), so this file
-> covers the classes known so far. General methodology lives in [SKILL.md](SKILL.md);
-> PG15 traps that still apply (dup OIDs after genbki, WAL-section order, clean-merge
-> signature traps, init_file regen) are in [pg15-notes.md](pg15-notes.md).
+> Status: **COMPLETE.** Merge `f0a59594975` (target `97d89101045`) + ~40 follow-up
+> commits. Build/install/unittest/initdb/cluster green; opt=off AND opt=on
+> `parallel_schedule` = 203/203; ORCA builds and runs (`--enable-orca`);
+> greenplum_schedule triaged (a few deep MPP/flake items deferred, listed at the end).
+> General methodology lives in [SKILL.md](SKILL.md); PG15 traps that still apply
+> (dup OIDs after genbki, WAL-section order, clean-merge signature traps, init_file
+> regen) are in [pg15-notes.md](pg15-notes.md). The first half of this file is
+> conflict-resolution classes; the **"Post-merge bring-up"** section at the end holds
+> the highest-value recurring lessons (GUC-table relocation audit, ORCA translator
+> port, missing-struct-field, dead-macro) — read those first when starting PG17.
 
 ## Target and inventory
 
@@ -218,7 +223,7 @@ provider, extended SQL/JSON.
 - `StoreAttrDefault` stays in `catalog/heap.c` (don't follow any relocation).
 - `dropcmds.c` keeps the `OBJECT_RESQUEUE`/`OBJECT_RESGROUP` switch cases.
 
-## Deferred / open items (as of the resolution stage)
+## Deferred items from the resolution stage (all closed during bring-up)
 
 - `portalmem.c`: GGDB `pg_cursor` SRF has an extra column (7 vs 6) — catalog-coupled,
   resolve with the catalog conflicts, not with the allocator cluster.
@@ -228,3 +233,163 @@ provider, extended SQL/JSON.
   memory-quota / tuplesort-peak / resgroup tests.
 - outfast.c/readfast.c bodies still carry PG15 field lists — reconcile at build phase.
 - Test `.out`/`.sql` conflicts (≈70) deferred to the regress phase entirely.
+
+---
+
+# Post-merge bring-up (the campaign after the conflicts cleared)
+
+The conflict resolution is maybe a third of the work. These are the classes the phased
+bring-up surfaced — **most are recurring and will bite PG17 too.** Ordered by value.
+
+## ⭐ The GUC-table relocation audit (the single most expensive PG16 lesson)
+
+PG16 relocated the GUC definition tables `guc.c` → **`guc_tables.c`** and took the
+**upstream `boot_val`s wholesale**, silently reverting ~15 GGDB overrides **with zero
+conflict markers** (the file was clean-merged; the values just came from theirs).
+
+- **Symptom:** a recursive-CTE query *hung for 13 minutes* (interconnect deadlock) plus
+  wide plan-shape drift across the suite. **Root cause:** `enable_mergejoin`'s default
+  flipped back to `on` → the PG16 planner picked a merge-join over a Broadcast Motion
+  *inside a recursive-union recursive term* → the Sort re-drives the motion each iteration
+  → interconnect deadlock. This is a **pre-existing GGDB executor limitation** that
+  `enable_mergejoin=off` (a GGDB default) had merely been *costing out*; cm3 hangs too if
+  you force the same plan. The fix was purely restoring the GUC default — **not** executor
+  surgery.
+- **The audit (do this proactively after any GUC-table move):** extract EVERY `boot_val`
+  (bool/int/real/string) from the old file on the PG-N-green reference branch and from the
+  new file on the merge branch, join on GUC name, and diff. Restore each GGDB override.
+  `check_GUC_init` (cassert) catches *some* (bool: C-var `!= 0 && != boot_val`; enum needs
+  the C-var static-init to equal boot_val, e.g. `plancat.c` `constraint_exclusion`, `jit.c`
+  `jit_enabled`) but **NOT** cases where the C-var was also reset to the upstream value —
+  so diff exhaustively, don't trust the assert.
+- Restored in two commits: **planner** `ef55a525c13` (`enable_nestloop`/`enable_mergejoin`/
+  `geqo`/`hot_standby`/`jit`→false, `logging_collector`→true, `from/join_collapse_limit`→20,
+  `constraint_exclusion`→on, + `jit.c`/`plancat.c` C-vars) and **non-planner** `9a51407716f`
+  (`max_connections`→200, `max_prepared_transactions`→50, `superuser_reserved_connections`→10,
+  `work_mem`→32768, `max_locks_per_transaction`→128, `wal_sender_timeout`→300s,
+  `wal_keep_size`→320MB, `log_filename`→`gpdb-*.csv`, `log_rotation_size`→1GB, + 4 C-var
+  static inits for `check_GUC_init`). Restoring `enable_nestloop=off` also reshaped many
+  plans back to the expected cm3 shape → *reduced* plan-shape drift suite-wide.
+- **GENERALIZE:** whenever an upstream merge relocates or reshuffles a GUC table/entry,
+  re-verify every GGDB `boot_val` survived. Silent behavior reversion, no markers. The
+  PG-(N-1)-green docker container (a separate live cluster) is the ideal reference to diff
+  live GUC values and plans against.
+
+## ⭐ ORCA on PG16: the RTEPermissionInfo translator port (+ build flags)
+
+PG16 moved `requiredPerms`/`checkAsUser`/`selectedCols` **out of `RangeTblEntry`** into a
+separate **`RTEPermissionInfo`** list (`PlannedStmt->permInfos`, linked by
+`rte->perminfoindex`). This is the PG16 analog of PG15's Value/SeqScan translator port: the
+ORCA translator (`gpopt` `CTranslator*`) had to be re-grafted to build and thread perminfos
+or ORCA crashes on GGDB's up-front `CheckRTPermissions`/`ExecCheckPermissions` bijection
+assert. Ported `CContextDXLToPlStmt` perminfo list + Query→DXL threading of
+`query->rteperminfos`; commit `69e8aca666e`. **Any merge that touches how permissions/RTEs
+are represented is an ORCA-translator re-graft — budget for it.**
+
+Two ORCA code bugs this surfaced in *core* regress (both real, not regen):
+
+1. **`transformGroupedWindows` (orca.c) orphaned rteperminfos** — ORCA-only preprocessing
+   splits a window+aggregate query into an outer window query `Q'` wrapping an aggregating
+   subquery `Q''`; it moved base RTEs into `Q''` but left `qry->rteperminfos` on `Q'`
+   (whose only RTE is now the synthetic `"Window"` wrapper) → orphan perminfo →
+   `bms_num_members(indexset) == list_length(rteperminfos)` assert → SIGABRT on QD →
+   **crash cascade** (dominated the first opt=on run: 33 tests). Trigger: any
+   `SUM(SUM(c)) OVER (...) ... GROUP BY`. **FIX:** move it —
+   `subq->rteperminfos = qry->rteperminfos; qry->rteperminfos = NIL;`. (Commit `85737e48a5f`.)
+2. **`TranslateDXLTvf` coldeflist** — the RTE's `rtfunc` kept `funccolcount = 0` → `EXPLAIN
+   VERBOSE` of a record-returning function with a column-def list → `invalid attnum`
+   (ruleutils `expandRTE` truncates colnames to funccolcount). Execution was fine
+   (deparse-only). **FIX:** populate the RTE rtfunc `funccol*` + `funccolcount`.
+
+Build/answer-file specifics:
+- **`gporca.mk` must `filter-out -Wshadow=compatible-local`** from BOTH `CXXFLAGS` and
+  `BITCODE_CXXFLAGS` — PG16's `configure.ac` added it and it errors on ~18 harmless
+  vendored-ORCA shadows. `g++ -Wno-shadow` does NOT override an explicit `-Wshadow=...` →
+  you must *filter*, not append `-Wno-`.
+- **`_optimizer.out` local regen is CORRECT** (ORCA-only files, not shared across the
+  JIT/non-JIT base-`.out` jobs; db is always "regression", 3:1 seg count, addr/pid
+  atmsort-stripped). The answer-file-regen skill's "regen from CI" rule is about SHARED
+  base `.out`, not `_optimizer.out`. **GITIGNORE TRAP:** some tests' `_optimizer.out` is
+  gitignored (`constraints`, `createdb`, `external_table`, `table_functions`, …) → opt=on
+  falls back to the TRACKED base `.out`; before regenning, `git check-ignore
+  expected/<t>_optimizer.out` and if ignored fix the base `.out` instead.
+
+## ⭐ Missing-struct-field: `IndexVacuumInfo.heaprel` (a whole recurring class)
+
+PG16 added `IndexVacuumInfo.heaprel` (btree page recycling needs it for the xmin horizon).
+GGDB's `vacuum_ao.c` built `IndexVacuumInfo ivinfo = {0}` in `vacuum_appendonly_index` +
+`scan_index` and never set it → `BTPageIsRecyclable(heaprel=NULL)` assert → segment SIGABRT
+on any AO VACUUM that compacts a segfile and updates a btree index (a 19-test cluster).
+**FIX:** `ivinfo.heaprel = <the AO relation>` (an AO table is the heap its indexes belong
+to). Commit `096fe26bba7`. **GENERALIZE:** an upstream-added *required* struct field that
+GGDB call sites zero-init (`= {0}`, `MemSet`) is a recurring class — after a merge, for each
+struct whose definition upstream extended, grep GGDB code for `{0}`/`MemSet` initializers of
+that struct and set the new field.
+
+## ⭐ Upstream macro removal → GGDB dead `#ifdef` (`HAVE_UNIX_SOCKETS`)
+
+PG16 **removed the `HAVE_UNIX_SOCKETS`** configure macro (Unix sockets are now
+unconditional). GGDB's `internal_client_authentication()` wrapped its entry-db /
+QE-at-coordinator AF_UNIX `FakeClientAuthentication` bypass in `#ifdef HAVE_UNIX_SOCKETS` →
+the whole block **compiled out** → internal `[local]` connections fell through to normal
+`pg_hba` and were rejected ("failed to acquire resources … entry db"). **FIX:** drop the
+dead `#ifdef` (unconditional AF_UNIX). Same dead guard cleaned in `cdbutil.c`/`ic_udpifc.c`/
+`pgstat.c`. Commit `a2503257ce2`. **GENERALIZE:** after a merge, for every configure macro
+upstream *removed* (diff `pg_config.h.in`), grep `#ifdef <MACRO>` — every GGDB use is now
+silently dead code.
+
+## Executor / grouping bugs from the node-support migration + EC dedup
+
+- **setrefs.c multi-DQA:** PG16's node-support migration dropped the `equal_ignore` on
+  `Aggref.agg_expr_id` (and `SubPlan.is_initplan`) → a HAVING/qual multi-DQA combine-aggref
+  can't `equal()`-match its stamped partial aggref. **FIX:** re-annotate those fields
+  `equal_ignore` in the node header. Commit `987e469fedc`. (Node fields that used to be
+  `equal_ignore` in the hand-written `equalfuncs.c` must become header annotations — audit
+  them during the node layer.)
+- **`ExecInitTupleSplit` off-by-one:** `all_input_attr_bms` was 0-based where it should be
+  1-based → nulled the last passthrough column; masked before, *unmasked* by PG16's EC
+  group-key dedup. **FIX:** 1-based. Commit `a72b31481b7`.
+- **All-constant GROUP BY:** PG16 drops the sole provably-constant GROUP BY column →
+  `cdbgroupingpaths` two-stage split's first-stage plain Agg projects a passthrough Var from
+  an empty-input segment → `execExprInterp.c` crash. **FIX:** skip the multi-stage split for
+  a degenerate all-constant GROUP BY (single-stage). Commit `1c169fde348`.
+
+## Deparse drift (ruleutils) → base `.out` regens
+
+PG16 `ruleutils` emits **unqualified** column refs in view-defs (`SELECT e FROM cte` not
+`SELECT cte.e`; `WHERE id < 790` not `WHERE people.id < 790`; `ARRAY[fname,lname]` not
+`[people.fname,…]`). `pg_get_viewdef` output is **optimizer-independent** → regen the
+TRACKED base `.out` (fixes both matrices at once; verify identical opt on/off first).
+Commit `205e76437a6`.
+
+## Test-harness merge artifacts & direct-pg_regress run defects (not code, but they lie)
+
+- **pg_regress pass/fail-by-psql-exit:** the PG16 merge reworked pg_regress result-reporting
+  and nested it so pass/fail was decided by the psql **exit status** *before* checking the
+  diff. Tests that intentionally exit psql `!= 0` (gp_connections' final `\connect` to a
+  segment = exit 2) then "failed" with an **empty regression.diffs**. Upstream/cm3 decide
+  from the DIFF alone. **FIX:** restore diff-only at both report sites (commit `b65f3d3864a`;
+  strictly more lenient — can't break a passing test).
+- Running `pg_regress` **directly** (not via `make installcheck-good`) in the container:
+  `export USER=gpadmin LOGNAME=gpadmin` (docker `exec -u` leaves them empty → gpconfig/gpstop
+  tests fail "USER must be set") and pass `--load-extension=gp_inject_fault` (Makefile.global
+  injects it when `enable_debug_extensions=yes`; direct runs omit it → "gp_inject_fault does
+  not exist" fails ALL fault tests). A killed run leaves leftover databases + fault
+  injections that false-fail *later* runs — drop non-system dbs + reset all faults (or
+  recreate the cluster) before a clean measure. Kill an in-container run as root:
+  `sudo docker exec <c> pkill -9 -f pg_regress`.
+
+## Still deferred at campaign end (follow-ups, not PG16-merge blockers)
+
+- **qp_with_clause DML+CTE motion deadlock:** PG16 focuses a ~1-row correlated aggregate to
+  a single node (`Gather 3:1 → Broadcast 1:3`) instead of cm3's distributed `Redistribute
+  3:3` → contention-fragile under the full-regression interconnect load (completes in
+  isolation, deadlocks in the parallel group). Deep MPP locus/planner work; **not** a GUC
+  fix. Deferred.
+- **AO-truncate mirror WAL-replay PANIC** (`cdbappendonlyxlog.c` → `XLogAOSegmentFile` →
+  `log_invalid_page`) — a LATENT TIMING FLAKE **shared with cm3** (identical code): a mirror
+  replays an AO-truncate of a missing segfile after reaching consistency → the upstream guard
+  PANICs where GGDB expects self-heal. **By design; do NOT "fix" the assert** (grep for a
+  validating test first — this bit PG14 too).
+- **autovacuum fault-never-fires** hang (`gp_wait_until_triggered_fault('auto_vac_worker')`
+  never fires — a PG15+ autovacuum-behavior-change class).

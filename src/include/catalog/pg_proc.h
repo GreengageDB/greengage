@@ -158,8 +158,11 @@ typedef FormData_pg_proc *Form_pg_proc;
  * currently smart enough for that.
  */
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_proc_oid_index, 2690, ProcedureOidIndexId, on pg_proc using btree(oid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_proc_proname_args_nsp_index, 2691, ProcedureNameArgsNspIndexId, on pg_proc using btree(proname name_ops, proargtypes oidvector_ops, pronamespace oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_proc_oid_index, 2690, ProcedureOidIndexId, pg_proc, btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_proc_proname_args_nsp_index, 2691, ProcedureNameArgsNspIndexId, pg_proc, btree(proname name_ops, proargtypes oidvector_ops, pronamespace oid_ops));
+
+MAKE_SYSCACHE(PROCOID, pg_proc_oid_index, 128);
+MAKE_SYSCACHE(PROCNAMEARGSNSP, pg_proc_proname_args_nsp_index, 128);
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 

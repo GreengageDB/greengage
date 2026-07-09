@@ -61,7 +61,7 @@ extern List * rel_get_column_encodings(Relation rel);
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 7039, AttributeEncodingAttrelidIndexId, on pg_attribute_encoding using btree(attrelid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_attnum_index, 7040, AttributeEncodingAttrelidAttnumIndexId, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
+DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 7039, AttributeEncodingAttrelidIndexId, pg_attribute_encoding, btree(attrelid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_attnum_index, 7040, AttributeEncodingAttrelidAttnumIndexId, pg_attribute_encoding, btree(attrelid oid_ops, attnum int2_ops));
 
 #endif   /* PG_ATTRIBUTE_ENCODING_H */

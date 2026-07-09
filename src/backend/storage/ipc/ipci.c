@@ -3,7 +3,7 @@
  * ipci.c
  *	  POSTGRES inter-process communication initialization code.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -18,11 +18,11 @@
 
 #include "access/clog.h"
 #include "access/commit_ts.h"
-#include "access/heapam.h"
 #include "access/multixact.h"
 #include "access/nbtree.h"
 #include "access/subtrans.h"
 #include "access/syncscan.h"
+#include "access/transam.h"
 #include "access/twophase.h"
 #include "access/distributedlog.h"
 #include "access/xlogprefetcher.h"
@@ -38,13 +38,16 @@
 #include "postmaster/bgwriter.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/fts.h"
+#include "postmaster/walsummarizer.h"
 #include "replication/logicallauncher.h"
 #include "replication/origin.h"
 #include "replication/slot.h"
+#include "replication/slotsync.h"
 #include "replication/walreceiver.h"
 #include "replication/walsender.h"
 #include "storage/bufmgr.h"
 #include "storage/dsm.h"
+#include "storage/dsm_registry.h"
 #include "storage/ipc.h"
 #include "storage/pg_shmem.h"
 #include "storage/pmsignal.h"
@@ -60,7 +63,7 @@
 #include "utils/sharedsnapshot.h"
 #include "utils/gpexpand.h"
 #include "utils/guc.h"
-#include "utils/snapmgr.h"
+#include "utils/injection_point.h"
 
 #include "libpq-fe.h"
 #include "libpq-int.h"
@@ -81,6 +84,8 @@ int			shared_memory_type = DEFAULT_SHARED_MEMORY_TYPE;
 shmem_startup_hook_type shmem_startup_hook = NULL;
 
 static Size total_addin_request = 0;
+
+static void CreateOrAttachShmemStructs(void);
 
 /*
  * RequestAddinShmemSpace
@@ -135,11 +140,13 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, hash_estimate_size(SHMEM_INDEX_SIZE,
 											 sizeof(ShmemIndexEnt)));
 	size = add_size(size, dsm_estimate_size());
+	size = add_size(size, DSMRegistryShmemSize());
 	size = add_size(size, BufferShmemSize());
 	size = add_size(size, LockShmemSize());
 	size = add_size(size, PredicateLockShmemSize());
 	size = add_size(size, ProcGlobalShmemSize());
 	size = add_size(size, XLogPrefetchShmemSize());
+	size = add_size(size, VarsupShmemSize());
 	size = add_size(size, XLOGShmemSize());
 	size = add_size(size, XLogRecoveryShmemSize());
 	size = add_size(size, CLOGShmemSize());
@@ -160,13 +167,16 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, ReplicationOriginShmemSize());
 	size = add_size(size, WalSndShmemSize());
 	size = add_size(size, WalRcvShmemSize());
+	size = add_size(size, WalSummarizerShmemSize());
 	size = add_size(size, PgArchShmemSize());
 	size = add_size(size, ApplyLauncherShmemSize());
-	size = add_size(size, SnapMgrShmemSize());
 	size = add_size(size, BTreeShmemSize());
 	size = add_size(size, SyncScanShmemSize());
 	size = add_size(size, AsyncShmemSize());
 	size = add_size(size, StatsShmemSize());
+	size = add_size(size, WaitEventCustomShmemSize());
+	size = add_size(size, InjectionPointShmemSize());
+	size = add_size(size, SlotSyncShmemSize());
 
 	/* GPDB-specific shared memory regions */
 	if (IsResQueueEnabled() && Gp_role == GP_ROLE_DISPATCH)
@@ -206,9 +216,117 @@ CalculateShmemSize(int *num_semaphores)
 	return size;
 }
 
+#ifdef EXEC_BACKEND
+/*
+ * AttachSharedMemoryStructs
+ *		Initialize a postmaster child process's access to shared memory
+ *      structures.
+ *
+ * In !EXEC_BACKEND mode, we inherit everything through the fork, and this
+ * isn't needed.
+ */
+void
+AttachSharedMemoryStructs(void)
+{
+	/* InitProcess must've been called already */
+	Assert(MyProc != NULL);
+	Assert(IsUnderPostmaster);
+
+	CreateOrAttachShmemStructs();
+
+	/*
+	 * Now give loadable modules a chance to set up their shmem allocations
+	 */
+	if (shmem_startup_hook)
+		shmem_startup_hook();
+}
+#endif
+
 /*
  * CreateSharedMemoryAndSemaphores
  *		Creates and initializes shared memory and semaphores.
+ */
+void
+CreateSharedMemoryAndSemaphores(void)
+{
+	PGShmemHeader *shim;
+	PGShmemHeader *seghdr;
+	Size		size;
+	int			numSemas;
+
+	Assert(!IsUnderPostmaster);
+
+	/*
+	 * GPDB: request our built-in named LWLock tranches.  RequestNamedLWLockTranche()
+	 * is only allowed while process_shmem_requests_in_progress is set (normally
+	 * during the postmaster's shmem_request_hook).  Doing it here covers the
+	 * bootstrap/single-user paths too (which never run that hook) and happens
+	 * before CalculateShmemSize() so the computed size accounts for these locks.
+	 */
+	process_shmem_requests_in_progress = true;
+	RequestNamedLWLockTranche("SharedSnapshotLocks", NUM_SHARED_SNAPSHOT_SLOTS);
+	process_shmem_requests_in_progress = false;
+
+	/* Compute the size of the shared-memory block */
+	size = CalculateShmemSize(&numSemas);
+	elog(DEBUG3, "invoking IpcMemoryCreate(size=%zu)", size);
+
+	/*
+	 * Create the shmem segment
+	 */
+	seghdr = PGSharedMemoryCreate(size, &shim);
+
+	/*
+	 * Make sure that huge pages are never reported as "unknown" while the
+	 * server is running.
+	 */
+	Assert(strcmp("unknown",
+				  GetConfigOption("huge_pages_status", false, false)) != 0);
+
+	InitShmemAccess(seghdr);
+
+	/*
+	 * Create semaphores
+	 */
+	PGReserveSemaphores(numSemas);
+
+	/*
+	 * If spinlocks are disabled, initialize emulation layer (which depends on
+	 * semaphores, so the order is important here).
+	 */
+#ifndef HAVE_SPINLOCKS
+	SpinlockSemaInit();
+#endif
+
+	/*
+	 * Set up shared memory allocation mechanism
+	 */
+	InitShmemAllocation();
+
+	/* Initialize subsystems */
+	CreateOrAttachShmemStructs();
+
+#ifdef EXEC_BACKEND
+
+	/*
+	 * Alloc the win32 shared backend array
+	 */
+	ShmemBackendArrayAllocation();
+#endif
+
+	/* Initialize dynamic shared memory facilities. */
+	dsm_postmaster_startup(shim);
+
+	/*
+	 * Now give loadable modules a chance to set up their shmem allocations
+	 */
+	if (shmem_startup_hook)
+		shmem_startup_hook();
+}
+
+/*
+ * Initialize various subsystems, setting up their data structures in
+ * shared memory.
  *
  * This is called by the postmaster or by a standalone backend.
  * It is also called by a backend forked from the postmaster in the
@@ -221,70 +339,9 @@ CalculateShmemSize(int *num_semaphores)
  * check IsUnderPostmaster, rather than EXEC_BACKEND, to detect this case.
  * This is a bit code-wasteful and could be cleaned up.)
  */
-void
-CreateSharedMemoryAndSemaphores(void)
+static void
+CreateOrAttachShmemStructs(void)
 {
-	PGShmemHeader *shim = NULL;
-
-	if (!IsUnderPostmaster)
-	{
-		PGShmemHeader *seghdr;
-		Size		size;
-		int			numSemas;
-
-		/*
-		 * GPDB: request our built-in named LWLock tranches.  PG15 only allows
-		 * RequestNamedLWLockTranche() while process_shmem_requests_in_progress
-		 * is set (normally during the postmaster's shmem_request_hook).  Doing
-		 * it here covers the bootstrap/single-user paths too (which never run
-		 * that hook) and happens before CalculateShmemSize() so the computed
-		 * size accounts for these locks.
-		 */
-		process_shmem_requests_in_progress = true;
-		RequestNamedLWLockTranche("SharedSnapshotLocks", NUM_SHARED_SNAPSHOT_SLOTS);
-		process_shmem_requests_in_progress = false;
-
-		/* Compute the size of the shared-memory block */
-		size = CalculateShmemSize(&numSemas);
-		elog(DEBUG3, "invoking IpcMemoryCreate(size=%zu)", size);
-
-		/*
-		 * Create the shmem segment
-		 */
-		seghdr = PGSharedMemoryCreate(size, &shim);
-
-		InitShmemAccess(seghdr);
-
-		/*
-		 * Create semaphores
-		 */
-		PGReserveSemaphores(numSemas);
-
-		/*
-		 * If spinlocks are disabled, initialize emulation layer (which
-		 * depends on semaphores, so the order is important here).
-		 */
-#ifndef HAVE_SPINLOCKS
-		SpinlockSemaInit();
-#endif
-	}
-	else
-	{
-		/*
-		 * We are reattaching to an existing shared memory segment. This
-		 * should only be reached in the EXEC_BACKEND case.
-		 */
-#ifndef EXEC_BACKEND
-		elog(PANIC, "should be attached to shared memory already");
-#endif
-	}
-
-	/*
-	 * Set up shared memory allocation mechanism
-	 */
-	if (!IsUnderPostmaster)
-		InitShmemAllocation();
-
 	/*
 	 * Now initialize LWLocks, which do shared memory allocation and are
 	 * needed for InitShmemIndex.
@@ -297,10 +354,12 @@ CreateSharedMemoryAndSemaphores(void)
 	InitShmemIndex();
 
 	dsm_shmem_init();
+	DSMRegistryShmemInit();
 
 	/*
 	 * Set up xlog, clog, and buffers
 	 */
+	VarsupShmemInit();
 	XLOGShmemInit();
 	XLogPrefetchShmemInit();
 	XLogRecoveryShmemInit();
@@ -371,8 +430,10 @@ CreateSharedMemoryAndSemaphores(void)
 	ReplicationOriginShmemInit();
 	WalSndShmemInit();
 	WalRcvShmemInit();
+	WalSummarizerShmemInit();
 	PgArchShmemInit();
 	ApplyLauncherShmemInit();
+	SlotSyncShmemInit();
 	FTSReplicationStatusShmemInit();
 
 #ifdef FAULT_INJECTOR
@@ -382,11 +443,13 @@ CreateSharedMemoryAndSemaphores(void)
 	/*
 	 * Set up other modules that need some shared memory space
 	 */
-	SnapMgrInit();
 	BTreeShmemInit();
 	SyncScanShmemInit();
 	AsyncShmemInit();
 	StatsShmemInit();
+	WaitEventCustomShmemInit();
+	InjectionPointShmemInit();
+
 	BackendCancelShmemInit();
 	WorkFileShmemInit();
 	ShareInputShmemInit();
@@ -399,34 +462,15 @@ CreateSharedMemoryAndSemaphores(void)
 
 	GpExpandVersionShmemInit();
 
-#ifdef EXEC_BACKEND
-
-	/*
-	 * Alloc the win32 shared backend array
-	 */
-	if (!IsUnderPostmaster)
-		ShmemBackendArrayAllocation();
-#endif
-
 	if (gp_enable_resqueue_priority)
 		BackoffStateInit();
-
-	/* Initialize dynamic shared memory facilities. */
-	if (!IsUnderPostmaster)
-		dsm_postmaster_startup(shim);
 
 	/* Initialize shared memory for parallel retrieve cursor */
 	if (!IsUnderPostmaster)
 		EndpointShmemInit();
-	
+
 	if (Gp_role == GP_ROLE_DISPATCH)
 		ParallelCursorCountInit();
-
-	/*
-	 * Now give loadable modules a chance to set up their shmem allocations
-	 */
-	if (shmem_startup_hook)
-		shmem_startup_hook();
 }
 
 /*

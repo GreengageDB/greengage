@@ -4,7 +4,7 @@
  *	  Definitions for using the POSTGRES copy command.
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/copy.h
@@ -33,6 +33,25 @@ typedef enum CopyHeaderChoice
 	COPY_HEADER_TRUE,
 	COPY_HEADER_MATCH,
 } CopyHeaderChoice;
+
+/*
+ * Represents where to save input processing errors.  More values to be added
+ * in the future.
+ */
+typedef enum CopyOnErrorChoice
+{
+	COPY_ON_ERROR_STOP = 0,		/* immediately throw errors, default */
+	COPY_ON_ERROR_IGNORE,		/* ignore errors */
+} CopyOnErrorChoice;
+
+/*
+ * Represents verbosity of logged messages by COPY command.
+ */
+typedef enum CopyLogVerbosityChoice
+{
+	COPY_LOG_VERBOSITY_DEFAULT = 0, /* logs no additional messages, default */
+	COPY_LOG_VERBOSITY_VERBOSE, /* logs additional messages */
+} CopyLogVerbosityChoice;
 
 /*
  * Represents the different source/dest cases we need to worry about at
@@ -166,10 +185,14 @@ typedef struct CopyStateData
 	bool		force_quote_all;	/* FORCE QUOTE *? */
 	bool	   *force_quote_flags;	/* per-column CSV FQ flags */
 	List	   *force_notnull;	/* list of column names */
+	bool		force_notnull_all;	/* FORCE_NOT_NULL *? */
 	bool	   *force_notnull_flags;	/* per-column CSV FNN flags */
 	List	   *force_null;		/* list of column names */
+	bool		force_null_all; /* FORCE_NULL *? */
 	bool	   *force_null_flags;	/* per-column CSV FN flags */
 	bool		convert_selectively;	/* do selective binary conversion? */
+	CopyOnErrorChoice on_error; /* what to do when error happened */
+	CopyLogVerbosityChoice log_verbosity;	/* verbosity of logged messages */
 	List	   *convert_select;	/* list of column names (can be NIL) */
 	bool	   *convert_select_flags;	/* per-column CSV/TEXT CS flags */
 	bool		fill_missing;	/* missing attrs at end of line are NULL */
@@ -303,6 +326,7 @@ extern bool NextCopyFrom(CopyState cstate, ExprContext *econtext,
 extern bool NextCopyFromRawFields(CopyState cstate,
 								  char ***fields, int *nfields);
 extern void CopyFromErrorCallback(void *arg);
+extern char *CopyLimitPrintoutLength(const char *str);
 
 extern uint64 CopyFrom(CopyState cstate);
 

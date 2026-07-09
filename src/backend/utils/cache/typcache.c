@@ -31,7 +31,7 @@
  * constraint changes are also tracked properly.
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -57,6 +57,7 @@
 #include "catalog/pg_range.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
+#include "common/int.h"
 #include "executor/executor.h"
 #include "lib/dshash.h"
 #include "optimizer/optimizer.h"
@@ -69,7 +70,6 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "cdb/cdbvars.h"
@@ -148,7 +148,7 @@ typedef struct TypeCacheEnumData
  * We use a separate table for storing the definitions of non-anonymous
  * record types.  Once defined, a record type will be remembered for the
  * life of the backend.  Subsequent uses of the "same" record type (where
- * sameness means equalTupleDescs) will refer to the existing table entry.
+ * sameness means equalRowTypes) will refer to the existing table entry.
  *
  * Stored record types are remembered in a linear array of TupleDescs,
  * which can be indexed quickly with the assigned typmod.  There is also
@@ -250,7 +250,7 @@ shared_record_table_hash(const void *a, size_t size, void *arg)
 	else
 		t = k->u.local_tupdesc;
 
-	return hashTupleDesc(t);
+	return hashRowType(t);
 }
 
 /* Parameters for SharedRecordTypmodRegistry's TupleDesc table. */
@@ -259,6 +259,7 @@ static const dshash_parameters srtr_record_table_params = {
 	sizeof(SharedRecordTableEntry),
 	shared_record_table_compare,
 	shared_record_table_hash,
+	dshash_memcpy,
 	LWTRANCHE_PER_SESSION_RECORD_TYPE
 };
 
@@ -268,17 +269,24 @@ static const dshash_parameters srtr_typmod_table_params = {
 	sizeof(SharedTypmodTableEntry),
 	dshash_memcmp,
 	dshash_memhash,
+	dshash_memcpy,
 	LWTRANCHE_PER_SESSION_RECORD_TYPMOD
 };
 
 /* hashtable for recognizing registered record types */
 static HTAB *RecordCacheHash = NULL;
 
-/* arrays of info about registered record types, indexed by assigned typmod */
-static TupleDesc *RecordCacheArray = NULL;
-static uint64 *RecordIdentifierArray = NULL;
-static int32 RecordCacheArrayLen = 0;	/* allocated length of above arrays */
-int32 NextRecordTypmod = 0;	/* number of entries used */
+typedef struct RecordCacheArrayEntry
+{
+	uint64		id;
+	TupleDesc	tupdesc;
+} RecordCacheArrayEntry;
+
+/* array of info about registered record types, indexed by assigned typmod */
+static RecordCacheArrayEntry *RecordCacheArray = NULL;
+static int32 RecordCacheArrayLen = 0;	/* allocated length of above array */
+/* GPDB: NextRecordTypmod is non-static; used by cdbmotion.c via typcache.h */
+int32		NextRecordTypmod = 0;	/* number of entries used */
 
 /*
  * Process-wide counter for generating unique tupledesc identifiers.
@@ -936,6 +944,7 @@ load_rangetype_info(TypeCacheEntry *typentry)
 	/* get opclass properties and look up the comparison function */
 	opfamilyOid = get_opclass_family(opclassOid);
 	opcintype = get_opclass_input_type(opclassOid);
+	typentry->rng_opfamily = opfamilyOid;
 
 	cmpFnOid = get_opfamily_proc(opfamilyOid, opcintype, opcintype,
 								 BTORDER_PROC);
@@ -1064,7 +1073,7 @@ load_domaintype_info(TypeCacheEntry *typentry)
 			Expr	   *check_expr;
 			DomainConstraintState *r;
 
-			/* Ignore non-CHECK constraints (presently, shouldn't be any) */
+			/* Ignore non-CHECK constraints */
 			if (c->contype != CONSTRAINT_CHECK)
 				continue;
 
@@ -1704,10 +1713,9 @@ ensure_record_cache_typmod_slot_exists(int32 typmod)
 {
 	if (RecordCacheArray == NULL)
 	{
-		RecordCacheArray = (TupleDesc *)
-			MemoryContextAllocZero(CacheMemoryContext, 64 * sizeof(TupleDesc));
-		RecordIdentifierArray = (uint64 *)
-			MemoryContextAllocZero(CacheMemoryContext, 64 * sizeof(uint64));
+		RecordCacheArray = (RecordCacheArrayEntry *)
+			MemoryContextAllocZero(CacheMemoryContext,
+								   64 * sizeof(RecordCacheArrayEntry));
 		RecordCacheArrayLen = 64;
 	}
 
@@ -1715,8 +1723,10 @@ ensure_record_cache_typmod_slot_exists(int32 typmod)
 	{
 		int32		newlen = pg_nextpower2_32(typmod + 1);
 
-		RecordCacheArray = repalloc0_array(RecordCacheArray, TupleDesc, RecordCacheArrayLen, newlen);
-		RecordIdentifierArray = repalloc0_array(RecordIdentifierArray, uint64, RecordCacheArrayLen, newlen);
+		RecordCacheArray = repalloc0_array(RecordCacheArray,
+										   RecordCacheArrayEntry,
+										   RecordCacheArrayLen,
+										   newlen);
 		RecordCacheArrayLen = newlen;
 	}
 }
@@ -1754,8 +1764,8 @@ lookup_rowtype_tupdesc_internal(Oid type_id, int32 typmod, bool noError)
 		{
 			/* It is already in our local cache? */
 			if (typmod < RecordCacheArrayLen &&
-				RecordCacheArray[typmod] != NULL)
-				return RecordCacheArray[typmod];
+				RecordCacheArray[typmod].tupdesc != NULL)
+				return RecordCacheArray[typmod].tupdesc;
 
 			/* Are we attached to a shared record typmod registry? */
 			if (CurrentSession->shared_typmod_registry != NULL)
@@ -1781,19 +1791,19 @@ lookup_rowtype_tupdesc_internal(Oid type_id, int32 typmod, bool noError)
 					 * Our local array can now point directly to the TupleDesc
 					 * in shared memory, which is non-reference-counted.
 					 */
-					RecordCacheArray[typmod] = tupdesc;
+					RecordCacheArray[typmod].tupdesc = tupdesc;
 					Assert(tupdesc->tdrefcount == -1);
 
 					/*
 					 * We don't share tupdesc identifiers across processes, so
 					 * assign one locally.
 					 */
-					RecordIdentifierArray[typmod] = ++tupledesc_id_counter;
+					RecordCacheArray[typmod].id = ++tupledesc_id_counter;
 
 					dshash_release_lock(CurrentSession->shared_typmod_table,
 										entry);
 
-					return RecordCacheArray[typmod];
+					return RecordCacheArray[typmod].tupdesc;
 				}
 			}
 		}
@@ -1919,7 +1929,7 @@ record_type_typmod_hash(const void *data, size_t size)
 {
 	RecordCacheEntry *entry = (RecordCacheEntry *) data;
 
-	return hashTupleDesc(entry->tupdesc);
+	return hashRowType(entry->tupdesc);
 }
 
 /*
@@ -2006,10 +2016,10 @@ assign_record_type_typmod(TupleDesc tupDesc)
 		ensure_record_cache_typmod_slot_exists(entDesc->tdtypmod);
 	}
 
-	RecordCacheArray[entDesc->tdtypmod] = entDesc;
+	RecordCacheArray[entDesc->tdtypmod].tupdesc = entDesc;
 
 	/* Assign a unique tupdesc identifier, too. */
-	RecordIdentifierArray[entDesc->tdtypmod] = ++tupledesc_id_counter;
+	RecordCacheArray[entDesc->tdtypmod].id = ++tupledesc_id_counter;
 
 	/* Fully initialized; create the hash table entry */
 	recentry = (RecordCacheEntry *) hash_search(RecordCacheHash,
@@ -2058,10 +2068,10 @@ assign_record_type_identifier(Oid type_id, int32 typmod)
 		 * It's a transient record type, so look in our record-type table.
 		 */
 		if (typmod >= 0 && typmod < RecordCacheArrayLen &&
-			RecordCacheArray[typmod] != NULL)
+			RecordCacheArray[typmod].tupdesc != NULL)
 		{
-			Assert(RecordIdentifierArray[typmod] != 0);
-			return RecordIdentifierArray[typmod];
+			Assert(RecordCacheArray[typmod].id != 0);
+			return RecordCacheArray[typmod].id;
 		}
 
 		/* For anonymous or unrecognized record type, generate a new ID */
@@ -2141,7 +2151,7 @@ SharedRecordTypmodRegistryInit(SharedRecordTypmodRegistry *registry,
 		TupleDesc	tupdesc;
 		bool		found;
 
-		tupdesc = RecordCacheArray[typmod];
+		tupdesc = RecordCacheArray[typmod].tupdesc;
 		if (tupdesc == NULL)
 			continue;
 
@@ -2455,7 +2465,7 @@ build_tuple_node_list(int start)
 
 	for (; i < NextRecordTypmod; i++)
 	{
-		TupleDesc tmp = RecordCacheArray[i];
+		TupleDesc tmp = RecordCacheArray[i].tupdesc;
 
 		TupleDescNode *node = palloc0(sizeof(TupleDescNode));
 		node->type = T_TupleDescNode;
@@ -2750,12 +2760,7 @@ enum_oid_cmp(const void *left, const void *right)
 	const EnumItem *l = (const EnumItem *) left;
 	const EnumItem *r = (const EnumItem *) right;
 
-	if (l->enum_oid < r->enum_oid)
-		return -1;
-	else if (l->enum_oid > r->enum_oid)
-		return 1;
-	else
-		return 0;
+	return pg_cmp_u32(l->enum_oid, r->enum_oid);
 }
 
 /*

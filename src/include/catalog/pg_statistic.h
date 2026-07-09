@@ -144,7 +144,9 @@ FOREIGN_KEY(staop4 REFERENCES pg_operator(oid));
 typedef FormData_pg_statistic *Form_pg_statistic;
 
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelidAttnumInhIndexId, on pg_statistic using btree(starelid oid_ops, staattnum int2_ops, stainherit bool_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelidAttnumInhIndexId, pg_statistic, btree(starelid oid_ops, staattnum int2_ops, stainherit bool_ops));
+
+MAKE_SYSCACHE(STATRELATTINH, pg_statistic_relid_att_inh_index, 128);
 
 
 #ifdef EXPOSE_TO_CLIENT_CODE
@@ -159,6 +161,9 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelid
  * data "kind" will appear in any particular slot.  Instead, search the
  * stakind fields to see if the desired data is available.  (The standard
  * function get_attstatsslot() may be used for this.)
+ *
+ * Note: The pg_stats view needs to be modified whenever a new slot kind is
+ * added to core.
  */
 
 /*
@@ -185,7 +190,7 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelid
  * the K most common non-null values appearing in the column, and stanumbers
  * contains their frequencies (fractions of total row count).  The values
  * shall be ordered in decreasing frequency.  Note that since the arrays are
- * variable-size, K may be chosen by the statistics collector.  Values should
+ * variable-size, K may be chosen may be chosen at ANALYZE time.  Values should
  * not appear in MCV unless they have been observed to occur more than once;
  * a unique column will have no MCV slot.
  */
@@ -269,7 +274,8 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelid
  * a format similar to STATISTIC_KIND_HISTOGRAM: it contains M (>=2) range
  * values that divide the column data values into M-1 bins of approximately
  * equal population. The lengths are stored as float8s, as measured by the
- * range type's subdiff function. Only non-null rows are considered.
+ * range type's subdiff function. Only non-null, non-empty rows are
+ * considered.
  */
 #define STATISTIC_KIND_RANGE_LENGTH_HISTOGRAM  6
 

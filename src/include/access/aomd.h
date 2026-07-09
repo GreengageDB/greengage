@@ -51,7 +51,7 @@ extern void
 mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo);
 
 extern void
-copy_append_only_data(RelFileNode src, RelFileNode dst, BackendId backendid, char relpersistence);
+copy_append_only_data(RelFileNode src, RelFileNode dst, ProcNumber backendid, char relpersistence);
 
 /*
  * return value should be true if the callback was able to find the given

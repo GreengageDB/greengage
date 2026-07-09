@@ -282,7 +282,6 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 void
 ExecEndSplitUpdate(SplitUpdateState *node)
 {
-	ExecFreeExprContext(&node->ps);
 	ExecClearTuple(node->ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->insertTuple);
 	ExecClearTuple(node->deleteTuple);

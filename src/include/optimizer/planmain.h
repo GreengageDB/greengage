@@ -114,6 +114,10 @@ extern void add_vars_to_targetlist_x(PlannerInfo *root, List *vars,
 extern void find_lateral_references(PlannerInfo *root);
 extern void create_lateral_join_info(PlannerInfo *root);
 extern List *deconstruct_jointree(PlannerInfo *root);
+extern bool restriction_is_always_true(PlannerInfo *root,
+									   RestrictInfo *restrictinfo);
+extern bool restriction_is_always_false(PlannerInfo *root,
+										RestrictInfo *restrictinfo);
 extern void distribute_restrictinfo_to_rels(PlannerInfo *root,
 											RestrictInfo *restrictinfo);
 extern RestrictInfo *process_implied_equality(PlannerInfo *root,
@@ -153,6 +157,8 @@ extern bool innerrel_is_unique(PlannerInfo *root,
  */
 extern Plan *set_plan_references(PlannerInfo *root, Plan *plan);
 extern bool trivial_subqueryscan(SubqueryScan *plan);
+extern Param *find_minmax_agg_replacement_param(PlannerInfo *root,
+												Aggref *aggref);
 extern void record_plan_function_dependency(PlannerInfo *root, Oid funcid);
 extern void record_plan_type_dependency(PlannerInfo *root, Oid typid);
 extern bool extract_query_dependencies_walker(Node *node, PlannerInfo *context);

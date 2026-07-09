@@ -23,7 +23,7 @@ invalidate_buffers(PG_FUNCTION_ARGS)
 	rnodebackend.node.dbNode  = PG_GETARG_OID(1);
 	rnodebackend.node.relNode = PG_GETARG_OID(2);
 
-	rnodebackend.backend = InvalidBackendId; /* not temporary/local */
+	rnodebackend.backend = INVALID_PROC_NUMBER; /* not temporary/local */
 
 	DropRelFileNodeBuffers(smgropen(rnodebackend.node, rnodebackend.backend,
 									SMGR_MD),

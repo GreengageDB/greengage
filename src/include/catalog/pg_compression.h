@@ -102,6 +102,6 @@ extern PGFunction *GetCompressionImplementation(char *comptype);
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, CompressionCompnameIndexId, on pg_compression using btree(compname name_ops));
+DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, CompressionCompnameIndexId, pg_compression, btree(compname name_ops));
 
 #endif   /* PG_COMPRESSION */

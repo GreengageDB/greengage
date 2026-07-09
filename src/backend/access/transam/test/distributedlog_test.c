@@ -19,6 +19,19 @@
 	((page) * (TransactionId) ENTRIES_PER_PAGE + (TransactionId) (entry))
 
 /*
+ * Under the PG17 SLRU model the distributed log is protected by per-bank
+ * LWLocks obtained via SimpleLruGetBankLock() instead of a single control
+ * lock.  For the unit tests we point the SlruCtl at a single, statically
+ * allocated bank lock (bank_mask == 0), so SimpleLruGetBankLock() always
+ * returns a predictable pointer that the LWLock mocks can match against.
+ */
+static LWLockPadded distributedlog_bank_locks[1];
+#define DistributedLogBankLock (&distributedlog_bank_locks[0].lock)
+
+/* Backing store for TransamVariables consulted by DistributedLog_InitOldestXmin(). */
+static TransamVariablesData distributedlog_transam_vars;
+
+/*
  * A bug found in MPP-20426 was we were overrunnig to the next page
  * of DistributedLog.  The intention of the memset with zeors is to
  * reset the reset of the current page if we are in the middle of page,
@@ -35,11 +48,11 @@ MPP_20426(void **state, TransactionId nextXid)
 	char			zeros[BLCKSZ];
 	int				bytes;
 
-	/* Setup ShmemVariableCache */
-	VariableCacheData data;
-	ShmemVariableCache = &data;
-	ShmemVariableCache->oldestXid = 3;
-	ShmemVariableCache->latestCompletedXid = FullTransactionIdFromEpochAndXid(0, 4);
+	/* Setup TransamVariables */
+	TransamVariablesData data;
+	TransamVariables = &data;
+	TransamVariables->oldestXid = 3;
+	TransamVariables->latestCompletedXid = FullTransactionIdFromEpochAndXid(0, 4);
 	DistributedLogShmem dls;
 	DistributedLogShared = &dls;
 
@@ -54,7 +67,11 @@ MPP_20426(void **state, TransactionId nextXid)
 	memset(pages, 0x7f, sizeof(pages));
 	memset(zeros, 0, sizeof(zeros));
 
-	expect_value(LWLockAcquire, lock, DistributedLogControlLock);
+	/* Point the SLRU at a single, predictable bank lock. */
+	DistributedLogCtl->shared->bank_locks = distributedlog_bank_locks;
+	DistributedLogCtl->bank_mask = 0;
+
+	expect_value(LWLockAcquire, lock, DistributedLogBankLock);
 	expect_value(LWLockAcquire, mode, LW_EXCLUSIVE);
 	will_return(LWLockAcquire, true);
 
@@ -69,7 +86,7 @@ MPP_20426(void **state, TransactionId nextXid)
 	expect_value(SimpleLruReadPage, xid, nextXid);
 	will_return(SimpleLruReadPage, 0);
 
-	expect_value(LWLockRelease, lock, DistributedLogControlLock);
+	expect_value(LWLockRelease, lock, DistributedLogBankLock);
 	will_be_called(LWLockRelease);
 
 	/* Run the function. */
@@ -110,26 +127,51 @@ setup(TransactionId nextXid)
 	DistributedLogCtl->shared->page_buffer[0] = &pages[0];
 	memset(pages, 0x7f, sizeof(char) * BLCKSZ);
 
-	expect_value(LWLockAcquire, lock, DistributedLogControlLock);
-	expect_value(LWLockAcquire, mode, LW_EXCLUSIVE);
-	will_be_called(LWLockAcquire);
+	/* Point the SLRU at a single, predictable bank lock. */
+	DistributedLogCtl->shared->bank_locks = distributedlog_bank_locks;
+	DistributedLogCtl->bank_mask = 0;
+
+	/* DistributedLog_InitOldestXmin() consults TransamVariables. */
+	distributedlog_transam_vars.oldestXid = FirstNormalTransactionId;
+	distributedlog_transam_vars.latestCompletedXid =
+		FullTransactionIdFromEpochAndXid(0, FirstNormalTransactionId + 100);
+	TransamVariables = &distributedlog_transam_vars;
 
 	/*
 	 * Map every page to buffer 0; we're only testing that the correct calls are
 	 * made to SimpleLruZeroPage().
+	 *
+	 * DistributedLog_InitOldestXmin() peeks at the first page's existence and
+	 * then stops.
 	 */
 	expect_value(SimpleLruDoesPhysicalPageExist, ctl, DistributedLogCtl);
 	expect_any(SimpleLruDoesPhysicalPageExist, pageno);
 	will_return(SimpleLruDoesPhysicalPageExist, true);
 
+	/* Zeroing the remainder of the trailing page reads it back in. */
 	expect_value(SimpleLruReadPage, ctl, DistributedLogCtl);
 	expect_any(SimpleLruReadPage, pageno);
 	expect_any(SimpleLruReadPage, write_ok);
 	expect_value(SimpleLruReadPage, xid, nextXid);
 	will_return(SimpleLruReadPage, 0);
+}
 
-	expect_value(LWLockRelease, lock, DistributedLogControlLock);
-	will_be_called(LWLockRelease);
+/*
+ * Set up the bank-lock acquire/release expectations for the binary-upgrade /
+ * segment-conversion paths.  'nzeroed' pages are zeroed under a bank lock in
+ * the fill loop, plus one more acquisition for the trailing-page zero-fill.
+ */
+static void
+expect_bank_locks(int nzeroed)
+{
+	int			nlocks = nzeroed + 1;
+
+	expect_value_count(LWLockAcquire, lock, DistributedLogBankLock, nlocks);
+	expect_value_count(LWLockAcquire, mode, LW_EXCLUSIVE, nlocks);
+	will_return_count(LWLockAcquire, true, nlocks);
+
+	expect_value_count(LWLockRelease, lock, DistributedLogBankLock, nlocks);
+	will_be_called_count(LWLockRelease, nlocks);
 }
 
 static void
@@ -147,6 +189,8 @@ test_BinaryUpgradeZeroesOutDistributedLogFittingOnSinglePage(void **state)
 	expect_value(SimpleLruZeroPage, ctl, DistributedLogCtl);
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(oldestActiveXid));
 	will_return(SimpleLruZeroPage, 0);
+
+	expect_bank_locks(1);
 
 	IsBinaryUpgrade = true;
 
@@ -180,6 +224,8 @@ test_BinaryUpgradeZeroesOutDistributedLogFittingOnThreePages(void **state)
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(nextXid));
 	will_return(SimpleLruZeroPage, 0);
 
+	expect_bank_locks(3);
+
 	IsBinaryUpgrade = true;
 
 	/* Run the function. */
@@ -208,6 +254,8 @@ test_BinaryUpgradeZeroesOutDistributedLogWithTransactionIdWraparound(void **stat
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(nextXid));
 	will_return(SimpleLruZeroPage, 0);
 
+	expect_bank_locks(2);
+
 	IsBinaryUpgrade = true;
 
 	/* Run the function. */
@@ -231,6 +279,8 @@ test_ConvertMasterDataDirToSegmentZeroesOutDistributedLogFittingOnSinglePage(voi
 	expect_value(SimpleLruZeroPage, ctl, DistributedLogCtl);
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(oldestActiveXid));
 	will_return(SimpleLruZeroPage, 0);
+
+	expect_bank_locks(1);
 
 	ConvertMasterDataDirToSegment = true;
 
@@ -264,6 +314,8 @@ test_ConvertMasterDataDirToSegmentZeroesOutDistributedLogFittingOnThreePages(voi
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(nextXid));
 	will_return(SimpleLruZeroPage, 0);
 
+	expect_bank_locks(3);
+
 	ConvertMasterDataDirToSegment = true;
 
 	/* Run the function. */
@@ -291,6 +343,8 @@ test_ConvertMasterDataDirToSegmentZeroesOutDistributedLogWithTransactionIdWrapar
 	expect_value(SimpleLruZeroPage, ctl, DistributedLogCtl);
 	expect_value(SimpleLruZeroPage, pageno, TransactionIdToPage(nextXid));
 	will_return(SimpleLruZeroPage, 0);
+
+	expect_bank_locks(2);
 
 	ConvertMasterDataDirToSegment = true;
 

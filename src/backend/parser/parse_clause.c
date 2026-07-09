@@ -22,10 +22,8 @@
 #include "access/table.h"
 #include "access/tsmapi.h"
 #include "catalog/catalog.h"
-#include "catalog/heap.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_amproc.h"
-#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_type.h"
@@ -909,7 +907,11 @@ transformRangeTableFunc(ParseState *pstate, RangeTableFunc *rtf)
 	char	  **names;
 	int			colno;
 
-	/* Currently only XMLTABLE is supported */
+	/*
+	 * Currently we only support XMLTABLE here.  See transformJsonTable() for
+	 * JSON_TABLE support.
+	 */
+	tf->functype = TFT_XMLTABLE;
 	constructName = "XMLTABLE";
 	docType = XMLOID;
 
@@ -1316,13 +1318,17 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 		rtr->rtindex = nsitem->p_rtindex;
 		return (Node *) rtr;
 	}
-	else if (IsA(n, RangeTableFunc))
+	else if (IsA(n, RangeTableFunc) || IsA(n, JsonTable))
 	{
 		/* table function is like a plain relation */
 		RangeTblRef *rtr;
 		ParseNamespaceItem *nsitem;
 
-		nsitem = transformRangeTableFunc(pstate, (RangeTableFunc *) n);
+		if (IsA(n, JsonTable))
+			nsitem = transformJsonTable(pstate, (JsonTable *) n);
+		else
+			nsitem = transformRangeTableFunc(pstate, (RangeTableFunc *) n);
+
 		*top_nsitem = nsitem;
 		*namespace = list_make1(nsitem);
 		rtr = makeNode(RangeTblRef);
@@ -1785,6 +1791,7 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 			jnsitem->p_names = j->join_using_alias;
 			jnsitem->p_rte = nsitem->p_rte;
 			jnsitem->p_rtindex = nsitem->p_rtindex;
+			jnsitem->p_perminfo = NULL;
 			/* no need to copy the first N columns, just use res_nscolumns */
 			jnsitem->p_nscolumns = res_nscolumns;
 			/* set default visibility flags; might get changed later */
@@ -3202,7 +3209,6 @@ transformWindowDefinitions(ParseState *pstate,
 											 rangeopfamily, rangeopcintype,
 											 &wc->endInRangeFunc,
 											 windef->endOffset);
-		wc->runCondition = NIL;
 		wc->winref = winref;
 
 		/* finally, check function restriction with this spec. */

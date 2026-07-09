@@ -169,6 +169,7 @@ extern bool IsReplicatedTable(Oid relid);
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 8103, GpPolicyLocalOidIndexId, on gp_distribution_policy using btree(localoid oid_ops));
+DECLARE_UNIQUE_INDEX(gp_distribution_policy_localoid_index, 8103, GpPolicyLocalOidIndexId, gp_distribution_policy, btree(localoid oid_ops));
+MAKE_SYSCACHE(GPPOLICYID, gp_distribution_policy_localoid_index, 1024);
 
 #endif			/* GP_DISTRIBUTION_POLICY_H */

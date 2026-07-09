@@ -3,7 +3,7 @@
  * pl_handler.c		- Handler for the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -295,7 +295,7 @@ plpgsql_call_handler(PG_FUNCTION_ARGS)
 		/* Be sure to release the procedure resowner if any */
 		if (procedure_resowner)
 		{
-			ResourceOwnerReleaseAllPlanCacheRefs(procedure_resowner);
+			ReleaseAllPlanCacheRefsInOwner(procedure_resowner);
 			ResourceOwnerDelete(procedure_resowner);
 		}
 	}
@@ -400,7 +400,7 @@ plpgsql_inline_handler(PG_FUNCTION_ARGS)
 
 		/* Clean up the private EState and resowner */
 		FreeExecutorState(simple_eval_estate);
-		ResourceOwnerReleaseAllPlanCacheRefs(simple_eval_resowner);
+		ReleaseAllPlanCacheRefsInOwner(simple_eval_resowner);
 		ResourceOwnerDelete(simple_eval_resowner);
 
 		/* Function should now have no remaining use-counts ... */
@@ -417,7 +417,7 @@ plpgsql_inline_handler(PG_FUNCTION_ARGS)
 
 	/* Clean up the private EState and resowner */
 	FreeExecutorState(simple_eval_estate);
-	ResourceOwnerReleaseAllPlanCacheRefs(simple_eval_resowner);
+	ReleaseAllPlanCacheRefsInOwner(simple_eval_resowner);
 	ResourceOwnerDelete(simple_eval_resowner);
 
 	/* Function should now have no remaining use-counts ... */

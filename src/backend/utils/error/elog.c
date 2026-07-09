@@ -68,18 +68,14 @@
 #include <execinfo.h>
 #endif
 
-#ifdef HAVE_EXECINFO_H
-#include <execinfo.h>
-#endif
-
 #include "access/transam.h"
 #include "access/xact.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
-#include "nodes/miscnodes.h"
 #include "miscadmin.h"
+#include "nodes/miscnodes.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
@@ -136,8 +132,8 @@ char	   *Log_destination_string = NULL;
 bool		syslog_sequence_numbers = true;
 bool		syslog_split_messages = true;
 
-/* Processed form of backtrace_symbols GUC */
-static char *backtrace_symbol_list;
+/* Processed form of backtrace_functions GUC */
+static char *backtrace_function_list;
 
 #ifdef HAVE_SYSLOG
 
@@ -200,7 +196,7 @@ static int	recursion_depth = 0;	/* to detect actual recursion */
 
 /*
  * Saved timeval and buffers for formatted timestamps that might be used by
- * both log_line_prefix and csv logs.
+ * log_line_prefix, csv logs and JSON logs.
  */
 static struct timeval saved_timeval;
 static bool saved_timeval_set = false;
@@ -1061,13 +1057,13 @@ matches_backtrace_functions(const char *funcname)
 {
 	const char *p;
 
-	if (!backtrace_symbol_list || funcname == NULL || funcname[0] == '\0')
+	if (!backtrace_function_list || funcname == NULL || funcname[0] == '\0')
 		return false;
 
-	p = backtrace_symbol_list;
+	p = backtrace_function_list;
 	for (;;)
 	{
-		if (*p == '\0')			/* end of backtrace_symbol_list */
+		if (*p == '\0')			/* end of backtrace_function_list */
 			break;
 
 		if (strcmp(funcname, p) == 0)
@@ -1143,15 +1139,17 @@ errcode_for_file_access(void)
 			/* Wrong object type or state */
 		case ENOTDIR:			/* Not a directory */
 		case EISDIR:			/* Is a directory */
-#if defined(ENOTEMPTY) && (ENOTEMPTY != EEXIST) /* same code on AIX */
 		case ENOTEMPTY:			/* Directory not empty */
-#endif
 			edata->sqlerrcode = ERRCODE_WRONG_OBJECT_TYPE;
 			break;
 
 			/* Insufficient resources */
 		case ENOSPC:			/* No space left on device */
 			edata->sqlerrcode = ERRCODE_DISK_FULL;
+			break;
+
+		case ENOMEM:			/* Out of memory */
+			edata->sqlerrcode = ERRCODE_OUT_OF_MEMORY;
 			break;
 
 		case ENFILE:			/* File table overflow */
@@ -1983,6 +1981,14 @@ EmitErrorReport(void)
 		cdb_tidy_message(edata);
 
 	/*
+	 * Reset the formatted timestamp fields before emitting any logs.  This
+	 * includes all the log destinations and emit_log_hook, as the latter
+	 * could use log_line_prefix or the formatted timestamps.
+	 */
+	saved_timeval_set = false;
+	formatted_log_time[0] = '\0';
+
+	/*
 	 * Call hook before sending message to log.  The hook function is allowed
 	 * to turn off edata->output_to_server, so we must recheck that afterward.
 	 * Making any other change in the content of edata is not considered
@@ -2041,7 +2047,21 @@ CopyErrorData(void)
 	newedata = (ErrorData *) palloc(sizeof(ErrorData));
 	memcpy(newedata, edata, sizeof(ErrorData));
 
-	/* Make copies of separately-allocated fields */
+	/*
+	 * Make copies of separately-allocated strings.  Note that we copy even
+	 * theoretically-constant strings such as filename.  This is because those
+	 * could point into JIT-created code segments that might get unloaded at
+	 * transaction cleanup.  In some cases we need the copied ErrorData to
+	 * survive transaction boundaries, so we'd better copy those strings too.
+	 */
+	if (newedata->filename)
+		newedata->filename = pstrdup(newedata->filename);
+	if (newedata->funcname)
+		newedata->funcname = pstrdup(newedata->funcname);
+	if (newedata->domain)
+		newedata->domain = pstrdup(newedata->domain);
+	if (newedata->context_domain)
+		newedata->context_domain = pstrdup(newedata->context_domain);
 	if (newedata->message)
 		newedata->message = pstrdup(newedata->message);
 	if (newedata->detail)
@@ -2054,6 +2074,8 @@ CopyErrorData(void)
 		newedata->context = pstrdup(newedata->context);
 	if (newedata->backtrace)
 		newedata->backtrace = pstrdup(newedata->backtrace);
+	if (newedata->message_id)
+		newedata->message_id = pstrdup(newedata->message_id);
 	if (newedata->schema_name)
 		newedata->schema_name = pstrdup(newedata->schema_name);
 	if (newedata->table_name)
@@ -2140,7 +2162,7 @@ FlushErrorState(void)
 	errordata_stack_depth = -1;
 	recursion_depth = 0;
 	/* Delete all data in ErrorContext */
-	MemoryContextResetAndDeleteChildren(ErrorContext);
+	MemoryContextReset(ErrorContext);
 }
 
 /*
@@ -2627,7 +2649,7 @@ check_backtrace_functions(char **newval, void **extra, GucSource source)
 					  ", \n\t");
 	if (validlen != newvallen)
 	{
-		GUC_check_errdetail("invalid character");
+		GUC_check_errdetail("Invalid character");
 		return false;
 	}
 
@@ -2669,7 +2691,7 @@ check_backtrace_functions(char **newval, void **extra, GucSource source)
 void
 assign_backtrace_functions(const char *newval, void *extra)
 {
-	backtrace_symbol_list = (char *) extra;
+	backtrace_function_list = (char *) extra;
 }
 
 /*
@@ -3211,7 +3233,7 @@ get_formatted_log_time(void)
 	/*
 	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
 	 * least with a minimal GMT value) before Log_line_prefix can become
-	 * nonempty or CSV mode can be selected.
+	 * nonempty or CSV/JSON mode can be selected.
 	 */
 	pg_strftime(formatted_log_time, FORMATTED_TS_LEN,
 	/* leave room for microseconds... */
@@ -3252,7 +3274,7 @@ get_formatted_start_time(void)
 	/*
 	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
 	 * least with a minimal GMT value) before Log_line_prefix can become
-	 * nonempty or CSV mode can be selected.
+	 * nonempty or CSV/JSON mode can be selected.
 	 */
 	pg_strftime(formatted_start_time, FORMATTED_TS_LEN,
 				"%Y-%m-%d %H:%M:%S %Z",
@@ -3654,18 +3676,18 @@ log_status_format(StringInfo buf, const char *format, ErrorData *edata)
 				break;
 			case 'v':
 				/* keep VXID format in sync with lockfuncs.c */
-				if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
+				if (MyProc != NULL && MyProc->vxid.procNumber != INVALID_PROC_NUMBER)
 				{
 					if (padding != 0)
 					{
 						char		strfbuf[128];
 
 						snprintf(strfbuf, sizeof(strfbuf) - 1, "%d/%u",
-								 MyProc->backendId, MyProc->lxid);
+								 MyProc->vxid.procNumber, MyProc->vxid.lxid);
 						appendStringInfo(buf, "%*s", padding, strfbuf);
 					}
 					else
-						appendStringInfo(buf, "%d/%u", MyProc->backendId, MyProc->lxid);
+						appendStringInfo(buf, "%d/%u", MyProc->vxid.procNumber, MyProc->vxid.lxid);
 				}
 				else if (padding != 0)
 					appendStringInfoSpaces(buf,
@@ -4522,9 +4544,6 @@ send_message_to_server_log(ErrorData *edata)
 	/* Format message prefix. */
 	initStringInfo(&buf);
 
-	saved_timeval_set = false;
-	formatted_log_time[0] = '\0';
-
 	log_line_prefix(&buf, edata);
 	nc = buf.len;
 	appendStringInfo(&buf, "%s:  ", _(error_severity(edata->elevel)));
@@ -4915,7 +4934,10 @@ send_message_to_frontend(ErrorData *edata)
 		char		tbuf[12];
 
 		/* 'N' (Notice) is for nonfatal conditions, 'E' is for errors */
-		pq_beginmessage(&msgbuf, (edata->elevel < ERROR) ? 'N' : 'E');
+		if (edata->elevel < ERROR)
+			pq_beginmessage(&msgbuf, PqMsg_NoticeResponse);
+		else
+			pq_beginmessage(&msgbuf, PqMsg_ErrorResponse);
 
 		sev = error_severity(edata->elevel);
 		pq_sendbyte(&msgbuf, PG_DIAG_SEVERITY);

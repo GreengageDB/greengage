@@ -12,7 +12,7 @@
  * the metapage.  When the revmap needs to be expanded, all tuples on the
  * regular BRIN page at that block (if any) are moved out of the way.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -29,7 +29,6 @@
 #include "access/xloginsert.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
-#include "storage/lmgr.h"
 #include "utils/rel.h"
 
 
@@ -61,8 +60,7 @@ static BlockNumber revmap_physical_extend(BrinRevmap *revmap);
  * brinRevmapTerminate when caller is done with it.
  */
 BrinRevmap *
-brinRevmapInitialize(Relation idxrel, BlockNumber *pagesPerRange,
-					 Snapshot snapshot)
+brinRevmapInitialize(Relation idxrel, BlockNumber *pagesPerRange)
 {
 	BrinRevmap *revmap;
 	Buffer		meta;
@@ -72,7 +70,6 @@ brinRevmapInitialize(Relation idxrel, BlockNumber *pagesPerRange,
 	meta = ReadBuffer(idxrel, BRIN_METAPAGE_BLKNO);
 	LockBuffer(meta, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(meta);
-	TestForOldSnapshot(snapshot, idxrel, page);
 	metadata = (BrinMetaPageData *) PageGetContents(page);
 
 	revmap = palloc(sizeof(BrinRevmap));
@@ -192,8 +189,7 @@ brinSetHeapBlockItemptr(Buffer buf, BlockNumber pagesPerRange,
  */
 BrinTuple *
 brinGetTupleForHeapBlock(BrinRevmap *revmap, BlockNumber heapBlk,
-						 Buffer *buf, OffsetNumber *off, Size *size, int mode,
-						 Snapshot snapshot)
+						 Buffer *buf, OffsetNumber *off, Size *size, int mode)
 {
 	Relation	idxRel = revmap->rm_irel;
 	BlockNumber mapBlk;
@@ -274,7 +270,6 @@ brinGetTupleForHeapBlock(BrinRevmap *revmap, BlockNumber heapBlk,
 		}
 		LockBuffer(*buf, mode);
 		page = BufferGetPage(*buf);
-		TestForOldSnapshot(snapshot, idxRel, page);
 
 		/* If we land on a revmap page, start over */
 		if (BRIN_IS_REGULAR_PAGE(page))
@@ -338,7 +333,7 @@ brinRevmapDesummarizeRange(Relation idxrel, BlockNumber heapBlk)
 	OffsetNumber regOffset;
 	ItemId		lp;
 
-	revmap = brinRevmapInitialize(idxrel, &pagesPerRange, NULL);
+	revmap = brinRevmapInitialize(idxrel, &pagesPerRange);
 
 	revmapBlk = revmap_get_blkno(revmap, heapBlk);
 	if (!BlockNumberIsValid(revmapBlk))
@@ -368,11 +363,6 @@ brinRevmapDesummarizeRange(Relation idxrel, BlockNumber heapBlk)
 	regBuf = ReadBuffer(idxrel, ItemPointerGetBlockNumber(iptr));
 	LockBuffer(regBuf, BUFFER_LOCK_EXCLUSIVE);
 	regPg = BufferGetPage(regBuf);
-
-	/*
-	 * We're only removing data, not reading it, so there's no need to
-	 * TestForOldSnapshot here.
-	 */
 
 	/* if this is no longer a regular page, tell caller to start over */
 	if (!BRIN_IS_REGULAR_PAGE(regPg))
@@ -669,7 +659,7 @@ revmap_physical_extend(BrinRevmap *revmap)
 	}
 	else
 	{
-		buf = ExtendBufferedRel(EB_REL(irel), MAIN_FORKNUM, NULL,
+		buf = ExtendBufferedRel(BMR_REL(irel), MAIN_FORKNUM, NULL,
 								EB_LOCK_FIRST);
 		if (BufferGetBlockNumber(buf) != mapBlk)
 		{

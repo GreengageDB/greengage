@@ -56,6 +56,6 @@ extern bool RemoveGpPartitionTemplate(Oid relid, int32 level);
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 8023, GpPartitionTemplateRelidLevelIndexId, on gp_partition_template using btree(relid oid_ops, level int2_ops));
+DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 8023, GpPartitionTemplateRelidLevelIndexId, gp_partition_template, btree(relid oid_ops, level int2_ops));
 
 #endif							/* GP_PARTITION_TEMPLATE_H */

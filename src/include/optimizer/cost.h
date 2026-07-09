@@ -49,7 +49,7 @@ typedef enum
 {
 	CONSTRAINT_EXCLUSION_OFF,	/* do not use c_e */
 	CONSTRAINT_EXCLUSION_ON,	/* apply c_e to all rels */
-	CONSTRAINT_EXCLUSION_PARTITION	/* apply c_e to otherrels only */
+	CONSTRAINT_EXCLUSION_PARTITION, /* apply c_e to otherrels only */
 }			ConstraintExclusionType;
 
 
@@ -177,7 +177,7 @@ extern void cost_agg(Path *path, PlannerInfo *root,
 					 Cost input_startup_cost, Cost input_total_cost,
 					 double input_tuples, double input_width);
 extern void cost_windowagg(Path *path, PlannerInfo *root,
-						   List *windowFuncs, int numPartCols, int numOrderCols,
+						   List *windowFuncs, WindowClause *winclause,
 						   Cost input_startup_cost, Cost input_total_cost,
 						   double input_tuples);
 extern void cost_group(Path *path, PlannerInfo *root,
@@ -260,7 +260,8 @@ extern void set_result_size_estimates(PlannerInfo *root, RelOptInfo *rel);
 extern void set_foreign_size_estimates(PlannerInfo *root, RelOptInfo *rel);
 extern PathTarget *set_pathtarget_cost_width(PlannerInfo *root, PathTarget *target);
 extern double compute_bitmap_pages(PlannerInfo *root, RelOptInfo *baserel,
-								   Path *bitmapqual, int loop_count, Cost *cost, double *tuple);
+								   Path *bitmapqual, double loop_count,
+								   Cost *cost_p, double *tuples_p);
 
 extern int planner_segment_count(GpPolicy *policy);
 extern double global_work_mem(void);

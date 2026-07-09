@@ -3,7 +3,7 @@
  * datetime.c
  *	  Support functions for date/time types.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -20,7 +20,6 @@
 
 #include "access/htup_details.h"
 #include "access/xact.h"
-#include "catalog/pg_type.h"
 #include "common/int.h"
 #include "common/string.h"
 #include "funcapi.h"
@@ -32,7 +31,6 @@
 #include "utils/guc.h"
 #include "utils/datetime.h"
 #include "utils/guc.h"
-#include "utils/memutils.h"
 #include "utils/tzparser.h"
 
 /*
@@ -2014,6 +2012,17 @@ DecodeTimeOnly(char **field, int *ftype, int nf,
 				break;
 
 			case DTK_TIME:
+
+				/*
+				 * This might be an ISO time following a "t" field.
+				 */
+				if (ptype != 0)
+				{
+					if (ptype != DTK_TIME)
+						return DTERR_BAD_FORMAT;
+					ptype = 0;
+				}
+
 				dterr = DecodeTime(field[i], (fmask | DTK_DATE_M),
 								   INTERVAL_FULL_RANGE,
 								   &tmask, tm, fsec);
@@ -3292,6 +3301,82 @@ DecodeTimezoneNameToTz(const char *tzname)
 	return result;
 }
 
+/* DecodeTimezoneAbbrevPrefix()
+ * Interpret prefix of string as a timezone abbreviation, if possible.
+ *
+ * This has roughly the same functionality as DecodeTimezoneAbbrev(),
+ * but the API is adapted to the needs of formatting.c.  Notably,
+ * we will match the longest possible prefix of the given string
+ * rather than insisting on a complete match, and downcasing is applied
+ * here rather than in the caller.
+ *
+ * Returns the length of the timezone abbreviation, or -1 if not recognized.
+ * On success, sets *offset to the GMT offset for the abbreviation if it
+ * is a fixed-offset abbreviation, or sets *tz to the pg_tz struct for
+ * a dynamic abbreviation.
+ */
+int
+DecodeTimezoneAbbrevPrefix(const char *str, int *offset, pg_tz **tz)
+{
+	char		lowtoken[TOKMAXLEN + 1];
+	int			len;
+
+	*offset = 0;				/* avoid uninitialized vars on failure */
+	*tz = NULL;
+
+	if (!zoneabbrevtbl)
+		return -1;				/* no abbrevs known, so fail immediately */
+
+	/* Downcase as much of the string as we could need */
+	for (len = 0; len < TOKMAXLEN; len++)
+	{
+		if (*str == '\0' || !isalpha((unsigned char) *str))
+			break;
+		lowtoken[len] = pg_tolower((unsigned char) *str++);
+	}
+	lowtoken[len] = '\0';
+
+	/*
+	 * We could avoid doing repeated binary searches if we cared to duplicate
+	 * datebsearch here, but it's not clear that such an optimization would be
+	 * worth the trouble.  In common cases there's probably not anything after
+	 * the zone abbrev anyway.  So just search with successively truncated
+	 * strings.
+	 */
+	while (len > 0)
+	{
+		const datetkn *tp = datebsearch(lowtoken, zoneabbrevtbl->abbrevs,
+										zoneabbrevtbl->numabbrevs);
+
+		if (tp != NULL)
+		{
+			if (tp->type == DYNTZ)
+			{
+				DateTimeErrorExtra extra;
+				pg_tz	   *tzp = FetchDynamicTimeZone(zoneabbrevtbl, tp,
+													   &extra);
+
+				if (tzp != NULL)
+				{
+					/* Caller must resolve the abbrev's current meaning */
+					*tz = tzp;
+					return len;
+				}
+			}
+			else
+			{
+				/* Fixed-offset zone abbrev, so it's easy */
+				*offset = tp->value;
+				return len;
+			}
+		}
+		lowtoken[--len] = '\0';
+	}
+
+	/* Did not find a match */
+	return -1;
+}
+
 
 /* ClearPgItmIn
  *
@@ -3317,6 +3402,9 @@ ClearPgItmIn(struct pg_itm_in *itm_in)
  *
  * Allow ISO-style time span, with implicit units on number of days
  *	preceding an hh:mm:ss field. - thomas 1998-04-30
+ *
+ * itm_in remains undefined for infinite interval values for which dtype alone
+ * suffices.
  */
 int
 DecodeInterval(char **field, int *ftype, int nf, int range,
@@ -3324,6 +3412,7 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 {
 	bool		force_negative = false;
 	bool		is_before = false;
+	bool		parsing_unit_val = false;
 	char	   *cp;
 	int			fmask = 0,
 				tmask,
@@ -3382,6 +3471,7 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 					itm_in->tm_usec > 0)
 					itm_in->tm_usec = -itm_in->tm_usec;
 				type = DTK_DAY;
+				parsing_unit_val = false;
 				break;
 
 			case DTK_TZ:
@@ -3419,6 +3509,7 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 					 * are reading right to left.
 					 */
 					type = DTK_DAY;
+					parsing_unit_val = false;
 					break;
 				}
 
@@ -3608,11 +3699,17 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 					default:
 						return DTERR_BAD_FORMAT;
 				}
+				parsing_unit_val = false;
 				break;
 
 			case DTK_STRING:
 			case DTK_SPECIAL:
+				/* reject consecutive unhandled units */
+				if (parsing_unit_val)
+					return DTERR_BAD_FORMAT;
 				type = DecodeUnits(i, field[i], &uval);
+				if (type == UNKNOWN_FIELD)
+					type = DecodeSpecial(i, field[i], &uval);
 				if (type == IGNORE_DTF)
 					continue;
 
@@ -3621,15 +3718,39 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 				{
 					case UNITS:
 						type = uval;
+						parsing_unit_val = true;
 						break;
 
 					case AGO:
+
+						/*
+						 * "ago" is only allowed to appear at the end of the
+						 * interval.
+						 */
+						if (i != nf - 1)
+							return DTERR_BAD_FORMAT;
 						is_before = true;
 						type = uval;
 						break;
 
 					case RESERV:
 						tmask = (DTK_DATE_M | DTK_TIME_M);
+
+						/*
+						 * Only reserved words corresponding to infinite
+						 * intervals are accepted.
+						 */
+						if (uval != DTK_LATE && uval != DTK_EARLY)
+							return DTERR_BAD_FORMAT;
+
+						/*
+						 * Infinity cannot be followed by anything else. We
+						 * could allow "ago" to reverse the sign of infinity
+						 * but using signed infinity is more intuitive.
+						 */
+						if (i != nf - 1)
+							return DTERR_BAD_FORMAT;
+
 						*dtype = uval;
 						break;
 
@@ -3649,6 +3770,10 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 
 	/* ensure that at least one time field has been found */
 	if (fmask == 0)
+		return DTERR_BAD_FORMAT;
+
+	/* reject if unit appeared and was never handled */
+	if (parsing_unit_val)
 		return DTERR_BAD_FORMAT;
 
 	/* finally, AGO negates everything */

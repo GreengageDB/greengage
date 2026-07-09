@@ -3,7 +3,7 @@
  * pg_foreign_table.h
  *	  definition of the "foreign table" system catalog (pg_foreign_table)
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_foreign_table.h
@@ -43,6 +43,8 @@ CATALOG(pg_foreign_table,3118,ForeignTableRelationId)
 typedef FormData_pg_foreign_table *Form_pg_foreign_table;
 
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_foreign_table_relid_index, 3119, ForeignTableRelidIndexId, on pg_foreign_table using btree(ftrelid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_foreign_table_relid_index, 3119, ForeignTableRelidIndexId, pg_foreign_table, btree(ftrelid oid_ops));
+
+MAKE_SYSCACHE(FOREIGNTABLEREL, pg_foreign_table_relid_index, 4);
 
 #endif							/* PG_FOREIGN_TABLE_H */

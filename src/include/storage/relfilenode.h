@@ -15,7 +15,7 @@
 #define RELFILENODE_H
 
 #include "common/relpath.h"
-#include "storage/backendid.h"
+#include "storage/procnumber.h"
 #include "storage/relfilelocator.h"
 
 /*
@@ -64,7 +64,7 @@ typedef struct RelFileNode
 
 /*
  * Augmenting a relfilenode with the backend ID provides all the information
- * we need to locate the physical storage.  The backend ID is InvalidBackendId
+ * we need to locate the physical storage.  The backend ID is INVALID_PROC_NUMBER
  * for regular relations (those accessible to more than one backend), or the
  * owning backend's ID for backend-local relations.  Backend-local relations
  * are always transient and removed in case of a database crash; they are
@@ -73,11 +73,11 @@ typedef struct RelFileNode
 typedef struct RelFileNodeBackend
 {
 	RelFileNode node;
-	BackendId	backend;
+	ProcNumber	backend;
 } RelFileNodeBackend;
 
 #define RelFileNodeBackendIsTemp(rnode) \
-	((rnode).backend != InvalidBackendId)
+	((rnode).backend != INVALID_PROC_NUMBER)
 
 /*
  * Note: RelFileNodeEquals and RelFileNodeBackendEquals compare relNode first

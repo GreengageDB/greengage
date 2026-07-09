@@ -29,7 +29,6 @@
 #include "optimizer/clauses.h"
 #include "utils/lsyscache.h"
 #include "miscadmin.h"
-#include "utils/memutils.h"
 
 extern bool Test_print_prefetch_joinqual;
 
@@ -607,16 +606,6 @@ ExecEndNestLoop(NestLoopState *node)
 {
 	NL1_printf("ExecEndNestLoop: %s\n",
 			   "ending node processing");
-
-	/*
-	 * Free the exprcontext
-	 */
-	ExecFreeExprContext(&node->js.ps);
-
-	/*
-	 * clean out the tuple table
-	 */
-	ExecClearTuple(node->js.ps.ps_ResultTupleSlot);
 
 	/*
 	 * close down subplans

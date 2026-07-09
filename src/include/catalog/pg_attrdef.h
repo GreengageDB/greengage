@@ -4,7 +4,7 @@
  *	  definition of the "attribute defaults" system catalog (pg_attrdef)
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_attrdef.h
@@ -52,8 +52,8 @@ FOREIGN_KEY(adrelid REFERENCES pg_attribute(attrelid));
 typedef FormData_pg_attrdef *Form_pg_attrdef;
 
 
-DECLARE_UNIQUE_INDEX(pg_attrdef_adrelid_adnum_index, 2656, AttrDefaultIndexId, on pg_attrdef using btree(adrelid oid_ops, adnum int2_ops));
-DECLARE_UNIQUE_INDEX_PKEY(pg_attrdef_oid_index, 2657, AttrDefaultOidIndexId, on pg_attrdef using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_attrdef_adrelid_adnum_index, 2656, AttrDefaultIndexId, pg_attrdef, btree(adrelid oid_ops, adnum int2_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_attrdef_oid_index, 2657, AttrDefaultOidIndexId, pg_attrdef, btree(oid oid_ops));
 
 
 

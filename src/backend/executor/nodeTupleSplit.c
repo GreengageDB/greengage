@@ -260,13 +260,6 @@ void ExecEndTupleSplit(TupleSplitState *node)
 
 	pfree(node->isnull_orig);
 
-	/*
-	 * We don't actually free any ExprContexts here (see comment in
-	 * ExecFreeExprContext), just unlink the output one from the plan node
-	 * suffices.
-	 */
-	ExecFreeExprContext(&node->ss.ps);
-
 	/* clean up tuple table */
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
 

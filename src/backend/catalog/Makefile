@@ -2,7 +2,7 @@
 #
 # Makefile for backend/catalog
 #
-# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/backend/catalog/Makefile
@@ -62,10 +62,12 @@ CATALOG_JSON:= $(addprefix $(top_srcdir)/gpMgmt/bin/gppylib/data/, $(addsuffix .
 
 include $(top_srcdir)/src/backend/common.mk
 
-# Note: the order of this list determines the order in which the catalog
-# header files are assembled into postgres.bki.  BKI_BOOTSTRAP catalogs
-# must appear first, and there are reputedly other, undocumented ordering
-# dependencies.
+# GPDB: the genbki-driving header/data lists and the bki-stamp/header-stamp
+# machinery moved to src/include/catalog/Makefile in PG17 (upstream 6ab2e8385d5).
+# We keep the GPDB catalog header list here ONLY to feed the GPDB-specific
+# catalog_json generation target below (invoked by
+# gpMgmt/bin/gppylib/data/Makefile); the GPDB catalog headers themselves must
+# also be registered in src/include/catalog/Makefile so genbki emits them.
 CATALOG_HEADERS := \
 	pg_proc.h pg_type.h pg_attribute.h pg_class.h \
 	pg_attrdef.h pg_constraint.h pg_inherits.h pg_index.h pg_operator.h \
@@ -99,74 +101,20 @@ CATALOG_HEADERS := \
 	pg_publication_rel.h pg_subscription.h pg_subscription_rel.h \
 	gp_partition_template.h
 
-GENERATED_HEADERS := $(CATALOG_HEADERS:%.h=%_d.h) schemapg.h system_fk_info.h
-
-# In the list of headers used to assemble postgres.bki, indexing.h needs
-# be last, and toasting.h just before it.  This ensures we don't try to
-# create indexes or toast tables before their catalogs exist.
+# In the list of headers, indexing.h needs to be last, and toasting.h just
+# before it.  This ensures we don't try to create indexes or toast tables
+# before their catalogs exist.
 POSTGRES_BKI_SRCS := $(addprefix $(top_srcdir)/src/include/catalog/,\
 	$(CATALOG_HEADERS) toasting.h indexing.h \
 	)
-
-# The .dat files we need can just be listed alphabetically.
-POSTGRES_BKI_DATA = $(addprefix $(top_srcdir)/src/include/catalog/,\
-	pg_aggregate.dat pg_am.dat pg_amop.dat pg_amproc.dat pg_authid.dat \
-	pg_cast.dat pg_class.dat pg_collation.dat pg_conversion.dat \
-	pg_database.dat pg_language.dat \
-	pg_namespace.dat pg_opclass.dat pg_operator.dat pg_opfamily.dat \
-	pg_proc.dat pg_range.dat pg_tablespace.dat \
-	pg_ts_config.dat pg_ts_config_map.dat pg_ts_dict.dat pg_ts_parser.dat \
-	pg_ts_template.dat pg_type.dat \
-	)
-
-POSTGRES_BKI_DATA += $(addprefix $(top_srcdir)/src/include/catalog/,\
-	pg_compression.dat \
-	pg_resgroup.dat pg_resgroupcapability.dat \
-	) \
-	$(top_builddir)/src/include/catalog/gp_version_at_initdb.dat
-
-
-all: distprep generated-header-symlinks
-
-distprep: bki-stamp
-
-.PHONY: generated-header-symlinks
 
 catalog_json: $(CATALOG_JSON)
 
 $(CATALOG_JSON): process_foreign_keys.pl $(POSTGRES_BKI_SRCS) $(top_srcdir)/src/include/catalog/catversion.h
 	cat $(POSTGRES_BKI_SRCS) $(top_srcdir)/src/include/catalog/catversion.h | $(PERL) process_foreign_keys.pl > $@
 
-generated-header-symlinks: $(top_builddir)/src/include/catalog/header-stamp
-
-# bki-stamp records the last time we ran genbki.pl.  We don't rely on
-# the timestamps of the individual output files, because the Perl script
-# won't update them if they didn't change (to avoid unnecessary recompiles).
-# Technically, this should depend on Makefile.global which supplies
-# $(MAJORVERSION); but then genbki.pl would need to be re-run after every
-# configure run, even in distribution tarballs.  So depending on configure.ac
-# instead is cheating a bit, but it will achieve the goal of updating the
-# version number when it changes.
-bki-stamp: genbki.pl Catalog.pm $(POSTGRES_BKI_SRCS) $(POSTGRES_BKI_DATA) $(top_srcdir)/configure.ac $(top_srcdir)/src/include/access/transam.h
-	$(PERL) $< --include-path=$(top_srcdir)/src/include/ \
-		--set-version=$(PG_MAJORVERSION) $(POSTGRES_BKI_SRCS)
-	touch $@
-
-# The generated headers must all be symlinked into builddir/src/include/,
-# using absolute links for the reasons explained in src/backend/Makefile.
-# We use header-stamp to record that we've done this because the symlinks
-# themselves may appear older than bki-stamp.
-$(top_builddir)/src/include/catalog/header-stamp: bki-stamp
-	prereqdir=`cd '$(dir $<)' >/dev/null && pwd` && \
-	cd '$(dir $@)' && for file in $(GENERATED_HEADERS); do \
-	  rm -f $$file && $(LN_S) "$$prereqdir/$$file" . ; \
-	done
-	touch $@
-
-# Note: installation of generated headers is handled elsewhere
 .PHONY: install-data
-install-data: bki-stamp installdirs
-	$(INSTALL_DATA) $(call vpathsearch,postgres.bki) '$(DESTDIR)$(datadir)/postgres.bki'
+install-data: installdirs
 	$(INSTALL_DATA) $(srcdir)/system_functions.sql '$(DESTDIR)$(datadir)/system_functions.sql'
 	$(INSTALL_DATA) $(srcdir)/system_views.sql '$(DESTDIR)$(datadir)/system_views.sql'
 	$(INSTALL_DATA) $(srcdir)/information_schema.sql '$(DESTDIR)$(datadir)/information_schema.sql'
@@ -180,11 +128,4 @@ installdirs:
 
 .PHONY: uninstall-data
 uninstall-data:
-	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_functions.sql system_views.sql information_schema.sql cdb_init.d/cdb_schema.sql sql_features.txt)
-
-# postgres.bki and the generated headers are in the distribution tarball,
-# so they are not cleaned here.
-clean:
-
-maintainer-clean: clean
-	rm -f bki-stamp postgres.bki $(GENERATED_HEADERS)
+	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, system_functions.sql system_views.sql information_schema.sql cdb_init.d/cdb_schema.sql sql_features.txt)

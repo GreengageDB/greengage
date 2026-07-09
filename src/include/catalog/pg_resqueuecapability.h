@@ -50,7 +50,7 @@ typedef FormData_pg_resqueuecapability *Form_pg_resqueuecapability;
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, ResQueueCapabilityResqueueidIndexId, on pg_resqueuecapability using btree(resqueueid oid_ops));
-DECLARE_INDEX(pg_resqueuecapability_restypid_index, 6443, ResQueueCapabilityRestypidIndexId, on pg_resqueuecapability using btree(restypid int2_ops));
+DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, ResQueueCapabilityResqueueidIndexId, pg_resqueuecapability, btree(resqueueid oid_ops));
+DECLARE_INDEX(pg_resqueuecapability_restypid_index, 6443, ResQueueCapabilityRestypidIndexId, pg_resqueuecapability, btree(restypid int2_ops));
 
 #endif   /* PG_RESQUEUECAPABILITY_H */

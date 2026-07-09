@@ -903,8 +903,6 @@ ExecEndMotion(MotionState *node)
 	double		motionTimeSec;
 #endif
 
-	ExecFreeExprContext(&node->ps);
-
 	/*
 	 * clean out the tuple table
 	 */

@@ -43,6 +43,6 @@ typedef FormData_pg_type_encoding *Form_pg_type_encoding;
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(pg_type_encoding_typid_index, 7038, TypeEncodingTypidIndexId, on pg_type_encoding using btree(typid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_type_encoding_typid_index, 7038, TypeEncodingTypidIndexId, pg_type_encoding, btree(typid oid_ops));
 
 #endif   /* PG_TYPE_ENCODING_H */

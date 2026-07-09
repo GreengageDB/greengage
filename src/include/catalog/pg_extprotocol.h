@@ -82,7 +82,9 @@ ExtProtocolGetNameByOid(Oid	protOid);
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(pg_extprotocol_oid_index, 7156, ExtprotocolOidIndexId, on pg_extprotocol using btree(oid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, ExtprotocolPtcnameIndexId, on pg_extprotocol using btree(ptcname name_ops));
+DECLARE_UNIQUE_INDEX(pg_extprotocol_oid_index, 7156, ExtprotocolOidIndexId, pg_extprotocol, btree(oid oid_ops));
+MAKE_SYSCACHE(EXTPROTOCOLOID, pg_extprotocol_oid_index, 128);
+DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, ExtprotocolPtcnameIndexId, pg_extprotocol, btree(ptcname name_ops));
+MAKE_SYSCACHE(EXTPROTOCOLNAME, pg_extprotocol_ptcname_index, 128);
 
 #endif /* PG_EXTPROTOCOL_H */

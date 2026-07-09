@@ -4,7 +4,7 @@
  *	  definition of the "language" system catalog (pg_language)
  *
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_language.h
@@ -70,7 +70,10 @@ FOREIGN_KEY(lanowner REFERENCES pg_authid(oid));
 typedef FormData_pg_language *Form_pg_language;
 
 
-DECLARE_UNIQUE_INDEX(pg_language_name_index, 2681, LanguageNameIndexId, on pg_language using btree(lanname name_ops));
-DECLARE_UNIQUE_INDEX_PKEY(pg_language_oid_index, 2682, LanguageOidIndexId, on pg_language using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_language_name_index, 2681, LanguageNameIndexId, pg_language, btree(lanname name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_language_oid_index, 2682, LanguageOidIndexId, pg_language, btree(oid oid_ops));
+
+MAKE_SYSCACHE(LANGNAME, pg_language_name_index, 4);
+MAKE_SYSCACHE(LANGOID, pg_language_oid_index, 4);
 
 #endif							/* PG_LANGUAGE_H */

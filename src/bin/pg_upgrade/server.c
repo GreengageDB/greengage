@@ -3,7 +3,7 @@
  *
  *	database server functions
  *
- *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2024, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/server.c
  */
 
@@ -208,6 +208,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	PGconn	   *conn;
 	bool		pg_ctl_return = false;
 	char		socket_string[MAXPGPATH + 200];
+	PQExpBufferData pgoptions;
 
 	static bool exit_hook_registered = false;
 
@@ -235,39 +236,65 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 				 cluster->sockdir);
 #endif
 
+	initPQExpBuffer(&pgoptions);
+
 	/*
-	 * Use -b to disable autovacuum.
+	 * Construct a parameter string which is passed to the server process.
 	 *
 	 * Turn off durability requirements to improve object creation speed, and
 	 * we only modify the new cluster, so only use it there.  If there is a
 	 * crash, the new cluster has to be recreated anyway.  fsync=off is a big
 	 * win on ext4.
 	 */
-	char *version_opts = "";
-	if (GET_MAJOR_VERSION(cluster->major_version) >= 904)
-		version_opts = "-c synchronous_standby_names='' --xid_warn_limit=10000000";
-	else
-	{
-		if (is_greenplum_dispatcher_mode())
-			version_opts =
-				"-c gp_dbid=1 -c gp_contentid=-1 -c gp_num_contents_in_cluster=1";
-		else
-			version_opts =
-				"-c gp_dbid=1 -c gp_contentid=0 -c gp_num_contents_in_cluster=1";
-	}
+	if (cluster == &new_cluster)
+		appendPQExpBufferStr(&pgoptions, " -c synchronous_commit=off -c fsync=off -c full_page_writes=off");
 
+	/*
+	 * Use max_slot_wal_keep_size as -1 to prevent the WAL removal by the
+	 * checkpointer process.  If WALs required by logical replication slots
+	 * are removed, the slots are unusable.  This setting prevents the
+	 * invalidation of slots during the upgrade. We set this option when
+	 * cluster is PG17 or later because logical replication slots can only be
+	 * migrated since then. Besides, max_slot_wal_keep_size is added in PG13.
+	 */
+	if (GET_MAJOR_VERSION(cluster->major_version) >= 1700)
+		appendPQExpBufferStr(&pgoptions, " -c max_slot_wal_keep_size=-1");
+
+	/*
+	 * GPDB: version-specific server options.  Newer Greenplum clusters need
+	 * synchronous_standby_names cleared and a relaxed xid warn limit; very old
+	 * source clusters instead need the gp_dbid/gp_contentid identity GUCs.
+	 */
+	if (GET_MAJOR_VERSION(cluster->major_version) >= 904)
+		appendPQExpBufferStr(&pgoptions, " -c synchronous_standby_names='' --xid_warn_limit=10000000");
+	else if (is_greenplum_dispatcher_mode())
+		appendPQExpBufferStr(&pgoptions, " -c gp_dbid=1 -c gp_contentid=-1 -c gp_num_contents_in_cluster=1");
+	else
+		appendPQExpBufferStr(&pgoptions, " -c gp_dbid=1 -c gp_contentid=0 -c gp_num_contents_in_cluster=1");
+
+	/* GPDB: run the utility-mode server in the correct role */
+	appendPQExpBuffer(&pgoptions, " -c %s",
+					  (GET_MAJOR_VERSION(cluster->major_version) < 1200) ?
+					  "gp_session_role=utility" : "gp_role=utility");
+
+	/*
+	 * Use -b to disable autovacuum and logical replication launcher (effective
+	 * in PG17 or later for the latter), but only for catalog versions new
+	 * enough to understand the binary-upgrade flag; older Greenplum source
+	 * clusters instead need autovacuum disabled the old way.
+	 */
 	snprintf(cmd, sizeof(cmd),
-			 "\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d -c %s %s%s %s%s %s\" start",
-			 cluster->bindir, log_opts.logdir, SERVER_LOG_FILE, cluster->pgconfig, cluster->port,
-			 (GET_MAJOR_VERSION(cluster->major_version) < 1200) ?
-			 "gp_session_role=utility" :
-			 "gp_role=utility",
-			 (cluster->controldata.cat_ver >=
-			  BINARY_UPGRADE_SERVER_FLAG_CAT_VER) ? " -b" :
+			 "\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d%s%s %s%s\" start",
+			 cluster->bindir,
+			 log_opts.logdir,
+			 SERVER_LOG_FILE, cluster->pgconfig, cluster->port,
+			 (cluster->controldata.cat_ver >= BINARY_UPGRADE_SERVER_FLAG_CAT_VER) ?
+			 " -b" :
 			 " -c autovacuum=off -c autovacuum_freeze_max_age=2000000000",
-			 (cluster == &new_cluster) ?
-			 " -c synchronous_commit=off -c fsync=off -c full_page_writes=off" : "",
-			 cluster->pgopts ? cluster->pgopts : "", socket_string, version_opts);
+			 pgoptions.data,
+			 cluster->pgopts ? cluster->pgopts : "", socket_string);
+
+	termPQExpBuffer(&pgoptions);
 
 	/*
 	 * Don't throw an error right away, let connecting throw the error because

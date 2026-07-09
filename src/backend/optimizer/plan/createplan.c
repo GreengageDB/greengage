@@ -34,6 +34,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/paramassign.h"
+#include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/placeholder.h"
 #include "optimizer/plancat.h"
@@ -349,7 +350,8 @@ static ModifyTable *make_modifytable(PlannerInfo *root, Plan *subplan,
 									 List *withCheckOptionLists, List *returningLists,
 									 List *is_split_updates,
 									 List *rowMarks, OnConflictExpr *onconflict,
-									 List *mergeActionLists, int epqParam);
+									 List *mergeActionLists, List *mergeJoinConditions,
+									 int epqParam);
 static GatherMerge *create_gather_merge_plan(PlannerInfo *root,
 											 GatherMergePath *best_path);
 
@@ -677,8 +679,27 @@ create_scan_plan(PlannerInfo *root, Path *best_path, int flags)
 	 * Detect whether we have any pseudoconstant quals to deal with.  Then, if
 	 * we'll need a gating Result node, it will be able to project, so there
 	 * are no requirements on the child's tlist.
+	 *
+	 * If this replaces a join, it must be a foreign scan or a custom scan,
+	 * and the FDW or the custom scan provider would have stored in the best
+	 * path the list of RestrictInfo nodes to apply to the join; check against
+	 * that list in that case.
 	 */
-	gating_clauses = get_gating_quals(root, scan_clauses);
+	if (IS_JOIN_REL(rel))
+	{
+		List	   *join_clauses;
+
+		Assert(best_path->pathtype == T_ForeignScan ||
+			   best_path->pathtype == T_CustomScan);
+		if (best_path->pathtype == T_ForeignScan)
+			join_clauses = ((ForeignPath *) best_path)->fdw_restrictinfo;
+		else
+			join_clauses = ((CustomPath *) best_path)->custom_restrictinfo;
+
+		gating_clauses = get_gating_quals(root, join_clauses);
+	}
+	else
+		gating_clauses = get_gating_quals(root, scan_clauses);
 	if (gating_clauses)
 		flags = 0;
 
@@ -2935,12 +2956,7 @@ create_windowagg_plan(PlannerInfo *root, WindowAggPath *best_path)
 
 	/*
 	 * Convert SortGroupClause lists into arrays of attr indexes and equality
-	 * operators, as wanted by executor.  (Note: in principle, it's possible
-	 * to drop some of the sort columns, if they were proved redundant by
-	 * pathkey logic.  However, it doesn't seem worth going out of our way to
-	 * optimize such cases.  In any case, we must *not* remove the ordering
-	 * column for RANGE OFFSET cases, as the executor needs that for in_range
-	 * tests even if it's known to be equal to some partitioning column.)
+	 * operators, as wanted by executor.
 	 */
 	partColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numPart);
 	partOperators = (Oid *) palloc(sizeof(Oid) * numPart);
@@ -3019,7 +3035,7 @@ create_windowagg_plan(PlannerInfo *root, WindowAggPath *best_path)
 						  wc->inRangeColl,
 						  wc->inRangeAsc,
 						  wc->inRangeNullsFirst,
-						  wc->runCondition,
+						  best_path->runCondition,
 						  best_path->qual,
 						  best_path->topwindow,
 						  subplan);
@@ -3176,6 +3192,7 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 							best_path->rowMarks,
 							best_path->onconflict,
 							best_path->mergeActionLists,
+							best_path->mergeJoinConditions,
 							best_path->epqParam);
 
 	copy_generic_path_info(&plan->plan, &best_path->path);
@@ -4464,13 +4481,22 @@ create_subqueryscan_plan(PlannerInfo *root, SubqueryScanPath *best_path,
 	/* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
-	/* Replace any outer-relation variables with nestloop params */
+	/*
+	 * Replace any outer-relation variables with nestloop params.
+	 *
+	 * We must provide nestloop params for both lateral references of the
+	 * subquery and outer vars in the scan_clauses.  It's better to assign the
+	 * former first, because that code path requires specific param IDs, while
+	 * replace_nestloop_params can adapt to the IDs assigned by
+	 * process_subquery_nestloop_params.  This avoids possibly duplicating
+	 * nestloop params when the same Var is needed for both reasons.
+	 */
 	if (best_path->path.param_info)
 	{
-		scan_clauses = (List *)
-			replace_nestloop_params(root, (Node *) scan_clauses);
 		process_subquery_nestloop_params(root,
 										 rel->subplan_params);
+		scan_clauses = (List *)
+			replace_nestloop_params(root, (Node *) scan_clauses);
 	}
 
 	scan_plan = make_subqueryscan(tlist,
@@ -5234,6 +5260,22 @@ create_nestloop_plan(PlannerInfo *root,
 										 joinrestrictclauses,
 										 best_path->jpath.innerjoinpath);
 #endif
+
+	/*
+	 * If the inner path is parameterized by the topmost parent of the outer
+	 * rel rather than the outer rel itself, fix that.  (Nothing happens here
+	 * if it is not so parameterized.)
+	 */
+	best_path->jpath.innerjoinpath =
+		reparameterize_path_by_child(root,
+									 best_path->jpath.innerjoinpath,
+									 best_path->jpath.outerjoinpath->parent);
+
+	/*
+	 * Failure here probably means that reparameterize_path_by_child() is not
+	 * in sync with path_is_reparameterizable_by_child().
+	 */
+	Assert(best_path->jpath.innerjoinpath != NULL);
 
 	/* NestLoop can project, so no need to be picky about child tlists */
 	outer_plan = create_plan_recurse(root, best_path->jpath.outerjoinpath, 0);
@@ -7796,6 +7838,8 @@ materialize_finished_plan(PlannerInfo *root, Plan *subplan)
 {
 	Plan	   *matplan;
 	Path		matpath;		/* dummy for result of cost_material */
+	Cost		initplan_cost;
+	bool		unsafe_initplans;
 
 	matplan = (Plan *) make_material(subplan);
 
@@ -7803,11 +7847,16 @@ materialize_finished_plan(PlannerInfo *root, Plan *subplan)
 	 * XXX horrid kluge: if there are any initPlans attached to the subplan,
 	 * move them up to the Material node, which is now effectively the top
 	 * plan node in its query level.  This prevents failure in
-	 * SS_finalize_plan(), which see for comments.  We don't bother adjusting
-	 * the subplan's cost estimate for this.
+	 * SS_finalize_plan(), which see for comments.
 	 */
 	matplan->initPlan = subplan->initPlan;
 	subplan->initPlan = NIL;
+
+	/* Move the initplans' cost delta, as well */
+	SS_compute_initplan_cost(matplan->initPlan,
+							 &initplan_cost, &unsafe_initplans);
+	subplan->startup_cost -= initplan_cost;
+	subplan->total_cost -= initplan_cost;
 
 	/* Set cost data */
 	cost_material(&matpath,
@@ -7815,8 +7864,8 @@ materialize_finished_plan(PlannerInfo *root, Plan *subplan)
 				  subplan->total_cost,
 				  subplan->plan_rows,
 				  subplan->plan_width);
-	matplan->startup_cost = matpath.startup_cost;
-	matplan->total_cost = matpath.total_cost;
+	matplan->startup_cost = matpath.startup_cost + initplan_cost;
+	matplan->total_cost = matpath.total_cost + initplan_cost;
 	matplan->plan_rows = subplan->plan_rows;
 	matplan->plan_width = subplan->plan_width;
 	matplan->parallel_aware = false;
@@ -8305,7 +8354,8 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 				 List *withCheckOptionLists, List *returningLists,
 				 List *is_split_updates,
 				 List *rowMarks, OnConflictExpr *onconflict,
-				 List *mergeActionLists, int epqParam)
+				 List *mergeActionLists, List *mergeJoinConditions,
+				 int epqParam)
 {
 	ModifyTable *node = makeNode(ModifyTable);
 	List	   *fdw_private_list;
@@ -8376,6 +8426,7 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 	node->returningLists = returningLists;
 	node->rowMarks = rowMarks;
 	node->mergeActionLists = mergeActionLists;
+	node->mergeJoinConditions = mergeJoinConditions;
 	node->epqParam = epqParam;
 
 	node->isSplitUpdates = is_split_updates;

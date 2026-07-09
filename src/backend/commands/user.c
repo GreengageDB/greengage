@@ -42,7 +42,6 @@
 #include "utils/date.h"
 #include "utils/fmgroids.h"
 #include "utils/syscache.h"
-#include "utils/timestamp.h"
 #include "utils/varlena.h"
 
 /*
@@ -68,7 +67,7 @@ typedef enum
 	RRG_REMOVE_ADMIN_OPTION,
 	RRG_REMOVE_INHERIT_OPTION,
 	RRG_REMOVE_SET_OPTION,
-	RRG_DELETE_GRANT
+	RRG_DELETE_GRANT,
 } RevokeRoleGrantAction;
 
 #include "catalog/oid_dispatch.h"
@@ -1190,7 +1189,7 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("permission denied to alter role"),
-					 errdetail("The bootstrap user must have the %s attribute.",
+					 errdetail("The bootstrap superuser must have the %s attribute.",
 							   "SUPERUSER")));
 
 		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(should_be_super);
@@ -1619,7 +1618,7 @@ DropRole(DropRoleStmt *stmt)
 	Relation	pg_authid_rel,
 				pg_auth_members_rel;
 	ListCell   *item;
-	List	   *role_addresses = NIL;
+	List	   *role_oids = NIL;
 
 	if (!have_createrole_privilege())
 		ereport(ERROR,
@@ -1645,7 +1644,6 @@ DropRole(DropRoleStmt *stmt)
 		ScanKeyData scankey;
 		SysScanDesc sscan;
 		Oid			roleid;
-		ObjectAddress *role_address;
 
 		if (rolspec->roletype != ROLESPEC_CSTRING)
 			ereport(ERROR,
@@ -1796,21 +1794,16 @@ DropRole(DropRoleStmt *stmt)
 		 */
 		CommandCounterIncrement();
 
-		/* Looks tentatively OK, add it to the list. */
-		role_address = palloc(sizeof(ObjectAddress));
-		role_address->classId = AuthIdRelationId;
-		role_address->objectId = roleid;
-		role_address->objectSubId = 0;
-		role_addresses = lappend(role_addresses, role_address);
+		/* Looks tentatively OK, add it to the list if not there yet. */
+		role_oids = list_append_unique_oid(role_oids, roleid);
 	}
 
 	/*
 	 * Second pass over the roles to be removed.
 	 */
-	foreach(item, role_addresses)
+	foreach(item, role_oids)
 	{
-		ObjectAddress *role_address = lfirst(item);
-		Oid			roleid = role_address->objectId;
+		Oid			roleid = lfirst_oid(item);
 		HeapTuple	tuple;
 		Form_pg_authid roleform;
 		char	   *detail;
@@ -2529,7 +2522,7 @@ AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 				HeapTuple	mrtup;
 				Form_pg_authid mrform;
 
-				mrtup = SearchSysCache1(AUTHOID, memberid);
+				mrtup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(memberid));
 				if (!HeapTupleIsValid(mrtup))
 					elog(ERROR, "cache lookup failed for role %u", memberid);
 				mrform = (Form_pg_authid) GETSTRUCT(mrtup);

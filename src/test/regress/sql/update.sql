@@ -33,6 +33,9 @@ UPDATE update_test t SET b = t.b + 10 WHERE t.a = 10;
 
 SELECT a,b,c FROM update_test ORDER BY a,b,c;
 
+-- error, you're not supposed to qualify the target column
+UPDATE update_test t SET t.b = t.b + 10 WHERE t.a = 10;
+
 --
 -- Test VALUES in FROM
 --

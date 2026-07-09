@@ -11,26 +11,39 @@ SUBDIRS = \
 		  dummy_index_am \
 		  dummy_seclabel \
 		  plsample \
-		  snapshot_too_old \
 		  test_bloomfilter \
 		  test_copy_callbacks \
 		  test_custom_rmgrs \
 		  test_ddl_deparse \
+		  test_dsa \
+		  test_dsm_registry \
 		  test_extensions \
 		  test_ginpostinglist \
 		  test_integerset \
+		  test_json_parser \
 		  test_lfind \
 		  test_misc \
 		  test_oat_hooks \
 		  test_parser \
 		  test_pg_dump \
 		  test_predtest \
+		  test_radixtree \
 		  test_rbtree \
+		  test_resowner \
 		  test_rls_hooks \
 		  test_shm_mq \
 		  test_slru \
+		  test_tidstore \
 		  unsafe_tests \
-		  worker_spi
+		  worker_spi \
+		  xid_wraparound
+
+
+ifeq ($(enable_injection_points),yes)
+SUBDIRS += injection_points gin
+else
+ALWAYS_SUBDIRS += injection_points gin
+endif
 
 # GPDB subdirs
 SUBDIRS += test_planner

@@ -146,6 +146,5 @@ ExecReScanAssertOp(AssertOpState *node)
 void
 ExecEndAssertOp(AssertOpState *node)
 {
-	ExecFreeExprContext(&node->ps);
 	ExecEndNode(outerPlanState(node));
 }

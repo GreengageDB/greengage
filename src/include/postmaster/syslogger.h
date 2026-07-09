@@ -3,7 +3,7 @@
  * syslogger.h
  *	  Exports from postmaster/syslogger.c.
  *
- * Copyright (c) 2004-2023, PostgreSQL Global Development Group
+ * Copyright (c) 2004-2024, PostgreSQL Global Development Group
  *
  * src/include/postmaster/syslogger.h
  *
@@ -190,9 +190,7 @@ extern void syslogger_write_int32(bool test0, const char *prefix, int32 i,
 								  bool amsyslogger, bool append_comma);
 extern int syslogger_write_str(const char *data, int len, bool amsyslogger, bool csv);
 
-#ifdef EXEC_BACKEND
-extern void SysLoggerMain(int argc, char *argv[]) pg_attribute_noreturn();
-#endif
+extern void SysLoggerMain(char *startup_data, size_t startup_data_len) pg_attribute_noreturn();
 
 extern bool CheckLogrotateSignal(void);
 extern void RemoveLogrotateSignalFiles(void);

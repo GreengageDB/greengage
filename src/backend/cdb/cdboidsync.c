@@ -98,7 +98,7 @@ pg_highest_oid(PG_FUNCTION_ARGS pg_attribute_unused())
 	Oid			result;
 	Oid			max_from_segdbs;
 
-	result = ShmemVariableCache->nextOid;
+	result = TransamVariables->nextOid;
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{

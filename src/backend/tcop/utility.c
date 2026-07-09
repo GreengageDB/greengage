@@ -5,7 +5,7 @@
  *	  commands.  At one time acted as an interface between the Lisp and C
  *	  systems.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -16,7 +16,6 @@
  */
 #include "postgres.h"
 
-#include "access/htup_details.h"
 #include "access/reloptions.h"
 #include "access/twophase.h"
 #include "access/xact.h"
@@ -68,15 +67,11 @@
 #include "parser/parse_utilcmd.h"
 #include "postmaster/bgwriter.h"
 #include "rewrite/rewriteDefine.h"
-#include "rewrite/rewriteRemove.h"
 #include "storage/fd.h"
-#include "tcop/pquery.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
 
 #include "access/table.h"
 #include "catalog/oid_dispatch.h"
@@ -1114,6 +1109,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			if (!has_privs_of_role(GetUserId(), ROLE_PG_CHECKPOINT))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				/* translator: %s is name of a SQL command, eg CHECKPOINT */
 						 errmsg("permission denied to execute %s command",
 								"CHECKPOINT"),
 						 errdetail("Only roles with privileges of the \"%s\" role may execute this command.",
@@ -1126,18 +1122,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 			RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_WAIT |
 							  (RecoveryInProgress() ? 0 : CHECKPOINT_FORCE));
-			break;
-
-		case T_ReindexStmt:
-			{
-				ReindexStmt *stmt = (ReindexStmt *) parsetree;
-
-				if (stmt->concurrent)
-					PreventInTransactionBlock(isTopLevel,
-											  "REINDEX CONCURRENTLY");
-
-				ExecReindex(pstate, stmt, isTopLevel);
-			}
 			break;
 
 			/*
@@ -1974,6 +1958,21 @@ ProcessUtilitySlow(ParseState *pstate,
 				}
 				break;
 
+			case T_ReindexStmt:
+				{
+					ReindexStmt *stmt = (ReindexStmt *) parsetree;
+
+					if (stmt->concurrent)
+						PreventInTransactionBlock(isTopLevel,
+												  "REINDEX CONCURRENTLY");
+
+					ExecReindex(pstate, stmt, isTopLevel);
+				}
+
+				/* EventTriggerCollectSimpleCommand is called directly */
+				commandCollected = true;
+				break;
+
 			case T_CreateExtensionStmt:
 				address = CreateExtension(pstate, (CreateExtensionStmt *) parsetree);
 				break;
@@ -2629,11 +2628,10 @@ QueryReturnsTuples(Query *parsetree)
 		case CMD_SELECT:
 			/* returns tuples */
 			return true;
-		case CMD_MERGE:
-			return false;
 		case CMD_INSERT:
 		case CMD_UPDATE:
 		case CMD_DELETE:
+		case CMD_MERGE:
 			/* the forms with RETURNING return tuples */
 			if (parsetree->returningList)
 				return true;

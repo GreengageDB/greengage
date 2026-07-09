@@ -267,7 +267,7 @@ myBackoffLocalEntry()
 static inline BackoffBackendSharedEntry *
 myBackoffSharedEntry()
 {
-	return getBackoffEntryRW(MyBackendId);
+	return getBackoffEntryRW(MyProcNumber);
 }
 
 /**
@@ -435,7 +435,7 @@ BackoffBackendEntryInit(int sessionid, int commandcount, Oid queueId)
 		elog(ERROR, "Unable to execute gettimeofday(). Please disable query prioritization.");
 	}
 
-	mySharedEntry->groupLeaderIndex = MyBackendId;
+	mySharedEntry->groupLeaderIndex = MyProcNumber;
 	mySharedEntry->weight = ResourceQueueGetPriorityWeight(queueId);
 	mySharedEntry->groupSize = 0;
 	mySharedEntry->numFollowers = 1;
@@ -501,7 +501,7 @@ BackoffBackend()
 	Assert(se->weight > 0);
 
 	/* Provide tracing information */
-	TRACE_POSTGRESQL_BACKOFF_LOCALCHECK(MyBackendId);
+	TRACE_POSTGRESQL_BACKOFF_LOCALCHECK(MyProcNumber);
 
 	if (gettimeofday(&currentTime, NULL) < 0)
 	{
@@ -615,7 +615,7 @@ BackoffBackendTickExpired(void)
 		|| !IsResQueueEnabled()
 		|| !gp_enable_resqueue_priority
 		|| !IsUnderPostmaster
-		|| (MyBackendId == InvalidBackendId)
+		|| (MyProcNumber == INVALID_PROC_NUMBER)
 		|| proc_exit_inprogress
 		|| ProcDiePending		/* Proc is dying */
 		|| QueryCancelPending	/* Statement cancellation */
@@ -997,7 +997,7 @@ BackoffStateInit()
 void
 BackoffBackendEntryExit()
 {
-	if (MyBackendId >= 0
+	if (MyProcNumber >= 0
 		&& (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE))
 	{
 		BackoffBackendSharedEntry *se = myBackoffSharedEntry();

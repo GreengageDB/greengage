@@ -24,7 +24,7 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "executor/execdebug.h"
+#include "executor/executor.h"
 #include "executor/nodeBitmapIndexscan.h"
 #include "executor/nodeIndexscan.h"
 #include "miscadmin.h"
@@ -203,15 +203,12 @@ ExecEndBitmapIndexScan(BitmapIndexScanState *node)
 	indexScanDesc = node->biss_ScanDesc;
 
 	/*
-	 * Free the exprcontext(s) ... now dead code, see ExecFreeExprContext
-	 *
-	 * GPDB: This is not dead code in GPDB, because we don't want to leak
-	 * exprcontexts in a dynamic bitmap index scan.
+	 * GPDB: Free the exprcontext. This is not dead code in GPDB (unlike
+	 * upstream), because we don't want to leak exprcontexts in a dynamic
+	 * bitmap index scan.
 	 */
-#if 1
 	if (node->biss_RuntimeContext)
 		FreeExprContext(node->biss_RuntimeContext, true);
-#endif
 
 	/*
 	 * close the index relation (no-op if we didn't open it)

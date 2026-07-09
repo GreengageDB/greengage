@@ -1215,7 +1215,8 @@ hasBackendsExist(PG_FUNCTION_ARGS)
 		int tot_backends = pgstat_fetch_stat_numbackends();
 		for (beid = 1; beid <= tot_backends; beid++)
 		{
-			PgBackendStatus *beentry = pgstat_fetch_stat_beentry(beid);
+			LocalPgBackendStatus *local_beentry = pgstat_get_local_beentry_by_index(beid);
+			PgBackendStatus *beentry = local_beentry ? &local_beentry->backendStatus : NULL;
 			if (beentry && beentry->st_procpid >0 && beentry->st_procpid != pid &&
 				beentry->st_session_id == gp_session_id)
 				result++;
@@ -2076,7 +2077,7 @@ gp_set_next_oid(PG_FUNCTION_ARGS)
 
 	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 
-	ShmemVariableCache->nextOid = new_oid;
+	TransamVariables->nextOid = new_oid;
 
 	LWLockRelease(OidGenLock);
 
@@ -2087,7 +2088,7 @@ PG_FUNCTION_INFO_V1(gp_get_next_oid);
 Datum
 gp_get_next_oid(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_OID(ShmemVariableCache->nextOid);
+	PG_RETURN_OID(TransamVariables->nextOid);
 }
 
 /*

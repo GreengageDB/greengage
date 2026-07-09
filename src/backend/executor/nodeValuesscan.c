@@ -20,7 +20,6 @@
  *		ExecValuesScan			scans a values list.
  *		ExecValuesNext			retrieve next tuple in sequential order.
  *		ExecInitValuesScan		creates and initializes a valuesscan node.
- *		ExecEndValuesScan		releases any storage allocated.
  *		ExecReScanValuesScan	rescans the values list
  */
 #include "postgres.h"
@@ -321,30 +320,6 @@ ExecInitValuesScan(ValuesScan *node, EState *estate, int eflags)
 	}
 
 	return scanstate;
-}
-
-/* ----------------------------------------------------------------
- *		ExecEndValuesScan
- *
- *		frees any storage allocated through C routines.
- * ----------------------------------------------------------------
- */
-void
-ExecEndValuesScan(ValuesScanState *node)
-{
-	/*
-	 * Free both exprcontexts
-	 */
-	ExecFreeExprContext(&node->ss.ps);
-	node->ss.ps.ps_ExprContext = node->rowcontext;
-	ExecFreeExprContext(&node->ss.ps);
-
-	/*
-	 * clean out the tuple table
-	 */
-	if (node->ss.ps.ps_ResultTupleSlot)
-		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
-	ExecClearTuple(node->ss.ss_ScanTupleSlot);
 }
 
 /* ----------------------------------------------------------------

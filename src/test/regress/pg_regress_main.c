@@ -8,7 +8,7 @@
  *
  * This code is released under the terms of the PostgreSQL License.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/test/regress/pg_regress_main.c
@@ -18,6 +18,7 @@
 
 #include "postgres_fe.h"
 
+#include "lib/stringinfo.h"
 #include "pg_regress.h"
 
 #include <sys/stat.h>
@@ -36,9 +37,8 @@ psql_start_test(const char *testname,
 	PID_TYPE	pid;
 	char		infile[MAXPGPATH];
 	char		outfile[MAXPGPATH];
-	char		expectfile[MAXPGPATH] = "";
-	char		psql_cmd[MAXPGPATH * 4];
-	size_t		offset = 0;
+	char		expectfile[MAXPGPATH];
+	StringInfoData psql_cmd;
 	char	   *appnameenv;
 	char		use_utility_mode = 0;
 	char	   *lastslash;
@@ -88,7 +88,7 @@ psql_start_test(const char *testname,
 	}
 
 	snprintf(expectfile, sizeof(expectfile), "%s/expected/%s.out",
-			 outputdir, testname);
+			 expecteddir, testname);
 	if (!file_exists(expectfile))
 		snprintf(expectfile, sizeof(expectfile), "%s/expected/%s.out",
 				 inputdir, testname);
@@ -96,16 +96,10 @@ psql_start_test(const char *testname,
 	add_stringlist_item(resultfiles, outfile);
 	add_stringlist_item(expectfiles, expectfile);
 
+	initStringInfo(&psql_cmd);
+
 	if (launcher)
-	{
-		offset += snprintf(psql_cmd + offset, sizeof(psql_cmd) - offset,
-						   "%s ", launcher);
-		if (offset >= sizeof(psql_cmd))
-		{
-			fprintf(stderr, _("command too long\n"));
-			exit(2);
-		}
-	}
+		appendStringInfo(&psql_cmd, "%s ", launcher);
 
 	/*
 	 * Use HIDE_TABLEAM to hide different AMs to allow to use regression tests
@@ -130,29 +124,24 @@ psql_start_test(const char *testname,
 	 *     $(cat prehook infile)
 	 *     EOF
 	 */
-	offset += snprintf(psql_cmd + offset, sizeof(psql_cmd) - offset,
-					   "%s \"%s%spsql\" -X -a -q -d \"%s\" -v %s > \"%s\" 2>&1 <<EOF\n"
-					   "$(cat \"%s\" \"%s\")\n"
-					   "EOF",
-					   use_utility_mode ? "env PGOPTIONS='-c gp_role=utility'" : "",
-					   bindir ? bindir : "",
-					   bindir ? "/" : "",
-					   dblist->str,
-					   "HIDE_TABLEAM=\"on\"",
-					   outfile,
-					   prehook[0] ? prehook : "/dev/null",
-					   infile);
-	if (offset >= sizeof(psql_cmd))
-	{
-		fprintf(stderr, _("command too long\n"));
-		exit(2);
-	}
+	appendStringInfo(&psql_cmd,
+					 "%s \"%s%spsql\" -X -a -q -d \"%s\" %s > \"%s\" 2>&1 <<EOF\n"
+					 "$(cat \"%s\" \"%s\")\n"
+					 "EOF",
+					 use_utility_mode ? "env PGOPTIONS='-c gp_role=utility'" : "",
+					 bindir ? bindir : "",
+					 bindir ? "/" : "",
+					 dblist->str,
+					 "-v HIDE_TABLEAM=on -v HIDE_TOAST_COMPRESSION=on",
+					 outfile,
+					 prehook[0] ? prehook : "/dev/null",
+					 infile);
 
 	appnameenv = psprintf("pg_regress/%s", testname);
 	setenv("PGAPPNAME", appnameenv, 1);
 	free(appnameenv);
 
-	pid = spawn_process(psql_cmd);
+	pid = spawn_process(psql_cmd.data);
 
 	if (pid == INVALID_PID)
 	{
@@ -162,6 +151,8 @@ psql_start_test(const char *testname,
 	}
 
 	unsetenv("PGAPPNAME");
+
+	pfree(psql_cmd.data);
 
 	return pid;
 }

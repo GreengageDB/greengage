@@ -3,7 +3,7 @@
  *
  *	relfilenumber functions
  *
- *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2024, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/relfilenumber.c
  */
 
@@ -43,6 +43,9 @@ transfer_all_new_tablespaces(DbInfoArr *old_db_arr, DbInfoArr *new_db_arr,
 			break;
 		case TRANSFER_MODE_COPY:
 			prep_status_progress("Copying user relation files");
+			break;
+		case TRANSFER_MODE_COPY_FILE_RANGE:
+			prep_status_progress("Copying user relation files with copy_file_range");
 			break;
 		case TRANSFER_MODE_LINK:
 			prep_status_progress("Linking user relation files");
@@ -294,6 +297,11 @@ transfer_relfile_segment(int segno, FileNameMap *map,
 				pg_log(PG_VERBOSE, "copying \"%s\" to \"%s\"",
 					   old_file, new_file);
 				copyFile(old_file, new_file, map->nspname, map->relname);
+				break;
+			case TRANSFER_MODE_COPY_FILE_RANGE:
+				pg_log(PG_VERBOSE, "copying \"%s\" to \"%s\" with copy_file_range",
+					   old_file, new_file);
+				copyFileByRange(old_file, new_file, map->nspname, map->relname);
 				break;
 			case TRANSFER_MODE_LINK:
 				pg_log(PG_VERBOSE, "linking \"%s\" to \"%s\"",

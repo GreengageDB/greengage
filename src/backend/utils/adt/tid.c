@@ -22,9 +22,8 @@
 #include <math.h>
 #include <limits.h>
 
-#include "access/hash.h"
-#include "access/heapam.h"
 #include "access/sysattr.h"
+#include "access/table.h"
 #include "access/tableam.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_type.h"
@@ -33,7 +32,7 @@
 #include "miscadmin.h"
 #include "parser/parsetree.h"
 #include "utils/acl.h"
-#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"

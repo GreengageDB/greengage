@@ -53,7 +53,7 @@ extern void BufFileTell(BufFile *file, int *fileno, off_t *offset);
 extern int	BufFileSeekBlock(BufFile *file, int64 blknum);
 extern int64 BufFileSize(BufFile *file);
 extern int64 BufFileGetSize(BufFile *file);
-extern long BufFileAppend(BufFile *target, BufFile *source);
+extern int64 BufFileAppend(BufFile *target, BufFile *source);
 
 extern BufFile *BufFileCreateFileSet(FileSet *fileset, const char *name, struct workfile_set *work_set);
 extern void BufFileExportFileSet(BufFile *file);

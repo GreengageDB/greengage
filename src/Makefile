@@ -62,9 +62,6 @@ uninstall: uninstall-local
 uninstall-local:
 	rm -f $(addprefix '$(DESTDIR)$(pgxsdir)/$(subdir)'/, Makefile.global Makefile.port Makefile.shlib nls-global.mk)
 
-distprep:
-	$(MAKE) -C test/isolation $@
-
 clean:
 	$(MAKE) -C test $@
 	$(MAKE) -C tutorial NO_PGXS=1 $@
@@ -73,7 +70,7 @@ clean:
 	$(MAKE) -C $(MOCK_DIR) $@
 	$(MAKE) -C $(CMOCKERY_DIR) $@
 
-distclean maintainer-clean:
+distclean:
 	$(MAKE) -C test $@
 	$(MAKE) -C tutorial NO_PGXS=1 $@
 	$(MAKE) -C test/isolation $@

@@ -24,26 +24,22 @@
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/view.h"
-#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/analyze.h"
 #include "parser/parse_relation.h"
 #include "rewrite/rewriteDefine.h"
 #include "rewrite/rewriteHandler.h"
-#include "rewrite/rewriteManip.h"
 #include "rewrite/rewriteSupport.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
-#include "utils/syscache.h"
 
 
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
 
-static void checkViewTupleDesc(TupleDesc newdesc, TupleDesc olddesc);
+static void checkViewColumns(TupleDesc newdesc, TupleDesc olddesc);
 
 /*---------------------------------------------------------------------
  * DefineVirtualRelation
@@ -145,7 +141,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * column list.
 		 */
 		descriptor = BuildDescForRelation(attrList);
-		checkViewTupleDesc(descriptor, rel->rd_att);
+		checkViewColumns(descriptor, rel->rd_att);
 
 		/*
 		 * If new attributes have been added, we must add pg_attribute entries
@@ -276,13 +272,13 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 }
 
 /*
- * Verify that tupledesc associated with proposed new view definition
- * matches tupledesc of old view.  This is basically a cut-down version
- * of equalTupleDescs(), with code added to generate specific complaints.
- * Also, we allow the new tupledesc to have more columns than the old.
+ * Verify that the columns associated with proposed new view definition match
+ * the columns of the old view.  This is similar to equalRowTypes(), with code
+ * added to generate specific complaints.  Also, we allow the new view to have
+ * more columns than the old.
  */
 static void
-checkViewTupleDesc(TupleDesc newdesc, TupleDesc olddesc)
+checkViewColumns(TupleDesc newdesc, TupleDesc olddesc)
 {
 	int			i;
 

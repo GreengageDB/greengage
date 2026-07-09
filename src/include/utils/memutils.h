@@ -99,9 +99,6 @@ extern PGDLLIMPORT MemoryContext OptimizerMemoryContext;
 /* This is a transient link to the active portal's memory context: */
 extern PGDLLIMPORT MemoryContext PortalContext;
 
-/* Backwards compatibility macro */
-#define MemoryContextResetAndDeleteChildren(ctx) MemoryContextReset(ctx)
-
 
 /*
  * Memory-context-type-independent functions in mcxt.c
@@ -129,8 +126,11 @@ extern Size MemoryContextSetPeakSpace(MemoryContext context, Size nbytes);
 extern void MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline);
 
 extern Size MemoryContextMemAllocated(MemoryContext context, bool recurse);
+extern void MemoryContextMemConsumed(MemoryContext context,
+									 MemoryContextCounters *consumed);
 extern void MemoryContextStats(MemoryContext context);
-extern void MemoryContextStatsDetail(MemoryContext context, int max_children,
+extern void MemoryContextStatsDetail(MemoryContext context,
+									 int max_level, int max_children,
 									 bool print_to_stderr);
 extern void MemoryContextAllowInCriticalSection(MemoryContext context,
 												bool allow);
@@ -197,6 +197,13 @@ extern MemoryContext GenerationContextCreate(MemoryContext parent,
 											 Size minContextSize,
 											 Size initBlockSize,
 											 Size maxBlockSize);
+
+/* bump.c */
+extern MemoryContext BumpContextCreate(MemoryContext parent,
+									   const char *name,
+									   Size minContextSize,
+									   Size initBlockSize,
+									   Size maxBlockSize);
 
 /* this function should be only called by MemoryContextSetParent() */
 extern void AllocSetTransferAccounting(MemoryContext context,

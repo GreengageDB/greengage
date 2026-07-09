@@ -230,7 +230,8 @@ extern void standard_ExecutorEnd(QueryDesc *queryDesc);
 extern void ExecutorRewind(QueryDesc *queryDesc);
 extern bool ExecCheckPermissions(List *rangeTable,
 								 List *rteperminfos, bool ereport_on_violation);
-extern void CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation);
+extern void CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation,
+								List *mergeActions);
 extern void InitResultRelInfo(ResultRelInfo *resultRelInfo,
 							  Relation resultRelationDesc,
 							  Index resultRelationIndex,
@@ -551,7 +552,7 @@ typedef struct TupOutputState
 extern TupOutputState *begin_tup_output_tupdesc(DestReceiver *dest,
 												TupleDesc tupdesc,
 												const TupleTableSlotOps *tts_ops);
-extern void do_tup_output(TupOutputState *tstate, Datum *values, bool *isnull);
+extern void do_tup_output(TupOutputState *tstate, const Datum *values, const bool *isnull);
 extern void do_text_output_multiline(TupOutputState *tstate, const char *txt);
 extern void end_tup_output(TupOutputState *tstate);
 
@@ -612,7 +613,6 @@ extern void ExecAssignProjectionInfo(PlanState *planstate,
 									 TupleDesc inputDesc);
 extern void ExecConditionalAssignProjectionInfo(PlanState *planstate,
 												TupleDesc inputDesc, int varno);
-extern void ExecFreeExprContext(PlanState *planstate);
 extern void ExecAssignScanType(ScanState *scanstate, TupleDesc tupDesc);
 extern void ExecCreateScanSlotFromOuterPlan(EState *estate,
 											ScanState *scanstate,
@@ -684,12 +684,13 @@ extern bool ExecCheckIndexConstraints(ResultRelInfo *resultRelInfo,
 extern void check_exclusion_constraint(Relation heap, Relation index,
 									   IndexInfo *indexInfo,
 									   ItemPointer tupleid,
-									   Datum *values, bool *isnull,
+									   const Datum *values, const bool *isnull,
 									   EState *estate, bool newIndex);
 
 /*
  * prototypes from functions in execReplication.c
  */
+extern StrategyNumber get_equal_strategy_number_for_am(Oid am);
 extern bool RelationFindReplTupleByIndex(Relation rel, Oid idxoid,
 										 LockTupleMode lockmode,
 										 TupleTableSlot *searchslot,

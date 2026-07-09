@@ -3,7 +3,7 @@
  * parse_cte.c
  *	  handle CTEs (common table expressions) in parser
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -36,7 +36,7 @@ typedef enum
 	RECURSION_SUBLINK,			/* inside a sublink */
 	RECURSION_OUTERJOIN,		/* inside nullable side of an outer join */
 	RECURSION_INTERSECT,		/* underneath INTERSECT (ALL) */
-	RECURSION_EXCEPT			/* underneath EXCEPT (ALL) */
+	RECURSION_EXCEPT,			/* underneath EXCEPT (ALL) */
 } RecursionContext;
 
 /* Associated error messages --- each must have one %s for CTE name */
@@ -139,13 +139,6 @@ transformWithClause(ParseState *pstate, WithClause *withClause)
 		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
 		ListCell   *rest;
 
-		/* MERGE is allowed by parser, but unimplemented. Reject for now */
-		if (IsA(cte->ctequery, MergeStmt))
-			ereport(ERROR,
-					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("MERGE not supported in WITH query"),
-					parser_errposition(pstate, cte->location));
-
 		for_each_cell(rest, withClause->ctes, lnext(withClause->ctes, lc))
 		{
 			CommonTableExpr *cte2 = (CommonTableExpr *) lfirst(rest);
@@ -166,7 +159,8 @@ transformWithClause(ParseState *pstate, WithClause *withClause)
 			/* must be a data-modifying statement */
 			Assert(IsA(cte->ctequery, InsertStmt) ||
 				   IsA(cte->ctequery, UpdateStmt) ||
-				   IsA(cte->ctequery, DeleteStmt));
+				   IsA(cte->ctequery, DeleteStmt) ||
+				   IsA(cte->ctequery, MergeStmt));
 
 
 			/*

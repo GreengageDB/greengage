@@ -268,6 +268,7 @@ Section: Class 25 - Invalid Transaction State
 25P02    E    ERRCODE_IN_FAILED_SQL_TRANSACTION                              in_failed_sql_transaction
 25M01    E    ERRCODE_GP_OPERATION_CANCELED                                  gp_operation_canceled
 25P03    E    ERRCODE_IDLE_IN_TRANSACTION_SESSION_TIMEOUT                    idle_in_transaction_session_timeout
+25P04    E    ERRCODE_TRANSACTION_TIMEOUT                                    transaction_timeout
 
 Section: Class 26 - Invalid SQL Statement Name
 
@@ -460,10 +461,6 @@ Section: Class 58 - System Error (errors external to PostgreSQL itself)
 58P01    E    ERRCODE_UNDEFINED_FILE                                         undefined_file
 58P02    E    ERRCODE_DUPLICATE_FILE                                         duplicate_file
 58M01    E    ERRCODE_GP_INTERCONNECTION_ERROR                               gp_interconnection_error
-
-Section: Class 72 - Snapshot Failure
-# (class borrowed from Oracle)
-72000    E    ERRCODE_SNAPSHOT_TOO_OLD                                       snapshot_too_old
 
 Section: Class F0 - Configuration File Error
 

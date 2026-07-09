@@ -110,8 +110,8 @@ typedef FormData_pg_resourcetype *Form_pg_resourcetype;
 
 
 /* GPDB-specific index(es) (moved from indexing.h: PG15 genbki emits IndexId per-catalog) */
-DECLARE_UNIQUE_INDEX(pg_resourcetype_oid_index, 6061, ResourceTypeOidIndexId, on pg_resourcetype using btree(oid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_resourcetype_restypid_index, 6062, ResourceTypeRestypidIndexId, on pg_resourcetype using btree(restypid int2_ops));
-DECLARE_UNIQUE_INDEX(pg_resourcetype_resname_index, 6063, ResourceTypeResnameIndexId, on pg_resourcetype using btree(resname name_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_oid_index, 6061, ResourceTypeOidIndexId, pg_resourcetype, btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_restypid_index, 6062, ResourceTypeRestypidIndexId, pg_resourcetype, btree(restypid int2_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_resname_index, 6063, ResourceTypeResnameIndexId, pg_resourcetype, btree(resname name_ops));
 
 #endif   /* PG_RESOURCETYPE_H */

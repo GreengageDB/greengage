@@ -3,7 +3,7 @@
  * nodeIncrementalSort.c
  *	  Routines to handle incremental sorting of relations.
  *
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -78,7 +78,6 @@
 
 #include "postgres.h"
 
-#include "access/htup_details.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIncrementalSort.h"
 #include "miscadmin.h"
@@ -1141,7 +1140,6 @@ ExecReScanIncrementalSort(IncrementalSortState *node)
 	node->outerNodeDone = false;
 	node->n_fullsort_remaining = 0;
 	node->bound_Done = 0;
-	node->presorted_keys = NULL;
 
 	node->execution_status = INCSORT_LOADFULLSORT;
 
@@ -1154,15 +1152,9 @@ ExecReScanIncrementalSort(IncrementalSortState *node)
 	 * cause a leak.
 	 */
 	if (node->fullsort_state != NULL)
-	{
 		tuplesort_reset(node->fullsort_state);
-		node->fullsort_state = NULL;
-	}
 	if (node->prefixsort_state != NULL)
-	{
 		tuplesort_reset(node->prefixsort_state);
-		node->prefixsort_state = NULL;
-	}
 
 	/*
 	 * If chgParam of subnode is not null, then the plan will be re-scanned by

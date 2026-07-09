@@ -1,8 +1,8 @@
 
-# Copyright (c) 2021-2023, PostgreSQL Global Development Group
+# Copyright (c) 2021-2024, PostgreSQL Global Development Group
 
 use strict;
-use warnings;
+use warnings FATAL => 'all';
 
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
@@ -109,11 +109,11 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=gzip:1',
 			"--file=$tempdir/compression_gzip_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
+		# Give coverage for manually compressed blobs.toc files during
 		# restore.
 		compress_cmd => {
 			program => $ENV{'GZIP_PROGRAM'},
-			args => [ '-f', "$tempdir/compression_gzip_dir/blobs.toc", ],
+			args => [ '-f', "$tempdir/compression_gzip_dir/blobs_*.toc", ],
 		},
 		# Verify that only data files were compressed
 		glob_patterns => [
@@ -172,16 +172,6 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=lz4:1',
 			"--file=$tempdir/compression_lz4_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
-		# restore.
-		compress_cmd => {
-			program => $ENV{'LZ4'},
-			args => [
-				'-z', '-f', '--rm',
-				"$tempdir/compression_lz4_dir/blobs.toc",
-				"$tempdir/compression_lz4_dir/blobs.toc.lz4",
-			],
-		},
 		# Verify that data files were compressed
 		glob_patterns => [
 			"$tempdir/compression_lz4_dir/toc.dat",
@@ -242,14 +232,13 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=zstd:1',
 			"--file=$tempdir/compression_zstd_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
+		# Give coverage for manually compressed blobs.toc files during
 		# restore.
 		compress_cmd => {
 			program => $ENV{'ZSTD'},
 			args => [
 				'-z', '-f',
-				'--rm', "$tempdir/compression_zstd_dir/blobs.toc",
-				"-o", "$tempdir/compression_zstd_dir/blobs.toc.zst",
+				'--rm', "$tempdir/compression_zstd_dir/blobs_*.toc",
 			],
 		},
 		# Verify that data files were compressed
@@ -413,7 +402,7 @@ my %pgdump_runs = (
 		},
 		glob_patterns => [
 			"$tempdir/defaults_dir_format/toc.dat",
-			"$tempdir/defaults_dir_format/blobs.toc",
+			"$tempdir/defaults_dir_format/blobs_*.toc",
 			$supports_gzip ? "$tempdir/defaults_dir_format/*.dat.gz"
 			: "$tempdir/defaults_dir_format/*.dat",
 		],
@@ -806,7 +795,7 @@ my %tests = (
 		regexp => qr/^\QALTER COLLATION public.test0 OWNER TO \E.+;/m,
 		collation => 1,
 		like => { %full_runs, section_pre_data => 1, },
-		unlike => { %dump_test_schema_runs, no_owner => 1, },
+		unlike => { no_owner => 1, },
 	},
 
 	'ALTER FOREIGN DATA WRAPPER dummy OWNER TO' => {
@@ -911,11 +900,12 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
-#			section_pre_data       => 1,
-#			test_schema_plus_blobs => 1,
+#			inserts                => 1,
+#			section_data           => 1,
+#			test_schema_plus_large_objects => 1,
 #		},
 #		unlike => {
-#			no_blobs    => 1,
+#			no_large_objects => 1,
 #			no_owner    => 1,
 #			schema_only => 1,
 #		},
@@ -965,7 +955,7 @@ my %tests = (
 		create_sql =>
 		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
 		regexp => qr/^(GRANT|REVOKE)/m,
-		unlike => { defaults_public_owner => 1 },
+		like => {},
 	},
 
 	'ALTER SEQUENCE test_table_col1_seq' => {
@@ -1273,9 +1263,7 @@ my %tests = (
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
 		unlike => {
 			exclude_dump_test_schema => 1,
-			only_dump_test_table => 1,
 			no_owner => 1,
-			role => 1,
 			only_dump_measurement => 1,
 		},
 	},
@@ -1320,6 +1308,7 @@ my %tests = (
 #			schema_only    => 1,
 #		},
 #	},
+
 
 	'COMMENT ON DATABASE postgres' => {
 		regexp => qr/^COMMENT ON DATABASE postgres IS .+;/m,
@@ -1871,6 +1860,33 @@ my %tests = (
 			pg_dumpall_globals => 1,
 			pg_dumpall_globals_clean => 1,
 		},
+	},
+
+	'CREATE TABLESPACE regress_dump_tablespace' => {
+		create_order => 2,
+		create_sql => q(
+		    SET allow_in_place_tablespaces = on;
+			CREATE TABLESPACE regress_dump_tablespace
+			OWNER regress_dump_test_role LOCATION ''),
+		regexp =>
+		  qr/^CREATE TABLESPACE regress_dump_tablespace OWNER regress_dump_test_role LOCATION '';/m,
+		like => {
+			pg_dumpall_dbprivs => 1,
+			pg_dumpall_exclude => 1,
+			pg_dumpall_globals => 1,
+			pg_dumpall_globals_clean => 1,
+		},
+	},
+
+	'CREATE DATABASE regression_invalid...' => {
+		create_order => 1,
+		create_sql => q(
+		    CREATE DATABASE regression_invalid;
+			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid'),
+		regexp => qr/^CREATE DATABASE regression_invalid/m,
+
+		# invalid databases should never be dumped
+		like => {},
 	},
 
 	'CREATE ACCESS METHOD gist2' => {
@@ -3206,7 +3222,6 @@ my %tests = (
 			binary_upgrade => 1,
 			exclude_dump_test_schema => 1,
 			schema_only => 1,
-			only_dump_measurement => 1,
 		},
 	},
 
@@ -3429,7 +3444,6 @@ my %tests = (
 	'Disabled trigger on partition is not created' => {
 		regexp => qr/CREATE TRIGGER test_trigger.*ON dump_test_second_schema/,
 		like => {},
-		unlike => { %full_runs, %dump_test_schema_runs },
 	},
 
 	# Triggers on partitions should not be dropped individually
@@ -3719,14 +3733,15 @@ my %tests = (
 	'CREATE STATISTICS extended_stats_no_options' => {
 		create_order => 97,
 		create_sql => 'CREATE STATISTICS dump_test.test_ext_stats_no_options
-							ON col1, col2 FROM dump_test.test_fifth_table',
+							ON col1, col2 FROM dump_test.test_table',
 		regexp => qr/^
-			\QCREATE STATISTICS dump_test.test_ext_stats_no_options ON col1, col2 FROM dump_test.test_fifth_table;\E
+			\QCREATE STATISTICS dump_test.test_ext_stats_no_options ON col1, col2 FROM dump_test.test_table;\E
 		    /xms,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
 		unlike => {
 			exclude_dump_test_schema => 1,
+			exclude_test_table => 1,
 			only_dump_measurement => 1,
 		},
 	},
@@ -3829,11 +3844,6 @@ my %tests = (
 		},
 		unlike => {
 			exclude_dump_test_schema => 1,
-			only_dump_test_table => 1,
-			pg_dumpall_globals => 1,
-			pg_dumpall_globals_clean => 1,
-			role => 1,
-			section_pre_data => 1,
 			exclude_measurement => 1,
 		},
 	},
@@ -3884,7 +3894,6 @@ my %tests = (
 			role => 1,
 			section_post_data => 1,
 			only_dump_measurement => 1,
-			exclude_measurement_data => 1,
 		},
 		unlike => {
 			exclude_measurement => 1,
@@ -3914,18 +3923,10 @@ my %tests = (
 			pg_dumpall_dbprivs => 1,
 			pg_dumpall_exclude => 1,
 			role => 1,
-			schema_only => 1,
 			section_post_data => 1,
 			only_dump_measurement => 1,
-			exclude_measurement_data => 1,
 		},
 		unlike => {
-			only_dump_test_schema => 1,
-			only_dump_test_table => 1,
-			pg_dumpall_globals => 1,
-			pg_dumpall_globals_clean => 1,
-			section_pre_data => 1,
-			test_schema_plus_large_objects => 1,
 			exclude_measurement => 1,
 		},
 	},
@@ -4218,11 +4219,13 @@ my %tests = (
 
 	'GRANT SELECT ON TABLE measurement' => {
 		create_order => 91,
-		create_sql => 'GRANT SELECT ON
-						   TABLE dump_test.measurement
-						   TO regress_dump_test_role;',
+		create_sql => 'GRANT SELECT ON TABLE dump_test.measurement
+						   TO regress_dump_test_role;
+					   GRANT SELECT(city_id) ON TABLE dump_test.measurement
+						   TO "regress_quoted  \"" role";',
 		regexp =>
-		  qr/^\QGRANT SELECT ON TABLE dump_test.measurement TO regress_dump_test_role;\E/m,
+		  qr/^\QGRANT SELECT ON TABLE dump_test.measurement TO regress_dump_test_role;\E\n.*
+			 ^\QGRANT SELECT(city_id) ON TABLE dump_test.measurement TO "regress_quoted  \"" role";\E/xms,
 		like => {
 			%full_runs,
 			%dump_test_schema_runs,
@@ -4573,6 +4576,41 @@ my %tests = (
 			no_table_access_method => 1,
 			only_dump_measurement => 1,
 		},
+	},
+
+	# CREATE TABLE with partitioned table and various AMs.  One
+	# partition uses the same default as the parent, and a second
+	# uses its own AM.
+	'CREATE TABLE regress_pg_dump_table_part' => {
+		create_order => 19,
+		create_sql => '
+			CREATE TABLE dump_test.regress_pg_dump_table_am_parent (id int) PARTITION BY LIST (id);
+			ALTER TABLE dump_test.regress_pg_dump_table_am_parent SET ACCESS METHOD regress_table_am;
+			CREATE TABLE dump_test.regress_pg_dump_table_am_child_1
+			  PARTITION OF dump_test.regress_pg_dump_table_am_parent FOR VALUES IN (1);
+			CREATE TABLE dump_test.regress_pg_dump_table_am_child_2
+			  PARTITION OF dump_test.regress_pg_dump_table_am_parent FOR VALUES IN (2) USING heap;',
+		regexp => qr/^
+			\n\QCREATE TABLE dump_test.regress_pg_dump_table_am_parent (\E
+			(\n(?!SET[^;]+;)[^\n]*)*
+			\QALTER TABLE dump_test.regress_pg_dump_table_am_parent SET ACCESS METHOD regress_table_am;\E
+			(.*\n)*
+			\QSET default_table_access_method = regress_table_am;\E
+			(\n(?!SET[^;]+;)[^\n]*)*
+			\n\QCREATE TABLE dump_test.regress_pg_dump_table_am_child_1 (\E
+			(.*\n)*
+			\QSET default_table_access_method = heap;\E
+			(\n(?!SET[^;]+;)[^\n]*)*
+			\n\QCREATE TABLE dump_test.regress_pg_dump_table_am_child_2 (\E
+			(.*\n)*/xm,
+		like => {
+			%full_runs, %dump_test_schema_runs, section_pre_data => 1,
+		},
+		unlike => {
+			exclude_dump_test_schema => 1,
+			no_table_access_method => 1,
+			only_dump_measurement => 1,
+		},
 	});
 
 #########################################
@@ -4691,6 +4729,14 @@ command_fails_like(
 	'connecting to a non-existent database');
 
 #########################################
+# Test connecting to an invalid database
+
+$node->command_fails_like(
+	[ 'pg_dump', '-d', 'regression_invalid' ],
+	qr/pg_dump: error: connection to server .* failed: FATAL:  cannot connect to invalid database "regression_invalid"/,
+	'connecting to an invalid database');
+
+#########################################
 # Test connecting with an unprivileged user
 
 command_fails_like(
@@ -4733,6 +4779,12 @@ $node->command_fails_like(
 	[ 'pg_dumpall', '--exclude-database', 'myhost.mydb' ],
 	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): myhost\.mydb/,
 	'pg_dumpall: option --exclude-database rejects multipart database names');
+
+##############################################################
+# Test dumping pg_catalog (for research -- cannot be reloaded)
+
+$node->command_ok([ 'pg_dump', '-p', "$port", '-n', 'pg_catalog' ],
+	'pg_dump: option -n pg_catalog');
 
 #########################################
 # Test valid database exclusion patterns
@@ -4828,8 +4880,13 @@ foreach my $run (sort keys %pgdump_runs)
 		# not defined.
 		next if (!defined($compress_program) || $compress_program eq '');
 
-		my @full_compress_cmd =
-		  ($compress_cmd->{program}, @{ $compress_cmd->{args} });
+		# Arguments may require globbing.
+		my @full_compress_cmd = ($compress_program);
+		foreach my $arg (@{ $compress_cmd->{args} })
+		{
+			push @full_compress_cmd, glob($arg);
+		}
+
 		command_ok(\@full_compress_cmd, "$run: compression commands");
 	}
 
@@ -4882,6 +4939,22 @@ foreach my $run (sort keys %pgdump_runs)
 		if (defined($tests{$test}->{database}))
 		{
 			$test_db = $tests{$test}->{database};
+		}
+
+		# Check for proper test definitions
+		#
+		# There should be a "like" list, even if it is empty.  (This
+		# makes the test more self-documenting.)
+		if (!defined($tests{$test}->{like}))
+		{
+			die "missing \"like\" in test \"$test\"";
+		}
+		# Check for useless entries in "unlike" list.  Runs that are
+		# not listed in "like" don't need to be excluded in "unlike".
+		if ($tests{$test}->{unlike}->{$test_key}
+			&& !defined($tests{$test}->{like}->{$test_key}))
+		{
+			die "useless \"unlike\" entry \"$test_key\" in test \"$test\"";
 		}
 
 		# Skip any collation-related commands if there is no collation support
