@@ -96,14 +96,6 @@ typedef struct
 	int			objsubid;		/* subobject (table column #) */
 } SecLabelItem;
 
-typedef struct TypeNamesList {
-	Oid 	schema_oid;
-	char  **names;
-	int 	count;
-	int 	capacity;
-	struct 	TypeNamesList *next;
-} TypeNamesList;
-
 typedef enum OidOptions
 {
 	zeroAsOpaque = 1,
@@ -4942,6 +4934,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						  pg_type_array_oid, pg_type_array_ns_oid,
 						  pg_type_array_name);
+		pg_free(pg_type_array_name);
 	}
 
 	destroyPQExpBuffer(upgrade_query);
@@ -12734,32 +12727,34 @@ truncate_array_type_name(char *typeName, int encoding, int limit)
  * Analogous to makeArrayTypeName() from pg_type.c, but does not use
  * backend functions.
  * Also manages its own list of assigned names, which lives till
- * the end of pg_dump.
+ * the end of current schema dump.
  */
 static char *
 make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 {
-	static TypeNamesList *type_names_list = NULL;
-	TypeNamesList  *list = NULL;
-	TypeNamesList  *prev = NULL;
-	char		   *arr;
-	int				namelen = strlen(typeName);
-	int				i, j;
-	PGresult	   *res;
-	PQExpBuffer		query;
-	bool			is_dup;
-	bool			is_assigned;
+	static SimpleStringList	   *type_names = NULL;
+	static Oid 					names_schema_oid = InvalidOid;
+	SimpleStringListCell	   *next;
+	SimpleStringListCell	   *cell;
+	char					   *arr;
+	int							namelen = strlen(typeName);
+	int							i;
+	PGresult				   *res;
+	PQExpBuffer					query;
+	bool						is_dup, is_assigned;
 
 	arr = (char *) pg_malloc(NAMEDATALEN);
 
-	/* Search for schema's list */
-	list = type_names_list;
-	while (list)
+	/* We have encountered new schema, have to clear the old list */
+	if (type_names && names_schema_oid != typeNamespace)
 	{
-		if (list->schema_oid == typeNamespace)
-			break;
-		prev = list;
-		list = list->next;
+		names_schema_oid = typeNamespace;
+		for(cell = type_names->head; cell; cell = next)
+		{
+			next = cell->next;
+			pg_free(cell);
+		}
+		type_names = NULL;
 	}
 
 	/* Try to find a unique name */
@@ -12797,13 +12792,14 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 
 		/* Check if dump already assigned such name for this schema */
 		is_assigned = false;
-		for (j = 0; list && j < list->count; j++)
+		if (type_names)
 		{
-			if (strcmp(list->names[j], arr) == 0)
-			{
-				is_assigned = true;
-				break;
-			}
+			for (cell = type_names->head; cell; cell = cell->next)
+				if (strcmp(cell->val, arr) == 0)
+				{
+					is_assigned = true;
+					break;
+				}
 		}
 		if (is_assigned)
 			continue;
@@ -12814,31 +12810,22 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	if (i >= NAMEDATALEN - 1)
 		fatal("could not form array type name for type \"%s\"", typeName);
 
+	/* Store the name */
+	cell = (SimpleStringListCell *) pg_malloc0(sizeof(SimpleStringListCell) + 
+										   sizeof(char) * (strlen(arr) + 1));
+	strcpy(cell->val, arr);
+
 	/* If no list found for this schema, create one */
-	if (!list)
+	if (!type_names)
 	{
-		list = (TypeNamesList *) pg_malloc0(sizeof(TypeNamesList));
-		list->schema_oid = typeNamespace;
-		list->capacity = 16;
-		list->count = 0;
-		list->names = (char **) pg_malloc(list->capacity * sizeof(char *));
-		list->next = NULL;
-
-		/* Add to linked list */
-		if (prev)
-			prev->next = list;
-		else
-			type_names_list = list;
+		names_schema_oid = typeNamespace;
+		type_names = (SimpleStringList *) pg_malloc0(sizeof(SimpleStringList));
+		type_names->head = cell;
 	}
+	else
+		type_names->tail->next = cell;
 
-	if (list->count == list->capacity)
-	{
-		list->capacity = list->capacity * 2;
-		list->names = (char **) pg_realloc(list->names,
-											list->capacity * sizeof(char *));
-	}
-	list->names[list->count] = arr;
-	list->count++;
+	type_names->tail = cell;
 
 	return arr;
 }
