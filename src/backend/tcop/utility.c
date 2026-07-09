@@ -1321,9 +1321,22 @@ ProcessUtilitySlow(ParseState *pstate,
 					 * CreateStmt by parse analysis. The QD will dispatch those other statements
 					 * separately.
 					 */
-					if (Gp_role == GP_ROLE_EXECUTE)
+					if (Gp_role == GP_ROLE_EXECUTE && gp_dispatch_utility_statement)
 						stmts = list_make1(parsetree);
 					else
+						/*
+						 * GPDB: Normally the QE receives an already-transformed
+						 * CreateStmt from the QD.  But a nested CREATE that runs
+						 * with gp_dispatch_utility_statement = false (e.g. the
+						 * partition built by createPartitionTable() for ALTER
+						 * TABLE ... SPLIT/MERGE PARTITION) is not dispatched; the
+						 * QE builds and runs its own copy while re-executing the
+						 * enclosing ALTER, so it must expand the LIKE clause
+						 * itself.  The parent model relation is identical on the
+						 * QD and the QEs, so this yields the same columns; the
+						 * relation's OIDs are preassigned on the QD and
+						 * dispatched with the enclosing ALTER command.
+						 */
 						stmts = transformCreateStmt((CreateStmt *) parsetree,
 													queryString);
 

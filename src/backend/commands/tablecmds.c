@@ -24428,6 +24428,30 @@ createPartitionTable(RangeVar *newPartName, Relation modelRel,
 	createStmt->if_not_exists = false;
 	createStmt->accessMethod = get_am_name(modelRel->rd_rel->relam);
 
+	/*
+	 * GPDB: set the owner explicitly.  On the QD DefineRelation() would default
+	 * this to GetUserId(), but because this nested CREATE is not dispatched (see
+	 * the gp_dispatch_utility_statement handling below) the QE builds and runs
+	 * its own copy of the statement, where DefineRelation() asserts
+	 * stmt->ownerid is already set.  GetUserId() is the same on the QD and the
+	 * QEs, so this keeps the new partition's owner consistent across the
+	 * cluster.
+	 */
+	createStmt->ownerid = GetUserId();
+
+	/*
+	 * GPDB: give the new partition the same distribution policy as the parent.
+	 * The LIKE clause does not copy the GPDB distribution policy, and because
+	 * this nested CREATE is not dispatched, DefineRelation() would otherwise
+	 * leave the new partition with no gp_distribution_policy entry -- the
+	 * coordinator would then treat it as non-distributed and never gather the
+	 * rows moved into it on the segments.  modelRel is the (identical on QD and
+	 * QEs) partitioned parent, so this yields the same policy everywhere.  The
+	 * partition is validated to be distribution-compatible when it is attached.
+	 */
+	if (modelRel->rd_cdbpolicy)
+		createStmt->intoPolicy = GpPolicyCopy(modelRel->rd_cdbpolicy);
+
 	tlc = makeNode(TableLikeClause);
 	tlc->relation = makeRangeVar(get_namespace_name(RelationGetNamespace(modelRel)),
 								 RelationGetRelationName(modelRel), -1);
@@ -24450,14 +24474,40 @@ createPartitionTable(RangeVar *newPartName, Relation modelRel,
 	wrapper->stmt_location = context->pstmt->stmt_location;
 	wrapper->stmt_len = context->pstmt->stmt_len;
 
-	ProcessUtility(wrapper,
-				   context->queryString,
-				   false,
-				   PROCESS_UTILITY_SUBCOMMAND,
-				   NULL,
-				   NULL,
-				   None_Receiver,
-				   NULL);
+	/*
+	 * GPDB: Do not let this nested CREATE (or any statement it generates, e.g.
+	 * for a SERIAL column's default) dispatch itself to the segments.
+	 * ATExecSplitPartition()/ATExecMergePartitions() run on the QD first and
+	 * then the whole ALTER TABLE ... SPLIT/MERGE PARTITION command is
+	 * dispatched and re-executed on the QEs, which recreate the partition
+	 * there.  If the nested CREATE also dispatched, each QE would create the
+	 * partition twice ("relation already exists").  Clearing
+	 * gp_dispatch_utility_statement makes CdbDispatchUtilityStatement() a no-op
+	 * for the whole nested command while leaving the OIDs preassigned on the QD
+	 * in the pending dispatch list (GetAssignedOidsForDispatch() only resets
+	 * that list when gp_dispatch_utility_statement is set), so the OIDs ride
+	 * along with the enclosing ALTER command and the QEs create the partition
+	 * with matching OIDs.  We clear it unconditionally (not just on the QD) so
+	 * the QE, which re-executes the ALTER and builds its own copy of this
+	 * CREATE, expands the LIKE clause locally (see ProcessUtilitySlow()).
+	 */
+	gp_dispatch_utility_statement = false;
+	PG_TRY();
+	{
+		ProcessUtility(wrapper,
+					   context->queryString,
+					   false,
+					   PROCESS_UTILITY_SUBCOMMAND,
+					   NULL,
+					   NULL,
+					   None_Receiver,
+					   NULL);
+	}
+	PG_FINALLY();
+	{
+		gp_dispatch_utility_statement = true;
+	}
+	PG_END_TRY();
 
 	/*
 	 * Open the new partition with no lock, because we already have
