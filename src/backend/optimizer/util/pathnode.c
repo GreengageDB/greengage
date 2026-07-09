@@ -1930,13 +1930,27 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 												  NULL,		/* incompatible_relids */
 												  NULL);	/* outer_relids */
 
+				/*
+				 * GPDB: preserve the child's parameterization (need_param =
+				 * true).  add_paths_to_append_rel() may have reparameterized
+				 * this General/SegmentGeneral child to the append's
+				 * required_outer (e.g. a non-lateral UNION ALL arm such as
+				 * "(VALUES(1))" sitting under a LATERAL append).  Dropping
+				 * param_info here would make PATH_REQ_OUTER() of the wrapped
+				 * subpath differ from required_outer and trip the
+				 * "All child paths must have same parameterization" assert in
+				 * create_append_path().  The segment-restricting Result does
+				 * not change which outer rels the path depends on, so it is
+				 * correct to carry the parameterization through.  When the
+				 * child has no params this is a no-op (param_info stays NULL).
+				 */
 				subpath = (Path *) create_projection_path_with_quals(
 					root,
 					subpath->parent,
 					subpath,
 					subpath->pathtarget,
 					list_make1(restrict_info),
-					false);
+					true);
 
 				/*
 				 * We use the skill of Result plannode with one time filter
