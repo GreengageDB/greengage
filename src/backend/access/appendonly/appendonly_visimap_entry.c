@@ -162,6 +162,8 @@ AppendOnlyVisiMapEnty_ReadData(AppendOnlyVisimapEntry *visiMapEntry, size_t data
 	{
 		visiMapEntry->bitmap = palloc0(offsetof(Bitmapset, words) +
 									   (newWordCount * sizeof(bitmapword)));
+		/* PG17 made Bitmapset a Node; the tag must be set or bms_is_valid_set() fails */
+		visiMapEntry->bitmap->type = T_Bitmapset;
 		visiMapEntry->bitmap->nwords = newWordCount;
 		BitmapDecompress_Decompress(&decompressState,
 									visiMapEntry->bitmap->words,
@@ -478,29 +480,6 @@ AppendOnlyVisimapEntry_IsVisible(
 	return visibilityBit;
 }
 
-/*
- * The minimal size (in uint32's elements) the entry array needs to have to
- * cover the given offset
- */
-static uint32
-AppendOnlyVisimapEntry_GetMinimalSizeToCover(int64 offset)
-{
-	uint32		minSize;
-
-	Assert(offset >= 0);
-
-	minSize = (offset / BITS_PER_BITMAPWORD) + 1;
-
-	/* Round up to the nearest multiple of two */
-	minSize--;
-	minSize |= minSize >> 1;
-	minSize |= minSize >> 2;
-	minSize |= minSize >> 4;
-	minSize |= minSize >> 8;
-	minSize |= minSize >> 16;
-	minSize++;
-	return minSize;
-}
 
 /**
  * Hides the given tuple id in the bitmap.
@@ -542,11 +521,15 @@ AppendOnlyVisimapEntry_HideTuple(AppendOnlyVisimapEntry *visiMapEntry,
 	 * enlarge the bitmap by a power of two. this avoids the O(n*n) resizing
 	 * policy of the original bitmap set
 	 */
-	if (!bms_covers_member(visiMapEntry->bitmap, rowNumOffset))
-		visiMapEntry->bitmap =
-			bms_resize(visiMapEntry->bitmap,
-					   AppendOnlyVisimapEntry_GetMinimalSizeToCover(rowNumOffset));
-
+	/*
+	 * GPDB/PG17: previously we pre-grew the bitmap with bms_resize() to cover
+	 * rowNumOffset, avoiding repeated reallocs.  PG17 made Bitmapset a Node with
+	 * a strict "no trailing zero words" invariant (bms_is_valid_set asserts), so
+	 * an over-sized bitmap crashes on the next bms_is_member().  bms_add_member()
+	 * grows the set on demand and PG's aset allocator already rounds allocations
+	 * up to power-of-two chunks, giving amortized O(1) growth, so the manual
+	 * pre-sizing is both unnecessary and invalid now.
+	 */
 	if (!bms_is_member(rowNumOffset, visiMapEntry->bitmap))
 	{
 		visiMapEntry->bitmap = bms_add_member(visiMapEntry->bitmap, rowNumOffset);

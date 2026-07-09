@@ -620,6 +620,7 @@ _outModifyTable(StringInfo str, const ModifyTable *node)
 	WRITE_NODE_FIELD(isSplitUpdates);
 	WRITE_BOOL_FIELD(forceTupleRouting);
 	WRITE_NODE_FIELD(mergeActionLists);
+	WRITE_NODE_FIELD(mergeJoinConditions);
 }
 
 static void

@@ -2565,6 +2565,7 @@ _readModifyTable(void)
 	READ_NODE_FIELD(isSplitUpdates);
 	READ_BOOL_FIELD(forceTupleRouting);
 	READ_NODE_FIELD(mergeActionLists);
+	READ_NODE_FIELD(mergeJoinConditions);
 
 	READ_DONE();
 }
