@@ -1475,6 +1475,7 @@ _outTableFunc(StringInfo str, const TableFunc *node)
 {
 	WRITE_NODE_TYPE("TABLEFUNC");
 
+	WRITE_ENUM_FIELD(functype, TableFuncType);
 	WRITE_NODE_FIELD(ns_uris);
 	WRITE_NODE_FIELD(ns_names);
 	WRITE_NODE_FIELD(docexpr);
@@ -1485,7 +1486,10 @@ _outTableFunc(StringInfo str, const TableFunc *node)
 	WRITE_NODE_FIELD(colcollations);
 	WRITE_NODE_FIELD(colexprs);
 	WRITE_NODE_FIELD(coldefexprs);
+	WRITE_NODE_FIELD(colvalexprs);
+	WRITE_NODE_FIELD(passingvalexprs);
 	WRITE_BITMAPSET_FIELD(notnulls);
+	WRITE_NODE_FIELD(plan);
 	WRITE_INT_FIELD(ordinalitycol);
 	WRITE_LOCATION_FIELD(location);
 }

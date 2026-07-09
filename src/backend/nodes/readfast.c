@@ -558,6 +558,7 @@ _readTableFunc(void)
 {
 	READ_LOCALS(TableFunc);
 
+	READ_ENUM_FIELD(functype, TableFuncType);
 	READ_NODE_FIELD(ns_uris);
 	READ_NODE_FIELD(ns_names);
 	READ_NODE_FIELD(docexpr);
@@ -568,7 +569,10 @@ _readTableFunc(void)
 	READ_NODE_FIELD(colcollations);
 	READ_NODE_FIELD(colexprs);
 	READ_NODE_FIELD(coldefexprs);
+	READ_NODE_FIELD(colvalexprs);
+	READ_NODE_FIELD(passingvalexprs);
 	READ_BITMAPSET_FIELD(notnulls);
+	READ_NODE_FIELD(plan);
 	READ_INT_FIELD(ordinalitycol);
 	READ_LOCATION_FIELD(location);
 
