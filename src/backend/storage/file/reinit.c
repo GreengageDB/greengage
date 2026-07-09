@@ -342,10 +342,18 @@ ResetUnloggedRelationsInDbspaceDir(const char *dbspacedirname, int op)
 			 * recovery init fork will be created and if we will not remove main
 			 * fork here, function copy_file will return error. Let's check main
 			 * fork here and remove if it is presented.
+			 * Such situations may happen when pg_basebackup checks main fork
+			 * file at time when init fork is not created yet. pg_basebackup
+			 * does not filter such file and adds it to the backup. Next, init
+			 * fork will be created by reading xlog at recovery.
 			 */
 			struct stat statbuf;
 			if (lstat(dstpath, &statbuf) == 0)
-				unlink(dstpath);
+			{
+				if (unlink(dstpath) != 0)
+					elog(ERROR, "unlink extra main fork %s error: %m", dstpath);
+				elog(DEBUG2, "unlink extra main fork %s", dstpath);
+			}
 
 			/* OK, we're ready to perform the actual copy. */
 			elog(DEBUG2, "copying %s to %s", srcpath, dstpath);

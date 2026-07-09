@@ -83,6 +83,12 @@ ok( !-f "$pgdata/${ts1UnloggedPath}_fsm",
 
 # Create new unlogged tables to check recovery when DB contains main fork only.
 
+# Make unreal get checkpoint after table creation before crash.
+$node->append_conf('postgresql.conf', <<EOF);
+checkpoint_timeout=1h
+EOF
+$node->restart;
+
 $node->safe_psql('postgres', 'CREATE UNLOGGED TABLE base_unlogged2 (id int)');
 $node->safe_psql('postgres',
 	'CREATE UNLOGGED TABLE ts1_unlogged2 (id int) TABLESPACE ts1');
