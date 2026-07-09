@@ -6263,6 +6263,30 @@ do { \
 			}
 			break;
 
+		case T_ProjectionPath:
+			{
+				/*
+				 * GPDB: a ProjectionPath can appear on the inner side of a
+				 * partitionwise nestloop (e.g. the semi-join RowIdExpr dedup
+				 * projection added by add_rowid_to_path(), or the
+				 * segment-restricting Result added by set_append_path_locus()).
+				 * Reparameterize the input and translate any restriction
+				 * clauses that reference the outer parent rel, mirroring how
+				 * the join cases treat joinrestrictinfo.  The projection's
+				 * pathtarget references the path's own (inner) rels, not the
+				 * outer parent being reparameterized, so it needs no
+				 * adjustment.  This case must stay in lockstep with
+				 * path_is_reparameterizable_by_child().
+				 */
+				ProjectionPath *ppath = (ProjectionPath *) path;
+
+				REPARAMETERIZE_CHILD_PATH(ppath->subpath);
+				if (ppath->cdb_restrict_clauses)
+					ADJUST_CHILD_ATTRS(ppath->cdb_restrict_clauses);
+				new_path = (Path *) ppath;
+			}
+			break;
+
 		default:
 			/* We don't know how to reparameterize this path. */
 			return NULL;
@@ -6448,6 +6472,15 @@ do { \
 				GatherPath *gpath = (GatherPath *) path;
 
 				REJECT_IF_PATH_NOT_REPARAMETERIZABLE(gpath->subpath);
+			}
+			break;
+
+		case T_ProjectionPath:
+			{
+				/* GPDB: keep in lockstep with reparameterize_path_by_child() */
+				ProjectionPath *ppath = (ProjectionPath *) path;
+
+				REJECT_IF_PATH_NOT_REPARAMETERIZABLE(ppath->subpath);
 			}
 			break;
 
