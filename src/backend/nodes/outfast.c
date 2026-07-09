@@ -4205,6 +4205,15 @@ _outPartitionCmd(StringInfo str, const PartitionCmd *node)
 }
 
 static void
+_outSinglePartitionSpec(StringInfo str, const SinglePartitionSpec *node)
+{
+	WRITE_NODE_TYPE("SINGLEPARTITIONSPEC");
+
+	WRITE_NODE_FIELD(name);
+	WRITE_NODE_FIELD(bound);
+}
+
+static void
 _outGpAlterPartitionId(StringInfo str, const GpAlterPartitionId *node)
 {
 	WRITE_NODE_TYPE("GPALTERPARTITIONID");
@@ -5884,6 +5893,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_PartitionRangeDatum:
 				_outPartitionRangeDatum(str, obj);
+				break;
+			case T_SinglePartitionSpec:
+				_outSinglePartitionSpec(str, obj);
 				break;
 			case T_PartitionCmd:
 				_outPartitionCmd(str, obj);

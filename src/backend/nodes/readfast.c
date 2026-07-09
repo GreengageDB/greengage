@@ -4564,6 +4564,17 @@ _readPartitionCmd(void)
 	READ_DONE();
 }
 
+static SinglePartitionSpec *
+_readSinglePartitionSpec(void)
+{
+	READ_LOCALS(SinglePartitionSpec);
+
+	READ_NODE_FIELD(name);
+	READ_NODE_FIELD(bound);
+
+	READ_DONE();
+}
+
 
 /*
  * For some structs, we have to provide a read functions because it differs
@@ -6523,6 +6534,9 @@ readNodeBinary(void)
 				break;
 			case T_PartitionRangeDatum:
 				return_value = _readPartitionRangeDatum();
+				break;
+			case T_SinglePartitionSpec:
+				return_value = _readSinglePartitionSpec();
 				break;
 			case T_PartitionCmd:
 				return_value = _readPartitionCmd();
