@@ -2215,6 +2215,201 @@ _outJsonIsPredicate(StringInfo str, const JsonIsPredicate *node)
 	WRITE_LOCATION_FIELD(location);
 }
 
+/*
+ * GPDB: PG17 SQL/JSON query (JSON_EXISTS/JSON_QUERY/JSON_VALUE), JSON_TABLE,
+ * JSON()/JSON_SCALAR()/JSON_SERIALIZE(), plus the MERGE and window run-condition
+ * expression nodes. These can appear in dispatched plans/expressions, so the
+ * hand-maintained binary serializers must handle them. Field order and types
+ * mirror the auto-generated _out* functions in outfuncs.funcs.c exactly; the
+ * matching readers live in readfast.c and MUST stay in lockstep.
+ */
+static void
+_outWindowFuncRunCondition(StringInfo str, const WindowFuncRunCondition *node)
+{
+	WRITE_NODE_TYPE("WINDOWFUNCRUNCONDITION");
+
+	WRITE_OID_FIELD(opno);
+	WRITE_OID_FIELD(inputcollid);
+	WRITE_BOOL_FIELD(wfunc_left);
+	WRITE_NODE_FIELD(arg);
+}
+
+static void
+_outMergeSupportFunc(StringInfo str, const MergeSupportFunc *node)
+{
+	WRITE_NODE_TYPE("MERGESUPPORTFUNC");
+
+	WRITE_OID_FIELD(msftype);
+	WRITE_OID_FIELD(msfcollid);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonBehavior(StringInfo str, const JsonBehavior *node)
+{
+	WRITE_NODE_TYPE("JSONBEHAVIOR");
+
+	WRITE_ENUM_FIELD(btype, JsonBehaviorType);
+	WRITE_NODE_FIELD(expr);
+	WRITE_BOOL_FIELD(coerce);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonExpr(StringInfo str, const JsonExpr *node)
+{
+	WRITE_NODE_TYPE("JSONEXPR");
+
+	WRITE_ENUM_FIELD(op, JsonExprOp);
+	WRITE_STRING_FIELD(column_name);
+	WRITE_NODE_FIELD(formatted_expr);
+	WRITE_NODE_FIELD(format);
+	WRITE_NODE_FIELD(path_spec);
+	WRITE_NODE_FIELD(returning);
+	WRITE_NODE_FIELD(passing_names);
+	WRITE_NODE_FIELD(passing_values);
+	WRITE_NODE_FIELD(on_empty);
+	WRITE_NODE_FIELD(on_error);
+	WRITE_BOOL_FIELD(use_io_coercion);
+	WRITE_BOOL_FIELD(use_json_coercion);
+	WRITE_ENUM_FIELD(wrapper, JsonWrapper);
+	WRITE_BOOL_FIELD(omit_quotes);
+	WRITE_OID_FIELD(collation);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonTablePath(StringInfo str, const JsonTablePath *node)
+{
+	WRITE_NODE_TYPE("JSONTABLEPATH");
+
+	WRITE_NODE_FIELD(value);
+	WRITE_STRING_FIELD(name);
+}
+
+static void
+_outJsonTablePathScan(StringInfo str, const JsonTablePathScan *node)
+{
+	WRITE_NODE_TYPE("JSONTABLEPATHSCAN");
+
+	WRITE_NODE_FIELD(path);
+	WRITE_BOOL_FIELD(errorOnError);
+	WRITE_NODE_FIELD(child);
+	WRITE_INT_FIELD(colMin);
+	WRITE_INT_FIELD(colMax);
+}
+
+static void
+_outJsonTableSiblingJoin(StringInfo str, const JsonTableSiblingJoin *node)
+{
+	WRITE_NODE_TYPE("JSONTABLESIBLINGJOIN");
+
+	WRITE_NODE_FIELD(lplan);
+	WRITE_NODE_FIELD(rplan);
+}
+
+static void
+_outJsonArgument(StringInfo str, const JsonArgument *node)
+{
+	WRITE_NODE_TYPE("JSONARGUMENT");
+
+	WRITE_NODE_FIELD(val);
+	WRITE_STRING_FIELD(name);
+}
+
+static void
+_outJsonFuncExpr(StringInfo str, const JsonFuncExpr *node)
+{
+	WRITE_NODE_TYPE("JSONFUNCEXPR");
+
+	WRITE_ENUM_FIELD(op, JsonExprOp);
+	WRITE_STRING_FIELD(column_name);
+	WRITE_NODE_FIELD(context_item);
+	WRITE_NODE_FIELD(pathspec);
+	WRITE_NODE_FIELD(passing);
+	WRITE_NODE_FIELD(output);
+	WRITE_NODE_FIELD(on_empty);
+	WRITE_NODE_FIELD(on_error);
+	WRITE_ENUM_FIELD(wrapper, JsonWrapper);
+	WRITE_ENUM_FIELD(quotes, JsonQuotes);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonTablePathSpec(StringInfo str, const JsonTablePathSpec *node)
+{
+	WRITE_NODE_TYPE("JSONTABLEPATHSPEC");
+
+	WRITE_NODE_FIELD(string);
+	WRITE_STRING_FIELD(name);
+	WRITE_LOCATION_FIELD(name_location);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonTable(StringInfo str, const JsonTable *node)
+{
+	WRITE_NODE_TYPE("JSONTABLE");
+
+	WRITE_NODE_FIELD(context_item);
+	WRITE_NODE_FIELD(pathspec);
+	WRITE_NODE_FIELD(passing);
+	WRITE_NODE_FIELD(columns);
+	WRITE_NODE_FIELD(on_error);
+	WRITE_NODE_FIELD(alias);
+	WRITE_BOOL_FIELD(lateral);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonTableColumn(StringInfo str, const JsonTableColumn *node)
+{
+	WRITE_NODE_TYPE("JSONTABLECOLUMN");
+
+	WRITE_ENUM_FIELD(coltype, JsonTableColumnType);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(typeName);
+	WRITE_NODE_FIELD(pathspec);
+	WRITE_NODE_FIELD(format);
+	WRITE_ENUM_FIELD(wrapper, JsonWrapper);
+	WRITE_ENUM_FIELD(quotes, JsonQuotes);
+	WRITE_NODE_FIELD(columns);
+	WRITE_NODE_FIELD(on_empty);
+	WRITE_NODE_FIELD(on_error);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonParseExpr(StringInfo str, const JsonParseExpr *node)
+{
+	WRITE_NODE_TYPE("JSONPARSEEXPR");
+
+	WRITE_NODE_FIELD(expr);
+	WRITE_NODE_FIELD(output);
+	WRITE_BOOL_FIELD(unique_keys);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonScalarExpr(StringInfo str, const JsonScalarExpr *node)
+{
+	WRITE_NODE_TYPE("JSONSCALAREXPR");
+
+	WRITE_NODE_FIELD(expr);
+	WRITE_NODE_FIELD(output);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outJsonSerializeExpr(StringInfo str, const JsonSerializeExpr *node)
+{
+	WRITE_NODE_TYPE("JSONSERIALIZEEXPR");
+
+	WRITE_NODE_FIELD(expr);
+	WRITE_NODE_FIELD(output);
+	WRITE_LOCATION_FIELD(location);
+}
+
 /*****************************************************************************
  *
  *	Stuff from pathnodes.h.
@@ -5905,6 +6100,54 @@ _outNode(StringInfo str, void *obj)
 			case T_JsonOutput:
 				_outJsonOutput(str, obj);
 				break;
+
+			/* GPDB: PG17 SQL/JSON and MERGE/window expression nodes */
+			case T_WindowFuncRunCondition:
+				_outWindowFuncRunCondition(str, obj);
+				break;
+			case T_MergeSupportFunc:
+				_outMergeSupportFunc(str, obj);
+				break;
+			case T_JsonBehavior:
+				_outJsonBehavior(str, obj);
+				break;
+			case T_JsonExpr:
+				_outJsonExpr(str, obj);
+				break;
+			case T_JsonTablePath:
+				_outJsonTablePath(str, obj);
+				break;
+			case T_JsonTablePathScan:
+				_outJsonTablePathScan(str, obj);
+				break;
+			case T_JsonTableSiblingJoin:
+				_outJsonTableSiblingJoin(str, obj);
+				break;
+			case T_JsonArgument:
+				_outJsonArgument(str, obj);
+				break;
+			case T_JsonFuncExpr:
+				_outJsonFuncExpr(str, obj);
+				break;
+			case T_JsonTablePathSpec:
+				_outJsonTablePathSpec(str, obj);
+				break;
+			case T_JsonTable:
+				_outJsonTable(str, obj);
+				break;
+			case T_JsonTableColumn:
+				_outJsonTableColumn(str, obj);
+				break;
+			case T_JsonParseExpr:
+				_outJsonParseExpr(str, obj);
+				break;
+			case T_JsonScalarExpr:
+				_outJsonScalarExpr(str, obj);
+				break;
+			case T_JsonSerializeExpr:
+				_outJsonSerializeExpr(str, obj);
+				break;
+
 			case T_PublicationObjSpec:
 				_outPublicationObjSpec(str, obj);
 				break;

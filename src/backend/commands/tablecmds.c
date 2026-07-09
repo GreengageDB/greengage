@@ -19534,6 +19534,15 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 		 */
 		PushActiveSnapshot(GetLatestSnapshot());
 
+		/*
+		 * The plan built by build_ctas_with_dist() was given a (now popped)
+		 * snapshot in queryDesc->snapshot.  ExecutorStart() asserts that the
+		 * active snapshot is identical to queryDesc->snapshot, so retarget
+		 * queryDesc->snapshot to the snapshot we just made active (which also
+		 * ensures the query sees all committed work, per the comment above).
+		 */
+		queryDesc->snapshot = GetActiveSnapshot();
+
 		/* Step (c) - run on all nodes */
 		queryDesc->ddesc = makeNode(QueryDispatchDesc);
 		queryDesc->ddesc->useChangedAOOpts = false;
@@ -20051,10 +20060,20 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			 */
 			PushActiveSnapshot(GetLatestSnapshot());
 
+			/*
+			 * The plan built by build_ctas_with_dist() was given a (now
+			 * popped) snapshot in queryDesc->snapshot.  ExecutorStart()
+			 * asserts that the active snapshot is identical to
+			 * queryDesc->snapshot, so retarget queryDesc->snapshot to the
+			 * snapshot we just made active (which also ensures the query sees
+			 * all committed work, per the comment above).
+			 */
+			queryDesc->snapshot = GetActiveSnapshot();
+
 			/* Step (c) - run on all nodes */
 			queryDesc->ddesc = makeNode(QueryDispatchDesc);
 			queryDesc->ddesc->useChangedAOOpts = false;
-		
+
 			/* GPDB hook for collecting query info */
 			if (query_info_collect_hook)
 				(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);

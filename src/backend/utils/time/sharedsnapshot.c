@@ -186,8 +186,6 @@ typedef struct DumpEntry
 static HTAB *dumpHtab = NULL;
 static bool created_dump = false;
 
-static ResourceOwner DumpResOwner = NULL;	/* shared snapshot dump resources */
-
 /* MPP Shared Snapshot. */
 typedef struct SharedSnapshotStruct
 {
@@ -620,20 +618,15 @@ lookupSharedSnapshot(char *lookerDescription, char *creatorDescription, int id)
 void
 dumpSharedLocalSnapshot_forCursor(void)
 {
-	ResourceOwner oldowner;
+	ResourceOwner saveOwner;
 	SharedSnapshotSlot *src = NULL;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH || (Gp_role == GP_ROLE_EXECUTE && Gp_is_writer));
 	Assert(SharedLocalSnapshotSlot != NULL);
 
-	if (DumpResOwner== NULL)
-		DumpResOwner = ResourceOwnerCreate(NULL, "SharedSnapshotDumpResOwner");
-
 	LWLockAcquire(SharedLocalSnapshotSlot->slotLock, LW_EXCLUSIVE);
 
 	created_dump = true;
-	oldowner = CurrentResourceOwner;
-	CurrentResourceOwner = DumpResOwner;
 
 	src = (SharedSnapshotSlot *)SharedLocalSnapshotSlot;
 
@@ -646,7 +639,24 @@ dumpSharedLocalSnapshot_forCursor(void)
 		dsm_detach(pDump->segment);
 
 	sz = EstimateSnapshotSpace(&src->snapshot);
+
+	/*
+	 * GPDB: This shared-snapshot DSM segment is shared across cursor gangs and
+	 * is meant to outlive the current statement's resource owner.  In addition,
+	 * this function can run from a GUC assign hook (SET gp_write_shared_snapshot)
+	 * that may fire while CurrentResourceOwner is mid-release
+	 * (owner->releasing == true).  Since PG17 dsm_create() registers the new
+	 * segment with CurrentResourceOwner (via ResourceOwnerEnlarge /
+	 * ResourceOwnerRememberDSM), both cases would error out inside
+	 * ResourceOwnerEnlarge.  Create the segment with no resource owner so it is
+	 * not tied to (nor auto-detached by) the current owner; instead it stays
+	 * mapped until we explicitly detach it -- on slot reuse just above, or in
+	 * AtEOXact_SharedSnapshot().
+	 */
+	saveOwner = CurrentResourceOwner;
+	CurrentResourceOwner = NULL;
 	segment = dsm_create(sz, 0);
+	CurrentResourceOwner = saveOwner;
 
 	char *ptr = dsm_segment_address(segment);
 	SerializeSnapshot(&src->snapshot, ptr);
@@ -662,7 +672,6 @@ dumpSharedLocalSnapshot_forCursor(void)
 	src->cur_dump_id =
 		(src->cur_dump_id + 1) % SNAPSHOTDUMPARRAYSZ;
 
-	CurrentResourceOwner = oldowner;
 	LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 }
 
@@ -773,13 +782,25 @@ AtEOXact_SharedSnapshot(void)
 
 	if (created_dump)
 	{
+		int i;
+
 		LWLockAcquire(SharedLocalSnapshotSlot->slotLock, LW_EXCLUSIVE);
 
-		/* release dump dsm */
-		ResourceOwnerRelease(DumpResOwner,
-		                     RESOURCE_RELEASE_BEFORE_LOCKS,
-		                     false, /* isCommit */
-		                     true); /* isTopLevel */
+		/*
+		 * GPDB: The dump DSM segments are created with no resource owner (see
+		 * dumpSharedLocalSnapshot_forCursor), so resource-owner cleanup does
+		 * not detach them.  Detach any that are still mapped by this (writer)
+		 * backend before we clear the slot; otherwise the mappings would leak
+		 * for the remaining life of the backend.
+		 */
+		for (i = 0; i < SNAPSHOTDUMPARRAYSZ; i++)
+		{
+			if (SharedLocalSnapshotSlot->dump[i].segment != NULL)
+			{
+				dsm_detach(SharedLocalSnapshotSlot->dump[i].segment);
+				SharedLocalSnapshotSlot->dump[i].segment = NULL;
+			}
+		}
 
 		SharedLocalSnapshotSlot->cur_dump_id = 0;
 		MemSet(SharedLocalSnapshotSlot->dump, 0, sizeof(SnapshotDump) * SNAPSHOTDUMPARRAYSZ);

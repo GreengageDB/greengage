@@ -2070,6 +2070,230 @@ _readJsonIsPredicate()
 }
 
 /*
+ * GPDB: readers for the PG17 SQL/JSON query (JSON_EXISTS/JSON_QUERY/JSON_VALUE),
+ * JSON_TABLE, JSON()/JSON_SCALAR()/JSON_SERIALIZE(), and MERGE/window
+ * run-condition expression nodes that GPDB dispatches to the segments. These
+ * must stay in exact lockstep with the matching _out* functions in outfast.c
+ * (same fields, same order). Bodies mirror readfuncs.funcs.c.
+ */
+static WindowFuncRunCondition *
+_readWindowFuncRunCondition(void)
+{
+	READ_LOCALS(WindowFuncRunCondition);
+
+	READ_OID_FIELD(opno);
+	READ_OID_FIELD(inputcollid);
+	READ_BOOL_FIELD(wfunc_left);
+	READ_NODE_FIELD(arg);
+
+	READ_DONE();
+}
+
+static MergeSupportFunc *
+_readMergeSupportFunc(void)
+{
+	READ_LOCALS(MergeSupportFunc);
+
+	READ_OID_FIELD(msftype);
+	READ_OID_FIELD(msfcollid);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonBehavior *
+_readJsonBehavior(void)
+{
+	READ_LOCALS(JsonBehavior);
+
+	READ_ENUM_FIELD(btype, JsonBehaviorType);
+	READ_NODE_FIELD(expr);
+	READ_BOOL_FIELD(coerce);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonExpr *
+_readJsonExpr(void)
+{
+	READ_LOCALS(JsonExpr);
+
+	READ_ENUM_FIELD(op, JsonExprOp);
+	READ_STRING_FIELD(column_name);
+	READ_NODE_FIELD(formatted_expr);
+	READ_NODE_FIELD(format);
+	READ_NODE_FIELD(path_spec);
+	READ_NODE_FIELD(returning);
+	READ_NODE_FIELD(passing_names);
+	READ_NODE_FIELD(passing_values);
+	READ_NODE_FIELD(on_empty);
+	READ_NODE_FIELD(on_error);
+	READ_BOOL_FIELD(use_io_coercion);
+	READ_BOOL_FIELD(use_json_coercion);
+	READ_ENUM_FIELD(wrapper, JsonWrapper);
+	READ_BOOL_FIELD(omit_quotes);
+	READ_OID_FIELD(collation);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonTablePath *
+_readJsonTablePath(void)
+{
+	READ_LOCALS(JsonTablePath);
+
+	READ_NODE_FIELD(value);
+	READ_STRING_FIELD(name);
+
+	READ_DONE();
+}
+
+static JsonTablePathScan *
+_readJsonTablePathScan(void)
+{
+	READ_LOCALS(JsonTablePathScan);
+
+	READ_NODE_FIELD(path);
+	READ_BOOL_FIELD(errorOnError);
+	READ_NODE_FIELD(child);
+	READ_INT_FIELD(colMin);
+	READ_INT_FIELD(colMax);
+
+	READ_DONE();
+}
+
+static JsonTableSiblingJoin *
+_readJsonTableSiblingJoin(void)
+{
+	READ_LOCALS(JsonTableSiblingJoin);
+
+	READ_NODE_FIELD(lplan);
+	READ_NODE_FIELD(rplan);
+
+	READ_DONE();
+}
+
+static JsonArgument *
+_readJsonArgument(void)
+{
+	READ_LOCALS(JsonArgument);
+
+	READ_NODE_FIELD(val);
+	READ_STRING_FIELD(name);
+
+	READ_DONE();
+}
+
+static JsonFuncExpr *
+_readJsonFuncExpr(void)
+{
+	READ_LOCALS(JsonFuncExpr);
+
+	READ_ENUM_FIELD(op, JsonExprOp);
+	READ_STRING_FIELD(column_name);
+	READ_NODE_FIELD(context_item);
+	READ_NODE_FIELD(pathspec);
+	READ_NODE_FIELD(passing);
+	READ_NODE_FIELD(output);
+	READ_NODE_FIELD(on_empty);
+	READ_NODE_FIELD(on_error);
+	READ_ENUM_FIELD(wrapper, JsonWrapper);
+	READ_ENUM_FIELD(quotes, JsonQuotes);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonTablePathSpec *
+_readJsonTablePathSpec(void)
+{
+	READ_LOCALS(JsonTablePathSpec);
+
+	READ_NODE_FIELD(string);
+	READ_STRING_FIELD(name);
+	READ_LOCATION_FIELD(name_location);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonTable *
+_readJsonTable(void)
+{
+	READ_LOCALS(JsonTable);
+
+	READ_NODE_FIELD(context_item);
+	READ_NODE_FIELD(pathspec);
+	READ_NODE_FIELD(passing);
+	READ_NODE_FIELD(columns);
+	READ_NODE_FIELD(on_error);
+	READ_NODE_FIELD(alias);
+	READ_BOOL_FIELD(lateral);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonTableColumn *
+_readJsonTableColumn(void)
+{
+	READ_LOCALS(JsonTableColumn);
+
+	READ_ENUM_FIELD(coltype, JsonTableColumnType);
+	READ_STRING_FIELD(name);
+	READ_NODE_FIELD(typeName);
+	READ_NODE_FIELD(pathspec);
+	READ_NODE_FIELD(format);
+	READ_ENUM_FIELD(wrapper, JsonWrapper);
+	READ_ENUM_FIELD(quotes, JsonQuotes);
+	READ_NODE_FIELD(columns);
+	READ_NODE_FIELD(on_empty);
+	READ_NODE_FIELD(on_error);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonParseExpr *
+_readJsonParseExpr(void)
+{
+	READ_LOCALS(JsonParseExpr);
+
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(output);
+	READ_BOOL_FIELD(unique_keys);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonScalarExpr *
+_readJsonScalarExpr(void)
+{
+	READ_LOCALS(JsonScalarExpr);
+
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(output);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonSerializeExpr *
+_readJsonSerializeExpr(void)
+{
+	READ_LOCALS(JsonSerializeExpr);
+
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(output);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+/*
  *	Stuff from pathnodes.h.
  *
  * Mostly we don't need to read planner nodes back in again, but some
@@ -6331,6 +6555,54 @@ readNodeBinary(void)
 			case T_JsonOutput:
 				return_value = _readJsonOutput();
 				break;
+
+			/* GPDB: PG17 SQL/JSON and MERGE/window expression nodes */
+			case T_WindowFuncRunCondition:
+				return_value = _readWindowFuncRunCondition();
+				break;
+			case T_MergeSupportFunc:
+				return_value = _readMergeSupportFunc();
+				break;
+			case T_JsonBehavior:
+				return_value = _readJsonBehavior();
+				break;
+			case T_JsonExpr:
+				return_value = _readJsonExpr();
+				break;
+			case T_JsonTablePath:
+				return_value = _readJsonTablePath();
+				break;
+			case T_JsonTablePathScan:
+				return_value = _readJsonTablePathScan();
+				break;
+			case T_JsonTableSiblingJoin:
+				return_value = _readJsonTableSiblingJoin();
+				break;
+			case T_JsonArgument:
+				return_value = _readJsonArgument();
+				break;
+			case T_JsonFuncExpr:
+				return_value = _readJsonFuncExpr();
+				break;
+			case T_JsonTablePathSpec:
+				return_value = _readJsonTablePathSpec();
+				break;
+			case T_JsonTable:
+				return_value = _readJsonTable();
+				break;
+			case T_JsonTableColumn:
+				return_value = _readJsonTableColumn();
+				break;
+			case T_JsonParseExpr:
+				return_value = _readJsonParseExpr();
+				break;
+			case T_JsonScalarExpr:
+				return_value = _readJsonScalarExpr();
+				break;
+			case T_JsonSerializeExpr:
+				return_value = _readJsonSerializeExpr();
+				break;
+
 			case T_PublicationObjSpec:
 				return_value = _readPublicationObjSpec();
 				break;
