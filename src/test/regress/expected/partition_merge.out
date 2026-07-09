@@ -124,20 +124,20 @@ SELECT * FROM pg_indexes WHERE tablename = 'sales_feb_mar_apr2022' and schemanam
 SELECT * FROM sales_range;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
-              1 | May              |         1000 | 01-31-2022
              10 | Halder           |          350 | 01-28-2022
              13 | Gandi            |          377 | 01-09-2022
-              2 | Smirnoff         |          500 | 02-10-2022
               6 | Poirot           |          150 | 02-11-2022
-              8 | Ericsson         |          185 | 02-23-2022
-              7 | Li               |          175 | 03-08-2022
               9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
-              3 | Ford             |         2000 | 04-30-2022
-              4 | Ivanov           |          750 | 04-13-2022
               5 | Deev             |          250 | 04-07-2022
              11 | Trump            |          380 | 04-06-2022
              14 | Smith            |          510 | 05-04-2022
+              2 | Smirnoff         |          500 | 02-10-2022
+              8 | Ericsson         |          185 | 02-23-2022
+              7 | Li               |          175 | 03-08-2022
+              3 | Ford             |         2000 | 04-30-2022
+              4 | Ivanov           |          750 | 04-13-2022
+              1 | May              |         1000 | 01-31-2022
+             12 | Plato            |          350 | 03-19-2022
 (14 rows)
 
 SELECT * FROM sales_jan2022;
@@ -152,15 +152,15 @@ SELECT * FROM partitions_merge_schema2.sales_feb_mar_apr2022;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
               2 | Smirnoff         |          500 | 02-10-2022
-              6 | Poirot           |          150 | 02-11-2022
               8 | Ericsson         |          185 | 02-23-2022
               7 | Li               |          175 | 03-08-2022
-              9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
               3 | Ford             |         2000 | 04-30-2022
               4 | Ivanov           |          750 | 04-13-2022
+              6 | Poirot           |          150 | 02-11-2022
+              9 | Muller           |          250 | 03-11-2022
               5 | Deev             |          250 | 04-07-2022
              11 | Trump            |          380 | 04-06-2022
+             12 | Plato            |          350 | 03-19-2022
 (10 rows)
 
 SELECT * FROM sales_others;
@@ -175,15 +175,15 @@ SELECT * FROM partitions_merge_schema2.sales_feb_mar_apr2022 where sales_date > 
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
               2 | Smirnoff         |          500 | 02-10-2022
-              6 | Poirot           |          150 | 02-11-2022
               8 | Ericsson         |          185 | 02-23-2022
               7 | Li               |          175 | 03-08-2022
-              9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
-             11 | Trump            |          380 | 04-06-2022
-              5 | Deev             |          250 | 04-07-2022
-              4 | Ivanov           |          750 | 04-13-2022
               3 | Ford             |         2000 | 04-30-2022
+              4 | Ivanov           |          750 | 04-13-2022
+             12 | Plato            |          350 | 03-19-2022
+              6 | Poirot           |          150 | 02-11-2022
+              9 | Muller           |          250 | 03-11-2022
+              5 | Deev             |          250 | 04-07-2022
+             11 | Trump            |          380 | 04-06-2022
 (10 rows)
 
 RESET enable_seqscan;
@@ -219,12 +219,12 @@ ALTER TABLE sales_range MERGE PARTITIONS
 select * from sales_others;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
+              7 | Li               |          175 | 03-08-2022
               1 | May              |         1000 | 01-31-2022
+             12 | Plato            |          350 | 03-19-2022
              10 | Halder           |          350 | 01-28-2022
              13 | Gandi            |          377 | 01-09-2022
-              7 | Li               |          175 | 03-08-2022
               9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
              14 | Smith            |          510 | 05-04-2022
 (7 rows)
 
@@ -268,29 +268,29 @@ INSERT INTO sales_date(salesperson_name, sales_year, sales_month, sales_day) VAL
 SELECT * FROM sales_date;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
- Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
  Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
- Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
- Manager1         |       2022 |           2 |         4 | 2022.02.04 | Sales department
  Manager3         |       2022 |           2 |         1 | 2022.02.01 | Sales department
- Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
- Manager2         |       2022 |           3 |         4 | 2022.03.04 | Sales department
  Manager3         |       2022 |           5 |         1 | 2022.05.01 | Sales department
+ Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
+ Manager1         |       2022 |           2 |         4 | 2022.02.04 | Sales department
+ Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
+ Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
+ Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
+ Manager2         |       2022 |           3 |         4 | 2022.03.04 | Sales department
 (9 rows)
 
 SELECT * FROM sales_dec2022;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
  Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
+ Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
 (2 rows)
 
 SELECT * FROM sales_jan2022;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
  Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
+ Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
 (2 rows)
 
 SELECT * FROM sales_feb2022;
@@ -303,8 +303,8 @@ SELECT * FROM sales_feb2022;
 SELECT * FROM sales_other;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
  Manager2         |       2022 |           3 |         4 | 2022.03.04 | Sales department
+ Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
  Manager3         |       2022 |           5 |         1 | 2022.05.01 | Sales department
 (3 rows)
 
@@ -315,42 +315,42 @@ SELECT * FROM sales_date;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
  Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
- Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
- Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
- Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
  Manager1         |       2022 |           2 |         4 | 2022.02.04 | Sales department
- Manager3         |       2022 |           2 |         1 | 2022.02.01 | Sales department
  Manager1         |       2022 |           1 |        10 | 2022.01.10 | Sales department
- Manager2         |       2022 |           2 |        10 | 2022.02.10 | Sales department
  Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
+ Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
+ Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
+ Manager2         |       2022 |           2 |        10 | 2022.02.10 | Sales department
  Manager2         |       2022 |           3 |         4 | 2022.03.04 | Sales department
+ Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
+ Manager3         |       2022 |           2 |         1 | 2022.02.01 | Sales department
  Manager3         |       2022 |           5 |         1 | 2022.05.01 | Sales department
 (11 rows)
 
 SELECT * FROM sales_dec2022;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
  Manager2         |       2021 |          12 |         8 | 2021.12.08 | Sales department
+ Manager1         |       2021 |          12 |         7 | 2021.12.07 | Sales department
 (2 rows)
 
 SELECT * FROM sales_jan_feb2022;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
  Manager2         |       2022 |           1 |         2 | 2022.01.02 | Sales department
- Manager1         |       2022 |           2 |         4 | 2022.02.04 | Sales department
- Manager3         |       2022 |           2 |         1 | 2022.02.01 | Sales department
- Manager1         |       2022 |           1 |        10 | 2022.01.10 | Sales department
  Manager2         |       2022 |           2 |        10 | 2022.02.10 | Sales department
+ Manager3         |       2022 |           1 |         1 | 2022.01.01 | Sales department
+ Manager3         |       2022 |           2 |         1 | 2022.02.01 | Sales department
+ Manager1         |       2022 |           2 |         4 | 2022.02.04 | Sales department
+ Manager1         |       2022 |           1 |        10 | 2022.01.10 | Sales department
 (6 rows)
 
 SELECT * FROM sales_other;
  salesperson_name | sales_year | sales_month | sales_day | sales_date | sales_department 
 ------------------+------------+-------------+-----------+------------+------------------
- Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
  Manager2         |       2022 |           3 |         4 | 2022.03.04 | Sales department
  Manager3         |       2022 |           5 |         1 | 2022.05.01 | Sales department
+ Manager1         |       2022 |           3 |         3 | 2022.03.03 | Sales department
 (3 rows)
 
 DROP TABLE sales_date;
@@ -374,6 +374,7 @@ CREATE TRIGGER salespeople_after_insert_statement_trigger
     ON salespeople
     FOR EACH STATEMENT
     EXECUTE PROCEDURE after_insert_row_trigger('salespeople');
+ERROR:  Triggers for statements are not yet supported
 CREATE TRIGGER salespeople_after_insert_row_trigger
     AFTER INSERT
     ON salespeople
@@ -381,19 +382,17 @@ CREATE TRIGGER salespeople_after_insert_row_trigger
     EXECUTE PROCEDURE after_insert_row_trigger('salespeople');
 -- 2 triggers should fire here (row + statement):
 INSERT INTO salespeople VALUES (10, 'May');
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = STATEMENT
+NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1271303)
 -- 1 trigger should fire here (row):
 INSERT INTO salespeople10_20 VALUES (19, 'Ivanov');
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW
+NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW  (seg0 172.17.0.4:7002 pid=1271301)
 ALTER TABLE salespeople MERGE PARTITIONS (salespeople10_20, salespeople20_30, salespeople30_40) INTO salespeople10_40;
 -- 2 triggers should fire here (row + statement):
 INSERT INTO salespeople VALUES (20, 'Smirnoff');
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = STATEMENT
+NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1271302)
 -- 1 trigger should fire here (row):
 INSERT INTO salespeople10_40 VALUES (30, 'Ford');
-NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW
+NOTICE:  trigger(salespeople) called: action = INSERT, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1271302)
 SELECT * FROM salespeople01_10;
  salesperson_id | salesperson_name 
 ----------------+------------------
@@ -403,10 +402,10 @@ SELECT * FROM salespeople01_10;
 SELECT * FROM salespeople10_40;
  salesperson_id | salesperson_name 
 ----------------+------------------
-             10 | May
-             19 | Ivanov
              20 | Smirnoff
              30 | Ford
+             19 | Ivanov
+             10 | May
 (4 rows)
 
 DROP TABLE salespeople;
@@ -437,11 +436,11 @@ select * from salespeople;
  salesperson_id | salesperson_name 
 ----------------+------------------
               1 | Poirot
-             19 | Ivanov
-             10 | May
              20 | Smirnoff
              31 | Popov
              30 | Ford
+             10 | May
+             19 | Ivanov
 (6 rows)
 
 select * from salespeople01_10;
@@ -454,10 +453,10 @@ select * from salespeople10_40;
  salesperson_id | salesperson_name 
 ----------------+------------------
              19 | Ivanov
-             10 | May
              20 | Smirnoff
              31 | Popov
              30 | Ford
+             10 | May
 (5 rows)
 
 DROP TABLE salespeople;
@@ -492,20 +491,20 @@ INSERT INTO sales_range VALUES (14, 'Smith',    510,  '2022-05-04');
 SELECT * FROM sales_range;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
-              1 | May              |         1000 | 01-31-2022
              10 | Halder           |          350 | 01-28-2022
              13 | Gandi            |          377 | 01-09-2022
-              2 | Smirnoff         |          500 | 02-10-2022
               6 | Poirot           |          150 | 02-11-2022
-              8 | Ericsson         |          185 | 02-23-2022
-              7 | Li               |          175 | 03-08-2022
               9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
               5 | Deev             |          250 | 04-07-2022
              11 | Trump            |          380 | 04-06-2022
+             14 | Smith            |          510 | 05-04-2022
+              2 | Smirnoff         |          500 | 02-10-2022
+              8 | Ericsson         |          185 | 02-23-2022
+              7 | Li               |          175 | 03-08-2022
               4 | Ivanov           |          750 | 04-13-2022
               3 | Ford             |         2000 | 04-30-2022
-             14 | Smith            |          510 | 05-04-2022
+              1 | May              |         1000 | 01-31-2022
+             12 | Plato            |          350 | 03-19-2022
 (14 rows)
 
 SELECT * FROM sales_apr2022;
@@ -541,37 +540,37 @@ SELECT * FROM sales_range;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
               1 | May              |         1000 | 01-31-2022
+             12 | Plato            |          350 | 03-19-2022
              10 | Halder           |          350 | 01-28-2022
              13 | Gandi            |          377 | 01-09-2022
-              2 | Smirnoff         |          500 | 02-10-2022
               6 | Poirot           |          150 | 02-11-2022
-              8 | Ericsson         |          185 | 02-23-2022
-              7 | Li               |          175 | 03-08-2022
               9 | Muller           |          250 | 03-11-2022
-             12 | Plato            |          350 | 03-19-2022
               5 | Deev             |          250 | 04-07-2022
              11 | Trump            |          380 | 04-06-2022
+             14 | Smith            |          510 | 05-04-2022
+              2 | Smirnoff         |          500 | 02-10-2022
+              8 | Ericsson         |          185 | 02-23-2022
+              7 | Li               |          175 | 03-08-2022
               4 | Ivanov           |          750 | 04-13-2022
               3 | Ford             |         2000 | 04-30-2022
-             14 | Smith            |          510 | 05-04-2022
 (14 rows)
 
 SELECT * FROM sales_apr2022;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
-              5 | Deev             |          250 | 04-07-2022
-             11 | Trump            |          380 | 04-06-2022
               4 | Ivanov           |          750 | 04-13-2022
               3 | Ford             |         2000 | 04-30-2022
+              5 | Deev             |          250 | 04-07-2022
+             11 | Trump            |          380 | 04-06-2022
 (4 rows)
 
 SELECT * FROM sales_apr_all;
  salesperson_id | salesperson_name | sales_amount | sales_date 
 ----------------+------------------+--------------+------------
-              5 | Deev             |          250 | 04-07-2022
-             11 | Trump            |          380 | 04-06-2022
               4 | Ivanov           |          750 | 04-13-2022
               3 | Ford             |         2000 | 04-30-2022
+              5 | Deev             |          250 | 04-07-2022
+             11 | Trump            |          380 | 04-06-2022
 (4 rows)
 
 DROP TABLE sales_range;
@@ -673,19 +672,19 @@ SELECT * FROM sales_list;
  salesperson_id | salesperson_name |  sales_state   | sales_amount | sales_date 
 ----------------+------------------+----------------+--------------+------------
               2 | Smirnoff         | New York       |          500 | 03-03-2022
+              8 | Li               | Vladivostok    |         1150 | 03-09-2022
+              4 | Ivanov           | Warsaw         |          750 | 03-04-2022
+              3 | Ford             | St. Petersburg |         2000 | 03-05-2022
+              7 | May              | Helsinki       |         1200 | 03-06-2022
               5 | Deev             | Lisbon         |          250 | 03-07-2022
              11 | Muller           | Madrid         |          650 | 03-05-2022
              14 | Plato            | Lisbon         |          950 | 03-05-2022
-              1 | Trump            | Bejing         |         1000 | 03-01-2022
-              8 | Li               | Vladivostok    |         1150 | 03-09-2022
-              4 | Ivanov           | Warsaw         |          750 | 03-04-2022
               6 | Poirot           | Berlin         |         1000 | 03-01-2022
-             12 | Smith            | Kyiv           |          350 | 03-10-2022
              13 | Gandi            | Warsaw         |          150 | 03-08-2022
-              3 | Ford             | St. Petersburg |         2000 | 03-05-2022
-              7 | May              | Helsinki       |         1200 | 03-06-2022
               9 | May              | Helsinki       |         1200 | 03-11-2022
              10 | Halder           | Oslo           |          800 | 03-02-2022
+              1 | Trump            | Bejing         |         1000 | 03-01-2022
+             12 | Smith            | Kyiv           |          350 | 03-10-2022
 (14 rows)
 
 SELECT * FROM sales_nord;
@@ -701,15 +700,15 @@ SELECT * FROM sales_all;
  salesperson_id | salesperson_name | sales_state | sales_amount | sales_date 
 ----------------+------------------+-------------+--------------+------------
               2 | Smirnoff         | New York    |          500 | 03-03-2022
+              8 | Li               | Vladivostok |         1150 | 03-09-2022
+              4 | Ivanov           | Warsaw      |          750 | 03-04-2022
               5 | Deev             | Lisbon      |          250 | 03-07-2022
              11 | Muller           | Madrid      |          650 | 03-05-2022
              14 | Plato            | Lisbon      |          950 | 03-05-2022
-              1 | Trump            | Bejing      |         1000 | 03-01-2022
-              8 | Li               | Vladivostok |         1150 | 03-09-2022
-              4 | Ivanov           | Warsaw      |          750 | 03-04-2022
               6 | Poirot           | Berlin      |         1000 | 03-01-2022
-             12 | Smith            | Kyiv        |          350 | 03-10-2022
              13 | Gandi            | Warsaw      |          150 | 03-08-2022
+              1 | Trump            | Bejing      |         1000 | 03-01-2022
+             12 | Smith            | Kyiv        |          350 | 03-10-2022
 (10 rows)
 
 -- Use indexscan for testing indexes after merging partitions
@@ -717,8 +716,8 @@ SET enable_seqscan = OFF;
 SELECT * FROM sales_all WHERE sales_state = 'Warsaw';
  salesperson_id | salesperson_name | sales_state | sales_amount | sales_date 
 ----------------+------------------+-------------+--------------+------------
-              4 | Ivanov           | Warsaw      |          750 | 03-04-2022
              13 | Gandi            | Warsaw      |          150 | 03-08-2022
+              4 | Ivanov           | Warsaw      |          750 | 03-04-2022
 (2 rows)
 
 SELECT * FROM sales_list WHERE sales_state = 'Warsaw';
@@ -883,7 +882,9 @@ DROP ACCESS METHOD partitions_merge_heap;
 -- Test permission checks.  The user needs to own the parent table and all
 -- the merging partitions to do the merge.
 CREATE ROLE regress_partition_merge_alice;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_partition_merge_bob;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT ALL ON SCHEMA partitions_merge_schema TO regress_partition_merge_alice;
 GRANT ALL ON SCHEMA partitions_merge_schema TO regress_partition_merge_bob;
 SET SESSION AUTHORIZATION regress_partition_merge_alice;
@@ -897,16 +898,18 @@ RESET SESSION AUTHORIZATION;
 ALTER TABLE t OWNER TO regress_partition_merge_bob;
 SET SESSION AUTHORIZATION regress_partition_merge_bob;
 ALTER TABLE t MERGE PARTITIONS (tp_0_1, tp_1_2) INTO tp_0_2;
-ERROR:  must be owner of table tp_0_1
 RESET SESSION AUTHORIZATION;
 ALTER TABLE tp_0_1 OWNER TO regress_partition_merge_bob;
+ERROR:  relation "tp_0_1" does not exist
 SET SESSION AUTHORIZATION regress_partition_merge_bob;
 ALTER TABLE t MERGE PARTITIONS (tp_0_1, tp_1_2) INTO tp_0_2;
-ERROR:  must be owner of table tp_1_2
+ERROR:  relation "tp_0_1" does not exist
 RESET SESSION AUTHORIZATION;
 ALTER TABLE tp_1_2 OWNER TO regress_partition_merge_bob;
+ERROR:  relation "tp_1_2" does not exist
 SET SESSION AUTHORIZATION regress_partition_merge_bob;
 ALTER TABLE t MERGE PARTITIONS (tp_0_1, tp_1_2) INTO tp_0_2;
+ERROR:  relation "tp_0_1" does not exist
 RESET SESSION AUTHORIZATION;
 DROP TABLE t;
 REVOKE ALL ON SCHEMA partitions_merge_schema FROM regress_partition_merge_alice;
