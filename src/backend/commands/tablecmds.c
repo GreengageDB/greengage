@@ -1115,8 +1115,17 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 
 	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
 		 relkind == RELKIND_PARTITIONED_TABLE) &&
-		Gp_role != GP_ROLE_EXECUTE)
+		(Gp_role != GP_ROLE_EXECUTE || !gp_dispatch_utility_statement))
 	{
+		/*
+		 * GPDB: normally the QE receives the already-computed attr_encodings
+		 * from the QD's dispatch, but a nested CREATE that runs with
+		 * gp_dispatch_utility_statement == false (the partition built by
+		 * createPartitionTable() for SPLIT/MERGE PARTITION) is not dispatched
+		 * and the QE builds its own copy, so it must compute the AOCS column
+		 * encodings itself -- otherwise the new partition has no
+		 * pg_attribute_encoding rows and AOCO scans/inserts fail.
+		 */
 		/*
 		 * Note that we disallow encoding clauses for non-AOCO table
 		 * besides only one exception: if we're creating a partition as
@@ -24160,6 +24169,15 @@ createSplitPartitionContext(Relation partRel)
 	pc->partRel = partRel;
 
 	/*
+	 * GPDB: initialize the table-AM DML state for the destination partition.
+	 * moveSplitTableRows() inserts with table_tuple_insert() directly, outside
+	 * the executor's ModifyTable machinery that normally does this, and AO/AOCS
+	 * tables assert that their per-relation DML state exists before an insert.
+	 * For heap this is a no-op.
+	 */
+	table_dml_init(pc->partRel);
+
+	/*
 	 * Prepare a BulkInsertState for table_tuple_insert. The FSM is empty, so
 	 * don't bother using it.
 	 */
@@ -24183,6 +24201,9 @@ deleteSplitPartitionContext(SplitPartitionContext *pc, int ti_options)
 	FreeBulkInsertState(pc->bistate);
 
 	table_finish_bulk_insert(pc->partRel, ti_options);
+
+	/* GPDB: release the table-AM DML state opened in createSplitPartitionContext(). */
+	table_dml_finish(pc->partRel);
 
 	pfree(pc);
 }
@@ -24684,6 +24705,13 @@ moveMergedTablesRows(Relation rel, List *mergingPartitionsList,
 
 	mycid = GetCurrentCommandId(true);
 
+	/*
+	 * GPDB: initialize the table-AM DML state for the destination partition;
+	 * we insert with table_tuple_insert() outside the executor, and AO/AOCS
+	 * tables require this before an insert (no-op for heap).
+	 */
+	table_dml_init(newPartRel);
+
 	/* Prepare a BulkInsertState for table_tuple_insert. */
 	bistate = GetBulkInsertState();
 
@@ -24762,6 +24790,9 @@ moveMergedTablesRows(Relation rel, List *mergingPartitionsList,
 	FreeBulkInsertState(bistate);
 
 	table_finish_bulk_insert(newPartRel, ti_options);
+
+	/* GPDB: release the table-AM DML state opened above. */
+	table_dml_finish(newPartRel);
 }
 
 /*
