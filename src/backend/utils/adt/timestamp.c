@@ -2882,9 +2882,25 @@ bool
 interval_div_internal(Interval *interval1, Interval *interval2,
 					  float8 *quo, Interval *rem)
 {
-	TimeOffset	span1 = interval_cmp_value(interval1);
-	TimeOffset	span2 = interval_cmp_value(interval2);
+	TimeOffset	span1;
+	TimeOffset	span2;
 	float8 q;
+
+	/*
+	 * GGDB: these interval / interval (and % interval) operators are a GPDB
+	 * extension.  PG17 introduced infinite intervals; interval_cmp_value()
+	 * maps +/-infinity to the INT64 range endpoints, so dividing them would
+	 * silently return a meaningless ratio (e.g. inf/inf -> 1).  A quotient or
+	 * remainder involving a non-finite interval is undefined, so reject it the
+	 * same way the rest of interval arithmetic does.
+	 */
+	if (INTERVAL_NOT_FINITE(interval1) || INTERVAL_NOT_FINITE(interval2))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+				 errmsg("interval out of range")));
+
+	span1 = interval_cmp_value(interval1);
+	span2 = interval_cmp_value(interval2);
 
 	if (span2 == 0)
 		return false;
