@@ -301,7 +301,7 @@ static char *format_function_arguments(const FuncInfo *finfo, const char *funcar
 									   bool is_agg);
 static char *format_function_signature(Archive *fout,
 									   const FuncInfo *finfo, bool honor_quotes);
-static void truncate_array_type_name(char *typeName, int encoding);
+static void truncate_array_type_name(char *typeName, int encoding, int limit);
 static char *make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout);
 static char *convertRegProcReference(const char *proc);
 static char *getFormattedOperatorName(const char *oproid);
@@ -12711,16 +12711,16 @@ format_function_signature(Archive *fout, const FuncInfo *finfo, bool honor_quote
 }
 
 static void
-truncate_array_type_name(char *typeName, int encoding)
+truncate_array_type_name(char *typeName, int encoding, int limit)
 {
 	int 	byte_len = 0;
 	int		char_len = 0;
 
-	while(byte_len < NAMEDATALEN - 1) {
+	while(byte_len < limit) {
 		char_len = PQmblen(typeName + byte_len, encoding);
 		/* Non-valid encoding or broken string */
 		Assert(char_len > 0);
-		if (byte_len + char_len > NAMEDATALEN - 1)
+		if (byte_len + char_len > limit)
 			break;
 		byte_len += char_len;
 	}
@@ -12744,16 +12744,13 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	TypeNamesList  *prev = NULL;
 	char		   *arr;
 	int				namelen = strlen(typeName);
-	int				i;
-	int				j;
+	int				i, j;
 	PGresult	   *res;
 	PQExpBuffer		query;
 	bool			is_dup;
 	bool			is_assigned;
 
 	arr = (char *) pg_malloc(NAMEDATALEN);
-	if (!arr)
-		fatal("out of memory");
 
 	/* Search for schema's list */
 	list = type_names_list;
@@ -12781,7 +12778,7 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 			 * inside pg_upgrade (with --binary-upgrade), which uses default
 			 * database encoding.
 			 */
-			truncate_array_type_name(arr, fout->encoding);
+			truncate_array_type_name(arr, fout->encoding, NAMEDATALEN - 1);
 		}
 
 		/* Check existence in pg_type */
@@ -12821,14 +12818,10 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 	if (!list)
 	{
 		list = (TypeNamesList *) pg_malloc0(sizeof(TypeNamesList));
-		if (!list)
-			fatal("out of memory");
 		list->schema_oid = typeNamespace;
 		list->capacity = 16;
 		list->count = 0;
 		list->names = (char **) pg_malloc(list->capacity * sizeof(char *));
-		if (!list->names)
-			fatal("out of memory");
 		list->next = NULL;
 
 		/* Add to linked list */
@@ -12843,8 +12836,6 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 		list->capacity = list->capacity * 2;
 		list->names = (char **) pg_realloc(list->names,
 											list->capacity * sizeof(char *));
-		if (!list->names)
-			fatal("out of memory");
 	}
 	list->names[list->count] = arr;
 	list->count++;
