@@ -188,6 +188,26 @@ INSERT INTO ro_view13 VALUES (3, 'Row 3');
 ERROR:  cannot insert into view "ro_view13"
 DETAIL:  Views that do not select from a single table or view are not automatically updatable.
 HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
+MERGE INTO ro_view13 AS t USING (VALUES (1, 'Row 1')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN DELETE;
+ERROR:  cannot delete from view "ro_view13"
+DETAIL:  Views that do not select from a single table or view are not automatically updatable.
+HINT:  To enable deleting from the view using MERGE, provide an INSTEAD OF DELETE trigger.
+MERGE INTO ro_view13 AS t USING (VALUES (2, 'Row 2')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = v.b;
+ERROR:  cannot update view "ro_view13"
+DETAIL:  Views that do not select from a single table or view are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+MERGE INTO ro_view13 AS t USING (VALUES (3, 'Row 3')) AS v(a,b) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.b);
+ERROR:  cannot insert into view "ro_view13"
+DETAIL:  Views that do not select from a single table or view are not automatically updatable.
+HINT:  To enable inserting into the view using MERGE, provide an INSTEAD OF INSERT trigger.
+MERGE INTO ro_view13 AS t USING (VALUES (3, 'Row 3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN DO NOTHING
+  WHEN NOT MATCHED THEN DO NOTHING; -- should be OK to do nothing
+ERROR:  cannot change view "ro_view13"
+HINT:  changing views is not supported in Greenplum
 -- Partially updatable view
 INSERT INTO rw_view14 VALUES (null, 3, 'Row 3'); -- should fail
 ERROR:  cannot insert into column "ctid" of view "rw_view14"
@@ -200,15 +220,50 @@ UPDATE rw_view14 SET b='ROW 3' WHERE a=3; -- should be OK
 SELECT * FROM base_tbl;
  a  |   b    
 ----+--------
+  2 | Row 2
+  3 | ROW 3
  -2 | Row -2
   0 | Row 0
   1 | Row 1
  -1 | Row -1
-  2 | Row 2
-  3 | ROW 3
 (6 rows)
 
 DELETE FROM rw_view14 WHERE a=3; -- should be OK
+MERGE INTO rw_view14  AS t
+  USING (VALUES (2, 'Merged row 2'), (3, 'Merged row 3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = v.b  -- should be OK, except...
+  WHEN NOT MATCHED THEN INSERT VALUES (null, v.a, v.b); -- should fail
+ERROR:  cannot merge into column "ctid" of view "rw_view14"
+DETAIL:  View columns that refer to system columns are not updatable.
+MERGE INTO rw_view14  AS t
+  USING (VALUES (2, 'Merged row 2'), (3, 'Merged row 3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = v.b  -- should be OK
+  WHEN NOT MATCHED THEN INSERT (a,b) VALUES (v.a, v.b); -- should be OK
+SELECT * FROM base_tbl ORDER BY a;
+ a  |      b       
+----+--------------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | Row 1
+  2 | Merged row 2
+  3 | Merged row 3
+(6 rows)
+
+MERGE INTO rw_view14  AS t
+  USING (VALUES (2, 'Row 2'), (3, 'Row 3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED AND t.a = 2 THEN UPDATE SET b = v.b  -- should be OK
+  WHEN MATCHED AND t.a = 3 THEN DELETE; -- should be OK
+SELECT * FROM base_tbl ORDER BY a;
+ a  |   b    
+----+--------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | Row 1
+  2 | Row 2
+(5 rows)
+
 -- Partially updatable view
 INSERT INTO rw_view15 VALUES (3, 'ROW 3'); -- should fail
 ERROR:  cannot insert into column "upper" of view "rw_view15"
@@ -218,12 +273,12 @@ INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT DO NOTHING; -- succeeds
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
- -1 | ROW -1
+  2 | ROW 2
+  3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
-  2 | ROW 2
-  3 | UNSPECIFIED
+ -1 | ROW -1
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO NOTHING; -- succeeds
@@ -231,11 +286,11 @@ SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
  -1 | ROW -1
+  2 | ROW 2
+  3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
-  2 | ROW 2
-  3 | UNSPECIFIED
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set a = excluded.a; -- succeeds
@@ -244,10 +299,10 @@ SELECT * FROM rw_view15;
 ----+-------------
   2 | ROW 2
   3 | UNSPECIFIED
- -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
+ -1 | ROW -1
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set upper = 'blarg'; -- fails
@@ -258,18 +313,18 @@ SELECT * FROM rw_view15;
 ----+-------------
   2 | ROW 2
   3 | UNSPECIFIED
- -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
+ -1 | ROW -1
 (6 rows)
 
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
+ -1 | ROW -1
   2 | ROW 2
   3 | UNSPECIFIED
- -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
@@ -292,9 +347,9 @@ SELECT * FROM base_tbl;
  -2 | Row -2
   0 | Row 0
   1 | Row 1
+ -1 | Row -1
   2 | Row 2
   4 | Unspecified
- -1 | Row -1
 (6 rows)
 
 DELETE FROM rw_view15 WHERE a=4; -- should be OK
@@ -308,8 +363,8 @@ UPDATE rw_view16 SET aa=-3 WHERE a=3; -- should be OK
 SELECT * FROM base_tbl;
  a  |   b    
 ----+--------
- -1 | Row -1
   2 | Row 2
+ -1 | Row -1
  -2 | Row -2
   0 | Row 0
   1 | Row 1
@@ -355,6 +410,10 @@ DELETE FROM rw_view16 WHERE a=2; -- should fail
 ERROR:  cannot delete from view "rw_view16"
 DETAIL:  Views with conditional DO INSTEAD rules are not automatically updatable.
 HINT:  To enable deleting from the view, provide an INSTEAD OF DELETE trigger or an unconditional ON DELETE DO INSTEAD rule.
+MERGE INTO rw_view16 AS t USING (VALUES (3, 'Row 3')) AS v(a,b) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.b); -- should fail
+ERROR:  cannot execute MERGE on relation "rw_view16"
+DETAIL:  MERGE is not supported for relations with rules.
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to 16 other objects
 DETAIL:  drop cascades to view ro_view1
@@ -422,6 +481,57 @@ SELECT * FROM base_tbl;
   3 | Row 3
 (6 rows)
 
+MERGE INTO rw_view1 t
+  USING (VALUES (0, 'ROW 0'), (1, 'ROW 1'),
+                (2, 'ROW 2'), (3, 'ROW 3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED AND t.a <= 1 THEN UPDATE SET b = v.b
+  WHEN MATCHED THEN DELETE
+  WHEN NOT MATCHED AND a > 0 THEN INSERT (a) VALUES (v.a)
+  RETURNING merge_action(), v.*, t.*;
+ merge_action | a |   b   | a |      b      
+--------------+---+-------+---+-------------
+ UPDATE       | 1 | ROW 1 | 1 | ROW 1
+ INSERT       | 2 | ROW 2 | 2 | Unspecified
+ DELETE       | 3 | ROW 3 | 3 | Row 3
+(3 rows)
+
+SELECT * FROM base_tbl ORDER BY a;
+ a  |      b      
+----+-------------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | ROW 1
+  2 | Unspecified
+  5 | Unspecified
+(6 rows)
+
+MERGE INTO rw_view1 t
+  USING (VALUES (0, 'R0'), (1, 'R1'),
+                (2, 'R2'), (3, 'R3')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED AND t.a <= 1 THEN UPDATE SET b = v.b
+  WHEN MATCHED THEN DELETE
+  WHEN NOT MATCHED BY SOURCE THEN DELETE
+  WHEN NOT MATCHED AND a > 0 THEN INSERT (a) VALUES (v.a)
+  RETURNING merge_action(), v.*, t.*;
+ merge_action | a | b  | a |      b      
+--------------+---+----+---+-------------
+ DELETE       |   |    | 5 | Unspecified
+ UPDATE       | 1 | R1 | 1 | R1
+ DELETE       | 2 | R2 | 2 | Unspecified
+ INSERT       | 3 | R3 | 3 | Unspecified
+(4 rows)
+
+SELECT * FROM base_tbl ORDER BY a;
+ a  |      b      
+----+-------------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | R1
+  3 | Unspecified
+(5 rows)
+
 EXPLAIN (costs off) UPDATE rw_view1 SET a=6 WHERE a=5;
                           QUERY PLAN                           
 ---------------------------------------------------------------
@@ -441,6 +551,67 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE a=5;
          Filter: ((a > 0) AND (a = 5))
  Optimizer: Postgres query optimizer
 (4 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view1 t USING (VALUES (5, 'X')) AS v(a,b) ON t.a = v.a
+  WHEN MATCHED THEN DELETE;
+              QUERY PLAN               
+---------------------------------------
+ Merge on base_tbl
+   ->  Seq Scan on base_tbl
+         Filter: ((a > 0) AND (a = 5))
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view1 t
+  USING (SELECT * FROM generate_series(1,5)) AS s(a) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = 'Updated';
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Merge on base_tbl
+   ->  Nested Loop
+         Join Filter: (base_tbl.a = generate_series.generate_series)
+         ->  Seq Scan on base_tbl
+               Filter: (a > 0)
+         ->  Function Scan on generate_series
+               Filter: (generate_series > 0)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view1 t
+  USING (SELECT * FROM generate_series(1,5)) AS s(a) ON t.a = s.a
+  WHEN NOT MATCHED BY SOURCE THEN DELETE;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Merge on base_tbl
+   ->  Hash Right Join
+         Hash Cond: (generate_series.generate_series = base_tbl.a)
+         ->  Function Scan on generate_series
+         ->  Hash
+               ->  Seq Scan on base_tbl
+                     Filter: (a > 0)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view1 t
+  USING (SELECT * FROM generate_series(1,5)) AS s(a) ON t.a = s.a
+  WHEN NOT MATCHED THEN INSERT (a) VALUES (s.a);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Merge on base_tbl
+   ->  Nested Loop Left Join
+         Join Filter: (base_tbl.a = generate_series.generate_series)
+         ->  Redistribute Motion 1:3  (slice1; segments: 1)
+               Hash Key: generate_series.generate_series
+               ->  Function Scan on generate_series
+         ->  Materialize
+               ->  Seq Scan on base_tbl
+                     Filter: (a > 0)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 -- it's still updatable if we add a DO ALSO rule
 CREATE TABLE base_tbl_hist(ts timestamptz default now(), a int, b text);
@@ -505,10 +676,10 @@ INSERT INTO rw_view2 (aaa) VALUES (4);
 SELECT * FROM rw_view2;
  aaa |     bbb     
 -----+-------------
-   1 | Row 1
    2 | Row 2
    3 | Row 3
    4 | Unspecified
+   1 | Row 1
 (4 rows)
 
 UPDATE rw_view2 SET bbb='Row 4' WHERE aaa=4;
@@ -516,9 +687,53 @@ DELETE FROM rw_view2 WHERE aaa=2;
 SELECT * FROM rw_view2;
  aaa |  bbb  
 -----+-------
-   1 | Row 1
    3 | Row 3
    4 | Row 4
+   1 | Row 1
+(3 rows)
+
+MERGE INTO rw_view2 t
+  USING (VALUES (3, 'R3'), (4, 'R4'), (5, 'R5')) AS v(a,b) ON aaa = v.a
+  WHEN MATCHED AND aaa = 3 THEN DELETE
+  WHEN MATCHED THEN UPDATE SET bbb = v.b
+  WHEN NOT MATCHED THEN INSERT (aaa) VALUES (v.a)
+  RETURNING merge_action(), v.*, t.*;
+ merge_action | a | b  | aaa |     bbb     
+--------------+---+----+-----+-------------
+ DELETE       | 3 | R3 |   3 | Row 3
+ UPDATE       | 4 | R4 |   4 | R4
+ INSERT       | 5 | R5 |   5 | Unspecified
+(3 rows)
+
+SELECT * FROM rw_view2 ORDER BY aaa;
+ aaa |     bbb     
+-----+-------------
+   1 | Row 1
+   4 | R4
+   5 | Unspecified
+(3 rows)
+
+MERGE INTO rw_view2 t
+  USING (VALUES (4, 'r4'), (5, 'r5'), (6, 'r6')) AS v(a,b) ON aaa = v.a
+  WHEN MATCHED AND aaa = 4 THEN DELETE
+  WHEN MATCHED THEN UPDATE SET bbb = v.b
+  WHEN NOT MATCHED THEN INSERT (aaa) VALUES (v.a)
+  WHEN NOT MATCHED BY SOURCE THEN UPDATE SET bbb = 'Not matched by source'
+  RETURNING merge_action(), v.*, t.*;
+ merge_action | a | b  | aaa |          bbb          
+--------------+---+----+-----+-----------------------
+ DELETE       | 4 | r4 |   4 | R4
+ UPDATE       |   |    |   1 | Not matched by source
+ UPDATE       | 5 | r5 |   5 | r5
+ INSERT       | 6 | r6 |   6 | Unspecified
+(4 rows)
+
+SELECT * FROM rw_view2 ORDER BY aaa;
+ aaa |          bbb          
+-----+-----------------------
+   1 | Not matched by source
+   5 | r5
+   6 | Unspecified
 (3 rows)
 
 EXPLAIN (costs off) UPDATE rw_view2 SET aaa=5 WHERE aaa=4;
@@ -700,9 +915,9 @@ UPDATE rw_view2 SET b='Row three' WHERE a=3 RETURNING *;
 SELECT * FROM rw_view2;
  a |     b     
 ---+-----------
- 1 | Row 1
  2 | Row 2
  3 | Row three
+ 1 | Row 1
 (3 rows)
 
 DELETE FROM rw_view2 WHERE a=3 RETURNING *;
@@ -714,10 +929,14 @@ DELETE FROM rw_view2 WHERE a=3 RETURNING *;
 SELECT * FROM rw_view2;
  a |   b   
 ---+-------
- 2 | Row 2
  1 | Row 1
+ 2 | Row 2
 (2 rows)
 
+MERGE INTO rw_view2 t USING (VALUES (3, 'Row 3')) AS v(a,b) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.b); -- should fail
+ERROR:  cannot execute MERGE on relation "rw_view1"
+DETAIL:  MERGE is not supported for relations with rules.
 EXPLAIN (costs off) UPDATE rw_view2 SET a=3 WHERE a=2;
                               QUERY PLAN                              
 ----------------------------------------------------------------------
@@ -931,8 +1150,8 @@ HINT:  To enable updating the view, provide an INSTEAD OF UPDATE trigger or an u
 SELECT * FROM rw_view2;
  a |   b   
 ---+-------
- 2 | Row 2
  1 | Row 1
+ 2 | Row 2
 (2 rows)
 
 DELETE FROM rw_view2 WHERE a=3 RETURNING *;
@@ -942,9 +1161,47 @@ HINT:  To enable deleting from the view, provide an INSTEAD OF DELETE trigger or
 SELECT * FROM rw_view2;
  a |   b   
 ---+-------
- 1 | Row 1
  2 | Row 2
+ 1 | Row 1
 (2 rows)
+
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED AND t.a <= 1 THEN DELETE
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b)
+  RETURNING merge_action(), s.*, t.*;
+ERROR:  cannot delete from view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable deleting from the view using MERGE, provide an INSTEAD OF DELETE trigger.
+SELECT * FROM base_tbl ORDER BY a;
+ a  |   b    
+----+--------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | Row 1
+  2 | Row 2
+(5 rows)
+
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'r'||x FROM generate_series(0,2) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b)
+  WHEN NOT MATCHED BY SOURCE THEN UPDATE SET b = 'Not matched by source'
+  RETURNING merge_action(), s.*, t.*;
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+SELECT * FROM base_tbl ORDER BY a;
+ a  |   b    
+----+--------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | Row 1
+  2 | Row 2
+(5 rows)
 
 EXPLAIN (costs off) UPDATE rw_view2 SET a=3 WHERE a=2;
 ERROR:  cannot update view "rw_view1"
@@ -954,6 +1211,75 @@ EXPLAIN (costs off) DELETE FROM rw_view2 WHERE a=2;
 ERROR:  cannot delete from view "rw_view1"
 DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
 HINT:  To enable deleting from the view, provide an INSTEAD OF DELETE trigger or an unconditional ON DELETE DO INSTEAD rule.
+EXPLAIN (costs off)
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED AND t.a <= 1 THEN DELETE
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b);
+ERROR:  cannot delete from view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable deleting from the view using MERGE, provide an INSTEAD OF DELETE trigger.
+-- MERGE with incomplete set of INSTEAD OF triggers
+DROP TRIGGER rw_view1_del_trig ON rw_view1;
+ERROR:  trigger "rw_view1_del_trig" for table "rw_view1" does not exist
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED AND t.a <= 1 THEN DELETE
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b); -- should fail
+ERROR:  cannot delete from view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable deleting from the view using MERGE, provide an INSTEAD OF DELETE trigger.
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b); -- ok
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+DROP TRIGGER rw_view1_ins_trig ON rw_view1;
+ERROR:  trigger "rw_view1_ins_trig" for table "rw_view1" does not exist
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b); -- should fail
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b; -- ok
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+-- MERGE with INSTEAD OF triggers on auto-updatable view
+CREATE TRIGGER rw_view2_upd_trig INSTEAD OF UPDATE ON rw_view2
+  FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
+ERROR:  INSTEAD OF triggers are not supported in Greenplum
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b
+  WHEN NOT MATCHED AND s.a > 0 THEN INSERT VALUES (s.a, s.b); -- should fail
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+MERGE INTO rw_view2 t
+  USING (SELECT x, 'R'||x FROM generate_series(0,3) x) AS s(a,b) ON t.a = s.a
+  WHEN MATCHED THEN UPDATE SET b = s.b; -- ok
+ERROR:  cannot update view "rw_view1"
+DETAIL:  Views containing LIMIT or OFFSET are not automatically updatable.
+HINT:  To enable updating the view using MERGE, provide an INSTEAD OF UPDATE trigger.
+SELECT * FROM base_tbl ORDER BY a;
+ a  |   b    
+----+--------
+ -2 | Row -2
+ -1 | Row -1
+  0 | Row 0
+  1 | Row 1
+  2 | Row 2
+(5 rows)
+
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to view rw_view1
@@ -976,11 +1302,11 @@ UPDATE rw_view1 v SET bb='Updated row 2' WHERE rw_view1_aa(v)=2
 SELECT * FROM base_tbl;
  a  |       b       
 ----+---------------
+  2 | Updated row 2
  -1 | Row -1
  -2 | Row -2
   0 | Row 0
   1 | Row 1
-  2 | Updated row 2
 (5 rows)
 
 EXPLAIN (costs off)
@@ -1030,15 +1356,15 @@ SELECT * FROM base_tbl; -- ok
 SELECT * FROM rw_view1; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 1 |  1 |  1
  Row 2 |  2 |  2
+ Row 1 |  1 |  1
 (2 rows)
 
 SELECT * FROM rw_view2; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 2 |  2 |  2
  Row 1 |  1 |  1
+ Row 2 |  2 |  2
 (2 rows)
 
 INSERT INTO base_tbl VALUES (3, 'Row 3', 3.0); -- not allowed
@@ -1046,6 +1372,14 @@ ERROR:  permission denied for table base_tbl
 INSERT INTO rw_view1 VALUES ('Row 3', 3.0, 3); -- not allowed
 ERROR:  permission denied for view rw_view1
 INSERT INTO rw_view2 VALUES ('Row 3', 3.0, 3); -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t
+  USING (VALUES ('Row 3', 3.0, 3)) AS v(b,c,a) ON t.aa = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.b, v.c, v.a); -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t
+  USING (VALUES ('Row 3', 3.0, 3)) AS v(b,c,a) ON t.aa = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.b, v.c, v.a); -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE base_tbl SET a=a, c=c; -- ok
 UPDATE base_tbl SET b=b; -- not allowed
@@ -1055,6 +1389,16 @@ UPDATE rw_view1 SET aa=aa; -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET aa=aa, cc=cc; -- ok
 UPDATE rw_view2 SET bb=bb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET bb = bb, cc = cc; -- ok
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET aa = aa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET aa = aa, cc = cc; -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET bb = bb; -- not allowed
 ERROR:  permission denied for table base_tbl
 DELETE FROM base_tbl; -- not allowed
 ERROR:  permission denied for table base_tbl
@@ -1075,6 +1419,11 @@ DELETE FROM base_tbl WHERE a=1; -- ok
 DELETE FROM rw_view1 WHERE aa=2; -- not allowed
 ERROR:  permission denied for view rw_view1
 DELETE FROM rw_view2 WHERE aa=2; -- ok
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED AND bb = 'xxx' THEN DELETE; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED AND bb = 'xxx' THEN DELETE; -- ok
 SELECT * FROM base_tbl;
  a |   b   | c 
 ---+-------+---
@@ -1097,6 +1446,11 @@ DELETE FROM base_tbl WHERE a=3; -- not allowed
 ERROR:  permission denied for table base_tbl
 DELETE FROM rw_view1 WHERE aa=3; -- ok
 DELETE FROM rw_view2 WHERE aa=4; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED AND bb = 'xxx' THEN DELETE; -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED AND bb = 'xxx' THEN DELETE; -- not allowed
 ERROR:  permission denied for table base_tbl
 SELECT * FROM base_tbl;
  a |   b   | c 
@@ -1123,6 +1477,9 @@ SELECT * FROM rw_view1 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET b = 'foo' WHERE a = 1;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1;
 SELECT * FROM rw_view2;  -- not allowed
@@ -1130,6 +1487,9 @@ ERROR:  permission denied for view rw_view1
 SELECT * FROM rw_view2 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
 ERROR:  permission denied for view rw_view1
 RESET SESSION AUTHORIZATION;
 GRANT SELECT ON base_tbl TO regress_view_user1;
@@ -1144,12 +1504,18 @@ SELECT * FROM rw_view1 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET b = 'foo' WHERE a = 1;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for view rw_view1
 SELECT * FROM rw_view2 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
 ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT SELECT ON rw_view1 TO regress_view_user2;
@@ -1163,6 +1529,9 @@ SELECT * FROM rw_view2;
 SELECT * FROM rw_view2 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
 ERROR:  permission denied for view rw_view1
 RESET SESSION AUTHORIZATION;
 GRANT UPDATE ON base_tbl TO regress_view_user1;
@@ -1180,6 +1549,8 @@ SELECT * FROM rw_view1 FOR UPDATE;
 (1 row)
 
 UPDATE rw_view1 SET b = 'foo' WHERE a = 1;
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo';
 SET SESSION AUTHORIZATION regress_view_user2;
 SELECT * FROM rw_view2;
  a |  b  | c 
@@ -1190,6 +1561,9 @@ SELECT * FROM rw_view2;
 SELECT * FROM rw_view2 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'bar'; -- not allowed
 ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT UPDATE ON rw_view1 TO regress_view_user2;
@@ -1207,29 +1581,37 @@ SELECT * FROM rw_view2 FOR UPDATE;
 (1 row)
 
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'fud';
 RESET SESSION AUTHORIZATION;
 REVOKE UPDATE ON base_tbl FROM regress_view_user1;
 SET SESSION AUTHORIZATION regress_view_user1;
 SELECT * FROM rw_view1;
  a |  b  | c 
 ---+-----+---
- 1 | bar | 1
+ 1 | fud | 1
 (1 row)
 
 SELECT * FROM rw_view1 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET b = 'foo' WHERE a = 1;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 SELECT * FROM rw_view2;
  a |  b  | c 
 ---+-----+---
- 1 | bar | 1
+ 1 | fud | 1
 (1 row)
 
 SELECT * FROM rw_view2 FOR UPDATE;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET b = 'bar' WHERE a = 1;  -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET b = 'foo'; -- not allowed
 ERROR:  permission denied for table base_tbl
 RESET SESSION AUTHORIZATION;
 DROP TABLE base_tbl CASCADE;
@@ -1260,9 +1642,15 @@ UPDATE base_tbl SET a=a; -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET bb=bb, cc=cc; -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET bb = bb; -- not allowed
+ERROR:  permission denied for table base_tbl
 DELETE FROM base_tbl; -- not allowed
 ERROR:  permission denied for table base_tbl
 DELETE FROM rw_view1; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN DELETE; -- not allowed
 ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT SELECT ON base_tbl TO regress_view_user2;
@@ -1278,17 +1666,25 @@ SELECT * FROM base_tbl; -- ok
 SELECT * FROM rw_view1; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 2 |  2 |  2
  Row 1 |  1 |  1
+ Row 2 |  2 |  2
 (2 rows)
 
 UPDATE base_tbl SET a=a, c=c; -- ok
 UPDATE base_tbl SET b=b; -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET cc=cc; -- ok
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET cc = cc; -- ok
 UPDATE rw_view1 SET aa=aa; -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view1 SET bb=bb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET aa = aa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET bb = bb; -- not allowed
 ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT INSERT, DELETE ON base_tbl TO regress_view_user2;
@@ -1299,6 +1695,9 @@ ERROR:  permission denied for view rw_view1
 DELETE FROM base_tbl WHERE a=1; -- ok
 DELETE FROM rw_view1 WHERE aa=2; -- not allowed
 ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN DELETE; -- not allowed
+ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user1;
 REVOKE INSERT, DELETE ON base_tbl FROM regress_view_user2;
 GRANT INSERT, DELETE ON rw_view1 TO regress_view_user2;
@@ -1307,17 +1706,21 @@ INSERT INTO rw_view1 VALUES ('Row 4', 4.0, 4); -- not allowed
 ERROR:  permission denied for table base_tbl
 DELETE FROM rw_view1 WHERE aa=2; -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN DELETE; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT INSERT, DELETE ON base_tbl TO regress_view_user2;
 SET SESSION AUTHORIZATION regress_view_user2;
 INSERT INTO rw_view1 VALUES ('Row 4', 4.0, 4); -- ok
 DELETE FROM rw_view1 WHERE aa=2; -- ok
+MERGE INTO rw_view1 t USING (VALUES (3)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN DELETE; -- ok
 SELECT * FROM base_tbl; -- ok
  a |   b   | c 
 ---+-------+---
- 3 | Row 3 | 3
  4 | Row 4 | 4
-(2 rows)
+(1 row)
 
 RESET SESSION AUTHORIZATION;
 DROP TABLE base_tbl CASCADE;
@@ -1334,12 +1737,18 @@ SELECT * FROM rw_view1;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET aa=aa;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (2, 'Row 2', 2.0)) AS v(a,b,c) ON t.aa = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.b, v.c, v.a); -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 CREATE VIEW rw_view2 AS SELECT cc AS ccc, aa AS aaa, bb AS bbb FROM rw_view1;
 GRANT SELECT, UPDATE ON rw_view2 TO regress_view_user3;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET aaa=aaa;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (2, 'Row 2', 2.0)) AS v(a,b,c) ON t.aaa = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.c, v.a, v.b); -- not allowed
 ERROR:  permission denied for view rw_view1
 RESET SESSION AUTHORIZATION;
 GRANT SELECT ON base_tbl TO regress_view_user1;
@@ -1354,15 +1763,26 @@ SELECT * FROM rw_view1; -- ok
 UPDATE rw_view1 SET aa=aa, bb=bb;  -- ok
 UPDATE rw_view1 SET cc=cc;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET aa = aa, bb = bb; -- ok
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET cc = cc; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET aaa=aaa;  -- not allowed
 ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user3;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET aaa=aaa;  -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
 ERROR:  permission denied for view rw_view1
 SET SESSION AUTHORIZATION regress_view_user1;
 GRANT SELECT ON rw_view1 TO regress_view_user2;
@@ -1372,10 +1792,16 @@ SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user3;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
 ERROR:  permission denied for table base_tbl
 RESET SESSION AUTHORIZATION;
 GRANT SELECT ON base_tbl TO regress_view_user2;
@@ -1392,6 +1818,14 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- ok
 SET SESSION AUTHORIZATION regress_view_user3;
 SELECT * FROM rw_view2;  -- not allowed
 ERROR:  permission denied for table base_tbl
@@ -1400,6 +1834,15 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- not allowed
 ERROR:  permission denied for table base_tbl
 RESET SESSION AUTHORIZATION;
 GRANT SELECT ON base_tbl TO regress_view_user3;
@@ -1416,12 +1859,23 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- ok
 RESET SESSION AUTHORIZATION;
 REVOKE SELECT, UPDATE ON base_tbl FROM regress_view_user1;
 SET SESSION AUTHORIZATION regress_view_user1;
 SELECT * FROM rw_view1;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view1 SET aa=aa;  -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.aa = v.a
+  WHEN MATCHED THEN UPDATE SET aa = aa; -- not allowed
 ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user2;
 SELECT * FROM rw_view2;  -- ok
@@ -1435,6 +1889,14 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- ok
 SET SESSION AUTHORIZATION regress_view_user3;
 SELECT * FROM rw_view2;  -- ok
  ccc | aaa |  bbb  
@@ -1447,6 +1909,14 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- ok
 RESET SESSION AUTHORIZATION;
 REVOKE SELECT, UPDATE ON base_tbl FROM regress_view_user2;
 SET SESSION AUTHORIZATION regress_view_user2;
@@ -1458,6 +1928,15 @@ UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- not allowed
 ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- not allowed
+ERROR:  permission denied for table base_tbl
 SET SESSION AUTHORIZATION regress_view_user3;
 SELECT * FROM rw_view2;  -- ok
  ccc | aaa |  bbb  
@@ -1470,6 +1949,14 @@ ERROR:  permission denied for view rw_view1
 UPDATE rw_view2 SET bbb=bbb;  -- not allowed
 ERROR:  permission denied for table base_tbl
 UPDATE rw_view2 SET ccc=ccc;  -- ok
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET aaa = aaa; -- not allowed
+ERROR:  permission denied for view rw_view1
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET bbb = bbb; -- not allowed
+ERROR:  permission denied for table base_tbl
+MERGE INTO rw_view2 t USING (VALUES (1)) AS v(a) ON t.aaa = v.a
+  WHEN MATCHED THEN UPDATE SET ccc = ccc; -- ok
 RESET SESSION AUTHORIZATION;
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to 2 other objects
@@ -1487,15 +1974,18 @@ CREATE VIEW rw_view1 AS SELECT a AS aa, b AS bb FROM base_tbl;
 ALTER VIEW rw_view1 ALTER COLUMN bb SET DEFAULT 'View default';
 INSERT INTO rw_view1 VALUES (4, 'Row 4');
 INSERT INTO rw_view1 (aa) VALUES (5);
+MERGE INTO rw_view1 t USING (VALUES (6)) AS v(a) ON t.aa = v.a
+  WHEN NOT MATCHED THEN INSERT (aa) VALUES (v.a);
 SELECT * FROM base_tbl;
  a |      b       | c 
 ---+--------------+---
+ 1 | Row 1        | 1
+ 5 | View default | 5
+ 6 | View default | 6
  2 | Row 2        | 2
  3 | Unspecified  | 3
  4 | Row 4        | 4
- 5 | View default | 5
- 1 | Row 1        | 1
-(5 rows)
+(6 rows)
 
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
@@ -1519,14 +2009,14 @@ CREATE TRIGGER rw_view1_ins_trig AFTER INSERT ON base_tbl
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
 CREATE VIEW rw_view1 AS SELECT a AS aa, b AS bb FROM base_tbl;
 INSERT INTO rw_view1 VALUES (3, 'Row 3');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160220)
 CONTEXT:  SQL statement "UPDATE base_tbl SET b=NEW.b WHERE a=1"
 PL/pgSQL function rw_view1_trig_fn() line 4 at SQL statement
 select * from base_tbl;
  a |   b   
 ---+-------
- 1 | Row 1
  2 | Row 2
+ 1 | Row 1
 (2 rows)
 
 DROP VIEW rw_view1;
@@ -1568,16 +2058,16 @@ EXPLAIN (verbose, costs off) UPDATE rw_view1 SET b = b + 1 RETURNING *;
          ->  Seq Scan on public.base_tbl
                Output: (base_tbl.b + 1), base_tbl.ctid, base_tbl.gp_segment_id
  Optimizer: Postgres query optimizer
- Settings: enable_mergejoin = 'on', optimizer = 'off', enable_nestloop = 'on'
+ Settings: enable_mergejoin = 'on', enable_nestloop = 'on'
 (8 rows)
 
 UPDATE rw_view1 SET b = b + 1 RETURNING *;
  a | b  
 ---+----
+ 1 |  3
  4 |  6
  3 | -2
  7 | -7
- 1 |  3
 (4 rows)
 
 SELECT * FROM rw_view1;
@@ -1601,8 +2091,8 @@ UPDATE rw_view1 SET arr[1] = 42, arr[2] = 77 WHERE a = 3;
 SELECT * FROM rw_view1;
  a |   arr   
 ---+---------
- 1 | {2}
  3 | {42,77}
+ 1 | {2}
 (2 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1780,10 +2270,10 @@ UPDATE rw_view1 SET id = 3000 WHERE id = 3;
 SELECT * FROM base_tbl;
   id  | idplus1 
 ------+---------
- 3000 |    3001
     4 |       5
  2000 |    2001
     1 |       2
+ 3000 |    3001
 (4 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -1889,6 +2379,38 @@ SELECT * FROM base_tbl_child ORDER BY a;
  20
 (6 rows)
 
+MERGE INTO rw_view1 t USING (VALUES (-200), (10)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -199 and 11
+MERGE INTO ONLY rw_view1 t USING (VALUES (-100), (20)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -99 and 21
+MERGE INTO rw_view2 t USING (VALUES (-40), (3)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -39 only
+MERGE INTO ONLY rw_view2 t USING (VALUES (-30), (4)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -29 only
+SELECT * FROM ONLY base_tbl_parent ORDER BY a;
+  a   
+------
+ -199
+  -99
+  -39
+  -29
+  -20
+  -10
+  100
+  200
+(8 rows)
+
+SELECT * FROM base_tbl_child ORDER BY a;
+ a  
+----
+  3
+  4
+  7
+  8
+ 11
+ 21
+(6 rows)
+
 CREATE TABLE other_tbl_parent (id int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -1923,10 +2445,10 @@ UPDATE rw_view1 SET a = a + 1000 FROM other_tbl_parent WHERE a = id;
 SELECT * FROM ONLY base_tbl_parent ORDER BY a;
   a   
 ------
- -200
- -100
-  -40
-  -30
+ -199
+  -99
+  -39
+  -29
   -20
   -10
  1100
@@ -1938,8 +2460,8 @@ SELECT * FROM base_tbl_child ORDER BY a;
 ------
     3
     4
-   10
-   20
+   11
+   21
  1007
  1008
 (6 rows)
@@ -1981,28 +2503,51 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view1';
 
 INSERT INTO rw_view1 VALUES(3,4); -- ok
 INSERT INTO rw_view1 VALUES(4,3); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.4:7002 pid=1160220)
 DETAIL:  Failing row contains (4, 3).
 INSERT INTO rw_view1 VALUES(5,null); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (5, null).
 UPDATE rw_view1 SET b = 5 WHERE a = 3; -- ok
 UPDATE rw_view1 SET b = -5 WHERE a = 3; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.4:7002 pid=1160220)
 DETAIL:  Failing row contains (3, -5).
 INSERT INTO rw_view1(a) VALUES (9); -- ok
 INSERT INTO rw_view1(a) VALUES (10); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (10, 10).
-SELECT * FROM base_tbl;
+SELECT * FROM base_tbl ORDER BY a, b;
  a | b  
 ---+----
- 9 | 10
+ 1 | -1
+ 1 |  2
  2 |  3
  3 |  5
- 1 |  2
- 1 | -1
+ 9 | 10
 (5 rows)
+
+MERGE INTO rw_view1 t USING (VALUES (10)) AS v(a) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.a + 1); -- ok
+MERGE INTO rw_view1 t USING (VALUES (11)) AS v(a) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.a - 1); -- should fail
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
+DETAIL:  Failing row contains (11, 10).
+MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a - 1; -- ok
+MERGE INTO rw_view1 t USING (VALUES (2)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a + 1; -- should fail
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.4:7002 pid=1160220)
+DETAIL:  Failing row contains (3, 3).
+SELECT * FROM base_tbl ORDER BY a, b;
+ a  | b  
+----+----
+  0 |  2
+  1 | -1
+  2 |  3
+  3 |  5
+  9 | 10
+ 10 | 11
+(6 rows)
 
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
@@ -2033,11 +2578,11 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
 (1 row)
 
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-5).
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (15).
 SELECT * FROM base_tbl;
  a 
@@ -2046,10 +2591,10 @@ SELECT * FROM base_tbl;
 (1 row)
 
 UPDATE rw_view2 SET a = a - 10; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-5).
 UPDATE rw_view2 SET a = a + 10; -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (15).
 CREATE OR REPLACE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
   WITH LOCAL CHECK OPTION;
@@ -2074,7 +2619,7 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
 
 INSERT INTO rw_view2 VALUES (-10); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (20); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (20).
 SELECT * FROM base_tbl;
   a  
@@ -2088,10 +2633,10 @@ ERROR:  invalid value for enum option "check_option": here
 DETAIL:  Valid values are "local" and "cascaded".
 ALTER VIEW rw_view1 SET (check_option=local);
 INSERT INTO rw_view2 VALUES (-20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-20).
 INSERT INTO rw_view2 VALUES (30); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (30).
 ALTER VIEW rw_view2 RESET (check_option);
 \d+ rw_view2
@@ -2149,7 +2694,7 @@ INSERT INTO rw_view1 VALUES (1); -- ok
 INSERT INTO rw_view2 VALUES (-2); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (2); -- ok
 INSERT INTO rw_view3 VALUES (-3); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-3).
 INSERT INTO rw_view3 VALUES (3); -- ok
 DROP TABLE base_tbl CASCADE;
@@ -2165,16 +2710,16 @@ CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a = ANY (b)
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (1, ARRAY[1,2,3]); -- ok
 INSERT INTO rw_view1 VALUES (10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (10, {4,5}).
 UPDATE rw_view1 SET b[2] = -b[2] WHERE a = 1; -- ok
 UPDATE rw_view1 SET b[1] = -b[1] WHERE a = 1; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (1, {-1,-2,3}).
 PREPARE ins(int, int[]) AS INSERT INTO rw_view1 VALUES($1, $2);
 EXECUTE ins(2, ARRAY[1,2,3]); -- ok
 EXECUTE ins(10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (10, {4,5}).
 DEALLOCATE PREPARE ins;
 DROP TABLE base_tbl CASCADE;
@@ -2192,11 +2737,11 @@ CREATE VIEW rw_view1 AS
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5); -- ok
 INSERT INTO rw_view1 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (15).
 UPDATE rw_view1 SET a = a + 5; -- ok
 UPDATE rw_view1 SET a = a + 5; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (15).
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (5);
                            QUERY PLAN                            
@@ -2254,7 +2799,7 @@ CREATE TRIGGER base_tbl_trig BEFORE INSERT OR UPDATE ON base_tbl
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a < b WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5,0); -- ok
 INSERT INTO rw_view1 VALUES (15, 20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (15, 10).
 UPDATE rw_view1 SET a = 20, b = 30; -- should fail
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
@@ -2290,32 +2835,46 @@ ERROR:  INSTEAD OF triggers are not supported in Greenplum
 CREATE VIEW rw_view2 AS
   SELECT * FROM rw_view1 WHERE a > 0 WITH LOCAL CHECK OPTION;
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-5, null).
+MERGE INTO rw_view2 t USING (VALUES (-5)) AS v(a) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a); -- should fail
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 INSERT INTO rw_view2 VALUES (5); -- ok
+MERGE INTO rw_view2 t USING (VALUES (6)) AS v(a) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a); -- ok
 INSERT INTO rw_view2 VALUES (50); -- ok, but not in view
+MERGE INTO rw_view2 t USING (VALUES (60)) AS v(a) ON t.a = v.a
+  WHEN NOT MATCHED THEN INSERT VALUES (v.a); -- ok, but not in view
 UPDATE rw_view2 SET a = a - 10; -- should fail
 -- Greenplum doesn't fail because nothing was inserted into view, which is
 -- because Greenplum doesn't support INSTEAD OF triggers.
+MERGE INTO rw_view2 t USING (VALUES (6)) AS v(a) ON t.a = v.a
+  WHEN MATCHED THEN UPDATE SET a = t.a - 10; -- should fail
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
  50 |  
   5 |  
-(2 rows)
+  6 |  
+ 60 |  
+(4 rows)
 
 -- Check option won't cascade down to base view with INSTEAD OF triggers
 ALTER VIEW rw_view2 SET (check_option=cascaded);
 INSERT INTO rw_view2 VALUES (100); -- ok, but not in view (doesn't fail rw_view1's check)
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (100, null).
 UPDATE rw_view2 SET a = 200 WHERE a = 5; -- ok, but not in view (doesn't fail rw_view1's check)
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
- 50 |  
   5 |  
-(2 rows)
+  6 |  
+ 50 |  
+ 60 |  
+(4 rows)
 
 -- Neither local nor cascaded check options work with INSTEAD rules
 DROP TRIGGER rw_view1_trig ON rw_view1;
@@ -2338,11 +2897,11 @@ UPDATE rw_view2 SET a = -5 WHERE a = 5; -- ok, but not in view (doesn't fail rw_
 SELECT * FROM base_tbl;
   a  | b  
 -----+----
+ -10 | 10
   50 | 10
   20 | 10
   30 | 10
   -5 | 10
- -10 | 10
  100 | 10
  200 | 10
 (7 rows)
@@ -2398,9 +2957,9 @@ END;
 $$
 LANGUAGE plpgsql STRICT IMMUTABLE LEAKPROOF;
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Dick  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Dick  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1160220)
  person 
 --------
  Tom
@@ -2408,13 +2967,13 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 ALTER VIEW rw_view1 SET (security_barrier = true);
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
@@ -2442,8 +3001,8 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1160220)
  person 
 --------
  Tom
@@ -2451,11 +3010,16 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
+MERGE INTO rw_view1 t
+  USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
+  WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 EXPLAIN (costs off) SELECT * FROM rw_view1 WHERE snoop(person);
                      QUERY PLAN                      
 -----------------------------------------------------
@@ -2484,6 +3048,22 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE NOT snoop(person);
          Filter: ((visibility = 'public'::text) AND (NOT snoop(person)))
  Optimizer: Postgres query optimizer
 (4 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view1 t
+  USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
+  WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Merge on base_tbl
+   ->  Nested Loop
+         Join Filter: (base_tbl.person = "*VALUES*".column1)
+         ->  Seq Scan on base_tbl
+               Filter: (visibility = 'public'::text)
+         ->  Materialize
+               ->  Values Scan on "*VALUES*"
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 -- security barrier view on top of security barrier view
 CREATE VIEW rw_view2 WITH (security_barrier = true) AS
@@ -2514,10 +3094,10 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view2 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.4:7002 pid=1160220)
  person 
 --------
  Tom
@@ -2525,15 +3105,22 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=16688)
 (2 rows)
 
 UPDATE rw_view2 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 DELETE FROM rw_view2 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
+MERGE INTO rw_view2 t
+  USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
+  WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.4:7002 pid=1160220)
 EXPLAIN (costs off) SELECT * FROM rw_view2 WHERE snoop(person);
                         QUERY PLAN                         
 -----------------------------------------------------------
@@ -2564,6 +3151,22 @@ EXPLAIN (costs off) DELETE FROM rw_view2 WHERE NOT snoop(person);
          Filter: ((visibility = 'public'::text) AND snoop(person) AND (NOT snoop(person)))
  Optimizer: Postgres query optimizer
 (4 rows)
+
+EXPLAIN (costs off)
+MERGE INTO rw_view2 t
+  USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
+  WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Merge on base_tbl
+   ->  Nested Loop
+         Join Filter: (base_tbl.person = "*VALUES*".column1)
+         ->  Seq Scan on base_tbl
+               Filter: ((visibility = 'public'::text) AND snoop(person))
+         ->  Materialize
+               ->  Values Scan on "*VALUES*"
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to 2 other objects
@@ -2603,29 +3206,29 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
 (8 rows)
 
 DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
-NOTICE:  snooped value: Row 1  (seg1 172.17.0.2:7003 pid=16692)
+NOTICE:  snooped value: Row 1  (seg1 172.17.0.4:7003 pid=1160209)
 reset enable_seqscan;
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
-                      QUERY PLAN                      
-------------------------------------------------------
+                           QUERY PLAN                           
+----------------------------------------------------------------
  Insert on base_tbl
-   InitPlan 1 (returns $0)  (slice2)
+   InitPlan 1  (slice2)
      ->  Gather Motion 1:1  (slice3; segments: 1)
            ->  Seq Scan on base_tbl t
                  Filter: (id = 2)
    ->  Redistribute Motion 1:3  (slice1; segments: 1)
          Hash Key: 2
          ->  Result
-               One-Time Filter: ($0 IS NOT TRUE)
+               One-Time Filter: ((InitPlan 1).col1 IS NOT TRUE)
  Optimizer: Postgres query optimizer
  
  Update on base_tbl
-   InitPlan 1 (returns $0)  (slice1)
+   InitPlan 1  (slice1)
      ->  Gather Motion 1:1  (slice2; segments: 1)
            ->  Seq Scan on base_tbl t
                  Filter: (id = 2)
    ->  Result
-         One-Time Filter: $0
+         One-Time Filter: (InitPlan 1).col1
          ->  Seq Scan on base_tbl
                Filter: (id = 2)
  Optimizer: Postgres query optimizer
@@ -2690,8 +3293,8 @@ SELECT * FROM v1 WHERE a=8;
 
 EXPLAIN (VERBOSE, COSTS OFF)
 UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
-                                                                         QUERY PLAN                                                                         
-------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.t1
    Update on public.t1 t1_1
    Update on public.t11 t1_2
@@ -2706,7 +3309,7 @@ UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
                      ->  Append
                            ->  Seq Scan on public.t1 t1_1
                                  Output: t1_1.b, t1_1.c, t1_1.tableoid, t1_1.ctid, t1_1.gp_segment_id, t1_1.*
-                                 Filter: ((t1_1.a > 5) AND (t1_1.a < 7) AND (t1_1.a <> 6) AND (SubPlan 1 (copy 2)) AND snoop(t1_1.a) AND leakproof(t1_1.a))
+                                 Filter: ((t1_1.a > 5) AND (t1_1.a < 7) AND (t1_1.a <> 6) AND EXISTS(SubPlan 1 (copy 2)) AND snoop(t1_1.a) AND leakproof(t1_1.a))
                                  SubPlan 1 (copy 2)
                                    ->  Result
                                          Filter: (t12_1.a = t1_1.a)
@@ -2721,7 +3324,7 @@ UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
                                                                  Output: t12_2.a
                            ->  Seq Scan on public.t11 t1_2
                                  Output: t1_2.b, t1_2.c, t1_2.tableoid, t1_2.ctid, t1_2.gp_segment_id, t1_2.*
-                                 Filter: ((t1_2.a > 5) AND (t1_2.a < 7) AND (t1_2.a <> 6) AND (SubPlan 1 (copy 3)) AND snoop(t1_2.a) AND leakproof(t1_2.a))
+                                 Filter: ((t1_2.a > 5) AND (t1_2.a < 7) AND (t1_2.a <> 6) AND EXISTS(SubPlan 1 (copy 3)) AND snoop(t1_2.a) AND leakproof(t1_2.a))
                                  SubPlan 1 (copy 3)
                                    ->  Result
                                          Filter: (t12_4.a = t1_2.a)
@@ -2736,7 +3339,7 @@ UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
                                                                  Output: t12_5.a
                            ->  Seq Scan on public.t12 t1_3
                                  Output: t1_3.b, t1_3.c, t1_3.tableoid, t1_3.ctid, t1_3.gp_segment_id, t1_3.*
-                                 Filter: ((t1_3.a > 5) AND (t1_3.a < 7) AND (t1_3.a <> 6) AND (SubPlan 1 (copy 4)) AND snoop(t1_3.a) AND leakproof(t1_3.a))
+                                 Filter: ((t1_3.a > 5) AND (t1_3.a < 7) AND (t1_3.a <> 6) AND EXISTS(SubPlan 1 (copy 4)) AND snoop(t1_3.a) AND leakproof(t1_3.a))
                                  SubPlan 1 (copy 4)
                                    ->  Result
                                          Filter: (t12_7.a = t1_3.a)
@@ -2751,7 +3354,7 @@ UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
                                                                  Output: t12_8.a
                            ->  Seq Scan on public.t111 t1_4
                                  Output: t1_4.b, t1_4.c, t1_4.tableoid, t1_4.ctid, t1_4.gp_segment_id, t1_4.*
-                                 Filter: ((t1_4.a > 5) AND (t1_4.a < 7) AND (t1_4.a <> 6) AND (SubPlan 1 (copy 5)) AND snoop(t1_4.a) AND leakproof(t1_4.a))
+                                 Filter: ((t1_4.a > 5) AND (t1_4.a < 7) AND (t1_4.a <> 6) AND EXISTS(SubPlan 1 (copy 5)) AND snoop(t1_4.a) AND leakproof(t1_4.a))
                                  SubPlan 1 (copy 5)
                                    ->  Result
                                          Filter: (t12_10.a = t1_4.a)
@@ -2765,7 +3368,7 @@ UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
                                                            ->  Seq Scan on public.t111 t12_11
                                                                  Output: t12_11.a
  Optimizer: Postgres query optimizer
- Settings: enable_mergejoin = 'on', optimizer = 'off', enable_nestloop = 'on'
+ Settings: enable_mergejoin = 'on', enable_nestloop = 'on'
 (74 rows)
 
 UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a < 7 AND a != 6;
@@ -2781,8 +3384,8 @@ SELECT * FROM t1 WHERE a=100; -- Nothing should have been changed to 100
 
 EXPLAIN (VERBOSE, COSTS OFF)
 UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
-                                                                QUERY PLAN                                                                
-------------------------------------------------------------------------------------------------------------------------------------------
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.t1
    Update on public.t1 t1_1
    Update on public.t11 t1_2
@@ -2797,7 +3400,7 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
                      ->  Append
                            ->  Seq Scan on public.t1 t1_1
                                  Output: t1_1.a, t1_1.b, t1_1.c, t1_1.tableoid, t1_1.ctid, t1_1.gp_segment_id, t1_1.*
-                                 Filter: ((t1_1.a > 5) AND (t1_1.a = 8) AND (SubPlan 1 (copy 2)) AND snoop(t1_1.a) AND leakproof(t1_1.a))
+                                 Filter: ((t1_1.a > 5) AND (t1_1.a = 8) AND EXISTS(SubPlan 1 (copy 2)) AND snoop(t1_1.a) AND leakproof(t1_1.a))
                                  SubPlan 1 (copy 2)
                                    ->  Result
                                          Filter: (t12_1.a = t1_1.a)
@@ -2812,7 +3415,7 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
                                                                  Output: t12_2.a
                            ->  Seq Scan on public.t11 t1_2
                                  Output: t1_2.a, t1_2.b, t1_2.c, t1_2.tableoid, t1_2.ctid, t1_2.gp_segment_id, t1_2.*
-                                 Filter: ((t1_2.a > 5) AND (t1_2.a = 8) AND (SubPlan 1 (copy 3)) AND snoop(t1_2.a) AND leakproof(t1_2.a))
+                                 Filter: ((t1_2.a > 5) AND (t1_2.a = 8) AND EXISTS(SubPlan 1 (copy 3)) AND snoop(t1_2.a) AND leakproof(t1_2.a))
                                  SubPlan 1 (copy 3)
                                    ->  Result
                                          Filter: (t12_4.a = t1_2.a)
@@ -2827,7 +3430,7 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
                                                                  Output: t12_5.a
                            ->  Seq Scan on public.t12 t1_3
                                  Output: t1_3.a, t1_3.b, t1_3.c, t1_3.tableoid, t1_3.ctid, t1_3.gp_segment_id, t1_3.*
-                                 Filter: ((t1_3.a > 5) AND (t1_3.a = 8) AND (SubPlan 1 (copy 4)) AND snoop(t1_3.a) AND leakproof(t1_3.a))
+                                 Filter: ((t1_3.a > 5) AND (t1_3.a = 8) AND EXISTS(SubPlan 1 (copy 4)) AND snoop(t1_3.a) AND leakproof(t1_3.a))
                                  SubPlan 1 (copy 4)
                                    ->  Result
                                          Filter: (t12_7.a = t1_3.a)
@@ -2842,7 +3445,7 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
                                                                  Output: t12_8.a
                            ->  Seq Scan on public.t111 t1_4
                                  Output: t1_4.a, t1_4.b, t1_4.c, t1_4.tableoid, t1_4.ctid, t1_4.gp_segment_id, t1_4.*
-                                 Filter: ((t1_4.a > 5) AND (t1_4.a = 8) AND (SubPlan 1 (copy 5)) AND snoop(t1_4.a) AND leakproof(t1_4.a))
+                                 Filter: ((t1_4.a > 5) AND (t1_4.a = 8) AND EXISTS(SubPlan 1 (copy 5)) AND snoop(t1_4.a) AND leakproof(t1_4.a))
                                  SubPlan 1 (copy 5)
                                    ->  Result
                                          Filter: (t12_10.a = t1_4.a)
@@ -2856,14 +3459,14 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
                                                            ->  Seq Scan on public.t111 t12_11
                                                                  Output: t12_11.a
  Optimizer: Postgres query optimizer
- Settings: enable_mergejoin = 'on', optimizer = 'off', enable_nestloop = 'on'
+ Settings: enable_mergejoin = 'on', enable_nestloop = 'on'
 (74 rows)
 
 UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=17501)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=17501)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=17501)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=17501)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1161056)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1161056)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1161056)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.4:7002 pid=1161056)
 SELECT * FROM v1 WHERE b=8;
  a | b |  c   |  d   
 ---+---+------+------
@@ -2894,26 +3497,26 @@ END;
 $$
 LANGUAGE plpgsql COST 0.000001;
 DELETE FROM v1 WHERE snoop_five(a) AND leakproof(a); -- should not delete everything, just where a>5
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=16688)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=16687)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=16688)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.4:7002 pid=1160220)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.4:7004 pid=1160200)
 TABLE t1; -- verify all a<=5 are intact
  a | b |  c   
 ---+---+------
@@ -2929,14 +3532,14 @@ TABLE t1; -- verify all a<=5 are intact
  2 | 2 | t111
  3 | 3 | t111
  4 | 4 | t111
- 5 | 5 | t1
- 5 | 5 | t11
- 5 | 5 | t12
- 5 | 5 | t111
  1 | 1 | t1
  1 | 1 | t11
  1 | 1 | t12
  1 | 1 | t111
+ 5 | 5 | t1
+ 5 | 5 | t11
+ 5 | 5 | t12
+ 5 | 5 | t111
 (20 rows)
 
 DROP TABLE t1, t11, t12, t111 CASCADE;
@@ -3048,17 +3651,17 @@ CREATE VIEW v2 WITH (security_barrier = true) AS
   WITH CHECK OPTION;
 INSERT INTO v2 VALUES (2, 'two', 20); -- ok
 INSERT INTO v2 VALUES (-2, 'minus two', 20); -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (-2, minus two, 20).
 INSERT INTO v2 VALUES (3, 'three', 30); -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.4:7002 pid=1160220)
 DETAIL:  Failing row contains (3, three, 30).
 UPDATE v2 SET b = 'ONE' WHERE a = 1; -- ok
 UPDATE v2 SET a = -1 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (-1, ONE, 10).
 UPDATE v2 SET c = 30 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (1, ONE, 30).
 DELETE FROM v2 WHERE a = 2; -- ok
 SELECT * FROM v2;
@@ -3084,10 +3687,10 @@ CREATE RULE v1_upd_rule AS ON UPDATE TO v1 DO INSTEAD
 CREATE VIEW v2 WITH (security_barrier = true) AS
   SELECT * FROM v1 WHERE EXISTS (SELECT 1);
 EXPLAIN (COSTS OFF) UPDATE v2 SET a = 1;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Update on t1
-   InitPlan 1 (returns $0)  (slice2)
+   InitPlan 1  (slice2)
      ->  Result
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          ->  Split
@@ -3100,7 +3703,7 @@ EXPLAIN (COSTS OFF) UPDATE v2 SET a = 1;
                            Sort Key: v1.a
                            ->  Subquery Scan on v1
                                  ->  Result
-                                       One-Time Filter: $0
+                                       One-Time Filter: (InitPlan 1).col1
                                        ->  Seq Scan on t1 t1_1
  Optimizer: Postgres query optimizer
 (17 rows)
@@ -3119,7 +3722,7 @@ CREATE VIEW v1 AS SELECT null::int AS a;
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1 WHERE a > 0 WITH CHECK OPTION;
 INSERT INTO v1 VALUES (1, 'ok'); -- ok
 INSERT INTO v1 VALUES (-1, 'invalid'); -- should fail
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=16687)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.4:7004 pid=1160200)
 DETAIL:  Failing row contains (-1, invalid).
 DROP VIEW v1;
 DROP TABLE t1;
@@ -3186,8 +3789,31 @@ select tableoid::regclass, * from uv_pt;
 
 create view uv_ptv_wco as select * from uv_pt where a = 0 with check option;
 insert into uv_ptv_wco values (1, 2);
-ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.4:7002 pid=1160220)
 DETAIL:  Failing row contains (1, 2, null).
+merge into uv_ptv t
+  using (values (1,2), (1,4)) as v(a,b) on t.a = v.a -- fail: matches 2 src rows
+  when matched then update set b = t.b + 1
+  when not matched then insert values (v.a, v.b + 1);
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
+merge into uv_ptv t
+  using (values (1,2), (1,4)) as v(a,b) on t.a = v.a and t.b = v.b
+  when matched then update set b = t.b + 1
+  when not matched then insert values (v.a, v.b + 1); -- fail: no partition for b=5
+ERROR:  no partition of relation "uv_pt1" found for row  (seg0 172.17.0.4:7002 pid=1160220)
+DETAIL:  Partition key of the failing row contains (b) = (5).
+merge into uv_ptv t
+  using (values (1,2), (1,3)) as v(a,b) on t.a = v.a and t.b = v.b
+  when matched then update set b = t.b + 1
+  when not matched then insert values (v.a, v.b + 1); -- ok
+select tableoid::regclass, * from uv_pt order by a, b;
+ tableoid | a | b | v 
+----------+---+---+---
+ uv_pt11  | 1 | 3 | 
+ uv_pt11  | 1 | 4 | 
+(2 rows)
+
 drop view uv_ptv, uv_ptv_wco;
 drop table uv_pt, uv_pt1, uv_pt11;
 -- check that wholerow vars appearing in WITH CHECK OPTION constraint expressions
@@ -3199,7 +3825,7 @@ create table wcowrtest1 partition of wcowrtest for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create view wcowrtest_v as select * from wcowrtest where wcowrtest = '(2)'::wcowrtest with check option;
 insert into wcowrtest_v values (1);
-ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.2:7003 pid=16692)
+ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.4:7003 pid=1160209)
 DETAIL:  Failing row contains (1).
 alter table wcowrtest add b text;
 create table wcowrtest2 (b text, c int, a int);
@@ -3221,7 +3847,7 @@ with check option;
 -- WITH CHECK qual will be processed with wcowrtest2's
 -- rowtype after tuple-routing
 insert into wcowrtest_v2 values (2, 'no such row in sometable');
-ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.2:7002 pid=16688)
+ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.4:7002 pid=1160220)
 DETAIL:  Failing row contains (2, no such row in sometable).
 drop view wcowrtest_v, wcowrtest_v2;
 drop table wcowrtest, sometable;

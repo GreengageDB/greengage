@@ -150,8 +150,7 @@ SELECT count(*) FROM
                                  ->  Seq Scan on public.tenk1
                                        Output: tenk1.two, tenk1.four, tenk1.two
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(19 rows)
+(18 rows)
 
 SELECT count(*) FROM
   (SELECT DISTINCT two, four, two FROM tenk1) ss;
@@ -195,19 +194,21 @@ SET enable_seqscan = 0;
 -- Check to see we get an incremental sort plan
 EXPLAIN (costs off)
 SELECT DISTINCT hundred, two FROM tenk1;
-                           QUERY PLAN                            
------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  GroupAggregate
    Group Key: hundred, two
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred, two
-         ->  GroupAggregate
-               Group Key: hundred, two
-               ->  Sort
-                     Sort Key: hundred, two
-                     ->  Index Scan using tenk1_hundred on tenk1
+         ->  Sort
+               Sort Key: hundred, two
+               ->  GroupAggregate
+                     Group Key: hundred, two
+                     ->  Sort
+                           Sort Key: hundred, two
+                           ->  Index Scan using tenk1_hundred on tenk1
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 RESET enable_seqscan;
 SET enable_hashagg=TRUE;
@@ -392,6 +393,25 @@ SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
     0 |        1 |        2 |        3
 (1 row)
 
+SET parallel_setup_cost=0;
+SET min_parallel_table_scan_size=0;
+SET max_parallel_workers_per_gather=2;
+-- Ensure we get a plan with a Limit 1 in both partial distinct and final
+-- distinct
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 10;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on tenk1
+               Filter: (four = 10)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+RESET max_parallel_workers_per_gather;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
 --
 -- Also, some tests of IS DISTINCT FROM, which doesn't quite deserve its
 -- very own regression file.
@@ -407,10 +427,10 @@ INSERT INTO DISTTABLE VALUES(NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
  f1 | not 2 
 ----+-------
-  1 | t
   2 | f
   3 | t
     | t
+  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
@@ -541,8 +561,8 @@ SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinc
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
-   |  
  1 | 1
+   |  
 (2 rows)
 
 DROP TABLE distinct_1;

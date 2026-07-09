@@ -186,14 +186,6 @@ CREATE TABLE partitioned (
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use "list" partition strategy with more than one column
--- unsupported constraint type for partitioned tables
-CREATE TABLE partitioned (
-	a int,
-	EXCLUDE USING gist (a WITH &&)
-) PARTITION BY RANGE (a);
-ERROR:  exclusion constraints are not supported on partitioned tables
-LINE 3:  EXCLUDE USING gist (a WITH &&)
-         ^
 -- prevent using prohibited expressions in the key
 CREATE FUNCTION retset (a int) RETURNS SETOF int AS $$ SELECT 1; $$ LANGUAGE SQL IMMUTABLE;
 CREATE TABLE partitioned (
@@ -360,26 +352,26 @@ Number of partitions: 0
 Distributed by: (a)
 
 \d+ partitioned2
-                                 Partitioned table "public.partitioned2"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer |           |          |         | plain    |             |              | 
- b      | text    |           |          |         | extended |             |              | 
+                          Partitioned table "public.partitioned2"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer |           |          |         | plain    |              | 
+ b      | text    |           |          |         | extended |              | 
 Partition key: RANGE (((a + 1)), substr(b, 1, 5))
 Number of partitions: 0
 Distributed by: (a)
 
 INSERT INTO partitioned2 VALUES (1, 'hello');
-ERROR:  no partition of relation "partitioned2" found for row  (seg1 172.17.0.2:7003 pid=15993)
+ERROR:  no partition of relation "partitioned2" found for row  (seg1 172.17.0.4:7003 pid=1159519)
 DETAIL:  Partition key of the failing row contains ((a + 1), substr(b, 1, 5)) = (2, hello).
 CREATE TABLE part2_1 PARTITION OF partitioned2 FOR VALUES FROM (-1, 'aaaaa') TO (100, 'ccccc');
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ part2_1
-                                         Table "public.part2_1"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer |           |          |         | plain    |             |              | 
- b      | text    |           |          |         | extended |             |              | 
+                                  Table "public.part2_1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer |           |          |         | plain    |              | 
+ b      | text    |           |          |         | extended |              | 
 Partition of: partitioned2 FOR VALUES FROM ('-1', 'aaaaa') TO (100, 'ccccc')
 Partition constraint: (((a + 1) IS NOT NULL) AND (substr(b, 1, 5) IS NOT NULL) AND (((a + 1) > '-1'::integer) OR (((a + 1) = '-1'::integer) AND (substr(b, 1, 5) >= 'aaaaa'::text))) AND (((a + 1) < 100) OR (((a + 1) = 100) AND (substr(b, 1, 5) < 'ccccc'::text))))
 Distributed by: (a)
@@ -429,11 +421,11 @@ select * from partitioned where partitioned = '(1,2)'::partitioned;
 (4 rows)
 
 \d+ partitioned1
-                                      Table "public.partitioned1"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                               Table "public.partitioned1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition of: partitioned FOR VALUES IN ('(1,2)')
 Partition constraint: (((partitioned1.*)::partitioned IS DISTINCT FROM NULL) AND ((partitioned1.*)::partitioned = '(1,2)'::partitioned))
 Distributed by: (a)
@@ -497,10 +489,10 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_null PARTITION OF list_parted FOR VALUES IN (null);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ list_parted
-                                 Partitioned table "public.list_parted"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
+                          Partitioned table "public.list_parted"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
 Partition key: LIST (a)
 Partitions: part_null FOR VALUES IN (NULL),
             part_p1 FOR VALUES IN (1),
@@ -798,7 +790,7 @@ LINE 1: ...ail_part PARTITION OF list_parted2 FOR VALUES IN ('b', 'c');
 INSERT INTO list_parted2 VALUES('X');
 CREATE TABLE fail_part PARTITION OF list_parted2 FOR VALUES IN ('W', 'X', 'Y');
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row  (seg1 172.17.0.2:7003 pid=15993)
+ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row  (seg1 172.17.0.4:7003 pid=1159519)
 CREATE TABLE range_parted2 (
 	a int
 ) PARTITION BY RANGE (a);
@@ -864,7 +856,7 @@ LINE 1: ... TABLE fail_default_part PARTITION OF range_parted2 DEFAULT;
 INSERT INTO range_parted2 VALUES (85);
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (80) TO (90);
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row  (seg2 172.17.0.2:7004 pid=15990)
+ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row  (seg2 172.17.0.4:7004 pid=1159521)
 CREATE TABLE part4 PARTITION OF range_parted2 FOR VALUES FROM (90) TO (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- now check for multi-column range partition key
@@ -968,21 +960,21 @@ CREATE TABLE part_b PARTITION OF parted (
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging constraint "check_a" with inherited definition
 -- conislocal should be false for any merged constraints, true otherwise
-SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass ORDER BY conislocal, coninhcount;
- conislocal | coninhcount 
-------------+-------------
- f          |           1
- t          |           0
+SELECT conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass ORDER BY coninhcount DESC, conname;
+ conname | conislocal | coninhcount 
+---------+------------+-------------
+ check_a | f          |           1
+ check_b | t          |           0
 (2 rows)
 
 -- Once check_b is added to the parent, it should be made non-local for part_b
 ALTER TABLE parted ADD CONSTRAINT check_b CHECK (b >= 0);
 NOTICE:  merging constraint "check_b" with inherited definition
-SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass;
- conislocal | coninhcount 
-------------+-------------
- f          |           1
- f          |           1
+SELECT conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass ORDER BY coninhcount DESC, conname;
+ conname | conislocal | coninhcount 
+---------+------------+-------------
+ check_a | f          |           1
+ check_b | f          |           1
 (2 rows)
 
 -- Neither check_a nor check_b are droppable from part_b
@@ -994,9 +986,9 @@ ERROR:  cannot drop inherited constraint "check_b" of relation "part_b"
 -- traditional inheritance where they will be left behind, because they would
 -- be local constraints.
 ALTER TABLE parted DROP CONSTRAINT check_a, DROP CONSTRAINT check_b;
-SELECT conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass;
- conislocal | coninhcount 
-------------+-------------
+SELECT conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid = 'part_b'::regclass ORDER BY coninhcount DESC, conname;
+ conname | conislocal | coninhcount 
+---------+------------+-------------
 (0 rows)
 
 -- specify PARTITION BY for a partition
@@ -1017,7 +1009,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create table parted_notnull_inh_test1 partition of parted_notnull_inh_test (a not null, b default 1) for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parted_notnull_inh_test (b) values (null);
-ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint  (seg1 172.17.0.2:7003 pid=15993)
+ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1159519)
 DETAIL:  Failing row contains (1, null).
 -- note that while b's default is overridden, a's default is preserved
 \d parted_notnull_inh_test1
@@ -1075,22 +1067,22 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 drop table test_part_coll_posix;
 -- Partition bound in describe output
 \d+ part_b
-                                          Table "public.part_b"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           | not null | 1       | plain    |             |              | 
+                                   Table "public.part_b"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           | not null | 1       | plain    |              | 
 Partition of: parted FOR VALUES IN ('b')
 Partition constraint: ((a IS NOT NULL) AND (a = 'b'::text))
 Distributed by: (a)
 
 -- Both partition bound and partition key in describe output
 \d+ part_c
-                                    Partitioned table "public.part_c"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           | not null | 0       | plain    |             |              | 
+                             Partitioned table "public.part_c"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           | not null | 0       | plain    |              | 
 Partition of: parted FOR VALUES IN ('c')
 Partition constraint: ((a IS NOT NULL) AND (a = 'c'::text))
 Partition key: RANGE (b)
@@ -1099,11 +1091,11 @@ Distributed by: (a)
 
 -- a level-2 partition's constraint will include the parent's expressions
 \d+ part_c_1_10
-                                       Table "public.part_c_1_10"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           | not null | 0       | plain    |             |              | 
+                                Table "public.part_c_1_10"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           | not null | 0       | plain    |              | 
 Partition of: part_c FOR VALUES FROM (1) TO (10)
 Partition constraint: ((a IS NOT NULL) AND (a = 'c'::text) AND (b IS NOT NULL) AND (b >= 1) AND (b < 10))
 Distributed by: (a)
@@ -1138,12 +1130,12 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 CREATE TABLE unbounded_range_part PARTITION OF range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (MAXVALUE, MAXVALUE, MAXVALUE);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ unbounded_range_part
-                                  Table "public.unbounded_range_part"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
+                           Table "public.unbounded_range_part"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
 Partition of: range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (MAXVALUE, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL))
 Distributed by: (a)
@@ -1152,12 +1144,12 @@ DROP TABLE unbounded_range_part;
 CREATE TABLE range_parted4_1 PARTITION OF range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (1, MAXVALUE, MAXVALUE);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_1
-                                     Table "public.range_parted4_1"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
+                              Table "public.range_parted4_1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
 Partition of: range_parted4 FOR VALUES FROM (MINVALUE, MINVALUE, MINVALUE) TO (1, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND (abs(a) <= 1))
 Distributed by: (a)
@@ -1165,12 +1157,12 @@ Distributed by: (a)
 CREATE TABLE range_parted4_2 PARTITION OF range_parted4 FOR VALUES FROM (3, 4, 5) TO (6, 7, MAXVALUE);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_2
-                                     Table "public.range_parted4_2"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
+                              Table "public.range_parted4_2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
 Partition of: range_parted4 FOR VALUES FROM (3, 4, 5) TO (6, 7, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND ((abs(a) > 3) OR ((abs(a) = 3) AND (abs(b) > 4)) OR ((abs(a) = 3) AND (abs(b) = 4) AND (c >= 5))) AND ((abs(a) < 6) OR ((abs(a) = 6) AND (abs(b) <= 7))))
 Distributed by: (a)
@@ -1178,12 +1170,12 @@ Distributed by: (a)
 CREATE TABLE range_parted4_3 PARTITION OF range_parted4 FOR VALUES FROM (6, 8, MINVALUE) TO (9, MAXVALUE, MAXVALUE);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ range_parted4_3
-                                     Table "public.range_parted4_3"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
+                              Table "public.range_parted4_3"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
 Partition of: range_parted4 FOR VALUES FROM (6, 8, MINVALUE) TO (9, MAXVALUE, MAXVALUE)
 Partition constraint: ((abs(a) IS NOT NULL) AND (abs(b) IS NOT NULL) AND (c IS NOT NULL) AND ((abs(a) > 6) OR ((abs(a) = 6) AND (abs(b) >= 8))) AND (abs(a) <= 9))
 Distributed by: (a)
@@ -1221,11 +1213,11 @@ SELECT obj_description('parted_col_comment'::regclass);
 (1 row)
 
 \d+ parted_col_comment
-                               Partitioned table "public.parted_col_comment"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target |  Description  
---------+---------+-----------+----------+---------+----------+-------------+--------------+---------------
- a      | integer |           |          |         | plain    |             |              | Partition key
- b      | text    |           |          |         | extended |             |              | 
+                        Partitioned table "public.parted_col_comment"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target |  Description  
+--------+---------+-----------+----------+---------+----------+--------------+---------------
+ a      | integer |           |          |         | plain    |              | Partition key
+ b      | text    |           |          |         | extended |              | 
 Partition key: LIST (a)
 Number of partitions: 0
 Distributed by: (a)
@@ -1242,10 +1234,10 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 CREATE TABLE arrlp12 PARTITION OF arrlp FOR VALUES IN ('{1}', '{2}');
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ arrlp12
-                                          Table "public.arrlp12"
- Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | integer[] |           |          |         | extended |             |              | 
+                                   Table "public.arrlp12"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer[] |           |          |         | extended |              | 
 Partition of: arrlp FOR VALUES IN ('{1}', '{2}')
 Partition constraint: ((a IS NOT NULL) AND ((a = '{1}'::integer[]) OR (a = '{2}'::integer[])))
 Distributed by: (a)
@@ -1260,10 +1252,10 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolspart_f partition of boolspart for values in (false);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ boolspart
-                                  Partitioned table "public.boolspart"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | boolean |           |          |         | plain   |             |              | 
+                           Partitioned table "public.boolspart"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | boolean |           |          |         | plain   |              | 
 Partition key: LIST (a)
 Partitions: boolspart_f FOR VALUES IN (false),
             boolspart_t FOR VALUES IN (true)
@@ -1305,7 +1297,7 @@ create trigger trig_part_create before insert on tab_part_create
   for each statement execute procedure func_part_create();
 ERROR:  Triggers for statements are not yet supported
 insert into tab_part_create values (1);
-ERROR:  no partition of relation "tab_part_create" found for row  (seg1 172.17.0.2:7003 pid=15993)
+ERROR:  no partition of relation "tab_part_create" found for row  (seg1 172.17.0.4:7003 pid=1159519)
 DETAIL:  Partition key of the failing row contains (a) = (1).
 drop table tab_part_create;
 drop function func_part_create();
@@ -1343,7 +1335,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 insert into defcheck_def values (0, 0);
 create table defcheck_0 partition of defcheck for values in (0);
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row  (seg1 172.17.0.2:7003 pid=15993)
+ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row  (seg1 172.17.0.4:7003 pid=1159519)
 drop table defcheck;
 -- Test github issue #7340. truncating a toast unlogged table fails.
 -- Leave the table on purpose for pg_dump and gp_replica_check tests.

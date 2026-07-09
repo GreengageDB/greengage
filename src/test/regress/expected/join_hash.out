@@ -1193,7 +1193,7 @@ WHERE
            ->  Result
                  Output: (hjtest_1.b * 5)
  Optimizer: Postgres query optimizer
- Settings: enable_sort = 'off', optimizer = 'off', from_collapse_limit = '1'
+ Settings: enable_sort = 'off', from_collapse_limit = '1'
 (38 rows)
 
 SELECT hjtest_1.a a1, hjtest_2.a a2,hjtest_1.tableoid::regclass t1, hjtest_2.tableoid::regclass t2
@@ -1257,7 +1257,7 @@ WHERE
            ->  Result
                  Output: (hjtest_2.c * 5)
  Optimizer: Postgres query optimizer
- Settings: enable_sort = 'off', optimizer = 'off', from_collapse_limit = '1'
+ Settings: enable_sort = 'off', from_collapse_limit = '1'
 (38 rows)
 
 SELECT hjtest_1.a a1, hjtest_2.a a2,hjtest_1.tableoid::regclass t1, hjtest_2.tableoid::regclass t2
@@ -1306,6 +1306,6 @@ select i8.q2, ss.* from
 int8_tbl i8,
 lateral (select t1.fivethous, i4.f1 from tenk1 t1 join int4_tbl i4
          on t1.fivethous = i4.f1+i8.q2 order by 1,2) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1272)  (seg2 slice1 172.17.0.2:7004 pid=20283) (nodeMotion.c:1272)
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1270)  (seg1 slice1 172.17.0.4:7003 pid=1162874) (nodeMotion.c:1270)
 HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 rollback;

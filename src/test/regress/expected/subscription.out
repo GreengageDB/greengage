@@ -34,11 +34,11 @@ ERROR:  publication name "foo" used more than once
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 COMMENT ON SUBSCRIPTION regress_testsub IS 'test subscription';
 SELECT obj_description(s.oid, 'pg_subscription') FROM pg_subscription s;
@@ -111,11 +111,11 @@ ERROR:  subscription with slot_name = NONE must also set enabled = false
 CREATE SUBSCRIPTION regress_testsub3 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, connect = false);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 -- fail
 ALTER SUBSCRIPTION regress_testsub3 ENABLE;
@@ -129,11 +129,11 @@ ERROR:  unrecognized origin value: "foo"
 CREATE SUBSCRIPTION regress_testsub4 CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (slot_name = NONE, connect = false, origin = none);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+ regress_testsub4
                                                                                                                  List of subscriptions
@@ -258,10 +258,10 @@ ERROR:  DROP SUBSCRIPTION cannot run inside a transaction block
 COMMIT;
 ALTER SUBSCRIPTION regress_testsub SET (slot_name = NONE);
 \dRs+
-                                                                                                                List of subscriptions
-      Name       |           Owner            | Enabled |     Publication     | Binary | Streaming | Two-phase commit | Disable on error | Origin | Password required | Run as owner? | Synchronous commit |           Conninfo           | Skip LSN 
------------------+----------------------------+---------+---------------------+--------+-----------+------------------+------------------+--------+-------------------+---------------+--------------------+------------------------------+----------
- regress_testsub | regress_subscription_user2 | f       | {testpub2,testpub3} | f      | off       | d                | f                | any    | t                 | f             | local              | dbname=regress_doesnotexist2 | 0/0
+                                                                                                                     List of subscriptions
+      Name       |           Owner            | Enabled |     Publication     | Binary | Streaming | Two-phase commit | Disable on error | Origin | Password required | Run as owner? | Failover | Synchronous commit |           Conninfo           | Skip LSN 
+-----------------+----------------------------+---------+---------------------+--------+-----------+------------------+------------------+--------+-------------------+---------------+----------+--------------------+------------------------------+----------
+ regress_testsub | regress_subscription_user2 | f       | {testpub2,testpub3} | f      | off       | d                | f                | any    | t                 | f             | f        | local              | dbname=regress_doesnotexist2 | 0/0
 (1 row)
 
 -- now it works
@@ -279,11 +279,11 @@ ERROR:  binary requires a Boolean value
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, binary = true);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+
                                                                                                                 List of subscriptions
@@ -309,11 +309,11 @@ ERROR:  streaming requires a Boolean value or "parallel"
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = true);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+
                                                                                                                 List of subscriptions
@@ -380,11 +380,11 @@ CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUB
        WITH (connect = false, create_slot = false, copy_data = false);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 ALTER SUBSCRIPTION regress_testsub ENABLE;
 -- fail - ALTER SUBSCRIPTION with refresh is not allowed in a transaction
@@ -413,11 +413,11 @@ ERROR:  two_phase requires a Boolean value
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, two_phase = true);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+
                                                                                                                 List of subscriptions
@@ -444,11 +444,11 @@ DROP SUBSCRIPTION regress_testsub;
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = true, two_phase = true);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+
                                                                                                                 List of subscriptions
@@ -466,11 +466,11 @@ ERROR:  disable_on_error requires a Boolean value
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, disable_on_error = false);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 \dRs+
                                                                                                                 List of subscriptions
@@ -515,11 +515,11 @@ SET SESSION AUTHORIZATION regress_subscription_user3;
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist password=regress_fakepassword' PUBLICATION testpub WITH (connect = false);
 WARNING:  subscription was created, but is not connected
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg0 172.17.0.2:7002 pid=22569)
+WARNING:  subscription was created, but is not connected  (seg1 172.17.0.4:7003 pid=1165071)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg1 172.17.0.2:7003 pid=22568)
+WARNING:  subscription was created, but is not connected  (seg0 172.17.0.4:7002 pid=1165069)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
-WARNING:  subscription was created, but is not connected  (seg2 172.17.0.2:7004 pid=22571)
+WARNING:  subscription was created, but is not connected  (seg2 172.17.0.4:7004 pid=1165073)
 HINT:  To initiate replication, you must manually create the replication slot, enable the subscription, and refresh the subscription.
 -- we cannot give the subscription away to some random user
 ALTER SUBSCRIPTION regress_testsub OWNER TO regress_subscription_user;

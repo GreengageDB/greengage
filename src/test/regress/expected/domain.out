@@ -42,6 +42,8 @@ create table basictest
            , testvarchar domainvarchar
            , testnumeric domainnumeric
            );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testint4' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO basictest values ('88', 'haha', 'short', '123.12');      -- Good
 INSERT INTO basictest values ('88', 'haha', 'short text', '123.12'); -- Bad varchar
 ERROR:  value too long for type character varying(5)
@@ -144,6 +146,8 @@ create table domarrtest
            ( testint4arr domainint4arr
            , testchar4arr domainchar4arr
             );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testint4arr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO domarrtest values ('{2,2}', '{{"a","b"},{"c","d"}}');
 INSERT INTO domarrtest values ('{{2,2},{2,2}}', '{{"a","b"}}');
 INSERT INTO domarrtest values ('{2,2}', '{{"a","b"},{"c","d"},{"e","f"}}');
@@ -156,21 +160,21 @@ select * from domarrtest;
   testint4arr  |    testchar4arr     
 ---------------+---------------------
  {11,NULL,22}  | 
- {{2,2},{2,2}} | {{a,b}}
  {2,2}         | {{a,b},{c,d}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
+ {{2,2},{2,2}} | {{a,b}}
 (6 rows)
 
 select testint4arr[1], testchar4arr[2:2] from domarrtest;
  testint4arr | testchar4arr 
 -------------+--------------
+             | {}
            2 | {{c,d}}
            2 | {{c,d}}
            2 | {{c}}
              | {{d,e,f}}
-             | {}
           11 | 
 (6 rows)
 
@@ -178,11 +182,11 @@ select array_dims(testint4arr), array_dims(testchar4arr) from domarrtest;
  array_dims | array_dims 
 ------------+------------
  [1:3]      | 
- [1:2][1:2] | [1:1][1:2]
  [1:2]      | [1:2][1:2]
  [1:2]      | [1:3][1:2]
  [1:2]      | [1:2][1:1]
             | [1:2][1:3]
+ [1:2][1:2] | [1:1][1:2]
 (6 rows)
 
 COPY domarrtest FROM stdin;
@@ -192,14 +196,14 @@ CONTEXT:  COPY domarrtest, line 1, column testchar4arr: "{qwerty,w,e}"
 select * from domarrtest;
   testint4arr  |    testchar4arr     
 ---------------+---------------------
- {{2,2},{2,2}} | {{a,b}}
- {3,4}         | {q,w,e}
  {11,NULL,22}  | 
  {2,2}         | {{a,b},{c,d}}
  {2,2}         | {{a,b},{c,d},{e,f}}
  {2,2}         | {{a},{c}}
                | {{a,b,c},{d,e,f}}
                | 
+ {{2,2},{2,2}} | {{a,b}}
+ {3,4}         | {q,w,e}
 (8 rows)
 
 update domarrtest set
@@ -252,7 +256,7 @@ create table dcomptable (d1 dcomptype unique) distributed replicated;
 insert into dcomptable values (row(1,2)::dcomptype);
 insert into dcomptable values (row(3,4)::comptype);
 insert into dcomptable values (row(1,2)::dcomptype);  -- fail on uniqueness
-ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"  (seg2 172.17.0.2:7004 pid=771263)
+ERROR:  duplicate key value violates unique constraint "dcomptable_d1_key"  (seg0 172.17.0.4:7002 pid=1166198)
 DETAIL:  Key (d1)=((1,2)) already exists.
 insert into dcomptable (d1.r) values(11);
 select * from dcomptable;
@@ -282,18 +286,18 @@ select * from dcomptable;
 
 alter domain dcomptype add constraint c1 check ((value).r <= (value).i);
 alter domain dcomptype add constraint c2 check ((value).r > (value).i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg2 172.17.0.4:7004 pid=1166204)
 select row(2,1)::dcomptype;  -- fail
 ERROR:  value for domain dcomptype violates check constraint "c1"
 insert into dcomptable values (row(1,2)::comptype);
 insert into dcomptable values (row(2,1)::comptype);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.4:7003 pid=1166199)
 insert into dcomptable (d1.r) values(99);
 insert into dcomptable (d1.r, d1.i) values(99, 100);
 insert into dcomptable (d1.r, d1.i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg0 172.17.0.4:7002 pid=1166198)
 update dcomptable set d1.r = (d1).r + 1 where (d1).i > 0;  -- fail
-ERROR:  value for domain dcomptype violates check constraint "c1"  (seg2 172.17.0.2:7004 pid=771263)
+ERROR:  value for domain dcomptype violates check constraint "c1"  (seg0 172.17.0.4:7002 pid=1166198)
 update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 select * from dcomptable;
     d1    
@@ -315,16 +319,15 @@ explain (verbose, costs off)
          Output: ROW(((d1).r - '1'::double precision), ((d1).i + '1'::double precision)), ctid, gp_segment_id
          Filter: ((dcomptable.d1).i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(6 rows)
+(5 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1.r = (d1).r - 1, d1.i = (d1).i + 1 where (d1).i > 0;
 \d+ dcomptable
-                                         Table "public.dcomptable"
- Column |   Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+-----------+-----------+----------+---------+----------+-------------+--------------+-------------
- d1     | dcomptype |           |          |         | extended |             |              | 
+                                  Table "public.dcomptable"
+ Column |   Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-----------+-----------+----------+---------+----------+--------------+-------------
+ d1     | dcomptype |           |          |         | extended |              | 
 Indexes:
     "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
 Rules:
@@ -392,6 +395,8 @@ create table dcomptable (d1 dcomptypea unique);
 -- to be part of the distribution key, and composite types can't be used as
 -- distribution keys because they have no hash opclasses.
 create table dcomptable (d1 dcomptypea /*unique*/);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  relation "dcomptable" already exists
 create index on dcomptable (d1);
 insert into dcomptable values (array[row(1,2)]::dcomptypea);
@@ -414,21 +419,21 @@ select d1[2], d1[1].r, d1[1].i from dcomptable;
    d1   | r  | i  
 --------+----+----
  (5,6)  |  3 |  4
+ (9,10) |  7 |  8
         |  1 |  2
         |  9 | 10
         | 11 |   
- (9,10) |  7 |  8
 (5 rows)
 
 update dcomptable set d1[2] = row(d1[2].i, d1[2].r);
 select * from dcomptable;
          d1         
 --------------------
- {"(9,10)","(,)"}
- {"(3,4)","(6,5)"}
  {"(11,)","(,)"}
  {"(7,8)","(10,9)"}
  {"(1,2)","(,)"}
+ {"(9,10)","(,)"}
+ {"(3,4)","(6,5)"}
 (5 rows)
 
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;
@@ -438,35 +443,35 @@ select * from dcomptable;
  {"(8,8)","(10,9)"}
  {"(10,10)","(,)"}
  {"(11,)","(,)"}
- {"(2,2)","(,)"}
  {"(4,4)","(6,5)"}
+ {"(2,2)","(,)"}
 (5 rows)
 
 alter domain dcomptypea add constraint c1 check (value[1].r <= value[1].i);
 alter domain dcomptypea add constraint c2 check (value[1].r > value[1].i);  -- fail
-ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "d1" of table "dcomptable" contains values that violate the new constraint  (seg2 172.17.0.4:7004 pid=1166204)
 select array[row(2,1)]::dcomptypea;  -- fail
 ERROR:  value for domain dcomptypea violates check constraint "c1"
 insert into dcomptable values (array[row(1,2)]::comptype[]);
 insert into dcomptable values (array[row(2,1)]::comptype[]);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.4:7003 pid=1166635)
 insert into dcomptable (d1[1].r) values(99);
 insert into dcomptable (d1[1].r, d1[1].i) values(99, 100);
 insert into dcomptable (d1[1].r, d1[1].i) values(100, 99);  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.4:7003 pid=1166635)
 update dcomptable set d1[1].r = d1[1].r + 1 where d1[1].i > 0;  -- fail
-ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=771663)
+ERROR:  value for domain dcomptypea violates check constraint "c1"  (seg1 slice1 172.17.0.4:7003 pid=1166635)
 update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
   where d1[1].i > 0;
 select * from dcomptable;
          d1         
 --------------------
- {"(9,11)","(,)"}
- {"(98,101)"}
- {"(1,3)","(,)"}
  {"(11,)","(,)"}
  {"(0,3)"}
  {"(3,5)","(6,5)"}
+ {"(9,11)","(,)"}
+ {"(98,101)"}
+ {"(1,3)","(,)"}
  {"(99,)"}
  {"(7,9)","(10,9)"}
 (8 rows)
@@ -485,17 +490,16 @@ explain (verbose, costs off)
                      Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id
                      Filter: (dcomptable.d1[1].i > '0'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(10 rows)
+(9 rows)
 
 create rule silly as on delete to dcomptable do instead
   update dcomptable set d1[1].r = d1[1].r - 1, d1[1].i = d1[1].i + 1
     where d1[1].i > 0;
 \d+ dcomptable
-                                         Table "public.dcomptable"
- Column |    Type    | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+------------+-----------+----------+---------+----------+-------------+--------------+-------------
- d1     | dcomptypea |           |          |         | extended |             |              | 
+                                  Table "public.dcomptable"
+ Column |    Type    | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------+-----------+----------+---------+----------+--------------+-------------
+ d1     | dcomptypea |           |          |         | extended |              | 
 Indexes:
     "dcomptable_d1_idx" btree (d1)
     "dcomptable_d1_key" UNIQUE CONSTRAINT, btree (d1)
@@ -503,6 +507,7 @@ Rules:
     silly AS
     ON DELETE TO dcomptable DO INSTEAD  UPDATE dcomptable SET d1[1].r = dcomptable.d1[1].r - 1::double precision, d1[1].i = dcomptable.d1[1].i + 1::double precision
   WHERE dcomptable.d1[1].i > 0::double precision
+Distributed by: (d1)
 
 drop table dcomptable;
 drop type comptype cascade;
@@ -510,16 +515,18 @@ NOTICE:  drop cascades to type dcomptypea
 -- Test arrays over domains
 create domain posint as int check (value > 0);
 create table pitable (f1 posint[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pitable values(array[42]);
 insert into pitable values(array[-1]);  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"  (seg1 slice1 172.17.0.2:7003 pid=771930)
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg1 slice1 172.17.0.4:7003 pid=1166888)
 insert into pitable values('{0}');  -- fail
 ERROR:  value for domain posint violates check constraint "posint_check"
 LINE 1: insert into pitable values('{0}');
                                    ^
 update pitable set f1[1] = f1[1] + 1;
 update pitable set f1[1] = 0;  -- fail
-ERROR:  value for domain posint violates check constraint "posint_check"  (seg0 slice1 172.17.0.2:7002 pid=772002)
+ERROR:  value for domain posint violates check constraint "posint_check"  (seg0 slice1 172.17.0.4:7002 pid=1166954)
 select * from pitable;
   f1  
 ------
@@ -529,6 +536,8 @@ select * from pitable;
 drop table pitable;
 create domain vc4 as varchar(4);
 create table vc4table (f1 vc4[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into vc4table values(array['too long']);  -- fail
 ERROR:  value too long for type character varying(4)
 insert into vc4table values(array['too long']::vc4[]);  -- cast truncates
@@ -543,6 +552,8 @@ drop type vc4;
 -- You can sort of fake arrays-of-arrays by putting a domain in between
 create domain dposinta as posint[];
 create table dposintatable (f1 dposinta[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dposintatable values(array[array[42]]);  -- fail
 ERROR:  column "f1" is of type dposinta[] but expression is of type integer[]
 LINE 1: insert into dposintatable values(array[array[42]]);
@@ -593,7 +604,7 @@ select f1, f1[1], (f1[2])[1] from dposintatable;
 
 -- it'd be nice if you could do something like this, but for now you can't:
 update dposintatable set f1[2][1] = array[97];
-ERROR:  wrong number of array subscripts  (seg0 slice1 172.17.0.2:7002 pid=772074)
+ERROR:  wrong number of array subscripts  (seg0 slice1 172.17.0.4:7002 pid=1167075)
 -- maybe someday we can make this syntax work:
 update dposintatable set (f1[2])[1] = array[98];
 ERROR:  syntax error at or near "["
@@ -606,6 +617,8 @@ NOTICE:  drop cascades to type dposinta
 create type comptype as (cf1 int, cf2 int);
 create domain dcomptype as comptype check ((value).cf1 > 0);
 create table dcomptable (f1 dcomptype[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dcomptable values (null);
 update dcomptable set f1[1].cf2 = 5;
 table dcomptable;
@@ -615,7 +628,7 @@ table dcomptable;
 (1 row)
 
 update dcomptable set f1[1].cf1 = -1;  -- fail
-ERROR:  value for domain dcomptype violates check constraint "dcomptype_check"
+ERROR:  value for domain dcomptype violates check constraint "dcomptype_check"  (seg2 slice1 172.17.0.4:7004 pid=1167128)
 update dcomptable set f1[1].cf1 = 1;
 table dcomptable;
     f1     
@@ -646,20 +659,22 @@ create table nulltest
            , col4 dnull
            , col5 dcheck CHECK (col5 IN ('c', 'd'))
            );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO nulltest DEFAULT VALUES;
-ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.4:7003 pid=1167184)
 INSERT INTO nulltest values ('a', 'b', 'c', 'd', 'c');  -- Good
 insert into nulltest values ('a', 'b', 'c', 'd', NULL);
-ERROR:  domain dcheck does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
+ERROR:  domain dcheck does not allow null values  (seg1 slice1 172.17.0.4:7003 pid=1167184)
 insert into nulltest values ('a', 'b', 'c', 'd', 'a');
-ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"  (seg2 172.17.0.2:7004 pid=771263)
+ERROR:  new row for relation "nulltest" violates check constraint "nulltest_col5_check"  (seg2 172.17.0.4:7004 pid=1166204)
 DETAIL:  Failing row contains (a, b, c, d, a).
 INSERT INTO nulltest values (NULL, 'b', 'c', 'd', 'd');
-ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.4:7003 pid=1167184)
 INSERT INTO nulltest values ('a', NULL, 'c', 'd', 'c');
-ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.2:7003 pid=772109)
+ERROR:  domain dnotnull does not allow null values  (seg1 slice1 172.17.0.4:7003 pid=1167184)
 INSERT INTO nulltest values ('a', 'b', NULL, 'd', 'c');
-ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint  (seg2 172.17.0.2:7004 pid=771263)
+ERROR:  null value in column "col3" of relation "nulltest" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1166204)
 DETAIL:  Failing row contains (a, b, null, d, c).
 INSERT INTO nulltest values ('a', 'b', 'c', NULL, 'd'); -- Good
 -- Test copy
@@ -694,7 +709,7 @@ ERROR:  domain dnotnull does not allow null values
 SELECT cast(cast(NULL as dnull) as dnotnull); -- fail
 ERROR:  domain dnotnull does not allow null values
 SELECT cast(col4 as dnotnull) from nulltest; -- fail
-ERROR:  domain dnotnull does not allow null values  (seg2 slice1 172.17.0.2:7004 pid=771263)
+ERROR:  domain dnotnull does not allow null values  (seg2 slice1 172.17.0.4:7004 pid=1166204)
 -- cleanup
 drop table nulltest;
 drop domain dnotnull restrict;
@@ -718,14 +733,14 @@ create table defaulttest
             , col8 ddef5
             );
 insert into defaulttest(col4) values(0); -- fails, col5 defaults to null
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1166199)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values; -- succeeds, inserts domain default
 -- We used to treat SET DEFAULT NULL as equivalent to DROP DEFAULT; wrong
 alter table defaulttest alter column col5 set default null;
 insert into defaulttest(col4) values(0); -- fails
-ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  null value in column "col5" of relation "defaulttest" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1166199)
 DETAIL:  Failing row contains (3, 12, 5, 0, null, 88, 8000, 12.12).
 alter table defaulttest alter column col5 drop default;
 insert into defaulttest default values;
@@ -751,14 +766,14 @@ create table domnotnull
 ) distributed by (id);
 insert into domnotnull default values;
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col1" of table "domnotnull" contains null values  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "col1" of table "domnotnull" contains null values  (seg0 172.17.0.4:7002 pid=1166198)
 update domnotnull set col1 = 5;
 alter domain dnotnulltest set not null; -- fails
-ERROR:  column "col2" of table "domnotnull" contains null values  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "col2" of table "domnotnull" contains null values  (seg0 172.17.0.4:7002 pid=1166198)
 update domnotnull set col2 = 6;
 alter domain dnotnulltest set not null;
 update domnotnull set col1 = null; -- fails
-ERROR:  domain dnotnulltest does not allow null values  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  domain dnotnulltest does not allow null values  (seg0 172.17.0.4:7002 pid=1166198)
 alter domain dnotnulltest drop not null;
 update domnotnull set col1 = null;
 drop domain dnotnulltest cascade;
@@ -767,6 +782,8 @@ DETAIL:  drop cascades to column col2 of table domnotnull
 drop cascades to column col1 of table domnotnull
 -- Test ALTER DOMAIN .. DEFAULT ..
 create table domdeftest (col1 ddef1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domdeftest default values;
 select * from domdeftest;
  col1 
@@ -797,41 +814,99 @@ drop table domdeftest;
 -- Test ALTER DOMAIN .. CONSTRAINT ..
 create domain con as integer;
 create table domcontest (col1 con);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domcontest values (1);
 insert into domcontest values (2);
 alter domain con add constraint t check (VALUE < 1); -- fails
-ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  column "col1" of table "domcontest" contains values that violate the new constraint  (seg0 172.17.0.4:7002 pid=1166198)
 alter domain con add constraint t check (VALUE < 34);
 alter domain con add check (VALUE > 0);
+\dD con
+                                         List of domains
+ Schema | Name |  Type   | Collation | Nullable | Default |                Check                 
+--------+------+---------+-----------+----------+---------+--------------------------------------
+ public | con  | integer |           |          |         | CHECK (VALUE > 0) CHECK (VALUE < 34)
+(1 row)
+
 insert into domcontest values (-5); -- fails
-ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.2:7003 pid=772249)
+ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.4:7003 pid=1167304)
 insert into domcontest values (42); -- fails
-ERROR:  value for domain con violates check constraint "t"  (seg1 slice1 172.17.0.2:7003 pid=772249)
+ERROR:  value for domain con violates check constraint "t"  (seg1 slice1 172.17.0.4:7003 pid=1167304)
 insert into domcontest values (5);
 alter domain con drop constraint t;
 insert into domcontest values (-5); --fails
-ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.2:7003 pid=772290)
+ERROR:  value for domain con violates check constraint "con_check"  (seg1 slice1 172.17.0.4:7003 pid=1167338)
 insert into domcontest values (42);
 alter domain con drop constraint nonexistent;
 ERROR:  constraint "nonexistent" of domain "con" does not exist
 alter domain con drop constraint if exists nonexistent;
 NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping
-NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg0 172.17.0.2:7002 pid=771237)
-NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg2 172.17.0.2:7004 pid=771263)
-NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg1 172.17.0.2:7003 pid=771242)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg0 172.17.0.4:7002 pid=1166198)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg1 172.17.0.4:7003 pid=1166199)
+NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping  (seg2 172.17.0.4:7004 pid=1166204)
+-- not-null constraints
+create domain connotnull integer;
+create table domconnotnulltest
+( col1 connotnull
+, col2 connotnull
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into domconnotnulltest default values;
+alter domain connotnull add not null; -- fails
+ERROR:  column "col1" of table "domconnotnulltest" contains null values  (seg0 172.17.0.4:7002 pid=1166198)
+update domconnotnulltest set col1 = 5;
+alter domain connotnull add not null; -- fails
+ERROR:  column "col2" of table "domconnotnulltest" contains null values  (seg2 172.17.0.4:7004 pid=1166204)
+update domconnotnulltest set col2 = 6;
+alter domain connotnull add constraint constr1 not null;
+select count(*) from pg_constraint where contypid = 'connotnull'::regtype and contype = 'n';
+ count 
+-------
+     1
+(1 row)
+
+alter domain connotnull add constraint constr1bis not null;  -- redundant
+select count(*) from pg_constraint where contypid = 'connotnull'::regtype and contype = 'n';
+ count 
+-------
+     1
+(1 row)
+
+\dD connotnull
+                            List of domains
+ Schema |    Name    |  Type   | Collation | Nullable | Default | Check 
+--------+------------+---------+-----------+----------+---------+-------
+ public | connotnull | integer |           | not null |         | 
+(1 row)
+
+update domconnotnulltest set col1 = null; -- fails
+ERROR:  domain connotnull does not allow null values  (seg2 slice1 172.17.0.4:7004 pid=1167362)
+alter domain connotnull drop constraint constr1;
+update domconnotnulltest set col1 = null;
+drop domain connotnull cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to column col2 of table domconnotnulltest
+drop cascades to column col1 of table domconnotnulltest
+drop table domconnotnulltest;
 -- Test ALTER DOMAIN .. CONSTRAINT .. NOT VALID
 create domain things AS INT;
 CREATE TABLE thethings (id int, stuff things);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO thethings (stuff) VALUES (55);
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11);
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.4:7002 pid=1166198)
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11) NOT VALID;
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
-ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "stuff" of table "thethings" contains values that violate the new constraint  (seg0 172.17.0.4:7002 pid=1166198)
 UPDATE thethings SET stuff = 10;
 ALTER DOMAIN things VALIDATE CONSTRAINT meow;
 -- Confirm ALTER DOMAIN with RULES.
 create table domtab (col1 integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create domain dom as integer;
 create view domview as select cast(col1 as dom) from domtab;
 insert into domtab (col1) values (null);
@@ -845,18 +920,18 @@ select * from domview;
 
 alter domain dom set not null;
 select * from domview; -- fail
-ERROR:  domain dom does not allow null values  (seg0 slice1 172.17.0.2:7002 pid=771237)
+ERROR:  domain dom does not allow null values  (seg0 slice1 172.17.0.4:7002 pid=1166198)
 alter domain dom drop not null;
 select * from domview;
  col1 
 ------
-     
     5
+     
 (2 rows)
 
 alter domain dom add constraint domchkgt6 check(value > 6);
 select * from domview; --fail
-ERROR:  value for domain dom violates check constraint "domchkgt6"  (seg2 slice1 172.17.0.2:7004 pid=771263)
+ERROR:  value for domain dom violates check constraint "domchkgt6"  (seg2 slice1 172.17.0.4:7004 pid=1166204)
 alter domain dom drop constraint domchkgt6 restrict;
 select * from domview;
  col1 
@@ -897,17 +972,19 @@ ERROR:  value for domain dtop violates check constraint "dinter_check"
 select 'xz23'::dtop; -- fail
 ERROR:  value for domain dtop violates check constraint "dtop_check"
 create temp table dtest(f1 dtop);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dtest values('x123');
 insert into dtest values('x1234'); -- fail, implicit coercion
 ERROR:  value too long for type character varying(4)
 insert into dtest values('y1234'); -- fail, implicit coercion
 ERROR:  value too long for type character varying(4)
 insert into dtest values('y123'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.4:7003 pid=1167395)
 insert into dtest values('yz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
+ERROR:  value for domain dtop violates check constraint "dinter_check"  (seg1 slice1 172.17.0.4:7003 pid=1167395)
 insert into dtest values('xz23'); -- fail
-ERROR:  value for domain dtop violates check constraint "dtop_check"  (seg1 slice1 172.17.0.2:7003 pid=772324)
+ERROR:  value for domain dtop violates check constraint "dtop_check"  (seg1 slice1 172.17.0.4:7003 pid=1167395)
 drop table dtest;
 drop domain vchar4 cascade;
 NOTICE:  drop cascades to 2 other objects
@@ -918,15 +995,17 @@ drop cascades to type dtop
 -- column. Per bug #1433
 create domain str_domain as text not null;
 create table domain_test (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into domain_test values (1, 2);
 insert into domain_test values (1, 2);
 -- should fail
 alter table domain_test add column c str_domain;
-ERROR:  domain str_domain does not allow null values  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  domain str_domain does not allow null values  (seg1 172.17.0.4:7003 pid=1166199)
 create domain str_domain2 as text check (value <> 'foo') default 'foo';
 -- should fail
 alter table domain_test add column d str_domain2;
-ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"  (seg1 172.17.0.2:7003 pid=771242)
+ERROR:  value for domain str_domain2 violates check constraint "str_domain2_check"  (seg1 172.17.0.4:7003 pid=1166199)
 -- Check that domain constraints on prepared statement parameters of
 -- unknown type are enforced correctly.
 create domain pos_int as int4 check (value > 0) not null;
@@ -986,6 +1065,8 @@ create domain posint as int4;
 -- Currently, this doesn't work for composite types, but verify it complains
 create type ddtest1 as (f1 posint);
 create table ddtest2(f1 ddtest1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values(row(-1));
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -999,6 +1080,8 @@ drop table ddtest2;
 -- Likewise for domains within domains over composite
 create domain ddtest1d as ddtest1;
 create table ddtest2(f1 ddtest1d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('(-1)');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -1007,6 +1090,8 @@ drop domain ddtest1d;
 -- Likewise for domains within domains over array of composite
 create domain ddtest1d as ddtest1[];
 create table ddtest2(f1 ddtest1d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('{(-1)}');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -1015,6 +1100,8 @@ drop domain ddtest1d;
 -- Doesn't work for ranges, either
 create type rposint as range (subtype = posint);
 create table ddtest2(f1 rposint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values('(-1,3]');
 alter domain posint add constraint c1 check(value >= 0);
 ERROR:  cannot alter type "posint" because column "ddtest2.f1" uses it
@@ -1023,13 +1110,15 @@ drop type rposint;
 alter domain posint add constraint c1 check(value >= 0);
 create domain posint2 as posint check (value % 2 = 0);
 create table ddtest2(f1 posint2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ddtest2 values(11); -- fail
-ERROR:  value for domain posint2 violates check constraint "posint2_check"  (seg1 slice1 172.17.0.2:7003 pid=772388)
+ERROR:  value for domain posint2 violates check constraint "posint2_check"  (seg1 slice1 172.17.0.4:7003 pid=1167471)
 insert into ddtest2 values(-2); -- fail
-ERROR:  value for domain posint2 violates check constraint "c1"  (seg1 slice1 172.17.0.2:7003 pid=772388)
+ERROR:  value for domain posint2 violates check constraint "c1"  (seg1 slice1 172.17.0.4:7003 pid=1167471)
 insert into ddtest2 values(2);
 alter domain posint add constraint c2 check(value >= 10); -- fail
-ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint  (seg0 172.17.0.2:7002 pid=771237)
+ERROR:  column "f1" of table "ddtest2" contains values that violate the new constraint  (seg0 172.17.0.4:7002 pid=1166198)
 alter domain posint add constraint c2 check(value > 0); -- OK
 drop table ddtest2;
 drop type ddtest1;
@@ -1105,12 +1194,14 @@ select array[1,2]::orderedpair;
 select array[2,1]::orderedpair;  -- fail
 ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"
 create temp table op (f1 orderedpair);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into op values (array[1,2]);
 insert into op values (array[2,1]);  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg1 slice1 172.17.0.2:7003 pid=772413)
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg1 slice1 172.17.0.4:7003 pid=1167508)
 update op set f1[2] = 3;
 update op set f1[2] = 0;  -- fail
-ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg0 slice1 172.17.0.2:7002 pid=772420)
+ERROR:  value for domain orderedpair violates check constraint "orderedpair_check"  (seg0 slice1 172.17.0.4:7002 pid=1167540)
 select * from op;
   f1   
 -------
@@ -1207,10 +1298,12 @@ select 1::inotnull;
 select null::inotnull;
 ERROR:  value for domain inotnull violates check constraint "inotnull_check"
 create table dom_table (x inotnull);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dom_table values ('1');
 insert into dom_table values (1);
 insert into dom_table values (null);
-ERROR:  value for domain inotnull violates check constraint "inotnull_check"  (seg1 slice1 172.17.0.2:7003 pid=772440)
+ERROR:  value for domain inotnull violates check constraint "inotnull_check"  (seg1 slice1 172.17.0.4:7003 pid=1167555)
 drop table dom_table;
 drop domain inotnull;
 drop function sql_is_distinct_from(anyelement, anyelement);
@@ -1256,6 +1349,8 @@ from
 -- github issue: https://github.com/greenplum-db/gpdb/issues/14155
 --
 create table test_table_14155(txtime timestamptz default now(), user_role text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtime' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create domain domainname as name;
 create function test_func_name(
     i_msg text,
@@ -1309,4 +1404,78 @@ select * from test_func_bpchar('test');
 ------------------
  
 (1 row)
+
+--
+-- Get the base type of a domain
+--
+create domain mytext as text;
+create domain mytext_child_1 as mytext;
+select pg_basetype('mytext'::regtype);
+ pg_basetype 
+-------------
+ text
+(1 row)
+
+select pg_basetype('mytext_child_1'::regtype);
+ pg_basetype 
+-------------
+ text
+(1 row)
+
+select pg_basetype(1);  -- expect NULL not error
+ pg_basetype 
+-------------
+ 
+(1 row)
+
+drop domain mytext cascade;
+NOTICE:  drop cascades to type mytext_child_1
+--
+-- Information schema
+--
+SELECT * FROM information_schema.column_domain_usage
+  WHERE domain_name IN ('con', 'dom', 'pos_int', 'things')
+  ORDER BY domain_name;
+ domain_catalog | domain_schema | domain_name | table_catalog | table_schema | table_name | column_name 
+----------------+---------------+-------------+---------------+--------------+------------+-------------
+ regression     | public        | con         | regression    | public       | domcontest | col1
+ regression     | public        | dom         | regression    | public       | domview    | col1
+ regression     | public        | things      | regression    | public       | thethings  | stuff
+(3 rows)
+
+SELECT * FROM information_schema.domain_constraints
+  WHERE domain_name IN ('con', 'dom', 'pos_int', 'things')
+  ORDER BY constraint_name;
+ constraint_catalog | constraint_schema | constraint_name  | domain_catalog | domain_schema | domain_name | is_deferrable | initially_deferred 
+--------------------+-------------------+------------------+----------------+---------------+-------------+---------------+--------------------
+ regression         | public            | con_check        | regression     | public        | con         | NO            | NO
+ regression         | public            | meow             | regression     | public        | things      | NO            | NO
+ regression         | public            | pos_int_check    | regression     | public        | pos_int     | NO            | NO
+ regression         | public            | pos_int_not_null | regression     | public        | pos_int     | NO            | NO
+(4 rows)
+
+SELECT * FROM information_schema.domains
+  WHERE domain_name IN ('con', 'dom', 'pos_int', 'things')
+  ORDER BY domain_name;
+ domain_catalog | domain_schema | domain_name | data_type | character_maximum_length | character_octet_length | character_set_catalog | character_set_schema | character_set_name | collation_catalog | collation_schema | collation_name | numeric_precision | numeric_precision_radix | numeric_scale | datetime_precision | interval_type | interval_precision | domain_default | udt_catalog | udt_schema | udt_name | scope_catalog | scope_schema | scope_name | maximum_cardinality | dtd_identifier 
+----------------+---------------+-------------+-----------+--------------------------+------------------------+-----------------------+----------------------+--------------------+-------------------+------------------+----------------+-------------------+-------------------------+---------------+--------------------+---------------+--------------------+----------------+-------------+------------+----------+---------------+--------------+------------+---------------------+----------------
+ regression     | public        | con         | integer   |                          |                        |                       |                      |                    |                   |                  |                |                32 |                       2 |             0 |                    |               |                    |                | regression  | pg_catalog | int4     |               |              |            |                     | 1
+ regression     | public        | dom         | integer   |                          |                        |                       |                      |                    |                   |                  |                |                32 |                       2 |             0 |                    |               |                    |                | regression  | pg_catalog | int4     |               |              |            |                     | 1
+ regression     | public        | pos_int     | integer   |                          |                        |                       |                      |                    |                   |                  |                |                32 |                       2 |             0 |                    |               |                    |                | regression  | pg_catalog | int4     |               |              |            |                     | 1
+ regression     | public        | things      | integer   |                          |                        |                       |                      |                    |                   |                  |                |                32 |                       2 |             0 |                    |               |                    |                | regression  | pg_catalog | int4     |               |              |            |                     | 1
+(4 rows)
+
+SELECT * FROM information_schema.check_constraints
+  WHERE (constraint_schema, constraint_name)
+        IN (SELECT constraint_schema, constraint_name
+            FROM information_schema.domain_constraints
+            WHERE domain_name IN ('con', 'dom', 'pos_int', 'things'))
+  ORDER BY constraint_name;
+ constraint_catalog | constraint_schema | constraint_name  |   check_clause    
+--------------------+-------------------+------------------+-------------------
+ regression         | public            | con_check        | (VALUE > 0)
+ regression         | public            | meow             | (VALUE < 11)
+ regression         | public            | pos_int_check    | (VALUE > 0)
+ regression         | public            | pos_int_not_null | VALUE IS NOT NULL
+(4 rows)
 

@@ -2,6 +2,8 @@ CREATE TABLE xmltest (
     id int,
     data xml
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO xmltest VALUES (1, '<value>one</value>');
 INSERT INTO xmltest VALUES (2, '<value>two</value>');
 INSERT INTO xmltest VALUES (3, '<wrong');
@@ -142,12 +144,12 @@ SELECT xmlelement(name element, xmlelement(name nested, 'stuff'));
 SELECT xmlelement(name employee, xmlforest(name, age, salary as pay)) FROM emp;
                               xmlelement                              
 ----------------------------------------------------------------------
+ <employee><name>jeff</name><age>23</age><pay>600</pay></employee>
  <employee><name>sharon</name><age>25</age><pay>1000</pay></employee>
  <employee><name>sam</name><age>30</age><pay>2000</pay></employee>
- <employee><name>bill</name><age>20</age><pay>1000</pay></employee>
- <employee><name>jeff</name><age>23</age><pay>600</pay></employee>
  <employee><name>cim</name><age>30</age><pay>400</pay></employee>
  <employee><name>linda</name><age>19</age><pay>100</pay></employee>
+ <employee><name>bill</name><age>20</age><pay>1000</pay></employee>
 (6 rows)
 
 SELECT xmlelement(name duplicate, xmlattributes(1 as a, 2 as b, 3 as a));
@@ -474,8 +476,8 @@ SELECT xmlroot (
 SELECT xmlserialize(content data as character varying(20)) FROM xmltest;
     xmlserialize    
 --------------------
- <value>one</value>
  <value>two</value>
+ <value>one</value>
 (2 rows)
 
 SELECT xmlserialize(content 'good' as char(10));
@@ -1073,6 +1075,8 @@ SELECT COUNT(id) FROM xmltest WHERE xpath_exists('/myns:menu/myns:beers/myns:nam
 (1 row)
 
 CREATE TABLE query ( expr TEXT );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'expr' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO query VALUES ('/menu/beers/cost[text() = ''lots'']');
 SELECT COUNT(id) FROM xmltest, query WHERE xmlexists(expr PASSING BY REF data);
  count 
@@ -1251,6 +1255,7 @@ SELECT XMLPARSE(DOCUMENT '<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4
 
 -- XMLPATH tests
 CREATE TABLE xmldata(data xml);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO xmldata VALUES('<ROWS>
 <ROW id="1">
   <COUNTRY_ID>AU</COUNTRY_ID>
@@ -1368,8 +1373,7 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM xmltableview1;
                      Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME/text()'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(13 rows)
+(12 rows)
 
 -- errors
 SELECT * FROM XMLTABLE (ROW () PASSING null COLUMNS v1 timestamp) AS f (v1, v2);
@@ -1553,8 +1557,7 @@ SELECT  xmltable.*
                      Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(13 rows)
+(12 rows)
 
 -- test qual
 SELECT xmltable.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) WHERE "COUNTRY_NAME" = 'Japan';
@@ -1564,24 +1567,102 @@ SELECT xmltable.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan"
 (1 row)
 
 EXPLAIN (VERBOSE, COSTS OFF)
-SELECT xmltable.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) WHERE "COUNTRY_NAME" = 'Japan';
+SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) AS f WHERE "COUNTRY_NAME" = 'Japan';
                                                                                           QUERY PLAN                                                                                          
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: "xmltable"."COUNTRY_NAME", "xmltable"."REGION_ID"
+   Output: f."COUNTRY_NAME", f."REGION_ID"
    ->  Nested Loop
-         Output: "xmltable"."COUNTRY_NAME", "xmltable"."REGION_ID"
+         Output: f."COUNTRY_NAME", f."REGION_ID"
          ->  Seq Scan on public.xmldata
                Output: xmldata.data
          ->  Materialize
-               Output: "xmltable"."COUNTRY_NAME", "xmltable"."REGION_ID"
-               ->  Table Function Scan on "xmltable"
-                     Output: "xmltable"."COUNTRY_NAME", "xmltable"."REGION_ID"
+               Output: f."COUNTRY_NAME", f."REGION_ID"
+               ->  Table Function Scan on "xmltable" f
+                     Output: f."COUNTRY_NAME", f."REGION_ID"
                      Table Function Call: XMLTABLE(('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]'::text) PASSING (xmldata.data) COLUMNS "COUNTRY_NAME" text, "REGION_ID" integer)
-                     Filter: ("xmltable"."COUNTRY_NAME" = 'Japan'::text)
+                     Filter: (f."COUNTRY_NAME" = 'Japan'::text)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(14 rows)
+(13 rows)
+
+EXPLAIN (VERBOSE, FORMAT JSON, COSTS OFF)
+SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) AS f WHERE "COUNTRY_NAME" = 'Japan';
+                                                                                               QUERY PLAN                                                                                                
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ [                                                                                                                                                                                                      +
+   {                                                                                                                                                                                                    +
+     "Plan": {                                                                                                                                                                                          +
+       "Node Type": "Gather Motion",                                                                                                                                                                    +
+       "Senders": 3,                                                                                                                                                                                    +
+       "Receivers": 1,                                                                                                                                                                                  +
+       "Slice": 1,                                                                                                                                                                                      +
+       "Segments": 3,                                                                                                                                                                                   +
+       "Gang Type": "primary reader",                                                                                                                                                                   +
+       "Parallel Aware": false,                                                                                                                                                                         +
+       "Async Capable": false,                                                                                                                                                                          +
+       "Output": ["f.\"COUNTRY_NAME\"", "f.\"REGION_ID\""],                                                                                                                                             +
+       "Plans": [                                                                                                                                                                                       +
+         {                                                                                                                                                                                              +
+           "Node Type": "Nested Loop",                                                                                                                                                                  +
+           "Parent Relationship": "Outer",                                                                                                                                                              +
+           "Slice": 1,                                                                                                                                                                                  +
+           "Segments": 3,                                                                                                                                                                               +
+           "Gang Type": "primary reader",                                                                                                                                                               +
+           "Parallel Aware": false,                                                                                                                                                                     +
+           "Async Capable": false,                                                                                                                                                                      +
+           "Join Type": "Inner",                                                                                                                                                                        +
+           "Output": ["f.\"COUNTRY_NAME\"", "f.\"REGION_ID\""],                                                                                                                                         +
+           "Inner Unique": false,                                                                                                                                                                       +
+           "Plans": [                                                                                                                                                                                   +
+             {                                                                                                                                                                                          +
+               "Node Type": "Seq Scan",                                                                                                                                                                 +
+               "Parent Relationship": "Outer",                                                                                                                                                          +
+               "Slice": 1,                                                                                                                                                                              +
+               "Segments": 3,                                                                                                                                                                           +
+               "Gang Type": "primary reader",                                                                                                                                                           +
+               "Parallel Aware": false,                                                                                                                                                                 +
+               "Async Capable": false,                                                                                                                                                                  +
+               "Relation Name": "xmldata",                                                                                                                                                              +
+               "Schema": "public",                                                                                                                                                                      +
+               "Alias": "xmldata",                                                                                                                                                                      +
+               "Output": ["xmldata.data"]                                                                                                                                                               +
+             },                                                                                                                                                                                         +
+             {                                                                                                                                                                                          +
+               "Node Type": "Materialize",                                                                                                                                                              +
+               "Parent Relationship": "Inner",                                                                                                                                                          +
+               "Slice": 1,                                                                                                                                                                              +
+               "Segments": 3,                                                                                                                                                                           +
+               "Gang Type": "primary reader",                                                                                                                                                           +
+               "Parallel Aware": false,                                                                                                                                                                 +
+               "Async Capable": false,                                                                                                                                                                  +
+               "Output": ["f.\"COUNTRY_NAME\"", "f.\"REGION_ID\""],                                                                                                                                     +
+               "Plans": [                                                                                                                                                                               +
+                 {                                                                                                                                                                                      +
+                   "Node Type": "Table Function Scan",                                                                                                                                                  +
+                   "Parent Relationship": "Outer",                                                                                                                                                      +
+                   "Slice": 1,                                                                                                                                                                          +
+                   "Segments": 3,                                                                                                                                                                       +
+                   "Gang Type": "primary reader",                                                                                                                                                       +
+                   "Parallel Aware": false,                                                                                                                                                             +
+                   "Async Capable": false,                                                                                                                                                              +
+                   "Table Function Name": "xmltable",                                                                                                                                                   +
+                   "Alias": "f",                                                                                                                                                                        +
+                   "Output": ["f.\"COUNTRY_NAME\"", "f.\"REGION_ID\""],                                                                                                                                 +
+                   "Table Function Call": "XMLTABLE(('/ROWS/ROW[COUNTRY_NAME=\"Japan\" or COUNTRY_NAME=\"India\"]'::text) PASSING (xmldata.data) COLUMNS \"COUNTRY_NAME\" text, \"REGION_ID\" integer)",+
+                   "Filter": "(f.\"COUNTRY_NAME\" = 'Japan'::text)"                                                                                                                                     +
+                 }                                                                                                                                                                                      +
+               ]                                                                                                                                                                                        +
+             }                                                                                                                                                                                          +
+           ]                                                                                                                                                                                            +
+         }                                                                                                                                                                                              +
+       ]                                                                                                                                                                                                +
+     },                                                                                                                                                                                                 +
+     "Optimizer": "Postgres query optimizer",                                                                                                                                                           +
+     "Settings": {                                                                                                                                                                                      +
+     }                                                                                                                                                                                                  +
+   }                                                                                                                                                                                                    +
+ ]
+(1 row)
 
 -- should to work with more data
 INSERT INTO xmldata VALUES('<ROWS>
@@ -1627,6 +1708,8 @@ SELECT  xmltable.*
                                   premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified');
  id | _id |  country_name  | country_id | region_id | size | unit | premier_name  
 ----+-----+----------------+------------+-----------+------+------+---------------
+ 20 |   1 | Egypt          | EG         |         1 |      |      | not specified
+ 21 |   2 | Sudan          | SD         |         1 |      |      | not specified
   1 |   1 | Australia      | AU         |         3 |      |      | not specified
   2 |   2 | China          | CN         |         3 |      |      | not specified
   3 |   3 | HongKong       | HK         |         3 |      |      | not specified
@@ -1636,8 +1719,6 @@ SELECT  xmltable.*
  10 |   1 | Czech Republic | CZ         |         2 |      |      | Milos Zeman
  11 |   2 | Germany        | DE         |         2 |      |      | not specified
  12 |   3 | France         | FR         |         2 |      |      | not specified
- 20 |   1 | Egypt          | EG         |         1 |      |      | not specified
- 21 |   2 | Sudan          | SD         |         1 |      |      | not specified
 (11 rows)
 
 SELECT  xmltable.*
@@ -1689,8 +1770,7 @@ SELECT  xmltable.*
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
                      Filter: ("xmltable".region_id = 2)
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(14 rows)
+(13 rows)
 
 -- should fail, NULL value
 SELECT  xmltable.*
@@ -1705,7 +1785,7 @@ SELECT  xmltable.*
                                   size float PATH 'SIZE' NOT NULL,
                                   unit text PATH 'SIZE/@unit',
                                   premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified');
-ERROR:  null is not allowed in column "size"
+ERROR:  null is not allowed in column "size"  (seg1 slice1 172.17.0.4:7003 pid=1166274)
 -- if all is ok, then result is empty
 -- one line xml test
 WITH
@@ -1760,6 +1840,8 @@ WITH
 (0 rows)
 
 CREATE TABLE xmltest2(x xml, _path text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '_path' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO xmltest2 VALUES('<d><r><ac>1</ac></r></d>', 'A');
 INSERT INTO xmltest2 VALUES('<d><r><bc>2</bc></r></d>', 'B');
 INSERT INTO xmltest2 VALUES('<d><r><cc>3</cc></r></d>', 'C');
@@ -1785,10 +1867,10 @@ SELECT xmltable.* FROM xmltest2, LATERAL xmltable(('/d/r/' || lower(_path) || 'c
 SELECT xmltable.* FROM xmltest2, LATERAL xmltable(('/d/r/' || lower(_path) || 'c') PASSING x COLUMNS a int PATH 'x' DEFAULT ascii(_path) - 54);
  a  
 ----
- 11
  12
  13
  14
+ 11
 (4 rows)
 
 -- XPath result can be boolean or number too
@@ -1810,5 +1892,41 @@ SELECT * FROM XMLTABLE('.' PASSING XMLELEMENT(NAME a) columns a varchar(20) PATH
    a    |      b       
 --------+--------------
  <foo/> | &lt;foo/&gt;
+(1 row)
+
+SELECT xmltext(NULL);
+ xmltext 
+---------
+ 
+(1 row)
+
+SELECT xmltext('');
+ xmltext 
+---------
+ 
+(1 row)
+
+SELECT xmltext('  ');
+ xmltext 
+---------
+   
+(1 row)
+
+SELECT xmltext('foo `$_-+?=*^%!|/\()[]{}');
+         xmltext          
+--------------------------
+ foo `$_-+?=*^%!|/\()[]{}
+(1 row)
+
+SELECT xmltext('foo & <"bar">');
+              xmltext              
+-----------------------------------
+ foo &amp; &lt;&quot;bar&quot;&gt;
+(1 row)
+
+SELECT xmltext('x'|| '<P>73</P>'::xml || .42 || true || 'j'::char);
+             xmltext             
+---------------------------------
+ x&lt;P&gt;73&lt;/P&gt;0.42truej
 (1 row)
 

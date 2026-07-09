@@ -85,7 +85,7 @@ select explain_filter('explain (analyze) select * from int8_tbl i8');
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 112K bytes avg x N workers, 112K bytes max (seg0).
+   (slice1)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -98,13 +98,12 @@ select explain_filter('explain (analyze, verbose) select * from int8_tbl i8');
    ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
          Output: q1, q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
    (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
-(11 rows)
+(10 rows)
 
 select explain_filter('explain (analyze, buffers, format text) select * from int8_tbl i8');
                                                  explain_filter                                                 
@@ -221,7 +220,7 @@ select explain_filter('explain (analyze, buffers, format xml) select * from int8
  </explain>
 (1 row)
 
-select explain_filter('explain (analyze, buffers, format yaml) select * from int8_tbl i8');
+select explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
              explain_filter              
 -----------------------------------------
  - Plan:                                +
@@ -303,6 +302,20 @@ select explain_filter('explain (analyze, buffers, format yaml) select * from int
          Maximum Memory Used: N         +
    Statement statistics:                +
      Memory used: N                     +
+   Serialization:                       +
+     Time: N.N                          +
+     Output Volume: N                   +
+     Format: "text"                     +
+     Shared Hit Blocks: N               +
+     Shared Read Blocks: N              +
+     Shared Dirtied Blocks: N           +
+     Shared Written Blocks: N           +
+     Local Hit Blocks: N                +
+     Local Read Blocks: N               +
+     Local Dirtied Blocks: N            +
+     Local Written Blocks: N            +
+     Temp Read Blocks: N                +
+     Temp Written Blocks: N             +
    Execution Time: N.N
 (1 row)
 
@@ -422,8 +435,10 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
        "Local Written Blocks": N,            +
        "Temp Read Blocks": N,                +
        "Temp Written Blocks": N,             +
-       "I/O Read Time": N.N,                 +
-       "I/O Write Time": N.N,                +
+       "Shared I/O Read Time": N.N,          +
+       "Shared I/O Write Time": N.N,         +
+       "Local I/O Read Time": N.N,           +
+       "Local I/O Write Time": N.N,          +
        "Temp I/O Read Time": N.N,            +
        "Temp I/O Write Time": N.N,           +
        "Plans": [                            +
@@ -455,8 +470,10 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
            "Local Written Blocks": N,        +
            "Temp Read Blocks": N,            +
            "Temp Written Blocks": N,         +
-           "I/O Read Time": N.N,             +
-           "I/O Write Time": N.N,            +
+           "Shared I/O Read Time": N.N,      +
+           "Shared I/O Write Time": N.N,     +
+           "Local I/O Read Time": N.N,       +
+           "Local I/O Write Time": N.N,      +
            "Temp I/O Read Time": N.N,        +
            "Temp I/O Write Time": N.N        +
          }                                   +
@@ -474,8 +491,10 @@ select explain_filter('explain (analyze, buffers, format json) select * from int
        "Local Written Blocks": N,            +
        "Temp Read Blocks": N,                +
        "Temp Written Blocks": N,             +
-       "I/O Read Time": N.N,                 +
-       "I/O Write Time": N.N,                +
+       "Shared I/O Read Time": N.N,          +
+       "Shared I/O Write Time": N.N,         +
+       "Local I/O Read Time": N.N,           +
+       "Local I/O Write Time": N.N,          +
        "Temp I/O Read Time": N.N,            +
        "Temp I/O Write Time": N.N            +
      },                                      +
@@ -541,6 +560,151 @@ select explain_filter('explain (generic_plan) select unique1 from tenk1 where th
 select explain_filter('explain (analyze, generic_plan) select unique1 from tenk1 where thousand = $1');
 ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
 CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
+-- MEMORY option
+select explain_filter('explain (memory) select * from int8_tbl i8');
+                              explain_filter                              
+--------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
+ Optimizer: Postgres query optimizer
+   Memory: used=NkB  allocated=NkB
+(4 rows)
+
+select explain_filter('explain (memory, analyze) select * from int8_tbl i8');
+                                                 explain_filter                                                 
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+ Optimizer: Postgres query optimizer
+   Memory: used=NkB  allocated=NkB
+ Planning Time: N.N ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+ Memory used:  NkB
+ Execution Time: N.N ms
+(9 rows)
+
+select explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
+             explain_filter              
+-----------------------------------------
+ - Plan:                                +
+     Node Type: "Gather Motion"         +
+     Senders: N                         +
+     Receivers: N                       +
+     Slice: N                           +
+     Segments: N                        +
+     Gang Type: "primary reader"        +
+     Parallel Aware: false              +
+     Async Capable: false               +
+     Startup Cost: N.N                  +
+     Total Cost: N.N                    +
+     Plan Rows: N                       +
+     Plan Width: N                      +
+     Plans:                             +
+       - Node Type: "Seq Scan"          +
+         Parent Relationship: "Outer"   +
+         Slice: N                       +
+         Segments: N                    +
+         Gang Type: "primary reader"    +
+         Parallel Aware: false          +
+         Async Capable: false           +
+         Relation Name: "int8_tbl"      +
+         Alias: "i8"                    +
+         Startup Cost: N.N              +
+         Total Cost: N.N                +
+         Plan Rows: N                   +
+         Plan Width: N                  +
+   Optimizer: "Postgres query optimizer"+
+   Planning:                            +
+     Memory Used: N                     +
+     Memory Allocated: N                +
+   Planning Time: N.N
+(1 row)
+
+select explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
+                explain_filter                
+----------------------------------------------
+ [                                           +
+   {                                         +
+     "Plan": {                               +
+       "Node Type": "Gather Motion",         +
+       "Senders": N,                         +
+       "Receivers": N,                       +
+       "Slice": N,                           +
+       "Segments": N,                        +
+       "Gang Type": "primary reader",        +
+       "Parallel Aware": false,              +
+       "Async Capable": false,               +
+       "Startup Cost": N.N,                  +
+       "Total Cost": N.N,                    +
+       "Plan Rows": N,                       +
+       "Plan Width": N,                      +
+       "Actual Startup Time": N.N,           +
+       "Actual Total Time": N.N,             +
+       "Actual Rows": N,                     +
+       "Actual Loops": N,                    +
+       "Plans": [                            +
+         {                                   +
+           "Node Type": "Seq Scan",          +
+           "Parent Relationship": "Outer",   +
+           "Slice": N,                       +
+           "Segments": N,                    +
+           "Gang Type": "primary reader",    +
+           "Parallel Aware": false,          +
+           "Async Capable": false,           +
+           "Relation Name": "int8_tbl",      +
+           "Alias": "i8",                    +
+           "Startup Cost": N.N,              +
+           "Total Cost": N.N,                +
+           "Plan Rows": N,                   +
+           "Plan Width": N,                  +
+           "Actual Startup Time": N.N,       +
+           "Actual Total Time": N.N,         +
+           "Actual Rows": N,                 +
+           "Actual Loops": N                 +
+         }                                   +
+       ]                                     +
+     },                                      +
+     "Optimizer": "Postgres query optimizer",+
+     "Planning": {                           +
+       "Memory Used": N,                     +
+       "Memory Allocated": N                 +
+     },                                      +
+     "Planning Time": N.N,                   +
+     "Triggers": [                           +
+     ],                                      +
+     "Slice statistics": [                   +
+       {                                     +
+         "Slice": N,                         +
+         "Executor Memory": N                +
+       },                                    +
+       {                                     +
+         "Slice": N,                         +
+         "Executor Memory": {                +
+           "Average": N,                     +
+           "Workers": N,                     +
+           "Maximum Memory Used": N          +
+         }                                   +
+       }                                     +
+     ],                                      +
+     "Statement statistics": {               +
+       "Memory used": N                      +
+     },                                      +
+     "Execution Time": N.N                   +
+   }                                         +
+ ]
+(1 row)
+
+prepare int8_query as select * from int8_tbl i8;
+select explain_filter('explain (memory) execute int8_query');
+                              explain_filter                              
+--------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
+ Optimizer: Postgres query optimizer
+   Memory: used=NkB  allocated=NkB
+(4 rows)
+
 -- Test EXPLAIN (GENERIC_PLAN) with partition pruning
 -- partitions should be pruned at plan time, based on constants,
 -- but there should be no pruning based on parameter placeholders
@@ -786,7 +950,6 @@ select jsonb_pretty(
              "Shared Written Blocks": 0                     +
          },                                                 +
          "Settings": {                                      +
-             "optimizer": "off",                            +
              "parallel_setup_cost": "0",                    +
              "parallel_tuple_cost": "0",                    +
              "min_parallel_table_scan_size": "0"            +
@@ -833,8 +996,7 @@ select explain_filter('explain (verbose) select * from t1 where pg_temp.mysin(f1
          Output: f1
          Filter: (pg_temp.mysin(t1.f1) < 'N.N'::double precision)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(7 rows)
+(6 rows)
 
 -- Test compute_query_id
 set compute_query_id = on;
@@ -846,7 +1008,64 @@ select explain_filter('explain (verbose) select * from int8_tbl i8');
    ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N)
          Output: q1, q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
  Query Identifier: N
+(6 rows)
+
+-- Test SERIALIZE option
+select explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
+                                                 explain_filter                                                 
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+ Optimizer: Postgres query optimizer
+ Planning Time: N.N ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+ Memory used:  NkB
+ Serialization: time=N.N ms  output=NkB  format=text
+ Execution Time: N.N ms
+(9 rows)
+
+select explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
+                                          explain_filter                                          
+--------------------------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
+ Optimizer: Postgres query optimizer
+ Planning Time: N.N ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+ Memory used:  NkB
+ Serialization: output=NkB  format=text
+ Execution Time: N.N ms
+(9 rows)
+
+select explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
+                                                 explain_filter                                                 
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+ Optimizer: Postgres query optimizer
+ Planning Time: N.N ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+ Memory used:  NkB
+ Serialization: time=N.N ms  output=NkB  format=binary
+ Execution Time: N.N ms
+(9 rows)
+
+-- this tests an edge case where we have no data to return
+select explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'q1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+                                        explain_filter                                         
+-----------------------------------------------------------------------------------------------
+ Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+ Optimizer: Postgres query optimizer
+ Planning Time: N.N ms
+   (slice0)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
+ Memory used:  NkB
+ Serialization: time=N.N ms  output=NkB  format=text
+ Execution Time: N.N ms
 (7 rows)
 

@@ -89,15 +89,15 @@ INSERT INTO itest4 DEFAULT VALUES;
 SELECT * FROM itest1;
  a | b 
 ---+---
- 1 | 
  2 | 
+ 1 | 
 (2 rows)
 
 SELECT * FROM itest2;
  a | b 
 ---+---
- 1 | 
  2 | 
+ 1 | 
 (2 rows)
 
 SELECT * FROM itest3;
@@ -110,8 +110,8 @@ SELECT * FROM itest3;
 SELECT * FROM itest4;
  a | b 
 ---+---
- 1 | 
  2 | 
+ 1 | 
 (2 rows)
 
 -- VALUES RTEs
@@ -155,13 +155,6 @@ SELECT * FROM itest5;
   7 | ii
   8 | aaa
  16 | iii
-  1 | a
- -2 | bb
- -3 | cc
- -4 | ee
- -5 | ff
- 12 | eee
- 15 | hhh
  -1 | aa
   5 | gg
   6 | hh
@@ -170,6 +163,13 @@ SELECT * FROM itest5;
  11 | ddd
  13 | fff
  14 | ggg
+  1 | a
+ -2 | bb
+ -3 | cc
+ -4 | ee
+ -5 | ff
+ 12 | eee
+ 15 | hhh
 (21 rows)
 
 DROP TABLE itest5;
@@ -199,11 +199,11 @@ INSERT INTO itest1 OVERRIDING USER VALUE VALUES (30, 'xyz');
 SELECT * FROM itest1;
  a  |  b  
 ----+-----
-  2 | 
-  3 | xyz
  10 | xyz
   1 | 
  20 | xyz
+  2 | 
+  3 | xyz
 (5 rows)
 
 -- GENERATED ALWAYS
@@ -247,10 +247,10 @@ UPDATE itest2 SET a = DEFAULT WHERE a = 2;  -- ok
 SELECT * FROM itest2;
  a  |  b  
 ----+-----
-  1 | 
- 20 | xyz
   3 | xyz
   4 | 
+  1 | 
+ 20 | xyz
 (4 rows)
 
 -- COPY tests
@@ -275,7 +275,7 @@ ERROR:  column "a" of relation "itest4" is not an identity column
 ALTER TABLE itest4 ALTER COLUMN a DROP IDENTITY IF EXISTS;  -- noop
 NOTICE:  column "a" of relation "itest4" is not an identity column, skipping
 INSERT INTO itest4 DEFAULT VALUES;  -- fails because NOT NULL is not dropped
-ERROR:  null value in column "a" of relation "itest4" violates not-null constraint  (seg0 172.17.0.2:7002 pid=20310)
+ERROR:  null value in column "a" of relation "itest4" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1162913)
 DETAIL:  Failing row contains (null, ).
 ALTER TABLE itest4 ALTER COLUMN a DROP NOT NULL;
 INSERT INTO itest4 DEFAULT VALUES;
@@ -315,8 +315,8 @@ SELECT * FROM itestv10;
 SELECT * FROM itestv11;
  a | b 
 ---+---
- 1 | 
  2 | 
+ 1 | 
 (2 rows)
 
 INSERT INTO itestv10 VALUES (10, 'xyz');
@@ -339,8 +339,8 @@ SELECT * FROM itestv11;
  a  |  b  
 ----+-----
   2 | 
-  1 | 
  11 | xyz
+  1 | 
 (3 rows)
 
 DROP VIEW itestv10, itestv11;
@@ -386,6 +386,75 @@ Distributed by: (a)
 
 ALTER TABLE itest3 ALTER COLUMN a TYPE text;  -- error
 ERROR:  identity column type must be smallint, integer, or bigint
+-- check that unlogged propagates to sequence
+CREATE UNLOGGED TABLE itest17 (a int NOT NULL, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER TABLE itest17 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;
+ERROR:  unlogged sequences are not supported
+ALTER TABLE itest17 ADD COLUMN c int GENERATED ALWAYS AS IDENTITY;
+ERROR:  unlogged sequences are not supported
+\d itest17
+          Unlogged table "public.itest17"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ a      | integer |           | not null | 
+ b      | text    |           |          | 
+Distributed by: (a)
+
+\d itest17_a_seq
+\d itest17_c_seq
+CREATE TABLE itest18 (a int NOT NULL, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER TABLE itest18 SET UNLOGGED, ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;
+\d itest18
+                    Unlogged table "public.itest18"
+ Column |  Type   | Collation | Nullable |           Default            
+--------+---------+-----------+----------+------------------------------
+ a      | integer |           | not null | generated always as identity
+ b      | text    |           |          | 
+Distributed by: (a)
+
+\d itest18_a_seq
+               Unlogged sequence "public.itest18_a_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Sequence for identity column: public.itest18.a
+
+ALTER TABLE itest18 SET LOGGED;
+\d itest18
+                         Table "public.itest18"
+ Column |  Type   | Collation | Nullable |           Default            
+--------+---------+-----------+----------+------------------------------
+ a      | integer |           | not null | generated always as identity
+ b      | text    |           |          | 
+Distributed by: (a)
+
+\d itest18_a_seq
+                   Sequence "public.itest18_a_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Sequence for identity column: public.itest18.a
+
+ALTER TABLE itest18 SET UNLOGGED;
+\d itest18
+                    Unlogged table "public.itest18"
+ Column |  Type   | Collation | Nullable |           Default            
+--------+---------+-----------+----------+------------------------------
+ a      | integer |           | not null | generated always as identity
+ b      | text    |           |          | 
+Distributed by: (a)
+
+\d itest18_a_seq
+               Unlogged sequence "public.itest18_a_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Sequence for identity column: public.itest18.a
+
 -- kinda silly to change property in the same command, but it should work
 ALTER TABLE itest3
   ADD COLUMN c int GENERATED BY DEFAULT AS IDENTITY,
@@ -410,9 +479,9 @@ INSERT INTO itest6 DEFAULT VALUES;
 SELECT * FROM itest6;
   a  | b 
 -----+---
- 102 | 
    1 | 
  100 | 
+ 102 | 
 (3 rows)
 
 SELECT table_name, column_name, is_identity, identity_generation FROM information_schema.columns WHERE table_name = 'itest6' ORDER BY 1, 2;
@@ -527,7 +596,7 @@ INSERT INTO itest8 VALUES(0), (1);
 ALTER TABLE itest8
   ADD COLUMN f22 int NOT NULL,
   ALTER COLUMN f22 ADD GENERATED ALWAYS AS IDENTITY;
-ERROR:  column "f22" of relation "itest8" contains null values  (seg1 172.17.0.2:7003 pid=20340)
+ERROR:  column "f22" of relation "itest8" contains null values  (seg1 172.17.0.4:7003 pid=1162883)
 TABLE itest8;
  f1 | f2 | f3 | f4 | f5 
 ----+----+----+----+----
@@ -536,14 +605,14 @@ TABLE itest8;
 (2 rows)
 
 \d+ itest8
-                                                      Table "public.itest8"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+-------------+--------------+-------------
- f1     | integer |           |          |                                  | plain   |             |              | 
- f2     | integer |           | not null | generated always as identity     | plain   |             |              | 
- f3     | integer |           | not null | generated by default as identity | plain   |             |              | 
- f4     | bigint  |           | not null | generated always as identity     | plain   |             |              | 
- f5     | bigint  |           |          |                                  | plain   |             |              | 
+                                               Table "public.itest8"
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
+--------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
+ f1     | integer |           |          |                                  | plain   |              | 
+ f2     | integer |           | not null | generated always as identity     | plain   |              | 
+ f3     | integer |           | not null | generated by default as identity | plain   |              | 
+ f4     | bigint  |           | not null | generated always as identity     | plain   |              | 
+ f5     | bigint  |           |          |                                  | plain   |              | 
 Distributed by: (f1)
 
 \d itest8_f2_seq
@@ -574,15 +643,243 @@ CREATE TYPE itest_type AS (f1 integer, f2 text, f3 bigint);
 CREATE TABLE itest12 OF itest_type (f1 WITH OPTIONS GENERATED ALWAYS AS IDENTITY); -- error
 ERROR:  identity columns are not supported on typed tables
 DROP TYPE itest_type CASCADE;
--- table partitions (currently not supported)
-CREATE TABLE itest_parent (f1 date NOT NULL, f2 text, f3 bigint) PARTITION BY RANGE (f1);
+-- table partitions
+-- partitions inherit identity column and share sequence
+CREATE TABLE pitest1 (f1 date NOT NULL, f2 text, f3 bigint generated always as identity) PARTITION BY RANGE (f1);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-CREATE TABLE itest_child PARTITION OF itest_parent (
+-- new partition
+CREATE TABLE pitest1_p1 PARTITION OF pitest1 FOR VALUES FROM ('2016-07-01') TO ('2016-08-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT into pitest1(f1, f2) VALUES ('2016-07-2', 'from pitest1');
+INSERT into pitest1_p1 (f1, f2) VALUES ('2016-07-3', 'from pitest1_p1');
+-- attached partition
+CREATE TABLE pitest1_p2 (f3 bigint, f2 text, f1 date NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f3' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO pitest1_p2 (f1, f2, f3) VALUES ('2016-08-2', 'before attaching', 100);
+ALTER TABLE pitest1 ATTACH PARTITION pitest1_p2 FOR VALUES FROM ('2016-08-01') TO ('2016-09-01'); -- requires NOT NULL constraint
+ERROR:  distribution policy for "pitest1_p2" must be the same as that for "pitest1"
+ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET NOT NULL;
+ALTER TABLE pitest1 ATTACH PARTITION pitest1_p2 FOR VALUES FROM ('2016-08-01') TO ('2016-09-01');
+ERROR:  distribution policy for "pitest1_p2" must be the same as that for "pitest1"
+INSERT INTO pitest1_p2 (f1, f2) VALUES ('2016-08-3', 'from pitest1_p2');
+ERROR:  null value in column "f3" of relation "pitest1_p2" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1162913)
+DETAIL:  Failing row contains (null, from pitest1_p2, 08-03-2016).
+INSERT INTO pitest1 (f1, f2) VALUES ('2016-08-4', 'from pitest1');
+ERROR:  no partition of relation "pitest1" found for row  (seg2 172.17.0.4:7004 pid=1162902)
+DETAIL:  Partition key of the failing row contains (f1) = (08-04-2016).
+-- LIKE INCLUDING on partition
+CREATE TABLE pitest1_p1_like (LIKE pitest1_p1 INCLUDING IDENTITY);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+INSERT into pitest1_p1_like(f1, f2) VALUES ('2016-07-2', 'from pitest1_p1_like');
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest1;
+  tableoid  |     f1     |       f2        | f3 
+------------+------------+-----------------+----
+ pitest1_p1 | 07-02-2016 | from pitest1    |  1
+ pitest1_p1 | 07-03-2016 | from pitest1_p1 |  2
+(2 rows)
+
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest1_p1_like;
+    tableoid     |     f1     |          f2          | f3 
+-----------------+------------+----------------------+----
+ pitest1_p1_like | 07-02-2016 | from pitest1_p1_like |  1
+(1 row)
+
+ALTER TABLE pitest1 ALTER COLUMN f3 SET DATA TYPE bigint;
+SELECT tableoid::regclass, f1, f2, f3, pg_typeof(f3) FROM pitest1;
+  tableoid  |     f1     |       f2        | f3 | pg_typeof 
+------------+------------+-----------------+----+-----------
+ pitest1_p1 | 07-02-2016 | from pitest1    |  1 | bigint
+ pitest1_p1 | 07-03-2016 | from pitest1_p1 |  2 | bigint
+(2 rows)
+
+SELECT tableoid::regclass, f1, f2, f3, pg_typeof(f3) FROM pitest1_p2;
+  tableoid  |     f1     |        f2        | f3  | pg_typeof 
+------------+------------+------------------+-----+-----------
+ pitest1_p2 | 08-02-2016 | before attaching | 100 | bigint
+(1 row)
+
+-- add identity column
+CREATE TABLE pitest2 (f1 date NOT NULL, f2 text) PARTITION BY RANGE (f1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE pitest2_p1 PARTITION OF pitest2 FOR VALUES FROM ('2016-07-01') TO ('2016-08-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE pitest2_p2 PARTITION OF pitest2 FOR VALUES FROM ('2016-08-01') TO ('2016-09-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT into pitest2(f1, f2) VALUES ('2016-07-2', 'from pitest2');
+INSERT INTO pitest2 (f1, f2) VALUES ('2016-08-2', 'from pitest2');
+ALTER TABLE pitest2 ADD COLUMN f3 int GENERATED ALWAYS AS IDENTITY;
+INSERT into pitest2_p1 (f1, f2) VALUES ('2016-07-3', 'from pitest2_p1');
+INSERT INTO pitest2_p2 (f1, f2) VALUES ('2016-08-3', 'from pitest2_p2');
+INSERT into pitest2(f1, f2) VALUES ('2016-07-4', 'from pitest2');
+INSERT INTO pitest2 (f1, f2) VALUES ('2016-08-4', 'from pitest2');
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest2;
+  tableoid  |     f1     |       f2        | f3 
+------------+------------+-----------------+----
+ pitest2_p1 | 07-02-2016 | from pitest2    |  1
+ pitest2_p1 | 07-03-2016 | from pitest2_p1 |  3
+ pitest2_p1 | 07-04-2016 | from pitest2    |  5
+ pitest2_p2 | 08-03-2016 | from pitest2_p2 |  4
+ pitest2_p2 | 08-02-2016 | from pitest2    |  2
+ pitest2_p2 | 08-04-2016 | from pitest2    |  6
+(6 rows)
+
+-- SET identity column
+ALTER TABLE pitest2_p1 ALTER COLUMN f3 SET GENERATED BY DEFAULT; -- fails
+ERROR:  cannot change identity column of a partition
+ALTER TABLE pitest2_p1 ALTER COLUMN f3 SET INCREMENT BY 2; -- fails
+ERROR:  cannot change identity column of a partition
+ALTER TABLE ONLY pitest2 ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT BY 2 SET START WITH 1000 RESTART; -- fails
+ERROR:  cannot change identity column of only the partitioned table
+HINT:  Do not specify the ONLY keyword.
+ALTER TABLE pitest2 ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT BY 2 SET START WITH 1000 RESTART;
+INSERT into pitest2(f1, f2, f3) VALUES ('2016-07-5', 'from pitest2', 200);
+INSERT INTO pitest2(f1, f2) VALUES ('2016-08-5', 'from pitest2');
+INSERT into pitest2_p1 (f1, f2) VALUES ('2016-07-6', 'from pitest2_p1');
+INSERT INTO pitest2_p2 (f1, f2, f3) VALUES ('2016-08-6', 'from pitest2_p2', 300);
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest2;
+  tableoid  |     f1     |       f2        |  f3  
+------------+------------+-----------------+------
+ pitest2_p1 | 07-02-2016 | from pitest2    |    1
+ pitest2_p1 | 07-03-2016 | from pitest2_p1 |    3
+ pitest2_p1 | 07-04-2016 | from pitest2    |    5
+ pitest2_p1 | 07-05-2016 | from pitest2    |  200
+ pitest2_p2 | 08-03-2016 | from pitest2_p2 |    4
+ pitest2_p2 | 08-05-2016 | from pitest2    | 1000
+ pitest2_p1 | 07-06-2016 | from pitest2_p1 | 1002
+ pitest2_p2 | 08-02-2016 | from pitest2    |    2
+ pitest2_p2 | 08-04-2016 | from pitest2    |    6
+ pitest2_p2 | 08-06-2016 | from pitest2_p2 |  300
+(10 rows)
+
+-- detaching a partition removes identity property
+ALTER TABLE pitest2 DETACH PARTITION pitest2_p1;
+INSERT into pitest2(f1, f2) VALUES ('2016-08-7', 'from pitest2');
+INSERT into pitest2_p1 (f1, f2) VALUES ('2016-07-7', 'from pitest2_p1'); -- error
+ERROR:  null value in column "f3" of relation "pitest2_p1" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1162902)
+DETAIL:  Failing row contains (07-07-2016, from pitest2_p1, null).
+INSERT into pitest2_p1 (f1, f2, f3) VALUES ('2016-07-7', 'from pitest2_p1', 2000);
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest2;
+  tableoid  |     f1     |       f2        |  f3  
+------------+------------+-----------------+------
+ pitest2_p2 | 08-03-2016 | from pitest2_p2 |    4
+ pitest2_p2 | 08-05-2016 | from pitest2    | 1000
+ pitest2_p2 | 08-02-2016 | from pitest2    |    2
+ pitest2_p2 | 08-04-2016 | from pitest2    |    6
+ pitest2_p2 | 08-06-2016 | from pitest2_p2 |  300
+ pitest2_p2 | 08-07-2016 | from pitest2    | 1004
+(6 rows)
+
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest2_p1;
+  tableoid  |     f1     |       f2        |  f3  
+------------+------------+-----------------+------
+ pitest2_p1 | 07-02-2016 | from pitest2    |    1
+ pitest2_p1 | 07-03-2016 | from pitest2_p1 |    3
+ pitest2_p1 | 07-04-2016 | from pitest2    |    5
+ pitest2_p1 | 07-05-2016 | from pitest2    |  200
+ pitest2_p1 | 07-06-2016 | from pitest2_p1 | 1002
+ pitest2_p1 | 07-07-2016 | from pitest2_p1 | 2000
+(6 rows)
+
+DROP TABLE pitest2_p1;
+-- changing a regular column to identity column in a partitioned table
+CREATE TABLE pitest3 (f1 date NOT NULL, f2 text, f3 int) PARTITION BY RANGE (f1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE pitest3_p1 PARTITION OF pitest3 FOR VALUES FROM ('2016-07-01') TO ('2016-08-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT into pitest3 VALUES ('2016-07-2', 'from pitest3', 1);
+INSERT into pitest3_p1 VALUES ('2016-07-3', 'from pitest3_p1', 2);
+-- fails, changing only a partition not allowed
+ALTER TABLE pitest3_p1
+            ALTER COLUMN f3 SET NOT NULL,
+            ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY (START WITH 3);
+ERROR:  cannot add identity to a column of a partition
+-- fails, changing only the partitioned table not allowed
+BEGIN;
+ALTER TABLE pitest3_p1 ALTER COLUMN f3 SET NOT NULL;
+ALTER TABLE ONLY pitest3
+            ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY (START WITH 3);
+ERROR:  cannot add identity to a column of only the partitioned table
+HINT:  Do not specify the ONLY keyword.
+ROLLBACK;
+ALTER TABLE pitest3
+            ALTER COLUMN f3 SET NOT NULL,
+            ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY (START WITH 3);
+INSERT into pitest3(f1, f2) VALUES ('2016-07-4', 'from pitest3');
+INSERT into pitest3_p1 (f1, f2) VALUES ('2016-07-5', 'from pitest3_p1');
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest3;
+  tableoid  |     f1     |       f2        | f3 
+------------+------------+-----------------+----
+ pitest3_p1 | 07-02-2016 | from pitest3    |  1
+ pitest3_p1 | 07-03-2016 | from pitest3_p1 |  2
+ pitest3_p1 | 07-04-2016 | from pitest3    |  3
+ pitest3_p1 | 07-05-2016 | from pitest3_p1 |  4
+(4 rows)
+
+-- changing an identity column to a non-identity column in a partitioned table
+ALTER TABLE pitest3_p1 ALTER COLUMN f3 DROP IDENTITY; -- fails
+ERROR:  cannot drop identity from a column of a partition
+ALTER TABLE ONLY pitest3 ALTER COLUMN f3 DROP IDENTITY; -- fails
+ERROR:  cannot drop identity from a column of only the partitioned table
+HINT:  Do not specify the ONLY keyword.
+ALTER TABLE pitest3 ALTER COLUMN f3 DROP IDENTITY;
+INSERT into pitest3(f1, f2) VALUES ('2016-07-4', 'from pitest3'); -- fails
+ERROR:  null value in column "f3" of relation "pitest3_p1" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1162913)
+DETAIL:  Failing row contains (07-04-2016, from pitest3, null).
+INSERT into pitest3_p1 (f1, f2) VALUES ('2016-07-5', 'from pitest3_p1'); -- fails
+ERROR:  null value in column "f3" of relation "pitest3_p1" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1162913)
+DETAIL:  Failing row contains (07-05-2016, from pitest3_p1, null).
+INSERT into pitest3(f1, f2, f3) VALUES ('2016-07-6', 'from pitest3', 5);
+INSERT into pitest3_p1 (f1, f2, f3) VALUES ('2016-07-7', 'from pitest3_p1', 6);
+SELECT tableoid::regclass, f1, f2, f3 FROM pitest3;
+  tableoid  |     f1     |       f2        | f3 
+------------+------------+-----------------+----
+ pitest3_p1 | 07-02-2016 | from pitest3    |  1
+ pitest3_p1 | 07-03-2016 | from pitest3_p1 |  2
+ pitest3_p1 | 07-04-2016 | from pitest3    |  3
+ pitest3_p1 | 07-05-2016 | from pitest3_p1 |  4
+ pitest3_p1 | 07-06-2016 | from pitest3    |  5
+ pitest3_p1 | 07-07-2016 | from pitest3_p1 |  6
+(6 rows)
+
+-- Changing NOT NULL constraint of identity columns is not allowed
+ALTER TABLE pitest1_p1 ALTER COLUMN f3 DROP NOT NULL;
+ERROR:  column "f3" of relation "pitest1_p1" is an identity column
+ALTER TABLE pitest1 ALTER COLUMN f3 DROP NOT NULL;
+ERROR:  column "f3" of relation "pitest1" is an identity column
+-- Identity columns have their own default
+ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET DEFAULT 10000;
+ALTER TABLE pitest1 ALTER COLUMN f3 SET DEFAULT 10000;
+ERROR:  column "f3" of relation "pitest1" is an identity column
+-- Adding identity to an identity column is not allowed
+ALTER TABLE pitest1_p2 ALTER COLUMN f3 ADD GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  column "f3" of relation "pitest1_p2" already has a default value
+ALTER TABLE pitest1 ALTER COLUMN f3 ADD GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  column "f3" of relation "pitest1" is already an identity column
+-- partitions with their own identity columns are not allowed, even if the
+-- partitioned table does not have an identity column.
+CREATE TABLE pitest1_pfail PARTITION OF pitest1 (
     f3 WITH OPTIONS GENERATED ALWAYS AS IDENTITY
-) FOR VALUES FROM ('2016-07-01') TO ('2016-08-01'); -- error
+) FOR VALUES FROM ('2016-11-01') TO ('2016-12-01');
 ERROR:  identity columns are not supported on partitions
-DROP TABLE itest_parent;
+CREATE TABLE pitest_pfail PARTITION OF pitest3 (
+    f3 WITH OPTIONS GENERATED ALWAYS AS IDENTITY
+) FOR VALUES FROM ('2016-07-01') TO ('2016-08-01');
+ERROR:  identity columns are not supported on partitions
+CREATE TABLE pitest1_pfail (f1 date NOT NULL, f2 text, f3 bigint GENERATED ALWAYS AS IDENTITY);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER TABLE pitest1 ATTACH PARTITION pitest1_pfail FOR VALUES FROM ('2016-11-01') TO ('2016-12-01');
+ERROR:  table "pitest1_pfail" being attached contains an identity column "f3"
+DETAIL:  The new partition may not contain an identity column.
+ALTER TABLE pitest3 ATTACH PARTITION pitest1_pfail FOR VALUES FROM ('2016-11-01') TO ('2016-12-01');
+ERROR:  table "pitest1_pfail" being attached contains an identity column "f3"
+DETAIL:  The new partition may not contain an identity column.
+DROP TABLE pitest1_pfail;
+DROP TABLE pitest3;
 -- test that sequence of half-dropped serial column is properly ignored
 CREATE TABLE itest14 (id serial);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
@@ -658,9 +955,9 @@ SELECT * FROM itest15;
 SELECT * FROM itest16;
  a  |         b         
 ----+-------------------
- 10 | inserted by merge
   1 | inserted by merge
  30 | inserted by merge
+ 10 | inserted by merge
 (3 rows)
 
 DROP TABLE itest15;

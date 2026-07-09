@@ -4,6 +4,8 @@
 create table insertconflicttest(key int4, fruit text);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- These things should work through a view, as well
+create view insertconflictview as select * from insertconflicttest;
 --
 -- Test unique index inference with operator class specifications and
 -- named collations
@@ -54,6 +56,18 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Optimizer: Postgres query optimizer
 (7 rows)
 
+explain (costs off) insert into insertconflictview values(0, 'Crowberry') on conflict (lower(fruit), key, lower(fruit), key) do nothing;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Insert on insertconflicttest
+   Conflict Resolution: NOTHING
+   Conflict Arbiter Indexes: both_index_expr_key
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Hash Key: 0
+         ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
+
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (key, fruit) do update set fruit = excluded.fruit
   where exists (select 1 from insertconflicttest ii where ii.key = excluded.key);
                                   QUERY PLAN                                   
@@ -61,7 +75,7 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   Conflict Filter: (SubPlan 1)
+   Conflict Filter: EXISTS(SubPlan 1)
    ->  Redistribute Motion 1:3  (slice1; segments: 1)
          Hash Key: 0
          ->  Result
@@ -350,6 +364,12 @@ ERROR:  invalid reference to FROM-clause entry for table "insertconflicttest"
 LINE 1: ...onfruit') on conflict (key) do update set fruit = insertconf...
                                                              ^
 HINT:  Perhaps you meant to reference the table alias "ict".
+-- Check helpful hint when qualifying set column with target table
+insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set insertconflicttest.fruit = 'Mango';
+ERROR:  column "insertconflicttest" of relation "insertconflicttest" does not exist
+LINE 1: ...3, 'Kiwi') on conflict (key, fruit) do update set insertconf...
+                                                             ^
+HINT:  SET target columns cannot be qualified with the relation name.
 drop index key_index;
 --
 -- Composite key tests
@@ -466,6 +486,7 @@ create unique index partial_key_index on insertconflicttest(key) where fruit lik
 -- Succeeds
 insert into insertconflicttest values (23, 'Blackberry') on conflict (key) where fruit like '%berry' do update set fruit = excluded.fruit;
 insert into insertconflicttest as t values (23, 'Blackberry') on conflict (key) where fruit like '%berry' and t.fruit = 'inconsequential' do nothing;
+insert into insertconflictview as t values (23, 'Blackberry') on conflict (key) where fruit like '%berry' and t.fruit = 'inconsequential' do nothing;
 -- fails
 insert into insertconflicttest values (23, 'Blackberry') on conflict (key) do update set fruit = excluded.fruit;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
@@ -537,6 +558,7 @@ explain (costs off) insert into insertconflicttest as i values (23, 'Avocado') o
 
 drop index plain;
 -- Cleanup
+drop view insertconflictview;
 drop table insertconflicttest;
 --
 -- Verify that EXCLUDED does not allow system column references. These
@@ -588,8 +610,6 @@ create view insertconflictv as
 insert into insertconflictv values (1,'foo')
   on conflict (f1) do update set f2 = excluded.f2;
 select * from insertconflict;
-NOTICE:  One or more columns in the following table(s) do not have statistics: insertconflict
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | foo
@@ -598,8 +618,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 insert into insertconflictv values (1,'bar')
   on conflict (f1) do update set f2 = excluded.f2;
 select * from insertconflict;
-NOTICE:  One or more columns in the following table(s) do not have statistics: insertconflict
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2  
 ----+-----
   1 | bar
@@ -636,8 +654,6 @@ insert into capitals values ('Sacramento', 3.694E+5, 30, 'CA');
 insert into capitals values ('Madison', 1.913E+5, 845, 'WI');
 -- Tests proper for inheritance:
 select * from capitals;
-NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
  Madison    |     191300 |      845 | WI
@@ -650,8 +666,6 @@ insert into capitals values ('Sacramento', 4664.E+5, 30, 'CA') on conflict (name
 -- Wrong "Sacramento", so do nothing:
 insert into capitals values ('Sacramento', 50, 2267, 'NE') on conflict (name) do nothing;
 select * from capitals;
-NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
  Sacramento |  466400000 |       30 | CA
@@ -664,16 +678,14 @@ select tableoid::regclass, * from cities;
 ----------+---------------+------------+----------
  cities   | Las Vegas     |     583000 |     2001
  capitals | Sacramento    |  466400000 |       30
- cities   | San Francisco |     724000 |       63
  cities   | Mariposa      |       1200 |     1953
  capitals | Madison       |     191300 |      845
+ cities   | San Francisco |     724000 |       63
 (5 rows)
 
 insert into capitals values ('Las Vegas', 5.83E+5, 2222, 'NV') on conflict (name) do update set population = excluded.population;
 -- Capitals will contain new capital, Las Vegas:
 select * from capitals;
-NOTICE:  One or more columns in the following table(s) do not have statistics: capitals
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     name    | population | altitude | state 
 ------------+------------+----------+-------
  Madison    |     191300 |      845 | WI
@@ -686,12 +698,12 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
+ cities   | Mariposa      |       1200 |     1953
+ capitals | Madison       |     191300 |      845
  cities   | Las Vegas     |     583000 |     2001
  capitals | Sacramento    |  466400000 |       30
  capitals | Las Vegas     |     583000 |     2222
  cities   | San Francisco |     724000 |       63
- cities   | Mariposa      |       1200 |     1953
- capitals | Madison       |     191300 |      845
 (6 rows)
 
 -- This only affects "cities" version of "Las Vegas":
@@ -840,22 +852,20 @@ insert into selfconflict values (3,1), (3,2) on conflict do nothing;
 commit;
 begin transaction isolation level read committed;
 insert into selfconflict values (4,1), (4,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.3:7002 pid=170649)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.4:7002 pid=1159067)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level repeatable read;
 insert into selfconflict values (5,1), (5,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.3:7004 pid=170651)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.4:7004 pid=1159071)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level serializable;
 insert into selfconflict values (6,1), (6,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.3:7004 pid=170651)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.4:7004 pid=1159071)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 select * from selfconflict;
-NOTICE:  One or more columns in the following table(s) do not have statistics: selfconflict
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 | f2 
 ----+----
   2 |  1
@@ -886,8 +896,6 @@ insert into parted_conflict_test_1 values (2, 'b') on conflict (b) do update set
 ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 -- should see (2, 'b')
 select * from parted_conflict_test order by a;
-NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  1 | b
@@ -903,8 +911,6 @@ insert into parted_conflict_test values (3, 'a') on conflict (a) do update set b
 insert into parted_conflict_test values (3, 'b') on conflict (a) do update set b = excluded.b;
 -- should see (3, 'b')
 select * from parted_conflict_test order by a;
-NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  3 | b
@@ -919,8 +925,6 @@ insert into parted_conflict_test (a, b) values (4, 'a') on conflict (a) do updat
 insert into parted_conflict_test (a, b) values (4, 'b') on conflict (a) do update set b = excluded.b where parted_conflict_test.b = 'a';
 -- should see (4, 'b')
 select * from parted_conflict_test order by a;
-NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
  4 | b
@@ -1005,8 +1009,6 @@ insert into parted_conflict values (50, 'cincuenta', 2)
 ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 -- should see (50, 'cincuenta', 2)
 select * from parted_conflict order by a;
-NOTICE:  One or more columns in the following table(s) do not have statistics: parted_conflict
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  |     b     | c 
 ----+-----------+---
  50 | cincuenta | 1

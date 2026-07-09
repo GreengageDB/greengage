@@ -11,14 +11,17 @@ CREATE FUNCTION autoinc ()
 	RETURNS trigger
 	AS :'autoinclib'
 	LANGUAGE C;
+ERROR:  could not access file "/usr/local/greenplum-db-devel/lib/postgresql/autoinc.so": No such file or directory
 CREATE FUNCTION check_primary_key ()
 	RETURNS trigger
 	AS :'refintlib'
 	LANGUAGE C;
+ERROR:  could not access file "/usr/local/greenplum-db-devel/lib/postgresql/refint.so": No such file or directory
 CREATE FUNCTION check_foreign_key ()
 	RETURNS trigger
 	AS :'refintlib'
 	LANGUAGE C;
+ERROR:  could not access file "/usr/local/greenplum-db-devel/lib/postgresql/refint.so": No such file or directory
 CREATE FUNCTION trigger_return_old ()
         RETURNS trigger
         AS :'regresslib'
@@ -56,10 +59,12 @@ create trigger check_fkeys_pkey_exist
 	for each row
 	execute function
 	check_primary_key ('fkey1', 'fkey2', 'pkeys', 'pkey1', 'pkey2');
+ERROR:  function check_primary_key() does not exist
 create trigger check_fkeys_pkey2_exist
 	before insert or update on fkeys
 	for each row
 	execute function check_primary_key ('fkey3', 'fkeys2', 'pkey23');
+ERROR:  function check_primary_key() does not exist
 --
 -- For fkeys2:
 -- 	(fkey21, fkey22)	--> pkeys (pkey1, pkey2)
@@ -69,11 +74,14 @@ create trigger check_fkeys2_pkey_exist
 	for each row
 	execute procedure
 	check_primary_key ('fkey21', 'fkey22', 'pkeys', 'pkey1', 'pkey2');
+ERROR:  function check_primary_key() does not exist
 -- Test comments
 COMMENT ON TRIGGER check_fkeys2_pkey_bad ON fkeys2 IS 'wrong';
 ERROR:  trigger "check_fkeys2_pkey_bad" for table "fkeys2" does not exist
 COMMENT ON TRIGGER check_fkeys2_pkey_exist ON fkeys2 IS 'right';
+ERROR:  trigger "check_fkeys2_pkey_exist" for table "fkeys2" does not exist
 COMMENT ON TRIGGER check_fkeys2_pkey_exist ON fkeys2 IS NULL;
+ERROR:  trigger "check_fkeys2_pkey_exist" for table "fkeys2" does not exist
 --
 -- For pkeys:
 -- 	ON DELETE/UPDATE (pkey1, pkey2) CASCADE:
@@ -85,6 +93,7 @@ create trigger check_pkeys_fkey_cascade
 	execute procedure
 	check_foreign_key (2, 'cascade', 'pkey1', 'pkey2',
 	'fkeys', 'fkey1', 'fkey2', 'fkeys2', 'fkey21', 'fkey22');
+ERROR:  function check_foreign_key() does not exist
 --
 -- For fkeys2:
 -- 	ON DELETE/UPDATE (pkey23) RESTRICT:
@@ -94,71 +103,36 @@ create trigger check_fkeys2_fkey_restrict
 	before delete or update on fkeys2
 	for each row
 	execute procedure check_foreign_key (1, 'restrict', 'pkey23', 'fkeys', 'fkey3');
+ERROR:  function check_foreign_key() does not exist
 insert into fkeys2 values (10, '1', 1);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg2 172.17.0.2:7004 pid=16672)
-CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (30, '3', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (40, '4', 5);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys2 values (50, '5', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 -- no key in pkeys
 insert into fkeys2 values (70, '5', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.pkeys"  (seg0 172.17.0.2:7002 pid=16664)
-CONTEXT:  SQL statement "select 1 from pkeys where pkey1 = $1 and pkey2 = $2 "
 insert into fkeys values (10, '1', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg2 172.17.0.2:7004 pid=16672)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (30, '3', 3);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (40, '4', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 insert into fkeys values (50, '5', 2);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 -- no key in pkeys
 insert into fkeys values (70, '5', 1);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.2:7002 pid=16664)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 -- no key in fkeys2
 insert into fkeys values (60, '6', 4);
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.fkeys2"  (seg0 172.17.0.2:7002 pid=16664)
-CONTEXT:  SQL statement "select 1 from fkeys2 where pkey23 = $1 "
 delete from pkeys where pkey1 = 30 and pkey2 = '3';
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "delete from fkeys where fkey1 = $1 and fkey2 = $2 "
 delete from pkeys where pkey1 = 40 and pkey2 = '4';
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
-CONTEXT:  SQL statement "delete from fkeys where fkey1 = $1 and fkey2 = $2 "
 update pkeys set pkey1 = 7, pkey2 = '70' where pkey1 = 50 and pkey2 = '5';
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 update pkeys set pkey1 = 7, pkey2 = '70' where pkey1 = 10 and pkey2 = '1';
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
+ERROR:  duplicate key value violates unique constraint "pkeys_i"  (seg0 172.17.0.4:7002 pid=1160262)
+DETAIL:  Key (pkey1, pkey2)=(7, 70) already exists.
 SELECT trigger_name, event_manipulation, event_object_schema, event_object_table,
        action_order, action_condition, action_orientation, action_timing,
        action_reference_old_table, action_reference_new_table
   FROM information_schema.triggers
   WHERE event_object_table in ('pkeys', 'fkeys', 'fkeys2')
   ORDER BY trigger_name COLLATE "C", 2;
-        trigger_name        | event_manipulation | event_object_schema | event_object_table | action_order | action_condition | action_orientation | action_timing | action_reference_old_table | action_reference_new_table 
-----------------------------+--------------------+---------------------+--------------------+--------------+------------------+--------------------+---------------+----------------------------+----------------------------
- check_fkeys2_fkey_restrict | DELETE             | public              | fkeys2             |            1 |                  | ROW                | BEFORE        |                            | 
- check_fkeys2_fkey_restrict | UPDATE             | public              | fkeys2             |            1 |                  | ROW                | BEFORE        |                            | 
- check_fkeys2_pkey_exist    | INSERT             | public              | fkeys2             |            1 |                  | ROW                | BEFORE        |                            | 
- check_fkeys2_pkey_exist    | UPDATE             | public              | fkeys2             |            2 |                  | ROW                | BEFORE        |                            | 
- check_fkeys_pkey2_exist    | INSERT             | public              | fkeys              |            1 |                  | ROW                | BEFORE        |                            | 
- check_fkeys_pkey2_exist    | UPDATE             | public              | fkeys              |            1 |                  | ROW                | BEFORE        |                            | 
- check_fkeys_pkey_exist     | INSERT             | public              | fkeys              |            2 |                  | ROW                | BEFORE        |                            | 
- check_fkeys_pkey_exist     | UPDATE             | public              | fkeys              |            2 |                  | ROW                | BEFORE        |                            | 
- check_pkeys_fkey_cascade   | DELETE             | public              | pkeys              |            1 |                  | ROW                | BEFORE        |                            | 
- check_pkeys_fkey_cascade   | UPDATE             | public              | pkeys              |            1 |                  | ROW                | BEFORE        |                            | 
-(10 rows)
+ trigger_name | event_manipulation | event_object_schema | event_object_table | action_order | action_condition | action_orientation | action_timing | action_reference_old_table | action_reference_new_table 
+--------------+--------------------+---------------------+--------------------+--------------+------------------+--------------------+---------------+----------------------------+----------------------------
+(0 rows)
 
 DROP TABLE pkeys;
 DROP TABLE fkeys;
@@ -312,26 +286,26 @@ create trigger ttserial
 	for each row
 	execute procedure
 	autoinc (price_on, ttdummy_seq);
+ERROR:  function autoinc() does not exist
 insert into tttest values (1, 1, null);
 insert into tttest values (2, 2, null);
 insert into tttest values (3, 3, 0);
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
-        1 |         1 |       10 |    999999
+        1 |         1 |          |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
 (3 rows)
 
 delete from tttest where price_id = 2;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
-CONTEXT:  SQL statement "INSERT INTO tttest VALUES ($1, $2, $3, $4)"
+ERROR:  ttdummy (tttest): price_on must be NOT NULL (regress.c:344)  (seg0 172.17.0.4:7002 pid=1160262) (regress.c:344)
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
-        1 |         1 |       10 |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
+        1 |         1 |          |    999999
 (3 rows)
 
 -- what do we see ?
@@ -339,21 +313,21 @@ select * from tttest;
 select * from tttest where price_off = 999999;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
-        1 |         1 |       10 |    999999
+        1 |         1 |          |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
 (3 rows)
 
 -- change price for price_id == 3
 update tttest set price_val = 30 where price_id = 3;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160262)
 CONTEXT:  SQL statement "INSERT INTO tttest VALUES ($1, $2, $3, $4)"
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        1 |         1 |       10 |    999999
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
+        1 |         1 |          |    999999
 (3 rows)
 
 -- now we want to change pric_id in ALL tuples
@@ -363,9 +337,9 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
-        1 |         1 |       10 |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
+        1 |         1 |          |    999999
 (3 rows)
 
 -- restore data as before last update:
@@ -380,9 +354,9 @@ update tttest set price_off = 999999 where price_val = 30;
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        1 |         1 |       10 |    999999
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
+        1 |         1 |          |    999999
 (3 rows)
 
 -- and try change price_id now!
@@ -391,9 +365,9 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
-        1 |         1 |       10 |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
+        1 |         1 |          |    999999
 (3 rows)
 
 -- isn't it what we need ?
@@ -405,7 +379,7 @@ select set_ttdummy(1);
 
 -- we want to correct some "date"
 update tttest set price_on = -1 where price_id = 1;
-ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  ttdummy (tttest): price_on must be NOT NULL (regress.c:344)  (seg1 172.17.0.4:7003 pid=1160265) (regress.c:344)
 -- but this doesn't work
 -- try in this way
 select set_ttdummy(0);
@@ -415,13 +389,13 @@ select set_ttdummy(0);
 (1 row)
 
 update tttest set price_on = -1 where price_id = 1;
-ERROR:  ttdummy (tttest): you cannot change price_on and/or price_off columns (use set_ttdummy)  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  ttdummy (tttest): price_on must be NOT NULL (regress.c:344)  (seg1 172.17.0.4:7003 pid=1160265) (regress.c:344)
 select * from tttest;
  price_id | price_val | price_on | price_off 
 ----------+-----------+----------+-----------
-        1 |         1 |       10 |    999999
-        2 |         2 |       20 |    999999
-        3 |         3 |       30 |    999999
+        1 |         1 |          |    999999
+        2 |         2 |          |    999999
+        3 |         3 |        0 |    999999
 (3 rows)
 
 -- isn't it what we need ?
@@ -522,12 +496,12 @@ SELECT trigger_name, event_manipulation, event_object_schema, event_object_table
 (5 rows)
 
 INSERT INTO main_table (a) VALUES (123), (456);
-NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
 COPY main_table FROM stdin;
-NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger_func(insert_a) called: action = INSERT, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
 DELETE FROM main_table WHERE a IN (123, 456);
-NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger_func(delete_a) called: action = DELETE, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
 UPDATE main_table SET a = 50, b = 60;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 SELECT * FROM main_table ORDER BY a, b;
@@ -598,7 +572,7 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 -- try again
 alter table table_with_oids set distributed randomly;
 update table_with_oids set a = a + 1;
-NOTICE:  trigger_func(after_upd_oid_unchanged) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger_func(after_upd_oid_unchanged) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
 drop table table_with_oids;
 -- Test column-level triggers
 DROP TRIGGER after_upd_row_trig ON main_table;
@@ -623,22 +597,22 @@ SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid = 'main_table'::regc
 UPDATE main_table SET a = 50;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 UPDATE main_table SET b = 10;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 172.17.0.4:7004 pid=1160264)
 --
 -- Test case for bug with BEFORE trigger followed by AFTER trigger with WHEN
 --
@@ -740,11 +714,11 @@ create trigger trigtest_a_stmt_tg after insert or update or delete on trigtest
 for each statement execute procedure trigtest();
 ERROR:  Triggers for statements are not yet supported
 insert into trigtest default values;
-NOTICE:  trigtest INSERT BEFORE ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigtest INSERT AFTER ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigtest INSERT BEFORE ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigtest INSERT AFTER ROW  (seg1 172.17.0.4:7003 pid=1160265)
 alter table trigtest disable trigger trigtest_b_row_tg;
 insert into trigtest default values;
-NOTICE:  trigtest INSERT AFTER ROW  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  trigtest INSERT AFTER ROW  (seg0 172.17.0.4:7002 pid=1160262)
 alter table trigtest disable trigger user;
 insert into trigtest default values;
 alter table trigtest enable trigger trigtest_a_stmt_tg;
@@ -762,8 +736,8 @@ delete from trigtest where i=2;
 select * from trigtest2;
  i 
 ---
- 1
  2
+ 1
 (2 rows)
 
 alter table trigtest disable trigger all;
@@ -780,11 +754,11 @@ insert into trigtest default values;
 select *  from trigtest;
  i 
 ---
+ 5
+ 6
  3
  4
  7
- 5
- 6
 (5 rows)
 
 drop table trigtest2;
@@ -851,42 +825,42 @@ CREATE TRIGGER show_trigger_data_trig
 BEFORE INSERT OR UPDATE OR DELETE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(23,'skidoo');
 insert into trigger_test values(1,'insert');
-NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_OP: INSERT  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_NARGS: 2  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  NEW: (1,insert)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_OP: INSERT  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  NEW: (1,insert)  (seg1 172.17.0.4:7003 pid=1160265)
 update trigger_test set v = 'update' where i = 1;
-NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_OP: UPDATE  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_NARGS: 2  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  OLD: (1,insert)  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  NEW: (1,update)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_OP: UPDATE  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  OLD: (1,insert)  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  NEW: (1,update)  (seg1 172.17.0.4:7003 pid=1160265)
 delete from trigger_test;
-NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_OP: DELETE  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_NARGS: 2  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  OLD: (1,update)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  TG_NAME: show_trigger_data_trig  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_WHEN: BEFORE  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_LEVEL: ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_OP: DELETE  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELID::regclass: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_RELNAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_NAME: trigger_test  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_TABLE_SCHEMA: public  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_NARGS: 2  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  TG_ARGV: [23, skidoo]  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  OLD: (1,update)  (seg1 172.17.0.4:7003 pid=1160265)
 DROP TRIGGER show_trigger_data_trig on trigger_test;
 DROP FUNCTION trigger_data();
 DROP TABLE trigger_test;
@@ -912,15 +886,15 @@ FOR EACH ROW EXECUTE PROCEDURE mytrigger();
 INSERT INTO trigger_test VALUES(0, 1, 'foo', 'bar');
 INSERT INTO trigger_test VALUES(0, 2, 'baz', 'quux');
 UPDATE trigger_test SET f3 = 'bar';
-NOTICE:  row 1 not changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 not changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 changed  (seg1 172.17.0.4:7003 pid=1160265)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 changed  (seg1 172.17.0.4:7003 pid=1160265)
 -- this demonstrates that the above isn't really working as desired:
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 changed  (seg1 172.17.0.4:7003 pid=1160265)
 -- the right way when considering nulls is
 CREATE OR REPLACE FUNCTION mytrigger() RETURNS trigger LANGUAGE plpgsql as $$
 begin
@@ -932,14 +906,14 @@ begin
 	return new;
 end$$;
 UPDATE trigger_test SET f3 = 'bar';
-NOTICE:  row 1 changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 changed  (seg1 172.17.0.4:7003 pid=1160265)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 changed  (seg1 172.17.0.4:7003 pid=1160265)
 UPDATE trigger_test SET f3 = NULL;
-NOTICE:  row 1 not changed  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  row 2 not changed  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  row 1 not changed  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  row 2 not changed  (seg1 172.17.0.4:7003 pid=1160265)
 DROP TABLE trigger_test;
 DROP FUNCTION mytrigger();
 -- Test snapshot management in serializable transactions involving triggers
@@ -995,8 +969,8 @@ UPDATE 1
 SELECT * FROM min_updates_test;
  f1 | f2 | f3 
 ----+----+----
- b  |  3 |  2
  a  |  2 |  2
+ b  |  3 |  2
 (2 rows)
 
 DROP TABLE min_updates_test;
@@ -1145,14 +1119,14 @@ INSERT INTO main_view VALUES (21, 31) RETURNING a, b;
 INSERT 0 1
 -- Table trigger will prevent updates
 UPDATE main_view SET b = 31 WHERE a = 20;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
 UPDATE 2
 UPDATE main_view SET b = 32 WHERE a = 21 AND b = 31 RETURNING a, b;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg2 slice1 172.17.0.4:7004 pid=1160264)
  a  | b  
 ----+----
  21 | 32
@@ -1163,10 +1137,10 @@ UPDATE 1
 DROP TRIGGER before_upd_a_row_trig ON main_table;
 DROP TRIGGER
 UPDATE main_view SET b = 31 WHERE a = 20;
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_a_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger_func(after_upd_b_row) called: action = UPDATE, when = AFTER, level = ROW  (seg1 172.17.0.4:7003 pid=1160265)
 UPDATE 2
 UPDATE main_view SET b = 32 WHERE a = 21 AND b = 31 RETURNING a, b;
  a | b 
@@ -1523,8 +1497,8 @@ select pg_trigger_depth();
 (1 row)
 
 insert into depth_a values (1);
-NOTICE:  depth_a_tr: depth = 1  (seg1 172.17.0.2:7003 pid=16667)
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  depth_a_tr: depth = 1  (seg1 172.17.0.4:7003 pid=1160265)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "insert into depth_b values (new.id)"
 PL/pgSQL function depth_a_tf() line 4 at SQL statement
 select pg_trigger_depth();
@@ -1534,8 +1508,8 @@ select pg_trigger_depth();
 (1 row)
 
 insert into depth_a values (2);
-NOTICE:  depth_a_tr: depth = 1  (seg0 172.17.0.2:7002 pid=16664)
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  depth_a_tr: depth = 1  (seg0 172.17.0.4:7002 pid=1160262)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160262)
 CONTEXT:  SQL statement "insert into depth_b values (new.id)"
 PL/pgSQL function depth_a_tf() line 4 at SQL statement
 select pg_trigger_depth();
@@ -1608,7 +1582,7 @@ create trigger child_del_trig after delete on child
   for each row execute procedure child_del_func();
 insert into parent values (1, 'a', 'a', 'a', 'a', 0);
 insert into child values (10, 1, 'b');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  SQL statement "update parent set bcnt = bcnt + 1 where aid = new.aid"
 PL/pgSQL function child_ins_func() line 3 at SQL statement
 select * from parent; select * from child;
@@ -1622,7 +1596,12 @@ select * from parent; select * from child;
 (0 rows)
 
 update parent set val1 = 'b' where aid = 1; -- should fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
+CONTEXT:  SQL statement "delete from child where child.aid = new.aid and child.val1 = new.val1"
+PL/pgSQL function parent_upd_func() line 5 at SQL statement
+merge into parent p using (values (1)) as v(id) on p.aid = v.id
+  when matched then update set val1 = 'b'; -- should fail
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "delete from child where child.aid = new.aid and child.val1 = new.val1"
 PL/pgSQL function parent_upd_func() line 5 at SQL statement
 select * from parent; select * from child;
@@ -1636,7 +1615,12 @@ select * from parent; select * from child;
 (0 rows)
 
 delete from parent where aid = 1; -- should fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
+CONTEXT:  SQL statement "delete from child where aid = old.aid"
+PL/pgSQL function parent_del_func() line 3 at SQL statement
+merge into parent p using (values (1)) as v(id) on p.aid = v.id
+  when matched then delete; -- should fail
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "delete from child where aid = old.aid"
 PL/pgSQL function parent_del_func() line 3 at SQL statement
 select * from parent; select * from child;
@@ -1664,7 +1648,7 @@ begin
 end;
 $$;
 delete from parent where aid = 1;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "delete from child where aid = old.aid"
 PL/pgSQL function parent_del_func() line 3 at SQL statement
 select * from parent; select * from child;
@@ -1719,22 +1703,22 @@ create trigger self_ref_trigger_del_trig before delete on self_ref_trigger
   for each row execute procedure self_ref_trigger_del_func();
 insert into self_ref_trigger values (1, null, 'root');
 insert into self_ref_trigger values (2, 1, 'root child A');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160262)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (3, 1, 'root child B');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160262)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (4, 2, 'grandchild 1');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16664)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.4:7002 pid=1160262)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
 insert into self_ref_trigger values (5, 3, 'grandchild 2');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  SQL statement "update self_ref_trigger set nchildren = nchildren + 1
       where id = new.parent"
 PL/pgSQL function self_ref_trigger_ins_func() line 4 at SQL statement
@@ -1808,7 +1792,7 @@ end$$ language plpgsql;
 create trigger trigger_ddl_func before insert on trigger_ddl_table for each row
   execute procedure trigger_ddl_func();
 insert into trigger_ddl_table values (1, 42);  -- fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "alter table trigger_ddl_table add primary key (col1)"
 PL/pgSQL function trigger_ddl_func() line 3 at SQL statement
 create or replace function trigger_ddl_func() returns trigger as $$
@@ -1817,7 +1801,7 @@ begin
   return new;
 end$$ language plpgsql;
 insert into trigger_ddl_table values (1, 42);  -- fail
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  SQL statement "create index on trigger_ddl_table (col2)"
 PL/pgSQL function trigger_ddl_func() line 3 at SQL statement
 drop table trigger_ddl_table;
@@ -1863,46 +1847,46 @@ $$;
 create trigger upsert_after_trig after insert or update on upsert
   for each row execute procedure upsert_after_func();
 insert into upsert values(1, 'black') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (1,black)  (seg1 172.17.0.2:7003 pid=16667)
-WARNING:  after insert (new): (1,black)  (seg1 172.17.0.2:7003 pid=16667)
+WARNING:  before insert (new): (1,black)  (seg1 172.17.0.4:7003 pid=1160265)
+WARNING:  after insert (new): (1,black)  (seg1 172.17.0.4:7003 pid=1160265)
 insert into upsert values(2, 'red') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (2,red)  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  before insert (new, modified): (3,"red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after insert (new): (3,"red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
+WARNING:  before insert (new): (2,red)  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  before insert (new, modified): (3,"red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after insert (new): (3,"red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
 insert into upsert values(3, 'orange') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (3,orange)  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  before update (old): (3,"red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  before update (new): (3,"updated red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after update (old): (3,"red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after update (new): (3,"updated red trig modified")  (seg0 172.17.0.2:7002 pid=16664)
+WARNING:  before insert (new): (3,orange)  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  before update (old): (3,"red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  before update (new): (3,"updated red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after update (old): (3,"red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after update (new): (3,"updated red trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
 insert into upsert values(4, 'green') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (4,green)  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  before insert (new, modified): (5,"green trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after insert (new): (5,"green trig modified")  (seg0 172.17.0.2:7002 pid=16664)
+WARNING:  before insert (new): (4,green)  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  before insert (new, modified): (5,"green trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after insert (new): (5,"green trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
 insert into upsert values(5, 'purple') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (5,purple)  (seg2 172.17.0.2:7004 pid=16672)
-WARNING:  after insert (new): (5,purple)  (seg2 172.17.0.2:7004 pid=16672)
+WARNING:  before insert (new): (5,purple)  (seg2 172.17.0.4:7004 pid=1160264)
+WARNING:  after insert (new): (5,purple)  (seg2 172.17.0.4:7004 pid=1160264)
 insert into upsert values(6, 'white') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (6,white)  (seg2 172.17.0.2:7004 pid=16672)
-WARNING:  before insert (new, modified): (7,"white trig modified")  (seg2 172.17.0.2:7004 pid=16672)
-WARNING:  after insert (new): (7,"white trig modified")  (seg2 172.17.0.2:7004 pid=16672)
+WARNING:  before insert (new): (6,white)  (seg2 172.17.0.4:7004 pid=1160264)
+WARNING:  before insert (new, modified): (7,"white trig modified")  (seg2 172.17.0.4:7004 pid=1160264)
+WARNING:  after insert (new): (7,"white trig modified")  (seg2 172.17.0.4:7004 pid=1160264)
 insert into upsert values(7, 'pink') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (7,pink)  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after insert (new): (7,pink)  (seg0 172.17.0.2:7002 pid=16664)
+WARNING:  before insert (new): (7,pink)  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after insert (new): (7,pink)  (seg0 172.17.0.4:7002 pid=1160262)
 insert into upsert values(8, 'yellow') on conflict (key) do update set color = 'updated ' || upsert.color;
-WARNING:  before insert (new): (8,yellow)  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  before insert (new, modified): (9,"yellow trig modified")  (seg0 172.17.0.2:7002 pid=16664)
-WARNING:  after insert (new): (9,"yellow trig modified")  (seg0 172.17.0.2:7002 pid=16664)
+WARNING:  before insert (new): (8,yellow)  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  before insert (new, modified): (9,"yellow trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
+WARNING:  after insert (new): (9,"yellow trig modified")  (seg0 172.17.0.4:7002 pid=1160262)
 select * from upsert;
  key |           color           
 -----+---------------------------
    1 | black
+   5 | purple
+   7 | white trig modified
    3 | updated red trig modified
    5 | green trig modified
    7 | pink
    9 | yellow trig modified
-   5 | purple
-   7 | white trig modified
 (7 rows)
 
 drop table upsert;
@@ -2165,25 +2149,25 @@ HINT:  Rewrite the query to only include one writable clause.
 delete from parted_stmt_trig;
 -- insert via copy on the parent
 copy parted_stmt_trig(a) from stdin;
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig2 AFTER INSERT for ROW  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig2 AFTER INSERT for ROW  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
 -- insert via copy on the first partition
 copy parted_stmt_trig1(a) from stdin;
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
 -- Disabling a trigger in the parent table should disable children triggers too
 alter table parted_stmt_trig disable trigger trig_ins_after_parent;
 insert into parted_stmt_trig values (1);
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
 alter table parted_stmt_trig enable trigger trig_ins_after_parent;
 insert into parted_stmt_trig values (1);
-NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger trig_ins_before_child on parted_stmt_trig1 BEFORE INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_child on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger trig_ins_after_parent on parted_stmt_trig1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
 drop table parted_stmt_trig, parted2_stmt_trig;
 -- Verify that triggers fire in alphabetical order
 create table parted_trig (a int) partition by range (a);
@@ -2202,13 +2186,51 @@ create trigger aaa after insert on parted_trig_1 for each row execute procedure 
 create trigger bbb after insert on parted_trig for each row execute procedure trigger_notice();
 create trigger qqq after insert on parted_trig_1_1 for each row execute procedure trigger_notice();
 insert into parted_trig values (50), (1500);
-NOTICE:  trigger aaa on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger bbb on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger mmm on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger qqq on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger zzz on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger bbb on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger zzz on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  trigger bbb on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger aaa on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger zzz on parted_trig_2 AFTER INSERT for ROW  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger bbb on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger mmm on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger qqq on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger zzz on parted_trig_1_1 AFTER INSERT for ROW  (seg1 172.17.0.4:7003 pid=1160265)
+drop table parted_trig;
+-- Verify that the correct triggers fire for cross-partition updates
+create table parted_trig (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table parted_trig1 partition of parted_trig for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table parted_trig2 partition of parted_trig for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into parted_trig values (1);
+create or replace function trigger_notice() returns trigger as $$
+  begin
+    raise notice 'trigger % on % % % for %', TG_NAME, TG_TABLE_NAME, TG_WHEN, TG_OP, TG_LEVEL;
+    if TG_LEVEL = 'ROW' then
+      if TG_OP = 'DELETE' then
+        return OLD;
+      else
+        return NEW;
+      end if;
+    end if;
+    return null;
+  end;
+  $$ language plpgsql;
+create trigger parted_trig_before_stmt before insert or update or delete on parted_trig
+   for each statement execute procedure trigger_notice();
+ERROR:  Triggers for statements are not yet supported
+create trigger parted_trig_before_row before insert or update or delete on parted_trig
+   for each row execute procedure trigger_notice();
+create trigger parted_trig_after_row after insert or update or delete on parted_trig
+   for each row execute procedure trigger_notice();
+create trigger parted_trig_after_stmt after insert or update or delete on parted_trig
+   for each statement execute procedure trigger_notice();
+ERROR:  Triggers for statements are not yet supported
+update parted_trig set a = 2 where a = 1;
+ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
+-- update action in merge should behave the same
+merge into parted_trig using (select 1) as ss on true
+  when matched and a = 2 then update set a = 1;
 drop table parted_trig;
 -- Verify propagation of trigger arguments to partitions
 create table parted_trig (a int) partition by list (a);
@@ -2235,9 +2257,9 @@ create table parted_trig3 (like parted_trig);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table parted_trig attach partition parted_trig3 for values in (3);
 insert into parted_trig values (1), (2), (3);
-NOTICE:  trigger aaa on parted_trig1 AFTER INSERT for ROW args quirky 1  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger aaa on parted_trig2 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger aaa on parted_trig3 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  trigger aaa on parted_trig1 AFTER INSERT for ROW args quirky 1  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger aaa on parted_trig2 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger aaa on parted_trig3 AFTER INSERT for ROW args quirky 1  (seg0 172.17.0.4:7002 pid=1160262)
 drop table parted_trig;
 -- test irregular partitions (i.e., different column definitions),
 -- including that the WHEN clause works
@@ -2283,18 +2305,18 @@ create trigger parted_trig_odd after insert on parted_irreg for each row
 -- we should hear barking for every insert, but parted_trig_odd only emits
 -- noise for odd values of a. parted_trig does it for all inserts.
 insert into parted_irreg values (1, 'aardvark'), (2, 'aanimals');
-NOTICE:  aardvark <- woof!  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  aanimals <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aanimals)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg2 172.17.0.2:7004 pid=16672)
+NOTICE:  aardvark <- woof!  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  aanimals <- woof!  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aanimals)  (seg2 172.17.0.4:7004 pid=1160264)
 insert into parted1_irreg values ('aardwolf', 2);
-NOTICE:  aardwolf <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  aardwolf <- woof!  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg1 172.17.0.4:7003 pid=1160265)
 insert into parted_irreg_ancestor values ('aasvogel', 3);
-NOTICE:  aasvogel <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  aasvogel <- woof!  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trig on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trig_odd on parted1_irreg AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg1 172.17.0.4:7003 pid=1160265)
 drop table parted_irreg_ancestor;
 -- Before triggers and partitions
 create table parted (a int, b int, c text) partition by list (a);
@@ -2315,10 +2337,10 @@ insert into parted values (1, 1, 'uno uno v1');    -- works
 create trigger t before insert or update or delete on parted
   for each row execute function parted_trigfunc();
 insert into parted values (1, 1, 'uno uno v2');    -- fail
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
 update parted set c = c || 'v3';                   -- fail
-ERROR:  no partition of relation "parted" found for row  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  no partition of relation "parted" found for row  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Partition key of the failing row contains (a) = (2).
 create or replace function parted_trigfunc() returns trigger language plpgsql as $$
 begin
@@ -2327,10 +2349,10 @@ begin
 end;
 $$;
 insert into parted values (1, 1, 'uno uno v4');    -- fail
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1_1".
 update parted set c = c || 'v5';                   -- fail
-ERROR:  no partition of relation "parted_1" found for row  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  no partition of relation "parted_1" found for row  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Partition key of the failing row contains (b) = (2).
 create or replace function parted_trigfunc() returns trigger language plpgsql as $$
 begin
@@ -2365,10 +2387,10 @@ create trigger t before insert or update on parted
   for each row execute function parted_trigfunc();
 insert into parted values (0, 1, 'zero win');
 insert into parted values (1, 1, 'one fail');
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_1".
 insert into parted values (1, 2, 'two fail');
-ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  moving row to another partition during a BEFORE FOR EACH ROW trigger is not supported  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Before executing trigger "t", the row was to be in partition "public.parted_2".
 select * from parted;
  a | b |    c     
@@ -2407,32 +2429,32 @@ create constraint trigger parted_trig_two after insert on parted_constr
 -- is fired at commit time.
 begin;
 insert into parted_constr values (1, 'aardvark');
-NOTICE:  aardvark <- woof!  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  aardvark <- woof!  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.4:7003 pid=1160265)
 insert into parted1_constr values (2, 'aardwolf');
-NOTICE:  aardwolf <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  aardwolf <- woof!  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.4:7002 pid=1160262)
 insert into parted_constr_ancestor values (3, 'aasvogel');
-NOTICE:  aasvogel <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  aasvogel <- woof!  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.4:7002 pid=1160262)
 commit;
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.4:7003 pid=1160265)
 -- The WHEN clause is immediate, and both constraint triggers are fired at
 -- commit time.
 begin;
 set constraints parted_trig deferred;
 insert into parted_constr values (1, 'aardvark');
-NOTICE:  aardvark <- woof!  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  aardvark <- woof!  (seg1 172.17.0.4:7003 pid=1160265)
 insert into parted1_constr values (2, 'aardwolf'), (3, 'aasvogel');
-NOTICE:  aardwolf <- woof!  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  aasvogel <- woof!  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  aardwolf <- woof!  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  aasvogel <- woof!  (seg0 172.17.0.4:7002 pid=1160262)
 commit;
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.2:7003 pid=16667)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(2,aardwolf)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(3,aasvogel)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trig on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trig_two on parted1_constr AFTER INSERT for ROW: (a,b)=(1,aardvark)  (seg1 172.17.0.4:7003 pid=1160265)
 drop table parted_constr_ancestor;
 drop function bark(text);
 -- Test that the WHEN clause is set properly to partitions
@@ -2464,9 +2486,9 @@ insert into parted_trigger values
 	(1000, 'c'), (1001, 'ddd'), (1002, 'efg'), (1003, 'f'),
 	(2000, 'e'), (2001, 'fff'), (2002, 'ghi'), (2003, 'h');
 update parted_trigger set a = a + 2; -- notice for odd 'a' values, long 'b' values
-NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1003,ddd)  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,fff)  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(3,bbb)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1003,ddd)  (seg2 172.17.0.4:7004 pid=1160264)
+NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(3,bbb)  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,fff)  (seg2 172.17.0.4:7004 pid=1160264)
 drop table parted_trigger;
 -- try a constraint trigger, also
 create table parted_referenced (a int);
@@ -2546,10 +2568,10 @@ alter table parted_trigger attach partition parted_trigger_3 for values from (20
 insert into parted_trigger values (0, 'a'), (1000, 'c'), (2000, 'e'), (2001, 'eeee');
 update parted_trigger set a = a + 2;	-- no notices here
 update parted_trigger set b = b || 'b';	-- all triggers should fire
-NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(2,ab)  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,eeeeb)  (seg2 172.17.0.2:7004 pid=16672)
-NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1002,cb)  (seg0 172.17.0.2:7002 pid=16664)
-NOTICE:  trigger parted_trigger on parted_trigger_3_1 AFTER UPDATE for ROW: (a,b)=(2002,eb)  (seg0 172.17.0.2:7002 pid=16664)
+NOTICE:  trigger parted_trigger on parted_trigger_1 AFTER UPDATE for ROW: (a,b)=(2,ab)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trigger on parted_trigger_2 AFTER UPDATE for ROW: (a,b)=(1002,cb)  (seg0 172.17.0.4:7002 pid=1160262)
+NOTICE:  trigger parted_trigger on parted_trigger_3_1 AFTER UPDATE for ROW: (a,b)=(2002,eb)  (seg1 172.17.0.4:7003 pid=1160265)
+NOTICE:  trigger parted_trigger on parted_trigger_3_2 AFTER UPDATE for ROW: (a,b)=(2003,eeeeb)  (seg1 172.17.0.4:7003 pid=1160265)
 drop table parted_trigger;
 drop function trigger_notice_ab();
 -- Make sure we don't end up with unnecessary copies of triggers, when
@@ -2717,27 +2739,27 @@ CREATE OR REPLACE FUNCTION tgf() RETURNS trigger LANGUAGE plpgsql
   AS $$ begin raise exception 'except'; end $$;
 CREATE TRIGGER tg AFTER INSERT ON trgfire FOR EACH ROW EXECUTE FUNCTION tgf();
 INSERT INTO trgfire VALUES (1);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 ALTER TABLE trgfire DISABLE TRIGGER tg;
 INSERT INTO trgfire VALUES (1);
 CREATE TABLE trgfire2 PARTITION OF trgfire FOR VALUES FROM (10) TO (20);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trgfire VALUES (11);
-ERROR:  except  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  except  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire3 (LIKE trgfire);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 ALTER TABLE trgfire ATTACH PARTITION trgfire3 FOR VALUES FROM (20) TO (30);
 INSERT INTO trgfire VALUES (21);
-ERROR:  except  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  except  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire4 PARTITION OF trgfire FOR VALUES FROM (30) TO (40) PARTITION BY LIST (i);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE trgfire4_30 PARTITION OF trgfire4 FOR VALUES IN (30);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO trgfire VALUES (30);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 CREATE TABLE trgfire5 (LIKE trgfire) PARTITION BY LIST (i);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
@@ -2745,7 +2767,7 @@ CREATE TABLE trgfire5_40 PARTITION OF trgfire5 FOR VALUES IN (40);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE trgfire ATTACH PARTITION trgfire5 FOR VALUES FROM (40) TO (50);
 INSERT INTO trgfire VALUES (40);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 SELECT tgrelid::regclass, tgenabled FROM pg_trigger
   WHERE tgrelid::regclass IN (SELECT oid from pg_class where relname LIKE 'trgfire%')
@@ -2764,19 +2786,19 @@ SELECT tgrelid::regclass, tgenabled FROM pg_trigger
 
 ALTER TABLE trgfire ENABLE TRIGGER tg;
 INSERT INTO trgfire VALUES (1);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (11);
-ERROR:  except  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  except  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (21);
-ERROR:  except  (seg2 172.17.0.2:7004 pid=16672)
+ERROR:  except  (seg2 172.17.0.4:7004 pid=1160264)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (30);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 INSERT INTO trgfire VALUES (40);
-ERROR:  except  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  except  (seg1 172.17.0.4:7003 pid=1160265)
 CONTEXT:  PL/pgSQL function tgf() line 1 at RAISE
 DROP TABLE trgfire;
 DROP FUNCTION tgf();
@@ -3296,15 +3318,29 @@ delete from refd_table where length(b) = 3;
 select * from trig_table;
  a |    b    
 ---+---------
+ 1 | one a
+ 1 | one b
  2 | two a
  2 | two b
  3 | three a
  3 | three b
- 1 | one a
- 1 | one b
 (6 rows)
 
 drop table refd_table, trig_table;
+--
+-- Test that we can drop a not-yet-fired deferred trigger
+--
+create table refd_table (id int primary key);
+create table trig_table (fk int references refd_table initially deferred);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fk' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+begin;
+insert into trig_table values (1);
+drop table refd_table cascade;
+NOTICE:  drop cascades to constraint trig_table_fk_fkey on table trig_table
+commit;
+drop table trig_table;
 --
 -- self-referential FKs are even more fun
 --
@@ -3324,11 +3360,11 @@ create trigger self_ref_s_trig
 ERROR:  Triggers for statements are not yet supported
 insert into self_ref values (1, null), (2, 1), (3, 2);
 delete from self_ref where a = 1;
-NOTICE:  trigger = self_ref_r_trig, old table = (1,)  (seg1 172.17.0.2:7003 pid=16667)
+NOTICE:  trigger = self_ref_r_trig, old table = (1,)  (seg1 172.17.0.4:7003 pid=1160265)
 -- without AR trigger, cascaded deletes all end up in one transition table
 drop trigger self_ref_r_trig on self_ref;
 insert into self_ref values (1, null), (2, 1), (3, 2), (4, 3);
-ERROR:  duplicate key value violates unique constraint "self_ref_pkey"  (seg0 172.17.0.2:7002 pid=16664)
+ERROR:  duplicate key value violates unique constraint "self_ref_pkey"  (seg0 172.17.0.4:7002 pid=1160262)
 DETAIL:  Key (a)=(2) already exists.
 delete from self_ref where a = 1;
 drop table self_ref;
@@ -3480,7 +3516,7 @@ create trigger convslot_test_parent_update
     for each statement execute procedure convslot_trig4();
 ERROR:  Triggers for statements are not yet supported
 insert into convslot_test_parent (id, val) values (1, 2);
-ERROR:  no partition of relation "convslot_test_parent" found for row  (seg1 172.17.0.2:7003 pid=16667)
+ERROR:  no partition of relation "convslot_test_parent" found for row  (seg1 172.17.0.4:7003 pid=1160265)
 DETAIL:  Partition key of the failing row contains (id) = (1).
 begin;
 savepoint svp;
@@ -3521,7 +3557,7 @@ ERROR:  syntax error at or near "only"
 LINE 1: alter trigger a on only grandparent rename to b;
                            ^
 alter trigger b on middle rename to c;	-- can't rename trigger on partition
-ERROR:  cannot rename trigger "b" on table "middle" (trigger.c:1595)
+ERROR:  cannot rename trigger "b" on table "middle" (trigger.c:1588)
 HINT:  Rename the trigger on the partitioned table "grandparent" instead.
 create trigger c after insert on middle
 for each row execute procedure f();
@@ -3562,10 +3598,10 @@ create trigger parenttrig after insert on child
 for each row execute procedure f();
 alter trigger parenttrig on parent rename to anothertrig;
 \d+ child
-                                          Table "public.child"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
+                                   Table "public.child"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
 Triggers:
     parenttrig AFTER INSERT ON child FOR EACH ROW EXECUTE FUNCTION f()
 Inherits: parent

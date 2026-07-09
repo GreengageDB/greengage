@@ -258,15 +258,15 @@ HINT:  likely caused by a function that reads or modifies data in a distributed 
 CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg0 slice1 172.17.0.2:7002 pid=23720)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg0 slice1 172.17.0.4:7002 pid=1166290)
 CONTEXT:  SQL function "rngfunct" during startup
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(1) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.2:7000 pid=23848)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.4:7000 pid=1166399)
 CONTEXT:  SQL function "rngfunct" during startup
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = 1) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg0 slice1 172.17.0.2:7002 pid=23720)
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (seg0 slice1 172.17.0.4:7002 pid=1166290)
 CONTEXT:  SQL function "rngfunct" during startup
 -- nested functions
 select rngfunct.rngfuncid, rngfunct.f2 from rngfunct(sin(pi()/2)::int) ORDER BY 1,2;
@@ -1405,11 +1405,11 @@ AS $$select $1-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, rngfuncr(f1) FROM int4_tbl;
      f1      |          rngfuncr          
 -------------+----------------------------
+      123456 | (123455,123456z)
+     -123456 | (-123457,-123456z)
            0 | (-1,0z)
   2147483647 | (2147483646,2147483647z)
  -2147483647 | (-2147483648,-2147483647z)
-      123456 | (123455,123456z)
-     -123456 | (-123457,-123456z)
 (5 rows)
 
 SELECT * FROM rngfuncr(42);
@@ -1654,10 +1654,10 @@ select insert_tt('fool');
 select * from tt;
  f1 |   data   
 ----+----------
+  3 | fool
+  4 | foolfool
   1 | foo
   2 | bar
-  4 | foolfool
-  3 | fool
 (4 rows)
 
 -- setof does what's expected
@@ -1667,8 +1667,8 @@ language sql;
 select insert_tt2('foolish','barrish');
  insert_tt2 
 ------------
-          5
           6
+          5
 (2 rows)
 
 select * from insert_tt2('baz','quux');
@@ -1685,10 +1685,10 @@ select * from tt;
   2 | bar
   7 | baz
   8 | quux
-  4 | foolfool
-  5 | foolish
   3 | fool
   6 | barrish
+  4 | foolfool
+  5 | foolish
 (8 rows)
 
 -- limit doesn't prevent execution to completion
@@ -1701,16 +1701,16 @@ select insert_tt2('foolish','barrish') limit 1;
 select * from tt;
  f1 |   data   
 ----+----------
+  3 | fool
+  6 | barrish
+  4 | foolfool
+  5 | foolish
   1 | foo
   2 | bar
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
-  4 | foolfool
-  5 | foolish
-  3 | fool
-  6 | barrish
 (10 rows)
 
 -- triggers will fire, too
@@ -1722,8 +1722,8 @@ end $$ language plpgsql;
 create trigger tnoticetrigger after insert on tt for each row
 execute procedure noticetrigger();
 select insert_tt2('foolme','barme') limit 1;
-NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.2:7002 pid=23720)
-NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.2:7002 pid=23720)
+NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.4:7002 pid=1166290)
+NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.4:7002 pid=1166290)
  insert_tt2 
 ------------
          11
@@ -1732,10 +1732,6 @@ NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.2:7002 pid=23720)
 select * from tt;
  f1 |   data   
 ----+----------
-  4 | foolfool
-  5 | foolish
-  3 | fool
-  6 | barrish
   1 | foo
   2 | bar
   7 | baz
@@ -1744,6 +1740,10 @@ select * from tt;
  10 | barrish
  11 | foolme
  12 | barme
+  4 | foolfool
+  5 | foolish
+  3 | fool
+  6 | barrish
 (12 rows)
 
 -- and rules work
@@ -1753,8 +1753,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create rule insert_tt_rule as on insert to tt do also
   insert into tt_log values(new.*);
 select insert_tt2('foollog','barlog') limit 1;
-NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.2:7002 pid=23720)
-NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.2:7002 pid=23720)
+NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.4:7002 pid=1166290)
+NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.4:7002 pid=1166290)
  insert_tt2 
 ------------
          13
@@ -1763,6 +1763,8 @@ NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.2:7002 pid=23720)
 select * from tt;
  f1 |   data   
 ----+----------
+  3 | fool
+  6 | barrish
   4 | foolfool
   5 | foolish
   1 | foo
@@ -1775,8 +1777,6 @@ select * from tt;
  12 | barme
  13 | foollog
  14 | barlog
-  3 | fool
-  6 | barrish
 (14 rows)
 
 -- note that nextval() gets executed a second time in the rule expansion,
@@ -1856,8 +1856,7 @@ explain (verbose, costs off)
    Output: f1, f2
    Function Call: array_to_set('{one,two}'::text[])
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 -- but without, it can be:
 create or replace function array_to_set(anyarray) returns setof record as $$
@@ -1896,8 +1895,7 @@ explain (verbose, costs off)
    Output: i.i, ('{one,two}'::text[])[i.i]
    Function Call: generate_subscripts('{one,two}'::text[], 1)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 create temp table rngfunc(f1 int8, f2 int8);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
@@ -1956,8 +1954,7 @@ select testrngfunc();
  Result
    Output: '(7.136178,7.14)'::rngfunc_type
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(4 rows)
+(3 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -1973,8 +1970,7 @@ select * from testrngfunc();
    Output: f1, f2
    Function Call: '(7.136178,7.14)'::rngfunc_type
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -1992,8 +1988,7 @@ select testrngfunc();
  Result
    Output: testrngfunc()
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(4 rows)
+(3 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2008,13 +2003,12 @@ select * from testrngfunc();
  Subquery Scan on sirvf_sq
    Output: (sirvf_sq.testrngfunc).f1, (sirvf_sq.testrngfunc).f2
    ->  Result
-         Output: $0
-         InitPlan 1 (returns $0)
+         Output: (InitPlan 1).col1
+         InitPlan 1
            ->  Result
                  Output: testrngfunc()
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(9 rows)
+(8 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2034,8 +2028,7 @@ select testrngfunc();
    Output: testrngfunc()
    ->  Result
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2050,8 +2043,7 @@ select * from testrngfunc();
  Result
    Output: 7.136178::numeric(35,6), 7.14::numeric(35,2)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(4 rows)
+(3 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2070,8 +2062,7 @@ select testrngfunc();
    Output: testrngfunc()
    ->  Result
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2087,8 +2078,7 @@ select * from testrngfunc();
    Output: f1, f2
    Function Call: testrngfunc()
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2107,8 +2097,7 @@ select testrngfunc();
    Output: testrngfunc()
    ->  Result
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(5 rows)
+(4 rows)
 
 select testrngfunc();
    testrngfunc   
@@ -2123,20 +2112,19 @@ select * from testrngfunc();
 ----------------------------------------------------------
  Subquery Scan on "*SELECT*"
    Output: "*SELECT*"."?column?", "*SELECT*"."?column?_1"
-   ->  Sort
+   ->  Unique
          Output: (1), (2)
-         Sort Key: (1)
-         ->  HashAggregate
+         Group Key: (1), (2)
+         ->  Sort
                Output: (1), (2)
-               Group Key: (1), (2)
+               Sort Key: (1), (2)
                ->  Append
                      ->  Result
                            Output: 1, 2
                      ->  Result
                            Output: 3, 4
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(15 rows)
+(14 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2197,8 +2185,8 @@ SELECT get_users();
 SELECT * FROM get_users();
  userid | seq | email  | moredrop | enabled 
 --------+-----+--------+----------+---------
- id     |   1 | email  |       11 | t
  id2    |   2 | email2 |       12 | t
+ id     |   1 | email  |       11 | t
 (2 rows)
 
 SELECT * FROM get_users() WITH ORDINALITY;   -- make sure ordinality copes
@@ -2317,8 +2305,7 @@ explain (verbose, costs off) select * from rngfuncbar();
          ->  Result
                Output: 'bar'::character varying
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(9 rows)
+(8 rows)
 
 drop function rngfuncbar();
 -- check handling of a SQL function with multiple OUT params (bug #5777)
@@ -2359,17 +2346,16 @@ select x from int8_tbl, extractq2(int8_tbl) f(x);
                Output: f.x
                Function Call: int8_tbl.q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(11 rows)
+(10 rows)
 
 select x from int8_tbl, extractq2(int8_tbl) f(x);
          x         
 -------------------
+               456
+  4567890123456789
                123
   4567890123456789
  -4567890123456789
-               456
-  4567890123456789
 (5 rows)
 
 create function extractq2_2(t int8_tbl) returns table(ret1 int8) as $$
@@ -2390,8 +2376,7 @@ select x from int8_tbl, extractq2_2(int8_tbl) f(x);
                ->  Result
                      Output: (int8_tbl.*).q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(12 rows)
+(11 rows)
 
 select x from int8_tbl, extractq2_2(int8_tbl) f(x);
          x         
@@ -2416,8 +2401,7 @@ select x from int8_tbl, extractq2_2_opt(int8_tbl) f(x);
    ->  Seq Scan on public.int8_tbl
          Output: int8_tbl.q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(6 rows)
+(5 rows)
 
 select x from int8_tbl, extractq2_2_opt(int8_tbl) f(x);
          x         
@@ -2460,8 +2444,7 @@ select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extract
                ->  Result
                      Output: int8_tbl.q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(23 rows)
+(22 rows)
 
 select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extractq2_append(int8_tbl) f(x);
          x         
@@ -2492,17 +2475,16 @@ explain (verbose, costs off) select x from int8_tbl, extractq2_wapper(int8_tbl) 
            ->  Result
                  Output: (int8_tbl.*).q2
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(9 rows)
+(8 rows)
 
 select x from int8_tbl, extractq2_wapper(int8_tbl) f(x);
          x         
 -------------------
+               456
+  4567890123456789
                123
   4567890123456789
  -4567890123456789
-               456
-  4567890123456789
 (5 rows)
 
 -- check handling of nulls in SRF results (bug #7808)
@@ -2553,8 +2535,7 @@ select * from
          Output: j.id
          Function Call: jsonb_to_recordset(jsonb_path_query_array((unnested_modules.module -> 'lectures'::text), '$[*]'::jsonpath, '{}'::jsonb, false))
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off'
-(10 rows)
+(9 rows)
 
 select * from
   (select jsonb_path_query_array(module->'lectures', '$[*]') as lecture
@@ -2580,5 +2561,5 @@ select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
 ERROR:  function return row and query-specified return row do not match
 DETAIL:  Returned type integer at ordinal position 3, but query expects double precision.
 select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail
-ERROR:  function return row and query-specified return row do not match
+ERROR:  function return row and query-specified return row do not match  (seg0 slice1 172.17.0.4:7002 pid=1166290)
 DETAIL:  Returned row contains 1 attribute, but query expects 2.

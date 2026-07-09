@@ -276,10 +276,10 @@ SELECT nr, isempty(nr), lower(nr), upper(nr) FROM numrange_test;
 SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numrange_test;
     nr     | lower_inc | lower_inf | upper_inc | upper_inf 
 -----------+-----------+-----------+-----------+-----------
- [3,)      | t         | f         | f         | t
- empty     | f         | f         | f         | f
  [1.1,2.2) | t         | f         | f         | f
  [1.7,1.7] | t         | f         | t         | f
+ [3,)      | t         | f         | f         | t
+ empty     | f         | f         | f         | f
  (,)       | f         | t         | f         | t
  (,5)      | f         | t         | f         | f
 (6 rows)
@@ -287,9 +287,9 @@ SELECT nr, lower_inc(nr), lower_inf(nr), upper_inc(nr), upper_inf(nr) FROM numra
 SELECT * FROM numrange_test WHERE range_contains(nr, numrange(1.9,1.91));
     nr     
 -----------
- [1.1,2.2)
  (,)
  (,5)
+ [1.1,2.2)
 (3 rows)
 
 SELECT * FROM numrange_test WHERE nr @> numrange(1.0,10000.1);
@@ -338,9 +338,9 @@ select * from numrange_test where nr < 'empty';
 select * from numrange_test where nr < numrange(-1000.0, -1000.0,'[]');
   nr   
 -------
+ empty
  (,)
  (,5)
- empty
 (3 rows)
 
 select * from numrange_test where nr < numrange(0.0, 1.0,'[]');
@@ -354,10 +354,10 @@ select * from numrange_test where nr < numrange(0.0, 1.0,'[]');
 select * from numrange_test where nr < numrange(1000.0, 1001.0,'[]');
     nr     
 -----------
- (,)
- (,5)
  [3,)
  empty
+ (,)
+ (,5)
  [1.1,2.2)
  [1.7,1.7]
 (6 rows)
@@ -371,38 +371,38 @@ select * from numrange_test where nr <= 'empty';
 select * from numrange_test where nr >= 'empty';
     nr     
 -----------
- (,)
- (,5)
- [3,)
- empty
  [1.1,2.2)
  [1.7,1.7]
+ [3,)
+ empty
+ (,)
+ (,5)
 (6 rows)
 
 select * from numrange_test where nr > 'empty';
     nr     
 -----------
+ [1.1,2.2)
+ [1.7,1.7]
  (,)
  (,5)
  [3,)
- [1.1,2.2)
- [1.7,1.7]
 (5 rows)
 
 select * from numrange_test where nr > numrange(-1001.0, -1000.0,'[]');
     nr     
 -----------
+ [3,)
  [1.1,2.2)
  [1.7,1.7]
- [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(0.0, 1.0,'[]');
     nr     
 -----------
+ [3,)
  [1.1,2.2)
  [1.7,1.7]
- [3,)
 (3 rows)
 
 select * from numrange_test where nr > numrange(1000.0, 1000.0,'[]');
@@ -702,12 +702,12 @@ SELECT tr, isempty(tr), lower(tr), upper(tr) FROM textrange_test;
 SELECT tr, lower_inc(tr), lower_inf(tr), upper_inc(tr), upper_inf(tr) FROM textrange_test;
   tr   | lower_inc | lower_inf | upper_inc | upper_inf 
 -------+-----------+-----------+-----------+-----------
- empty | f         | f         | f         | f
  [a,)  | t         | f         | f         | t
  [b,g) | t         | f         | f         | f
  [d,d] | t         | f         | t         | f
  (,)   | f         | t         | f         | t
  (,q)  | f         | t         | f         | f
+ empty | f         | f         | f         | f
 (6 rows)
 
 SELECT * FROM textrange_test WHERE range_contains(tr, textrange('f', 'fx'));
@@ -736,10 +736,10 @@ SELECT * FROM textrange_test WHERE range_contained_by(textrange('0','9'), tr);
 SELECT * FROM textrange_test WHERE 'e'::text <@ tr;
   tr   
 -------
- (,)
- (,q)
  [a,)
  [b,g)
+ (,)
+ (,q)
 (4 rows)
 
 select * from textrange_test where tr = 'empty';
@@ -1546,13 +1546,13 @@ insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg1 172.17.0.3:7003 pid=296703)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"  (seg1 172.17.0.4:7003 pid=1158034)
 DETAIL:  Key (room, during)=([123,124), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (room, during)=([123,124), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 insert into test_range_excl
   values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
 insert into test_range_excl
   values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg2 172.17.0.3:7004 pid=296705)
+ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"  (seg0 172.17.0.4:7002 pid=1158036)
 DETAIL:  Key (speaker, during)=([1,2), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (speaker, during)=([1,2), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
@@ -1806,6 +1806,18 @@ ERROR:  composite type two_ints cannot be made a member of itself
 drop type two_ints cascade;
 NOTICE:  drop cascades to type two_ints_range
 --
+-- Check behavior when subtype lacks a hash function
+--
+create type varbitrange as range (subtype = varbit);
+set enable_sort = off;  -- try to make it pick a hash setop implementation
+select '(01,10)'::varbitrange except select '(10,11)'::varbitrange;
+ varbitrange 
+-------------
+ (01,10)
+(1 row)
+
+reset enable_sort;
+--
 -- OUT/INOUT/TABLE functions
 --
 -- infer anyrange from anyrange
@@ -1920,3 +1932,162 @@ select * from distribute_by_text_range where tr = '[aaa,aab)'::textrange3;
  [aaa,aab)
 (1 row)
 
+--
+-- Test support functions
+--
+-- empty range
+explain (verbose, costs off)
+select current_date <@ daterange 'empty';
+             QUERY PLAN              
+-------------------------------------
+ Result
+   Output: false
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- unbounded range
+explain (verbose, costs off)
+select current_date <@ daterange(NULL, NULL);
+             QUERY PLAN              
+-------------------------------------
+ Result
+   Output: true
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- only lower bound present
+explain (verbose, costs off)
+select current_date <@ daterange('2000-01-01', NULL, '[)');
+                   QUERY PLAN                   
+------------------------------------------------
+ Result
+   Output: (CURRENT_DATE >= '01-01-2000'::date)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- only upper bound present
+explain (verbose, costs off)
+select current_date <@ daterange(NULL, '2000-01-01', '(]');
+                  QUERY PLAN                   
+-----------------------------------------------
+ Result
+   Output: (CURRENT_DATE < '01-02-2000'::date)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- lower range "-Infinity" excluded
+explain (verbose, costs off)
+select current_date <@ daterange('-Infinity', '1997-04-10'::date, '()');
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE > '-infinity'::date) AND (CURRENT_DATE < '04-10-1997'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- lower range "-Infinity" included
+explain (verbose, costs off)
+select current_date <@ daterange('-Infinity', '1997-04-10'::date, '[)');
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE >= '-infinity'::date) AND (CURRENT_DATE < '04-10-1997'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- upper range "Infinity" excluded
+explain (verbose, costs off)
+select current_date <@ daterange('2002-09-25'::date, 'Infinity', '[)');
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE >= '09-25-2002'::date) AND (CURRENT_DATE < 'infinity'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- upper range "Infinity" included
+explain (verbose, costs off)
+select current_date <@ daterange('2002-09-25'::date, 'Infinity', '[]');
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE >= '09-25-2002'::date) AND (CURRENT_DATE <= 'infinity'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- should also work if we use "@>"
+explain (verbose, costs off)
+select daterange('-Infinity', '1997-04-10'::date, '()') @> current_date;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE > '-infinity'::date) AND (CURRENT_DATE < '04-10-1997'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+explain (verbose, costs off)
+select daterange('2002-09-25'::date, 'Infinity', '[]') @> current_date;
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result
+   Output: ((CURRENT_DATE >= '09-25-2002'::date) AND (CURRENT_DATE <= 'infinity'::date))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- Check that volatile cases are not optimized
+explain (verbose, costs off)
+select now() <@ tstzrange('2024-01-20 00:00', '2024-01-21 00:00');
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: ((now() >= 'Sat Jan 20 00:00:00 2024 PST'::timestamp with time zone) AND (now() < 'Sun Jan 21 00:00:00 2024 PST'::timestamp with time zone))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+explain (verbose, costs off)  -- unsafe!
+select clock_timestamp() <@ tstzrange('2024-01-20 00:00', '2024-01-21 00:00');
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Result
+   Output: (clock_timestamp() <@ '["Sat Jan 20 00:00:00 2024 PST","Sun Jan 21 00:00:00 2024 PST")'::tstzrange)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+explain (verbose, costs off)
+select clock_timestamp() <@ tstzrange('2024-01-20 00:00', NULL);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Result
+   Output: (clock_timestamp() >= 'Sat Jan 20 00:00:00 2024 PST'::timestamp with time zone)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- test a custom range type with a non-default operator class
+create type textrange_supp as range (
+   subtype = text,
+   subtype_opclass = text_pattern_ops
+);
+create temp table text_support_test (t text collate "C");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into text_support_test values ('a'), ('c'), ('d'), ('ch');
+explain (costs off)
+select * from text_support_test where t <@ textrange_supp('a', 'd');
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on text_support_test
+         Filter: ((t ~>=~ 'a'::text) AND (t ~<~ 'd'::text))
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select * from text_support_test where t <@ textrange_supp('a', 'd');
+ t  
+----
+ ch
+ a
+ c
+(3 rows)
+
+drop table text_support_test;
+drop type textrange_supp;

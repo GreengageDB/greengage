@@ -11,15 +11,13 @@ create table inserttest (col1 int4, col2 int4 NOT NULL, col3 text default 'testi
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttest (col1, col2, col3) values (DEFAULT, DEFAULT, DEFAULT);
-ERROR:  null value in column "col2" of relation "inserttest" violates not-null constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  null value in column "col2" of relation "inserttest" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (null, null, testing).
 insert into inserttest (col2, col3) values (3, DEFAULT);
 insert into inserttest (col1, col2, col3) values (DEFAULT, 5, DEFAULT);
 insert into inserttest values (DEFAULT, 5, 'test');
 insert into inserttest values (DEFAULT, 7);
 select * from inserttest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: inserttest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 |  col3   
 ------+------+---------
       |    3 | testing
@@ -48,8 +46,6 @@ ERROR:  INSERT has more expressions than target columns
 LINE 1: insert into inserttest (col1) values (DEFAULT, DEFAULT);
                                                        ^
 select * from inserttest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: inserttest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 |  col3   
 ------+------+---------
       |    3 | testing
@@ -64,8 +60,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 insert into inserttest values(10, 20, '40'), (-1, 2, DEFAULT),
     ((select 2), (select i from (values(3)) as foo (i)), 'values are fun!');
 select * from inserttest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: inserttest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 |      col3       
 ------+------+-----------------
    10 |   20 | 40
@@ -82,18 +76,16 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 --
 insert into inserttest values(30, 50, repeat('x', 10000));
 select col1, col2, char_length(col3) from inserttest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: inserttest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | char_length 
 ------+------+-------------
-   10 |   20 |           2
-   -1 |    2 |           7
+   30 |   50 |       10000
       |    3 |           7
       |    5 |           7
       |    5 |           4
       |    7 |           7
     2 |    3 |          15
-   30 |   50 |       10000
+   10 |   20 |           2
+   -1 |    2 |           7
 (8 rows)
 
 drop table inserttest;
@@ -151,8 +143,6 @@ insert into inserttest (f4[1].if2[1], f4[1].if2[2]) values ('foo', 'bar');
 insert into inserttest (f4[1].if2[1], f4[1].if2[2]) values ('foo', 'bar'), ('baz', 'quux');
 insert into inserttest (f4[1].if2[1], f4[1].if2[2]) select 'bear', 'beer';
 select * from inserttest;
-NOTICE:  One or more columns in the following table(s) do not have statistics: inserttest
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  f1 |  f2   |        f3        |           f4           
 ----+-------+------------------+------------------------
     | {1,2} |                  | 
@@ -187,11 +177,11 @@ create rule irule3 as on insert to inserttest2 do also
   insert into inserttest (f4[1].if1, f4[1].if2[2])
   select new.f1, new.f2;
 \d+ inserttest2
-                                       Table "public.inserttest2"
- Column |  Type  | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+--------+-----------+----------+---------+----------+-------------+--------------+-------------
- f1     | bigint |           |          |         | plain    |             |              | 
- f2     | text   |           |          |         | extended |             |              | 
+                                Table "public.inserttest2"
+ Column |  Type  | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+--------+-----------+----------+---------+----------+--------------+-------------
+ f1     | bigint |           |          |         | plain    |              | 
+ f2     | text   |           |          |         | extended |              | 
 Rules:
     irule1 AS
     ON INSERT TO inserttest2 DO  INSERT INTO inserttest (f3.if2[1], f3.if2[2])
@@ -210,7 +200,11 @@ create domain insert_pos_ints as int[] check (value[1] > 0);
 create domain insert_test_domain as insert_test_type
   check ((value).if2[1] is not null);
 create table inserttesta (f1 int, f2 insert_pos_ints);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inserttestb (f3 insert_test_domain, f4 insert_test_domain[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f3' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttesta (f2[1], f2[2]) values (1,2);
 insert into inserttesta (f2[1], f2[2]) values (3,4), (5,6);
 insert into inserttesta (f2[1], f2[2]) select 7,8;
@@ -219,11 +213,11 @@ ERROR:  cannot set an array element to DEFAULT
 LINE 1: insert into inserttesta (f2[1], f2[2]) values (1,default);
                                         ^
 insert into inserttesta (f2[1], f2[2]) values (0,2);
-ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"
+ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttesta (f2[1], f2[2]) values (3,4), (0,6);
-ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"
+ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttesta (f2[1], f2[2]) select 0,8;
-ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"
+ERROR:  value for domain insert_pos_ints violates check constraint "insert_pos_ints_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttestb (f3.if1, f3.if2) values (1,array['foo']);
 insert into inserttestb (f3.if1, f3.if2) values (1,'{foo}'), (2,'{bar}');
 insert into inserttestb (f3.if1, f3.if2) select 3, '{baz,quux}';
@@ -232,11 +226,11 @@ ERROR:  cannot set a subfield to DEFAULT
 LINE 1: insert into inserttestb (f3.if1, f3.if2) values (1,default);
                                          ^
 insert into inserttestb (f3.if1, f3.if2) values (1,array[null]);
-ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"
+ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttestb (f3.if1, f3.if2) values (1,'{null}'), (2,'{bar}');
-ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"
+ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttestb (f3.if1, f3.if2) select 3, '{null,quux}';
-ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"
+ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"  (seg2 slice1 172.17.0.4:7004 pid=1159114)
 insert into inserttestb (f3.if2[1], f3.if2[2]) values ('foo', 'bar');
 insert into inserttestb (f3.if2[1], f3.if2[2]) values ('foo', 'bar'), ('baz', 'quux');
 insert into inserttestb (f3.if2[1], f3.if2[2]) select 'bear', 'beer';
@@ -255,6 +249,7 @@ select * from inserttesta;
 select * from inserttestb;
         f3        |           f4           
 ------------------+------------------------
+ (2,{y})          | {"(,\"{baz,quux}\")"}
  (1,{foo})        | 
  (1,{foo})        | 
  (2,{bar})        | 
@@ -265,12 +260,13 @@ select * from inserttestb;
  (,"{bear,beer}") | 
  (1,{x})          | {"(,\"{foo,bar}\")"}
  (1,{x})          | {"(,\"{foo,bar}\")"}
- (2,{y})          | {"(,\"{baz,quux}\")"}
  (1,{x})          | {"(,\"{bear,beer}\")"}
 (12 rows)
 
 -- also check reverse-listing
 create table inserttest2 (f1 bigint, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create rule irule1 as on insert to inserttest2 do also
   insert into inserttestb (f3.if2[1], f3.if2[2])
   values (new.f1,new.f2);
@@ -295,6 +291,7 @@ Rules:
     irule3 AS
     ON INSERT TO inserttest2 DO  INSERT INTO inserttestb (f4[1].if1, f4[1].if2[2])  SELECT new.f1,
             new.f2
+Distributed by: (f1)
 
 drop table inserttest2;
 drop table inserttesta;
@@ -308,12 +305,16 @@ create domain insert_nnarray as int[]
 create domain insert_test_domain as insert_test_type
   check ((value).if1 is not null and (value).if2 is not null);
 create table inserttesta (f1 insert_nnarray);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttesta (f1[1]) values (1);  -- fail
-ERROR:  value for domain insert_nnarray violates check constraint "insert_nnarray_check"
+ERROR:  value for domain insert_nnarray violates check constraint "insert_nnarray_check"  (seg2 slice1 172.17.0.4:7004 pid=1159241)
 insert into inserttesta (f1[1], f1[2]) values (1, 2);
 create table inserttestb (f1 insert_test_domain);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttestb (f1.if1) values (1);  -- fail
-ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"
+ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"  (seg2 slice1 172.17.0.4:7004 pid=1159246)
 insert into inserttestb (f1.if1, f1.if2) values (1, '{foo}');
 drop table inserttesta;
 drop table inserttestb;
@@ -329,7 +330,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- no partitions, so fail
 insert into range_parted values ('a', 11);
-ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Partition key of the failing row contains (a, (b + 0)) = (a, 11).
 create table part1 partition of range_parted for values from ('a', 1) to ('a', 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -341,29 +342,29 @@ create table part4 partition of range_parted for values from ('b', 10) to ('b', 
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- fail
 insert into part1 values ('a', 11);
-ERROR:  new row for relation "part1" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "part1" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (a, 11).
 insert into part1 values ('b', 1);
-ERROR:  new row for relation "part1" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "part1" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (b, 1).
 -- ok
 insert into part1 values ('a', 1);
 -- fail
 insert into part4 values ('b', 21);
-ERROR:  new row for relation "part4" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "part4" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (b, 21).
 insert into part4 values ('a', 10);
-ERROR:  new row for relation "part4" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "part4" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (a, 10).
 -- ok
 insert into part4 values ('b', 10);
 -- fail (partition key a has a NOT NULL constraint)
 insert into part1 values (null);
-ERROR:  new row for relation "part1" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "part1" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (null, null).
 -- fail (expression key (b+0) cannot be null either)
 insert into part1 values (1);
-ERROR:  new row for relation "part1" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "part1" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (1, null).
 create table list_parted (
 	a text,
@@ -379,13 +380,13 @@ create table part_null partition of list_parted FOR VALUES IN (null);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- fail
 insert into part_aa_bb values ('cc', 1);
-ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (cc, 1).
 insert into part_aa_bb values ('AAa', 1);
-ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (AAa, 1).
 insert into part_aa_bb values (null);
-ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "part_aa_bb" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (null, null).
 -- ok
 insert into part_cc_dd values ('cC', 1);
@@ -403,10 +404,10 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 -- Negative test: a row, which would fit in other partition, does not fit
 -- default partition, even when inserted directly
 insert into part_default values ('aa', 2);
-ERROR:  new row for relation "part_default" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "part_default" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (aa, 2).
 insert into part_default values (null, 2);
-ERROR:  new row for relation "part_default" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "part_default" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (null, 2).
 -- ok
 insert into part_default values ('Zz', 2);
@@ -427,17 +428,17 @@ create table part_default_p2 partition of part_default for values from (30) to (
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- fail
 insert into part_ee_ff1 values ('EE', 11);
-ERROR:  new row for relation "part_ee_ff1" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "part_ee_ff1" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (EE, 11).
 insert into part_default_p2 values ('gg', 43);
-ERROR:  new row for relation "part_default_p2" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "part_default_p2" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (gg, 43).
 -- fail (even the parent's, ie, part_ee_ff's partition constraint applies)
 insert into part_ee_ff1 values ('cc', 1);
-ERROR:  new row for relation "part_ee_ff1" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "part_ee_ff1" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (cc, 1).
 insert into part_default values ('gg', 43);
-ERROR:  no partition of relation "part_default" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "part_default" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (b) = (43).
 -- ok
 insert into part_ee_ff1 values ('ff', 1);
@@ -450,13 +451,13 @@ insert into list_parted values ('yy', 2);
 select tableoid::regclass, * from list_parted;
       tableoid      | a  | b  
 --------------------+----+----
- part_default_p1    | cd | 25
  part_cc_dd         | cC |  1
  part_ee_ff1        | ff |  1
  part_ee_ff2        | ff | 11
  part_xx_yy_p1      | xx |  1
  part_xx_yy_defpart | yy |  2
  part_default_p1    | ab | 21
+ part_default_p1    | cd | 25
  part_null          |    |  0
  part_default_p2    | de | 35
 (9 rows)
@@ -464,28 +465,28 @@ select tableoid::regclass, * from list_parted;
 -- Check tuple routing for partitioned tables
 -- fail
 insert into range_parted values ('a', 0);
-ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Partition key of the failing row contains (a, (b + 0)) = (a, 0).
 -- ok
 insert into range_parted values ('a', 1);
 insert into range_parted values ('a', 10);
 -- fail
 insert into range_parted values ('a', 20);
-ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Partition key of the failing row contains (a, (b + 0)) = (a, 20).
 -- ok
 insert into range_parted values ('b', 1);
 insert into range_parted values ('b', 10);
 -- fail (partition key (b+0) is null)
 insert into range_parted values ('a');
-ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  no partition of relation "range_parted" found for row  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Partition key of the failing row contains (a, (b + 0)) = (a, null).
 -- Check default partition
 create table part_def partition of range_parted default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- fail
 insert into part_def values ('b', 10);
-ERROR:  new row for relation "part_def" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "part_def" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (b, 10).
 -- ok
 insert into part_def values ('c', 10);
@@ -501,12 +502,12 @@ select tableoid::regclass, * from range_parted;
  part2    | a | 10
  part_def | c | 10
  part_def | a |   
+ part_def |   |   
+ part_def |   | 19
  part3    | b |  1
  part4    | b | 10
  part4    | b | 10
  part_def | b | 20
- part_def |   |   
- part_def |   | 19
 (11 rows)
 
 -- ok
@@ -514,10 +515,10 @@ insert into list_parted values (null, 1);
 insert into list_parted (a) values ('aA');
 -- fail (partition of part_ee_ff not found in both cases)
 insert into list_parted values ('EE', 0);
-ERROR:  no partition of relation "part_ee_ff" found for row  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  no partition of relation "part_ee_ff" found for row  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Partition key of the failing row contains (b) = (0).
 insert into part_ee_ff values ('EE', 0);
-ERROR:  no partition of relation "part_ee_ff" found for row  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  no partition of relation "part_ee_ff" found for row  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Partition key of the failing row contains (b) = (0).
 -- ok
 insert into list_parted values ('EE', 1);
@@ -595,7 +596,7 @@ insert into hash_parted values(generate_series(1,10));
 insert into hpart0 values(12),(16);
 -- fail;
 insert into hpart0 values(11);
-ERROR:  new row for relation "hpart0" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "hpart0" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (11).
 -- 11 % 4 -> 3 remainder i.e. valid data for hpart3 partition
 insert into hpart3 values(11);
@@ -622,11 +623,11 @@ from hash_parted order by part;
 -- test \d+ output on a table which has both partitioned and unpartitioned
 -- partitions
 \d+ list_parted
-                                 Partitioned table "public.list_parted"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                          Partitioned table "public.list_parted"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition key: LIST (lower(a))
 Partitions: part_aa_bb FOR VALUES IN ('aa', 'bb'),
             part_cc_dd FOR VALUES IN ('cc', 'dd'),
@@ -648,10 +649,10 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create table part_default partition of list_parted default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ part_default
-                                      Table "public.part_default"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
+                               Table "public.part_default"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
 Partition of: list_parted DEFAULT
 No partition constraint
 Distributed by: (a)
@@ -660,13 +661,11 @@ insert into part_default values (null);
 insert into part_default values (1);
 insert into part_default values (-1);
 select tableoid::regclass, a from list_parted;
-NOTICE:  One or more columns in the following table(s) do not have statistics: list_parted
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid   | a  
 --------------+----
- part_default |  1
- part_default | -1
  part_default |   
+ part_default | -1
+ part_default |  1
 (3 rows)
 
 -- cleanup
@@ -713,7 +712,7 @@ select tableoid::regclass, * from mlparted;
 
 -- check that proper message is shown after failure to route through mlparted1
 insert into mlparted (a, b) values (1, 5);
-ERROR:  no partition of relation "mlparted1" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "mlparted1" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains ((b + 0)) = (5).
 truncate mlparted;
 alter table mlparted add constraint check_b check (b = 3);
@@ -733,7 +732,7 @@ create trigger mlparted11_trig before insert ON mlparted11
 -- "(1, 2)" is routed to mlparted11 (actually "(1, 4)" would be shown due
 -- to the BR trigger mlparted11_trig_fn)
 insert into mlparted values (1, 2);
-ERROR:  new row for relation "mlparted11" violates check constraint "check_b"  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "mlparted11" violates check constraint "check_b"  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (1, 4).
 drop trigger mlparted11_trig on mlparted11;
 drop function mlparted11_trig_fn();
@@ -741,7 +740,7 @@ drop function mlparted11_trig_fn();
 -- checking its partition constraint before inserting into the leaf partition
 -- selected by tuple-routing
 insert into mlparted1 (a, b) values (2, 3);
-ERROR:  new row for relation "mlparted1" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "mlparted1" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (3, 2).
 -- check routing error through a list partitioned table when the key is null
 create table lparted_nonullpart (a int, b char) partition by list (b);
@@ -750,7 +749,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create table lparted_nonullpart_a partition of lparted_nonullpart for values in ('a');
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into lparted_nonullpart values (1);
-ERROR:  no partition of relation "lparted_nonullpart" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "lparted_nonullpart" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (b) = (null).
 drop table lparted_nonullpart;
 -- check that RETURNING works correctly with tuple-routing
@@ -795,12 +794,12 @@ alter table mlparted5 attach partition mlparted5a for values in ('a');
 alter table mlparted attach partition mlparted5 for values from (1, 40) to (1, 50);
 alter table mlparted add constraint check_b check (a = 1 and b < 45);
 insert into mlparted values (1, 45, 'a');
-ERROR:  new row for relation "mlparted5a" violates check constraint "check_b"  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "mlparted5a" violates check constraint "check_b"  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (1, 45, a).
 create function mlparted5abrtrig_func() returns trigger as $$ begin new.c = 'b'; return new; end; $$ language plpgsql;
 create trigger mlparted5abrtrig before insert on mlparted5a for each row execute procedure mlparted5abrtrig_func();
 insert into mlparted5 (a, b, c) values (1, 40, 'a');
-ERROR:  new row for relation "mlparted5a" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "mlparted5a" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (b, 1, 40).
 drop table mlparted5;
 alter table mlparted drop constraint check_b;
@@ -816,21 +815,19 @@ insert into mlparted_def1 values (42, 100);
 insert into mlparted_def2 values (54, 50);
 -- fail
 insert into mlparted values (70, 100);
-ERROR:  no partition of relation "mlparted_def" found for row  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  no partition of relation "mlparted_def" found for row  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Partition key of the failing row contains (a) = (70).
 insert into mlparted_def1 values (52, 50);
-ERROR:  new row for relation "mlparted_def1" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "mlparted_def1" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (52, 50, null).
 insert into mlparted_def2 values (34, 50);
-ERROR:  new row for relation "mlparted_def2" violates partition constraint  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  new row for relation "mlparted_def2" violates partition constraint  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Failing row contains (34, 50, null).
 -- ok
 create table mlparted_defd partition of mlparted_def default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into mlparted values (70, 100);
 select tableoid::regclass, * from mlparted_def;
-NOTICE:  One or more columns in the following table(s) do not have statistics: mlparted_def
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | a  |  b  | c 
 ---------------+----+-----+---
  mlparted_def1 | 42 | 100 | 
@@ -865,10 +862,10 @@ insert into mlparted values (1, 2, 'a', 1);
 insert into mlparted values (1, 40, 'a', 1);  -- goes to mlparted5_a
 insert into mlparted values (1, 45, 'b', 1);  -- goes to mlparted5_b
 insert into mlparted values (1, 45, 'c', 1);  -- goes to mlparted5_cd, fails
-ERROR:  no partition of relation "mlparted5_cd" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "mlparted5_cd" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (c) = (c).
 insert into mlparted values (1, 45, 'f', 1);  -- goes to mlparted5, fails
-ERROR:  no partition of relation "mlparted5" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "mlparted5" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (c) = (f).
 select tableoid::regclass, * from mlparted order by a, b, c, d;
   tableoid   | a | b  | c | d 
@@ -887,10 +884,10 @@ insert into mlparted values (1, 2, 'a', 1);
 insert into mlparted values (1, 40, 'a', 1);  -- goes to mlparted5_a
 insert into mlparted values (1, 45, 'b', 1);  -- goes to mlparted5_b
 insert into mlparted values (1, 45, 'c', 1);  -- goes to mlparted5_cd, fails
-ERROR:  no partition of relation "mlparted5_cd" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "mlparted5_cd" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (c) = (c).
 insert into mlparted values (1, 45, 'f', 1);  -- goes to mlparted5, fails
-ERROR:  no partition of relation "mlparted5" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "mlparted5" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (c) = (f).
 select tableoid::regclass, * from mlparted order by a, b, c, d;
   tableoid   | a | b  | c | d 
@@ -916,17 +913,17 @@ grant insert on key_desc to regress_insert_other_user;
 set role regress_insert_other_user;
 -- no key description is shown
 insert into key_desc values (1, 1);
-ERROR:  no partition of relation "key_desc_1" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "key_desc_1" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 reset role;
 grant select (b) on key_desc_1 to regress_insert_other_user;
 set role regress_insert_other_user;
 -- key description (b)=(1) is now shown
 insert into key_desc values (1, 1);
-ERROR:  no partition of relation "key_desc_1" found for row  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  no partition of relation "key_desc_1" found for row  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Partition key of the failing row contains (b) = (1).
 -- key description is not shown if key contains expression
 insert into key_desc values (2, 1);
-ERROR:  no partition of relation "key_desc" found for row  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  no partition of relation "key_desc" found for row  (seg0 172.17.0.4:7002 pid=1159065)
 reset role;
 revoke all on key_desc from regress_insert_other_user;
 revoke all on key_desc_1 from regress_insert_other_user;
@@ -968,7 +965,7 @@ create table mcrparted5 partition of mcrparted for values from (30, 21, 20) to (
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- null not allowed in range partition
 insert into mcrparted values (null, null, null);
-ERROR:  no partition of relation "mcrparted" found for row  (seg0 172.17.0.3:7002 pid=170639)
+ERROR:  no partition of relation "mcrparted" found for row  (seg0 172.17.0.4:7002 pid=1159065)
 DETAIL:  Partition key of the failing row contains (a, abs(b), c) = (null, null, null).
 -- routed to mcrparted0
 insert into mcrparted values (0, 1, 1);
@@ -987,16 +984,16 @@ insert into mcrparted values (10, 1000, 1000);
 insert into mcrparted2 values (10, 1000, 1000);
 -- no partition exists, nor does mcrparted3 accept it
 insert into mcrparted values (11, 1, -1);
-ERROR:  no partition of relation "mcrparted" found for row  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  no partition of relation "mcrparted" found for row  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Partition key of the failing row contains (a, abs(b), c) = (11, 1, -1).
 insert into mcrparted3 values (11, 1, -1);
-ERROR:  new row for relation "mcrparted3" violates partition constraint  (seg2 172.17.0.3:7004 pid=170641)
+ERROR:  new row for relation "mcrparted3" violates partition constraint  (seg2 172.17.0.4:7004 pid=1159068)
 DETAIL:  Failing row contains (11, 1, -1).
 -- routed to mcrparted5
 insert into mcrparted values (30, 21, 20);
 insert into mcrparted5 values (30, 21, 20);
 insert into mcrparted4 values (30, 21, 20);	-- error
-ERROR:  new row for relation "mcrparted4" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "mcrparted4" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (30, 21, 20).
 -- check rows
 select tableoid::regclass::text, * from mcrparted order by 1;
@@ -1029,10 +1026,10 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create or replace function brtrigpartcon1trigf() returns trigger as $$begin new.a := 2; return new; end$$ language plpgsql;
 create trigger brtrigpartcon1trig before insert on brtrigpartcon1 for each row execute procedure brtrigpartcon1trigf();
 insert into brtrigpartcon values (1, 'hi there');
-ERROR:  new row for relation "brtrigpartcon1" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "brtrigpartcon1" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (2, hi there).
 insert into brtrigpartcon1 values (1, 'hi there');
-ERROR:  new row for relation "brtrigpartcon1" violates partition constraint  (seg1 172.17.0.3:7003 pid=170640)
+ERROR:  new row for relation "brtrigpartcon1" violates partition constraint  (seg1 172.17.0.4:7003 pid=1159066)
 DETAIL:  Failing row contains (2, hi there).
 -- check that the message shows the appropriate column description in a
 -- situation where the partitioned table is not the primary ModifyTable node
@@ -1077,14 +1074,12 @@ create trigger donothingbrtrig2 before insert on donothingbrtrig_test2 for each 
 alter table donothingbrtrig_test attach partition donothingbrtrig_test1 for values in (1);
 alter table donothingbrtrig_test attach partition donothingbrtrig_test2 for values in (2);
 insert into donothingbrtrig_test values (1, 'foo'), (2, 'bar');
-NOTICE:  b: foo  (seg1 172.17.0.3:7003 pid=170640)
-NOTICE:  b: bar  (seg0 172.17.0.3:7002 pid=170639)
+NOTICE:  b: foo  (seg1 172.17.0.4:7003 pid=1159066)
+NOTICE:  b: bar  (seg0 172.17.0.4:7002 pid=1159065)
 copy donothingbrtrig_test from stdout;
-NOTICE:  b: qux  (seg0 172.17.0.3:7002 pid=170639)
-NOTICE:  b: baz  (seg1 172.17.0.3:7003 pid=170640)
+NOTICE:  b: qux  (seg0 172.17.0.4:7002 pid=1159065)
+NOTICE:  b: baz  (seg1 172.17.0.4:7003 pid=1159066)
 select tableoid::regclass, * from donothingbrtrig_test;
-NOTICE:  One or more columns in the following table(s) do not have statistics: donothingbrtrig_test
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  tableoid | a | b 
 ----------+---+---
 (0 rows)
@@ -1113,11 +1108,11 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table mcrparted8_ge_d partition of mcrparted for values from ('d', minvalue) to (maxvalue, maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ mcrparted
-                                  Partitioned table "public.mcrparted"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                           Partitioned table "public.mcrparted"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition key: RANGE (a, b)
 Partitions: mcrparted1_lt_b FOR VALUES FROM (MINVALUE, MINVALUE) TO ('b', MINVALUE),
             mcrparted2_b FOR VALUES FROM ('b', MINVALUE) TO ('c', MINVALUE),
@@ -1130,81 +1125,81 @@ Partitions: mcrparted1_lt_b FOR VALUES FROM (MINVALUE, MINVALUE) TO ('b', MINVAL
 Distributed by: (a)
 
 \d+ mcrparted1_lt_b
-                                     Table "public.mcrparted1_lt_b"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                              Table "public.mcrparted1_lt_b"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM (MINVALUE, MINVALUE) TO ('b', MINVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a < 'b'::text))
 Distributed by: (a)
 
 \d+ mcrparted2_b
-                                       Table "public.mcrparted2_b"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                                Table "public.mcrparted2_b"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('b', MINVALUE) TO ('c', MINVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a >= 'b'::text) AND (a < 'c'::text))
 Distributed by: (a)
 
 \d+ mcrparted3_c_to_common
-                                  Table "public.mcrparted3_c_to_common"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                           Table "public.mcrparted3_c_to_common"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('c', MINVALUE) TO ('common', MINVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a >= 'c'::text) AND (a < 'common'::text))
 Distributed by: (a)
 
 \d+ mcrparted4_common_lt_0
-                                  Table "public.mcrparted4_common_lt_0"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                           Table "public.mcrparted4_common_lt_0"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('common', MINVALUE) TO ('common', 0)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a = 'common'::text) AND (b < 0))
 Distributed by: (a)
 
 \d+ mcrparted5_common_0_to_10
-                                Table "public.mcrparted5_common_0_to_10"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                         Table "public.mcrparted5_common_0_to_10"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('common', 0) TO ('common', 10)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a = 'common'::text) AND (b >= 0) AND (b < 10))
 Distributed by: (a)
 
 \d+ mcrparted6_common_ge_10
-                                 Table "public.mcrparted6_common_ge_10"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                          Table "public.mcrparted6_common_ge_10"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('common', 10) TO ('common', MAXVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a = 'common'::text) AND (b >= 10))
 Distributed by: (a)
 
 \d+ mcrparted7_gt_common_lt_d
-                                Table "public.mcrparted7_gt_common_lt_d"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                         Table "public.mcrparted7_gt_common_lt_d"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('common', MAXVALUE) TO ('d', MINVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a > 'common'::text) AND (a < 'd'::text))
 Distributed by: (a)
 
 \d+ mcrparted8_ge_d
-                                     Table "public.mcrparted8_ge_d"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- a      | text    |           |          |         | extended |             |              | 
- b      | integer |           |          |         | plain    |             |              | 
+                              Table "public.mcrparted8_ge_d"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ a      | text    |           |          |         | extended |              | 
+ b      | integer |           |          |         | plain    |              | 
 Partition of: mcrparted FOR VALUES FROM ('d', MINVALUE) TO (MAXVALUE, MAXVALUE)
 Partition constraint: ((a IS NOT NULL) AND (b IS NOT NULL) AND (a >= 'd'::text))
 Distributed by: (a)
@@ -1265,12 +1260,8 @@ alter table foo drop column y;
 insert into bar values(1);
 insert into bar values(2);
 insert into foo(x) select  t1.x from    bar t1 join bar t2 on t1.x=t2.x;
-NOTICE:  One or more columns in the following table(s) do not have statistics: bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into foo(x) select  t1.x from    bar t1;
 insert into foo(x) select  t1.x from    bar t1 group by t1.x;
-NOTICE:  One or more columns in the following table(s) do not have statistics: bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table if exists foo;
 drop table if exists bar;
 -- MPP-6775 : Dropping a column. Then perform an insert.
@@ -1280,11 +1271,7 @@ alter table foo drop column y;
 insert into bar values(1,1);
 insert into bar values(2,2);
 insert into foo(x) select  t1.x from    bar t1 join bar t2 on t1.x=t2.x;
-NOTICE:  One or more columns in the following table(s) do not have statistics: bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 insert into foo(x) select  t1.x from    bar t1;
 insert into foo(x) select  t1.x from    bar t1 group by t1.x;
-NOTICE:  One or more columns in the following table(s) do not have statistics: bar
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 drop table if exists foo;
 drop table if exists bar;

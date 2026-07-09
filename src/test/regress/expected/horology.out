@@ -3,6 +3,8 @@
 --
 -- create needed tables
 CREATE TABLE INTERVAL_HOROLOGY_TBL (f1 interval);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INTERVAL_HOROLOGY_TBL (f1) VALUES ('@ 1 minute'),
 ('@ 5 hour'),
 ('@ 10 day'),
@@ -14,6 +16,8 @@ INSERT INTO INTERVAL_HOROLOGY_TBL (f1) VALUES ('@ 1 minute'),
 ('5 months'),
 ('5 months 12 hours');
 CREATE TABLE TIME_HOROLOGY_TBL (f1 time(2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIME_HOROLOGY_TBL VALUES ('00:00'),
 ('01:00'),
 ('02:03 PST'),
@@ -25,6 +29,8 @@ INSERT INTO TIME_HOROLOGY_TBL VALUES ('00:00'),
 ('2003-03-07 15:36:39 America/New_York'),
 ('2003-07-07 15:36:39 America/New_York');
 CREATE TABLE TIMETZ_HOROLOGY_TBL (f1 time(2) with time zone);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMETZ_HOROLOGY_TBL VALUES ('00:01 PDT'),
 ('01:00 PDT'),
 ('02:03 PDT'),
@@ -38,6 +44,8 @@ INSERT INTO TIMETZ_HOROLOGY_TBL VALUES ('00:01 PDT'),
 ('2003-03-07 15:36:39 America/New_York'),
 ('2003-07-07 15:36:39 America/New_York');
 CREATE TABLE TIMESTAMP_HOROLOGY_TBL (d1 timestamp(2) without time zone);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMESTAMP_HOROLOGY_TBL VALUES ('-infinity'),
 ('infinity'),
 ('epoch'),
@@ -106,6 +114,8 @@ INSERT INTO TIMESTAMP_HOROLOGY_TBL VALUES ('97FEB10 5:32:01PM UTC'),
 ('97/02/10 17:32:01 UTC');
 reset datestyle;
 CREATE TABLE TIMESTAMPTZ_HOROLOGY_TBL (d1 timestamp(2) with time zone);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMESTAMPTZ_HOROLOGY_TBL VALUES ('-infinity'),
 ('infinity'),
 ('epoch'),
@@ -444,6 +454,161 @@ SELECT time with time zone 'J2452271 T040506.789 America/Los_Angeles';
  04:05:06.789-08
 (1 row)
 
+-- Check time formats required by ISO 8601
+SELECT time without time zone '040506.07';
+    time     
+-------------
+ 04:05:06.07
+(1 row)
+
+SELECT time without time zone '04:05:06.07';
+    time     
+-------------
+ 04:05:06.07
+(1 row)
+
+SELECT time without time zone '040506';
+   time   
+----------
+ 04:05:06
+(1 row)
+
+SELECT time without time zone '04:05:06';
+   time   
+----------
+ 04:05:06
+(1 row)
+
+SELECT time without time zone '0405';
+   time   
+----------
+ 04:05:00
+(1 row)
+
+SELECT time without time zone '04:05';
+   time   
+----------
+ 04:05:00
+(1 row)
+
+SELECT time without time zone 'T040506.07';
+    time     
+-------------
+ 04:05:06.07
+(1 row)
+
+SELECT time without time zone 'T04:05:06.07';
+    time     
+-------------
+ 04:05:06.07
+(1 row)
+
+SELECT time without time zone 'T040506';
+   time   
+----------
+ 04:05:06
+(1 row)
+
+SELECT time without time zone 'T04:05:06';
+   time   
+----------
+ 04:05:06
+(1 row)
+
+SELECT time without time zone 'T0405';
+   time   
+----------
+ 04:05:00
+(1 row)
+
+SELECT time without time zone 'T04:05';
+   time   
+----------
+ 04:05:00
+(1 row)
+
+-- 8601 says "Thh" is allowed, but we intentionally reject it as too vague
+SELECT time without time zone 'T04';
+ERROR:  invalid input syntax for type time: "T04"
+LINE 1: SELECT time without time zone 'T04';
+                                      ^
+SELECT time with time zone '040506.07+08';
+     timetz     
+----------------
+ 04:05:06.07+08
+(1 row)
+
+SELECT time with time zone '04:05:06.07+08';
+     timetz     
+----------------
+ 04:05:06.07+08
+(1 row)
+
+SELECT time with time zone '040506+08';
+   timetz    
+-------------
+ 04:05:06+08
+(1 row)
+
+SELECT time with time zone '04:05:06+08';
+   timetz    
+-------------
+ 04:05:06+08
+(1 row)
+
+SELECT time with time zone '0405+08';
+   timetz    
+-------------
+ 04:05:00+08
+(1 row)
+
+SELECT time with time zone '04:05+08';
+   timetz    
+-------------
+ 04:05:00+08
+(1 row)
+
+SELECT time with time zone 'T040506.07+08';
+     timetz     
+----------------
+ 04:05:06.07+08
+(1 row)
+
+SELECT time with time zone 'T04:05:06.07+08';
+     timetz     
+----------------
+ 04:05:06.07+08
+(1 row)
+
+SELECT time with time zone 'T040506+08';
+   timetz    
+-------------
+ 04:05:06+08
+(1 row)
+
+SELECT time with time zone 'T04:05:06+08';
+   timetz    
+-------------
+ 04:05:06+08
+(1 row)
+
+SELECT time with time zone 'T0405+08';
+   timetz    
+-------------
+ 04:05:00+08
+(1 row)
+
+SELECT time with time zone 'T04:05+08';
+   timetz    
+-------------
+ 04:05:00+08
+(1 row)
+
+-- 8601 says "Thh" is allowed, but we intentionally reject it as too vague
+SELECT time with time zone 'T04+08';
+ERROR:  invalid input syntax for type time with time zone: "T04+08"
+LINE 1: SELECT time with time zone 'T04+08';
+                                   ^
 SET DateStyle = 'Postgres, MDY';
 -- Check Julian dates BC
 SELECT date 'J1520447' AS "Confucius' Birthday";
@@ -652,6 +817,10 @@ SELECT timestamp without time zone 'Jan 1, 4713 BC' + interval '109203489 days' 
  Sun Dec 31 00:00:00 294276
 (1 row)
 
+SELECT timestamp without time zone '2000-01-01' - interval '2483590 days' AS "out of range";
+ERROR:  timestamp out of range
+SELECT timestamp without time zone '294276-12-31 23:59:59' + interval '9223372036854775807 microseconds' AS "out of range";
+ERROR:  timestamp out of range
 SELECT timestamp without time zone '12/31/294276' - timestamp without time zone '12/23/1999' AS "106751991 Days";
   106751991 Days  
 ------------------
@@ -912,6 +1081,10 @@ SELECT timestamp with time zone '1999-12-01' + interval '1 month - 1 second' AS 
  Fri Dec 31 23:59:59 1999 PST
 (1 row)
 
+SELECT timestamp with time zone '2000-01-01' - interval '2483590 days' AS "out of range";
+ERROR:  timestamp out of range
+SELECT timestamp with time zone '294276-12-31 23:59:59 UTC' + interval '9223372036854775807 microseconds' AS "out of range";
+ERROR:  timestamp out of range
 SELECT (timestamp with time zone 'today' = (timestamp with time zone 'yesterday' + interval '1 day')) as "True";
  True 
 ------
@@ -1152,6 +1325,18 @@ SELECT CAST(interval '02:03' AS time) AS "02:03:00";
  02:03:00
 (1 row)
 
+SELECT CAST(interval '-02:03' AS time) AS "21:57:00";
+ 21:57:00 
+----------
+ 21:57:00
+(1 row)
+
+SELECT CAST(interval '-9223372022400000000 us' AS time) AS "00:00:00";
+ 00:00:00 
+----------
+ 00:00:00
+(1 row)
+
 SELECT time '01:30' + interval '02:01' AS "03:31:00";
  03:31:00 
 ----------
@@ -1330,6 +1515,7 @@ SELECT t.d1 AS t, i.f1 AS i, t.d1 + i.f1 AS "add", t.d1 - i.f1 AS "subtract"
 
 SELECT t.f1 AS t, i.f1 AS i, t.f1 + i.f1 AS "add", t.f1 - i.f1 AS "subtract"
   FROM TIME_HOROLOGY_TBL t, INTERVAL_HOROLOGY_TBL i
+  WHERE isfinite(i.f1)
   ORDER BY 1,2;
       t      |               i               |     add     |  subtract   
 -------------+-------------------------------+-------------+-------------
@@ -1437,6 +1623,7 @@ SELECT t.f1 AS t, i.f1 AS i, t.f1 + i.f1 AS "add", t.f1 - i.f1 AS "subtract"
 
 SELECT t.f1 AS t, i.f1 AS i, t.f1 + i.f1 AS "add", t.f1 - i.f1 AS "subtract"
   FROM TIMETZ_HOROLOGY_TBL t, INTERVAL_HOROLOGY_TBL i
+  WHERE isfinite(i.f1)
   ORDER BY 1,2;
        t        |               i               |      add       |    subtract    
 ----------------+-------------------------------+----------------+----------------
@@ -1682,6 +1869,8 @@ SELECT (time '00:00', interval '1 hour')
 (1 row)
 
 CREATE TABLE TEMP_TIMESTAMP (f1 timestamp with time zone);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- get some candidate input values
 INSERT INTO TEMP_TIMESTAMP (f1)
   SELECT d1 FROM TIMESTAMP_HOROLOGY_TBL
@@ -3246,8 +3435,66 @@ SELECT to_timestamp('2011-12-18 11:38 20',     'YYYY-MM-DD HH12:MI TZM');
  Sun Dec 18 03:18:00 2011 PST
 (1 row)
 
-SELECT to_timestamp('2011-12-18 11:38 PST', 'YYYY-MM-DD HH12:MI TZ');  -- NYI
-ERROR:  formatting field "TZ" is only supported in to_char
+SELECT to_timestamp('2011-12-18 11:38 EST', 'YYYY-MM-DD HH12:MI TZ');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 08:38:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 -05', 'YYYY-MM-DD HH12:MI TZ');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 08:38:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 +01:30', 'YYYY-MM-DD HH12:MI TZ');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 02:08:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 MSK', 'YYYY-MM-DD HH12:MI TZ');  -- dyntz
+         to_timestamp         
+------------------------------
+ Sat Dec 17 23:38:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38ESTFOO24', 'YYYY-MM-DD HH12:MITZFOOSS');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 08:38:24 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38-05FOO24', 'YYYY-MM-DD HH12:MITZFOOSS');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 08:38:24 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 JUNK', 'YYYY-MM-DD HH12:MI TZ');  -- error
+ERROR:  invalid value "JUNK" for "TZ"
+DETAIL:  Time zone abbreviation is not recognized.
+SELECT to_timestamp('2011-12-18 11:38 ...', 'YYYY-MM-DD HH12:MI TZ');  -- error
+ERROR:  invalid value ".." for "TZ"
+DETAIL:  Value must be an integer.
+SELECT to_timestamp('2011-12-18 11:38 -05', 'YYYY-MM-DD HH12:MI OF');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 08:38:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 +01:30', 'YYYY-MM-DD HH12:MI OF');
+         to_timestamp         
+------------------------------
+ Sun Dec 18 02:08:00 2011 PST
+(1 row)
+
+SELECT to_timestamp('2011-12-18 11:38 +xyz', 'YYYY-MM-DD HH12:MI OF');  -- error
+ERROR:  invalid value "xy" for "OF"
+DETAIL:  Value must be an integer.
+SELECT to_timestamp('2011-12-18 11:38 +01:xyz', 'YYYY-MM-DD HH12:MI OF');  -- error
+ERROR:  invalid value "xy" for "OF"
+DETAIL:  Value must be an integer.
 SELECT to_timestamp('2018-11-02 12:34:56.025', 'YYYY-MM-DD HH24:MI:SS.MS');
            to_timestamp           
 ----------------------------------
@@ -3623,6 +3870,19 @@ SELECT to_date('2016 366', 'YYYY DDD');  -- ok
 
 SELECT to_date('2016 367', 'YYYY DDD');
 ERROR:  date/time field value out of range: "2016 367"
+-- to_char's TZ format code produces zone abbrev if known
+SELECT to_char('2012-12-12 12:00'::timestamptz, 'YYYY-MM-DD HH:MI:SS TZ');
+         to_char         
+-------------------------
+ 2012-12-12 12:00:00 PST
+(1 row)
+
+SELECT to_char('2012-12-12 12:00'::timestamptz, 'YYYY-MM-DD HH:MI:SS tz');
+         to_char         
+-------------------------
+ 2012-12-12 12:00:00 pst
+(1 row)
+
 --
 -- Check behavior with SQL-style fixed-GMT-offset time zone (cf bug #8572)
 --
@@ -3662,6 +3922,13 @@ SELECT to_char('2012-12-12 12:00'::timestamptz, 'YYYY-MM-DD SSSSS');
      to_char      
 ------------------
  2012-12-12 43200
+(1 row)
+
+SET TIME ZONE '+2';
+SELECT to_char('2012-12-12 12:00'::timestamptz, 'YYYY-MM-DD HH:MI:SS TZ');
+         to_char         
+-------------------------
+ 2012-12-12 12:00:00 +02
 (1 row)
 
 RESET TIME ZONE;
