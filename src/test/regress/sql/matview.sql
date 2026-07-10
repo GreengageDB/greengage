@@ -270,11 +270,16 @@ ROLLBACK;
 create table t_github_issue_11956(a int, b int) distributed randomly;
 insert into t_github_issue_11956 values (1, 1);
 
+-- GPDB: PG17 restricts search_path to "pg_catalog, pg_temp" during REFRESH
+-- MATERIALIZED VIEW (a maintenance command), so a stable function folded while
+-- planning the refresh must not rely on the caller's search_path.  Pin it so the
+-- unqualified reference to t_github_issue_11956 (in public) still resolves; this
+-- keeps the issue-11956 coverage (a plan-time-folded stable function) intact.
 create function f_github_issue_11956() returns int as
 $$
 select sum(a+b)::int from t_github_issue_11956
 $$
-language sql stable;
+language sql stable set search_path = public, pg_temp;
 
 create materialized view mat_view_github_issue_11956
 as

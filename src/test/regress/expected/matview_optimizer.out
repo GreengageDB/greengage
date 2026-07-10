@@ -81,9 +81,9 @@ CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
 SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
- y    |     12
- z    |     11
  x    |      5
+ z    |     11
+ y    |     12
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
@@ -118,11 +118,11 @@ CREATE MATERIALIZED VIEW mvtest_bb AS SELECT * FROM mvtest_tvvmv;
 CREATE INDEX mvtest_aa ON mvtest_bb (grandtot);
 -- check that plans seem reasonable
 \d+ mvtest_tvm
-                                  Materialized view "public.mvtest_tvm"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- type   | text    |           |          |         | extended |             |              | 
- totamt | numeric |           |          |         | main     |             |              | 
+                           Materialized view "public.mvtest_tvm"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ type   | text    |           |          |         | extended |              | 
+ totamt | numeric |           |          |         | main     |              | 
 View definition:
  SELECT type,
     totamt
@@ -131,11 +131,11 @@ View definition:
 Distributed randomly
 
 \d+ mvtest_tvm
-                                  Materialized view "public.mvtest_tvm"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- type   | text    |           |          |         | extended |             |              | 
- totamt | numeric |           |          |         | main     |             |              | 
+                           Materialized view "public.mvtest_tvm"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ type   | text    |           |          |         | extended |              | 
+ totamt | numeric |           |          |         | main     |              | 
 View definition:
  SELECT type,
     totamt
@@ -144,20 +144,20 @@ View definition:
 Distributed randomly
 
 \d+ mvtest_tvvm
-                                  Materialized view "public.mvtest_tvvm"
-  Column  |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
-----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- grandtot | numeric |           |          |         | main    |             |              | 
+                           Materialized view "public.mvtest_tvvm"
+  Column  |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+----------+---------+-----------+----------+---------+---------+--------------+-------------
+ grandtot | numeric |           |          |         | main    |              | 
 View definition:
  SELECT grandtot
    FROM mvtest_tvv;
 Distributed randomly
 
 \d+ mvtest_bb
-                                   Materialized view "public.mvtest_bb"
-  Column  |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
-----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- grandtot | numeric |           |          |         | main    |             |              | 
+                            Materialized view "public.mvtest_bb"
+  Column  |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+----------+---------+-----------+----------+---------+---------+--------------+-------------
+ grandtot | numeric |           |          |         | main    |              | 
 Indexes:
     "mvtest_aa" btree (grandtot)
 View definition:
@@ -170,10 +170,10 @@ CREATE SCHEMA mvtest_mvschema;
 ALTER MATERIALIZED VIEW mvtest_tvm SET SCHEMA mvtest_mvschema;
 \d+ mvtest_tvm
 \d+ mvtest_tvmm
-                                  Materialized view "public.mvtest_tvmm"
-  Column  |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
-----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- grandtot | numeric |           |          |         | main    |             |              | 
+                           Materialized view "public.mvtest_tvmm"
+  Column  |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+----------+---------+-----------+----------+---------+---------+--------------+-------------
+ grandtot | numeric |           |          |         | main    |              | 
 Indexes:
     "mvtest_tvmm_pred" UNIQUE, btree (grandtot) WHERE grandtot < 0::numeric
 View definition:
@@ -182,11 +182,11 @@ View definition:
 
 SET search_path = mvtest_mvschema, public;
 \d+ mvtest_tvm
-                             Materialized view "mvtest_mvschema.mvtest_tvm"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- type   | text    |           |          |         | extended |             |              | 
- totamt | numeric |           |          |         | main     |             |              | 
+                      Materialized view "mvtest_mvschema.mvtest_tvm"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ type   | text    |           |          |         | extended |              | 
+ totamt | numeric |           |          |         | main     |              | 
 View definition:
  SELECT type,
     totamt
@@ -398,11 +398,11 @@ UNION ALL
 
 CREATE MATERIALIZED VIEW mv_test2 AS SELECT moo, 2*moo FROM mvtest_vt2 UNION ALL SELECT moo, 3*moo FROM mvtest_vt2;
 \d+ mv_test2
-                                   Materialized view "public.mv_test2"
-  Column  |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
-----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- moo      | integer |           |          |         | plain   |             |              | 
- ?column? | integer |           |          |         | plain   |             |              | 
+                            Materialized view "public.mv_test2"
+  Column  |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+----------+---------+-----------+----------+---------+---------+--------------+-------------
+ moo      | integer |           |          |         | plain   |              | 
+ ?column? | integer |           |          |         | plain   |              | 
 View definition:
  SELECT mvtest_vt2.moo,
     2 * mvtest_vt2.moo AS "?column?"
@@ -431,7 +431,7 @@ CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a)
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.4:7003 pid=1169179)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.4:7003 pid=1665830)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -534,14 +534,14 @@ drop cascades to materialized view mvtest_mv_v_4
 CREATE MATERIALIZED VIEW mv_unspecified_types AS
   SELECT 42 as i, 42.5 as num, 'foo' as u, 'foo'::unknown as u2, null as n;
 \d+ mv_unspecified_types
-                             Materialized view "public.mv_unspecified_types"
- Column |  Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+----------+-------------+--------------+-------------
- i      | integer |           |          |         | plain    |             |              | 
- num    | numeric |           |          |         | main     |             |              | 
- u      | text    |           |          |         | extended |             |              | 
- u2     | text    |           |          |         | extended |             |              | 
- n      | text    |           |          |         | extended |             |              | 
+                      Materialized view "public.mv_unspecified_types"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ i      | integer |           |          |         | plain    |              | 
+ num    | numeric |           |          |         | main     |              | 
+ u      | text    |           |          |         | extended |              | 
+ u2     | text    |           |          |         | extended |              | 
+ n      | text    |           |          |         | extended |              | 
 View definition:
  SELECT 42 AS i,
     42.5 AS num,
@@ -569,21 +569,21 @@ DELETE FROM mvtest_v WHERE EXISTS ( SELECT * FROM mvtest_mv_v WHERE mvtest_mv_v.
 SELECT * FROM mvtest_v;
  a  
 ----
-  7
  10
   6
   8
   9
+  7
 (5 rows)
 
 SELECT * FROM mvtest_mv_v;
  a 
 ---
+ 4
+ 5
+ 2
  3
  1
- 4
- 2
- 5
 (5 rows)
 
 DROP TABLE mvtest_v CASCADE;
@@ -613,6 +613,28 @@ REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
+-- Concurrent refresh requires a unique index on the materialized
+-- view. Test what happens if it's dropped during the refresh.
+SET search_path = mvtest_mvschema, public;
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  EXECUTE 'DROP INDEX IF EXISTS mvtest_mvschema.mvtest_drop_idx';
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+CREATE MATERIALIZED VIEW drop_idx_matview AS
+  SELECT 1 as i WHERE mvtest_drop_the_index();
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 slice1 172.17.0.4:7004 pid=1666141)
+CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_mvschema.mvtest_drop_idx"
+PL/pgSQL function mvtest_drop_the_index() line 3 at EXECUTE
+CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
+ERROR:  relation "drop_idx_matview" does not exist
+REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
+ERROR:  relation "drop_idx_matview" does not exist
+DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
+ERROR:  materialized view "drop_idx_matview" does not exist
+RESET search_path;
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;
 CREATE FUNCTION mvtest_func()
@@ -643,11 +665,16 @@ ROLLBACK;
 -- https://github.com/greenplum-db/gpdb/issues/11956 for details.
 create table t_github_issue_11956(a int, b int) distributed randomly;
 insert into t_github_issue_11956 values (1, 1);
+-- GPDB: PG17 restricts search_path to "pg_catalog, pg_temp" during REFRESH
+-- MATERIALIZED VIEW (a maintenance command), so a stable function folded while
+-- planning the refresh must not rely on the caller's search_path.  Pin it so the
+-- unqualified reference to t_github_issue_11956 (in public) still resolves; this
+-- keeps the issue-11956 coverage (a plan-time-folded stable function) intact.
 create function f_github_issue_11956() returns int as
 $$
 select sum(a+b)::int from t_github_issue_11956
 $$
-language sql stable;
+language sql stable set search_path = public, pg_temp;
 create materialized view mat_view_github_issue_11956
 as
 select * from t_github_issue_11956 where a > f_github_issue_11956()
