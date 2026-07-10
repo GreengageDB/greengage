@@ -12709,7 +12709,8 @@ truncate_array_type_name(char *typeName, int encoding, int limit)
 	int 	byte_len = 0;
 	int		char_len = 0;
 
-	while(byte_len < limit) {
+	while(byte_len < limit)
+	{
 		char_len = PQmblen(typeName + byte_len, encoding);
 		/* Non-valid encoding or broken string */
 		Assert(char_len > 0);
