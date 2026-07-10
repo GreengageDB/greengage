@@ -707,10 +707,12 @@ void GPDBLockRelationOid(Oid reloid, int lockmode);
 
 #define LInitialOID(l) lfirst_oid(gpdb::ListHead(l))
 
-#define Palloc0Fast(sz)                                              \
-	(MemSetTest(0, (sz))                                             \
-		 ? gpdb::MemCtxtAllocZeroAligned(CurrentMemoryContext, (sz)) \
-		 : gpdb::MemCtxtAllocZero(CurrentMemoryContext, (sz)))
+/*
+ * GPDB_17_MERGE: PG17 removed the MemSetTest fast-path check and
+ * MemoryContextAllocZeroAligned; MemoryContextAllocZero now always uses
+ * MemSetAligned, so palloc0 collapses to a single path.
+ */
+#define Palloc0Fast(sz) gpdb::MemCtxtAllocZero(CurrentMemoryContext, (sz))
 
 #ifdef __GNUC__
 

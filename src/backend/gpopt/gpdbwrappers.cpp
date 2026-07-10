@@ -1446,7 +1446,11 @@ gpdb::MemCtxtAllocZeroAligned(MemoryContext context, Size size)
 {
 	GP_WRAP_START;
 	{
-		return MemoryContextAllocZeroAligned(context, size);
+		/*
+		 * GPDB_17_MERGE: PG17 removed MemoryContextAllocZeroAligned;
+		 * MemoryContextAllocZero is now equivalent (always MemSetAligned).
+		 */
+		return MemoryContextAllocZero(context, size);
 	}
 	GP_WRAP_END;
 	return nullptr;

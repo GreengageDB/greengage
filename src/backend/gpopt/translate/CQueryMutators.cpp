@@ -1655,7 +1655,8 @@ CQueryMutators::ReassignSortClause(Query *top_level_query,
 	derived_table_query->sortClause = nullptr;
 	derived_table_query->limitOffset = nullptr;
 	derived_table_query->limitCount = nullptr;
-	derived_table_query->limitOption = LIMIT_OPTION_DEFAULT;
+	/* GPDB_17_MERGE: PG17 removed LIMIT_OPTION_DEFAULT; COUNT is the 0 default */
+	derived_table_query->limitOption = LIMIT_OPTION_COUNT;
 }
 
 // EOF
