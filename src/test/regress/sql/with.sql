@@ -36,12 +36,17 @@ UNION ALL
 SELECT * FROM t;
 
 -- UNION DISTINCT requires hashable type
+-- GPDB: upstream uses varbit here, but GPDB adds a default hash opclass for
+-- varbit (usable as a distribution key; see pg_opclass.dat), so varbit is
+-- hashable and this recursive UNION would run forever instead of being
+-- rejected.  Use money, which is btree-supported but non-hashable in both
+-- upstream and GPDB, to exercise the same "non-hashable -> reject" path.
 WITH RECURSIVE t(n) AS (
-    VALUES ('01'::varbit)
+    VALUES (1::money)
 UNION
-    SELECT n || '10'::varbit FROM t WHERE n < '100'::varbit
+    SELECT n+1::money FROM t WHERE n < 100::money
 )
-SELECT n FROM t;
+SELECT sum(n) FROM t;
 
 -- recursive view
 CREATE RECURSIVE VIEW nums (n) AS
