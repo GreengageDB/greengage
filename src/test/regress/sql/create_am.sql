@@ -2,6 +2,14 @@
 -- Create access method tests
 --
 
+-- GPDB: "SELECT relam FROM pg_class WHERE relname = 'am_partitioned'" prints
+-- heap2's OID, which is assigned dynamically and varies between parallel runs;
+-- mask the bare 6+ digit relam OID so the test is deterministic.
+-- start_matchsubs
+-- m/^ \d\d\d\d\d\d+$/
+-- s/^ \d\d\d\d\d\d+$/ <relam_oid>/
+-- end_matchsubs
+
 -- Make gist2 over gisthandler. In fact, it would be a synonym to gist.
 CREATE ACCESS METHOD gist2 TYPE INDEX HANDLER gisthandler;
 
@@ -192,9 +200,6 @@ ALTER TABLE heaptable SET ACCESS METHOD DEFAULT;
 SELECT amname FROM pg_class c, pg_am am
   WHERE c.relam = am.oid AND c.oid = 'heaptable'::regclass;
 ROLLBACK;
--- No support for multiple subcommands
-ALTER TABLE heaptable SET ACCESS METHOD heap, SET ACCESS METHOD heap2;
-DROP TABLE heaptable;
 
 -- partition hierarchies
 -- upon ALTER, new children will inherit the new am, whereas the existing
@@ -211,6 +216,9 @@ SELECT relname, amname FROM pg_class c, pg_am am
 ALTER TABLE am_partitioned SET ACCESS METHOD heap;
 SELECT relname, amname FROM pg_class c, pg_am am
 WHERE c.relam = am.oid AND c.relname LIKE 'am_partitioned%' ORDER BY 1;
+-- GPDB: drop the table created by this GPDB-added section so the upstream
+-- "Partition hierarchies with access methods" block below can reuse the name.
+DROP TABLE am_partitioned;
 -- ALTER MATERIALIZED VIEW SET ACCESS METHOD
 CREATE MATERIALIZED VIEW heapmv USING heap AS SELECT * FROM heaptable;
 SELECT amname FROM pg_class c, pg_am am
