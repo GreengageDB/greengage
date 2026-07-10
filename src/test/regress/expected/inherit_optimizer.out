@@ -37,6 +37,11 @@ INSERT INTO d(aa) VALUES('dddddddd');
 SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
+ a       | aaaaaa
+ a       | aaaaaaaa
+ c       | ccccc
+ d       | dddd
+ d       | dddddddd
  a       | aaaa
  a       | aaaaa
  a       | aaaaaaa
@@ -56,28 +61,23 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  c       | cccccc
  c       | ccccccc
  d       | ddddddd
- a       | aaaaaa
- a       | aaaaaaaa
- c       | ccccc
- d       | dddd
- d       | dddddddd
 (24 rows)
 
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ b       | bbbbbbbb | 
+ d       | ddd      | 
+ d       | ddddd    | 
+ d       | dddddd   | 
+ d       | dddd     | 
+ d       | dddddddd | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
  d       | ddddddd  | 
- d       | dddd     | 
- d       | dddddddd | 
- b       | bbbbbbbb | 
- d       | ddd      | 
- d       | ddddd    | 
- d       | dddddd   | 
 (12 rows)
 
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
@@ -101,11 +101,11 @@ SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
  d       | ddddddd  |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
 (6 rows)
 
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
@@ -113,43 +113,43 @@ SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
 ---------+----------
  a       | aaaaaa
  a       | aaaaaaaa
+ a       | aaa
  a       | aaaa
  a       | aaaaa
  a       | aaaaaaa
- a       | aaa
 (6 rows)
 
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ b       | bbbbbbbb | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
- b       | bbbbbbbb | 
 (6 rows)
 
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
+ c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
  c       | ccc      | 
  c       | cccccccc | 
- c       | ccccc    | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
- d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
  d       | dddd     |    |    | 
  d       | dddddddd |    |    | 
+ d       | ddddddd  |    |    | 
 (6 rows)
 
 UPDATE a SET aa='zzzz' WHERE aa='aaaa';
@@ -189,18 +189,18 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ d       | dddd     | 
+ d       | dddddddd | 
+ b       | bbbbbbbb | 
+ d       | ddd      | 
+ d       | ddddd    | 
+ d       | dddddd   | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
  d       | ddddddd  | 
- b       | bbbbbbbb | 
- d       | ddd      | 
- d       | ddddd    | 
- d       | dddddd   | 
- d       | dddd     | 
- d       | dddddddd | 
 (12 rows)
 
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
@@ -234,12 +234,12 @@ SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
  relname |   aa   
 ---------+--------
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
  a       | zzzz
  a       | zzzzz
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
 (6 rows)
 
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
@@ -256,29 +256,32 @@ SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | cccc     | 
- c       | cccccc   | 
- c       | ccccccc  | 
  c       | ccc      | 
  c       | cccccccc | 
  c       | ccccc    | 
+ c       | cccc     | 
+ c       | cccccc   | 
+ c       | ccccccc  | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
  d       | dddd     |    |    | 
  d       | dddddddd |    |    | 
- d       | ddddddd  |    |    | 
 (6 rows)
 
 UPDATE b SET aa='new';
 SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
+ a       | zzzz
+ a       | zzzzz
+ c       | ccccc
  c       | ccc
  c       | cccccccc
  a       | zzzzzz
@@ -300,9 +303,6 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  d       | new
  d       | new
  d       | new
- a       | zzzz
- a       | zzzzz
- c       | ccccc
 (24 rows)
 
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
@@ -325,7 +325,8 @@ SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | ccccc    | 
+ c       | ccc      | 
+ c       | cccccccc | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
@@ -335,8 +336,7 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  d       | new      | 
  d       | new      | 
  d       | new      | 
- c       | ccc      | 
- c       | cccccccc | 
+ c       | ccccc    | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
@@ -375,12 +375,12 @@ SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | ccc      | 
- c       | cccccccc | 
- c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
+ c       | ccc      | 
+ c       | cccccccc | 
+ c       | ccccc    | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
@@ -540,8 +540,37 @@ SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
 -- Confirm PRIMARY KEY adds NOT NULL constraint to child table
 CREATE TEMP TABLE z (b TEXT, PRIMARY KEY(aa, b)) inherits (a);
 INSERT INTO z VALUES (NULL, 'text'); -- should fail
-ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (null, text).
+-- Check inherited UPDATE with first child excluded
+create table some_tab (f1 int, f2 int, f3 int, check (f1 < 10) no inherit);
+create table some_tab_child () inherits(some_tab);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into some_tab_child select i, i+1, 0 from generate_series(1,1000) i;
+create index on some_tab_child(f1, f2);
+-- while at it, also check that statement-level triggers fire
+create function some_tab_stmt_trig_func() returns trigger as
+$$begin raise notice 'updating some_tab'; return NULL; end;$$
+language plpgsql;
+create trigger some_tab_stmt_trig
+  before update on some_tab execute function some_tab_stmt_trig_func();
+ERROR:  Triggers for statements are not yet supported
+explain (costs off)
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Update on some_tab
+   Update on some_tab_child some_tab_1
+   ->  Result
+         ->  Index Scan using some_tab_child_f1_f2_idx on some_tab_child some_tab_1
+               Index Cond: ((f1 = 12) AND (f2 = 13))
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+drop table some_tab cascade;
+NOTICE:  drop cascades to table some_tab_child
+drop function some_tab_stmt_trig_func();
 -- Check inherited UPDATE with all children excluded
 create table some_tab (a int, b int);
 create table some_tab_child () inherits (some_tab);
@@ -872,10 +901,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1165641)
+ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1599396)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1165641)
+ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1599396)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_check" of relation "bc"
@@ -895,10 +924,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1165641)
+ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1599396)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1165641)
+ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1599396)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_aa_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_aa_check" of relation "bc"
@@ -981,14 +1010,14 @@ create table c1(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into c1 values(1,-1,2);
 alter table p2 add constraint cc check (f2>0);  -- fail
-ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1599408)
 alter table p2 add check (f2>0);  -- check it without a name, too
-ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1599408)
 delete from c1;
 insert into c1 values(1,1,2);
 alter table p2 add check (f2>0);
 insert into c1 values(1,-1,2);  -- fail
-ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (1, -1, 2).
 create table c2(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1098,17 +1127,38 @@ ALTER TABLE inhts RENAME aa TO aaa;      -- to be failed
 ERROR:  cannot rename inherited column "aa"
 ALTER TABLE inhts RENAME d TO dd;
 \d+ inhts
-                                          Table "public.inhts"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- aa     | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
- dd     | integer |           |          |         | plain   |             |              | 
+                                   Table "public.inhts"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ aa     | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
+ dd     | integer |           |          |         | plain   |              | 
 Inherits: inht1,
           inhs1
 
 DROP TABLE inhts;
+-- Test for adding a column to a parent table with complex inheritance
+CREATE TABLE inhta ();
+CREATE TABLE inhtb () INHERITS (inhta);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE inhtc () INHERITS (inhtb);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE inhtd () INHERITS (inhta, inhtb, inhtc);
+NOTICE:  table has parent, setting distribution columns to match parent table
+ALTER TABLE inhta ADD COLUMN i int;
+NOTICE:  merging definition of column "i" for child "inhtd"
+NOTICE:  merging definition of column "i" for child "inhtd"
+\d+ inhta
+                                   Table "public.inhta"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
+Child tables: inhtb,
+              inhtd
+Distributed randomly
+
+DROP TABLE inhta, inhtb, inhtc, inhtd;
 -- Test for renaming in diamond inheritance
 CREATE TABLE inht2 (x int) INHERITS (inht1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1120,14 +1170,14 @@ NOTICE:  merging multiple inherited definitions of column "aa"
 NOTICE:  merging multiple inherited definitions of column "b"
 ALTER TABLE inht1 RENAME aa TO aaa;
 \d+ inht4
-                                          Table "public.inht4"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- aaa    | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- x      | integer |           |          |         | plain   |             |              | 
- y      | integer |           |          |         | plain   |             |              | 
- z      | integer |           |          |         | plain   |             |              | 
+                                   Table "public.inht4"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ aaa    | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ x      | integer |           |          |         | plain   |              | 
+ y      | integer |           |          |         | plain   |              | 
+ z      | integer |           |          |         | plain   |              | 
 Inherits: inht2,
           inht3
 
@@ -1138,14 +1188,14 @@ ALTER TABLE inht1 RENAME aaa TO aaaa;
 ALTER TABLE inht1 RENAME b TO bb;                -- to be failed
 ERROR:  cannot rename inherited column "b"
 \d+ inhts
-                                          Table "public.inhts"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- aaaa   | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
- x      | integer |           |          |         | plain   |             |              | 
- c      | integer |           |          |         | plain   |             |              | 
- d      | integer |           |          |         | plain   |             |              | 
+                                   Table "public.inhts"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ aaaa   | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
+ x      | integer |           |          |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
+ d      | integer |           |          |         | plain   |              | 
 Inherits: inht2,
           inhs1
 
@@ -1186,33 +1236,33 @@ CREATE TABLE test_constraints (id int, val1 varchar, val2 int, UNIQUE(val1, val2
 CREATE TABLE test_constraints_inh () INHERITS (test_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ test_constraints
-                                          Table "public.test_constraints"
- Column |       Type        | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+-------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- id     | integer           |           |          |         | plain    |             |              | 
- val1   | character varying |           |          |         | extended |             |              | 
- val2   | integer           |           |          |         | plain    |             |              | 
+                                   Table "public.test_constraints"
+ Column |       Type        | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-------------------+-----------+----------+---------+----------+--------------+-------------
+ id     | integer           |           |          |         | plain    |              | 
+ val1   | character varying |           |          |         | extended |              | 
+ val2   | integer           |           |          |         | plain    |              | 
 Indexes:
     "test_constraints_val1_val2_key" UNIQUE CONSTRAINT, btree (val1, val2)
 Child tables: test_constraints_inh
 
 ALTER TABLE ONLY test_constraints DROP CONSTRAINT test_constraints_val1_val2_key;
 \d+ test_constraints
-                                          Table "public.test_constraints"
- Column |       Type        | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+-------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- id     | integer           |           |          |         | plain    |             |              | 
- val1   | character varying |           |          |         | extended |             |              | 
- val2   | integer           |           |          |         | plain    |             |              | 
+                                   Table "public.test_constraints"
+ Column |       Type        | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-------------------+-----------+----------+---------+----------+--------------+-------------
+ id     | integer           |           |          |         | plain    |              | 
+ val1   | character varying |           |          |         | extended |              | 
+ val2   | integer           |           |          |         | plain    |              | 
 Child tables: test_constraints_inh
 
 \d+ test_constraints_inh
-                                        Table "public.test_constraints_inh"
- Column |       Type        | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+-------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- id     | integer           |           |          |         | plain    |             |              | 
- val1   | character varying |           |          |         | extended |             |              | 
- val2   | integer           |           |          |         | plain    |             |              | 
+                                 Table "public.test_constraints_inh"
+ Column |       Type        | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-------------------+-----------+----------+---------+----------+--------------+-------------
+ id     | integer           |           |          |         | plain    |              | 
+ val1   | character varying |           |          |         | extended |              | 
+ val2   | integer           |           |          |         | plain    |              | 
 Inherits: test_constraints
 
 DROP TABLE test_constraints_inh;
@@ -1225,30 +1275,30 @@ CREATE TABLE test_ex_constraints (
 CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ test_ex_constraints
-                                  Table "public.test_ex_constraints"
- Column |  Type  | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+--------+-----------+----------+---------+---------+-------------+--------------+-------------
- c      | circle |           |          |         | plain   |             |              | 
- dkey   | inet   |           |          |         | main    |             |              | 
+                           Table "public.test_ex_constraints"
+ Column |  Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+--------+-----------+----------+---------+---------+--------------+-------------
+ c      | circle |           |          |         | plain   |              | 
+ dkey   | inet   |           |          |         | main    |              | 
 Indexes:
     "test_ex_constraints_dkey_c_excl" EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
 Child tables: test_ex_constraints_inh
 
 ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
 \d+ test_ex_constraints
-                                  Table "public.test_ex_constraints"
- Column |  Type  | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+--------+-----------+----------+---------+---------+-------------+--------------+-------------
- c      | circle |           |          |         | plain   |             |              | 
- dkey   | inet   |           |          |         | main    |             |              | 
+                           Table "public.test_ex_constraints"
+ Column |  Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+--------+-----------+----------+---------+---------+--------------+-------------
+ c      | circle |           |          |         | plain   |              | 
+ dkey   | inet   |           |          |         | main    |              | 
 Child tables: test_ex_constraints_inh
 
 \d+ test_ex_constraints_inh
-                                Table "public.test_ex_constraints_inh"
- Column |  Type  | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+--------+-----------+----------+---------+---------+-------------+--------------+-------------
- c      | circle |           |          |         | plain   |             |              | 
- dkey   | inet   |           |          |         | main    |             |              | 
+                         Table "public.test_ex_constraints_inh"
+ Column |  Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+--------+-----------+----------+---------+---------+--------------+-------------
+ c      | circle |           |          |         | plain   |              | 
+ dkey   | inet   |           |          |         | main    |              | 
 Inherits: test_ex_constraints
 
 DROP TABLE test_ex_constraints_inh;
@@ -1260,37 +1310,37 @@ WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in G
 CREATE TABLE test_foreign_constraints_inh () INHERITS (test_foreign_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ test_primary_constraints
-                                Table "public.test_primary_constraints"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- id     | integer |           | not null |         | plain   |             |              | 
+                         Table "public.test_primary_constraints"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ id     | integer |           | not null |         | plain   |              | 
 Indexes:
     "test_primary_constraints_pkey" PRIMARY KEY, btree (id)
 Referenced by:
     TABLE "test_foreign_constraints" CONSTRAINT "test_foreign_constraints_id1_fkey" FOREIGN KEY (id1) REFERENCES test_primary_constraints(id)
 
 \d+ test_foreign_constraints
-                                Table "public.test_foreign_constraints"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- id1    | integer |           |          |         | plain   |             |              | 
+                         Table "public.test_foreign_constraints"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ id1    | integer |           |          |         | plain   |              | 
 Foreign-key constraints:
     "test_foreign_constraints_id1_fkey" FOREIGN KEY (id1) REFERENCES test_primary_constraints(id)
 Child tables: test_foreign_constraints_inh
 
 ALTER TABLE test_foreign_constraints DROP CONSTRAINT test_foreign_constraints_id1_fkey;
 \d+ test_foreign_constraints
-                                Table "public.test_foreign_constraints"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- id1    | integer |           |          |         | plain   |             |              | 
+                         Table "public.test_foreign_constraints"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ id1    | integer |           |          |         | plain   |              | 
 Child tables: test_foreign_constraints_inh
 
 \d+ test_foreign_constraints_inh
-                              Table "public.test_foreign_constraints_inh"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- id1    | integer |           |          |         | plain   |             |              | 
+                       Table "public.test_foreign_constraints_inh"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ id1    | integer |           |          |         | plain   |              | 
 Inherits: test_foreign_constraints
 
 DROP TABLE test_foreign_constraints_inh;
@@ -1349,6 +1399,127 @@ order by 1, 2;
 
 drop table p1 cascade;
 NOTICE:  drop cascades to table p1_c1
+--
+-- Test DROP behavior of multiply-defined CHECK constraints
+--
+create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+create table p1_c1 (f1 int constraint f1_pos CHECK (f1 > 0)) inherits (p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging column "f1" with inherited definition
+NOTICE:  merging constraint "f1_pos" with inherited definition
+alter table p1_c1 drop constraint f1_pos;
+ERROR:  cannot drop inherited constraint "f1_pos" of relation "p1_c1"
+alter table p1 drop constraint f1_pos;
+\d p1_c1
+               Table "public.p1_c1"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Check constraints:
+    "f1_pos" CHECK (f1 > 0)
+Inherits: p1
+
+drop table p1 cascade;
+NOTICE:  drop cascades to table p1_c1
+create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+create table p2(f1 int constraint f1_pos CHECK (f1 > 0));
+create table p1p2_c1 (f1 int) inherits (p1, p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging column "f1" with inherited definition
+create table p1p2_c2 (f1 int constraint f1_pos CHECK (f1 > 0)) inherits (p1, p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging column "f1" with inherited definition
+NOTICE:  merging constraint "f1_pos" with inherited definition
+alter table p2 drop constraint f1_pos;
+alter table p1 drop constraint f1_pos;
+\d p1p2_c*
+              Table "public.p1p2_c1"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Inherits: p1,
+          p2
+
+              Table "public.p1p2_c2"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Check constraints:
+    "f1_pos" CHECK (f1 > 0)
+Inherits: p1,
+          p2
+
+drop table p1, p2 cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table p1p2_c1
+drop cascades to table p1p2_c2
+create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+create table p1_c1() inherits (p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table p1_c2() inherits (p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table p1_c1c2() inherits (p1_c1, p1_c2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+\d p1_c1c2
+              Table "public.p1_c1c2"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Check constraints:
+    "f1_pos" CHECK (f1 > 0)
+Inherits: p1_c1,
+          p1_c2
+
+alter table p1 drop constraint f1_pos;
+\d p1_c1c2
+              Table "public.p1_c1c2"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Inherits: p1_c1,
+          p1_c2
+
+drop table p1 cascade;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table p1_c1
+drop cascades to table p1_c2
+drop cascades to table p1_c1c2
+create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+create table p1_c1() inherits (p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table p1_c2(constraint f1_pos CHECK (f1 > 0)) inherits (p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging constraint "f1_pos" with inherited definition
+create table p1_c1c2() inherits (p1_c1, p1_c2, p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging multiple inherited definitions of column "f1"
+alter table p1_c2 drop constraint f1_pos;
+ERROR:  cannot drop inherited constraint "f1_pos" of relation "p1_c2"
+alter table p1 drop constraint f1_pos;
+alter table p1_c1c2 drop constraint f1_pos;
+ERROR:  cannot drop inherited constraint "f1_pos" of relation "p1_c1c2"
+alter table p1_c2 drop constraint f1_pos;
+ERROR:  constraint "f1_pos" of relation "p1_c2" does not exist  (seg0 172.17.0.4:7002 pid=1599396)
+\d p1_c1c2
+              Table "public.p1_c1c2"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ f1     | integer |           |          | 
+Check constraints:
+    "f1_pos" CHECK (f1 > 0)
+Inherits: p1_c1,
+          p1_c2,
+          p1
+
+drop table p1 cascade;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table p1_c1
+drop cascades to table p1_c2
+drop cascades to table p1_c1c2
 -- Test that a valid child can have not-valid parent, but not vice versa
 create table invalid_check_con(f1 int);
 create table invalid_check_con_child() inherits(invalid_check_con);
@@ -1362,10 +1533,10 @@ alter table invalid_check_con_child add constraint inh_check_constraint check(f1
 alter table invalid_check_con add constraint inh_check_constraint check(f1 > 0) not valid;
 NOTICE:  merging constraint "inh_check_constraint" with inherited definition
 insert into invalid_check_con values(0); -- fail
-ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0).
 insert into invalid_check_con_child values(0); -- fail
-ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0).
 select conrelid::regclass::text as relname, conname,
        convalidated, conislocal, coninhcount, connoinherit
@@ -1596,8 +1767,8 @@ explain (verbose, costs off) select min(1-id) from matest0;
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------
  Result
-   Output: $0
-   InitPlan 1 (returns $0)  (slice1)
+   Output: (InitPlan 1).col1
+   InitPlan 1  (slice1)
      ->  Limit
            Output: ((1 - matest0.id))
            ->  Gather Motion 3:1  (slice2; segments: 3)
@@ -1679,6 +1850,32 @@ order by t1.b limit 10;
 (19 rows)
 
 reset enable_nestloop;
+drop table matest0 cascade;
+NOTICE:  drop cascades to table matest1
+-- Test a MergeAppend plan where one child requires a sort
+create table matest0(a int primary key);
+create table matest1() inherits (matest0);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into matest0 select generate_series(1, 400);
+insert into matest1 select generate_series(1, 200);
+analyze matest0;
+analyze matest1;
+explain (costs off)
+select * from matest0 where a < 100 order by a;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: matest0.a
+   ->  Sort
+         Sort Key: matest0.a
+         ->  Append
+               ->  Seq Scan on matest0 matest0_1
+                     Filter: (a < 100)
+               ->  Seq Scan on matest1 matest0_2
+                     Filter: (a < 100)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
 drop table matest0 cascade;
 NOTICE:  drop cascades to table matest1
 --
@@ -1854,23 +2051,23 @@ insert into inhpar select x, x::text from generate_series(1,5) x;
 insert into inhcld select x::text, x from generate_series(6,10) x;
 explain (verbose, costs off)
 update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
-                                                          QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.inhpar i
    Update on public.inhpar i_1
    Update on public.inhcld i_2
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3))), i.tableoid, i.ctid, i.gp_segment_id, i.*, (DMLAction)
+         Output: ((SubPlan 1).col1), (((SubPlan 1).col2)::name), ((rescan SubPlan 1)), i.tableoid, i.ctid, i.gp_segment_id, i.*, (DMLAction)
          ->  Split
-               Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3))), i.tableoid, i.ctid, i.gp_segment_id, i.*, DMLAction
+               Output: ((SubPlan 1).col1), (((SubPlan 1).col2)::name), ((rescan SubPlan 1)), i.tableoid, i.ctid, i.gp_segment_id, i.*, DMLAction
                ->  Result
-                     Output: $2, $3, (SubPlan 1 (returns $2,$3)), i.tableoid, i.ctid, i.gp_segment_id, i.*
+                     Output: (SubPlan 1).col1, (SubPlan 1).col2, (rescan SubPlan 1), i.tableoid, i.ctid, i.gp_segment_id, i.*
                      ->  Append
                            ->  Seq Scan on public.inhpar i_1
                                  Output: i_1.f1, i_1.f2, i_1.tableoid, i_1.ctid, i_1.gp_segment_id, i_1.*
                            ->  Seq Scan on public.inhcld i_2
                                  Output: i_2.f1, i_2.f2, i_2.tableoid, i_2.ctid, i_2.gp_segment_id, i_2.*
-                     SubPlan 1 (returns $2,$3)
+                     SubPlan 1
                        ->  Limit
                              Output: (i.f1), (((i.f2)::text || '-'::text))
                              ->  Result
@@ -1886,16 +2083,16 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
 select * from inhpar;
  f1 | f2  
 ----+-----
-  5 | 5-
-  9 | 9-
- 10 | 10-
-  6 | 6-
-  1 | 1-
   2 | 2-
   3 | 3-
   4 | 4-
-  7 | 7-
   8 | 8-
+  7 | 7-
+  1 | 1-
+  5 | 5-
+  6 | 6-
+  9 | 9-
+ 10 | 10-
 (10 rows)
 
 drop table inhpar cascade;
@@ -1911,19 +2108,19 @@ alter table inhpar attach partition inhcld2 for values from (5) to (100);
 insert into inhpar select x, x::text from generate_series(1,10) x;
 explain (verbose, costs off)
 update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
-                                                            QUERY PLAN                                                            
-----------------------------------------------------------------------------------------------------------------------------------
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update on public.inhpar i
    Update on public.inhcld1 i_1
    Update on public.inhcld2 i_2
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3) (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, (DMLAction)
+         Output: ((SubPlan 1 (copy 2)).col1), (((SubPlan 1 (copy 2)).col2)::name), ((rescan SubPlan 1 (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, (DMLAction)
          ->  Split
-               Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3) (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, DMLAction
+               Output: ((SubPlan 1 (copy 2)).col1), (((SubPlan 1 (copy 2)).col2)::name), ((rescan SubPlan 1 (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, DMLAction
                ->  Append
                      ->  Seq Scan on public.inhcld1 i_1
-                           Output: $2, $3, (SubPlan 1 (returns $2,$3) (copy 2)), i_1.tableoid, i_1.ctid, i_1.gp_segment_id
-                           SubPlan 1 (returns $2,$3) (copy 2)
+                           Output: (SubPlan 1 (copy 2)).col1, (SubPlan 1 (copy 2)).col2, (rescan SubPlan 1 (copy 2)), i_1.tableoid, i_1.ctid, i_1.gp_segment_id
+                           SubPlan 1 (copy 2)
                              ->  Limit
                                    Output: (i_1.f1), (((i_1.f2)::text || '-'::text))
                                    ->  Result
@@ -1932,8 +2129,8 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                                                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                                      ->  Seq Scan on public.int4_tbl
                      ->  Seq Scan on public.inhcld2 i_2
-                           Output: $2, $3, (SubPlan 1 (returns $2,$3) (copy 3)), i_2.tableoid, i_2.ctid, i_2.gp_segment_id
-                           SubPlan 1 (returns $2,$3) (copy 3)
+                           Output: (SubPlan 1 (copy 3)).col1, (SubPlan 1 (copy 3)).col2, (rescan SubPlan 1 (copy 3)), i_2.tableoid, i_2.ctid, i_2.gp_segment_id
+                           SubPlan 1 (copy 3)
                              ->  Limit
                                    Output: (i_2.f1), (((i_2.f2)::text || '-'::text))
                                    ->  Result
@@ -1949,16 +2146,16 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
 select * from inhpar;
  f1 | f2  
 ----+-----
-  1 | 1-
-  5 | 5-
-  6 | 6-
-  9 | 9-
- 10 | 10-
   2 | 2-
   3 | 3-
   4 | 4-
   7 | 7-
   8 | 8-
+  1 | 1-
+  5 | 5-
+  6 | 6-
+  9 | 9-
+ 10 | 10-
 (10 rows)
 
 -- Also check ON CONFLICT
@@ -1993,9 +2190,9 @@ insert into cnullchild values(null);
 select * from cnullparent;
  f1 
 ----
-  1
   2
    
+  1
 (3 rows)
 
 select * from cnullparent where f1 = 2;
@@ -2006,6 +2203,30 @@ select * from cnullparent where f1 = 2;
 
 drop table cnullparent cascade;
 NOTICE:  drop cascades to table cnullchild
+--
+-- Mixed ownership inheritance tree
+--
+create role regress_alice;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+create role regress_bob;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+grant all on schema public to regress_alice, regress_bob;
+grant regress_alice to regress_bob;
+set session authorization regress_alice;
+create table inh_parent (a int not null);
+set session authorization regress_bob;
+create table inh_child () inherits (inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+set session authorization regress_alice;
+-- alice can't do this: she doesn't own inh_child
+alter table inh_parent alter a drop not null;
+ERROR:  must be owner of table inh_child
+set session authorization regress_bob;
+alter table inh_parent alter a drop not null;
+reset session authorization;
+drop table inh_parent, inh_child;
+revoke all on schema public from regress_alice, regress_bob;
+drop role regress_alice, regress_bob;
 --
 -- Check use of temporary tables with inheritance trees
 --
@@ -3000,33 +3221,33 @@ INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '5');
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '5');
 -- insert with child check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', '10');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '10');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '10');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 1, 10).
 -- insert with child not null constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 1, null).
 -- insert with shared check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '5', '5');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '5', '5');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '5', '5');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 5, 5).
 -- within partition update without child check constraint violation
 BEGIN;
@@ -3036,13 +3257,13 @@ UPDATE errtst_parent SET data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- within partition update with child check constraint violation
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 1, 15).
 -- direct leaf partition update, without partition id violation
 BEGIN;
@@ -3052,13 +3273,13 @@ UPDATE errtst_child_reorder SET partid = 21 WHERE partid = 20;
 ROLLBACK;
 -- direct leaf partition update, with partition id violation
 UPDATE errtst_child_fastdef SET partid = partid + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 1, 5).
 UPDATE errtst_child_plaindef SET partid = partid + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 1, 5).
 UPDATE errtst_child_reorder SET partid = partid + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (5, 1, 30).
 -- partition move, without child check constraint violation
 BEGIN;
@@ -3068,16 +3289,16 @@ UPDATE errtst_parent SET partid = 0, data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- partition move, with child check constraint violation
 UPDATE errtst_parent SET partid = 10, data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1165644)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET partid = 20, data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (20, 1, 15).
 UPDATE errtst_parent SET partid = 0, data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Failing row contains (0, 1, 15).
 -- partition move, without target partition
 UPDATE errtst_parent SET partid = 30, data = data + 10 WHERE partid = 20;
-ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.4:7003 pid=1165640)
+ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.4:7003 pid=1599408)
 DETAIL:  Partition key of the failing row contains (partid) = (30).
 DROP TABLE errtst_parent;

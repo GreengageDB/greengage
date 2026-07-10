@@ -87,8 +87,6 @@ DROP TABLE ext_stats_test;
 ERROR:  table "ext_stats_test" does not exist
 -- Ensure stats are dropped sanely, and test IF NOT EXISTS while at it
 CREATE TABLE ab1 (a INTEGER, b INTEGER, c INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE STATISTICS IF NOT EXISTS ab1_a_b_stats ON a, b FROM ab1;
 COMMENT ON STATISTICS ab1_a_b_stats IS 'new comment';
 CREATE ROLE regress_stats_ext;
@@ -146,8 +144,6 @@ SELECT stxname FROM pg_statistic_ext WHERE stxname LIKE 'ab1%';
 
 -- Ensure things work sanely with SET STATISTICS 0
 CREATE TABLE ab1 (a INTEGER, b INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ab1 ALTER a SET STATISTICS 0;
 INSERT INTO ab1 SELECT a, a%23 FROM generate_series(1, 1000) a;
 CREATE STATISTICS ab1_a_b_stats ON a, b FROM ab1;
@@ -177,8 +173,6 @@ ALTER STATISTICS IF EXISTS ab1_a_b_stats SET STATISTICS 0;
 NOTICE:  statistics object "ab1_a_b_stats" does not exist, skipping
 -- Ensure we can build statistics for tables with inheritance.
 CREATE TABLE ab1 (a INTEGER, b INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ab1c () INHERITS (ab1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO ab1 VALUES (1,1);
@@ -188,8 +182,6 @@ DROP TABLE ab1 CASCADE;
 NOTICE:  drop cascades to table ab1c
 -- Tests for stats with inheritance
 CREATE TABLE stxdinh(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE stxdinh1() INHERITS(stxdinh);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE stxdinh2() INHERITS(stxdinh);
@@ -249,8 +241,6 @@ DROP TABLE stxdinh, stxdinh1, stxdinh2;
 ERROR:  table "stxdinh" does not exist
 -- Ensure inherited stats ARE applied to inherited query in partitioned table
 CREATE TABLE stxdinp(i int, a int, b int) PARTITION BY RANGE (i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE stxdinp1 PARTITION OF stxdinp FOR VALUES FROM (1) TO (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO stxdinp SELECT 1, a/100, a/100 FROM generate_series(1, 999) a;
@@ -277,8 +267,6 @@ SELECT * FROM check_estimated_rows('SELECT a + 1, b FROM ONLY stxdinp GROUP BY 1
 DROP TABLE stxdinp;
 -- basic test for statistics on expressions
 CREATE TABLE ab1 (a INTEGER, b INTEGER, c TIMESTAMP, d TIMESTAMPTZ);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- expression stats may be built on a single expression column
 CREATE STATISTICS ab1_exprstat_1 ON (a+b) FROM ab1;
 -- with a single expression, we only enable expression statistics
@@ -322,20 +310,15 @@ DROP TABLE ab1;
 -- Verify supported object types for extended statistics
 CREATE schema tststats;
 CREATE TABLE tststats.t (a int, b int, c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX ti ON tststats.t (a, b);
 CREATE SEQUENCE tststats.s;
 CREATE VIEW tststats.v AS SELECT * FROM tststats.t;
 CREATE MATERIALIZED VIEW tststats.mv AS SELECT * FROM tststats.t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE TYPE tststats.ty AS (a int, b int, c text);
 CREATE FOREIGN DATA WRAPPER extstats_dummy_fdw;
 CREATE SERVER extstats_dummy_srv FOREIGN DATA WRAPPER extstats_dummy_fdw;
 CREATE FOREIGN TABLE tststats.f (a int, b int, c text) SERVER extstats_dummy_srv;
 CREATE TABLE tststats.pt (a int, b int, c text) PARTITION BY RANGE (a, b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tststats.pt1 PARTITION OF tststats.pt FOR VALUES FROM (-10, -10) TO (10, 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE STATISTICS tststats.s1 ON a, b FROM tststats.t;
@@ -387,11 +370,9 @@ CREATE TABLE ndistinct (
     d INT
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'filler1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- over-estimates when using only per-column statistics
 INSERT INTO ndistinct (a, b, c, filler1)
-     SELECT i/100, i/100, i/100, cash_words((i/100)::money)
+     SELECT i/100, i/100, i/100, (i/100) || ' dollars and zero cents'
        FROM generate_series(1,1000) s(i);
 ANALYZE ndistinct;
 -- Group Aggregate, due to over-estimate of the number of groups
@@ -578,8 +559,6 @@ CREATE TABLE functional_dependencies (
     d TEXT
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'filler1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX fdeps_ab_idx ON functional_dependencies (a, b);
 CREATE INDEX fdeps_abc_idx ON functional_dependencies (a, b, c);
 -- random data (no functional dependencies)
@@ -980,8 +959,6 @@ CREATE TABLE functional_dependencies_multi (
 	d INTEGER
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO functional_dependencies_multi (a, b, c, d)
     SELECT
          mod(i,7),
@@ -1068,8 +1045,6 @@ CREATE TABLE mcv_lists (
     ia INT[]
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'filler1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- random data (no MCV list)
 INSERT INTO mcv_lists (a, b, c, filler1)
      SELECT mod(i,37), mod(i,41), mod(i,43), mod(i,47) FROM generate_series(1,5000) s(i);
@@ -1583,8 +1558,6 @@ CREATE TABLE mcv_lists_uuid (
     c UUID
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mcv_lists_uuid (a, b, c)
      SELECT
          fipshash(mod(i,100)::text)::uuid,
@@ -1627,8 +1600,6 @@ CREATE TABLE mcv_lists_arrays (
     c INT[]
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mcv_lists_arrays (a, b, c)
      SELECT
          ARRAY[fipshash((i/100)::text), fipshash((i/100-1)::text), fipshash((i/100+1)::text)],
@@ -1645,8 +1616,6 @@ CREATE TABLE mcv_lists_bool (
     c BOOL
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mcv_lists_bool (a, b, c)
      SELECT
          (mod(i,2) = 0), (mod(i,4) = 0), (mod(i,8) = 0)
@@ -1711,8 +1680,6 @@ CREATE TABLE mcv_lists_multi (
 	d INTEGER
 )
 WITH (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mcv_lists_multi (a, b, c, d)
     SELECT
          mod(i,5),
@@ -1773,8 +1740,6 @@ CREATE TABLE tststats.priv_test_tbl (
     a int,
     b int
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tststats.priv_test_tbl
      SELECT mod(i,5), mod(i,10) FROM generate_series(1,100) s(i);
 CREATE STATISTICS tststats.priv_test_stats (mcv) ON a, b
@@ -1782,18 +1747,12 @@ CREATE STATISTICS tststats.priv_test_stats (mcv) ON a, b
 ANALYZE tststats.priv_test_tbl;
 -- Check printing info about extended statistics by \dX
 create table stts_t1 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create statistics (ndistinct) on a, b from stts_t1;
 create statistics (ndistinct, dependencies) on a, b from stts_t1;
 create statistics (ndistinct, dependencies, mcv) on a, b from stts_t1;
 create table stts_t2 (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create statistics on b, c from stts_t2;
 create table stts_t3 (col1 int, col2 int, col3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create statistics stts_hoge on col1, col2, col3 from stts_t3;
 create schema stts_s1;
 create schema stts_s2;
@@ -1980,10 +1939,53 @@ SELECT * FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Should not le
 (0 rows)
 
 DELETE FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Should not leak
+-- privilege checks for pg_stats_ext and pg_stats_ext_exprs
+RESET SESSION AUTHORIZATION;
+CREATE TABLE stats_ext_tbl (id INT PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY, col TEXT);
+INSERT INTO stats_ext_tbl (col) VALUES ('secret'), ('secret'), ('very secret');
+CREATE STATISTICS s_col ON id, col FROM stats_ext_tbl;
+CREATE STATISTICS s_expr ON mod(id, 2), lower(col) FROM stats_ext_tbl;
+ANALYZE stats_ext_tbl;
+-- unprivileged role should not have access
+SET SESSION AUTHORIZATION regress_stats_user1;
+SELECT statistics_name, most_common_vals FROM pg_stats_ext x
+    WHERE tablename = 'stats_ext_tbl' ORDER BY ROW(x.*);
+ statistics_name | most_common_vals 
+-----------------+------------------
+(0 rows)
+
+SELECT statistics_name, most_common_vals FROM pg_stats_ext_exprs x
+    WHERE tablename = 'stats_ext_tbl' ORDER BY ROW(x.*);
+ statistics_name | most_common_vals 
+-----------------+------------------
+(0 rows)
+
+-- give unprivileged role ownership of table
+RESET SESSION AUTHORIZATION;
+ALTER TABLE stats_ext_tbl OWNER TO regress_stats_user1;
+-- unprivileged role should now have access
+SET SESSION AUTHORIZATION regress_stats_user1;
+SELECT statistics_name, most_common_vals FROM pg_stats_ext x
+    WHERE tablename = 'stats_ext_tbl' ORDER BY ROW(x.*);
+ statistics_name |             most_common_vals              
+-----------------+-------------------------------------------
+ s_col           | {{1,secret},{2,secret},{3,"very secret"}}
+ s_expr          | {{0,secret},{1,secret},{1,"very secret"}}
+(2 rows)
+
+SELECT statistics_name, most_common_vals FROM pg_stats_ext_exprs x
+    WHERE tablename = 'stats_ext_tbl' ORDER BY ROW(x.*);
+ statistics_name | most_common_vals 
+-----------------+------------------
+ s_expr          | {secret}
+ s_expr          | {1}
+(2 rows)
+
 -- Tidy up
 DROP OPERATOR <<< (int, int);
 DROP FUNCTION op_leak(int, int);
 RESET SESSION AUTHORIZATION;
+DROP TABLE stats_ext_tbl;
 DROP SCHEMA tststats CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table tststats.priv_test_tbl

@@ -527,7 +527,7 @@ reset enable_hashagg;
 -- non-hashable type
 set enable_hashagg to on;
 explain (costs off)
-select x from (values (100::money), (200::money)) _(x) union select x from (values (100::money), (300::money)) _(x);
+select x from (values ('11'::varbit), ('10'::varbit)) _(x) union select x from (values ('11'::varbit), ('10'::varbit)) _(x);
                  QUERY PLAN                  
 ---------------------------------------------
  GroupAggregate
@@ -542,7 +542,7 @@ select x from (values (100::money), (200::money)) _(x) union select x from (valu
 
 set enable_hashagg to off;
 explain (costs off)
-select x from (values (100::money), (200::money)) _(x) union select x from (values (100::money), (300::money)) _(x);
+select x from (values ('11'::varbit), ('10'::varbit)) _(x) union select x from (values ('11'::varbit), ('10'::varbit)) _(x);
                  QUERY PLAN                  
 ---------------------------------------------
  GroupAggregate
@@ -628,7 +628,7 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (v
 
 -- non-hashable type
 explain (costs off)
-select x from (values (array[100::money]), (array[200::money])) _(x) union select x from (values (array[100::money]), (array[300::money])) _(x);
+select x from (values (array['10'::varbit]), (array['11'::varbit])) _(x) union select x from (values (array['10'::varbit]), (array['01'::varbit])) _(x);
                  QUERY PLAN                  
 ---------------------------------------------
  GroupAggregate
@@ -641,12 +641,12 @@ select x from (values (array[100::money]), (array[200::money])) _(x) union selec
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
-select x from (values (array[100::money]), (array[200::money])) _(x) union select x from (values (array[100::money]), (array[300::money])) _(x);
-     x     
------------
- {$100.00}
- {$200.00}
- {$300.00}
+select x from (values (array['10'::varbit]), (array['11'::varbit])) _(x) union select x from (values (array['10'::varbit]), (array['01'::varbit])) _(x);
+  x   
+------
+ {01}
+ {10}
+ {11}
 (3 rows)
 
 set enable_hashagg to off;
@@ -801,7 +801,7 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 -- With an anonymous row type, the typcache does not report that the
 -- type is hashable.  (Otherwise, this would fail at execution time.)
 explain (costs off)
-select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+select x from (values (row('10'::varbit)), (row('11'::varbit))) _(x) union select x from (values (row('10'::varbit)), (row('01'::varbit))) _(x);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: ROW EXPRESSION
                   QUERY PLAN                   
@@ -816,21 +816,21 @@ DETAIL:  Feature not supported: ROW EXPRESSION
  Optimizer: Postgres query optimizer
 (8 rows)
 
-select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+select x from (values (row('10'::varbit)), (row('11'::varbit))) _(x) union select x from (values (row('10'::varbit)), (row('01'::varbit))) _(x);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: ROW EXPRESSION
-     x     
------------
- ($100.00)
- ($200.00)
- ($300.00)
+  x   
+------
+ (01)
+ (10)
+ (11)
 (3 rows)
 
 -- With a defined row type, the typcache can inspect the type's fields
 -- for hashability.
-create type ct1 as (f1 money);
+create type ct1 as (f1 varbit);
 explain (costs off)
-select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union select x from (values (row(100::money)::ct1), (row(300::money)::ct1)) _(x);
+select x from (values (row('10'::varbit)::ct1), (row('11'::varbit)::ct1)) _(x) union select x from (values (row('10'::varbit)::ct1), (row('01'::varbit)::ct1)) _(x);
                  QUERY PLAN                  
 ---------------------------------------------
  GroupAggregate
@@ -843,12 +843,12 @@ select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
-select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union select x from (values (row(100::money)::ct1), (row(300::money)::ct1)) _(x);
-     x     
------------
- ($100.00)
- ($200.00)
- ($300.00)
+select x from (values (row('10'::varbit)::ct1), (row('11'::varbit)::ct1)) _(x) union select x from (values (row('10'::varbit)::ct1), (row('01'::varbit)::ct1)) _(x);
+  x   
+------
+ (01)
+ (10)
+ (11)
 (3 rows)
 
 drop type ct1;
@@ -928,6 +928,20 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 -------
  (1,3)
 (1 row)
+
+-- non-sortable type
+-- Ensure we get a HashAggregate plan.  Keep enable_hashagg=off to ensure
+-- there's no chance of a sort.
+explain (costs off) select '123'::xid union select '123'::xid;
+              QUERY PLAN               
+---------------------------------------
+ HashAggregate
+   Group Key: ('123'::xid)
+   ->  Append
+         ->  Result
+         ->  Result
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
 
 reset enable_hashagg;
 --
@@ -1069,19 +1083,9 @@ select except select;
 -- check hashed implementation
 set enable_hashagg = true;
 set enable_sort = false;
-explain (costs off)
-select from generate_series(1,5) union select from generate_series(1,3);
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- Aggregate
-   ->  Append
-         ->  Aggregate
-               ->  Function Scan on generate_series
-         ->  Aggregate
-               ->  Function Scan on generate_series generate_series_1
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
-
+-- We've no way to check hashed UNION as the empty pathkeys in the Append are
+-- fine to make use of Unique, which is cheaper than HashAggregate and we've
+-- no means to disable Unique.
 explain (costs off)
 select from generate_series(1,5) intersect select from generate_series(1,3);
                            QUERY PLAN                           
@@ -1094,10 +1098,6 @@ select from generate_series(1,5) intersect select from generate_series(1,3);
          ->  Function Scan on generate_series
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
-
-select from generate_series(1,5) union select from generate_series(1,3);
---
-(1 row)
 
 select from generate_series(1,5) union all select from generate_series(1,3);
 --
@@ -1172,6 +1172,20 @@ select from generate_series(1,5) except all select from generate_series(1,3);
 --
 (2 rows)
 
+-- Try a variation of the above but with a CTE which contains a column, again
+-- with an empty final select list.
+-- Ensure we get the expected 1 row with 0 columns
+with cte as materialized (select s from generate_series(1,5) s)
+select from cte union select from cte;
+--
+(1 row)
+
+-- Ensure we get the same result as the above.
+with cte as not materialized (select s from generate_series(1,5) s)
+select from cte union select from cte;
+--
+(1 row)
+
 reset enable_hashagg;
 reset enable_sort;
 --
@@ -1212,6 +1226,7 @@ ANALYZE t2;
 set enable_seqscan = off;
 set enable_indexscan = on;
 set enable_bitmapscan = off;
+set enable_sort = off;
 explain (costs off)
  SELECT * FROM
  (SELECT a || b AS ab FROM t1
@@ -1441,21 +1456,23 @@ WHERE x > 3
 ORDER BY x;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: SIRV functions
-                               QUERY PLAN                                
--------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Sort
    Sort Key: ss.x
    ->  Subquery Scan on ss
          Filter: (ss.x > 3)
-         ->  HashAggregate
-               Group Key: (1), ((($0 * '3'::double precision))::integer)
-               ->  Append
-                     ->  Result
-                           InitPlan 1 (returns $0)
-                             ->  Result
-                     ->  Result
+         ->  Unique
+               Group Key: (1), ((((InitPlan 1).col1 * '3'::double precision))::integer)
+               ->  Sort
+                     Sort Key: (1), ((((InitPlan 1).col1 * '3'::double precision))::integer)
+                     ->  Append
+                           ->  Result
+                                 InitPlan 1
+                                   ->  Result
+                           ->  Result
  Optimizer: Postgres query optimizer
-(12 rows)
+(14 rows)
 
 SELECT * FROM
   (SELECT 1 AS t, (random()*3)::int AS x
@@ -1628,3 +1645,38 @@ where (x = 0) or (q1 >= q2 and q1 <= q2);
 (6 rows)
 
 reset optimizer_trace_fallback;
+--
+-- Test the planner's ability to produce cheap startup plans with Append nodes
+--
+-- Ensure we get a Nested Loop join between tenk1 and tenk2
+explain (costs off)
+select t1.unique1 from tenk1 t1
+inner join tenk2 t2 on t1.tenthous = t2.tenthous and t2.thousand = 0
+   union all
+(values(1)) limit 1;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Limit
+               ->  Append
+                     ->  Nested Loop
+                           Join Filter: true
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on tenk2
+                                       Filter: (thousand = 0)
+                           ->  Index Scan using tenk1_thous_tenthous on tenk1
+                                 Index Cond: (tenthous = tenk2.tenthous)
+                     ->  Result
+                           One-Time Filter: (gp_execution_segment() = 1)
+                           ->  Result
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
+
+-- Ensure there is no problem if cheapest_startup_path is NULL
+explain (costs off)
+select * from tenk1 t1
+left join lateral
+  (select t1.tenthous from tenk2 t2 union all (values(1)))
+on true limit 1;
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)

@@ -406,6 +406,30 @@ SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
     0 |        1 |        2 |        3
 (1 row)
 
+SET parallel_setup_cost=0;
+SET min_parallel_table_scan_size=0;
+SET max_parallel_workers_per_gather=2;
+-- Ensure we get a plan with a Limit 1 in both partial distinct and final
+-- distinct
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 10;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Seq Scan on tenk1
+                           Filter: (four = 10)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+RESET max_parallel_workers_per_gather;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
 --
 -- Also, some tests of IS DISTINCT FROM, which doesn't quite deserve its
 -- very own regression file.
@@ -419,37 +443,37 @@ INSERT INTO DISTTABLE VALUES(NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
  f1 | not 2 
 ----+-------
-  1 | t
   2 | f
   3 | t
     | t
+  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
  f1 | not null 
 ----+----------
+  1 | t
   2 | t
   3 | t
     | f
-  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1 as "false" FROM disttable;
  f1 | false 
 ----+-------
-  1 | f
   2 | f
   3 | f
     | f
+  1 | f
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 as "not null" FROM disttable;
  f1 | not null 
 ----+----------
+  1 | t
   2 | t
   3 | t
     | f
-  1 | t
 (4 rows)
 
 -- check that optimizer constant-folds it properly
@@ -549,8 +573,8 @@ SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinc
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
-   |  
  1 | 1
+   |  
 (2 rows)
 
 DROP TABLE distinct_1;
