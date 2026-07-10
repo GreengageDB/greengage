@@ -945,7 +945,18 @@ gp_guc_list_init(void)
 		switch (gconf->group)
 		{
 			case QUERY_TUNING_METHOD:
-				explain = true;
+				/*
+				 * GPDB: the 'optimizer' GUC (GPORCA on/off) is already reported
+				 * by EXPLAIN's dedicated "Optimizer:" line, so listing it again
+				 * in the settings block is redundant.  Worse, its boot default
+				 * depends on whether ORCA was compiled in (on with USE_ORCA), so
+				 * with an ORCA build an optimizer=off run reports it as a
+				 * non-default GUC and adds a nondeterministic "optimizer = 'off'"
+				 * line to EXPLAIN (VERBOSE)/(SETTINGS) -- masked in text output
+				 * but not in FORMAT JSON, and it also perturbs row counts from
+				 * explain-filtering helpers.  Keep it out of the EXPLAIN list.
+				 */
+				explain = (guc_name_compare(gconf->name, "optimizer") != 0);
 				no_plan = true;
 				break;
 
