@@ -720,6 +720,27 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 	if (aocs_getnext(aoscan, direction, slot))
 	{
 		ExecStoreVirtualTuple(slot);
+
+		/*
+		 * In aocs_getnext() we set tts_nvalid to 0, and
+		 * ExecStoreVirtualTuple() in this case sets tts_nvalid to the
+		 * full attribute count, which is the generic TupleTableSlot
+		 * convention for "attributes 0..tts_nvalid-1 are all valid". That
+		 * does not hold for our lazy AOCS slot (TTSOpsVirtualAOCS): only the
+		 * anchor/projected column(s) fetched by aocs_getnext() are actually
+		 * populated in tts_values/tts_isnull, tracked per-attribute via
+		 * tts_is_valid. If tts_nvalid were left at natts, slot_getattr()/
+		 * slot_is_attr_valid() would trust it and return stale data from a
+		 * previous tuple instead of going through is_attr_valid()/
+		 * gettargetattr() to lazily fetch the column on demand. So reset it
+		 * to 0 here to force every later attribute access through the
+		 * AOCS-specific lazy-fetch path. This is skipped for AOCS_PROJ_ANY
+		 * (e.g. count(*)) since that projection never reads column values,
+		 * only row identity.
+		 */
+		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY)
+			slot->tts_nvalid = 0;
+
 		pgstat_count_heap_getnext(aoscan->rs_base.rs_rd);
 
 		return true;
@@ -1564,6 +1585,8 @@ aoco_relation_cluster_internals(Relation OldHeap, Relation NewHeap, TupleDesc ol
 		SIMPLE_FAULT_INJECTOR("cluster_ao_scanning_tuples");
 		tuplesort_putheaptuple(tuplesort, tuple);
 		heap_freetuple(tuple);
+
+		ExecClearTuple(slot);
 	}
 
 	ExecDropSingleTupleTableSlot(slot);

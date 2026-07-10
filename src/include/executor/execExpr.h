@@ -289,6 +289,8 @@ typedef struct ExprEvalStep
 			TupleDesc	known_desc;
 			/* type of slot, can only be relied upon if fixed is set */
 			const TupleTableSlotOps *kind;
+			/* all required att numbers (if NIL, use `last_var`) */
+			Bitmapset *all_vars;
 		}			fetch;
 
 		/* for EEOP_INNER/OUTER/SCAN_[SYS]VAR[_FIRST] */

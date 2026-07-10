@@ -346,6 +346,17 @@ int aoco_proj_move_anchor_first(AttrNumber *proj_atts,
 	return num_proj_atts;
 }
 
+static void
+aocs_sole_rowid_scan_finish(AOCSScanDesc scan)
+{
+	if (scan->soleRowIdScan.scan_blkdir != NULL)
+	{
+		systable_endscan(scan->soleRowIdScan.scan_blkdir);
+		pfree(scan->soleRowIdScan.curr_minipage.minipage);
+		scan->soleRowIdScan.scan_blkdir = NULL;
+	}
+}
+
 void
 initscan_with_colinfo(AOCSScanDesc scan)
 {
@@ -414,6 +425,31 @@ initscan_with_colinfo(AOCSScanDesc scan)
 				 scan->columnScanInfo.relationTupleDesc,
 				 scan->columnScanInfo.proj_atts, scan->columnScanInfo.num_proj_atts,
 				 scan->checksum);
+
+	if (gp_aocs_scan_shortpass &&
+	   !gp_select_invisible &&
+	   scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
+	   !scan->blockDirectory && scan->aocsfetch)
+	{
+		aocs_sole_rowid_scan_finish(scan);
+
+		ScanKeyData scanKey;
+		ScanKeyInit(&scanKey,
+					Anum_pg_aoblkdir_columngroupno,
+					BTEqualStrategyNumber,
+					F_INT4EQ,
+					Int32GetDatum(anchor_colno));
+
+		scan->soleRowIdScan.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
+										   InvalidOid,
+										   true,
+										   scan->rs_base.rs_snapshot,
+										   1,
+										   &scanKey);
+		scan->soleRowIdScan.curr_minipage.minipage = palloc0(minipage_size(NUM_MINIPAGE_ENTRIES));
+		scan->soleRowIdScan.curr_minipage_valid = false;
+		scan->soleRowIdScan.minipage_entry = NULL;
+	}
 
 	MemoryContextSwitchTo(oldCtx);
 
@@ -733,6 +769,12 @@ aocs_beginscan_internal(Relation relation,
 
 	scan->blkdirscan = NULL;
 
+	scan->soleRowIdScan.scan_blkdir = NULL;
+	scan->soleRowIdScan.minipage_entry = NULL;
+	scan->soleRowIdScan.curr_minipage_valid = false;
+	scan->soleRowIdScan.curr_minipage_entry_idx = 0;
+	scan->soleRowIdScan.segno = -1;
+
 	if (scan->total_seg != 0)
 	{
 		AppendOnlyVisimap_Init(&scan->visibilityMap,
@@ -886,6 +928,8 @@ aocs_endscan(AOCSScanDesc scan)
 		aocs_blkdirscan_finish(scan);
 
 	RelationDecrementReferenceCount(scan->rs_base.rs_rd);
+
+	aocs_sole_rowid_scan_finish(scan);
 
 	pfree(scan);
 }
@@ -1374,6 +1418,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	MemoryContext oldContext;
 
 	Assert(ScanDirectionIsForward(direction));
 
@@ -1389,44 +1434,23 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
-	if (gp_aocs_scan_shortpass &&
-		!gp_select_invisible &&
-		scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
-		!scan->blockDirectory && scan->aocsfetch)
+	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
+
+	if (unlikely(scan->soleRowIdScan.scan_blkdir))
 	{
 		/*
 		 * Short pass via visibility map and block directory for cases when
 		 * there is no actual need to access tables data, for ex. for queries
 		 * like "SELECT COUNT(*) FROM some_table;".
 		 */
-
-		typedef struct Context
-		{
-			SysScanDesc					scan_blkdir;
-			MinipagePerColumnGroup		curr_minipage;
-			MinipageEntry				*minipage_entry;
-			bool						curr_minipage_valid;
-			int							curr_minipage_entry_idx;
-			int							segno;
-		} Context;
-
-		static Context context =
-		{
-			.scan_blkdir = NULL,
-			.minipage_entry = NULL,
-			.curr_minipage_valid = false,
-			.curr_minipage_entry_idx = 0,
-			.segno = -1
-		};
-
 		while(1)
 		{
-			if (likely(context.minipage_entry &&
-					  scan->segrowsprocessed < context.minipage_entry->rowCount))
+			if (likely(scan->soleRowIdScan.minipage_entry &&
+					  scan->segrowsprocessed < scan->soleRowIdScan.minipage_entry->rowCount))
 			{
-				Assert(context.segno >= 0);
+				Assert(scan->soleRowIdScan.segno >= 0);
 				scan->segrowsprocessed++;
-				AOTupleIdInit(&aoTupleId, context.segno, context.minipage_entry->firstRowNum + scan->segrowsprocessed-1);
+				AOTupleIdInit(&aoTupleId, scan->soleRowIdScan.segno, scan->soleRowIdScan.minipage_entry->firstRowNum + scan->segrowsprocessed-1);
 				if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
 				{
 					/* The tuple is invisible */
@@ -1437,85 +1461,53 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 				return true;
 			}
 
-			if (likely(context.curr_minipage_valid))
+			if (likely(scan->soleRowIdScan.curr_minipage_valid))
 			{
-				Assert(context.curr_minipage_entry_idx < context.curr_minipage.numMinipageEntries);
+				Assert(scan->soleRowIdScan.curr_minipage_entry_idx < scan->soleRowIdScan.curr_minipage.numMinipageEntries);
 
-				context.minipage_entry = &context.curr_minipage.minipage->entry[context.curr_minipage_entry_idx];
+				scan->soleRowIdScan.minipage_entry = &scan->soleRowIdScan.curr_minipage.minipage->entry[scan->soleRowIdScan.curr_minipage_entry_idx];
 				scan->segrowsprocessed = 0;
 
-				context.curr_minipage_entry_idx++;
-				context.curr_minipage_valid =
-					(context.curr_minipage_entry_idx != context.curr_minipage.numMinipageEntries);
+				scan->soleRowIdScan.curr_minipage_entry_idx++;
+				scan->soleRowIdScan.curr_minipage_valid =
+					(scan->soleRowIdScan.curr_minipage_entry_idx != scan->soleRowIdScan.curr_minipage.numMinipageEntries);
 				continue;
 			}
 
-			if (unlikely(context.scan_blkdir == NULL))
-			{
-				static ScanKeyData scanKey;
-				ScanKeyInit(&scanKey,
-							Anum_pg_aoblkdir_columngroupno,
-							BTEqualStrategyNumber,
-							F_INT4EQ,
-							Int32GetDatum(scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ]));
-
-				context.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
-												   InvalidOid,
-												   true,// false,
-												   scan->rs_base.rs_snapshot,
-												   1,
-												   &scanKey);
-				context.curr_minipage.minipage = palloc0(minipage_size(NUM_MINIPAGE_ENTRIES));
-				context.curr_minipage_valid = false;
-				context.minipage_entry = NULL;
-			}
-
-			if (!context.curr_minipage_valid)
+			if (!scan->soleRowIdScan.curr_minipage_valid)
 			{
 				Datum	minipage_datum;
 				bool	minipageNull;
 				bool	segnoNull;
 
-				if (!HeapTupleIsValid(systable_getnext(context.scan_blkdir)))
+				if (!HeapTupleIsValid(systable_getnext(scan->soleRowIdScan.scan_blkdir)))
 				{
 					/* No more seg, we are at the end */
-					systable_endscan(context.scan_blkdir);
-					context.scan_blkdir = NULL;
-					pfree(context.curr_minipage.minipage);
-					context.curr_minipage.minipage = NULL;
-					context.curr_minipage_valid = false;
-					context.minipage_entry = NULL;
-					context.curr_minipage_entry_idx = 0;
-
 					ExecClearTuple(slot);
 					scan->cur_seg = -1;
 					slotAocs->current_scan = NULL;
 					return false;
 				}
 
-				TupleTableSlot *blkdir_slot = context.scan_blkdir->slot;
+				TupleTableSlot *blkdir_slot = scan->soleRowIdScan.scan_blkdir->slot;
 
 				slot_getallattrs(blkdir_slot);
 
-				context.segno = DatumGetInt32(slot_getattr(blkdir_slot, Anum_pg_aoblkdir_segno, &segnoNull));
+				scan->soleRowIdScan.segno = DatumGetInt32(slot_getattr(blkdir_slot, Anum_pg_aoblkdir_segno, &segnoNull));
 
 				minipage_datum = slot_getattr(blkdir_slot, Anum_pg_aoblkdir_minipage, &minipageNull);
-				context.curr_minipage_valid = !minipageNull;
-				if (context.curr_minipage_valid)
+				scan->soleRowIdScan.curr_minipage_valid = !minipageNull;
+				if (scan->soleRowIdScan.curr_minipage_valid)
 				{
-					copy_out_minipage(&context.curr_minipage, minipage_datum, false);
-					context.curr_minipage_entry_idx = 0;
+					copy_out_minipage(&scan->soleRowIdScan.curr_minipage, minipage_datum, false);
+					scan->soleRowIdScan.curr_minipage_entry_idx = 0;
 				}
 			}
 		}
 	}
 	else
 	{
-
-	while (1)
-	{
 		AOCSFileSegInfo *curseginfo;
-
 ReadNext:
 		/* If necessary, open next seg */
 		if (scan->cur_seg < 0 || err < 0)
@@ -1548,88 +1540,47 @@ ReadNext:
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
 
-		AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
-		int tts_nvalid = anchor_attr+1;
 		/* Read from cur_seg */
-		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		AttrNumber	attno = anchor_attr;
+
+		err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+		Assert(err >= 0);
+		if (err == 0)
 		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-			if (attno > anchor_attr)
-				break;
-
-			/*
-			 * Check missing value before reading from data files.
-			 * 
-			 * We don't need to check the missing value for the anchor column.
-			 * In fact, we cannot do that either because we don't have the
-			 * row number until we've scanned the anchor column.
-			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+			if (err < 0)
 			{
-				Assert(rowNum > 0);
-				if (AO_ATTR_VAL_IS_MISSING(rowNum,
-															attno,
-															curseginfo->segno,
-															scan->columnScanInfo.attnum_to_rownum))
-				{
-					/*
-					 * XXX: should we temporarily store the missing value to avoid repeatedly calling
-					 * getmissingattr? The performance gain seems not much though. 
-					 */
-					d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-					continue;
-				}
+				/*
+				 * Ha, cannot read next block, we need to go to next seg
+				 */
+				close_cur_scan_seg(scan);
+				goto ReadNext;
 			}
 
-			/* otherwise, read from data file */
+			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+
 			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-			Assert(err >= 0);
-			if (err == 0)
-			{
-				err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
-				if (err < 0)
-				{
-					/*
-					 * Ha, cannot read next block, we need to go to next seg
-					 */
-					close_cur_scan_seg(scan);
-					goto ReadNext;
-				}
+			Assert(err > 0);
+		}
 
-				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-											RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+		/*
+		 * Get the column's datum right here since the data structures
+		 * should still be hot in CPU data cache memory.
+		 */
+		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-				err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-				Assert(err > 0);
-			}
+		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+		MemoryContextSwitchTo(oldContext);
 
-			/*
-			 * Get the column's datum right here since the data structures
-			 * should still be hot in CPU data cache memory.
-			 */
-			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
-
-			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
-			if (rowNum == InvalidAORowNum &&
-				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
-			}
-#ifdef USE_ASSERT_CHECKING
-			/*
-			 * the row number from every column should match
-			 * XXX: the first assert is repeated code, we should move it outside of
-			 * the if/else block if we can be sure blockFirstRowNum cannot be -1 here.
-			 */
-			else if (scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				Assert(rowNum == scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock);
-			}
-#endif
+		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+		if (rowNum == InvalidAORowNum &&
+			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+		{
+			Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+			rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
 		}
 
 		scan->segrowsprocessed++;
@@ -1650,13 +1601,23 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = tts_nvalid;
+		/*
+		 * Only the anchor column (attno above, not necessarily attribute 0)
+		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
+		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
+		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
+		 * hold here since the anchor column can be any attribute. Keep
+		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
+		 * a stale count from a previous tuple and instead always go through
+		 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
+		 * which consults tts_is_valid per attribute.
+		 */
+		slot->tts_nvalid = 0;
 
 		slot->tts_tid = scan->cdb_fake_ctid;
 
 		slotAocs->current_scan = (void*)scan;
 		return true;
-	}
 	}
 
 	Assert(!"Never here");
@@ -3721,6 +3682,8 @@ aocs_writecol_rewritesegfiles(
 		ResetExprContext(econtext);
 		CHECK_FOR_INTERRUPTS();
 		expectedFRN++;
+
+		ExecClearTuple(oldslot);
 	}
 }
 

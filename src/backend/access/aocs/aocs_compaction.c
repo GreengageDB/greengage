@@ -350,6 +350,8 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 										 curr_heap_blks_scanned);
 			prev_heap_blks_scanned = curr_heap_blks_scanned;
 		}
+
+		ExecClearTuple(slot);
 	}
 	/* Accumulate total number dead tuples */
 	vacrelstats->num_dead_tuples += scanDesc->segrowsprocessed - moved_tupleCount;
