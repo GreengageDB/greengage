@@ -1089,14 +1089,29 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 													 union_pathkeys,
 													 NULL);
 
-			/* and make the MergeAppend unique */
-			path = (Path *) create_upper_unique_path(root,
-													 result_rel,
-													 path,
-													 list_length(tlist),
-													 dNumGroups);
+			/*
+			 * GPDB: A MergeAppend preserves each child's sort order, so a
+			 * collocating hash Motion cannot be inserted beneath the Unique
+			 * without destroying that order.  If the merged output is
+			 * partitioned across the segments, per-segment Unique would
+			 * under-remove cross-segment duplicates and Gather would sum them
+			 * (wrong, too-high count).  Only use this MergeAppend-based dedup
+			 * when its output is collocated (a bottleneck locus); for
+			 * partitioned output the HashAgg / Sort-on-Append paths (which
+			 * carry make_motion_hash_all_targets) already dedup correctly, so
+			 * just skip this candidate.
+			 */
+			if (!CdbPathLocus_IsPartitioned(path->locus))
+			{
+				/* and make the MergeAppend unique */
+				path = (Path *) create_upper_unique_path(root,
+														 result_rel,
+														 path,
+														 list_length(tlist),
+														 dNumGroups);
 
-			add_path(result_rel, path);
+				add_path(result_rel, path);
+			}
 		}
 	}
 	else
