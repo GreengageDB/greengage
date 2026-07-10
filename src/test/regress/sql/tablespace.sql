@@ -2,6 +2,12 @@
 -- m/WARNING:  tablespace symlink path is too long for TAR/
 -- m/DETAIL:  The symlinked path \".*\" will be truncated to 100 characters when sending a TAR to the utilities \(e.g. pg_basebackup\)/
 -- end_matchignore
+-- GPDB: the demo cluster defaults allow_in_place_tablespaces on (segments share a
+-- host and need in-place tablespaces). Force it off for the location-validation
+-- checks below so the empty-location case is rejected with "must be an absolute
+-- path" as upstream expects, instead of being accepted (regress_tblspace is
+-- pre-created by test_setup). It is turned back on further down where needed.
+SET allow_in_place_tablespaces = false;
 -- relative tablespace locations are not allowed
 CREATE TABLESPACE regress_tblspace LOCATION 'relative'; -- fail
 
