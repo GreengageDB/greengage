@@ -2223,7 +2223,9 @@ BeginCopy(ParseState *pstate,
 
 	/* Convert FORCE_NOT_NULL name list to per-column flags, check validity */
 	cstate->force_notnull_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->force_notnull)
+	if (cstate->force_notnull_all)
+		MemSet(cstate->force_notnull_flags, true, num_phys_attrs * sizeof(bool));
+	else if (cstate->force_notnull)
 	{
 		List	   *attnums;
 		ListCell   *cur;
@@ -2246,7 +2248,9 @@ BeginCopy(ParseState *pstate,
 
 	/* Convert FORCE_NULL name list to per-column flags, check validity */
 	cstate->force_null_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->force_null)
+	if (cstate->force_null_all)
+		MemSet(cstate->force_null_flags, true, num_phys_attrs * sizeof(bool));
+	else if (cstate->force_null)
 	{
 		List	   *attnums;
 		ListCell   *cur;
