@@ -9,11 +9,19 @@ HINT:  Creating replication slots on a single segment is not advised.  Replicati
  (some_replication_slot,)
 (1 row)
 
--- And I should see that my replication slot exists
-select * from pg_get_replication_slots() where not active;
-       slot_name       | plugin | slot_type | datoid | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn | wal_status | safe_wal_size | two_phase |           inactive_since            | conflicting | invalidation_reason | failover | synced 
------------------------+--------+-----------+--------+-----------+--------+------------+------+--------------+-------------+---------------------+------------+---------------+-----------+-------------------------------------+-------------+---------------------+----------+--------
- some_replication_slot |        | physical  |        | f         | f      |            |      |              |             |                     |            |               | f         | Fri Jul 10 11:51:05.816834 2026 PDT |             |                     | f        | f
+-- And I should see that my replication slot exists.
+-- GPDB: PG17 added the inactive_since column to pg_get_replication_slots(); it
+-- holds a wall-clock timestamp whose textual width (fractional seconds) varies
+-- between runs and perturbs psql's column alignment, so select the deterministic
+-- columns explicitly instead of "*".
+select slot_name, plugin, slot_type, datoid, temporary, active, active_pid,
+       xmin, catalog_xmin, restart_lsn, confirmed_flush_lsn, wal_status,
+       safe_wal_size, two_phase, conflicting, invalidation_reason, failover,
+       synced
+  from pg_get_replication_slots() where not active;
+       slot_name       | plugin | slot_type | datoid | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn | wal_status | safe_wal_size | two_phase | conflicting | invalidation_reason | failover | synced 
+-----------------------+--------+-----------+--------+-----------+--------+------------+------+--------------+-------------+---------------------+------------+---------------+-----------+-------------+---------------------+----------+--------
+ some_replication_slot |        | physical  |        | f         | f      |            |      |              |             |                     |            |               | f         |             |                     | f        | f
 (1 row)
 
 -- Cleanup:
