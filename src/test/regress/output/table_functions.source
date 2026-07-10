@@ -1736,7 +1736,7 @@ explain SELECT ARRAY(SELECT a FROM multiset_5( TABLE ( SELECT a, b from example)
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
  Result  (cost=2.42..2.43 rows=1 width=0)
-   InitPlan 1 (returns $0)  (slice1)
+   InitPlan 1  (slice1)
      ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=2.39..2.42 rows=5 width=4)
            Merge Key: a
            ->  Sort  (cost=2.39..2.42 rows=5 width=4)
@@ -1750,7 +1750,7 @@ explain SELECT ARRAY(SELECT a FROM multiset_5( TABLE ( SELECT a, b from example 
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Result  (cost=2.42..2.43 rows=1 width=0)
-   InitPlan 1 (returns $0)  (slice1)
+   InitPlan 1  (slice1)
      ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=2.27..2.42 rows=5 width=4)
            ->  Table Function Scan on multiset_5  (cost=2.27..2.42 rows=5 width=4)
                  ->  Sort  (cost=2.27..2.29 rows=5 width=16)
@@ -2015,7 +2015,7 @@ explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example WHERE a >= (SELEC
    ->  Table Function Scan on multiset_5  (cost=2.17..4.33 rows=2 width=36)
          ->  Seq Scan on example  (cost=2.17..4.29 rows=2 width=16)
                Filter: (a >= $0)
-               InitPlan 1 (returns $0)  (slice2)
+               InitPlan 1  (slice2)
                  ->  Finalize Aggregate  (cost=2.16..2.17 rows=1 width=4)
                        ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=2.12..2.15 rows=1 width=4)
                              ->  Partial Aggregate  (cost=2.12..2.13 rows=1 width=4)
@@ -2421,7 +2421,7 @@ NOTICE:  dropping a column that is part of the distribution policy forces a NULL
 -- ERROR: input tuple does not conform to expectations of multiset_5
 SELECT * FROM multiset_5( TABLE( SELECT 'hello'::text) ) as tf;
 ERROR:  invalid input tuple for function multiset_example
-HINT:  expected (integer, text)
+HINT:  Expected (integer, text).
 -- However, this should work despite the output tupdesc having a dropped column.
 SELECT * FROM multiset_5( TABLE( SELECT 1::integer, 'hello'::text) ) as tf;
    b   
@@ -3028,7 +3028,7 @@ SELECT "time"+1 FROM project( TABLE( SELECT * FROM history ), 2);
 ERROR:  operator does not exist: timestamp without time zone + integer
 LINE 1: SELECT "time"+1 FROM project( TABLE( SELECT * FROM history )...
                      ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 -- ERROR: select columns projected out by the function
 SELECT id  FROM project( TABLE( SELECT * FROM history ), 2);
 ERROR:  column "id" does not exist
