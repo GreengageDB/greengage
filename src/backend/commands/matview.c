@@ -36,6 +36,7 @@
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "pgstat.h"
 #include "rewrite/rewriteHandler.h"
 #include "storage/lmgr.h"
@@ -366,7 +367,20 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	SetUserIdAndSecContext(relowner,
 						   save_sec_context | SECURITY_RESTRICTED_OPERATION);
 
-	refreshClause = MakeRefreshClause(concurrent, stmt->skipData, stmt->relation);
+	/*
+	 * GPDB: build a schema-qualified RangeVar for the dispatched refresh clause.
+	 * Since PG17, ExecRefreshMatView restricts the search_path (to pg_catalog,
+	 * pg_temp) and that GUC is dispatched to the QEs.  A FROM-less datafill has
+	 * no Motion and runs on the writer gang, where transientrel_init resolves
+	 * refreshClause->relation by name; an unqualified name (e.g. a matview in
+	 * public) then fails to resolve under the restricted path.  Qualify it with
+	 * the matview's own schema so the QE lookup is search_path-independent and
+	 * pins the same relation the QD resolved.
+	 */
+	refreshClause = MakeRefreshClause(concurrent, stmt->skipData,
+									  makeRangeVar(get_namespace_name(RelationGetNamespace(matviewRel)),
+												   pstrdup(RelationGetRelationName(matviewRel)),
+												   -1));
 
 	dataQuery->intoPolicy = matviewRel->rd_cdbpolicy;
 	/* Generate the data, if wanted. */
