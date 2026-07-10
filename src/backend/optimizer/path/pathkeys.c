@@ -1805,8 +1805,18 @@ cdb_pull_up_eclass(PlannerInfo *root,
 	else
 		return NULL;
 
+	/*
+	 * GPDB: the eclass was found in the projected target list, but its
+	 * distribution-key expression could not be rewritten in terms of the
+	 * projected columns (e.g. a LATERAL subquery projecting an expression over
+	 * the key rather than the key itself).  Rather than erroring, treat the
+	 * projected relation's distribution as unknown by returning NULL; both
+	 * callers (cdbpathlocus.c) already handle this by falling back to a Strewn
+	 * locus (adding a redistribute Motion where needed), which is always
+	 * correct -- only possibly less optimal.
+	 */
 	if (!newexpr)
-		elog(ERROR, "could not pull up equivalence class using projected target list");
+		return NULL;
 
 	/*
 	 * It should be OK to set nullable_relids = NULL, since this eclass is only
