@@ -1730,6 +1730,8 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	Oid			defaultTablespace = InvalidOid;
 	Relation	pgdbrel;
 	HeapTuple	tup;
+	ScanKeyData scankey;
+	SysScanDesc scan;
 	Form_pg_database datform;
 	int			notherbackends;
 	int			npreparedxacts;
@@ -1905,7 +1907,21 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 */
 	pgstat_drop_database(db_id);
 
-	tup = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(db_id));
+	/*
+	 * GPDB_17_MERGE / upstream f18d3e47f0f: read the pg_database tuple straight
+	 * from the heap rather than the syscache.  The syscache flattens external
+	 * TOAST pointers (a large datacl is stored out-of-line), inflating the
+	 * copied tuple's t_len; the in-place update below would then trip
+	 * heap_inplace_update's "wrong tuple length" guard.  The heap tuple keeps
+	 * the toast pointers, so its length matches the on-disk row.
+	 */
+	ScanKeyInit(&scankey,
+				Anum_pg_database_datname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(dbname));
+	scan = systable_beginscan(pgdbrel, DatabaseNameIndexId, true,
+							  NULL, 1, &scankey);
+	tup = systable_getnext(scan);
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for database %u", db_id);
 	datform = (Form_pg_database) GETSTRUCT(tup);
@@ -1930,6 +1946,8 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 * the row will be gone, but if we fail, dropdb() can be invoked again.
 	 */
 	CatalogTupleDelete(pgdbrel, &tup->t_self);
+
+	systable_endscan(scan);
 
 	/*
 	 * Drop db-specific replication slots.
