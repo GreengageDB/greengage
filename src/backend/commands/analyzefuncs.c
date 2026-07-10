@@ -336,9 +336,23 @@ gp_acquire_sample_rows_col_type(Oid typid)
 	switch (typid)
 	{
 		case REGPROCOID:
+		case REGPROCEDUREOID:
+		case REGOPEROID:
+		case REGOPERATOROID:
+		case REGCLASSOID:
+		case REGCOLLATIONOID:
+		case REGTYPEOID:
+		case REGCONFIGOID:
+		case REGDICTIONARYOID:
+		case REGROLEOID:
+		case REGNAMESPACEOID:
 			/*
-			 * repproc isn't round-trippable, if there are overloaded
-			 * functions. Treat it as plain oid.
+			 * The reg* types aren't reliably round-trippable as text: regproc
+			 * is ambiguous with overloaded functions, and (since PG17) ANALYZE
+			 * runs under a restricted search_path (RestrictSearchPath in
+			 * do_analyze_rel), so an unqualified name emitted by a QE fails its
+			 * input function (regclassin etc.) when parsed back on the QD.
+			 * Transport them all as plain oid instead.
 			 */
 			return OIDOID;
 
