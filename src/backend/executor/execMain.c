@@ -319,8 +319,17 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		}
 	}
 
-	/* caller must ensure the query's snapshot is active */
-	Assert(GetActiveSnapshot() == queryDesc->snapshot);
+	/*
+	 * caller must ensure the query's snapshot is active.
+	 *
+	 * GPDB: under gp_select_invisible the executor deliberately runs with
+	 * SnapshotAny as its (non-MVCC) snapshot, so the QD can see invisible /
+	 * aborted tuples, while a normal MVCC snapshot stays active for dispatch
+	 * and xmin tracking (see PortalStart / ProcessQuery in tcop/pquery.c, and
+	 * the matching assert in nodeBitmapHeapscan.c).  Accept that case here.
+	 */
+	Assert(GetActiveSnapshot() == queryDesc->snapshot ||
+		   (gp_select_invisible && queryDesc->snapshot == SnapshotAny));
 
 	/*
 	 * If the transaction is read-only, we need to check if any writes are
