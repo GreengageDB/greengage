@@ -61,6 +61,9 @@ typedef struct
 	int			ti_options;		/* table_tuple_insert performance options */
 	BulkInsertState bistate;	/* bulk insert state */
 	uint64		processed;		/* GPDB: number of tuples inserted */
+	int			save_nestlevel; /* GPDB: GUC nest level for the QE's restricted
+								 * search_path during the REFRESH datafill; 0 when
+								 * unset (e.g. on the QD) */
 } DR_transientrel;
 
 static int	matview_maintenance_depth = 0;
@@ -611,6 +614,21 @@ transientrel_init(QueryDesc *queryDesc)
 	queryDesc->dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent,
 													 relpersistence, refreshClause->skipData);
 
+	/*
+	 * GPDB: ExecRefreshMatView restricts search_path (RestrictSearchPath) on the
+	 * QD around the whole refresh, but that GUC change is set with
+	 * GUC_ACTION_SAVE and is QD-local -- it is never dispatched to the QEs.  When
+	 * the datafill plan has no Motion (e.g. a FROM-less source, as ORCA plans it)
+	 * it runs on the persistent writer gang, which still carries the caller's
+	 * session search_path; a user function in the datafill query would then see
+	 * the caller's search_path instead of the safe maintenance value.  Mirror the
+	 * QD's restriction here on the QE, bracketing the executor run (the nest
+	 * level is popped in transientrel_shutdown, and by transaction abort on the
+	 * error path).
+	 */
+	((DR_transientrel *) queryDesc->dest)->save_nestlevel = NewGUCNestLevel();
+	RestrictSearchPath();
+
 	table_close(matviewRel, NoLock);
 }
 
@@ -714,6 +732,10 @@ transientrel_shutdown(DestReceiver *self)
 
 		table_close(matviewRel, NoLock);
 	}
+
+	/* GPDB: restore the search_path restricted for the QE in transientrel_init */
+	if (myState->save_nestlevel != 0)
+		AtEOXact_GUC(false, myState->save_nestlevel);
 }
 
 /*
