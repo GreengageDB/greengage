@@ -422,7 +422,7 @@ drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, iboolpart, boolrangep, r
 -- part_test_int4_ops and part_test_text_ops in test_setup.sql.
 --
 
-create table hp (a int, b text) partition by hash (a part_test_int4_ops, b part_test_text_ops);
+create table hp (a int, b text, c int) partition by hash (a part_test_int4_ops, b part_test_text_ops);
 create table hp0 partition of hp for values with (modulus 4, remainder 0);
 create table hp3 partition of hp for values with (modulus 4, remainder 3);
 create table hp1 partition of hp for values with (modulus 4, remainder 1);
@@ -455,7 +455,15 @@ explain (costs off) select * from hp where a = 2 and b = 'xxx';
 explain (costs off) select * from hp where a = 1 and b = 'abcde';
 explain (costs off) select * from hp where (a = 1 and b = 'abcde') or (a = 2 and b = 'xxx') or (a is null and b is null);
 
-drop table hp;
+-- test pruning when not all the partitions exist
+drop table hp1;
+drop table hp3;
+explain (costs off) select * from hp where a = 1 and b = 'abcde';
+explain (costs off) select * from hp where a = 1 and b = 'abcde' and
+  (c = 2 or c = 3);
+drop table hp2;
+explain (costs off) select * from hp where a = 1 and b = 'abcde' and
+  (c = 2 or c = 3);
 
 --
 -- Test runtime partition pruning
